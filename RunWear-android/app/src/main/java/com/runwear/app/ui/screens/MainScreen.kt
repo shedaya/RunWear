@@ -121,15 +121,7 @@ private fun MainContent(
     onShowTimePicker: () -> Unit,
     onShowSettings: () -> Unit
 ) {
-    val pullRefreshState = rememberPullToRefreshState()
-    
-    PullToRefreshBox(
-        isRefreshing = uiState.isLoading,
-        onRefresh = onRefresh,
-        state = pullRefreshState,
-        modifier = Modifier.fillMaxSize()
-    ) {
-        LazyColumn(
+    LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
@@ -199,7 +191,6 @@ private fun MainContent(
                 LocationFooter(locationName = uiState.locationName)
             }
         }
-    }
 }
 
 @Composable
@@ -485,7 +476,9 @@ private fun HourlyForecastChart(
             text = "Hourly Forecast",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 20.dp, bottom = 12.dp)
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 12.dp)
         )
         
         LazyRow(

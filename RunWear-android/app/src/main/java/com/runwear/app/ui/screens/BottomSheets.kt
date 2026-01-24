@@ -359,10 +359,9 @@ private fun ComfortPreferenceItem(
             )
             
             if (isSelected) {
-                Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                Text(
+                    text = "✓",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
