@@ -11,6 +11,7 @@ import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -20,6 +21,17 @@ data class UserLocation(
     val latitude: Double,
     val longitude: Double
 )
+
+enum class LocationErrorReason {
+    PERMISSION_DENIED,
+    TIMEOUT,
+    UNAVAILABLE
+}
+
+sealed class LocationFetchResult {
+    data class Success(val location: UserLocation) : LocationFetchResult()
+    data class Error(val reason: LocationErrorReason) : LocationFetchResult()
+}
 
 @Singleton
 class LocationProvider @Inject constructor(
@@ -76,6 +88,58 @@ class LocationProvider @Inject constructor(
             } catch (e: SecurityException) {
                 continuation.resumeWithException(e)
             }
+        }
+    }
+
+    /**
+     * Get current location with a 15-second timeout (matches PWA).
+     * Returns a sealed result indicating success or the reason for failure.
+     */
+    suspend fun getCurrentLocationWithTimeout(): LocationFetchResult {
+        if (!hasLocationPermission()) {
+            return LocationFetchResult.Error(LocationErrorReason.PERMISSION_DENIED)
+        }
+
+        val result = withTimeoutOrNull(15000L) {
+            suspendCancellableCoroutine<UserLocation?> { continuation ->
+                val cancellationTokenSource = CancellationTokenSource()
+
+                continuation.invokeOnCancellation {
+                    cancellationTokenSource.cancel()
+                }
+
+                try {
+                    fusedLocationClient.getCurrentLocation(
+                        Priority.PRIORITY_BALANCED_POWER_ACCURACY, // Faster than HIGH_ACCURACY
+                        cancellationTokenSource.token
+                    ).addOnSuccessListener { location: Location? ->
+                        if (location != null) {
+                            continuation.resume(UserLocation(location.latitude, location.longitude))
+                        } else {
+                            // Try last known location as fallback
+                            fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation ->
+                                if (lastLocation != null) {
+                                    continuation.resume(UserLocation(lastLocation.latitude, lastLocation.longitude))
+                                } else {
+                                    continuation.resume(null)
+                                }
+                            }.addOnFailureListener {
+                                continuation.resume(null)
+                            }
+                        }
+                    }.addOnFailureListener {
+                        continuation.resume(null)
+                    }
+                } catch (e: SecurityException) {
+                    continuation.resume(null)
+                }
+            }
+        }
+
+        return if (result != null) {
+            LocationFetchResult.Success(result)
+        } else {
+            LocationFetchResult.Error(LocationErrorReason.TIMEOUT)
         }
     }
 }
