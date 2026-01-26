@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v2.5 - Gender toggle 🚹🚺, Shop modal fix, FTP deploy fix -->
+<!-- RunWear PWA v2.6 - Fixed FTP path to correct public_html -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
