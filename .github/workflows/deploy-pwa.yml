@@ -25,7 +25,7 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
           local-dir: ./runwearpwa22/
-          server-dir: /../../public_html/
+          server-dir: /public_html/
           exclude: |
             **/.git*
             **/.git*/**

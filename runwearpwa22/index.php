@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v2.6 - Fixed FTP path to correct public_html -->
+<!-- RunWear PWA v2.7 - New deploy account with correct path -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
