@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- RunWear PWA v2.3 - Auto-deployed via GitHub Actions -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
