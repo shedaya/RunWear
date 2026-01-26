@@ -294,29 +294,37 @@
             display: flex;
             align-items: center;
             background: var(--surface-dim);
-            border-radius: 20px;
+            border-radius: 22px;
             padding: 3px;
             gap: 2px;
         }
-        
+
         .gender-opt {
-            padding: 6px 12px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 32px;
+            font-size: 16px;
             cursor: pointer;
             border-radius: 16px;
             transition: all 0.2s;
+            opacity: 0.5;
         }
-        
+
         .gender-opt.active {
             background: var(--primary);
-            color: white;
+            opacity: 1;
+            transform: scale(1.05);
         }
-        
+
         .gender-opt.center {
-            padding: 6px 8px;
-            font-size: 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .gender-opt.center.active {
+            color: white;
         }
         
         /* Shop All Button */
@@ -1948,8 +1956,8 @@
         // Shop Modal
         function openShop() {
             const container = document.getElementById('shopItems');
-            container.innerHTML = state.outfit.items.map(item => 
-                `<div class="shop-item" onclick="window.open('${buildAmazonLink(item.search)}', '_blank')">
+            container.innerHTML = state.outfit.items.map(item =>
+                `<div class="shop-item" onclick="shopItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">
                     <span class="shop-item-icon">${item.icon}</span>
                     <div class="shop-item-info">
                         <div class="shop-item-name">${item.name}</div>
@@ -2430,9 +2438,9 @@
                     <div class="section-title">Your Outfit</div>
                     <div class="outfit-controls">
                         <div class="gender-toggle">
-                            <span class="gender-opt ${state.gender === 'male' ? 'active' : ''}" onclick="setGender('male')">M</span>
+                            <span class="gender-opt ${state.gender === 'male' ? 'active' : ''}" onclick="setGender('male')">🚹</span>
                             <span class="gender-opt center ${state.gender === 'all' ? 'active' : ''}" onclick="setGender('all')">○</span>
-                            <span class="gender-opt ${state.gender === 'female' ? 'active' : ''}" onclick="setGender('female')">F</span>
+                            <span class="gender-opt ${state.gender === 'female' ? 'active' : ''}" onclick="setGender('female')">🚺</span>
                         </div>
                         <button class="shop-all-btn" onclick="openShop()">🛒 Shop</button>
                     </div>
