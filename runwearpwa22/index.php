@@ -321,11 +321,6 @@
 
         .gender-opt.center {
             font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .gender-opt.center.active {
-            color: white;
         }
         
         /* Shop All Button */
