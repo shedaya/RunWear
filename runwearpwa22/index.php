@@ -1958,8 +1958,8 @@
             </div>
 
             <div class="setting-row" style="flex-direction:column;align-items:flex-start">
-                <div class="setting-label">Comfort Preference</div>
-                <div class="setting-sublabel">Do you tend to run hot or cold?</div>
+                <div class="setting-label">Body Temperature</div>
+                <div class="setting-sublabel">Do you overheat easily or get cold quickly?</div>
                 <div class="comfort-selector" id="comfortSelector"></div>
             </div>
 
@@ -2027,13 +2027,13 @@
             </div>
 
             <div class="onboarding-section">
-                <div class="onboarding-label">I usually run...</div>
+                <div class="onboarding-label">Do you overheat easily or get cold quickly?</div>
                 <div class="onboarding-sublabel">We'll adjust outfit recommendations</div>
                 <div class="comfort-selector" id="onboardingComfortSelector">
                     <span class="comfort-opt" data-comfort="-10" onclick="setOnboardingComfort(-10)">🥶</span>
-                    <span class="comfort-opt" data-comfort="-5" onclick="setOnboardingComfort(-5)">Cold</span>
-                    <span class="comfort-opt" data-comfort="0" onclick="setOnboardingComfort(0)">Balanced</span>
-                    <span class="comfort-opt" data-comfort="5" onclick="setOnboardingComfort(5)">Warm</span>
+                    <span class="comfort-opt" data-comfort="-5" onclick="setOnboardingComfort(-5)">Get cold</span>
+                    <span class="comfort-opt" data-comfort="0" onclick="setOnboardingComfort(0)">Neither</span>
+                    <span class="comfort-opt" data-comfort="5" onclick="setOnboardingComfort(5)">Overheat</span>
                     <span class="comfort-opt" data-comfort="10" onclick="setOnboardingComfort(10)">🥵</span>
                 </div>
             </div>
@@ -2771,12 +2771,12 @@
             const container = document.getElementById('comfortSelector');
             const options = [
                 { val: -10, label: '🥶' },
-                { val: -5, label: 'Cold' },
-                { val: 0, label: 'Normal' },
-                { val: 5, label: 'Warm' },
+                { val: -5, label: 'Get cold' },
+                { val: 0, label: 'Neither' },
+                { val: 5, label: 'Overheat' },
                 { val: 10, label: '🥵' }
             ];
-            container.innerHTML = options.map(o => 
+            container.innerHTML = options.map(o =>
                 `<div class="comfort-opt ${state.comfort === o.val ? 'active' : ''}" onclick="setComfort(${o.val})">${o.label}</div>`
             ).join('');
         }
