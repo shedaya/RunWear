@@ -11,6 +11,7 @@
     <meta name="application-name" content="RunWear">
     <meta name="description" content="Get personalized running outfit recommendations based on real-time weather conditions">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="impact-site-verification" value="86649e82-8861-41f8-9773-c3a758e9a761">
     <title>RunWear - Running Outfit Guide</title>
     
     <!-- PWA Manifest -->
