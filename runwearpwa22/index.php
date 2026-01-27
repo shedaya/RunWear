@@ -1959,7 +1959,7 @@
 
             <div class="setting-row" style="flex-direction:column;align-items:flex-start">
                 <div class="setting-label">Body Temperature</div>
-                <div class="setting-sublabel">Do you overheat easily or get cold quickly?</div>
+                <div class="setting-sublabel">Do you get cold easily or overheat quickly?</div>
                 <div class="comfort-selector" id="comfortSelector"></div>
             </div>
 
@@ -2027,7 +2027,7 @@
             </div>
 
             <div class="onboarding-section">
-                <div class="onboarding-label">Do you overheat easily or get cold quickly?</div>
+                <div class="onboarding-label">Do you get cold easily or overheat quickly?</div>
                 <div class="onboarding-sublabel">We'll adjust outfit recommendations</div>
                 <div class="comfort-selector" id="onboardingComfortSelector">
                     <span class="comfort-opt" data-comfort="-10" onclick="setOnboardingComfort(-10)">🥶</span>
