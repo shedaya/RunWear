@@ -1220,6 +1220,116 @@
             background: var(--primary);
             color: white;
         }
+
+        /* ========== ONBOARDING MODAL ========== */
+        .onboarding-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        .onboarding-overlay.active {
+            display: flex;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .onboarding-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 28px;
+            padding: 32px 24px;
+            width: 100%;
+            max-width: 380px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .onboarding-header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .onboarding-logo {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.5px;
+            margin-bottom: 16px;
+        }
+
+        .onboarding-logo span {
+            color: var(--text-primary);
+        }
+
+        .onboarding-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 32px;
+            letter-spacing: 0.02em;
+            color: var(--text-primary);
+            margin: 0 0 8px 0;
+        }
+
+        .onboarding-subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        .onboarding-section {
+            margin-bottom: 24px;
+        }
+
+        .onboarding-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .onboarding-sublabel {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .onboarding-section .unit-selector {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .onboarding-section .unit-opt {
+            flex: 1;
+            text-align: center;
+        }
+
+        .onboarding-section .gender-toggle {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .onboarding-section .gender-opt {
+            flex: 1;
+            max-width: 80px;
+        }
+
+        .onboarding-section .comfort-selector {
+            width: 100%;
+        }
+
+        .onboarding-cta {
+            width: 100%;
+            margin-top: 8px;
+            padding: 16px 32px;
+            font-size: 16px;
+        }
         
         /* ========== SHOP MODAL ========== */
         .shop-modal {
@@ -1884,6 +1994,56 @@
         </div>
     </div>
 
+    <!-- Onboarding Modal -->
+    <div class="onboarding-overlay" id="onboardingModal">
+        <div class="onboarding-card">
+            <div class="onboarding-header">
+                <div class="onboarding-logo">Run<span>Wear</span></div>
+                <h1 class="onboarding-title">Welcome! 👋</h1>
+                <p class="onboarding-subtitle">Let's personalize your experience.<br>You can always change these later.</p>
+            </div>
+
+            <div class="onboarding-section">
+                <div class="onboarding-label">Temperature</div>
+                <div class="onboarding-sublabel">How do you measure the weather?</div>
+                <div class="unit-selector" id="onboardingUnitSelector">
+                    <span class="unit-opt" data-unit="f" onclick="setOnboardingUnit(false)">°F</span>
+                    <span class="unit-opt" data-unit="c" onclick="setOnboardingUnit(true)">°C</span>
+                </div>
+            </div>
+
+            <div class="onboarding-section">
+                <div class="onboarding-label">Fit Preference</div>
+                <div class="onboarding-sublabel">We'll tailor product recommendations</div>
+                <div class="gender-toggle" id="onboardingGenderSelector">
+                    <span class="gender-opt" data-gender="male" onclick="setOnboardingGender('male')">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9.5 11c1.93 0 3.5 1.57 3.5 3.5S11.43 18 9.5 18 6 16.43 6 14.5 7.57 11 9.5 11zm0-2C6.46 9 4 11.46 4 14.5S6.46 20 9.5 20s5.5-2.46 5.5-5.5c0-1.16-.36-2.23-.97-3.12L18 7.42V10h2V4h-6v2h2.58l-3.97 3.97C11.73 9.36 10.66 9 9.5 9z"/></svg>
+                    </span>
+                    <span class="gender-opt center" data-gender="all" onclick="setOnboardingGender('all')">All</span>
+                    <span class="gender-opt" data-gender="female" onclick="setOnboardingGender('female')">
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 4c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4 1.79-4 4-4zm0-2C8.69 2 6 4.69 6 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm1 16h-2v-2H9v-2h2v-2h2v2h2v2h-2v2z"/></svg>
+                    </span>
+                </div>
+            </div>
+
+            <div class="onboarding-section">
+                <div class="onboarding-label">I usually run...</div>
+                <div class="onboarding-sublabel">We'll adjust outfit recommendations</div>
+                <div class="comfort-selector" id="onboardingComfortSelector">
+                    <span class="comfort-opt" data-comfort="-10" onclick="setOnboardingComfort(-10)">🥶</span>
+                    <span class="comfort-opt" data-comfort="-5" onclick="setOnboardingComfort(-5)">Cold</span>
+                    <span class="comfort-opt" data-comfort="0" onclick="setOnboardingComfort(0)">Balanced</span>
+                    <span class="comfort-opt" data-comfort="5" onclick="setOnboardingComfort(5)">Warm</span>
+                    <span class="comfort-opt" data-comfort="10" onclick="setOnboardingComfort(10)">🥵</span>
+                </div>
+            </div>
+
+            <button class="btn onboarding-cta" onclick="completeOnboarding()">
+                Let's Go! 🏃
+            </button>
+        </div>
+    </div>
+
     <script>
         // ============ STATE ============
         let state = {
@@ -1905,6 +2065,7 @@
             useCelsius: localStorage.getItem('useCelsius') === 'true',
             gender: localStorage.getItem('gender') || 'all', // 'male', 'female', 'all'
             comfort: parseInt(localStorage.getItem('comfort')) || 0, // -10, -5, 0, 5, 10
+            hasCompletedOnboarding: localStorage.getItem('hasCompletedOnboarding') === 'true',
             hasPermission: false,
             locationSearching: false,
             locationResults: [],
@@ -3184,9 +3345,104 @@
             `;
         }
 
+        // ============ ONBOARDING ============
+        let onboardingState = {
+            useCelsius: null,
+            gender: 'all',
+            comfort: 0
+        };
+
+        function initOnboardingDefaults() {
+            // Detect locale for temperature default
+            const isUSLocale = navigator.language?.startsWith('en-US') ||
+                               Intl.DateTimeFormat().resolvedOptions().locale?.includes('US');
+            onboardingState.useCelsius = !isUSLocale;
+            onboardingState.gender = 'all';
+            onboardingState.comfort = 0;
+        }
+
+        function showOnboarding() {
+            initOnboardingDefaults();
+            updateOnboardingUI();
+            document.getElementById('onboardingModal').classList.add('active');
+        }
+
+        function updateOnboardingUI() {
+            // Update unit selector
+            const unitSelector = document.getElementById('onboardingUnitSelector');
+            if (unitSelector) {
+                unitSelector.querySelectorAll('.unit-opt').forEach(opt => {
+                    const isC = opt.dataset.unit === 'c';
+                    opt.classList.toggle('active', isC === onboardingState.useCelsius);
+                });
+            }
+
+            // Update gender selector
+            const genderSelector = document.getElementById('onboardingGenderSelector');
+            if (genderSelector) {
+                genderSelector.querySelectorAll('.gender-opt').forEach(opt => {
+                    opt.classList.toggle('active', opt.dataset.gender === onboardingState.gender);
+                });
+            }
+
+            // Update comfort selector
+            const comfortSelector = document.getElementById('onboardingComfortSelector');
+            if (comfortSelector) {
+                comfortSelector.querySelectorAll('.comfort-opt').forEach(opt => {
+                    opt.classList.toggle('active', parseInt(opt.dataset.comfort) === onboardingState.comfort);
+                });
+            }
+        }
+
+        function setOnboardingUnit(useCelsius) {
+            onboardingState.useCelsius = useCelsius;
+            updateOnboardingUI();
+        }
+
+        function setOnboardingGender(gender) {
+            onboardingState.gender = gender;
+            updateOnboardingUI();
+        }
+
+        function setOnboardingComfort(comfort) {
+            onboardingState.comfort = comfort;
+            updateOnboardingUI();
+        }
+
+        function completeOnboarding() {
+            // Save preferences
+            state.useCelsius = onboardingState.useCelsius;
+            state.gender = onboardingState.gender;
+            state.comfort = onboardingState.comfort;
+            state.hasCompletedOnboarding = true;
+
+            localStorage.setItem('useCelsius', state.useCelsius);
+            localStorage.setItem('gender', state.gender);
+            localStorage.setItem('comfort', state.comfort);
+            localStorage.setItem('hasCompletedOnboarding', 'true');
+
+            // Hide onboarding with fade
+            const modal = document.getElementById('onboardingModal');
+            modal.style.opacity = '0';
+            modal.style.transition = 'opacity 0.3s ease';
+
+            setTimeout(() => {
+                modal.classList.remove('active');
+                modal.style.opacity = '';
+                modal.style.transition = '';
+
+                // Now load weather (which will trigger location permission)
+                loadWeather();
+            }, 300);
+        }
+
         // ============ INIT ============
         document.addEventListener('DOMContentLoaded', () => {
-            loadWeather();
+            if (!state.hasCompletedOnboarding) {
+                showOnboarding();
+            } else {
+                loadWeather();
+            }
         });
 
         // Service worker
