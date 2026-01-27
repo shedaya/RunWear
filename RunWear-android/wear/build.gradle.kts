@@ -59,4 +59,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+
+    // Image Loading (Coil) - for hero images
+    implementation(libs.coil.compose)
 }

@@ -13,7 +13,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.runwear.app.ui.screens.MainScreen
+import com.runwear.app.ui.screens.HeroMainScreen
 import com.runwear.app.ui.screens.PermissionScreen
 import com.runwear.app.ui.theme.RunWearTheme
 import com.runwear.app.ui.viewmodel.MainViewModel
@@ -21,9 +21,9 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    
+
     private val viewModel: MainViewModel by viewModels()
-    
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -31,15 +31,15 @@ class MainActivity : ComponentActivity() {
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
         viewModel.onPermissionResult(fineGranted || coarseGranted)
     }
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         setContent {
             RunWearTheme {
                 val uiState by viewModel.uiState.collectAsState()
-                
+
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     if (!uiState.hasLocationPermission && !uiState.isLoading) {
                         PermissionScreen(
@@ -47,32 +47,32 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding)
                         )
                     } else {
-                        MainScreen(
+                        // New hero-image design MainScreen
+                        HeroMainScreen(
                             uiState = uiState,
                             onRefresh = viewModel::refresh,
                             onToggleUnit = viewModel::toggleUnit,
-                            onNextDay = viewModel::goToNextDay,
-                            onPreviousDay = viewModel::goToPreviousDay,
-                            onResetToNow = viewModel::resetToNow,
-                            onSelectHour = viewModel::selectHour,
-                            onSelectDate = viewModel::selectDate,
-                            onShowDatePicker = viewModel::showDatePicker,
-                            onHideDatePicker = viewModel::hideDatePicker,
-                            onShowTimePicker = viewModel::showTimePicker,
-                            onHideTimePicker = viewModel::hideTimePicker,
-                            onShowSettings = viewModel::showSettings,
-                            onHideSettings = viewModel::hideSettings,
-                            onSetComfortPreference = viewModel::setComfortPreference,
-                            modifier = Modifier.padding(innerPadding)
+                            onDateSelected = viewModel::selectDate,
+                            onTimeSelected = viewModel::selectHour,
+                            onShopItem = { item ->
+                                // For now, show shop sheet - to be implemented
+                                viewModel.showShopSheet()
+                            },
+                            onSettingsClick = viewModel::showSettings,
+                            onLocationClick = {
+                                // Could open location picker in future
+                                // For now, location is shown in the glass button
+                            },
+                            onGenderChange = viewModel::setGenderPreference
                         )
                     }
                 }
             }
         }
-        
+
         viewModel.checkLocationPermission()
     }
-    
+
     private fun requestLocationPermission() {
         locationPermissionLauncher.launch(
             arrayOf(

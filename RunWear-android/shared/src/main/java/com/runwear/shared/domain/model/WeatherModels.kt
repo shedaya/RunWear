@@ -101,3 +101,9 @@ enum class ComfortPreference(val tempAdjustment: Int, val label: String) {
     RUNS_WARM(5, "I run warm"),
     RUNS_VERY_WARM(10, "I run very hot")
 }
+
+enum class GenderPreference(val label: String) {
+    MALE("Men's"),
+    FEMALE("Women's"),
+    UNISEX("Unisex")
+}

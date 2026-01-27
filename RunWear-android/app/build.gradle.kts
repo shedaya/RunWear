@@ -70,6 +70,9 @@ dependencies {
     implementation(libs.vico.compose)
     implementation(libs.vico.compose.m3)
     implementation(libs.vico.core)
+
+    // Image Loading (Coil) - for hero images with crossfade
+    implementation(libs.coil.compose)
     
     // Debug
     debugImplementation(libs.androidx.ui.tooling)

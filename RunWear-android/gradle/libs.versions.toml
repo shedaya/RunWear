@@ -19,6 +19,7 @@ wearCompose = "1.4.0"
 wearComposeMaterial3 = "1.0.0-alpha29"
 coroutines = "1.9.0"
 vico = "2.0.0-beta.2"
+coil = "2.5.0"
 
 [libraries]
 # Core Android
@@ -70,6 +71,9 @@ kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "ko
 vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
+
+# Image Loading (Coil)
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
