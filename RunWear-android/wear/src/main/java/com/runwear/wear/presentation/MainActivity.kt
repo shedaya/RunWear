@@ -8,16 +8,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.runwear.wear.presentation.screens.WearMainScreen
+import com.runwear.wear.presentation.screens.HeroWearMainScreen
 import com.runwear.wear.presentation.theme.RunWearWatchTheme
 import com.runwear.wear.presentation.viewmodel.WearViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    
+
     private val viewModel: WearViewModel by viewModels()
-    
+
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -25,15 +25,16 @@ class MainActivity : ComponentActivity() {
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
         viewModel.onPermissionResult(fineGranted || coarseGranted)
     }
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         setContent {
             RunWearWatchTheme {
                 val uiState by viewModel.uiState.collectAsState()
-                
-                WearMainScreen(
+
+                // New hero-image paged design
+                HeroWearMainScreen(
                     uiState = uiState,
                     onRefresh = viewModel::refresh,
                     onToggleUnit = viewModel::toggleUnit,
@@ -44,10 +45,10 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-        
+
         viewModel.checkLocationPermission()
     }
-    
+
     private fun requestLocationPermission() {
         locationPermissionLauncher.launch(
             arrayOf(

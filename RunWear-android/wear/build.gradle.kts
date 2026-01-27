@@ -54,6 +54,11 @@ dependencies {
     implementation(libs.androidx.wear.compose.foundation)
     implementation(libs.androidx.wear.compose.material3)
     implementation(libs.androidx.wear.compose.navigation)
+
+    // Regular Compose Foundation (for HorizontalPager)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.ui)
+    implementation("androidx.compose.foundation:foundation")
     
     // Hilt
     implementation(libs.hilt.android)

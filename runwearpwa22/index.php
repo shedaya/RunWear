@@ -770,11 +770,18 @@
             gap: 12px;
         }
         
+        /* Outfit Controls */
+        .outfit-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
         /* Gender Toggle */
         .gender-toggle {
             display: flex;
             align-items: center;
-            background: var(--surface-dim);
+            background: var(--bg-card-light);
             border-radius: 22px;
             padding: 3px;
             gap: 2px;
@@ -786,21 +793,32 @@
             justify-content: center;
             width: 36px;
             height: 32px;
-            font-size: 16px;
+            font-size: 14px;
             cursor: pointer;
             border-radius: 16px;
             transition: all 0.2s;
-            opacity: 0.5;
+            color: var(--text-muted);
+        }
+
+        .gender-opt svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        .gender-opt:hover {
+            color: var(--text-secondary);
         }
 
         .gender-opt.active {
             background: var(--primary);
-            opacity: 1;
-            transform: scale(1.05);
+            color: white;
         }
 
         .gender-opt.center {
-            font-size: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 0 4px;
         }
         
         /* Shop All Button */
@@ -1171,6 +1189,34 @@
         }
 
         .comfort-opt.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        /* Unit Selector (°F / °C) */
+        .unit-selector {
+            display: flex;
+            background: var(--bg-card-light);
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+
+        .unit-opt {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-muted);
+        }
+
+        .unit-opt:hover {
+            color: var(--text-secondary);
+        }
+
+        .unit-opt.active {
             background: var(--primary);
             color: white;
         }
@@ -1785,22 +1831,28 @@
     <div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
         <div class="modal">
             <div class="modal-handle"></div>
-            <div class="modal-title">⚙️ Settings</div>
-            
+            <div class="modal-title">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24" style="vertical-align: middle; margin-right: 8px;"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+                SETTINGS
+            </div>
+
             <div class="setting-row">
                 <div>
                     <div class="setting-label">Temperature Unit</div>
-                    <div class="setting-sublabel">Tap temperature to toggle</div>
+                    <div class="setting-sublabel">Choose your preferred unit</div>
                 </div>
-                <div class="toggle" id="unitToggle" onclick="toggleUnit()"></div>
+                <div class="unit-selector" id="unitSelector">
+                    <span class="unit-opt" data-unit="f" onclick="setUnit(false)">°F</span>
+                    <span class="unit-opt" data-unit="c" onclick="setUnit(true)">°C</span>
+                </div>
             </div>
-            
+
             <div class="setting-row" style="flex-direction:column;align-items:flex-start">
                 <div class="setting-label">Comfort Preference</div>
                 <div class="setting-sublabel">Do you tend to run hot or cold?</div>
                 <div class="comfort-selector" id="comfortSelector"></div>
             </div>
-            
+
             <button class="btn" style="width:100%;margin-top:24px" onclick="closeSettings()">Done</button>
         </div>
     </div>
@@ -2424,10 +2476,24 @@
         }
 
         function toggleUnit() {
-            state.useCelsius = !state.useCelsius;
+            setUnit(!state.useCelsius);
+        }
+
+        function setUnit(useCelsius) {
+            state.useCelsius = useCelsius;
             localStorage.setItem('useCelsius', state.useCelsius);
-            document.getElementById('unitToggle')?.classList.toggle('active', state.useCelsius);
+            updateUnitSelector();
             loadWeather();
+        }
+
+        function updateUnitSelector() {
+            const selector = document.getElementById('unitSelector');
+            if (selector) {
+                selector.querySelectorAll('.unit-opt').forEach(opt => {
+                    const isC = opt.dataset.unit === 'c';
+                    opt.classList.toggle('active', isC === state.useCelsius);
+                });
+            }
         }
 
         function setGender(g) {
@@ -2532,7 +2598,7 @@
 
         function openSettings() {
             document.getElementById('settingsModal').classList.add('active');
-            document.getElementById('unitToggle').classList.toggle('active', state.useCelsius);
+            updateUnitSelector();
             renderComfortSelector();
         }
 
@@ -3071,10 +3137,21 @@
                 <div class="outfit-section">
                     <div class="outfit-section-header">
                         <div class="outfit-section-title">${state.outfit.items.length} Items for Your Run</div>
-                        <button class="shop-btn" onclick="openShop()">
-                            ${bagSvg}
-                            <span>Shop All</span>
-                        </button>
+                        <div class="outfit-controls">
+                            <div class="gender-toggle">
+                                <span class="gender-opt ${state.gender === 'male' ? 'active' : ''}" onclick="setGender('male')">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9.5 11c1.93 0 3.5 1.57 3.5 3.5S11.43 18 9.5 18 6 16.43 6 14.5 7.57 11 9.5 11zm0-2C6.46 9 4 11.46 4 14.5S6.46 20 9.5 20s5.5-2.46 5.5-5.5c0-1.16-.36-2.23-.97-3.12L18 7.42V10h2V4h-6v2h2.58l-3.97 3.97C11.73 9.36 10.66 9 9.5 9z"/></svg>
+                                </span>
+                                <span class="gender-opt center ${state.gender === 'all' ? 'active' : ''}" onclick="setGender('all')">All</span>
+                                <span class="gender-opt ${state.gender === 'female' ? 'active' : ''}" onclick="setGender('female')">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 4c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4 1.79-4 4-4zm0-2C8.69 2 6 4.69 6 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm1 16h-2v-2H9v-2h2v-2h2v2h2v2h-2v2z"/></svg>
+                                </span>
+                            </div>
+                            <button class="shop-btn" onclick="openShop()">
+                                ${bagSvg}
+                                <span>Shop</span>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="outfit-grid">
