@@ -2557,9 +2557,150 @@
             return categoryIcons[category] || categoryIcons.accessories;
         }
 
-        // Get hero image URL (placeholder for now, will be replaced with AI-generated images)
+        // ============ SUPABASE HERO IMAGE SERVICE ============
+        const SUPABASE_URL = 'https://ebicqznlcjbqcukjfzcf.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4';
+        const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop';
+
+        // Current hero image URL (updated asynchronously)
+        let currentHeroImageUrl = PLACEHOLDER_IMAGE;
+
+        // Map weather codes to weather categories
+        function getWeatherCode(code) {
+            if (code === 0) return 'CLEAR';
+            if (code >= 1 && code <= 3) return 'CLOUDY';
+            if (code >= 45 && code <= 48) return 'FOGGY';
+            if (code >= 51 && code <= 67) return 'RAINY';
+            if (code >= 71 && code <= 77) return 'SNOWY';
+            if (code >= 80 && code <= 82) return 'RAINY';
+            if (code >= 85 && code <= 86) return 'SNOWY';
+            if (code >= 95 && code <= 99) return 'STORMY';
+            return 'CLEAR';
+        }
+
+        // Get time of day category
+        function getTimeOfDay(date) {
+            const hour = date.getHours();
+            if (hour >= 5 && hour < 9) return 'DAWN';
+            if (hour >= 9 && hour < 17) return 'MIDDAY';
+            if (hour >= 17 && hour < 20) return 'DUSK';
+            return 'NIGHT';
+        }
+
+        // Get gender preference for API
+        function getGenderPreference() {
+            if (state.gender === 'male') return 'MALE';
+            if (state.gender === 'female') return 'FEMALE';
+            return 'UNISEX';
+        }
+
+        // Build combination ID from current conditions
+        function buildCombinationId(weather, tempBracket, timeOfDay, gender) {
+            return `${gender}-${weather}-${tempBracket}-${timeOfDay}`;
+        }
+
+        // Query Supabase for cached hero image
+        async function fetchCachedHeroImage(combinationId) {
+            try {
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/generated_images?combination_id=eq.${combinationId}&order=created_at.desc&limit=1`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                if (!response.ok) return null;
+                const images = await response.json();
+                return images.length > 0 ? images[0] : null;
+            } catch (e) {
+                console.error('Failed to fetch cached hero image:', e);
+                return null;
+            }
+        }
+
+        // Queue image generation in Supabase
+        async function queueHeroImageGeneration(combinationId, prompt) {
+            try {
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/generation_jobs`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            combination_id: combinationId,
+                            prompt: prompt,
+                            status: 'QUEUED'
+                        })
+                    }
+                );
+                return response.ok;
+            } catch (e) {
+                console.error('Failed to queue hero image generation:', e);
+                return false;
+            }
+        }
+
+        // Build prompt for image generation
+        function buildImagePrompt(gender, weather, tempBracket, timeOfDay) {
+            const genderText = gender === 'UNISEX' ? 'athletic' : gender.toLowerCase();
+            const weatherText = weather.toLowerCase().replace('_', ' ');
+            const tempText = tempBracket.toLowerCase();
+            const timeText = timeOfDay.toLowerCase();
+
+            return `A ${genderText} runner in their 30s running mid-stride outdoors. Weather: ${weatherText}, Temperature: ${tempText} conditions, Time: ${timeText}. Professional athletic photography style, Nike campaign aesthetic. Full body shot, sharp focus, soft bokeh background. Runner wearing appropriate athletic gear for the weather conditions.`;
+        }
+
+        // Load hero image from Supabase or queue generation
+        async function loadHeroImage() {
+            if (!state.weather) return;
+
+            const weather = getWeatherCode(state.weather.weatherCode);
+            const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
+            const timeOfDay = getTimeOfDay(state.selectedDate);
+            const gender = getGenderPreference();
+
+            const combinationId = buildCombinationId(weather, tempBracket, timeOfDay, gender);
+
+            // Try to get cached image
+            const cachedImage = await fetchCachedHeroImage(combinationId);
+
+            if (cachedImage && cachedImage.image_url) {
+                currentHeroImageUrl = cachedImage.image_url;
+                updateHeroImage();
+                return;
+            }
+
+            // No cached image - queue generation
+            const prompt = buildImagePrompt(gender, weather, tempBracket, timeOfDay);
+            await queueHeroImageGeneration(combinationId, prompt);
+
+            // Keep placeholder for now
+            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+        }
+
+        // Update hero image in DOM
+        function updateHeroImage() {
+            const heroImg = document.querySelector('.hero-image');
+            if (heroImg && heroImg.src !== currentHeroImageUrl) {
+                heroImg.style.opacity = '0';
+                heroImg.onload = () => {
+                    heroImg.style.transition = 'opacity 0.5s ease';
+                    heroImg.style.opacity = '1';
+                };
+                heroImg.src = currentHeroImageUrl;
+            }
+        }
+
+        // Get current hero image URL (for render)
         function getHeroImageUrl() {
-            return 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop';
+            return currentHeroImageUrl;
         }
 
         function formatDate(date) {
@@ -2617,6 +2758,10 @@
                 
                 state.weather = await fetchWeather(state.location.lat, state.location.lon, state.selectedDate);
                 state.outfit = getOutfitRecommendation(state.weather);
+
+                // Load hero image from Supabase (or queue generation if not cached)
+                await loadHeroImage();
+
                 state.loading = false;
             } catch (err) {
                 state.loading = false;
