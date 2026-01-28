@@ -492,6 +492,62 @@
             pointer-events: auto;
         }
 
+        /* ========== TOAST NOTIFICATION ========== */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 2000;
+        }
+
+        .toast.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        /* ========== SHARE BUTTON ========== */
+        .share-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 100px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .share-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .share-btn:active {
+            transform: scale(0.95);
+        }
+
+        .share-btn svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
         /* Temperature Tint Overlay */
         .hero-tint {
             position: absolute;
@@ -2975,13 +3031,55 @@
             return 'UNISEX';
         }
 
-        // Build combination ID from current conditions
-        function buildCombinationId(weather, tempBracket, timeOfDay, gender) {
-            return `${gender}-${weather}-${tempBracket}-${timeOfDay}`;
+        // Generate outfit hash from current outfit items
+        function getOutfitHash() {
+            if (!state.outfit || !state.outfit.items) return 'default';
+            // Create hash from outfit item names
+            const itemString = state.outfit.items.map(i => i.name).sort().join('|');
+            let hash = 0;
+            for (let i = 0; i < itemString.length; i++) {
+                const char = itemString.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32-bit integer
+            }
+            return Math.abs(hash).toString(16).slice(0, 8);
         }
 
-        // Query Supabase for cached hero image
+        // Build combination ID from current conditions (matches backend format)
+        function buildCombinationId(gender, weather, tempBracket, timeOfDay, outfitHash) {
+            return `${gender}_${weather}_${tempBracket}_${timeOfDay}_${outfitHash}`;
+        }
+
+        // Query Supabase for cached hero image (random for variety)
         async function fetchCachedHeroImage(combinationId) {
+            try {
+                // Use RPC to get random image for variety
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/rpc/get_random_image`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ p_combination_id: combinationId })
+                    }
+                );
+                if (!response.ok) {
+                    // Fallback to direct query if RPC doesn't exist
+                    return await fetchCachedHeroImageDirect(combinationId);
+                }
+                const image = await response.json();
+                return image;
+            } catch (e) {
+                // Fallback to direct query
+                return await fetchCachedHeroImageDirect(combinationId);
+            }
+        }
+
+        // Direct query fallback (if RPC not available)
+        async function fetchCachedHeroImageDirect(combinationId) {
             try {
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/generated_images?combination_id=eq.${combinationId}&order=created_at.desc&limit=1`,
@@ -2998,6 +3096,122 @@
             } catch (e) {
                 console.error('Failed to fetch hero image:', e);
                 return null;
+            }
+        }
+
+        // Increment serve count when image is displayed
+        async function incrementServeCount(imageId) {
+            if (!imageId) return;
+            try {
+                await fetch(
+                    `${SUPABASE_URL}/rest/v1/rpc/increment_serve_count`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ p_image_id: imageId })
+                    }
+                );
+            } catch (e) {
+                // Silent fail - not critical
+            }
+        }
+
+        // Check library stats for replenishment decision
+        async function getLibraryStats(combinationId) {
+            try {
+                const response = await fetch(
+                    `${SUPABASE_URL}/rest/v1/library_stats?combination_id=eq.${combinationId}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                if (!response.ok) return null;
+                const stats = await response.json();
+                return stats.length > 0 ? stats[0] : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Replenishment rules from spec
+        const REPLENISHMENT_RULES = {
+            dailyBudget: 50,           // Max 50 images/day
+            maxImagesPerCombo: 10,     // Cap per combination
+            minImageAgeHours: 24,      // Don't regenerate too fast
+            matureThreshold: 5,        // Combo is "mature" at 5+ images
+            matureRefreshDays: 7       // Slow refresh for mature combos
+        };
+
+        // Check if we should replenish this combination
+        async function shouldReplenish(combinationId) {
+            const stats = await getLibraryStats(combinationId);
+
+            // No stats = new combination, should generate
+            if (!stats) return true;
+
+            const imageCount = stats.image_count || 0;
+            const lastGenerated = stats.last_generated_at ? new Date(stats.last_generated_at) : null;
+            const now = new Date();
+
+            // Already at max images
+            if (imageCount >= REPLENISHMENT_RULES.maxImagesPerCombo) {
+                return false;
+            }
+
+            // Check minimum age since last generation
+            if (lastGenerated) {
+                const hoursSinceLastGen = (now - lastGenerated) / (1000 * 60 * 60);
+
+                // If mature combo, use longer interval
+                if (imageCount >= REPLENISHMENT_RULES.matureThreshold) {
+                    const daysSinceLastGen = hoursSinceLastGen / 24;
+                    if (daysSinceLastGen < REPLENISHMENT_RULES.matureRefreshDays) {
+                        return false;
+                    }
+                } else {
+                    // Immature combo, use shorter interval
+                    if (hoursSinceLastGen < REPLENISHMENT_RULES.minImageAgeHours) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        // Ensure outfit_combination exists in database
+        async function ensureOutfitCombination(combinationId, gender, weather, tempBracket, timeOfDay, outfitHash) {
+            try {
+                // Try to insert (will fail silently if exists due to primary key)
+                await fetch(
+                    `${SUPABASE_URL}/rest/v1/outfit_combinations`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal,resolution=ignore-duplicates'
+                        },
+                        body: JSON.stringify({
+                            id: combinationId,
+                            gender_preference: gender,
+                            weather_code: weather,
+                            temp_bracket: tempBracket,
+                            time_of_day: timeOfDay,
+                            outfit_hash: outfitHash
+                        })
+                    }
+                );
+            } catch (e) {
+                // Ignore - combination may already exist
             }
         }
 
@@ -3028,26 +3242,73 @@
             }
         }
 
-        // Build prompt for image generation
-        function buildImagePrompt(gender, weather, tempBracket, timeOfDay) {
+        // Build prompt for image generation (matches spec format)
+        function buildImagePrompt(gender, weather, tempBracket, timeOfDay, outfit) {
             const genderText = gender === 'UNISEX' ? 'athletic' : gender.toLowerCase();
-            const weatherText = weather.toLowerCase().replace('_', ' ');
-            const tempText = tempBracket.toLowerCase();
-            const timeText = timeOfDay.toLowerCase();
+            const timeLabels = { DAWN: 'early morning', MIDDAY: 'midday', DUSK: 'evening', NIGHT: 'night' };
+            const tempLabels = { FREEZING: 'freezing cold', COLD: 'cold', COOL: 'cool', MILD: 'mild', WARM: 'warm', HOT: 'hot' };
 
-            return `A ${genderText} runner in their 30s running mid-stride outdoors. Weather: ${weatherText}, Temperature: ${tempText} conditions, Time: ${timeText}. Professional athletic photography style, Nike campaign aesthetic. Full body shot, sharp focus, soft bokeh background. Runner wearing appropriate athletic gear for the weather conditions.`;
+            // Build outfit description from actual items
+            let outfitDesc = '';
+            if (outfit && outfit.items) {
+                outfitDesc = outfit.items.map(item => item.name).join(', ');
+            }
+
+            return `A ${genderText} runner in their 30s running mid-stride along a suburban sidewalk during a ${tempLabels[tempBracket] || tempBracket.toLowerCase()} ${timeLabels[timeOfDay] || timeOfDay.toLowerCase()}.
+
+OUTFIT (show ALL items clearly): ${outfitDesc || 'appropriate running gear'}
+
+ENVIRONMENT: ${getEnvironmentDesc(weather, tempBracket)}
+
+STYLE: Professional athletic action photography. Full body mid-stride, natural running gait, dynamic motion. Sharp focus on runner, soft bokeh background. Authentic and aspirational, like a Nike campaign.
+
+MOOD: ${getMoodDesc(tempBracket)}`;
+        }
+
+        function getEnvironmentDesc(weather, tempBracket) {
+            const weatherDescs = {
+                CLEAR: 'Clear blue sky, suburban neighborhood with sidewalks and trees',
+                CLOUDY: 'Overcast gray sky, diffused lighting',
+                RAIN: 'Wet pavement, light rain, gray sky',
+                SNOW: 'Snow-dusted sidewalk, flurries, winter scene'
+            };
+            const tempAdditions = {
+                FREEZING: ', frost on grass, breath visible',
+                COLD: ', crisp winter air',
+                COOL: ', fresh morning air',
+                MILD: ', pleasant conditions',
+                WARM: ', bright sunshine',
+                HOT: ', heat shimmer on asphalt, intense sun'
+            };
+            return (weatherDescs[weather] || weatherDescs.CLEAR) + (tempAdditions[tempBracket] || '');
+        }
+
+        function getMoodDesc(tempBracket) {
+            const moods = {
+                FREEZING: 'Tough and determined, layered and ready',
+                COLD: 'Brisk and prepared, embracing the cold',
+                COOL: 'Fresh and invigorating, energized',
+                MILD: 'Perfect running weather, pure joy',
+                WARM: 'Light and free, enjoying the warmth',
+                HOT: 'Intense but determined, beating the heat'
+            };
+            return moods[tempBracket] || 'Focused and determined';
         }
 
         // Load hero image from Supabase or queue generation
         async function loadHeroImage() {
-            if (!state.weather) return;
+            if (!state.weather || !state.outfit) return;
 
             const weather = getWeatherCode(state.weather.weatherCode);
             const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
             const timeOfDay = getTimeOfDay(state.selectedDate);
             const gender = getGenderPreference();
+            const outfitHash = getOutfitHash();
 
-            const combinationId = buildCombinationId(weather, tempBracket, timeOfDay, gender);
+            const combinationId = buildCombinationId(gender, weather, tempBracket, timeOfDay, outfitHash);
+
+            // Ensure combination exists in database
+            await ensureOutfitCombination(combinationId, gender, weather, tempBracket, timeOfDay, outfitHash);
 
             // Try to get cached image
             const cachedImage = await fetchCachedHeroImage(combinationId);
@@ -3055,12 +3316,20 @@
             if (cachedImage && cachedImage.image_url) {
                 currentHeroImageUrl = cachedImage.image_url;
                 updateHeroImage();
+
+                // Track serve count
+                if (cachedImage.id) {
+                    incrementServeCount(cachedImage.id);
+                }
                 return;
             }
 
-            // No cached image - queue generation for future
-            const prompt = buildImagePrompt(gender, weather, tempBracket, timeOfDay);
-            await queueHeroImageGeneration(combinationId, prompt);
+            // No cached image - check replenishment rules before queuing
+            const shouldQueue = await shouldReplenish(combinationId);
+            if (shouldQueue) {
+                const prompt = buildImagePrompt(gender, weather, tempBracket, timeOfDay, state.outfit);
+                await queueHeroImageGeneration(combinationId, prompt);
+            }
         }
 
         // Update hero image in DOM
@@ -3879,6 +4148,78 @@
             activeOutfitDetail = null;
         }
 
+        // ============ SHARE FEATURE ============
+        async function shareOutfit() {
+            if (!state.weather || !state.outfit) return;
+
+            const w = state.weather;
+            const unit = state.useCelsius ? '°C' : '°F';
+            const tempBracket = getTempBracket(w.feelsLike);
+
+            // Build share text
+            const outfitList = state.outfit.items.map(item => `• ${item.name}`).join('\n');
+            const shareText = `🏃 RunWear Recommendation
+
+📍 ${state.locationName}
+🌡️ Feels like ${Math.round(w.feelsLike)}${unit} (${tempBracket})
+${getWeatherIcon(w.weatherCode)} ${getWeatherDescription(w.weatherCode)}
+
+What to wear:
+${outfitList}
+
+${state.outfit.tips.length > 0 ? `💡 Tip: ${state.outfit.tips[0]}` : ''}
+
+Get your personalized running outfit at runwear.ai`;
+
+            // Try native share API first
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'RunWear - Running Outfit Recommendation',
+                        text: shareText,
+                        url: 'https://runwear.ai'
+                    });
+                    return;
+                } catch (e) {
+                    // User cancelled or share failed, fall through to clipboard
+                    if (e.name !== 'AbortError') {
+                        console.error('Share failed:', e);
+                    }
+                }
+            }
+
+            // Fallback: copy to clipboard
+            try {
+                await navigator.clipboard.writeText(shareText);
+                showToast('Copied to clipboard!');
+            } catch (e) {
+                console.error('Clipboard write failed:', e);
+                showToast('Could not share');
+            }
+        }
+
+        // Toast notification
+        function showToast(message) {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.add('visible');
+            });
+
+            // Remove after 2 seconds
+            setTimeout(() => {
+                toast.classList.remove('visible');
+                setTimeout(() => toast.remove(), 300);
+            }, 2000);
+        }
+
         // ============ TIP CARD EXPANSION ============
         function toggleTipCard(el) {
             el.classList.toggle('expanded');
@@ -4032,6 +4373,7 @@
             const chevronSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
             const bagSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg>`;
             const lightbulbSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>`;
+            const shareSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`;
 
             app.innerHTML = `
                 <!-- HERO SECTION -->
@@ -4049,9 +4391,14 @@
                             ${locationSvg}
                             <span>${state.locationName}</span>
                         </button>
-                        <button class="glass-btn glass-btn-icon" onclick="openSettings()" title="Settings">
-                            ${settingsSvg}
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="glass-btn glass-btn-icon" onclick="shareOutfit()" title="Share">
+                                ${shareSvg}
+                            </button>
+                            <button class="glass-btn glass-btn-icon" onclick="openSettings()" title="Settings">
+                                ${settingsSvg}
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Bottom Weather Content -->
