@@ -27,8 +27,8 @@
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
     <link rel="apple-touch-icon" sizes="144x144" href="icon-144.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="icon-120.png">
-    <link rel="apple-touch-icon" sizes="76x76" href="icon-76.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="icon-128.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="icon-72.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
