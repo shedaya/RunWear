@@ -106,6 +106,16 @@
             to { opacity: 1; }
         }
 
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes pullRefreshSpin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         @keyframes heroImageIn {
             from { opacity: 0; transform: scale(1.15); }
             to { opacity: 1; transform: scale(1.05); }
@@ -139,6 +149,347 @@
             width: 100%;
             height: 100%;
             background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-dark) 100%);
+        }
+
+        /* ========== SKELETON LOADING ========== */
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-card) 25%, rgba(255,255,255,0.08) 50%, var(--bg-card) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        .skeleton-hero {
+            height: 75vh;
+            min-height: 500px;
+            max-height: 700px;
+            background: var(--bg-card);
+            position: relative;
+        }
+
+        .skeleton-hero-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 24px 20px;
+        }
+
+        .skeleton-datetime {
+            width: 180px;
+            height: 36px;
+            margin-bottom: 16px;
+            border-radius: 100px;
+        }
+
+        .skeleton-temp {
+            width: 140px;
+            height: 96px;
+            margin-bottom: 16px;
+            border-radius: 16px;
+        }
+
+        .skeleton-pills {
+            display: flex;
+            gap: 8px;
+        }
+
+        .skeleton-pill {
+            width: 70px;
+            height: 36px;
+            border-radius: 100px;
+        }
+
+        .skeleton-section {
+            padding: 20px;
+        }
+
+        .skeleton-section-title {
+            width: 160px;
+            height: 24px;
+            margin-bottom: 16px;
+        }
+
+        .skeleton-card {
+            height: 72px;
+            margin-bottom: 12px;
+            border-radius: 16px;
+        }
+
+        /* ========== PULL TO REFRESH ========== */
+        .pull-refresh-indicator {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%) translateY(-60px);
+            z-index: 1000;
+            width: 40px;
+            height: 40px;
+            background: var(--bg-card);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+            opacity: 0;
+        }
+
+        .pull-refresh-indicator.pulling {
+            opacity: 1;
+        }
+
+        .pull-refresh-indicator.refreshing {
+            transform: translateX(-50%) translateY(20px);
+            opacity: 1;
+        }
+
+        .pull-refresh-indicator svg {
+            width: 24px;
+            height: 24px;
+            fill: var(--text-primary);
+            transition: transform 0.2s ease;
+        }
+
+        .pull-refresh-indicator.refreshing svg {
+            animation: pullRefreshSpin 1s linear infinite;
+        }
+
+        /* ========== WEATHER PILLS EXPANDED ========== */
+        .weather-pills-container {
+            position: relative;
+        }
+
+        .weather-pill {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .weather-pill:active {
+            transform: scale(0.95);
+        }
+
+        .weather-detail-popup {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-radius: 24px 24px 0 0;
+            padding: 24px 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1001;
+            max-height: 50vh;
+            overflow-y: auto;
+        }
+
+        .weather-detail-popup.active {
+            transform: translateY(0);
+        }
+
+        .weather-detail-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .weather-detail-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .weather-detail-icon svg {
+            width: 28px;
+            height: 28px;
+            fill: var(--text-primary);
+        }
+
+        .weather-detail-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .weather-detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .weather-detail-item {
+            background: rgba(255,255,255,0.05);
+            padding: 16px;
+            border-radius: 12px;
+        }
+
+        .weather-detail-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .weather-detail-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* ========== OUTFIT CARD EXPANDED ========== */
+        .outfit-card {
+            cursor: pointer;
+        }
+
+        .outfit-card:active {
+            transform: scale(0.98);
+        }
+
+        .outfit-detail-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-radius: 24px 24px 0 0;
+            padding: 24px 20px;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1001;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .outfit-detail-sheet.active {
+            transform: translateY(0);
+        }
+
+        .outfit-detail-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+            margin: 0 auto 20px;
+        }
+
+        .outfit-detail-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .outfit-detail-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .outfit-detail-icon svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .outfit-detail-name {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .outfit-detail-category {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .outfit-detail-desc {
+            background: rgba(255,255,255,0.05);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        .outfit-detail-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .outfit-detail-btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .outfit-detail-btn.primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+        }
+
+        .outfit-detail-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-primary);
+            border: none;
+        }
+
+        .outfit-detail-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* ========== TIP CARD EXPANDED ========== */
+        .tip-card {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tip-card:active {
+            transform: scale(0.98);
+        }
+
+        .tip-card.expanded .tip-text {
+            -webkit-line-clamp: unset;
+            max-height: none;
+        }
+
+        .tip-card .tip-more {
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .tip-card.expanded .tip-more {
+            display: block;
+        }
+
+        /* ========== OVERLAY FOR SHEETS ========== */
+        .sheet-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .sheet-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
         }
 
         /* Temperature Tint Overlay */
@@ -2529,6 +2880,36 @@
             return icons[code] || '❓';
         }
 
+        function getWeatherDescription(code) {
+            const descriptions = {
+                0: 'Clear Sky',
+                1: 'Mainly Clear',
+                2: 'Partly Cloudy',
+                3: 'Overcast',
+                45: 'Foggy',
+                48: 'Rime Fog',
+                51: 'Light Drizzle',
+                53: 'Moderate Drizzle',
+                55: 'Dense Drizzle',
+                61: 'Light Rain',
+                63: 'Moderate Rain',
+                65: 'Heavy Rain',
+                71: 'Light Snow',
+                73: 'Moderate Snow',
+                75: 'Heavy Snow',
+                77: 'Snow Grains',
+                80: 'Light Showers',
+                81: 'Moderate Showers',
+                82: 'Heavy Showers',
+                85: 'Light Snow Showers',
+                86: 'Heavy Snow Showers',
+                95: 'Thunderstorm',
+                96: 'Thunderstorm with Hail',
+                99: 'Severe Thunderstorm'
+            };
+            return descriptions[code] || 'Unknown';
+        }
+
         // Get temperature bracket name (freezing, cold, cool, mild, warm, hot)
         function getTempBracket(temp) {
             const f = state.useCelsius ? temp * 9/5 + 32 : temp;
@@ -3253,17 +3634,299 @@
             selectManualLocation(loc);
         }
 
+        // ============ PULL TO REFRESH ============
+        let pullStartY = 0;
+        let pullCurrentY = 0;
+        let isPulling = false;
+        let isRefreshing = false;
+
+        function initPullToRefresh() {
+            const app = document.getElementById('app');
+            if (!app) return;
+
+            app.addEventListener('touchstart', handlePullStart, { passive: true });
+            app.addEventListener('touchmove', handlePullMove, { passive: false });
+            app.addEventListener('touchend', handlePullEnd, { passive: true });
+        }
+
+        function handlePullStart(e) {
+            if (window.scrollY === 0 && !isRefreshing) {
+                pullStartY = e.touches[0].clientY;
+                isPulling = true;
+            }
+        }
+
+        function handlePullMove(e) {
+            if (!isPulling || isRefreshing) return;
+
+            pullCurrentY = e.touches[0].clientY;
+            const pullDistance = pullCurrentY - pullStartY;
+
+            if (pullDistance > 0 && window.scrollY === 0) {
+                e.preventDefault();
+                const indicator = document.querySelector('.pull-refresh-indicator');
+                if (indicator) {
+                    const progress = Math.min(pullDistance / 100, 1);
+                    indicator.classList.add('pulling');
+                    indicator.style.transform = `translateX(-50%) translateY(${-60 + pullDistance * 0.8}px)`;
+                    indicator.querySelector('svg').style.transform = `rotate(${progress * 180}deg)`;
+                }
+            }
+        }
+
+        function handlePullEnd() {
+            if (!isPulling) return;
+            isPulling = false;
+
+            const pullDistance = pullCurrentY - pullStartY;
+            const indicator = document.querySelector('.pull-refresh-indicator');
+
+            if (pullDistance > 80 && !isRefreshing) {
+                isRefreshing = true;
+                if (indicator) {
+                    indicator.classList.remove('pulling');
+                    indicator.classList.add('refreshing');
+                }
+
+                loadWeather().then(() => {
+                    setTimeout(() => {
+                        isRefreshing = false;
+                        if (indicator) {
+                            indicator.classList.remove('refreshing');
+                            indicator.style.transform = 'translateX(-50%) translateY(-60px)';
+                        }
+                    }, 500);
+                });
+            } else {
+                if (indicator) {
+                    indicator.classList.remove('pulling');
+                    indicator.style.transform = 'translateX(-50%) translateY(-60px)';
+                }
+            }
+
+            pullStartY = 0;
+            pullCurrentY = 0;
+        }
+
+        // ============ HERO PARALLAX ============
+        function initHeroParallax() {
+            window.addEventListener('scroll', handleParallax, { passive: true });
+        }
+
+        function handleParallax() {
+            const heroImage = document.querySelector('.hero-image');
+            const hero = document.querySelector('.hero');
+            if (!heroImage || !hero) return;
+
+            const scrollY = window.scrollY;
+            const heroHeight = hero.offsetHeight;
+
+            if (scrollY < heroHeight) {
+                const parallaxOffset = scrollY * 0.4;
+                heroImage.style.transform = `scale(1.05) translateY(${parallaxOffset}px)`;
+            }
+        }
+
+        // ============ WEATHER DETAIL POPUP ============
+        let activeWeatherDetail = null;
+
+        function showWeatherDetail(type) {
+            if (!state.weather) return;
+
+            const w = state.weather;
+            const unit = state.useCelsius ? '°C' : '°F';
+            const windUnit = state.useCelsius ? 'km/h' : 'mph';
+
+            let title, icon, details;
+
+            switch(type) {
+                case 'condition':
+                    title = getWeatherDescription(w.weatherCode);
+                    icon = getWeatherIcon(w.weatherCode);
+                    details = [
+                        { label: 'Condition', value: getWeatherDescription(w.weatherCode) },
+                        { label: 'Cloud Cover', value: `${w.cloudCover || 0}%` },
+                        { label: 'Visibility', value: 'Good' },
+                        { label: 'Precipitation', value: `${w.precipProb || 0}%` }
+                    ];
+                    break;
+                case 'wind':
+                    title = 'Wind';
+                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z"/></svg>`;
+                    details = [
+                        { label: 'Speed', value: `${Math.round(w.windSpeed)} ${windUnit}` },
+                        { label: 'Gusts', value: `${Math.round(w.windGusts || w.windSpeed * 1.3)} ${windUnit}` },
+                        { label: 'Direction', value: getWindDirection(w.windDirection || 0) },
+                        { label: 'Feels Like Impact', value: w.windSpeed > 20 ? 'Significant' : 'Minimal' }
+                    ];
+                    break;
+                case 'humidity':
+                    title = 'Humidity';
+                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
+                    details = [
+                        { label: 'Relative Humidity', value: `${w.humidity}%` },
+                        { label: 'Dew Point', value: `${Math.round(w.dewPoint || w.temp - 5)}${unit}` },
+                        { label: 'Comfort Level', value: w.humidity > 70 ? 'Muggy' : w.humidity < 30 ? 'Dry' : 'Comfortable' },
+                        { label: 'Sweat Impact', value: w.humidity > 60 ? 'Slower evaporation' : 'Normal' }
+                    ];
+                    break;
+                case 'uv':
+                    title = 'UV Index';
+                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`;
+                    const uvLevel = w.uvIndex <= 2 ? 'Low' : w.uvIndex <= 5 ? 'Moderate' : w.uvIndex <= 7 ? 'High' : 'Very High';
+                    details = [
+                        { label: 'UV Index', value: Math.round(w.uvIndex) },
+                        { label: 'Level', value: uvLevel },
+                        { label: 'Protection', value: w.uvIndex > 3 ? 'Sunscreen recommended' : 'Minimal needed' },
+                        { label: 'Peak Hours', value: '10am - 4pm' }
+                    ];
+                    break;
+            }
+
+            activeWeatherDetail = type;
+
+            const popup = document.getElementById('weatherDetailPopup');
+            const overlay = document.getElementById('sheetOverlay');
+
+            popup.innerHTML = `
+                <div class="weather-detail-header">
+                    <div class="weather-detail-icon">${icon}</div>
+                    <div class="weather-detail-title">${title}</div>
+                </div>
+                <div class="weather-detail-grid">
+                    ${details.map(d => `
+                        <div class="weather-detail-item">
+                            <div class="weather-detail-label">${d.label}</div>
+                            <div class="weather-detail-value">${d.value}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            popup.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function getWindDirection(degrees) {
+            const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+            const index = Math.round(degrees / 45) % 8;
+            return directions[index];
+        }
+
+        function closeWeatherDetail() {
+            const popup = document.getElementById('weatherDetailPopup');
+            const overlay = document.getElementById('sheetOverlay');
+            popup.classList.remove('active');
+            overlay.classList.remove('active');
+            activeWeatherDetail = null;
+        }
+
+        // ============ OUTFIT DETAIL SHEET ============
+        let activeOutfitDetail = null;
+
+        function showOutfitDetail(item) {
+            activeOutfitDetail = item;
+
+            const sheet = document.getElementById('outfitDetailSheet');
+            const overlay = document.getElementById('sheetOverlay');
+
+            const categoryDescriptions = {
+                hat: 'Protects from sun and helps regulate head temperature during your run.',
+                top: 'Your core layer - choose based on temperature and personal preference.',
+                bottom: 'Leg coverage for comfort and protection.',
+                socks: 'Proper running socks prevent blisters and wick moisture.',
+                shoes: 'The foundation of every run - match to conditions.',
+                accessories: 'Extra gear to enhance comfort and performance.',
+                outerwear: 'Protection from wind, rain, or cold.',
+                gloves: 'Keep hands warm and functional in cold weather.',
+                sunglasses: 'Protect eyes from sun and debris.'
+            };
+
+            sheet.innerHTML = `
+                <div class="outfit-detail-handle"></div>
+                <div class="outfit-detail-header">
+                    <div class="outfit-detail-icon cat-${item.category}">
+                        ${getCategoryIcon(item.category)}
+                    </div>
+                    <div>
+                        <div class="outfit-detail-name">${item.name}</div>
+                        <div class="outfit-detail-category">${item.category}</div>
+                    </div>
+                </div>
+                <div class="outfit-detail-desc">
+                    ${item.desc || categoryDescriptions[item.category] || 'Essential gear for your run.'}
+                </div>
+                <div class="outfit-detail-actions">
+                    <button class="outfit-detail-btn secondary" onclick="closeOutfitDetail()">
+                        Close
+                    </button>
+                    <button class="outfit-detail-btn primary" onclick="shopItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg>
+                        Shop
+                    </button>
+                </div>
+            `;
+
+            sheet.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function closeOutfitDetail() {
+            const sheet = document.getElementById('outfitDetailSheet');
+            const overlay = document.getElementById('sheetOverlay');
+            sheet.classList.remove('active');
+            overlay.classList.remove('active');
+            activeOutfitDetail = null;
+        }
+
+        // ============ TIP CARD EXPANSION ============
+        function toggleTipCard(el) {
+            el.classList.toggle('expanded');
+        }
+
+        // ============ CLOSE ALL SHEETS ============
+        function closeAllSheets() {
+            closeWeatherDetail();
+            closeOutfitDetail();
+        }
+
         // ============ RENDER ============
         function render() {
             const app = document.getElementById('app');
             
             if (state.loading) {
                 app.innerHTML = `
-                    <div class="state-screen">
-                        <div class="spinner"></div>
-                        <div class="state-title">Getting your outfit...</div>
-                        <div class="state-desc">Fetching weather data for your location</div>
+                    <!-- Pull to Refresh Indicator -->
+                    <div class="pull-refresh-indicator">
+                        <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                     </div>
+
+                    <!-- Skeleton Hero -->
+                    <div class="skeleton-hero">
+                        <div class="skeleton-hero-content">
+                            <div class="skeleton skeleton-datetime"></div>
+                            <div class="skeleton skeleton-temp"></div>
+                            <div class="skeleton-pills">
+                                <div class="skeleton skeleton-pill"></div>
+                                <div class="skeleton skeleton-pill"></div>
+                                <div class="skeleton skeleton-pill"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Skeleton Outfit Section -->
+                    <div class="skeleton-section">
+                        <div class="skeleton skeleton-section-title"></div>
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
+                    </div>
+
+                    <!-- Sheet Overlay -->
+                    <div class="sheet-overlay" id="sheetOverlay" onclick="closeAllSheets()"></div>
+                    <div class="weather-detail-popup" id="weatherDetailPopup"></div>
+                    <div class="outfit-detail-sheet" id="outfitDetailSheet"></div>
                 `;
                 return;
             }
@@ -3413,21 +4076,21 @@
                             <div class="temp-actual">Actual: <span>${Math.round(w.temp)}${unit}</span></div>
                         </div>
 
-                        <!-- Weather Pills -->
+                        <!-- Weather Pills (tap to expand) -->
                         <div class="weather-pills">
-                            <div class="weather-pill">
+                            <div class="weather-pill" onclick="showWeatherDetail('condition')">
                                 ${getWeatherIcon(w.weatherCode)}
                             </div>
-                            <div class="weather-pill">
+                            <div class="weather-pill" onclick="showWeatherDetail('wind')">
                                 ${windSvg}
                                 <span>${Math.round(w.windSpeed)} ${windUnit}</span>
                             </div>
-                            <div class="weather-pill">
+                            <div class="weather-pill" onclick="showWeatherDetail('humidity')">
                                 ${humiditySvg}
                                 <span>${w.humidity}%</span>
                             </div>
                             ${w.uvIndex > 0 ? `
-                            <div class="weather-pill">
+                            <div class="weather-pill" onclick="showWeatherDetail('uv')">
                                 ${uvSvg}
                                 <span>UV ${Math.round(w.uvIndex)}</span>
                             </div>
@@ -3459,7 +4122,7 @@
 
                     <div class="outfit-grid">
                         ${state.outfit.items.map((item, index) => `
-                            <button class="outfit-card" onclick="shopItem(${JSON.stringify(item).replace(/"/g, '&quot;')})" style="animation-delay: ${0.05 + index * 0.05}s">
+                            <button class="outfit-card" onclick="showOutfitDetail(${JSON.stringify(item).replace(/"/g, '&quot;')})" style="animation-delay: ${0.05 + index * 0.05}s">
                                 <div class="outfit-icon cat-${item.category}">
                                     ${getCategoryIcon(item.category)}
                                 </div>
@@ -3475,15 +4138,30 @@
                     </div>
 
                     ${state.outfit.tips.length > 0 ? `
-                        <div class="tip-card">
+                        <div class="tip-card" onclick="toggleTipCard(this)">
                             <div class="tip-header">
                                 <div class="tip-icon">${lightbulbSvg}</div>
                                 <div class="tip-label">Pro Tip</div>
                             </div>
                             <div class="tip-text">${state.outfit.tips[0]}</div>
+                            ${state.outfit.tips.length > 1 ? `
+                                <div class="tip-more">
+                                    ${state.outfit.tips.slice(1).map(tip => `<div class="tip-text" style="margin-top: 8px;">${tip}</div>`).join('')}
+                                </div>
+                            ` : ''}
                         </div>
                     ` : ''}
                 </div>
+
+                <!-- Pull to Refresh Indicator -->
+                <div class="pull-refresh-indicator">
+                    <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                </div>
+
+                <!-- Sheet Overlay -->
+                <div class="sheet-overlay" id="sheetOverlay" onclick="closeAllSheets()"></div>
+                <div class="weather-detail-popup" id="weatherDetailPopup"></div>
+                <div class="outfit-detail-sheet" id="outfitDetailSheet"></div>
             `;
         }
 
@@ -3580,6 +4258,10 @@
 
         // ============ INIT ============
         document.addEventListener('DOMContentLoaded', () => {
+            // Initialize pull-to-refresh and parallax
+            initPullToRefresh();
+            initHeroParallax();
+
             if (!state.hasCompletedOnboarding) {
                 showOnboarding();
             } else {
