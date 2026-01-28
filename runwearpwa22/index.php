@@ -2615,7 +2615,7 @@
                 const images = await response.json();
                 return images.length > 0 ? images[0] : null;
             } catch (e) {
-                console.error('Failed to fetch cached hero image:', e);
+                console.error('Failed to fetch hero image:', e);
                 return null;
             }
         }
@@ -2677,12 +2677,9 @@
                 return;
             }
 
-            // No cached image - queue generation
+            // No cached image - queue generation for future
             const prompt = buildImagePrompt(gender, weather, tempBracket, timeOfDay);
             await queueHeroImageGeneration(combinationId, prompt);
-
-            // Keep placeholder for now
-            currentHeroImageUrl = PLACEHOLDER_IMAGE;
         }
 
         // Update hero image in DOM
