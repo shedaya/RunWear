@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.8 -->
+<!-- RunWear PWA v3.9 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3423,7 +3423,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
                 try {
                     const response = await fetch(
-                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%&limit=10`,
+                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%25&limit=10`,
                         {
                             headers: {
                                 'apikey': SUPABASE_ANON_KEY,
@@ -4746,7 +4746,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.8</div>
+                    <div class="footer">v3.9</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
