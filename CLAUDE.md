@@ -28,16 +28,19 @@ adb shell am start -n com.runwear.app/.MainActivity
 - Removed PullToRefreshBox (not available in Material3 version) in MainScreen.kt
 - Fixed Modifier.padding() chaining in MainScreen.kt
 
-## PWA Hero Image System (v3.10)
+## Hero Image System (v3.11)
 
-Location: `runwearpwa22/index.php`
+Locations:
+- PWA: `runwearpwa22/index.php`
+- Android: `RunWear-android/shared/.../HeroImageRepository.kt`
+- iOS: Not yet implemented
 
 ### Gender Functions (Important Distinction)
 
 Two separate functions handle gender - DO NOT confuse them:
 
 1. **`getHeroImageGender()`** - For hero images ONLY
-   - Returns `MALE` or `FEMALE` (never `ALL`)
+   - Returns `MALE` or `FEMALE` (never `ALL`/`UNISEX`)
    - When user preference is 'all': randomly picks MALE or FEMALE (50/50)
    - Purpose: Ensures variety in hero images when no preference set
 
@@ -60,17 +63,32 @@ Queries Supabase `generated_images` table with cascading fallback:
 
 If all queries fail, falls back to Unsplash API.
 
+### Demand-Driven Replenishment (v3.11)
+
+The system automatically grows the image library based on actual user demand:
+
+**Replenishment triggers when:**
+1. No images found at all → queue generation
+2. Found via fallback (different gender) → queue for original gender
+3. Exact matches < 5 variants → queue more variety
+
+**Rate limiting:** 1 queue per user per 5 minutes (prevents abuse)
+
+**Variant numbering:** `_v1`, `_v2`, `_v3`... auto-increments
+
+**Result:** Popular combinations grow to 5+ variants automatically.
+
 ### Image Naming Convention
 
-Format: `{GENDER}_{WEATHER}_{TEMP}_{TIME}_{INDEX}`
+Format: `{GENDER}_{WEATHER}_{TEMP}_{TIME}_v{N}`
 
-- **Gender**: `MALE`, `FEMALE`, `UNISEX`
+- **Gender**: `MALE`, `FEMALE`
 - **Weather**: `CLEAR`, `CLOUDY`, `RAINY`, `SNOWY`
 - **Temp**: `FREEZING`, `COLD`, `COOL`, `MILD`, `WARM`, `HOT`
 - **Time**: `DAWN`, `MIDDAY`, `DUSK`, `NIGHT`
-- **Index**: Sequential number (1, 2, 3...)
+- **Variant**: `v1`, `v2`, `v3`...
 
-Example: `FEMALE_CLEAR_COLD_MIDDAY_1`
+Example: `FEMALE_CLEAR_COLD_MIDDAY_v1`
 
 ## Next Steps
 - UI/UX improvements (planning in progress)
