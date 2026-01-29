@@ -4900,7 +4900,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.9</div>
+                    <div class="footer">v3.11</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
