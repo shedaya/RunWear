@@ -1,4 +1,4 @@
-const CACHE_NAME = 'runwear-v2.9';
+const CACHE_NAME = 'runwear-v3.0';
 const ASSETS = [
   '/',
   '/index.html',
@@ -45,9 +45,10 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   
   // Skip API requests (always fetch fresh)
-  if (event.request.url.includes('api.open-meteo.com') || 
+  if (event.request.url.includes('api.open-meteo.com') ||
       event.request.url.includes('nominatim.openstreetmap.org') ||
-      event.request.url.includes('amazon.com')) {
+      event.request.url.includes('amazon.com') ||
+      event.request.url.includes('supabase.co')) {
     return;
   }
   

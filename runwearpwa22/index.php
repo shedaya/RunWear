@@ -3026,18 +3026,80 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4';
         const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop';
 
-        // Default hero images by temperature bracket (preloaded for instant display)
+        // Default hero images by temperature bracket AND weather condition (2D matrix)
         const DEFAULT_HERO_IMAGES = {
-            hot: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop',      // Runner in tank top, sunny
-            warm: 'https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop',    // Runner in t-shirt
-            mild: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop',       // Runner in light layers
-            cool: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop',    // Runner in long sleeves
-            cold: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop',    // Runner in jacket
-            freezing: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop'    // Runner in winter gear
+            hot: {
+                clear: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop',   // Tank top, bright sunny
+                cloudy: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop',  // Summer overcast
+                rain: 'https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop',    // Summer rain run
+                snow: null  // Not possible when hot
+            },
+            warm: {
+                clear: 'https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop',   // T-shirt sunny
+                cloudy: 'https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop',     // Warm overcast
+                rain: 'https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop',    // Warm rain
+                snow: null  // Not possible when warm
+            },
+            mild: {
+                clear: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop',      // Light layers sunny
+                cloudy: 'https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop',     // Mild overcast
+                rain: 'https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop',    // Spring/fall rain
+                snow: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop'     // Light snow
+            },
+            cool: {
+                clear: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop',   // Long sleeves sunny
+                cloudy: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop',  // Cool overcast
+                rain: 'https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop',    // Cool rainy
+                snow: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop'     // Cool snow
+            },
+            cold: {
+                clear: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop',   // Jacket sunny winter
+                cloudy: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop',  // Cold overcast
+                rain: 'https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop',    // Cold rain/sleet
+                snow: 'https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=800&h=1200&fit=crop'     // Snowy run
+            },
+            freezing: {
+                clear: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop',      // Winter gear sunny
+                cloudy: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop',     // Freezing overcast
+                rain: 'https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop',    // Freezing rain/sleet
+                snow: 'https://images.unsplash.com/photo-1418985991508-e47386d96a71?w=800&h=1200&fit=crop'     // Heavy snow winter
+            }
         };
 
-        // Preload default images for instant display
-        Object.values(DEFAULT_HERO_IMAGES).forEach(url => {
+        // Get weather condition for fallback images (simplified from weather code)
+        function getWeatherConditionForFallback(weatherCode) {
+            if (weatherCode === 0 || weatherCode === 1) return 'clear';
+            if ([2, 3, 45, 46, 47, 48].includes(weatherCode)) return 'cloudy';
+            if (weatherCode >= 51 && weatherCode <= 67) return 'rain';
+            if (weatherCode >= 71 && weatherCode <= 77) return 'snow';
+            if (weatherCode >= 80 && weatherCode <= 82) return 'rain';
+            if (weatherCode >= 85 && weatherCode <= 86) return 'snow';
+            if (weatherCode >= 95) return 'rain';  // Thunderstorm
+            return 'clear';
+        }
+
+        // Get default hero image by temp AND weather
+        function getDefaultHeroImage(tempBracket, weatherCode) {
+            const bracket = DEFAULT_HERO_IMAGES[tempBracket] || DEFAULT_HERO_IMAGES.mild;
+            const weather = getWeatherConditionForFallback(weatherCode);
+            return bracket[weather] || bracket.clear || PLACEHOLDER_IMAGE;
+        }
+
+        // Preload key default images for instant display (most common conditions)
+        const PRELOAD_IMAGES = [
+            DEFAULT_HERO_IMAGES.hot.clear,
+            DEFAULT_HERO_IMAGES.warm.clear,
+            DEFAULT_HERO_IMAGES.mild.clear,
+            DEFAULT_HERO_IMAGES.mild.rain,
+            DEFAULT_HERO_IMAGES.cool.clear,
+            DEFAULT_HERO_IMAGES.cool.rain,
+            DEFAULT_HERO_IMAGES.cold.clear,
+            DEFAULT_HERO_IMAGES.cold.snow,
+            DEFAULT_HERO_IMAGES.freezing.clear,
+            DEFAULT_HERO_IMAGES.freezing.snow
+        ].filter(Boolean);
+
+        PRELOAD_IMAGES.forEach(url => {
             const img = new Image();
             img.src = url;
         });
@@ -3449,9 +3511,9 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 state.weather = await fetchWeather(state.location.lat, state.location.lon, state.selectedDate);
                 state.outfit = getOutfitRecommendation(state.weather);
 
-                // Immediately use default image for this temperature bracket
+                // Immediately use default image for this temperature bracket AND weather condition
                 const tempBracket = getTempBracket(state.weather.feelsLike);
-                currentHeroImageUrl = DEFAULT_HERO_IMAGES[tempBracket] || PLACEHOLDER_IMAGE;
+                currentHeroImageUrl = getDefaultHeroImage(tempBracket, state.weather.weatherCode);
 
                 state.loading = false;
 
@@ -3502,6 +3564,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             localStorage.setItem('gender', state.gender);
             updateSettingsGenderSelector();
             render();
+            // Reload hero image for new gender (combination ID includes gender)
+            loadHeroImage();
         }
 
         function setComfort(val) {
@@ -3509,6 +3573,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             localStorage.setItem('comfort', val);
             if (state.weather) {
                 state.outfit = getOutfitRecommendation(state.weather);
+                // Reload hero image since outfit changed (affects combination ID)
+                loadHeroImage();
             }
             renderComfortSelector();
             render();
