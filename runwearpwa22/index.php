@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.2 -->
+<!-- RunWear PWA v3.3 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -38,7 +38,7 @@
     <link rel="preload" as="image" href="https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop">
     <link rel="preload" as="image" href="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop">
     <link rel="preload" as="image" href="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop">
     <link rel="preload" as="image" href="https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -1771,6 +1771,34 @@
             overflow-y: auto;
         }
 
+        .shop-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .shop-modal-header .modal-title {
+            margin-bottom: 0;
+        }
+
+        .shop-all-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .shop-all-btn:hover {
+            background: var(--primary-dark);
+            transform: scale(1.02);
+        }
+
         .shop-item {
             display: flex;
             align-items: center;
@@ -2410,7 +2438,10 @@
     <div class="modal-overlay" id="shopModal" onclick="if(event.target===this)closeShop()">
         <div class="shop-modal">
             <div class="modal-handle"></div>
-            <div class="modal-title">🛒 Shop Your Outfit</div>
+            <div class="shop-modal-header">
+                <div class="modal-title">🛒 Shop Your Outfit</div>
+                <button class="shop-all-btn" onclick="shopAll()">Shop All →</button>
+            </div>
             <div id="shopItems"></div>
             <div class="ftc-disclosure">
                 <strong>Affiliate Disclosure:</strong> As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.
@@ -3053,8 +3084,8 @@
                 snow: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop'     // Cool snow
             },
             cold: {
-                clear: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop',   // Jacket sunny winter
-                cloudy: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop',  // Cold overcast
+                clear: 'https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop',   // Jacket sunny winter
+                cloudy: 'https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop',  // Cold overcast
                 rain: 'https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop',    // Cold rain/sleet
                 snow: 'https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=800&h=1200&fit=crop'     // Snowy run
             },
@@ -3697,6 +3728,26 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
         function shopItem(item) {
             window.open(buildAmazonLink(item.search), '_blank');
+        }
+
+        function shopAll() {
+            // Build search term based on current weather conditions
+            const tempBracket = getTempBracket(state.weather.feelsLike);
+            const weatherDesc = getWeatherDescription(state.weather.weatherCode);
+            const searchTerm = `${weatherDesc} weather running gear`;
+            window.open(buildAmazonLink(searchTerm), '_blank');
+        }
+
+        function getWeatherDescription(code) {
+            if (code === 0 || code === 1) return 'sunny';
+            if (code >= 2 && code <= 3) return 'cloudy';
+            if (code >= 45 && code <= 48) return 'foggy';
+            if (code >= 51 && code <= 67) return 'rainy';
+            if (code >= 71 && code <= 77) return 'cold weather';
+            if (code >= 80 && code <= 82) return 'rainy';
+            if (code >= 85 && code <= 86) return 'snowy';
+            if (code >= 95) return 'stormy';
+            return 'all weather';
         }
 
         // ============ LOCATION MODAL ============
@@ -4552,7 +4603,7 @@ Get your personalized running outfit at runwear.ai`;
             const calendarSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>`;
             const clockSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`;
             const windSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z"/></svg>`;
-            const humiditySvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.66 8L12 2.35 6.34 8C4.78 9.56 4 11.64 4 13.64s.78 4.11 2.34 5.67 3.61 2.35 5.66 2.35 4.1-.79 5.66-2.35S20 15.64 20 13.64 19.22 9.56 17.66 8zM6 14c.01-2 .62-3.27 1.76-4.4L12 5.27l4.24 4.38C17.38 10.77 17.99 12 18 14H6z"/></svg>`;
+            const humiditySvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2V5z"/></svg>`;
             const precipSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
             const uvSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`;
             const chevronSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
@@ -4602,7 +4653,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
 
                         <!-- Temperature Display -->
-                        <div class="temp-display" onclick="toggleUnit()">
+                        <div class="temp-display">
                             <div class="temp-feels-label">Feels Like</div>
                             <div class="temp-main ${tempBracket}">${Math.round(w.feelsLike)}°</div>
                             <div class="temp-actual">Actual: <span>${Math.round(w.temp)}${unit}</span></div>
@@ -4681,7 +4732,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.2</div>
+                    <div class="footer">v3.3</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->

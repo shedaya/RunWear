@@ -499,3 +499,56 @@ async function loadHeroImage() {
 |------|---------|
 | `sw.js` | Added `supabase.co` to cache bypass, bumped to v3.0 |
 | `index.php` | 2D `DEFAULT_HERO_IMAGES`, `getWeatherConditionForFallback()`, `getDefaultHeroImage()`, `setGender()` calls `loadHeroImage()`, `setComfort()` calls `loadHeroImage()` |
+
+---
+
+## Backend: Varied Image Prompts (TODO)
+
+**Current Issue:** All AI-generated images use similar prompts with "sidewalk" backgrounds, leading to repetitive imagery.
+
+**Requested Enhancement:** Add variety to backgrounds and settings in the image generation prompts.
+
+### Suggested Background Variations
+
+The prompt generator should randomly select from diverse backgrounds:
+
+```javascript
+const BACKGROUNDS = [
+    'city street with buildings in background',
+    'urban park with trees',
+    'waterfront boardwalk',
+    'quiet suburban neighborhood',
+    'scenic trail with nature',
+    'downtown area with shops',
+    'bridge with city skyline',
+    'tree-lined avenue',
+    'modern city plaza',
+    'coastal path by the ocean'
+];
+
+const SURFACES = [
+    'asphalt road',
+    'concrete sidewalk',
+    'paved trail',
+    'brick pathway',
+    'gravel path'
+];
+```
+
+### Implementation Location
+
+This change needs to be made in the **Supabase Edge Function** or wherever the image generation prompts are built (likely `buildImagePrompt()` function on the backend).
+
+### Example Prompt Structure
+
+```
+A {gender} runner in their 30s running mid-stride along a {random_background}.
+They are wearing {outfit_items} appropriate for {weather} {temp_bracket} weather.
+Time of day: {time_of_day}. Surface: {random_surface}.
+
+MOOD: {mood_based_on_conditions}
+```
+
+### Priority
+
+Medium - Improves visual variety but not critical for functionality.

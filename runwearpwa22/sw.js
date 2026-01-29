@@ -1,32 +1,11 @@
-const CACHE_NAME = 'runwear-v3.2';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico',
-  '/favicon-16.png',
-  '/favicon-32.png',
-  '/apple-touch-icon.png',
-  '/icon-72.png',
-  '/icon-96.png',
-  '/icon-128.png',
-  '/icon-144.png',
-  '/icon-152.png',
-  '/icon-192.png',
-  '/icon-384.png',
-  '/icon-512.png'
-];
+const CACHE_NAME = 'runwear-v3.3';
 
-// Install
+// Install - skip precaching to avoid failures
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
-// Activate
+// Activate - clean old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -43,7 +22,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   // Skip non-GET requests
   if (event.request.method !== 'GET') return;
-  
+
   // Skip API requests (always fetch fresh)
   if (event.request.url.includes('api.open-meteo.com') ||
       event.request.url.includes('nominatim.openstreetmap.org') ||
@@ -51,7 +30,7 @@ self.addEventListener('fetch', event => {
       event.request.url.includes('supabase.co')) {
     return;
   }
-  
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
