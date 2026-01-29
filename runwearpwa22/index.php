@@ -3138,26 +3138,30 @@
         // Current hero image URL (updated asynchronously)
         let currentHeroImageUrl = PLACEHOLDER_IMAGE;
 
-        // Map weather codes to weather categories
+        // Map weather codes to weather categories (v3.7 - simplified to 4 categories)
         function getWeatherCode(code) {
-            if (code === 0) return 'CLEAR';
-            if (code >= 1 && code <= 3) return 'CLOUDY';
-            if (code >= 45 && code <= 48) return 'FOGGY';
-            if (code >= 51 && code <= 67) return 'RAINY';
-            if (code >= 71 && code <= 77) return 'SNOWY';
-            if (code >= 80 && code <= 82) return 'RAINY';
-            if (code >= 85 && code <= 86) return 'SNOWY';
-            if (code >= 95 && code <= 99) return 'STORMY';
+            if (code === 0 || code === 1) return 'CLEAR';
+            if ([2, 3, 45, 46, 47, 48].includes(code)) return 'CLOUDY';
+            if (code >= 51 && code <= 67) return 'RAIN';
+            if (code >= 71 && code <= 77) return 'SNOW';
+            if (code >= 80 && code <= 82) return 'RAIN';
+            if (code >= 85 && code <= 86) return 'SNOW';
+            if (code >= 95) return 'RAIN';  // Thunderstorm = RAIN
             return 'CLEAR';
         }
 
-        // Get time of day category
+        // Alias for spec compatibility
+        function getWeatherCondition(code) {
+            return getWeatherCode(code);
+        }
+
+        // Get time of day category (v3.7 spec)
         function getTimeOfDay(date) {
             const hour = date.getHours();
-            if (hour >= 5 && hour < 9) return 'DAWN';
-            if (hour >= 9 && hour < 17) return 'MIDDAY';
+            if (hour >= 5 && hour < 10) return 'DAWN';
+            if (hour >= 10 && hour < 17) return 'MIDDAY';
             if (hour >= 17 && hour < 20) return 'DUSK';
-            return 'NIGHT';
+            return 'NIGHT';  // 20-4
         }
 
         // Get gender preference for API
