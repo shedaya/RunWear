@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.7 -->
+<!-- RunWear PWA v3.8 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -4746,7 +4746,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.7</div>
+                    <div class="footer">v3.8</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
