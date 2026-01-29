@@ -65,15 +65,15 @@ enum class TimeOfDay(
     val description: String,
     val hourRange: IntRange
 ) {
-    DAWN("early morning golden hour", 5..8),
-    MIDDAY("bright midday", 9..16),
-    DUSK("evening golden hour", 17..20),
-    NIGHT("nighttime with streetlights", 21..23);
+    DAWN("early morning golden hour", 5..9),      // 5:00 - 9:59
+    MIDDAY("bright midday", 10..16),              // 10:00 - 16:59
+    DUSK("evening golden hour", 17..19),          // 17:00 - 19:59
+    NIGHT("nighttime with streetlights", 20..23); // 20:00 - 4:59
 
     companion object {
         fun fromHour(hour: Int): TimeOfDay {
             // Handle wraparound for 0-4 AM (treat as night)
-            val normalizedHour = if (hour < 5) 21 else hour
+            val normalizedHour = if (hour < 5) 20 else hour
             return entries.find { normalizedHour in it.hourRange } ?: MIDDAY
         }
     }

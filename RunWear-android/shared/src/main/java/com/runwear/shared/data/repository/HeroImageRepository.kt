@@ -65,7 +65,7 @@ class HeroImageRepository @Inject constructor() {
             val image = getRandomImage(combination)
             if (image != null) {
                 HeroImageResult(
-                    imageUrl = image.publicUrl,
+                    imageUrl = image.imageUrl,
                     thumbnailUrl = image.thumbnailUrl,
                     combinationId = combination.id
                 )
@@ -82,14 +82,18 @@ class HeroImageRepository @Inject constructor() {
 
     /**
      * Get a random cached image for the combination.
-     * Uses cascading fallback strategy (matches PWA v3.6):
+     * Uses cascading fallback strategy (matches PWA v3.9):
      *
      * | Priority | Query Pattern              | Example                    | Matches            |
      * |----------|---------------------------|----------------------------|-------------------|
-     * | 1        | Gender + Weather + Temp + Time | MALE_CLOUDY_MILD_NIGHT_* | Exact scenario    |
-     * | 2        | Gender + Weather + Temp   | MALE_CLOUDY_MILD_*        | Any time of day   |
-     * | 3        | Unisex + Weather + Temp   | UNISEX_CLOUDY_MILD_*      | Generic person    |
-     * | 4        | Gender + Clear + Temp     | MALE_CLEAR_MILD_*         | Clear weather fallback |
+     * | 1        | Gender + Weather + Temp + Time | MALE_CLOUDY_MILD_NIGHT_% | Exact scenario    |
+     * | 2        | Gender + Weather + Temp   | MALE_CLOUDY_MILD_%        | Any time of day   |
+     * | 3        | Unisex + Weather + Temp   | UNISEX_CLOUDY_MILD_%      | Generic person    |
+     * | 4        | Gender + Clear + Temp     | MALE_CLEAR_MILD_%         | Clear weather fallback |
+     *
+     * CRITICAL v3.9:
+     * - NO status filter (column doesn't exist in DB)
+     * - Supabase SDK handles URL encoding of % automatically
      */
     private suspend fun getRandomImage(combination: OutfitCombination): GeneratedImage? {
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
@@ -114,7 +118,6 @@ class HeroImageRepository @Inject constructor() {
                     .select {
                         filter {
                             like("combination_id", pattern)
-                            eq("status", "completed")
                         }
                         limit(10)
                     }
@@ -301,17 +304,15 @@ class HeroImageRepository @Inject constructor() {
 
 /**
  * Database model for generated_images table.
+ * v3.9: Matches actual Supabase schema - NO status column exists!
  */
 @Serializable
 data class GeneratedImage(
-    @SerialName("image_id") val imageId: String,
+    @SerialName("id") val id: String,
     @SerialName("combination_id") val combinationId: String,
-    @SerialName("storage_path") val storagePath: String,
-    @SerialName("public_url") val publicUrl: String,
+    @SerialName("image_url") val imageUrl: String,
     @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
-    @SerialName("prompt") val prompt: String,
-    @SerialName("status") val status: String,
-    @SerialName("created_at") val createdAt: String? = null
+    @SerialName("prompt") val prompt: String? = null
 )
 
 /**
