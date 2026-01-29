@@ -3452,7 +3452,62 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             }
 
             // No AI images found at any level - fallback already set
-            console.log('[Hero] No AI images found, keeping Unsplash fallback');
+            console.log('[Hero] No AI images found, queueing replenishment');
+
+            // Queue generation job (fire and forget)
+            queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+        }
+
+        // Queue a hero image generation job when none exist
+        async function queueHeroImageGeneration(gender, weather, temp, time) {
+            const combinationId = `${gender}_${weather}_${temp}_${time}_v1`;
+
+            try {
+                // Check if already queued/exists
+                const checkResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/generation_jobs?combination_id=eq.${combinationId}&limit=1`,
+                    { headers: { 'apikey': SUPABASE_ANON_KEY } }
+                );
+                const existing = await checkResponse.json();
+                if (existing.length > 0) {
+                    console.log('[Hero] Generation already queued for:', combinationId);
+                    return;
+                }
+
+                // Queue new generation
+                await fetch(`${SUPABASE_URL}/rest/v1/generation_jobs`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        combination_id: combinationId,
+                        gender: gender.toLowerCase(),
+                        weather_code: weather.toLowerCase(),
+                        temp_bracket: temp.toLowerCase(),
+                        time_of_day: time.toLowerCase(),
+                        prompt: buildHeroPrompt(gender, weather, temp, time),
+                        status: 'pending'
+                    })
+                });
+
+                console.log('[Hero] Queued generation for:', combinationId);
+            } catch (e) {
+                console.warn('[Hero] Failed to queue generation:', e);
+            }
+        }
+
+        // Build prompt for hero image generation
+        function buildHeroPrompt(gender, weather, temp, time) {
+            const genderDesc = gender === 'MALE' ? 'male' : gender === 'FEMALE' ? 'female' : 'person';
+            const weatherDesc = weather.toLowerCase();
+            const tempDesc = temp.toLowerCase().replace('_', ' ');
+            const timeDesc = time === 'DAWN' ? 'early morning' : time === 'MIDDAY' ? 'midday' : time === 'DUSK' ? 'evening' : 'night';
+
+            return `Professional running photography, ${genderDesc} runner in motion, ${weatherDesc} weather, ${tempDesc} temperature, ${timeDesc} lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus`;
         }
 
         // Update hero image in DOM with crossfade
