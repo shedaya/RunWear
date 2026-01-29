@@ -20,6 +20,7 @@ object RunWearColors {
     val Primary = Color(0xFF00796B)           // Teal - PRIMARY brand color
     val PrimaryLight = Color(0xFF4DB6AC)      // Lighter teal
     val PrimaryDark = Color(0xFF004D40)       // Darker teal
+    val PrimaryGlow = Color(0x4D00796B)       // rgba(0, 121, 107, 0.3)
 
     // Category Colors (for outfit items) - WCAG AA compliant on white backgrounds
     val CategoryTop = Color(0xFF00796B)       // Teal (tops)
@@ -36,19 +37,21 @@ object RunWearColors {
     val TempWarm = Color(0xFFF59E0B)          // Amber - 65-79°F
     val TempHot = Color(0xFFF97316)           // Orange - 80°F+
 
-    // Surface Colors (dark theme base)
-    val Background = Color(0xFF0A0A0A)        // Near black
-    val Surface = Color(0xFF1A1A1A)           // Dark surface
-    val SurfaceElevated = Color(0xFF262626)   // Elevated cards
+    // Surface Colors (dark theme base) - PWA v2.7 values
+    val Background = Color(0xFF0A0A0A)        // --bg-dark: #0A0A0A
+    val Surface = Color(0xFF1A1A1A)           // --bg-card: #1A1A1A
+    val BgCard = Color(0xFF1A1A1A)            // Outfit cards use this
+    val SurfaceElevated = Color(0xFF262626)   // --bg-card-light: #262626
+    val BgCardLight = Color(0xFF262626)       // Alias for toggle backgrounds
 
     // Text Colors
     val TextPrimary = Color(0xFFFFFFFF)
     val TextSecondary = Color(0xFFB3B3B3)
     val TextMuted = Color(0xFF737373)
 
-    // Glass morphism colors
-    val GlassBackground = Color(0x26FFFFFF)   // 15% white
-    val GlassBorder = Color(0x33FFFFFF)       // 20% white
+    // Glass morphism colors (for weather pills only, NOT outfit cards)
+    val GlassBackground = Color(0x1AFFFFFF)   // rgba(255, 255, 255, 0.1) = 10%
+    val GlassBorder = Color(0x26FFFFFF)       // rgba(255, 255, 255, 0.15) = 15%
     val GlassBackgroundHover = Color(0x1AFFFFFF) // 10% white
 }
 

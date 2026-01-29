@@ -3187,37 +3187,12 @@
         }
 
         // Query Supabase for cached hero image
+        // Legacy function - kept for compatibility, now uses cascading logic in loadHeroImage()
         async function fetchCachedHeroImage(combinationId) {
-            // Direct query to generated_images table
-            return await fetchCachedHeroImageDirect(combinationId);
-        }
-
-        // Query Supabase with partial matching (ignore outfit hash, match first 4 parts)
-        async function fetchCachedHeroImageDirect(combinationId) {
-            try {
-                // Extract base combo: FEMALE_CLOUDY_COOL_NIGHT from FEMALE_CLOUDY_COOL_NIGHT_37fb2714
-                const baseCombo = combinationId.split('_').slice(0, 4).join('_');
-
-                const response = await fetch(
-                    `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseCombo}_*&limit=10`,
-                    {
-                        headers: {
-                            'apikey': SUPABASE_ANON_KEY,
-                            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-                        }
-                    }
-                );
-                if (!response.ok) return null;
-                const images = await response.json();
-
-                // Pick a random one for variety
-                if (images.length > 0) {
-                    return images[Math.floor(Math.random() * images.length)];
-                }
-                return null;
-            } catch (e) {
-                return null;
-            }
+            // Cascading queries are now handled directly in loadHeroImage()
+            // This function is kept for any external calls but just returns null
+            console.log('[Hero] fetchCachedHeroImage called directly - use loadHeroImage() instead');
+            return null;
         }
 
         // Increment serve count when image is displayed
@@ -3416,28 +3391,64 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             return moods[tempBracket] || 'Focused and determined';
         }
 
-        // Load hero image from Supabase or queue generation
+        // Load hero image from Supabase with cascading fallback queries
+        // Priority: Exact match → Any time → Unisex → Clear weather fallback
         async function loadHeroImage() {
-            if (!state.weather || !state.outfit) return;
+            if (!state.weather || !state.outfit) {
+                console.log('[Hero] No weather/outfit data yet');
+                return;
+            }
 
             const weather = getWeatherCode(state.weather.weatherCode);
             const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
             const timeOfDay = getTimeOfDay(state.selectedDate);
             const gender = getGenderPreference();
-            const outfitHash = getOutfitHash();
 
-            const combinationId = buildCombinationId(gender, weather, tempBracket, timeOfDay, outfitHash);
+            console.log('[Hero] Building queries for:', { gender, weather, tempBracket, timeOfDay });
 
-            // Try to get AI image from Supabase (partial match on first 4 parts)
-            try {
-                const cachedImage = await fetchCachedHeroImage(combinationId);
-                if (cachedImage && cachedImage.image_url) {
-                    currentHeroImageUrl = cachedImage.image_url;
-                    updateHeroImage();
+            // Cascade: most specific → least specific
+            const queries = [
+                `${gender}_${weather}_${tempBracket}_${timeOfDay}`,   // 1. Exact: MALE_CLOUDY_MILD_NIGHT_*
+                `${gender}_${weather}_${tempBracket}`,                // 2. Any time: MALE_CLOUDY_MILD_*
+                `UNISEX_${weather}_${tempBracket}`,                   // 3. Unisex fallback: UNISEX_CLOUDY_MILD_*
+                `${gender}_CLEAR_${tempBracket}`,                     // 4. Clear weather fallback: MALE_CLEAR_MILD_*
+            ];
+
+            for (const baseQuery of queries) {
+                console.log('[Hero] Trying:', baseQuery + '_*');
+
+                try {
+                    const response = await fetch(
+                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_*&status=eq.completed&limit=10`,
+                        {
+                            headers: {
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                            }
+                        }
+                    );
+
+                    if (!response.ok) {
+                        console.warn('[Hero] Query failed:', response.status);
+                        continue;
+                    }
+
+                    const images = await response.json();
+
+                    if (images && images.length > 0) {
+                        const selected = images[Math.floor(Math.random() * images.length)];
+                        console.log('[Hero] ✓ Found via', baseQuery, '→', selected.combination_id);
+                        currentHeroImageUrl = selected.image_url || selected.public_url;
+                        updateHeroImage();
+                        return;  // Success! Stop searching
+                    }
+                } catch (e) {
+                    console.warn('[Hero] Query error:', baseQuery, e);
                 }
-            } catch (e) {
-                // Silently fail - fallback image already showing
             }
+
+            // No AI images found at any level - fallback already set
+            console.log('[Hero] No AI images found, keeping Unsplash fallback');
         }
 
         // Update hero image in DOM with crossfade

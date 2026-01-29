@@ -1,8 +1,14 @@
 package com.runwear.app.ui.components
 
+import android.content.Intent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,10 +20,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -37,11 +47,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.getTemperatureColor
 import com.runwear.app.ui.theme.getTemperatureFallbackGradient
-import com.runwear.shared.domain.model.GenderPreference
-import com.runwear.shared.domain.model.HeroImageSelector
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherConditions
 import java.time.LocalDateTime
@@ -49,17 +58,17 @@ import kotlin.math.roundToInt
 
 /**
  * Hero section with full-bleed AI runner image, weather overlay, and controls.
- * This is the main visual centerpiece of the new design.
+ * PWA v2.9 aligned.
  *
  * Layout (top to bottom):
  * - Status bar padding
- * - Location button (left) + Settings button (right)
+ * - Location button (left) + Share + Settings buttons (right)
  * - Flex space with hero image
- * - Date/Time pill (centered)
+ * - Date/Time combined pill (frosted glass)
+ * - "FEELS LIKE" label
  * - Large temperature display (color-coded)
- * - "Feels like" label
- * - Actual temperature (smaller)
- * - Weather conditions row
+ * - "Actual: X°F" line
+ * - Weather conditions pills (tappable)
  */
 @Composable
 fun HeroSection(
@@ -67,22 +76,34 @@ fun HeroSection(
     outfit: OutfitRecommendation?,
     locationName: String,
     selectedDateTime: LocalDateTime,
-    genderPreference: GenderPreference,
+    heroImageUrl: String?,
+    scrollOffset: Float = 0f,
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onShareClick: () -> Unit,
     onTempClick: () -> Unit,
+    onWeatherPillClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
     val heroHeight = (configuration.screenHeightDp * 0.75).dp
 
-    // Calculate temperature color (in Fahrenheit for consistency)
+    // Calculate temperature color with smooth animation (500ms transition)
     val tempFahrenheit = weather?.feelsLikeInFahrenheit ?: 65.0
-    val tempColor = remember(tempFahrenheit) {
+    val targetTempColor = remember(tempFahrenheit) {
         getTemperatureColor(tempFahrenheit)
     }
+    val tempColor by animateColorAsState(
+        targetValue = targetTempColor,
+        animationSpec = tween(500, easing = FastOutSlowInEasing),
+        label = "temperatureColorAnimation"
+    )
+
+    // Haptic feedback
+    val hapticFeedback = LocalHapticFeedback.current
+    val context = LocalContext.current
 
     // Animated temperature counter
     val actualTemp = weather?.effectiveTemperature?.roundToInt() ?: 0
@@ -104,44 +125,44 @@ fun HeroSection(
         targetTemp = actualTemp
     }
 
-    // Get hero image URL
-    val heroImageUrl = remember(weather, outfit, genderPreference) {
-        HeroImageSelector.getImageUrl(weather, outfit, genderPreference)
-    }
-
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(heroHeight)
+            .clipToBounds()
     ) {
-        // 1. Hero Image (or fallback gradient)
-        if (heroImageUrl != null) {
-            AsyncImage(
-                model = heroImageUrl,
-                contentDescription = generateHeroAltText(weather, outfit),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        // Subtle zoom for parallax feel
-                        scaleX = 1.05f
-                        scaleY = 1.05f
-                    }
-            )
-        } else {
-            // Fallback gradient when no image
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                getTemperatureFallbackGradient(tempFahrenheit),
-                                RunWearColors.Background
+        // 1. Hero Image
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            if (heroImageUrl != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(heroImageUrl)
+                        .crossfade(500)
+                        .build(),
+                    contentDescription = generateHeroAltText(weather, outfit),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .scale(1.1f)
+                )
+            } else {
+                // Fallback gradient when no image
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    getTemperatureFallbackGradient(tempFahrenheit),
+                                    RunWearColors.Background
+                                )
                             )
                         )
-                    )
-            )
+                )
+            }
         }
 
         // 2. Temperature Tint Overlay
@@ -151,25 +172,25 @@ fun HeroSection(
                 .background(tempColor.copy(alpha = 0.12f))
         )
 
-        // 3. Gradient Overlay (6-stop for text readability)
+        // 3. Gradient Overlay - PWA style 6-stop gradient
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.0f to Color.Black.copy(alpha = 0.6f),
+                            0.00f to Color.Black.copy(alpha = 0.6f),
                             0.15f to Color.Black.copy(alpha = 0.3f),
-                            0.4f to Color.Transparent,
-                            0.6f to Color.Transparent,
+                            0.40f to Color.Transparent,
+                            0.60f to Color.Transparent,
                             0.85f to Color.Black.copy(alpha = 0.5f),
-                            1.0f to Color.Black.copy(alpha = 0.95f)
+                            1.00f to Color.Black.copy(alpha = 0.95f)
                         )
                     )
                 )
         )
 
-        // 4. Top Controls (Location + Settings)
+        // 4. Top Controls (Location + Share + Settings)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -177,63 +198,88 @@ fun HeroSection(
                 .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            // Location button (pill with text)
             GlassButton(
                 icon = Icons.Outlined.LocationOn,
                 text = locationName,
                 onClick = onLocationClick
             )
-            GlassButton(
-                icon = Icons.Outlined.Settings,
-                onClick = onSettingsClick
-            )
+
+            // Right side: Share + Settings (icon-only circular buttons)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                GlassButtonIcon(
+                    icon = Icons.Outlined.Share,
+                    onClick = onShareClick,
+                    contentDescription = "Share"
+                )
+                GlassButtonIcon(
+                    icon = Icons.Outlined.Settings,
+                    onClick = onSettingsClick,
+                    contentDescription = "Settings"
+                )
+            }
         }
 
-        // 5. Bottom Content (Date/Time, Temp, Conditions)
+        // 5. Bottom Content (Date/Time Pill, Temp, Conditions)
         Column(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
+                .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(20.dp)
         ) {
-            // Date/Time Pill
+            // Combined Date/Time Pill (PWA v2.9 frosted glass style)
             DateTimePill(
                 dateTime = selectedDateTime,
                 onDateClick = onDateClick,
-                onTimeClick = onTimeClick
+                onTimeClick = onTimeClick,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            Spacer(Modifier.height(16.dp))
+            // "FEELS LIKE" label
+            Text(
+                text = "FEELS LIKE",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White.copy(alpha = 0.7f),
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
 
             // Large Temperature (tappable to toggle units)
             Text(
                 text = "${animatedTemp}°",
+                fontFamily = BebasNeueFontFamily,
                 fontSize = 96.sp,
                 fontWeight = FontWeight.Black,
                 color = tempColor,
                 letterSpacing = (-2).sp,
-                modifier = Modifier.clickable { onTempClick() }
+                lineHeight = 80.sp,
+                modifier = Modifier.clickable {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onTempClick()
+                }
             )
 
-            Text(
-                text = "Feels like",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-
+            // "Actual: X°F" line (PWA format)
             weather?.let {
-                val unitSymbol = if (it.isCelsius) "C" else "F"
+                val unitSymbol = if (it.isCelsius) "°C" else "°F"
                 Text(
-                    text = "Actual: ${it.temperature.toInt()}°$unitSymbol",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.5f)
+                    text = "Actual: ${it.temperature.toInt()}$unitSymbol",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Weather Conditions Row
-            WeatherConditionsRow(weather = weather)
+            // Weather Pills (tappable for detail popups)
+            WeatherPillsRow(
+                weather = weather,
+                onPillClick = onWeatherPillClick
+            )
         }
     }
 }

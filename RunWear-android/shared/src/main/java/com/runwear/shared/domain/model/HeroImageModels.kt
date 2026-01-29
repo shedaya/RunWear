@@ -25,6 +25,40 @@ enum class TempBracket(
 }
 
 /**
+ * Weather condition for hero image fallback selection.
+ * Maps Open-Meteo weather codes to simplified conditions.
+ */
+enum class HeroWeatherCondition {
+    CLEAR,
+    CLOUDY,
+    RAIN,
+    SNOW;
+
+    companion object {
+        /**
+         * Convert WeatherCode to simplified HeroWeatherCondition.
+         * Based on Open-Meteo WMO weather codes.
+         */
+        fun fromWeatherCode(weatherCode: WeatherCode): HeroWeatherCondition {
+            return when (weatherCode) {
+                WeatherCode.CLEAR_SKY, WeatherCode.MAINLY_CLEAR -> CLEAR
+                WeatherCode.PARTLY_CLOUDY, WeatherCode.OVERCAST,
+                WeatherCode.FOG, WeatherCode.DEPOSITING_RIME_FOG -> CLOUDY
+                WeatherCode.DRIZZLE_LIGHT, WeatherCode.DRIZZLE_MODERATE, WeatherCode.DRIZZLE_DENSE,
+                WeatherCode.FREEZING_DRIZZLE_LIGHT, WeatherCode.FREEZING_DRIZZLE_DENSE,
+                WeatherCode.RAIN_SLIGHT, WeatherCode.RAIN_MODERATE, WeatherCode.RAIN_HEAVY,
+                WeatherCode.FREEZING_RAIN_LIGHT, WeatherCode.FREEZING_RAIN_HEAVY,
+                WeatherCode.RAIN_SHOWERS_SLIGHT, WeatherCode.RAIN_SHOWERS_MODERATE, WeatherCode.RAIN_SHOWERS_VIOLENT,
+                WeatherCode.THUNDERSTORM, WeatherCode.THUNDERSTORM_HAIL_SLIGHT, WeatherCode.THUNDERSTORM_HAIL_HEAVY -> RAIN
+                WeatherCode.SNOW_SLIGHT, WeatherCode.SNOW_MODERATE, WeatherCode.SNOW_HEAVY, WeatherCode.SNOW_GRAINS,
+                WeatherCode.SNOW_SHOWERS_SLIGHT, WeatherCode.SNOW_SHOWERS_HEAVY -> SNOW
+                WeatherCode.UNKNOWN -> CLEAR
+            }
+        }
+    }
+}
+
+/**
  * Time of day for hero image lighting conditions.
  */
 enum class TimeOfDay(
@@ -58,6 +92,20 @@ data class OutfitCombination(
     val outfitHash: String
 ) {
     companion object {
+        /**
+         * Create combination from current conditions.
+         *
+         * Combination ID Format (matches PWA/Supabase):
+         * {GENDER}_{WEATHER}_{TEMP_BRACKET}_{TIME_OF_DAY}_{OUTFIT_HASH}
+         *
+         * Example: "FEMALE_RAIN_COLD_MIDDAY_a1b2c3d4"
+         *
+         * - GENDER: MALE, FEMALE, UNISEX
+         * - WEATHER: CLEAR, CLOUDY, RAIN, SNOW (simplified from Open-Meteo codes)
+         * - TEMP_BRACKET: HOT, WARM, MILD, COOL, COLD, FREEZING
+         * - TIME_OF_DAY: DAWN, MIDDAY, DUSK, NIGHT
+         * - OUTFIT_HASH: 8-char hex from sorted outfit item names
+         */
         fun fromConditions(
             weather: WeatherConditions,
             outfit: OutfitRecommendation,
@@ -65,17 +113,21 @@ data class OutfitCombination(
         ): OutfitCombination {
             val tempBracket = TempBracket.fromFahrenheit(weather.feelsLikeInFahrenheit)
             val timeOfDay = TimeOfDay.fromHour(weather.dateTime.hour)
+            val heroWeather = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
+
+            // 8-char hex hash from sorted outfit item names (per spec)
             val outfitHash = outfit.allItems
                 .map { it.name }
                 .sorted()
                 .joinToString("-")
                 .hashCode()
-                .toString()
+                .let { Integer.toHexString(it).takeLast(8).padStart(8, '0') }
 
-            val combinedHash = "${gender.name}_${weather.weatherCode.name}_${tempBracket.name}_${timeOfDay.name}_$outfitHash"
+            // Combination ID format: {GENDER}_{WEATHER}_{TEMP}_{TIME}_{HASH}
+            val combinationId = "${gender.name}_${heroWeather.name}_${tempBracket.name}_${timeOfDay.name}_$outfitHash"
 
             return OutfitCombination(
-                id = combinedHash.hashCode().toString(),
+                id = combinationId,
                 genderPreference = gender,
                 weatherCode = weather.weatherCode,
                 tempBracket = tempBracket,
@@ -97,34 +149,69 @@ data class HeroImageResult(
 )
 
 /**
- * Selects appropriate hero images based on weather and outfit conditions.
- *
- * Currently returns a placeholder URL. When the Supabase backend is ready,
- * this will query the image library for cached AI-generated images.
+ * Static helper for synchronous hero image selection (fallback/placeholder).
+ * For live AI images, use HeroImageRepository instead.
  */
 object HeroImageSelector {
 
-    // Placeholder image for development - portrait orientation runner
-    private const val PLACEHOLDER_URL =
-        "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop&crop=center"
-
-    // Alternate placeholders for variety (unused for now, kept for future random selection)
-    @Suppress("unused")
-    private val PLACEHOLDER_URLS = listOf(
-        "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop&crop=center",
-        "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop&crop=center",
-        "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop&crop=center"
+    /**
+     * Weather-aware fallback images: 2D matrix of temp bracket × weather condition.
+     * 6 temp brackets × 4 weather conditions = up to 24 unique fallback images.
+     *
+     * Image selection based on RunWear Hero Image System Specification.
+     * Uses Unsplash photo IDs with w=800&h=1200&fit=crop dimensions.
+     */
+    private val FALLBACK_IMAGES_2D: Map<TempBracket, Map<HeroWeatherCondition, String>> = mapOf(
+        // HOT (80°F+) - Snow impossible
+        TempBracket.HOT to mapOf(
+            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop", // Tank top, bright sunny
+            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop", // Summer overcast
+            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop" // Summer rain
+            // SNOW: null - Not possible when HOT
+        ),
+        // WARM (65-79°F) - Snow very unlikely
+        TempBracket.WARM to mapOf(
+            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop", // T-shirt sunny
+            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop", // Warm overcast
+            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop" // Warm rain
+            // SNOW: null - Very unlikely when WARM
+        ),
+        // MILD (50-64°F) - All conditions possible
+        TempBracket.MILD to mapOf(
+            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop", // Light layers sunny
+            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop", // Mild overcast
+            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop", // Spring/fall rain
+            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop" // Light snow
+        ),
+        // COOL (35-49°F) - All conditions possible
+        TempBracket.COOL to mapOf(
+            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop", // Long sleeves sunny
+            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop", // Cool overcast
+            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop", // Cool rainy
+            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop" // Cool snow
+        ),
+        // COLD (20-34°F) - All conditions possible
+        TempBracket.COLD to mapOf(
+            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop", // Jacket sunny
+            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop", // Cold overcast
+            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop", // Cold rain/sleet
+            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=800&h=1200&fit=crop" // Snowy run
+        ),
+        // FREEZING (<20°F) - All conditions possible
+        TempBracket.FREEZING to mapOf(
+            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop", // Winter gear sunny
+            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop", // Freezing overcast
+            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop", // Freezing rain/sleet
+            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1418985991508-e47386d96a71?w=800&h=1200&fit=crop" // Heavy snow
+        )
     )
 
     /**
-     * Select a hero image for the phone app (full-height hero).
-     *
-     * @param weather Current weather conditions
-     * @param outfit Current outfit recommendation
-     * @param gender User's gender preference (for matching runner in image)
-     * @return HeroImageResult with URL or null for fallback gradient
+     * Get a fallback/placeholder image synchronously.
+     * Uses 2D matrix: temp bracket × weather condition.
+     * Use HeroImageRepository.getHeroImage() for live AI images.
      */
-    fun selectImage(
+    fun getFallbackImage(
         weather: WeatherConditions?,
         outfit: OutfitRecommendation?,
         gender: GenderPreference = GenderPreference.UNISEX
@@ -138,26 +225,36 @@ object HeroImageSelector {
         }
 
         val combination = OutfitCombination.fromConditions(weather, outfit, gender)
+        val weatherCondition = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
+        val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition)
 
-        // TODO: Query Supabase image library here
-        // For now, return placeholder
         return HeroImageResult(
-            imageUrl = PLACEHOLDER_URL,
-            thumbnailUrl = PLACEHOLDER_URL,
+            imageUrl = url,
+            thumbnailUrl = url,
             combinationId = combination.id
         )
     }
 
     /**
-     * Select a hero image for the watch app (compact, upper-body crop).
+     * Get weather-aware fallback image URL.
      */
-    fun selectWatchImage(
-        weather: WeatherConditions?,
-        outfit: OutfitRecommendation?,
-        gender: GenderPreference = GenderPreference.UNISEX
-    ): HeroImageResult {
-        // Same logic but could use different crop parameters
-        return selectImage(weather, outfit, gender)
+    private fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String {
+        // Try exact temp + weather match
+        val bracketImages = FALLBACK_IMAGES_2D[tempBracket]
+        val weatherImages = bracketImages?.get(weatherCondition)
+        if (weatherImages != null) {
+            return weatherImages
+        }
+
+        // Fall back to CLEAR for this temp bracket
+        val clearFallback = bracketImages?.get(HeroWeatherCondition.CLEAR)
+        if (clearFallback != null) {
+            return clearFallback
+        }
+
+        // Ultimate fallback - mild + clear
+        return FALLBACK_IMAGES_2D[TempBracket.MILD]?.get(HeroWeatherCondition.CLEAR)
+            ?: "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop"
     }
 
     /**
@@ -168,6 +265,6 @@ object HeroImageSelector {
         outfit: OutfitRecommendation?,
         gender: GenderPreference = GenderPreference.UNISEX
     ): String? {
-        return selectImage(weather, outfit, gender).imageUrl
+        return getFallbackImage(weather, outfit, gender).imageUrl
     }
 }

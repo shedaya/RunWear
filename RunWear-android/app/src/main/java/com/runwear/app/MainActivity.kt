@@ -7,13 +7,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.runwear.app.debug.DebugOverlay
 import com.runwear.app.ui.screens.HeroMainScreen
+import com.runwear.app.ui.screens.OnboardingScreen
 import com.runwear.app.ui.screens.PermissionScreen
 import com.runwear.app.ui.theme.RunWearTheme
 import com.runwear.app.ui.viewmodel.MainViewModel
@@ -40,30 +45,64 @@ class MainActivity : ComponentActivity() {
             RunWearTheme {
                 val uiState by viewModel.uiState.collectAsState()
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    if (!uiState.hasLocationPermission && !uiState.isLoading) {
-                        PermissionScreen(
-                            onRequestPermission = { requestLocationPermission() },
-                            modifier = Modifier.padding(innerPadding)
-                        )
-                    } else {
-                        // New hero-image design MainScreen
-                        HeroMainScreen(
+                // Track current screen for debug overlay
+                val currentScreen = remember(uiState) {
+                    when {
+                        !uiState.hasCompletedOnboarding -> "Onboarding"
+                        !uiState.hasLocationPermission && !uiState.isLoading -> "Permission"
+                        uiState.isLoading -> "Loading"
+                        uiState.error != null -> "Error"
+                        else -> "Main"
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        when {
+                            // Show onboarding for first-time users
+                            !uiState.hasCompletedOnboarding -> {
+                                OnboardingScreen(
+                                    onComplete = { tempUnit, gender, comfort ->
+                                        viewModel.completeOnboarding(
+                                            tempUnit = tempUnit,
+                                            gender = gender,
+                                            comfort = comfort
+                                        )
+                                    },
+                                    onRequestLocationPermission = { requestLocationPermission() },
+                                    modifier = Modifier.padding(innerPadding)
+                                )
+                            }
+                            // Show permission screen if no location permission and not loading
+                            !uiState.hasLocationPermission && !uiState.isLoading -> {
+                                PermissionScreen(
+                                    onRequestPermission = { requestLocationPermission() },
+                                    modifier = Modifier.padding(innerPadding)
+                                )
+                            }
+                            else -> {
+                                // Main app screen
+                                HeroMainScreen(
+                                    uiState = uiState,
+                                    onRefresh = viewModel::refresh,
+                                    onToggleUnit = viewModel::toggleUnit,
+                                    onSetComfortPreference = viewModel::setComfortPreference,
+                                    onSetGenderPreference = viewModel::setGenderPreference,
+                                    onDateSelected = viewModel::selectDate,
+                                    onTimeSelected = viewModel::selectHour,
+                                    onShopItem = { /* Handled in HeroMainScreen */ },
+                                    onLocationSearch = viewModel::searchLocation,
+                                    onLocationSelect = viewModel::selectManualLocation
+                                )
+                            }
+                        }
+                    }
+
+                    // Debug Overlay - always on top (only in debug builds)
+                    if (BuildConfig.DEBUG) {
+                        DebugOverlay(
                             uiState = uiState,
-                            onRefresh = viewModel::refresh,
-                            onToggleUnit = viewModel::toggleUnit,
-                            onDateSelected = viewModel::selectDate,
-                            onTimeSelected = viewModel::selectHour,
-                            onShopItem = { item ->
-                                // For now, show shop sheet - to be implemented
-                                viewModel.showShopSheet()
-                            },
-                            onSettingsClick = viewModel::showSettings,
-                            onLocationClick = {
-                                // Could open location picker in future
-                                // For now, location is shown in the glass button
-                            },
-                            onGenderChange = viewModel::setGenderPreference
+                            currentScreen = currentScreen
                         )
                     }
                 }

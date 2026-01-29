@@ -126,3 +126,89 @@ fun DateTimePill(
         }
     }
 }
+
+/**
+ * Separate Date button matching HTML design.
+ * Primary colored background when isPrimary is true.
+ */
+@Composable
+fun DateButton(
+    dateTime: LocalDateTime,
+    onClick: () -> Unit,
+    isPrimary: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val isToday = dateTime.toLocalDate() == LocalDate.now()
+    val isTomorrow = dateTime.toLocalDate() == LocalDate.now().plusDays(1)
+
+    val dateText = when {
+        isToday -> "Today"
+        isTomorrow -> "Tomorrow"
+        else -> dateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+    }
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = if (isPrimary) RunWearColors.Primary else Color.White.copy(alpha = 0.12f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Outlined.CalendarToday,
+                contentDescription = "Select date",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = dateText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/**
+ * Separate Time button matching HTML design.
+ * Glass background style.
+ */
+@Composable
+fun TimeButton(
+    dateTime: LocalDateTime,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val timeText = dateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(8.dp),
+        color = Color.White.copy(alpha = 0.12f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Outlined.Schedule,
+                contentDescription = "Select time",
+                tint = Color.White,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = timeText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}

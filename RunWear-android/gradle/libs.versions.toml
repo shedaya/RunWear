@@ -20,6 +20,8 @@ wearComposeMaterial3 = "1.0.0-alpha29"
 coroutines = "1.9.0"
 vico = "2.0.0-beta.2"
 coil = "2.5.0"
+supabase = "2.0.0"
+ktor = "2.3.7"
 
 [libraries]
 # Core Android
@@ -74,6 +76,14 @@ vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = 
 
 # Image Loading (Coil)
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Google Fonts
+androidx-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
+
+# Supabase
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt", version.ref = "supabase" }
+supabase-storage = { group = "io.github.jan-tennert.supabase", name = "storage-kt", version.ref = "supabase" }
+ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

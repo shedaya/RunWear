@@ -94,16 +94,26 @@ enum class TemperatureUnit(val symbol: String) {
     fun format(temp: Double): String = "${temp.toInt()}$symbol"
 }
 
-enum class ComfortPreference(val tempAdjustment: Int, val label: String) {
-    RUNS_VERY_COLD(-10, "I run very cold"),
-    RUNS_COLD(-5, "I run cold"),
-    NEUTRAL(0, "Neutral"),
-    RUNS_WARM(5, "I run warm"),
-    RUNS_VERY_WARM(10, "I run very hot")
+/**
+ * Comfort preference for outfit recommendations.
+ * PWA v2.9 labels: "Run Cold" / "Slightly Cold" / "Neutral" / "Slightly Hot" / "Run Hot"
+ * Maps to temperature adjustments: -10, -5, 0, +5, +10
+ */
+enum class ComfortPreference(val tempAdjustment: Int, val label: String, val shortLabel: String) {
+    RUNS_VERY_COLD(-10, "I get cold very easily", "Run Cold"),
+    RUNS_COLD(-5, "I tend to get cold", "Slightly Cold"),
+    NEUTRAL(0, "Neither", "Neutral"),
+    RUNS_WARM(5, "I tend to overheat", "Slightly Hot"),
+    RUNS_VERY_WARM(10, "I overheat very easily", "Run Hot")
 }
 
+/**
+ * Gender/fit preference for affiliate search.
+ * PWA v2.9: Only "Male" and "Female" shown as options.
+ * UNISEX is the default when neither is selected (toggleable behavior).
+ */
 enum class GenderPreference(val label: String) {
-    MALE("Men's"),
-    FEMALE("Women's"),
-    UNISEX("Unisex")
+    MALE("Male"),
+    FEMALE("Female"),
+    UNISEX("") // Empty label - this is the "deselected" state
 }

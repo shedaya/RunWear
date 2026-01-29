@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.runwear.shared.data.repository.AffiliateRepository
+import com.runwear.shared.data.repository.HeroImageRepository
 import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
@@ -51,7 +52,9 @@ data class MainUiState(
     // Location fallback state
     val showLocationSetup: Boolean = false,
     val locationSource: String = "gps", // "gps" or "manual"
-    val locationErrorReason: LocationErrorReason? = null
+    val locationErrorReason: LocationErrorReason? = null,
+    // Hero image from AI service
+    val heroImageUrl: String? = null
 )
 
 data class LocationSearchState(
@@ -65,6 +68,7 @@ class MainViewModel @Inject constructor(
     private val weatherRepository: WeatherRepository,
     private val preferencesRepository: PreferencesRepository,
     private val affiliateRepository: AffiliateRepository,
+    private val heroImageRepository: HeroImageRepository,
     private val locationProvider: LocationProvider,
     private val getOutfitRecommendation: GetOutfitRecommendationUseCase
 ) : ViewModel() {
@@ -239,15 +243,24 @@ class MainViewModel @Inject constructor(
                 onSuccess = { weather ->
                     val outfit = getOutfitRecommendation.execute(weather, _uiState.value.comfortPreference)
                     val forecast = forecastResult.getOrDefault(emptyList())
-                    
+
+                    // PWA v2.9: Set default hero image IMMEDIATELY based on temp bracket
+                    val defaultImageUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
+                        weather, outfit, _uiState.value.genderPreference
+                    )
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             weather = weather,
                             outfit = outfit,
-                            hourlyForecast = forecast
+                            hourlyForecast = forecast,
+                            heroImageUrl = defaultImageUrl // Show default immediately
                         )
                     }
+
+                    // Then fetch AI hero image in background (upgrades if found)
+                    fetchHeroImage(weather, outfit)
                 },
                 onFailure = { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
@@ -259,6 +272,38 @@ class MainViewModel @Inject constructor(
     private fun isNow(dt: LocalDateTime): Boolean {
         val now = LocalDateTime.now()
         return dt.toLocalDate() == now.toLocalDate() && dt.hour == now.hour
+    }
+
+    /**
+     * Fetch hero image with zero-lag architecture:
+     * 1. INSTANTLY set weather-aware fallback image (no waiting)
+     * 2. BACKGROUND: Try to upgrade to AI image from Supabase
+     */
+    private fun fetchHeroImage(weather: WeatherConditions, outfit: OutfitRecommendation) {
+        val gender = _uiState.value.genderPreference
+
+        // INSTANT: Set weather-aware fallback immediately (no network wait)
+        val fallbackUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
+            weather, outfit, gender
+        )
+        _uiState.update { it.copy(heroImageUrl = fallbackUrl) }
+
+        // BACKGROUND: Try to get better AI image from Supabase (don't block UI)
+        viewModelScope.launch {
+            try {
+                val result = heroImageRepository.getHeroImage(
+                    weather = weather,
+                    outfit = outfit,
+                    gender = gender
+                )
+                // Only update if we got a valid URL (Supabase AI image found)
+                result.imageUrl?.let { url ->
+                    _uiState.update { it.copy(heroImageUrl = url) }
+                }
+            } catch (e: Exception) {
+                // Silently ignore - fallback is already showing
+            }
+        }
     }
     
     fun setDateTime(dt: LocalDateTime) {
@@ -309,6 +354,12 @@ class MainViewModel @Inject constructor(
     fun setComfortPreference(preference: ComfortPreference) {
         viewModelScope.launch {
             preferencesRepository.setComfortPreference(preference)
+            // Recalculate outfit with new comfort and reload hero image
+            val weather = _uiState.value.weather ?: return@launch
+            val outfit = getOutfitRecommendation.execute(weather, preference)
+            _uiState.update { it.copy(outfit = outfit) }
+            // Hero image depends on outfit hash - must reload
+            fetchHeroImage(weather, outfit)
         }
     }
     
@@ -352,6 +403,27 @@ class MainViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     locationName = location.displayName,
+                    locationSource = "manual",
+                    showLocationSetup = false,
+                    hasLocationPermission = true // Bypass permission screen for manual location
+                )
+            }
+            _locationSearch.update { LocationSearchState() }
+            fetchWeather()
+        }
+    }
+
+    fun selectManualLocation(lat: Double, lon: Double, name: String) {
+        viewModelScope.launch {
+            currentLat = lat
+            currentLon = lon
+
+            // Persist manual location to DataStore
+            preferencesRepository.saveManualLocation(lat, lon, name)
+
+            _uiState.update {
+                it.copy(
+                    locationName = name,
                     locationSource = "manual",
                     showLocationSetup = false,
                     hasLocationPermission = true // Bypass permission screen for manual location
@@ -417,6 +489,11 @@ class MainViewModel @Inject constructor(
     fun setGenderPreference(preference: GenderPreference) {
         viewModelScope.launch {
             preferencesRepository.setGenderPreference(preference)
+            _uiState.update { it.copy(genderPreference = preference) }
+            // Hero image depends on gender - reload with new combination ID
+            val weather = _uiState.value.weather ?: return@launch
+            val outfit = _uiState.value.outfit ?: return@launch
+            fetchHeroImage(weather, outfit)
         }
     }
 

@@ -39,6 +39,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -73,6 +74,9 @@ dependencies {
 
     // Image Loading (Coil) - for hero images with crossfade
     implementation(libs.coil.compose)
+
+    // Google Fonts
+    implementation(libs.androidx.ui.text.google.fonts)
     
     // Debug
     debugImplementation(libs.androidx.ui.tooling)

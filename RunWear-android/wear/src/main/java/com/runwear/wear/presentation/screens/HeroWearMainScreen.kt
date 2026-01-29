@@ -39,12 +39,19 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.rotary.rotaryScrollable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
+import androidx.wear.compose.foundation.rememberActiveFocusRequester
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.CardDefaults
 import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.ScrollIndicator
 import coil.compose.AsyncImage
 import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
@@ -199,7 +206,7 @@ private fun HeroWeatherPage(
                 .background(tintColor)
         )
 
-        // Gradient for text readability
+        // Gradient for text readability - stronger for temperature area
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -207,9 +214,11 @@ private fun HeroWeatherPage(
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.0f to Color.Black.copy(alpha = 0.4f),
-                            0.3f to Color.Transparent,
-                            0.7f to Color.Transparent,
+                            0.0f to Color.Black.copy(alpha = 0.5f),
+                            0.25f to Color.Black.copy(alpha = 0.3f),
+                            0.4f to Color.Black.copy(alpha = 0.5f),
+                            0.6f to Color.Black.copy(alpha = 0.5f),
+                            0.75f to Color.Black.copy(alpha = 0.3f),
                             1.0f to Color.Black.copy(alpha = 0.7f)
                         )
                     )
@@ -241,37 +250,60 @@ private fun HeroWeatherPage(
                 )
             }
 
-            // Center: Large temperature (tappable)
+            // Center: Large temperature with glass backdrop (tappable)
             Card(
                 onClick = onToggleUnit,
                 colors = CardDefaults.cardColors(
-                    containerColor = Color.Transparent
+                    containerColor = Color.Black.copy(alpha = 0.4f)
                 ),
+                shape = RoundedCornerShape(24.dp),
                 modifier = Modifier.padding(vertical = 8.dp)
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
-                    Text(
-                        text = "${animatedTemp}°",
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Black,
-                        color = tempColor,
-                        letterSpacing = (-1).sp
+                    // Temperature with colored accent border/shadow
+                    val unitSymbol = if (weather.isCelsius) "C" else "F"
+                    Box(contentAlignment = Alignment.Center) {
+                        // Shadow layer for depth
+                        Text(
+                            text = "${animatedTemp}°$unitSymbol",
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Black,
+                            color = tempColor.copy(alpha = 0.4f),
+                            letterSpacing = (-1).sp
+                        )
+                        // Main white text
+                        Text(
+                            text = "${animatedTemp}°$unitSymbol",
+                            fontSize = 48.sp,
+                            fontWeight = FontWeight.Black,
+                            color = Color.White,
+                            letterSpacing = (-1).sp
+                        )
+                    }
+                    // Color indicator bar
+                    Box(
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(tempColor)
                     )
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         text = "Feels like",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = Color.White.copy(alpha = 0.8f)
                     )
                 }
             }
 
-            // Bottom: Date and items count
+            // Bottom: Swipe hint with animated arrow
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(bottom = 20.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 val isToday = weather.dateTime.toLocalDate() == LocalDate.now()
                 Text(
@@ -281,11 +313,26 @@ private fun HeroWeatherPage(
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.White.copy(alpha = 0.8f)
                 )
-                Text(
-                    text = "${outfit.allItems.size} items →",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RunWearColors.Primary
-                )
+                Spacer(Modifier.height(4.dp))
+                // More prominent swipe hint
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Swipe for ${outfit.allItems.size} items",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RunWearColors.Primary,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "→",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = RunWearColors.Primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -301,37 +348,48 @@ private fun OutfitPage(
     onRefresh: () -> Unit
 ) {
     val listState = rememberScalingLazyListState()
+    val focusRequester = rememberActiveFocusRequester()
 
-    ScalingLazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
+    ScreenScaffold(
+        scrollState = listState,
+        scrollIndicator = { ScrollIndicator(listState) }
     ) {
-        // Title
-        item {
-            Text(
-                text = "Your Outfit",
-                style = MaterialTheme.typography.titleSmall,
-                color = RunWearColors.Primary,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .rotaryScrollable(
+                    behavior = androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults.behavior(listState),
+                    focusRequester = focusRequester
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
+        ) {
+            // Title
+            item {
+                Text(
+                    text = "Your Outfit",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = RunWearColors.Primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
-        // Outfit items as compact chips
-        items(outfit.allItems) { item ->
-            WearOutfitChip(item)
-        }
+            // Outfit items as compact chips
+            items(outfit.allItems) { item ->
+                WearOutfitChip(item)
+            }
 
-        // Refresh button
-        item {
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = onRefresh,
-                modifier = Modifier.size(width = 100.dp, height = 36.dp)
-            ) {
-                Text("Refresh", style = MaterialTheme.typography.labelSmall)
+            // Refresh button
+            item {
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = onRefresh,
+                    modifier = Modifier.size(width = 100.dp, height = 36.dp)
+                ) {
+                    Text("Refresh", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
@@ -405,48 +463,59 @@ private fun TipsPage(
     locationName: String
 ) {
     val listState = rememberScalingLazyListState()
+    val focusRequester = rememberActiveFocusRequester()
 
-    ScalingLazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
+    ScreenScaffold(
+        scrollState = listState,
+        scrollIndicator = { ScrollIndicator(listState) }
     ) {
-        // Title
-        item {
-            Text(
-                text = "Tips",
-                style = MaterialTheme.typography.titleSmall,
-                color = RunWearColors.Primary,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        if (tips.isEmpty()) {
+        ScalingLazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .rotaryScrollable(
+                    behavior = androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults.behavior(listState),
+                    focusRequester = focusRequester
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
+        ) {
+            // Title
             item {
                 Text(
-                    text = "No specific tips for today. Enjoy your run!",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = RunWearColors.TextSecondary,
+                    text = "Tips",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = RunWearColors.Primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (tips.isEmpty()) {
+                item {
+                    Text(
+                        text = "No specific tips for today. Enjoy your run!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = RunWearColors.TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                items(tips) { tip ->
+                    WearTipCard(tip)
+                }
+            }
+
+            // Location footer
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = locationName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = RunWearColors.TextMuted,
                     textAlign = TextAlign.Center
                 )
             }
-        } else {
-            items(tips) { tip ->
-                WearTipCard(tip)
-            }
-        }
-
-        // Location footer
-        item {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = locationName,
-                style = MaterialTheme.typography.labelSmall,
-                color = RunWearColors.TextMuted,
-                textAlign = TextAlign.Center
-            )
         }
     }
 }
