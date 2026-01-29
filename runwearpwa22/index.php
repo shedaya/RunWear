@@ -3158,6 +3158,7 @@
         // Query Supabase for cached hero image (random for variety)
         async function fetchCachedHeroImage(combinationId) {
             try {
+                console.log('[HeroImage] Fetching from Supabase RPC for:', combinationId);
                 // Use RPC to get random image for variety
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/rpc/get_random_image`,
@@ -3171,13 +3172,17 @@
                         body: JSON.stringify({ p_combination_id: combinationId })
                     }
                 );
+                console.log('[HeroImage] RPC response status:', response.status);
                 if (!response.ok) {
+                    console.log('[HeroImage] RPC failed, trying direct query');
                     // Fallback to direct query if RPC doesn't exist
                     return await fetchCachedHeroImageDirect(combinationId);
                 }
                 const image = await response.json();
+                console.log('[HeroImage] RPC returned:', image);
                 return image;
             } catch (e) {
+                console.error('[HeroImage] RPC error:', e);
                 // Fallback to direct query
                 return await fetchCachedHeroImageDirect(combinationId);
             }
@@ -3402,7 +3407,10 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
         // Load hero image from Supabase or queue generation
         async function loadHeroImage() {
-            if (!state.weather || !state.outfit) return;
+            if (!state.weather || !state.outfit) {
+                console.log('[HeroImage] Skipped: no weather or outfit');
+                return;
+            }
 
             const weather = getWeatherCode(state.weather.weatherCode);
             const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
@@ -3411,14 +3419,17 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const outfitHash = getOutfitHash();
 
             const combinationId = buildCombinationId(gender, weather, tempBracket, timeOfDay, outfitHash);
+            console.log('[HeroImage] Loading for:', combinationId);
 
             // Ensure combination exists in database
             await ensureOutfitCombination(combinationId, gender, weather, tempBracket, timeOfDay, outfitHash);
 
             // Try to get cached image
             const cachedImage = await fetchCachedHeroImage(combinationId);
+            console.log('[HeroImage] Supabase response:', cachedImage);
 
             if (cachedImage && cachedImage.public_url) {
+                console.log('[HeroImage] Found AI image:', cachedImage.public_url);
                 currentHeroImageUrl = cachedImage.public_url;
                 updateHeroImage();
 
@@ -3429,6 +3440,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 return;
             }
 
+            console.log('[HeroImage] No AI image found, using fallback');
             // No cached image - check replenishment rules before queuing
             const shouldQueue = await shouldReplenish(combinationId);
             if (shouldQueue) {
@@ -3440,13 +3452,22 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         // Update hero image in DOM
         function updateHeroImage() {
             const heroImg = document.querySelector('.hero-image');
-            if (heroImg && heroImg.src !== currentHeroImageUrl) {
+            console.log('[HeroImage] updateHeroImage called, element:', !!heroImg, 'newUrl:', currentHeroImageUrl);
+            if (heroImg) {
+                console.log('[HeroImage] Current src:', heroImg.src);
+                console.log('[HeroImage] Setting new src:', currentHeroImageUrl);
                 heroImg.style.opacity = '0';
                 heroImg.onload = () => {
+                    console.log('[HeroImage] Image loaded successfully');
                     heroImg.style.transition = 'opacity 0.5s ease';
                     heroImg.style.opacity = '1';
                 };
+                heroImg.onerror = (e) => {
+                    console.error('[HeroImage] Image failed to load:', e);
+                };
                 heroImg.src = currentHeroImageUrl;
+            } else {
+                console.warn('[HeroImage] No .hero-image element found in DOM');
             }
         }
 
