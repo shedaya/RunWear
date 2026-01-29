@@ -3428,9 +3428,9 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const cachedImage = await fetchCachedHeroImage(combinationId);
             console.log('[HeroImage] Supabase response:', cachedImage);
 
-            if (cachedImage && cachedImage.public_url) {
-                console.log('[HeroImage] Found AI image:', cachedImage.public_url);
-                currentHeroImageUrl = cachedImage.public_url;
+            if (cachedImage && cachedImage.image_url) {
+                console.log('[HeroImage] Found AI image:', cachedImage.image_url);
+                currentHeroImageUrl = cachedImage.image_url;
                 updateHeroImage();
 
                 // Track serve count
