@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.3 -->
+<!-- RunWear PWA v3.4 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3075,13 +3075,13 @@
                 clear: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop',      // Light layers sunny
                 cloudy: 'https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop',     // Mild overcast
                 rain: 'https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop',    // Spring/fall rain
-                snow: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop'     // Light snow
+                snow: 'https://images.unsplash.com/photo-1517483000871-1dbf64a6e1c6?w=800&h=1200&fit=crop'     // Light snow
             },
             cool: {
                 clear: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop',   // Long sleeves sunny
                 cloudy: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop',  // Cool overcast
                 rain: 'https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop',    // Cool rainy
-                snow: 'https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop'     // Cool snow
+                snow: 'https://images.unsplash.com/photo-1517483000871-1dbf64a6e1c6?w=800&h=1200&fit=crop'     // Cool snow
             },
             cold: {
                 clear: 'https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop',   // Jacket sunny winter
@@ -3093,7 +3093,7 @@
                 clear: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop',      // Winter gear sunny
                 cloudy: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop',     // Freezing overcast
                 rain: 'https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop',    // Freezing rain/sleet
-                snow: 'https://images.unsplash.com/photo-1418985991508-e47386d96a71?w=800&h=1200&fit=crop'     // Heavy snow winter
+                snow: 'https://images.unsplash.com/photo-1516410529446-2c777cb7366d?w=800&h=1200&fit=crop'     // Heavy snow winter
             }
         };
 
@@ -3411,7 +3411,10 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
         // Load hero image from Supabase or queue generation
         async function loadHeroImage() {
-            if (!state.weather || !state.outfit) return;
+            if (!state.weather || !state.outfit) {
+                console.log('[Hero] Skip: no weather/outfit');
+                return;
+            }
 
             const weather = getWeatherCode(state.weather.weatherCode);
             const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
@@ -3420,36 +3423,39 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const outfitHash = getOutfitHash();
 
             const combinationId = buildCombinationId(gender, weather, tempBracket, timeOfDay, outfitHash);
+            console.log('[Hero] Fetching for:', combinationId);
 
-            // Ensure combination exists in database
-            await ensureOutfitCombination(combinationId, gender, weather, tempBracket, timeOfDay, outfitHash);
+            // Try to get AI image from Supabase
+            try {
+                const cachedImage = await fetchCachedHeroImage(combinationId);
+                console.log('[Hero] Response:', cachedImage);
 
-            // Try to get cached image
-            const cachedImage = await fetchCachedHeroImage(combinationId);
-
-            if (cachedImage && cachedImage.image_url) {
-                currentHeroImageUrl = cachedImage.image_url;
-                updateHeroImage();
-                return;
-            }
-
-            // No cached image - check replenishment rules before queuing
-            const shouldQueue = await shouldReplenish(combinationId);
-            if (shouldQueue) {
-                const prompt = buildImagePrompt(gender, weather, tempBracket, timeOfDay, state.outfit);
-                await queueHeroImageGeneration(combinationId, prompt);
+                if (cachedImage && cachedImage.image_url) {
+                    console.log('[Hero] Found AI image, updating DOM');
+                    currentHeroImageUrl = cachedImage.image_url;
+                    updateHeroImage();
+                } else {
+                    console.log('[Hero] No AI image found for this combination');
+                }
+            } catch (e) {
+                console.error('[Hero] Fetch failed:', e);
             }
         }
 
         // Update hero image in DOM with crossfade
         function updateHeroImage() {
             const heroImg = document.querySelector('.hero-image');
-            if (heroImg && heroImg.src !== currentHeroImageUrl) {
+            console.log('[Hero] updateHeroImage - element found:', !!heroImg);
+            if (heroImg) {
+                console.log('[Hero] Current src:', heroImg.src.substring(0, 50) + '...');
+                console.log('[Hero] New src:', currentHeroImageUrl.substring(0, 50) + '...');
                 heroImg.style.opacity = '0';
                 heroImg.onload = () => {
+                    console.log('[Hero] Image loaded OK');
                     heroImg.style.transition = 'opacity 0.5s ease';
                     heroImg.style.opacity = '1';
                 };
+                heroImg.onerror = () => console.error('[Hero] Image failed to load');
                 heroImg.src = currentHeroImageUrl;
             }
         }
@@ -4254,7 +4260,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     break;
                 case 'humidity':
                     title = 'Humidity';
-                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.66 8L12 2.35 6.34 8C4.78 9.56 4 11.64 4 13.64s.78 4.11 2.34 5.67 3.61 2.35 5.66 2.35 4.1-.79 5.66-2.35S20 15.64 20 13.64 19.22 9.56 17.66 8zM6 14c.01-2 .62-3.27 1.76-4.4L12 5.27l4.24 4.38C17.38 10.77 17.99 12 18 14H6z"/></svg>`;
+                    icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14c0-4 3-7 5-9 2 2 5 5 5 9a5 5 0 01-10 0z"/><path d="M8 14h4"/><path d="M7 17h6"/></svg>`;
                     details = [
                         { label: 'Relative Humidity', value: `${w.humidity}%` },
                         { label: 'Dew Point', value: `${Math.round(w.dewPoint || w.temp - 5)}${unit}` },
@@ -4603,7 +4609,7 @@ Get your personalized running outfit at runwear.ai`;
             const calendarSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>`;
             const clockSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`;
             const windSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z"/></svg>`;
-            const humiditySvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zm-4-8c0-.55.45-1 1-1s1 .45 1 1h-1v1h1v2h-1v1h1v2h-2V5z"/></svg>`;
+            const humiditySvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14c0-4 3-7 5-9 2 2 5 5 5 9a5 5 0 01-10 0z"/><path d="M8 14h4"/><path d="M7 17h6"/></svg>`;
             const precipSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
             const uvSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`;
             const chevronSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
@@ -4732,7 +4738,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.3</div>
+                    <div class="footer">v3.4</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
