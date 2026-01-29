@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.9 -->
+<!-- RunWear PWA v3.10 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3395,8 +3395,17 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             return moods[tempBracket] || 'Focused and determined';
         }
 
+        // Get gender for hero image selection ONLY (not for affiliate links)
+        // When user hasn't selected a gender, randomly pick MALE or FEMALE for variety
+        function getHeroImageGender() {
+            if (state.gender === 'male') return 'MALE';
+            if (state.gender === 'female') return 'FEMALE';
+            // No preference: randomly pick for hero image variety
+            return Math.random() < 0.5 ? 'MALE' : 'FEMALE';
+        }
+
         // Load hero image from Supabase with cascading fallback queries
-        // Priority: Exact match → Any time → Unisex → Clear weather fallback
+        // Priority: Exact match → Any time → Clear fallback → Opposite gender
         async function loadHeroImage() {
             if (!state.weather || !state.outfit) {
                 console.log('[Hero] No weather/outfit data yet');
@@ -3406,17 +3415,26 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const weather = getWeatherCode(state.weather.weatherCode);
             const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
             const timeOfDay = getTimeOfDay(state.selectedDate);
-            const gender = getGenderPreference();
+            const gender = getHeroImageGender();
 
             console.log('[Hero] Building queries for:', { gender, weather, tempBracket, timeOfDay });
 
-            // Cascade: most specific → least specific
+            // v3.10: Extended cascade with opposite gender fallback
             const queries = [
-                `${gender}_${weather}_${tempBracket}_${timeOfDay}`,   // 1. Exact: MALE_CLOUDY_MILD_NIGHT_*
-                `${gender}_${weather}_${tempBracket}`,                // 2. Any time: MALE_CLOUDY_MILD_*
-                `UNISEX_${weather}_${tempBracket}`,                   // 3. Unisex fallback: UNISEX_CLOUDY_MILD_*
-                `${gender}_CLEAR_${tempBracket}`,                     // 4. Clear weather fallback: MALE_CLEAR_MILD_*
+                `${gender}_${weather}_${tempBracket}_${timeOfDay}`,   // 1. Exact
+                `${gender}_${weather}_${tempBracket}`,                // 2. Any time
             ];
+
+            const oppositeGender = gender === 'MALE' ? 'FEMALE' : 'MALE';
+
+            // Add clear weather fallback (only if not already CLEAR)
+            if (weather !== 'CLEAR') {
+                queries.push(`${gender}_CLEAR_${tempBracket}`);
+            }
+
+            // Fall back to opposite gender (better than Unsplash fallback)
+            queries.push(`${oppositeGender}_${weather}_${tempBracket}`);
+            queries.push(`${oppositeGender}_CLEAR_${tempBracket}`);
 
             for (const baseQuery of queries) {
                 console.log('[Hero] Trying:', baseQuery + '_%');
