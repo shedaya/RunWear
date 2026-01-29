@@ -3419,11 +3419,11 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             ];
 
             for (const baseQuery of queries) {
-                console.log('[Hero] Trying:', baseQuery + '_*');
+                console.log('[Hero] Trying:', baseQuery + '_%');
 
                 try {
                     const response = await fetch(
-                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_*&status=eq.completed&limit=10`,
+                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%&limit=10`,
                         {
                             headers: {
                                 'apikey': SUPABASE_ANON_KEY,
