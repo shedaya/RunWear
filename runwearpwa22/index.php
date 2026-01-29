@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v2.7 - New deploy account with correct path -->
+<!-- RunWear PWA v2.8 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1734,7 +1734,9 @@
 
         .onboarding-section .gender-opt {
             flex: 1;
-            max-width: 80px;
+            max-width: none;
+            text-align: center;
+            padding: 8px 16px;
         }
 
         .onboarding-section .comfort-selector {
@@ -3422,10 +3424,10 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 state.weather = await fetchWeather(state.location.lat, state.location.lon, state.selectedDate);
                 state.outfit = getOutfitRecommendation(state.weather);
 
-                // Load hero image from Supabase (or queue generation if not cached)
-                await loadHeroImage();
-
                 state.loading = false;
+
+                // Load hero image asynchronously (don't block UI)
+                loadHeroImage();
             } catch (err) {
                 state.loading = false;
                 state.error = err.message || 'Something went wrong';
@@ -4610,6 +4612,8 @@ Get your personalized running outfit at runwear.ai`;
                             ` : ''}
                         </div>
                     ` : ''}
+
+                    <div class="footer">v2.8</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->

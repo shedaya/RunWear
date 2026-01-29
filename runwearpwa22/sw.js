@@ -1,4 +1,4 @@
-const CACHE_NAME = 'runwear-v2.2';
+const CACHE_NAME = 'runwear-v2.8';
 const ASSETS = [
   '/',
   '/index.html',
