@@ -2,9 +2,12 @@ package com.runwear.wear.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.runwear.shared.data.repository.HeroImageRepository
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
 import com.runwear.shared.domain.model.ComfortPreference
+import com.runwear.shared.domain.model.GenderPreference
+import com.runwear.shared.domain.model.HeroImageSelector
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherConditions
@@ -29,7 +32,8 @@ data class WearUiState(
     val selectedDateTime: LocalDateTime = LocalDateTime.now(),
     val temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
     val comfortPreference: ComfortPreference = ComfortPreference.NEUTRAL,
-    val hasLocationPermission: Boolean = false
+    val hasLocationPermission: Boolean = false,
+    val heroImageUrl: String? = null  // v3.9: AI hero image support
 )
 
 @HiltViewModel
@@ -37,7 +41,8 @@ class WearViewModel @Inject constructor(
     private val weatherRepository: WeatherRepository,
     private val preferencesRepository: PreferencesRepository,
     private val locationProvider: LocationProvider,
-    private val getOutfitRecommendation: GetOutfitRecommendationUseCase
+    private val getOutfitRecommendation: GetOutfitRecommendationUseCase,
+    private val heroImageRepository: HeroImageRepository
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(WearUiState())
@@ -120,18 +125,48 @@ class WearViewModel @Inject constructor(
             result.fold(
                 onSuccess = { weather ->
                     val outfit = getOutfitRecommendation.execute(weather, _uiState.value.comfortPreference)
+
+                    // ZERO-LAG: Set fallback image immediately
+                    val fallbackUrl = HeroImageSelector.getImageUrl(weather, outfit, GenderPreference.UNISEX)
+
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             weather = weather,
-                            outfit = outfit
+                            outfit = outfit,
+                            heroImageUrl = fallbackUrl
                         )
                     }
+
+                    // BACKGROUND: Try to get AI image from Supabase
+                    fetchHeroImage(weather, outfit)
                 },
                 onFailure = { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
                 }
             )
+        }
+    }
+
+    /**
+     * Fetch AI-generated hero image from Supabase.
+     * Uses cascading query (v3.9) - fallback already set, this upgrades if available.
+     */
+    private fun fetchHeroImage(weather: WeatherConditions, outfit: OutfitRecommendation) {
+        viewModelScope.launch {
+            try {
+                val result = heroImageRepository.getHeroImage(
+                    weather = weather,
+                    outfit = outfit,
+                    gender = GenderPreference.UNISEX  // Watch uses unisex for simplicity
+                )
+                result.imageUrl?.let { url ->
+                    _uiState.update { it.copy(heroImageUrl = url) }
+                }
+            } catch (e: Exception) {
+                // Silently fail - fallback already displayed
+                android.util.Log.w("WearViewModel", "Hero image fetch failed", e)
+            }
         }
     }
     

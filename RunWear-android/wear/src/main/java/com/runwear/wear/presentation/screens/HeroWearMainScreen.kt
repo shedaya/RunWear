@@ -55,8 +55,6 @@ import androidx.wear.compose.material3.ScrollIndicator
 import coil.compose.AsyncImage
 import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
-import com.runwear.shared.domain.model.GenderPreference
-import com.runwear.shared.domain.model.HeroImageSelector
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.wear.presentation.theme.RunWearColors
@@ -120,8 +118,9 @@ private fun HeroWearContent(
             when (page) {
                 0 -> HeroWeatherPage(
                     weather = uiState.weather!!,
-                    outfit = uiState.outfit!!,
+                    heroImageUrl = uiState.heroImageUrl,
                     locationName = uiState.locationName,
+                    outfitItemCount = uiState.outfit!!.allItems.size,
                     onToggleUnit = onToggleUnit
                 )
                 1 -> OutfitPage(
@@ -153,8 +152,9 @@ private fun HeroWearContent(
 @Composable
 private fun HeroWeatherPage(
     weather: WeatherConditions,
-    outfit: OutfitRecommendation,
+    heroImageUrl: String?,
     locationName: String,
+    outfitItemCount: Int,
     onToggleUnit: () -> Unit
 ) {
     val tempColor = WeatherColors.forTemperature(weather.feelsLikeInFahrenheit)
@@ -174,11 +174,6 @@ private fun HeroWeatherPage(
         targetTemp = startTemp
         kotlinx.coroutines.delay(100)
         targetTemp = actualTemp
-    }
-
-    // Hero image URL
-    val heroImageUrl = remember(weather, outfit) {
-        HeroImageSelector.getImageUrl(weather, outfit, GenderPreference.UNISEX)
     }
 
     Box(
@@ -320,7 +315,7 @@ private fun HeroWeatherPage(
                     horizontalArrangement = Arrangement.Center
                 ) {
                     Text(
-                        text = "Swipe for ${outfit.allItems.size} items",
+                        text = "Swipe for $outfitItemCount items",
                         style = MaterialTheme.typography.labelSmall,
                         color = RunWearColors.Primary,
                         fontWeight = FontWeight.Medium
