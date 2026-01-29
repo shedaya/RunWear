@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.5 -->
+<!-- RunWear PWA v3.6 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3197,7 +3197,6 @@
             try {
                 // Extract base combo: FEMALE_CLOUDY_COOL_NIGHT from FEMALE_CLOUDY_COOL_NIGHT_37fb2714
                 const baseCombo = combinationId.split('_').slice(0, 4).join('_');
-                console.log('[Hero] Partial match query:', baseCombo + '_*');
 
                 const response = await fetch(
                     `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseCombo}_*&limit=10`,
@@ -3208,12 +3207,8 @@
                         }
                     }
                 );
-                if (!response.ok) {
-                    console.log('[Hero] Query failed:', response.status);
-                    return null;
-                }
+                if (!response.ok) return null;
                 const images = await response.json();
-                console.log('[Hero] Found', images.length, 'matching images');
 
                 // Pick a random one for variety
                 if (images.length > 0) {
@@ -3221,7 +3216,6 @@
                 }
                 return null;
             } catch (e) {
-                console.error('[Hero] Fetch failed:', e);
                 return null;
             }
         }
@@ -3424,10 +3418,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
         // Load hero image from Supabase or queue generation
         async function loadHeroImage() {
-            if (!state.weather || !state.outfit) {
-                console.log('[Hero] Skip: no weather/outfit');
-                return;
-            }
+            if (!state.weather || !state.outfit) return;
 
             const weather = getWeatherCode(state.weather.weatherCode);
             const tempBracket = getTempBracket(state.weather.feelsLike).toUpperCase();
@@ -3436,39 +3427,28 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const outfitHash = getOutfitHash();
 
             const combinationId = buildCombinationId(gender, weather, tempBracket, timeOfDay, outfitHash);
-            console.log('[Hero] Fetching for:', combinationId);
 
-            // Try to get AI image from Supabase
+            // Try to get AI image from Supabase (partial match on first 4 parts)
             try {
                 const cachedImage = await fetchCachedHeroImage(combinationId);
-                console.log('[Hero] Response:', cachedImage);
-
                 if (cachedImage && cachedImage.image_url) {
-                    console.log('[Hero] Found AI image, updating DOM');
                     currentHeroImageUrl = cachedImage.image_url;
                     updateHeroImage();
-                } else {
-                    console.log('[Hero] No AI image found for this combination');
                 }
             } catch (e) {
-                console.error('[Hero] Fetch failed:', e);
+                // Silently fail - fallback image already showing
             }
         }
 
         // Update hero image in DOM with crossfade
         function updateHeroImage() {
             const heroImg = document.querySelector('.hero-image');
-            console.log('[Hero] updateHeroImage - element found:', !!heroImg);
-            if (heroImg) {
-                console.log('[Hero] Current src:', heroImg.src.substring(0, 50) + '...');
-                console.log('[Hero] New src:', currentHeroImageUrl.substring(0, 50) + '...');
+            if (heroImg && heroImg.src !== currentHeroImageUrl) {
                 heroImg.style.opacity = '0';
                 heroImg.onload = () => {
-                    console.log('[Hero] Image loaded OK');
                     heroImg.style.transition = 'opacity 0.5s ease';
                     heroImg.style.opacity = '1';
                 };
-                heroImg.onerror = () => console.error('[Hero] Image failed to load');
                 heroImg.src = currentHeroImageUrl;
             }
         }
@@ -4751,7 +4731,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.5</div>
+                    <div class="footer">v3.6</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
