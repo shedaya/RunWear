@@ -1223,9 +1223,10 @@
         }
 
         .gender-opt.center {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
-            padding: 0 4px;
+            padding: 0 12px;
+            min-width: 50px;
         }
         
         /* Shop All Button */
@@ -1511,9 +1512,18 @@
         .modal-handle {
             width: 40px;
             height: 4px;
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.3);
             border-radius: 2px;
-            margin: 0 auto 20px;
+            margin: 0 auto 16px;
+            cursor: grab;
+        }
+
+        .modal-handle::before {
+            content: '';
+            display: block;
+            width: 100%;
+            height: 40px;
+            margin-top: -18px;
         }
 
         .modal-title {
@@ -2370,6 +2380,17 @@
                 <div class="comfort-selector" id="comfortSelector"></div>
             </div>
 
+            <div class="setting-row">
+                <div>
+                    <div class="setting-label">Fit Preference</div>
+                    <div class="setting-sublabel">Product recommendations style</div>
+                </div>
+                <div class="gender-toggle" id="settingsGenderSelector">
+                    <span class="gender-opt center" data-gender="male" onclick="setGender('male')">Male</span>
+                    <span class="gender-opt center" data-gender="female" onclick="setGender('female')">Female</span>
+                </div>
+            </div>
+
             <button class="btn" style="width:100%;margin-top:24px" onclick="closeSettings()">Done</button>
         </div>
     </div>
@@ -2407,7 +2428,7 @@
             <div class="onboarding-header">
                 <div class="onboarding-logo">Run<span>Wear</span></div>
                 <h1 class="onboarding-title">Welcome! 👋</h1>
-                <p class="onboarding-subtitle">Let's personalize your experience.<br>You can always change these later.</p>
+                <p class="onboarding-subtitle">Let's prepare your perfect run.<br>You can always change these later.</p>
             </div>
 
             <div class="onboarding-section">
@@ -2423,13 +2444,8 @@
                 <div class="onboarding-label">Fit Preference</div>
                 <div class="onboarding-sublabel">We'll tailor product recommendations</div>
                 <div class="gender-toggle" id="onboardingGenderSelector">
-                    <span class="gender-opt" data-gender="male" onclick="setOnboardingGender('male')">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M9.5 11c1.93 0 3.5 1.57 3.5 3.5S11.43 18 9.5 18 6 16.43 6 14.5 7.57 11 9.5 11zm0-2C6.46 9 4 11.46 4 14.5S6.46 20 9.5 20s5.5-2.46 5.5-5.5c0-1.16-.36-2.23-.97-3.12L18 7.42V10h2V4h-6v2h2.58l-3.97 3.97C11.73 9.36 10.66 9 9.5 9z"/></svg>
-                    </span>
-                    <span class="gender-opt center" data-gender="all" onclick="setOnboardingGender('all')">All</span>
-                    <span class="gender-opt" data-gender="female" onclick="setOnboardingGender('female')">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 4c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4 1.79-4 4-4zm0-2C8.69 2 6 4.69 6 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm1 16h-2v-2H9v-2h2v-2h2v2h2v2h-2v2z"/></svg>
-                    </span>
+                    <span class="gender-opt center" data-gender="male" onclick="setOnboardingGender('male')">Male</span>
+                    <span class="gender-opt center" data-gender="female" onclick="setOnboardingGender('female')">Female</span>
                 </div>
             </div>
 
@@ -2470,7 +2486,7 @@
             autoLon: parseFloat(localStorage.getItem('autoLon')) || null,
             selectedDate: new Date(),
             useCelsius: localStorage.getItem('useCelsius') === 'true',
-            gender: localStorage.getItem('gender') || 'all', // 'male', 'female', 'all'
+            gender: localStorage.getItem('gender') || 'all', // 'male', 'female', or 'all' (unisex default)
             comfort: parseInt(localStorage.getItem('comfort')) || 0, // -10, -5, 0, 5, 10
             hasCompletedOnboarding: localStorage.getItem('hasCompletedOnboarding') === 'true',
             hasPermission: false,
@@ -3450,8 +3466,10 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         }
 
         function setGender(g) {
-            state.gender = g;
-            localStorage.setItem('gender', g);
+            // Toggle: if same gender clicked, deselect (back to 'all'/unisex)
+            state.gender = (state.gender === g) ? 'all' : g;
+            localStorage.setItem('gender', state.gender);
+            updateSettingsGenderSelector();
             render();
         }
 
@@ -3553,6 +3571,16 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             document.getElementById('settingsModal').classList.add('active');
             updateUnitSelector();
             renderComfortSelector();
+            updateSettingsGenderSelector();
+        }
+
+        function updateSettingsGenderSelector() {
+            const selector = document.getElementById('settingsGenderSelector');
+            if (selector) {
+                selector.querySelectorAll('.gender-opt').forEach(opt => {
+                    opt.classList.toggle('active', opt.dataset.gender === state.gender);
+                });
+            }
         }
 
         function closeSettings() {
@@ -3996,6 +4024,67 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             }
         }
 
+        // ============ MODAL SWIPE TO CLOSE ============
+        function initModalSwipeToClose() {
+            const modals = [
+                { overlay: 'settingsModal', close: closeSettings },
+                { overlay: 'shopModal', close: closeShop },
+                { overlay: 'locationModal', close: closeLocationModal },
+                { overlay: 'outfitDetailModal', close: closeOutfitDetail },
+                { overlay: 'weatherDetailOverlay', close: closeWeatherDetail }
+            ];
+
+            modals.forEach(({ overlay, close }) => {
+                const overlayEl = document.getElementById(overlay);
+                if (!overlayEl) return;
+
+                let startY = 0;
+                let currentY = 0;
+                let isDragging = false;
+                const modal = overlayEl.querySelector('.modal, .shop-modal, .location-modal, .outfit-detail-modal, .weather-detail');
+
+                if (!modal) return;
+
+                modal.addEventListener('touchstart', (e) => {
+                    // Only start drag from top area (handle region)
+                    const touch = e.touches[0];
+                    const rect = modal.getBoundingClientRect();
+                    if (touch.clientY - rect.top < 60) { // Top 60px is draggable
+                        startY = touch.clientY;
+                        isDragging = true;
+                        modal.style.transition = 'none';
+                    }
+                }, { passive: true });
+
+                modal.addEventListener('touchmove', (e) => {
+                    if (!isDragging) return;
+                    currentY = e.touches[0].clientY;
+                    const deltaY = currentY - startY;
+                    if (deltaY > 0) { // Only allow dragging down
+                        modal.style.transform = `translateY(${deltaY}px)`;
+                    }
+                }, { passive: true });
+
+                modal.addEventListener('touchend', () => {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    modal.style.transition = 'transform 0.3s ease';
+                    const deltaY = currentY - startY;
+                    if (deltaY > 100) { // Threshold to close
+                        modal.style.transform = `translateY(100%)`;
+                        setTimeout(() => {
+                            close();
+                            modal.style.transform = '';
+                        }, 300);
+                    } else {
+                        modal.style.transform = '';
+                    }
+                    startY = 0;
+                    currentY = 0;
+                }, { passive: true });
+            });
+        }
+
         // ============ WEATHER DETAIL POPUP ============
         let activeWeatherDetail = null;
 
@@ -4031,12 +4120,24 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     break;
                 case 'humidity':
                     title = 'Humidity';
-                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
+                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.66 8L12 2.35 6.34 8C4.78 9.56 4 11.64 4 13.64s.78 4.11 2.34 5.67 3.61 2.35 5.66 2.35 4.1-.79 5.66-2.35S20 15.64 20 13.64 19.22 9.56 17.66 8zM6 14c.01-2 .62-3.27 1.76-4.4L12 5.27l4.24 4.38C17.38 10.77 17.99 12 18 14H6z"/></svg>`;
                     details = [
                         { label: 'Relative Humidity', value: `${w.humidity}%` },
                         { label: 'Dew Point', value: `${Math.round(w.dewPoint || w.temp - 5)}${unit}` },
                         { label: 'Comfort Level', value: w.humidity > 70 ? 'Muggy' : w.humidity < 30 ? 'Dry' : 'Comfortable' },
                         { label: 'Sweat Impact', value: w.humidity > 60 ? 'Slower evaporation' : 'Normal' }
+                    ];
+                    break;
+                case 'precipitation':
+                    title = 'Precipitation';
+                    icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
+                    const precipProb = w.precipitationProbability || 0;
+                    const precipAmt = w.precipitation || 0;
+                    details = [
+                        { label: 'Chance of Rain', value: `${Math.round(precipProb)}%` },
+                        { label: 'Expected Amount', value: precipAmt > 0 ? `${precipAmt.toFixed(1)} ${state.useCelsius ? 'mm' : 'in'}` : 'None' },
+                        { label: 'Recommendation', value: precipProb > 50 ? 'Bring rain jacket' : precipProb > 20 ? 'Consider rain gear' : 'Low risk' },
+                        { label: 'Running Impact', value: precipProb > 70 ? 'Plan for wet conditions' : 'Minimal impact expected' }
                     ];
                     break;
                 case 'uv':
@@ -4368,7 +4469,8 @@ Get your personalized running outfit at runwear.ai`;
             const calendarSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>`;
             const clockSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>`;
             const windSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z"/></svg>`;
-            const humiditySvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
+            const humiditySvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.66 8L12 2.35 6.34 8C4.78 9.56 4 11.64 4 13.64s.78 4.11 2.34 5.67 3.61 2.35 5.66 2.35 4.1-.79 5.66-2.35S20 15.64 20 13.64 19.22 9.56 17.66 8zM6 14c.01-2 .62-3.27 1.76-4.4L12 5.27l4.24 4.38C17.38 10.77 17.99 12 18 14H6z"/></svg>`;
+            const precipSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
             const uvSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`;
             const chevronSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
             const bagSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg>`;
@@ -4436,6 +4538,12 @@ Get your personalized running outfit at runwear.ai`;
                                 ${humiditySvg}
                                 <span>${w.humidity}%</span>
                             </div>
+                            ${w.precipitationProbability !== undefined && w.precipitationProbability > 0 ? `
+                            <div class="weather-pill" onclick="showWeatherDetail('precipitation')">
+                                ${precipSvg}
+                                <span>${Math.round(w.precipitationProbability)}%</span>
+                            </div>
+                            ` : ''}
                             ${w.uvIndex > 0 ? `
                             <div class="weather-pill" onclick="showWeatherDetail('uv')">
                                 ${uvSvg}
@@ -4451,15 +4559,6 @@ Get your personalized running outfit at runwear.ai`;
                     <div class="outfit-section-header">
                         <div class="outfit-section-title">${state.outfit.items.length} Items for Your Run</div>
                         <div class="outfit-controls">
-                            <div class="gender-toggle">
-                                <span class="gender-opt ${state.gender === 'male' ? 'active' : ''}" onclick="setGender('male')">
-                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M9.5 11c1.93 0 3.5 1.57 3.5 3.5S11.43 18 9.5 18 6 16.43 6 14.5 7.57 11 9.5 11zm0-2C6.46 9 4 11.46 4 14.5S6.46 20 9.5 20s5.5-2.46 5.5-5.5c0-1.16-.36-2.23-.97-3.12L18 7.42V10h2V4h-6v2h2.58l-3.97 3.97C11.73 9.36 10.66 9 9.5 9z"/></svg>
-                                </span>
-                                <span class="gender-opt center ${state.gender === 'all' ? 'active' : ''}" onclick="setGender('all')">All</span>
-                                <span class="gender-opt ${state.gender === 'female' ? 'active' : ''}" onclick="setGender('female')">
-                                    <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 4c2.21 0 4 1.79 4 4s-1.79 4-4 4-4-1.79-4-4 1.79-4 4-4zm0-2C8.69 2 6 4.69 6 8s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm1 16h-2v-2H9v-2h2v-2h2v2h2v2h-2v2z"/></svg>
-                                </span>
-                            </div>
                             <button class="shop-btn" onclick="openShop()">
                                 ${bagSvg}
                                 <span>Shop</span>
@@ -4515,7 +4614,7 @@ Get your personalized running outfit at runwear.ai`;
         // ============ ONBOARDING ============
         let onboardingState = {
             useCelsius: null,
-            gender: 'all',
+            gender: 'all', // default unisex, nothing selected visually
             comfort: 0
         };
 
@@ -4524,7 +4623,7 @@ Get your personalized running outfit at runwear.ai`;
             const isUSLocale = navigator.language?.startsWith('en-US') ||
                                Intl.DateTimeFormat().resolvedOptions().locale?.includes('US');
             onboardingState.useCelsius = !isUSLocale;
-            onboardingState.gender = 'all';
+            onboardingState.gender = 'all'; // default unisex, nothing selected visually
             onboardingState.comfort = 0;
         }
 
@@ -4567,7 +4666,8 @@ Get your personalized running outfit at runwear.ai`;
         }
 
         function setOnboardingGender(gender) {
-            onboardingState.gender = gender;
+            // Toggle: if same gender clicked, deselect (back to 'all'/unisex)
+            onboardingState.gender = (onboardingState.gender === gender) ? 'all' : gender;
             updateOnboardingUI();
         }
 
@@ -4605,9 +4705,10 @@ Get your personalized running outfit at runwear.ai`;
 
         // ============ INIT ============
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialize pull-to-refresh and parallax
+            // Initialize pull-to-refresh, parallax, and modal swipe
             initPullToRefresh();
             initHeroParallax();
+            initModalSwipeToClose();
 
             if (!state.hasCompletedOnboarding) {
                 showOnboarding();
