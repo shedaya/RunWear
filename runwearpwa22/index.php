@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v2.8 -->
+<!-- RunWear PWA v2.9 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -31,6 +31,15 @@
     <link rel="apple-touch-icon" sizes="72x72" href="icon-72.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://images.unsplash.com">
+
+    <!-- Preload default hero images for instant display -->
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop">
+    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3017,6 +3026,22 @@
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4';
         const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop';
 
+        // Default hero images by temperature bracket (preloaded for instant display)
+        const DEFAULT_HERO_IMAGES = {
+            hot: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop',      // Runner in tank top, sunny
+            warm: 'https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop',    // Runner in t-shirt
+            mild: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop',       // Runner in light layers
+            cool: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop',    // Runner in long sleeves
+            cold: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop',    // Runner in jacket
+            freezing: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop'    // Runner in winter gear
+        };
+
+        // Preload default images for instant display
+        Object.values(DEFAULT_HERO_IMAGES).forEach(url => {
+            const img = new Image();
+            img.src = url;
+        });
+
         // Current hero image URL (updated asynchronously)
         let currentHeroImageUrl = PLACEHOLDER_IMAGE;
 
@@ -3424,9 +3449,13 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 state.weather = await fetchWeather(state.location.lat, state.location.lon, state.selectedDate);
                 state.outfit = getOutfitRecommendation(state.weather);
 
+                // Immediately use default image for this temperature bracket
+                const tempBracket = getTempBracket(state.weather.feelsLike);
+                currentHeroImageUrl = DEFAULT_HERO_IMAGES[tempBracket] || PLACEHOLDER_IMAGE;
+
                 state.loading = false;
 
-                // Load hero image asynchronously (don't block UI)
+                // Then load specific hero image from Supabase in background
                 loadHeroImage();
             } catch (err) {
                 state.loading = false;
@@ -4613,7 +4642,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v2.8</div>
+                    <div class="footer">v2.9</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
