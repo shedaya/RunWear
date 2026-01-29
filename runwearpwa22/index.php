@@ -3592,7 +3592,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 if (response.ok) {
                     console.log('[Replenish] ✓ Queued:', combinationId);
                 } else {
-                    console.warn('[Replenish] Failed to queue:', response.status);
+                    const errorBody = await response.text();
+                    console.warn('[Replenish] Failed to queue:', response.status, errorBody);
                 }
             } catch (e) {
                 console.warn('[Replenish] Error:', e);
