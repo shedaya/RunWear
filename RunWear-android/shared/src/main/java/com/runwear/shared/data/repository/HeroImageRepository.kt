@@ -12,12 +12,14 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.serializer.KotlinXSerializer
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
@@ -37,6 +39,8 @@ class HeroImageRepository @Inject constructor() {
         supabaseUrl = SUPABASE_URL,
         supabaseKey = SUPABASE_ANON_KEY
     ) {
+        // v3.9: Ignore unknown fields from DB (style, served_count, rating, etc.)
+        defaultSerializer = KotlinXSerializer(Json { ignoreUnknownKeys = true })
         install(Postgrest)
         install(Storage)
     }
@@ -103,12 +107,22 @@ class HeroImageRepository @Inject constructor() {
         val time = combination.timeOfDay.name
 
         // Build cascade queries from most specific to least specific
-        val queries = listOf(
-            "${gender}_${weather}_${temp}_${time}_%",  // 1. Exact: MALE_CLOUDY_MILD_NIGHT_*
-            "${gender}_${weather}_${temp}_%",          // 2. Any time: MALE_CLOUDY_MILD_*
-            "UNISEX_${weather}_${temp}_%",             // 3. Unisex fallback: UNISEX_CLOUDY_MILD_*
-            "${gender}_CLEAR_${temp}_%"                // 4. Clear weather fallback: MALE_CLEAR_MILD_*
+        // v3.9: Extended cascade for better coverage when DB has limited images
+        val queries = mutableListOf(
+            "${gender}_${weather}_${temp}_${time}_%",  // 1. Exact: FEMALE_CLEAR_FREEZING_NIGHT_%
+            "${gender}_${weather}_${temp}_%",          // 2. Any time: FEMALE_CLEAR_FREEZING_%
+            "UNISEX_${weather}_${temp}_%",             // 3. Unisex: UNISEX_CLEAR_FREEZING_%
         )
+        // 4. Clear weather fallback (only if not already CLEAR)
+        if (weather != "CLEAR") {
+            queries.add("${gender}_CLEAR_${temp}_%")
+            queries.add("UNISEX_CLEAR_${temp}_%")
+        }
+        // 5-6. Fall back to MALE (largest image pool) if not already MALE
+        if (gender != "MALE") {
+            queries.add("MALE_${weather}_${temp}_%")
+            queries.add("MALE_CLEAR_${temp}_%")
+        }
 
         for (pattern in queries) {
             try {
@@ -139,28 +153,50 @@ class HeroImageRepository @Inject constructor() {
 
     /**
      * Queue an image generation job for this combination.
+     * Uses simplified combination ID (without outfit hash) for broader coverage.
      */
     private suspend fun queueImageGeneration(
         combination: OutfitCombination,
         outfit: OutfitRecommendation
     ) {
-        try {
-            val prompt = buildPrompt(combination, outfit)
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        // Simplified ID for broader reuse (no outfit hash)
+        val simpleCombinationId = "${combination.genderPreference.name}_${heroWeather.name}_${combination.tempBracket.name}_${combination.timeOfDay.name}_v1"
 
+        try {
+            // Check if already queued
+            val existing = supabase.from("generation_jobs")
+                .select {
+                    filter {
+                        eq("combination_id", simpleCombinationId)
+                    }
+                    limit(1)
+                }
+                .decodeList<GenerationJobCheck>()
+
+            if (existing.isNotEmpty()) {
+                android.util.Log.d("HeroImage", "[Hero] Generation already queued: $simpleCombinationId")
+                return
+            }
+
+            // Queue new generation
+            val prompt = buildPrompt(combination, outfit)
             supabase.from("generation_jobs")
                 .insert(
                     GenerationJobInsert(
-                        combinationId = combination.id,
+                        combinationId = simpleCombinationId,
                         tempBracket = combination.tempBracket.name.lowercase(),
                         timeOfDay = combination.timeOfDay.name.lowercase(),
                         gender = combination.genderPreference.name.lowercase(),
-                        weatherCode = combination.weatherCode.name.lowercase(),
+                        weatherCode = heroWeather.name.lowercase(),
                         prompt = prompt,
                         status = "pending"
                     )
                 )
+
+            android.util.Log.d("HeroImage", "[Hero] Queued generation: $simpleCombinationId")
         } catch (e: Exception) {
-            // Silently fail - generation is best-effort
+            android.util.Log.w("HeroImage", "[Hero] Failed to queue generation", e)
         }
     }
 
@@ -327,4 +363,12 @@ data class GenerationJobInsert(
     @SerialName("weather_code") val weatherCode: String,
     @SerialName("prompt") val prompt: String,
     @SerialName("status") val status: String
+)
+
+/**
+ * Minimal model for checking if a generation job exists.
+ */
+@Serializable
+data class GenerationJobCheck(
+    @SerialName("combination_id") val combinationId: String
 )
