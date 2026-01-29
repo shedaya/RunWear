@@ -278,16 +278,12 @@ class HeroImageRepository @Inject constructor() {
 
             android.util.Log.d("HeroImage", "[Replenish] Queueing variant: $combinationId")
 
-            // Queue new generation
+            // Queue new generation (only send fields that exist in table)
             val prompt = buildPrompt(combination, outfit)
             supabase.from("generation_jobs")
                 .insert(
                     GenerationJobInsert(
                         combinationId = combinationId,
-                        tempBracket = combination.tempBracket.name.lowercase(),
-                        timeOfDay = combination.timeOfDay.name.lowercase(),
-                        gender = combination.genderPreference.name.lowercase(),
-                        weatherCode = heroWeather.name.lowercase(),
                         prompt = prompt,
                         status = "QUEUED"
                     )
@@ -452,14 +448,11 @@ data class GeneratedImage(
 
 /**
  * Insert model for generation_jobs table.
+ * v3.11: Only includes fields that exist in the table (combination_id encodes gender/weather/temp/time)
  */
 @Serializable
 data class GenerationJobInsert(
     @SerialName("combination_id") val combinationId: String,
-    @SerialName("temp_bracket") val tempBracket: String,
-    @SerialName("time_of_day") val timeOfDay: String,
-    @SerialName("gender") val gender: String,
-    @SerialName("weather_code") val weatherCode: String,
     @SerialName("prompt") val prompt: String,
     @SerialName("status") val status: String
 )

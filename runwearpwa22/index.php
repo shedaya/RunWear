@@ -3569,7 +3569,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
                 console.log('[Replenish] Queueing variant:', combinationId);
 
-                // Queue new generation
+                // Queue new generation (only send fields that exist in table)
                 const response = await fetch(`${SUPABASE_URL}/rest/v1/generation_jobs`, {
                     method: 'POST',
                     headers: {
@@ -3580,10 +3580,6 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     },
                     body: JSON.stringify({
                         combination_id: combinationId,
-                        gender: gender.toLowerCase(),
-                        weather_code: weather.toLowerCase(),
-                        temp_bracket: temp.toLowerCase(),
-                        time_of_day: time.toLowerCase(),
                         prompt: buildHeroPrompt(gender, weather, temp, time),
                         status: 'QUEUED'
                     })
