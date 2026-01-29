@@ -289,7 +289,7 @@ class HeroImageRepository @Inject constructor() {
                         gender = combination.genderPreference.name.lowercase(),
                         weatherCode = heroWeather.name.lowercase(),
                         prompt = prompt,
-                        status = "pending"
+                        status = "QUEUED"
                     )
                 )
 

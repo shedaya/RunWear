@@ -3585,7 +3585,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                         temp_bracket: temp.toLowerCase(),
                         time_of_day: time.toLowerCase(),
                         prompt: buildHeroPrompt(gender, weather, temp, time),
-                        status: 'pending'
+                        status: 'QUEUED'
                     })
                 });
 
