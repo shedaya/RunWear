@@ -46,8 +46,39 @@ class HeroImageRepository @Inject constructor() {
     }
 
     /**
+     * Get gender for hero image selection ONLY (not for affiliate links).
+     * When user hasn't selected a gender (UNISEX), randomly pick MALE or FEMALE for variety.
+     * v3.10: Matches PWA getHeroImageGender() behavior.
+     */
+    private fun getHeroImageGender(preference: GenderPreference): GenderPreference {
+        return when (preference) {
+            GenderPreference.MALE -> GenderPreference.MALE
+            GenderPreference.FEMALE -> GenderPreference.FEMALE
+            GenderPreference.UNISEX -> if (Random.nextBoolean()) GenderPreference.MALE else GenderPreference.FEMALE
+        }
+    }
+
+    // Rate limiting: track last replenishment time
+    private var lastReplenishTime: Long = 0
+    private val RATE_LIMIT_MS = 5 * 60 * 1000L  // 5 minutes
+    private val MIN_VARIANTS = 5  // Target number of variants per combination
+
+    /**
+     * Check if we should queue replenishment (rate limited to 1 per 5 min).
+     */
+    private fun shouldQueueReplenishment(): Boolean {
+        val now = System.currentTimeMillis()
+        if (now - lastReplenishTime < RATE_LIMIT_MS) {
+            android.util.Log.d("HeroImage", "[Replenish] Rate limited, skipping")
+            return false
+        }
+        lastReplenishTime = now
+        return true
+    }
+
+    /**
      * Get a hero image for the given conditions.
-     * Returns cached AI image if available, otherwise returns fallback.
+     * v3.11: Demand-driven replenishment - queues new variants when < 5 exist.
      */
     suspend fun getHeroImage(
         weather: WeatherConditions?,
@@ -62,21 +93,52 @@ class HeroImageRepository @Inject constructor() {
             )
         }
 
-        val combination = OutfitCombination.fromConditions(weather, outfit, gender)
+        // v3.10: Use hero-specific gender (random when UNISEX) for image variety
+        val heroGender = getHeroImageGender(gender)
+        val combination = OutfitCombination.fromConditions(weather, outfit, heroGender)
 
         try {
             // Try to get a cached image for this combination
-            val image = getRandomImage(combination)
-            if (image != null) {
+            val searchResult = getRandomImage(combination)
+
+            // v3.11: Demand-driven replenishment
+            // Queue new variant if:
+            // 1. No images found at all, OR
+            // 2. Found via fallback (missing for requested gender), OR
+            // 3. Exact matches < MIN_VARIANTS (want more variety)
+            if (searchResult.image == null) {
+                android.util.Log.d("HeroImage", "[Hero] No AI images found, queueing replenishment")
+                if (shouldQueueReplenishment()) {
+                    queueImageGeneration(combination, outfit)
+                }
+                getFallbackImage(combination)
+            } else if (searchResult.foundViaFallback) {
+                android.util.Log.d("HeroImage", "[Hero] Found via fallback, queueing for requested gender")
+                if (shouldQueueReplenishment()) {
+                    queueImageGeneration(combination, outfit)
+                }
                 HeroImageResult(
-                    imageUrl = image.imageUrl,
-                    thumbnailUrl = image.thumbnailUrl,
+                    imageUrl = searchResult.image.imageUrl,
+                    thumbnailUrl = searchResult.image.thumbnailUrl,
+                    combinationId = combination.id
+                )
+            } else if (searchResult.exactMatchCount < MIN_VARIANTS) {
+                android.util.Log.d("HeroImage", "[Hero] Only ${searchResult.exactMatchCount} variants, queueing more (target: $MIN_VARIANTS)")
+                if (shouldQueueReplenishment()) {
+                    queueImageGeneration(combination, outfit)
+                }
+                HeroImageResult(
+                    imageUrl = searchResult.image.imageUrl,
+                    thumbnailUrl = searchResult.image.thumbnailUrl,
                     combinationId = combination.id
                 )
             } else {
-                // No cached image - queue generation and return fallback
-                queueImageGeneration(combination, outfit)
-                getFallbackImage(combination)
+                android.util.Log.d("HeroImage", "[Hero] Have ${searchResult.exactMatchCount} variants, no replenishment needed")
+                HeroImageResult(
+                    imageUrl = searchResult.image.imageUrl,
+                    thumbnailUrl = searchResult.image.thumbnailUrl,
+                    combinationId = combination.id
+                )
             }
         } catch (e: Exception) {
             // On error, return fallback
@@ -85,44 +147,51 @@ class HeroImageRepository @Inject constructor() {
     }
 
     /**
-     * Get a random cached image for the combination.
-     * Uses cascading fallback strategy (matches PWA v3.9):
-     *
-     * | Priority | Query Pattern              | Example                    | Matches            |
-     * |----------|---------------------------|----------------------------|-------------------|
-     * | 1        | Gender + Weather + Temp + Time | MALE_CLOUDY_MILD_NIGHT_% | Exact scenario    |
-     * | 2        | Gender + Weather + Temp   | MALE_CLOUDY_MILD_%        | Any time of day   |
-     * | 3        | Unisex + Weather + Temp   | UNISEX_CLOUDY_MILD_%      | Generic person    |
-     * | 4        | Gender + Clear + Temp     | MALE_CLEAR_MILD_%         | Clear weather fallback |
-     *
-     * CRITICAL v3.9:
-     * - NO status filter (column doesn't exist in DB)
-     * - Supabase SDK handles URL encoding of % automatically
+     * Result from getRandomImage including metadata for replenishment decisions.
      */
-    private suspend fun getRandomImage(combination: OutfitCombination): GeneratedImage? {
+    private data class ImageSearchResult(
+        val image: GeneratedImage?,
+        val exactMatchCount: Int,
+        val foundViaFallback: Boolean
+    )
+
+    /**
+     * Get a random cached image for the combination.
+     * v3.11: Matches PWA cascade with opposite gender fallback.
+     *
+     * | Priority | Query Pattern                    | Example                    |
+     * |----------|----------------------------------|----------------------------|
+     * | 1        | Gender + Weather + Temp + Time   | FEMALE_CLEAR_COLD_MIDDAY_% |
+     * | 2        | Gender + Weather + Temp          | FEMALE_CLEAR_COLD_%        |
+     * | 3        | Gender + Clear + Temp (if !CLEAR)| FEMALE_CLEAR_COLD_%        |
+     * | 4        | Opposite Gender + Weather + Temp | MALE_CLEAR_COLD_%          |
+     * | 5        | Opposite Gender + Clear + Temp   | MALE_CLEAR_COLD_%          |
+     */
+    private suspend fun getRandomImage(combination: OutfitCombination): ImageSearchResult {
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
         val gender = combination.genderPreference.name
         val weather = heroWeather.name
         val temp = combination.tempBracket.name
         val time = combination.timeOfDay.name
 
-        // Build cascade queries from most specific to least specific
-        // v3.9: Extended cascade for better coverage when DB has limited images
+        val requestedCombo = "${gender}_${weather}_${temp}_${time}"
+        val oppositeGender = if (gender == "MALE") "FEMALE" else "MALE"
+
+        // v3.11: Extended cascade with opposite gender fallback
         val queries = mutableListOf(
-            "${gender}_${weather}_${temp}_${time}_%",  // 1. Exact: FEMALE_CLEAR_FREEZING_NIGHT_%
-            "${gender}_${weather}_${temp}_%",          // 2. Any time: FEMALE_CLEAR_FREEZING_%
-            "UNISEX_${weather}_${temp}_%",             // 3. Unisex: UNISEX_CLEAR_FREEZING_%
+            "${gender}_${weather}_${temp}_${time}_%",  // 1. Exact
+            "${gender}_${weather}_${temp}_%",          // 2. Any time
         )
-        // 4. Clear weather fallback (only if not already CLEAR)
+        // 3. Clear weather fallback (only if not already CLEAR)
         if (weather != "CLEAR") {
             queries.add("${gender}_CLEAR_${temp}_%")
-            queries.add("UNISEX_CLEAR_${temp}_%")
         }
-        // 5-6. Fall back to MALE (largest image pool) if not already MALE
-        if (gender != "MALE") {
-            queries.add("MALE_${weather}_${temp}_%")
-            queries.add("MALE_CLEAR_${temp}_%")
-        }
+        // 4-5. Fall back to opposite gender (better than Unsplash)
+        queries.add("${oppositeGender}_${weather}_${temp}_%")
+        queries.add("${oppositeGender}_CLEAR_${temp}_%")
+
+        var exactMatchCount = 0
+        var foundViaFallback = false
 
         for (pattern in queries) {
             try {
@@ -133,14 +202,22 @@ class HeroImageRepository @Inject constructor() {
                         filter {
                             like("combination_id", pattern)
                         }
-                        limit(10)
+                        limit(20)
                     }
                     .decodeList<GeneratedImage>()
 
                 if (images.isNotEmpty()) {
+                    // Check if this is an exact match query
+                    if (pattern.startsWith(requestedCombo)) {
+                        exactMatchCount = images.size
+                        android.util.Log.d("HeroImage", "[Hero] Exact match count: $exactMatchCount")
+                    } else {
+                        foundViaFallback = true
+                    }
+
                     val selected = images.random()
                     android.util.Log.d("HeroImage", "[Hero] ✓ Found via ${pattern.dropLast(1)} → ${selected.combinationId}")
-                    return selected
+                    return ImageSearchResult(selected, exactMatchCount, foundViaFallback)
                 }
             } catch (e: Exception) {
                 android.util.Log.w("HeroImage", "[Hero] Query failed: $pattern", e)
@@ -148,43 +225,65 @@ class HeroImageRepository @Inject constructor() {
         }
 
         android.util.Log.d("HeroImage", "[Hero] No AI images found, using Unsplash fallback")
-        return null
+        return ImageSearchResult(null, 0, false)
     }
 
     /**
-     * Queue an image generation job for this combination.
-     * Uses simplified combination ID (without outfit hash) for broader coverage.
+     * Queue an image generation job with auto-incrementing variant number.
+     * v3.11: Finds next available variant number to support demand-driven growth.
      */
     private suspend fun queueImageGeneration(
         combination: OutfitCombination,
         outfit: OutfitRecommendation
     ) {
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        // Simplified ID for broader reuse (no outfit hash)
-        val simpleCombinationId = "${combination.genderPreference.name}_${heroWeather.name}_${combination.tempBracket.name}_${combination.timeOfDay.name}_v1"
+        val baseCombo = "${combination.genderPreference.name}_${heroWeather.name}_${combination.tempBracket.name}_${combination.timeOfDay.name}"
 
         try {
-            // Check if already queued
-            val existing = supabase.from("generation_jobs")
+            // Find highest existing variant number in generation_jobs
+            var maxVariant = 0
+            val existingJobs = supabase.from("generation_jobs")
                 .select {
                     filter {
-                        eq("combination_id", simpleCombinationId)
+                        like("combination_id", "${baseCombo}_%")
                     }
-                    limit(1)
                 }
                 .decodeList<GenerationJobCheck>()
 
-            if (existing.isNotEmpty()) {
-                android.util.Log.d("HeroImage", "[Hero] Generation already queued: $simpleCombinationId")
-                return
+            existingJobs.forEach { job ->
+                val match = Regex("_v(\\d+)$").find(job.combinationId)
+                match?.groupValues?.get(1)?.toIntOrNull()?.let { num ->
+                    maxVariant = maxOf(maxVariant, num)
+                }
             }
+
+            // Also check generated_images for existing variants
+            val existingImages = supabase.from("generated_images")
+                .select {
+                    filter {
+                        like("combination_id", "${baseCombo}_%")
+                    }
+                }
+                .decodeList<GeneratedImage>()
+
+            existingImages.forEach { img ->
+                val match = Regex("_v?(\\d+)$").find(img.combinationId)
+                match?.groupValues?.get(1)?.toIntOrNull()?.let { num ->
+                    maxVariant = maxOf(maxVariant, num)
+                }
+            }
+
+            val nextVariant = maxVariant + 1
+            val combinationId = "${baseCombo}_v${nextVariant}"
+
+            android.util.Log.d("HeroImage", "[Replenish] Queueing variant: $combinationId")
 
             // Queue new generation
             val prompt = buildPrompt(combination, outfit)
             supabase.from("generation_jobs")
                 .insert(
                     GenerationJobInsert(
-                        combinationId = simpleCombinationId,
+                        combinationId = combinationId,
                         tempBracket = combination.tempBracket.name.lowercase(),
                         timeOfDay = combination.timeOfDay.name.lowercase(),
                         gender = combination.genderPreference.name.lowercase(),
@@ -194,9 +293,9 @@ class HeroImageRepository @Inject constructor() {
                     )
                 )
 
-            android.util.Log.d("HeroImage", "[Hero] Queued generation: $simpleCombinationId")
+            android.util.Log.d("HeroImage", "[Replenish] ✓ Queued: $combinationId")
         } catch (e: Exception) {
-            android.util.Log.w("HeroImage", "[Hero] Failed to queue generation", e)
+            android.util.Log.w("HeroImage", "[Replenish] Error: ${e.message}", e)
         }
     }
 

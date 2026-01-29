@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.10 -->
+<!-- RunWear PWA v3.11 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3404,8 +3404,23 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             return Math.random() < 0.5 ? 'MALE' : 'FEMALE';
         }
 
+        // Rate limiting for replenishment (one queue per user per 5 minutes)
+        function shouldQueueReplenishment() {
+            const lastQueued = localStorage.getItem('lastHeroReplenishTime');
+            const now = Date.now();
+            const RATE_LIMIT_MS = 5 * 60 * 1000;  // 5 minutes
+
+            if (lastQueued && (now - parseInt(lastQueued)) < RATE_LIMIT_MS) {
+                console.log('[Replenish] Rate limited, skipping');
+                return false;
+            }
+
+            localStorage.setItem('lastHeroReplenishTime', now.toString());
+            return true;
+        }
+
         // Load hero image from Supabase with cascading fallback queries
-        // Priority: Exact match → Any time → Clear fallback → Opposite gender
+        // v3.11: Demand-driven replenishment - queues new variants when < 5 exist
         async function loadHeroImage() {
             if (!state.weather || !state.outfit) {
                 console.log('[Hero] No weather/outfit data yet');
@@ -3417,9 +3432,12 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const timeOfDay = getTimeOfDay(state.selectedDate);
             const gender = getHeroImageGender();
 
+            const requestedCombo = `${gender}_${weather}_${tempBracket}_${timeOfDay}`;
+            const MIN_VARIANTS = 5;  // Target number of variants per combination
+
             console.log('[Hero] Building queries for:', { gender, weather, tempBracket, timeOfDay });
 
-            // v3.10: Extended cascade with opposite gender fallback
+            // v3.11: Extended cascade with opposite gender fallback
             const queries = [
                 `${gender}_${weather}_${tempBracket}_${timeOfDay}`,   // 1. Exact
                 `${gender}_${weather}_${tempBracket}`,                // 2. Any time
@@ -3436,12 +3454,16 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             queries.push(`${oppositeGender}_${weather}_${tempBracket}`);
             queries.push(`${oppositeGender}_CLEAR_${tempBracket}`);
 
+            let exactMatchCount = 0;
+            let selectedImage = null;
+            let foundViaFallback = false;
+
             for (const baseQuery of queries) {
                 console.log('[Hero] Trying:', baseQuery + '_%');
 
                 try {
                     const response = await fetch(
-                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%25&limit=10`,
+                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%25&limit=20`,
                         {
                             headers: {
                                 'apikey': SUPABASE_ANON_KEY,
@@ -3458,42 +3480,97 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     const images = await response.json();
 
                     if (images && images.length > 0) {
-                        const selected = images[Math.floor(Math.random() * images.length)];
-                        console.log('[Hero] ✓ Found via', baseQuery, '→', selected.combination_id);
-                        currentHeroImageUrl = selected.image_url || selected.public_url;
+                        // Count exact matches for requested combination
+                        if (baseQuery === requestedCombo) {
+                            exactMatchCount = images.length;
+                            console.log('[Hero] Exact match count:', exactMatchCount);
+                        } else {
+                            foundViaFallback = true;
+                        }
+
+                        // Select random image
+                        selectedImage = images[Math.floor(Math.random() * images.length)];
+                        console.log('[Hero] ✓ Found via', baseQuery, '→', selectedImage.combination_id);
+
+                        currentHeroImageUrl = selectedImage.image_url || selectedImage.public_url;
                         updateHeroImage();
-                        return;  // Success! Stop searching
+                        break;  // Found an image, stop searching
                     }
                 } catch (e) {
                     console.warn('[Hero] Query error:', baseQuery, e);
                 }
             }
 
-            // No AI images found at any level - fallback already set
-            console.log('[Hero] No AI images found, queueing replenishment');
-
-            // Queue generation job (fire and forget)
-            queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+            // v3.11: Demand-driven replenishment
+            // Queue new variant if:
+            // 1. No images found at all, OR
+            // 2. Found via fallback (missing for requested gender), OR
+            // 3. Exact matches < MIN_VARIANTS (want more variety)
+            if (!selectedImage) {
+                console.log('[Hero] No AI images found, queueing replenishment');
+                if (shouldQueueReplenishment()) {
+                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+                }
+            } else if (foundViaFallback) {
+                console.log('[Hero] Found via fallback, queueing for requested gender');
+                if (shouldQueueReplenishment()) {
+                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+                }
+            } else if (exactMatchCount < MIN_VARIANTS) {
+                console.log(`[Hero] Only ${exactMatchCount} variants, queueing more (target: ${MIN_VARIANTS})`);
+                if (shouldQueueReplenishment()) {
+                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+                }
+            } else {
+                console.log(`[Hero] Have ${exactMatchCount} variants, no replenishment needed`);
+            }
         }
 
-        // Queue a hero image generation job when none exist
+        // Queue a hero image generation job with auto-incrementing variant number
         async function queueHeroImageGeneration(gender, weather, temp, time) {
-            const combinationId = `${gender}_${weather}_${temp}_${time}_v1`;
+            const baseCombo = `${gender}_${weather}_${temp}_${time}`;
 
             try {
-                // Check if already queued/exists
+                // Check existing variants in generation_jobs
                 const checkResponse = await fetch(
-                    `${SUPABASE_URL}/rest/v1/generation_jobs?combination_id=eq.${combinationId}&limit=1`,
+                    `${SUPABASE_URL}/rest/v1/generation_jobs?combination_id=like.${baseCombo}_%25&select=combination_id`,
                     { headers: { 'apikey': SUPABASE_ANON_KEY } }
                 );
                 const existing = await checkResponse.json();
-                if (existing.length > 0) {
-                    console.log('[Hero] Generation already queued for:', combinationId);
-                    return;
+
+                // Find highest variant number
+                let maxVariant = 0;
+                if (existing && existing.length > 0) {
+                    existing.forEach(job => {
+                        const match = job.combination_id.match(/_v(\d+)$/);
+                        if (match) {
+                            maxVariant = Math.max(maxVariant, parseInt(match[1]));
+                        }
+                    });
                 }
 
+                // Also check generated_images for existing variants
+                const imagesResponse = await fetch(
+                    `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseCombo}_%25&select=combination_id`,
+                    { headers: { 'apikey': SUPABASE_ANON_KEY } }
+                );
+                const existingImages = await imagesResponse.json();
+                if (existingImages && existingImages.length > 0) {
+                    existingImages.forEach(img => {
+                        const match = img.combination_id.match(/_v?(\d+)$/);
+                        if (match) {
+                            maxVariant = Math.max(maxVariant, parseInt(match[1]));
+                        }
+                    });
+                }
+
+                const nextVariant = maxVariant + 1;
+                const combinationId = `${baseCombo}_v${nextVariant}`;
+
+                console.log('[Replenish] Queueing variant:', combinationId);
+
                 // Queue new generation
-                await fetch(`${SUPABASE_URL}/rest/v1/generation_jobs`, {
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/generation_jobs`, {
                     method: 'POST',
                     headers: {
                         'apikey': SUPABASE_ANON_KEY,
@@ -3512,9 +3589,13 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     })
                 });
 
-                console.log('[Hero] Queued generation for:', combinationId);
+                if (response.ok) {
+                    console.log('[Replenish] ✓ Queued:', combinationId);
+                } else {
+                    console.warn('[Replenish] Failed to queue:', response.status);
+                }
             } catch (e) {
-                console.warn('[Hero] Failed to queue generation:', e);
+                console.warn('[Replenish] Error:', e);
             }
         }
 
