@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.4 -->
+<!-- RunWear PWA v3.5 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -3192,11 +3192,15 @@
             return await fetchCachedHeroImageDirect(combinationId);
         }
 
-        // Direct query fallback (if RPC not available)
+        // Query Supabase with partial matching (ignore outfit hash, match first 4 parts)
         async function fetchCachedHeroImageDirect(combinationId) {
             try {
+                // Extract base combo: FEMALE_CLOUDY_COOL_NIGHT from FEMALE_CLOUDY_COOL_NIGHT_37fb2714
+                const baseCombo = combinationId.split('_').slice(0, 4).join('_');
+                console.log('[Hero] Partial match query:', baseCombo + '_*');
+
                 const response = await fetch(
-                    `${SUPABASE_URL}/rest/v1/generated_images?combination_id=eq.${combinationId}&order=created_at.desc&limit=1`,
+                    `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseCombo}_*&limit=10`,
                     {
                         headers: {
                             'apikey': SUPABASE_ANON_KEY,
@@ -3204,11 +3208,20 @@
                         }
                     }
                 );
-                if (!response.ok) return null;
+                if (!response.ok) {
+                    console.log('[Hero] Query failed:', response.status);
+                    return null;
+                }
                 const images = await response.json();
-                return images.length > 0 ? images[0] : null;
+                console.log('[Hero] Found', images.length, 'matching images');
+
+                // Pick a random one for variety
+                if (images.length > 0) {
+                    return images[Math.floor(Math.random() * images.length)];
+                }
+                return null;
             } catch (e) {
-                console.error('Failed to fetch hero image:', e);
+                console.error('[Hero] Fetch failed:', e);
                 return null;
             }
         }
@@ -4738,7 +4751,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.4</div>
+                    <div class="footer">v3.5</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->
