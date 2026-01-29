@@ -3418,8 +3418,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             // Try to get cached image
             const cachedImage = await fetchCachedHeroImage(combinationId);
 
-            if (cachedImage && cachedImage.image_url) {
-                currentHeroImageUrl = cachedImage.image_url;
+            if (cachedImage && cachedImage.public_url) {
+                currentHeroImageUrl = cachedImage.public_url;
                 updateHeroImage();
 
                 // Track serve count
