@@ -3511,15 +3511,19 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
         function setHour(hour) {
             state.selectedDate.setHours(hour, 0, 0, 0);
+            // Reset hero image to placeholder while new one loads
+            currentHeroImageUrl = PLACEHOLDER_IMAGE;
             loadWeather();
             closeTimePicker();
         }
-        
+
         function setDate(daysFromNow) {
             const newDate = new Date();
             newDate.setDate(newDate.getDate() + daysFromNow);
             newDate.setHours(state.selectedDate.getHours(), 0, 0, 0);
             state.selectedDate = newDate;
+            // Reset hero image to placeholder while new one loads
+            currentHeroImageUrl = PLACEHOLDER_IMAGE;
             closeDatePicker();
             loadWeather();
         }
@@ -3817,13 +3821,16 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             state.manualLocationName = loc.displayName;
             state.location = { lat: loc.lat, lon: loc.lon };
             state.locationName = loc.displayName;
-            
+
+            // Reset hero image to placeholder while new one loads
+            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+
             // Save to localStorage
             localStorage.setItem('locationSource', 'manual');
             localStorage.setItem('manualLat', loc.lat.toString());
             localStorage.setItem('manualLon', loc.lon.toString());
             localStorage.setItem('manualLocationName', loc.displayName);
-            
+
             closeLocationModal();
             loadWeather();
         }
@@ -3835,6 +3842,10 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             state.autoLat = null;
             state.autoLon = null;
             state.autoLocationName = null;
+
+            // Reset hero image to placeholder while new one loads
+            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+
             localStorage.setItem('locationSource', 'auto');
             localStorage.removeItem('manualLat');
             localStorage.removeItem('manualLon');
@@ -3980,6 +3991,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
             if (pullDistance > 80 && !isRefreshing) {
                 isRefreshing = true;
+                // Reset hero image to placeholder while new one loads
+                currentHeroImageUrl = PLACEHOLDER_IMAGE;
                 if (indicator) {
                     indicator.classList.remove('pulling');
                     indicator.classList.add('refreshing');
