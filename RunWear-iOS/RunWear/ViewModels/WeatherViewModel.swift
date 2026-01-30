@@ -24,6 +24,9 @@ class WeatherViewModel: ObservableObject {
     // Current weather snapshot for selected date/time
     @Published var selectedWeatherSnapshot: HourlyWeatherSnapshot?
 
+    // Location source tracking
+    @Published var isUsingGPS: Bool = true
+
     // Settings with persistence
     @Published var genderPreference: GenderPreference {
         didSet {
@@ -127,6 +130,19 @@ class WeatherViewModel: ObservableObject {
             return
         }
         await fetchWeather(for: location)
+    }
+
+    func setManualLocation(coordinate: CLLocationCoordinate2D, name: String) {
+        isUsingGPS = false
+        locationName = name
+        let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        Task {
+            await fetchWeather(for: location)
+        }
+    }
+
+    func switchToGPS() {
+        isUsingGPS = true
     }
 
     func updateSelectedTime(date: Date, hour: Int) {

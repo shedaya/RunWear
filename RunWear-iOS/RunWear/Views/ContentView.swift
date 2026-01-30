@@ -32,6 +32,7 @@ struct ContentView: View {
                               let recommendation = viewModel.recommendation {
                         WeatherOutfitView(
                             viewModel: viewModel,
+                            locationService: locationService,
                             weather: weather,
                             recommendation: recommendation,
                             isRefreshing: viewModel.isLoading,
@@ -39,6 +40,10 @@ struct ContentView: View {
                                 Task {
                                     await viewModel.refresh(location: locationService.location)
                                 }
+                            },
+                            onUseCurrentLocation: {
+                                viewModel.switchToGPS()
+                                locationService.requestLocation()
                             }
                         )
                     } else {

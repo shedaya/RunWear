@@ -3,8 +3,9 @@ import SwiftUI
 // MARK: - Glass Morphism View Modifier
 
 struct GlassMorphismModifier: ViewModifier {
+    // PWA v2.9 exact values: rgba(255, 255, 255, 0.12) and rgba(255, 255, 255, 0.15)
     var cornerRadius: CGFloat = 16
-    var opacity: Double = 0.1
+    var opacity: Double = 0.12
     var borderOpacity: Double = 0.15
 
     func body(content: Content) -> some View {
@@ -51,6 +52,7 @@ struct DarkGlassMorphismModifier: ViewModifier {
 // MARK: - Pill Style Modifier
 
 struct GlassPillModifier: ViewModifier {
+    // PWA v2.9: background 12%, selected/active 15%, border 15%
     var isSelected: Bool = false
 
     func body(content: Content) -> some View {
@@ -59,7 +61,7 @@ struct GlassPillModifier: ViewModifier {
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.1))
+                    .fill(isSelected ? Color.white.opacity(0.15) : Color.white.opacity(0.12))
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial)
@@ -67,7 +69,7 @@ struct GlassPillModifier: ViewModifier {
             )
             .overlay(
                 Capsule()
-                    .stroke(Color.white.opacity(isSelected ? 0.3 : 0.15), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
             )
     }
 }
@@ -75,10 +77,10 @@ struct GlassPillModifier: ViewModifier {
 // MARK: - View Extensions
 
 extension View {
-    /// Applies glass morphism effect with white background
+    /// Applies glass morphism effect with white background - PWA v2.9 values
     func glassMorphism(
         cornerRadius: CGFloat = 16,
-        opacity: Double = 0.1,
+        opacity: Double = 0.12,
         borderOpacity: Double = 0.15
     ) -> some View {
         modifier(GlassMorphismModifier(

@@ -2,10 +2,12 @@ import SwiftUI
 
 struct WeatherOutfitView: View {
     @ObservedObject var viewModel: WeatherViewModel
+    @ObservedObject var locationService: LocationService
     let weather: WeatherData
     let recommendation: OutfitRecommendation
     let isRefreshing: Bool
     let onRefresh: () -> Void
+    var onUseCurrentLocation: () -> Void = {}
 
     // Modal state
     @State private var showSettings = false
@@ -13,6 +15,7 @@ struct WeatherOutfitView: View {
     @State private var showTimePicker = false
     @State private var showShop = false
     @State private var showWeatherDetail = false
+    @State private var showLocationPicker = false
     @State private var selectedWeatherDetail: WeatherDetailType?
 
     // Animation state
@@ -102,6 +105,19 @@ struct WeatherOutfitView: View {
                     isPresented: $showWeatherDetail
                 )
             }
+
+            if showLocationPicker {
+                LocationPickerSheet(
+                    isPresented: $showLocationPicker,
+                    isUsingGPS: viewModel.isUsingGPS,
+                    onUseCurrentLocation: {
+                        onUseCurrentLocation()
+                    },
+                    onSelectLocation: { coordinate, name in
+                        viewModel.setManualLocation(coordinate: coordinate, name: name)
+                    }
+                )
+            }
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.5).delay(0.2)) {
@@ -125,7 +141,7 @@ struct WeatherOutfitView: View {
             aiImageUrl: viewModel.heroImageUrl,
             onSettingsTapped: { withAnimation { showSettings = true } },
             onShareTapped: shareOutfit,
-            onLocationTapped: {},
+            onLocationTapped: { withAnimation { showLocationPicker = true } },
             onDateTapped: { withAnimation { showDatePicker = true } },
             onTimeTapped: { withAnimation { showTimePicker = true } }
         )
@@ -689,9 +705,11 @@ struct TipsCard: View {
 
 #Preview {
     let viewModel = WeatherViewModel()
+    let locationService = LocationService()
 
     return WeatherOutfitView(
         viewModel: viewModel,
+        locationService: locationService,
         weather: WeatherData(
             latitude: 40.7128,
             longitude: -74.0060,

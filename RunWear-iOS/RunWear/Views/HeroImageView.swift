@@ -111,20 +111,22 @@ struct HeroImageView: View {
     // MARK: - Top Controls
 
     private var topControls: some View {
-        HStack {
-            // Location button
+        HStack(spacing: 8) {
+            // Location button - constrained to prevent overflow with long names
             Button(action: onLocationTapped) {
                 HStack(spacing: 6) {
                     Image(systemName: "location.fill")
                         .font(.system(size: 14))
                     Text(locationName)
                         .font(.system(size: 15, weight: .medium))
+                        .lineLimit(1)
                 }
                 .foregroundColor(.white)
                 .glassPill()
             }
+            .frame(maxWidth: UIScreen.main.bounds.width - 140, alignment: .leading) // Leave room for buttons
 
-            Spacer()
+            Spacer(minLength: 8)
 
             HStack(spacing: 12) {
                 // Share button
