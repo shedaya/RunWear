@@ -62,6 +62,7 @@ import com.runwear.app.ui.components.OutfitListShimmer
 import com.runwear.app.ui.components.TipsSection
 import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
+import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.GenderPreference
@@ -83,6 +84,7 @@ import java.time.LocalDate
 @Composable
 fun HeroMainScreen(
     uiState: MainUiState,
+    locationSearchState: LocationSearchState,
     onRefresh: () -> Unit,
     onToggleUnit: () -> Unit,
     onSetComfortPreference: (com.runwear.shared.domain.model.ComfortPreference) -> Unit,
@@ -356,7 +358,8 @@ Get your personalized running outfit at runwear.app
                 onLocationSelect(lat, lon, name)
                 showLocationPicker = false
             },
-            onDismiss = { showLocationPicker = false }
+            onDismiss = { showLocationPicker = false },
+            searchResults = locationSearchState.results
         )
     }
 

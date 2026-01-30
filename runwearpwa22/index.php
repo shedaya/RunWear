@@ -3603,7 +3603,19 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const tempDesc = temp.toLowerCase().replace('_', ' ');
             const timeDesc = time === 'DAWN' ? 'early morning' : time === 'MIDDAY' ? 'midday' : time === 'DUSK' ? 'evening' : 'night';
 
-            return `Professional running photography, ${genderDesc} runner in motion, ${weatherDesc} weather, ${tempDesc} temperature, ${timeDesc} lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus`;
+            // Detailed outfit descriptions matching getOutfitRecommendation() logic
+            const outfitDescriptions = {
+                HOT: 'lightweight breathable tank top, very short split running shorts, sunglasses, sweat-wicking headband',
+                WARM: 'breathable short sleeve tech shirt, standard running shorts, light mesh running cap',
+                MILD: 'fitted long sleeve moisture-wicking shirt, running shorts or light capris',
+                COOL: 'quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband',
+                COLD: 'thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter',
+                FREEZING: 'multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor'
+            };
+
+            const outfit = outfitDescriptions[temp] || outfitDescriptions.MILD;
+
+            return `Professional running photography, ${genderDesc} runner in motion, ${weatherDesc} weather, ${tempDesc} temperature, ${timeDesc} lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus. OUTFIT: ${outfit}`;
         }
 
         // Update hero image in DOM with crossfade

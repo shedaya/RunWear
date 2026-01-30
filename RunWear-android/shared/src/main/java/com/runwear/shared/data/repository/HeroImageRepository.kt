@@ -297,6 +297,7 @@ class HeroImageRepository @Inject constructor() {
 
     /**
      * Build a prompt for AI image generation.
+     * v3.12: Enhanced prompt with detailed outfit descriptions matching PWA format.
      */
     private fun buildPrompt(
         combination: OutfitCombination,
@@ -308,20 +309,29 @@ class HeroImageRepository @Inject constructor() {
             GenderPreference.UNISEX -> "person"
         }
 
-        val clothingList = outfit.allItems.joinToString(", ") { it.name }
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        val weatherDesc = heroWeather.name.lowercase()
+        val tempDesc = combination.tempBracket.name.lowercase().replace("_", " ")
+        val timeDesc = when (combination.timeOfDay) {
+            TimeOfDay.DAWN -> "early morning"
+            TimeOfDay.MIDDAY -> "midday"
+            TimeOfDay.DUSK -> "evening"
+            TimeOfDay.NIGHT -> "night"
+        }
 
-        val weatherDesc = combination.tempBracket.description
-        val timeDesc = combination.timeOfDay.description
+        // Detailed outfit descriptions matching getOutfitRecommendation() logic
+        val outfitDescriptions = mapOf(
+            TempBracket.HOT to "lightweight breathable tank top, very short split running shorts, sunglasses, sweat-wicking headband",
+            TempBracket.WARM to "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
+            TempBracket.MILD to "fitted long sleeve moisture-wicking shirt, running shorts or light capris",
+            TempBracket.COOL to "quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband",
+            TempBracket.COLD to "thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter",
+            TempBracket.FREEZING to "multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+        )
 
-        return """
-            Professional running photography, $genderDesc runner in motion,
-            wearing $clothingList,
-            $weatherDesc weather conditions,
-            $timeDesc lighting,
-            urban trail or park setting,
-            dynamic action shot,
-            high quality, sharp focus
-        """.trimIndent().replace("\n", " ")
+        val outfitDesc = outfitDescriptions[combination.tempBracket] ?: outfitDescriptions[TempBracket.MILD]
+
+        return "Professional running photography, $genderDesc runner in motion, $weatherDesc weather, $tempDesc temperature, $timeDesc lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus. OUTFIT: $outfitDesc"
     }
 
     /**

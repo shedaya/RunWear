@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
+import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.domain.model.*
 import java.time.LocalDate
 import java.time.LocalTime
@@ -546,7 +547,7 @@ fun LocationPickerSheet(
                 ) {
                     items(searchResults) { result ->
                         Surface(
-                            onClick = { onSelectLocation(result.lat, result.lon, result.name) },
+                            onClick = { onSelectLocation(result.latitude, result.longitude, result.displayName) },
                             modifier = Modifier.fillMaxWidth(),
                             color = Color.Transparent
                         ) {
@@ -558,7 +559,7 @@ fun LocationPickerSheet(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = result.name,
+                                    text = result.displayName,
                                     color = RunWearColors.TextPrimary
                                 )
                                 Icon(
@@ -578,11 +579,7 @@ fun LocationPickerSheet(
     }
 }
 
-data class LocationResult(
-    val lat: Double,
-    val lon: Double,
-    val name: String
-)
+// Note: Use com.runwear.shared.data.repository.LocationResult instead
 
 // ============================================================================
 // SHOP ALL SHEET - Shows all outfit items with Amazon links
@@ -790,6 +787,17 @@ fun ShopSheet(
                 text = getCategoryDisplayName(item.category),
                 fontSize = 14.sp,
                 color = RunWearColors.TextSecondary
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // Item description
+            Text(
+                text = item.description,
+                fontSize = 14.sp,
+                color = RunWearColors.TextSecondary,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
             )
 
             Spacer(Modifier.height(24.dp))

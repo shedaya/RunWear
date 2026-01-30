@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun PermissionScreen(
     onRequestPermission: () -> Unit,
+    onSetManualLocation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -32,35 +33,44 @@ fun PermissionScreen(
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             Text(
                 text = "Location Needed",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold
             )
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             Text(
                 text = "RunWear needs your location to get accurate weather data for your area and recommend the right outfit for your run.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             Button(
                 onClick = onRequestPermission,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Grant Location Access")
             }
-            
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onSetManualLocation,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Set Location Manually")
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Text(
                 text = "Your location is only used to fetch weather data and is never stored or shared.",
                 style = MaterialTheme.typography.bodySmall,

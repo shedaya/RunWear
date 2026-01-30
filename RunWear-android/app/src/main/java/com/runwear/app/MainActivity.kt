@@ -15,9 +15,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.runwear.app.debug.DebugOverlay
 import com.runwear.app.ui.screens.HeroMainScreen
+import com.runwear.app.ui.screens.LocationPickerSheet
 import com.runwear.app.ui.screens.OnboardingScreen
 import com.runwear.app.ui.screens.PermissionScreen
 import com.runwear.app.ui.theme.RunWearTheme
@@ -44,6 +46,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             RunWearTheme {
                 val uiState by viewModel.uiState.collectAsState()
+                val locationSearchState by viewModel.locationSearch.collectAsState()
+                var showManualLocationPicker by remember { mutableStateOf(false) }
 
                 // Track current screen for debug overlay
                 val currentScreen = remember(uiState) {
@@ -77,6 +81,7 @@ class MainActivity : ComponentActivity() {
                             !uiState.hasLocationPermission && !uiState.isLoading -> {
                                 PermissionScreen(
                                     onRequestPermission = { requestLocationPermission() },
+                                    onSetManualLocation = { showManualLocationPicker = true },
                                     modifier = Modifier.padding(innerPadding)
                                 )
                             }
@@ -84,6 +89,7 @@ class MainActivity : ComponentActivity() {
                                 // Main app screen
                                 HeroMainScreen(
                                     uiState = uiState,
+                                    locationSearchState = locationSearchState,
                                     onRefresh = viewModel::refresh,
                                     onToggleUnit = viewModel::toggleUnit,
                                     onSetComfortPreference = viewModel::setComfortPreference,
@@ -98,11 +104,25 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Debug Overlay - always on top (only in debug builds)
-                    if (BuildConfig.DEBUG) {
-                        DebugOverlay(
-                            uiState = uiState,
-                            currentScreen = currentScreen
+                    // Debug Overlay - disabled for screenshots
+                    // if (BuildConfig.DEBUG) {
+                    //     DebugOverlay(
+                    //         uiState = uiState,
+                    //         currentScreen = currentScreen
+                    //     )
+                    // }
+
+                    // Manual Location Picker (shown from PermissionScreen)
+                    if (showManualLocationPicker) {
+                        LocationPickerSheet(
+                            currentLocation = uiState.locationName,
+                            onSearch = viewModel::searchLocation,
+                            onSelectLocation = { lat, lon, name ->
+                                viewModel.selectManualLocation(lat, lon, name)
+                                showManualLocationPicker = false
+                            },
+                            onDismiss = { showManualLocationPicker = false },
+                            searchResults = locationSearchState.results
                         )
                     }
                 }
