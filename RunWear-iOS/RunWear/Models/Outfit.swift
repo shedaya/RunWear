@@ -19,11 +19,22 @@ struct ClothingItem: Identifiable {
     let icon: String
     let amazonSearchTerm: String
 
-    /// Build affiliate URL with gender preference
-    func affiliateURL(for gender: GenderPreference) -> URL? {
+    /// Affiliate tag for Amazon links
+    static let affiliateTag = "runwear-20"
+
+    /// Build affiliate URL with gender preference and platform subtag
+    /// - Parameters:
+    ///   - gender: Gender preference for search term
+    ///   - subtag: Platform identifier (ios, watchos)
+    func affiliateURL(for gender: GenderPreference, subtag: String = "ios") -> URL? {
         let genderedTerm = "premium \(gender.buildSearchTerm(amazonSearchTerm))"
         let searchQuery = genderedTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        return URL(string: "https://www.amazon.com/s?k=\(searchQuery)&tag=runwear-20")
+        return URL(string: "https://www.amazon.com/s?k=\(searchQuery)&tag=\(Self.affiliateTag)&subtag=\(subtag)")
+    }
+
+    /// Build affiliate URL with gender preference (defaults to iOS subtag)
+    func affiliateURL(for gender: GenderPreference) -> URL? {
+        affiliateURL(for: gender, subtag: "ios")
     }
 
     /// Convenience for unisex/legacy usage

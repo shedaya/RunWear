@@ -18,11 +18,9 @@ struct WatchContentView: View {
                 }
             case .loaded(let weather, let recommendation):
                 WatchOutfitView(
+                    viewModel: viewModel,
                     weather: weather,
-                    recommendation: recommendation,
-                    locationName: viewModel.locationName,
-                    onRefresh: { viewModel.refresh() },
-                    onToggleUnit: { viewModel.toggleUnit() }
+                    recommendation: recommendation
                 )
             }
         }

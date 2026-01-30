@@ -1,96 +1,447 @@
 import SwiftUI
 
 struct WeatherOutfitView: View {
+    @ObservedObject var viewModel: WeatherViewModel
     let weather: WeatherData
     let recommendation: OutfitRecommendation
-    let locationName: String
     let isRefreshing: Bool
-    let genderPreference: GenderPreference
     let onRefresh: () -> Void
-    let onGenderChange: (GenderPreference) -> Void
+
+    // Modal state
+    @State private var showSettings = false
+    @State private var showDatePicker = false
+    @State private var showTimePicker = false
+    @State private var showShop = false
+    @State private var showWeatherDetail = false
+    @State private var selectedWeatherDetail: WeatherDetailType?
+
+    // Animation state
+    @State private var hasAppeared = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // Weather Card
-                WeatherCard(
-                    weather: weather.currentWeather,
-                    locationName: locationName
-                )
+        ZStack {
+            // Dark background
+            AppTheme.darkBackground
+                .ignoresSafeArea()
 
-                // Temperature Bracket
-                TemperatureBracketBadge(bracket: recommendation.temperatureBracket)
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Hero Image Section
+                    heroSection
 
-                // Outfit Recommendations
-                VStack(alignment: .leading, spacing: 16) {
-                    // Section header with gender toggle
-                    HStack {
-                        Text("Recommended Outfit")
-                            .font(.headline)
-                            .foregroundColor(AppTheme.textPrimary)
+                    // Weather Pills
+                    weatherPillsSection
+                        .padding(.top, -30)
+                        .zIndex(1)
 
-                        Spacer()
+                    // Outfit Recommendations
+                    outfitSection
+                        .padding(.top, 24)
 
-                        GenderToggle(
-                            selected: genderPreference,
-                            onSelect: onGenderChange
-                        )
-                    }
-                    .padding(.horizontal)
+                    // Tips
+                    tipsSection
+                        .padding(.top, 16)
 
-                    // Main clothing items
-                    ClothingItemCard(item: recommendation.top, category: "Top", gender: genderPreference)
-                    ClothingItemCard(item: recommendation.bottom, category: "Bottom", gender: genderPreference)
-
-                    // Accessories
-                    if !recommendation.accessories.isEmpty {
-                        Text("Accessories")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppTheme.textSecondary)
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-
-                        ForEach(recommendation.accessories) { item in
-                            ClothingItemCard(item: item, gender: genderPreference)
-                        }
-                    }
-
-                    // Extras (rain gear, etc.)
-                    if !recommendation.extras.isEmpty {
-                        Text("Additional Gear")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(AppTheme.textSecondary)
-                            .padding(.horizontal)
-                            .padding(.top, 8)
-
-                        ForEach(recommendation.extras) { item in
-                            ClothingItemCard(item: item, gender: genderPreference)
-                        }
-                    }
+                    Spacer(minLength: 40)
                 }
-
-                // Tips
-                TipsCard(bracket: recommendation.temperatureBracket, condition: weather.currentWeather.condition)
-
-                Spacer(minLength: 20)
             }
-            .padding(.vertical)
-        }
-        .refreshable {
-            onRefresh()
-        }
-        .overlay {
+            .refreshable {
+                onRefresh()
+            }
+
+            // Loading overlay
             if isRefreshing {
+                Color.black.opacity(0.3)
+                    .ignoresSafeArea()
                 ProgressView()
                     .scaleEffect(1.5)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black.opacity(0.1))
+                    .tint(.white)
+            }
+
+            // Modals
+            if showSettings {
+                SettingsModal(
+                    isPresented: $showSettings,
+                    temperatureUnit: $viewModel.temperatureUnit,
+                    genderPreference: $viewModel.genderPreference,
+                    comfortLevel: $viewModel.comfortLevel
+                )
+            }
+
+            if showDatePicker {
+                DatePickerSheet(
+                    selectedDate: $viewModel.selectedDate,
+                    isPresented: $showDatePicker
+                )
+                .onChange(of: viewModel.selectedDate) { _, newDate in
+                    viewModel.updateSelectedTime(date: newDate, hour: viewModel.selectedHour)
+                }
+            }
+
+            if showTimePicker {
+                TimePickerSheet(
+                    selectedHour: $viewModel.selectedHour,
+                    isPresented: $showTimePicker
+                )
+                .onChange(of: viewModel.selectedHour) { _, newHour in
+                    viewModel.updateSelectedTime(date: viewModel.selectedDate, hour: newHour)
+                }
+            }
+
+            if showShop {
+                ShopModal(
+                    items: recommendation.allItems,
+                    genderPreference: viewModel.genderPreference,
+                    isPresented: $showShop
+                )
+            }
+
+            if showWeatherDetail, let detail = selectedWeatherDetail {
+                WeatherDetailSheet(
+                    detailType: detail,
+                    isPresented: $showWeatherDetail
+                )
+            }
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.5).delay(0.2)) {
+                hasAppeared = true
             }
         }
     }
+
+    // MARK: - Hero Section
+
+    private var heroSection: some View {
+        HeroImageView(
+            locationName: viewModel.locationName,
+            temperature: viewModel.currentTemperature,
+            feelsLike: viewModel.currentFeelsLike,
+            weatherCondition: viewModel.currentCondition,
+            date: viewModel.selectedDate,
+            hour: viewModel.selectedHour,
+            tempBracket: viewModel.currentTempBracket,
+            fallbackImageUrl: viewModel.fallbackImageUrl ?? defaultFallbackUrl,
+            aiImageUrl: viewModel.heroImageUrl,
+            onSettingsTapped: { withAnimation { showSettings = true } },
+            onShareTapped: shareOutfit,
+            onLocationTapped: {},
+            onDateTapped: { withAnimation { showDatePicker = true } },
+            onTimeTapped: { withAnimation { showTimePicker = true } }
+        )
+    }
+
+    private var defaultFallbackUrl: String {
+        FallbackImageProvider.shared.getImageURL(
+            temp: .MILD,
+            weather: .CLEAR,
+            size: .iOS
+        )
+    }
+
+    // MARK: - Weather Pills Section
+
+    private var weatherPillsSection: some View {
+        WeatherPillsRow(
+            condition: viewModel.currentCondition,
+            windSpeed: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
+            windDirection: viewModel.selectedWeatherSnapshot?.windDirectionCompass ?? "N",
+            humidity: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
+            precipitationProbability: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
+            uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0,
+            onConditionTapped: {
+                selectedWeatherDetail = .condition(viewModel.currentCondition)
+                withAnimation { showWeatherDetail = true }
+            },
+            onWindTapped: {
+                let snapshot = viewModel.selectedWeatherSnapshot
+                selectedWeatherDetail = .wind(
+                    speed: (snapshot?.windSpeed ?? weather.currentWeather.windspeed) * 0.621371,
+                    direction: snapshot?.windDirectionCompass ?? "N",
+                    gusts: (snapshot?.windGusts ?? weather.currentWeather.windspeed) * 0.621371
+                )
+                withAnimation { showWeatherDetail = true }
+            },
+            onHumidityTapped: {
+                selectedWeatherDetail = .humidity(percentage: viewModel.selectedWeatherSnapshot?.humidity ?? 50)
+                withAnimation { showWeatherDetail = true }
+            },
+            onPrecipitationTapped: {
+                selectedWeatherDetail = .precipitation(percentage: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0)
+                withAnimation { showWeatherDetail = true }
+            },
+            onUVTapped: {
+                selectedWeatherDetail = .uvIndex(value: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0)
+                withAnimation { showWeatherDetail = true }
+            }
+        )
+        .padding(.vertical, 16)
+        .background(
+            LinearGradient(
+                colors: [AppTheme.darkBackground.opacity(0.8), AppTheme.darkBackground],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    // MARK: - Outfit Section
+
+    private var outfitSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section header
+            HStack {
+                Text("Recommended Outfit")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button(action: { withAnimation { showShop = true } }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "cart.fill")
+                        Text("Shop")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(AppTheme.primaryColor)
+                    .cornerRadius(20)
+                }
+            }
+            .padding(.horizontal, 16)
+
+            // Temperature bracket badge
+            TemperatureBracketBadge(bracket: recommendation.temperatureBracket)
+                .padding(.horizontal, 16)
+                .staggeredAnimation(index: 0, isVisible: hasAppeared)
+
+            // Main clothing items
+            DarkClothingItemCard(
+                item: recommendation.top,
+                category: "Top",
+                gender: viewModel.genderPreference
+            )
+            .staggeredAnimation(index: 1, isVisible: hasAppeared)
+
+            DarkClothingItemCard(
+                item: recommendation.bottom,
+                category: "Bottom",
+                gender: viewModel.genderPreference
+            )
+            .staggeredAnimation(index: 2, isVisible: hasAppeared)
+
+            // Accessories
+            if !recommendation.accessories.isEmpty {
+                Text("Accessories")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .staggeredAnimation(index: 3, isVisible: hasAppeared)
+
+                ForEach(Array(recommendation.accessories.enumerated()), id: \.element.id) { index, item in
+                    DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
+                        .staggeredAnimation(index: 4 + index, isVisible: hasAppeared)
+                }
+            }
+
+            // Extras (rain gear, etc.)
+            if !recommendation.extras.isEmpty {
+                Text("Additional Gear")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .staggeredAnimation(index: 4 + recommendation.accessories.count, isVisible: hasAppeared)
+
+                ForEach(Array(recommendation.extras.enumerated()), id: \.element.id) { index, item in
+                    DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
+                        .staggeredAnimation(index: 5 + recommendation.accessories.count + index, isVisible: hasAppeared)
+                }
+            }
+        }
+    }
+
+    // MARK: - Tips Section
+
+    private var tipsSection: some View {
+        DarkTipsCard(
+            bracket: recommendation.temperatureBracket,
+            condition: viewModel.currentCondition
+        )
+        .padding(.horizontal, 16)
+        .staggeredAnimation(
+            index: 5 + recommendation.accessories.count + recommendation.extras.count,
+            isVisible: hasAppeared
+        )
+    }
+
+    // MARK: - Actions
+
+    private func shareOutfit() {
+        // Build share content
+        let items: [Any] = [
+            "🏃 RunWear Outfit for \(viewModel.locationName)",
+            "Temperature: \(Int(viewModel.currentTemperature))°\(viewModel.temperatureUnit == .fahrenheit ? "F" : "C")",
+            "Condition: \(viewModel.currentCondition.rawValue)",
+            "",
+            "Top: \(recommendation.top.name)",
+            "Bottom: \(recommendation.bottom.name)",
+            recommendation.accessories.isEmpty ? "" : "Accessories: \(recommendation.accessories.map { $0.name }.joined(separator: ", "))",
+            "",
+            "Get your personalized running outfit at runwear.app"
+        ].filter { !($0 as? String ?? "").isEmpty }
+
+        let text = (items as? [String])?.joined(separator: "\n") ?? ""
+
+        let activityVC = UIActivityViewController(
+            activityItems: [text],
+            applicationActivities: nil
+        )
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first,
+           let rootVC = window.rootViewController {
+            rootVC.present(activityVC, animated: true)
+        }
+    }
 }
+
+// MARK: - Dark Theme Cards
+
+struct DarkClothingItemCard: View {
+    let item: ClothingItem
+    var category: String? = nil
+    var gender: GenderPreference = .unisex
+
+    var body: some View {
+        HStack(spacing: 16) {
+            // Icon
+            Text(item.icon)
+                .font(.system(size: 28))
+                .frame(width: 56, height: 56)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.1))
+                )
+
+            // Info
+            VStack(alignment: .leading, spacing: 4) {
+                if let category = category {
+                    Text(category.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                Text(item.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(item.description)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.6))
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            // Shop button
+            if let url = item.affiliateURL(for: gender) {
+                Link(destination: url) {
+                    Image(systemName: "cart.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(AppTheme.primaryColor)
+                        .cornerRadius(12)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+    }
+}
+
+struct DarkTipsCard: View {
+    let bracket: TemperatureBracket
+    let condition: WeatherCondition
+
+    var tips: [String] {
+        var result: [String] = []
+
+        switch bracket {
+        case .hot:
+            result.append("Stay hydrated - drink water before, during, and after your run")
+            result.append("Consider running early morning or evening to avoid peak heat")
+        case .warm:
+            result.append("Good conditions for running - enjoy your workout!")
+            result.append("Stay hydrated even if you don't feel thirsty")
+        case .mild:
+            result.append("Perfect running weather for many runners")
+            result.append("You may warm up quickly - dress lighter than expected")
+        case .cool:
+            result.append("Warm up thoroughly before picking up the pace")
+            result.append("Consider bringing a light layer to tie around your waist")
+        case .cold:
+            result.append("Extend your warm-up to prevent injury")
+            result.append("Breathe through a gaiter to warm the air")
+        case .veryCold:
+            result.append("Keep your core warm - the body prioritizes vital organs")
+            result.append("Shorten your run or consider indoor alternatives")
+        case .extreme:
+            result.append("Consider running indoors - frostbite risk is real")
+            result.append("If running outside, tell someone your route")
+        }
+
+        if condition == .rain || condition == .drizzle {
+            result.append("Wear a brimmed cap to keep rain off your face")
+        }
+
+        return result
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundColor(.yellow)
+                Text("Running Tips")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            ForEach(tips, id: \.self) { tip in
+                HStack(alignment: .top, spacing: 8) {
+                    Text("•")
+                        .foregroundColor(AppTheme.primaryColor)
+                    Text(tip)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Legacy Components (kept for compatibility)
 
 struct WeatherCard: View {
     let weather: CurrentWeather
@@ -150,19 +501,32 @@ struct TemperatureBracketBadge: View {
     let bracket: TemperatureBracket
 
     var body: some View {
-        VStack(spacing: 4) {
+        HStack(spacing: 8) {
             Text(bracket.description)
-                .font(.headline)
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
             Text(bracket.rawValue)
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.9))
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.8))
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 12)
-        .background(AppTheme.primaryColor.opacity(bracket.colorOpacity))
-        .background(AppTheme.primaryColor)
-        .cornerRadius(25)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(AppTheme.temperatureColor(fahrenheit: temperatureForBracket).opacity(0.8))
+        )
+    }
+
+    private var temperatureForBracket: Double {
+        switch bracket {
+        case .hot: return 85
+        case .warm: return 65
+        case .mild: return 55
+        case .cool: return 45
+        case .cold: return 35
+        case .veryCold: return 25
+        case .extreme: return 10
+        }
     }
 }
 
@@ -177,9 +541,8 @@ struct ClothingItemCard: View {
                 Circle()
                     .fill(AppTheme.primaryColor.opacity(0.1))
                     .frame(width: 50, height: 50)
-                Image(systemName: item.icon)
+                Text(item.icon)
                     .font(.title2)
-                    .foregroundColor(AppTheme.primaryColor)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -218,8 +581,6 @@ struct ClothingItemCard: View {
         .padding(.horizontal)
     }
 }
-
-// MARK: - Gender Toggle
 
 struct GenderToggle: View {
     let selected: GenderPreference
@@ -327,30 +688,26 @@ struct TipsCard: View {
 }
 
 #Preview {
-    let weather = WeatherData(
-        latitude: 40.7128,
-        longitude: -74.0060,
-        currentWeather: CurrentWeather(
-            temperature: 15,
-            windspeed: 10,
-            weathercode: 0,
-            isDay: 1
-        )
-    )
-    let recommendation = OutfitRecommendationService.shared.getRecommendation(
-        for: weather.currentWeather.temperatureFahrenheit,
-        condition: weather.currentWeather.condition
-    )
+    let viewModel = WeatherViewModel()
 
-    return NavigationStack {
-        WeatherOutfitView(
-            weather: weather,
-            recommendation: recommendation,
-            locationName: "New York, NY",
-            isRefreshing: false,
-            genderPreference: .unisex,
-            onRefresh: {},
-            onGenderChange: { _ in }
-        )
-    }
+    return WeatherOutfitView(
+        viewModel: viewModel,
+        weather: WeatherData(
+            latitude: 40.7128,
+            longitude: -74.0060,
+            currentWeather: CurrentWeather(
+                temperature: 15,
+                windspeed: 10,
+                weathercode: 0,
+                isDay: 1
+            ),
+            hourly: nil
+        ),
+        recommendation: OutfitRecommendationService.shared.getRecommendation(
+            for: 59,
+            condition: .clear
+        ),
+        isRefreshing: false,
+        onRefresh: {}
+    )
 }
