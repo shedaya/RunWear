@@ -23,14 +23,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.RunWearColors
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Glass morphism date/time selector pill.
+ * Glass morphism date/time selector pill - PWA v2.9 style.
  * Shows current date and time as tappable segments.
+ *
+ * PWA CSS reference:
+ * - background: rgba(255, 255, 255, 0.12)
+ * - backdrop-filter: blur(12px)
+ * - border: 1px solid rgba(255, 255, 255, 0.15)
+ * - .active section: rgba(255, 255, 255, 0.15)
  *
  * @param dateTime The currently selected date/time
  * @param onDateClick Handler when date section is tapped
@@ -55,26 +62,33 @@ fun DateTimePill(
 
     val timeText = dateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
 
+    // PWA glass morphism: rgba(255, 255, 255, 0.12) = 12% white
+    val glassBackground = Color.White.copy(alpha = 0.12f)
+    // PWA border: rgba(255, 255, 255, 0.15) = 15% white
+    val glassBorder = Color.White.copy(alpha = 0.15f)
+    // PWA active section: rgba(255, 255, 255, 0.15) = 15% white
+    val glassActiveSection = Color.White.copy(alpha = 0.15f)
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(100.dp),
-        color = RunWearColors.GlassBackground.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, RunWearColors.GlassBorder.copy(alpha = 0.15f))
+        color = glassBackground,
+        border = BorderStroke(1.dp, glassBorder)
     ) {
         Row(
             modifier = Modifier.padding(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Date button (highlighted)
+            // Date button (highlighted/active)
             Surface(
                 onClick = onDateClick,
                 shape = RoundedCornerShape(100.dp),
-                color = RunWearColors.GlassBackgroundHover
+                color = glassActiveSection
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         Icons.Outlined.CalendarToday,
@@ -84,14 +98,14 @@ fun DateTimePill(
                     )
                     Text(
                         text = dateText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
-                        fontWeight = FontWeight.SemiBold
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
                     )
                 }
             }
 
-            // Divider
+            // Divider - PWA: rgba(255, 255, 255, 0.2)
             Box(
                 modifier = Modifier
                     .width(1.dp)
@@ -108,7 +122,7 @@ fun DateTimePill(
                 Row(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         Icons.Outlined.Schedule,
@@ -118,7 +132,8 @@ fun DateTimePill(
                     )
                     Text(
                         text = timeText,
-                        style = MaterialTheme.typography.labelMedium,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = Color.White.copy(alpha = 0.7f)
                     )
                 }

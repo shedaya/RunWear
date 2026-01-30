@@ -647,6 +647,15 @@
             width: 16px;
             height: 16px;
             fill: currentColor;
+            flex-shrink: 0;
+        }
+
+        /* Location button text overflow handling */
+        .glass-btn span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: calc(100vw - 180px); /* Leave room for share/settings buttons */
         }
 
         .glass-btn-icon {

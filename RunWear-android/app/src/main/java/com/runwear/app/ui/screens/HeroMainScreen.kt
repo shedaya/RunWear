@@ -93,7 +93,9 @@ fun HeroMainScreen(
     onTimeSelected: (Int) -> Unit,
     onShopItem: (ClothingItem) -> Unit,
     onLocationSearch: (String) -> Unit,
-    onLocationSelect: (Double, Double, String) -> Unit
+    onLocationSelect: (Double, Double, String) -> Unit,
+    onUseCurrentLocation: () -> Unit = {},
+    isUsingGPS: Boolean = false
 ) {
     val context = LocalContext.current
 
@@ -359,7 +361,12 @@ Get your personalized running outfit at runwear.app
                 showLocationPicker = false
             },
             onDismiss = { showLocationPicker = false },
-            searchResults = locationSearchState.results
+            searchResults = locationSearchState.results,
+            isUsingGPS = isUsingGPS,
+            onUseCurrentLocation = {
+                onUseCurrentLocation()
+                showLocationPicker = false
+            }
         )
     }
 

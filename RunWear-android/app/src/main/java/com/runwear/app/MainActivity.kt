@@ -98,7 +98,16 @@ class MainActivity : ComponentActivity() {
                                     onTimeSelected = viewModel::selectHour,
                                     onShopItem = { /* Handled in HeroMainScreen */ },
                                     onLocationSearch = viewModel::searchLocation,
-                                    onLocationSelect = viewModel::selectManualLocation
+                                    onLocationSelect = viewModel::selectManualLocation,
+                                    isUsingGPS = uiState.locationSource == "gps",
+                                    onUseCurrentLocation = {
+                                        // Request GPS permission or retry if already granted
+                                        if (viewModel.hasLocationPermission()) {
+                                            viewModel.retryGPS()
+                                        } else {
+                                            requestLocationPermission()
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -122,7 +131,12 @@ class MainActivity : ComponentActivity() {
                                 showManualLocationPicker = false
                             },
                             onDismiss = { showManualLocationPicker = false },
-                            searchResults = locationSearchState.results
+                            searchResults = locationSearchState.results,
+                            isUsingGPS = uiState.locationSource == "gps",
+                            onUseCurrentLocation = {
+                                showManualLocationPicker = false
+                                requestLocationPermission()
+                            }
                         )
                     }
                 }

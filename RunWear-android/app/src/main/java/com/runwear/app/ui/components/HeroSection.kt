@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Settings
@@ -196,14 +197,18 @@ fun HeroSection(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Location button (pill with text)
+            // Location button (pill with text) - constrained to prevent overflow
             GlassButton(
                 icon = Icons.Outlined.LocationOn,
                 text = locationName,
-                onClick = onLocationClick
+                onClick = onLocationClick,
+                modifier = Modifier.weight(1f, fill = false)
             )
+
+            Spacer(Modifier.width(8.dp))
 
             // Right side: Share + Settings (icon-only circular buttons)
             Row(

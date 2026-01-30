@@ -49,10 +49,11 @@ object RunWearColors {
     val TextSecondary = Color(0xFFB3B3B3)
     val TextMuted = Color(0xFF737373)
 
-    // Glass morphism colors (for weather pills only, NOT outfit cards)
-    val GlassBackground = Color(0x1AFFFFFF)   // rgba(255, 255, 255, 0.1) = 10%
-    val GlassBorder = Color(0x26FFFFFF)       // rgba(255, 255, 255, 0.15) = 15%
-    val GlassBackgroundHover = Color(0x1AFFFFFF) // 10% white
+    // Glass morphism colors - PWA v2.9 exact values
+    // NOTE: These are the EXACT PWA values from index.php CSS
+    val GlassBackground = Color(0x1FFFFFFF)   // rgba(255, 255, 255, 0.12) = 12% white
+    val GlassBorder = Color(0x26FFFFFF)       // rgba(255, 255, 255, 0.15) = 15% white
+    val GlassBackgroundHover = Color(0x26FFFFFF) // rgba(255, 255, 255, 0.15) = 15% white (active state)
 }
 
 // Legacy color aliases for backward compatibility with existing code

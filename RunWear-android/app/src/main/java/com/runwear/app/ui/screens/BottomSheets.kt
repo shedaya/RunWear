@@ -8,10 +8,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
@@ -484,7 +486,7 @@ private fun GenderToggleSettings(
 }
 
 // ============================================================================
-// LOCATION PICKER SHEET
+// LOCATION PICKER SHEET - PWA v2.9 Style with GPS + Manual options
 // ============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -494,7 +496,9 @@ fun LocationPickerSheet(
     onSearch: (String) -> Unit,
     onSelectLocation: (Double, Double, String) -> Unit,
     onDismiss: () -> Unit,
-    searchResults: List<LocationResult> = emptyList()
+    searchResults: List<LocationResult> = emptyList(),
+    isUsingGPS: Boolean = false,
+    onUseCurrentLocation: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState()
     var query by remember { mutableStateOf("") }
@@ -518,6 +522,97 @@ fun LocationPickerSheet(
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            // Use Current Location Option (GPS)
+            Surface(
+                onClick = onUseCurrentLocation,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = if (isUsingGPS) Color(0x3300796B) else RunWearColors.BgCardLight,
+                border = if (isUsingGPS) BorderStroke(2.dp, RunWearColors.Primary) else null
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // GPS Icon
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(RunWearColors.Primary, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.MyLocation,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Use Current Location",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = RunWearColors.TextPrimary
+                            )
+                            if (isUsingGPS) {
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            Color(0x3300796B),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "✓ Active",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = RunWearColors.Primary
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = if (isUsingGPS) "GPS location enabled" else "Requires location permission",
+                            fontSize = 13.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            // Divider with "or enter manually"
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = RunWearColors.BgCardLight
+                )
+                Text(
+                    text = "or enter manually",
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextMuted,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = RunWearColors.BgCardLight
+                )
+            }
 
             // Search input
             OutlinedTextField(
@@ -560,7 +655,8 @@ fun LocationPickerSheet(
                             ) {
                                 Text(
                                     text = result.displayName,
-                                    color = RunWearColors.TextPrimary
+                                    color = RunWearColors.TextPrimary,
+                                    modifier = Modifier.weight(1f)
                                 )
                                 Icon(
                                     Icons.Outlined.ChevronRight,
@@ -582,8 +678,13 @@ fun LocationPickerSheet(
 // Note: Use com.runwear.shared.data.repository.LocationResult instead
 
 // ============================================================================
-// SHOP ALL SHEET - Shows all outfit items with Amazon links
+// SHOP ALL SHEET - Shows all outfit items with Amazon links - PWA v2.9 Style
 // ============================================================================
+
+private fun buildShopAllUrl(): String {
+    val searchTerm = "running gear outfit".replace(" ", "+")
+    return "https://www.amazon.com/s?k=$searchTerm&tag=$AMAZON_AFFILIATE_TAG&ascsubtag=$AMAZON_PLATFORM_SUBTAG"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -606,14 +707,40 @@ fun ShopAllSheet(
                 .fillMaxWidth()
                 .padding(24.dp)
         ) {
-            Text(
-                text = "SHOP YOUR OUTFIT",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
-                color = RunWearColors.TextPrimary,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
+            // Header with title and Shop All button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "SHOP YOUR OUTFIT",
+                    fontFamily = BebasNeueFontFamily,
+                    fontSize = 24.sp,
+                    letterSpacing = 0.48.sp,
+                    color = RunWearColors.TextPrimary
+                )
+
+                // Shop All button - PWA style
+                Surface(
+                    onClick = {
+                        val url = buildShopAllUrl()
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    color = RunWearColors.Primary
+                ) {
+                    Text(
+                        text = "Shop All →",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
 
             // Items list
             items.forEach { item ->
