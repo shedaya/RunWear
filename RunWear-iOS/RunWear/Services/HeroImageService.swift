@@ -203,40 +203,34 @@ actor HeroImageService {
     }
 
     /// Builds a generation prompt for the combination
+    /// v3.12: Enhanced prompt with detailed outfit descriptions matching PWA format.
     private func buildPrompt(for combination: HeroCombinationId) -> String {
         let genderText = combination.gender == .MALE ? "male" : "female"
-        let weatherText: String
-        switch combination.weather {
-        case .CLEAR: weatherText = "clear sunny"
-        case .CLOUDY: weatherText = "cloudy overcast"
-        case .RAIN: weatherText = "rainy wet"
-        case .SNOW: weatherText = "snowy winter"
-        }
-
-        let tempText: String
-        switch combination.temp {
-        case .FREEZING: tempText = "extremely cold freezing"
-        case .COLD: tempText = "cold winter"
-        case .COOL: tempText = "cool crisp"
-        case .MILD: tempText = "mild pleasant"
-        case .WARM: tempText = "warm comfortable"
-        case .HOT: tempText = "hot summer"
-        }
+        let weatherText = combination.weather.rawValue.lowercased()
+        let tempText = combination.temp.rawValue.lowercased().replacingOccurrences(of: "_", with: " ")
 
         let timeText: String
         switch combination.time {
-        case .DAWN: timeText = "early morning golden hour sunrise"
-        case .MIDDAY: timeText = "midday bright daylight"
-        case .DUSK: timeText = "evening golden hour sunset"
-        case .NIGHT: timeText = "night time city lights"
-        case .none: timeText = "daylight"
+        case .DAWN: timeText = "early morning"
+        case .MIDDAY: timeText = "midday"
+        case .DUSK: timeText = "evening"
+        case .NIGHT: timeText = "night"
+        case .none: timeText = "midday"
         }
 
-        return """
-        Professional photo of a \(genderText) runner in \(weatherText) \(tempText) weather during \(timeText). \
-        Athletic pose, running gear appropriate for conditions, urban or trail setting. \
-        High quality, lifestyle photography style, inspiring and motivational.
-        """
+        // Detailed outfit descriptions matching getOutfitRecommendation() logic
+        let outfitDescriptions: [HeroTempBracket: String] = [
+            .HOT: "lightweight breathable tank top, very short split running shorts, sunglasses, sweat-wicking headband",
+            .WARM: "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
+            .MILD: "fitted long sleeve moisture-wicking shirt, running shorts or light capris",
+            .COOL: "quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband",
+            .COLD: "thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter",
+            .FREEZING: "multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+        ]
+
+        let outfitDesc = outfitDescriptions[combination.temp] ?? outfitDescriptions[.MILD]!
+
+        return "Professional running photography, \(genderText) runner in motion, \(weatherText) weather, \(tempText) temperature, \(timeText) lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus. OUTFIT: \(outfitDesc)"
     }
 }
 
