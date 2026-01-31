@@ -3,7 +3,6 @@ package com.runwear.shared.data.repository
 import com.runwear.shared.data.api.GeocodingApi
 import com.runwear.shared.data.api.NominatimApi
 import com.runwear.shared.data.api.OpenMeteoApi
-import com.runwear.shared.data.model.GeocodingResult
 import com.runwear.shared.domain.model.HourlyForecast
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherCode
@@ -17,7 +16,9 @@ data class LocationResult(
     val latitude: Double,
     val longitude: Double,
     val name: String,
-    val displayName: String
+    val displayName: String,
+    val detail: String = "",
+    val isUSA: Boolean = false
 )
 
 @Singleton
@@ -136,8 +137,11 @@ class WeatherRepository @Inject constructor(
     }
     
     suspend fun searchLocation(query: String): Result<List<LocationResult>> = runCatching {
-        val response = geocodingApi.searchLocation(query)
-        response.results?.map { it.toLocationResult() } ?: emptyList()
+        val results = nominatimApi.searchLocation(query)
+        results
+            .map { it.toLocationResult() }
+            .sortedByDescending { it.isUSA } // USA results first
+            .take(5) // Limit to 5 results like PWA
     }
     
     suspend fun reverseGeocode(latitude: Double, longitude: Double): Result<String> = runCatching {
@@ -156,10 +160,12 @@ class WeatherRepository @Inject constructor(
         }
     }
     
-    private fun GeocodingResult.toLocationResult() = LocationResult(
+    private fun com.runwear.shared.data.model.NominatimSearchResult.toLocationResult() = LocationResult(
         latitude = latitude,
         longitude = longitude,
-        name = name,
-        displayName = displayName
+        name = cityName,
+        displayName = formattedDisplayName,
+        detail = fullLocationDetail,
+        isUSA = isUSA
     )
 }

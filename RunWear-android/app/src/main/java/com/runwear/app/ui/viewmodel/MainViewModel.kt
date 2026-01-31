@@ -22,6 +22,8 @@ import com.runwear.shared.util.LocationErrorReason
 import com.runwear.shared.util.LocationFetchResult
 import com.runwear.shared.util.LocationProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -81,6 +83,7 @@ class MainViewModel @Inject constructor(
 
     private var currentLat: Double? = null
     private var currentLon: Double? = null
+    private var searchJob: Job? = null
 
     init {
         // Load affiliate partner
@@ -374,16 +377,22 @@ class MainViewModel @Inject constructor(
     
     fun searchLocation(query: String) {
         _locationSearch.update { it.copy(query = query) }
+
+        // Cancel previous search job
+        searchJob?.cancel()
+
         if (query.length < 2) {
-            _locationSearch.update { it.copy(results = emptyList()) }
+            _locationSearch.update { it.copy(results = emptyList(), isSearching = false) }
             return
         }
-        
-        viewModelScope.launch {
+
+        // Debounce: wait 300ms before searching (like PWA)
+        searchJob = viewModelScope.launch {
             _locationSearch.update { it.copy(isSearching = true) }
+            delay(300)
             weatherRepository.searchLocation(query).fold(
                 onSuccess = { results -> _locationSearch.update { it.copy(isSearching = false, results = results) } },
-                onFailure = { _locationSearch.update { it.copy(isSearching = false) } }
+                onFailure = { _locationSearch.update { it.copy(isSearching = false, results = emptyList()) } }
             )
         }
     }

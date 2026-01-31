@@ -41,3 +41,6 @@
 # Keep data classes
 -keep class com.runwear.shared.data.model.** { *; }
 -keep class com.runwear.shared.domain.model.** { *; }
+
+# SLF4J
+-dontwarn org.slf4j.impl.StaticLoggerBinder

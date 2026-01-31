@@ -362,6 +362,7 @@ Get your personalized running outfit at runwear.app
             },
             onDismiss = { showLocationPicker = false },
             searchResults = locationSearchState.results,
+            isSearching = locationSearchState.isSearching,
             isUsingGPS = isUsingGPS,
             onUseCurrentLocation = {
                 onUseCurrentLocation()

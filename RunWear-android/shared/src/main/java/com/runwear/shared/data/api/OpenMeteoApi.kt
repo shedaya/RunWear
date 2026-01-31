@@ -1,6 +1,7 @@
 package com.runwear.shared.data.api
 
 import com.runwear.shared.data.model.GeocodingResponse
+import com.runwear.shared.data.model.NominatimSearchResult
 import com.runwear.shared.data.model.OpenMeteoResponse
 import com.runwear.shared.data.model.ReverseGeocodingResponse
 import retrofit2.http.GET
@@ -33,7 +34,7 @@ interface GeocodingApi {
 }
 
 interface NominatimApi {
-    
+
     @GET("reverse")
     suspend fun reverseGeocode(
         @Query("lat") latitude: Double,
@@ -41,4 +42,12 @@ interface NominatimApi {
         @Query("format") format: String = "json",
         @Query("zoom") zoom: Int = 10
     ): ReverseGeocodingResponse
+
+    @GET("search")
+    suspend fun searchLocation(
+        @Query("q") query: String,
+        @Query("format") format: String = "json",
+        @Query("limit") limit: Int = 8,
+        @Query("addressdetails") addressDetails: Int = 1
+    ): List<NominatimSearchResult>
 }

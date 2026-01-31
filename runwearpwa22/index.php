@@ -2146,6 +2146,8 @@
             margin-top: 12px;
             max-height: 200px;
             overflow-y: auto;
+            position: relative;
+            z-index: 10;
         }
 
         .location-result {
@@ -2295,6 +2297,7 @@
             transform: translateY(-50%);
             font-size: 18px;
             color: var(--text-muted);
+            pointer-events: none;
         }
 
         .search-spinner {
@@ -2308,6 +2311,7 @@
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
+            pointer-events: none;
         }
 
         .current-location-badge {
@@ -2543,6 +2547,7 @@
             hasPermission: false,
             locationSearching: false,
             locationResults: [],
+            errorLocationResults: [],
             locationSearchQuery: ''
         };
 
@@ -4030,14 +4035,38 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         
         function renderLocationResults() {
             if (!state.locationResults.length) return '';
-            
-            return state.locationResults.map(loc => `
-                <div class="location-result" onclick='selectManualLocation(${JSON.stringify(loc).replace(/'/g, "\\'")})'>
+
+            return state.locationResults.map((loc, index) => `
+                <div class="location-result" data-index="${index}">
                     <div class="location-result-name">${loc.name}</div>
                     <div class="location-result-detail">${loc.fullName}</div>
                 </div>
             `).join('');
         }
+
+        // Event delegation for location results - more reliable than inline onclick
+        document.addEventListener('click', function(e) {
+            // Handle main location modal results
+            const resultEl = e.target.closest('.location-result[data-index]');
+            if (resultEl && state.locationResults.length) {
+                const index = parseInt(resultEl.dataset.index, 10);
+                const loc = state.locationResults[index];
+                if (loc) {
+                    selectManualLocation(loc);
+                }
+                return;
+            }
+
+            // Handle error screen location results
+            const errorResultEl = e.target.closest('.location-result[data-error-index]');
+            if (errorResultEl && state.errorLocationResults && state.errorLocationResults.length) {
+                const index = parseInt(errorResultEl.dataset.errorIndex, 10);
+                const loc = state.errorLocationResults[index];
+                if (loc) {
+                    selectManualLocation(loc);
+                }
+            }
+        });
         
         let searchTimeout = null;
         async function handleLocationSearch(query) {
@@ -4228,9 +4257,12 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     return 0;
                 }).slice(0, 5);
                 
+                // Store results for event delegation
+                state.errorLocationResults = results;
+
                 if (resultsDiv) {
-                    resultsDiv.innerHTML = results.map(loc => `
-                        <div class="location-result" onclick='selectLocationFromError(${JSON.stringify(loc).replace(/'/g, "\\'")})'>
+                    resultsDiv.innerHTML = results.map((loc, index) => `
+                        <div class="location-result" data-error-index="${index}">
                             <div class="location-result-name">${loc.name}</div>
                             <div class="location-result-detail">${loc.fullName}</div>
                         </div>

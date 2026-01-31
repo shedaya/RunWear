@@ -89,3 +89,40 @@ data class Address(
     val country: String? = null,
     @SerialName("country_code") val countryCode: String? = null
 )
+
+@Serializable
+data class NominatimSearchResult(
+    val lat: String,
+    val lon: String,
+    @SerialName("display_name") val displayName: String,
+    val address: Address? = null
+) {
+    val latitude: Double get() = lat.toDoubleOrNull() ?: 0.0
+    val longitude: Double get() = lon.toDoubleOrNull() ?: 0.0
+
+    val cityName: String
+        get() = address?.city ?: address?.town ?: address?.village
+            ?: address?.municipality ?: address?.suburb
+            ?: displayName.split(",").firstOrNull()?.trim() ?: ""
+
+    val stateName: String
+        get() = address?.state ?: address?.region ?: ""
+
+    val countryName: String
+        get() = address?.country ?: ""
+
+    val isUSA: Boolean
+        get() = address?.countryCode?.equals("us", ignoreCase = true) == true
+
+    val formattedDisplayName: String
+        get() = buildString {
+            append(cityName)
+            if (stateName.isNotEmpty()) append(", $stateName")
+        }
+
+    val fullLocationDetail: String
+        get() = buildString {
+            if (stateName.isNotEmpty()) append("$stateName, ")
+            append(countryName)
+        }
+}

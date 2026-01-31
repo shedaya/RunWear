@@ -20,11 +20,16 @@ import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -497,11 +502,13 @@ fun LocationPickerSheet(
     onSelectLocation: (Double, Double, String) -> Unit,
     onDismiss: () -> Unit,
     searchResults: List<LocationResult> = emptyList(),
+    isSearching: Boolean = false,
     isUsingGPS: Boolean = false,
     onUseCurrentLocation: () -> Unit = {}
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -512,7 +519,9 @@ fun LocationPickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(24.dp)
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 24.dp)
         ) {
             Text(
                 text = "SET LOCATION",
@@ -523,141 +532,76 @@ fun LocationPickerSheet(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Use Current Location Option (GPS)
-            Surface(
-                onClick = onUseCurrentLocation,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                color = if (isUsingGPS) Color(0x3300796B) else RunWearColors.BgCardLight,
-                border = if (isUsingGPS) BorderStroke(2.dp, RunWearColors.Primary) else null
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // GPS Icon
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(RunWearColors.Primary, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.MyLocation,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.width(14.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Use Current Location",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp,
-                                color = RunWearColors.TextPrimary
-                            )
-                            if (isUsingGPS) {
-                                Spacer(Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            Color(0x3300796B),
-                                            RoundedCornerShape(4.dp)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "✓ Active",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = RunWearColors.Primary
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = if (isUsingGPS) "GPS location enabled" else "Requires location permission",
-                            fontSize = 13.sp,
-                            color = RunWearColors.TextSecondary,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            // Divider with "or enter manually"
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HorizontalDivider(
-                    modifier = Modifier.weight(1f),
-                    color = RunWearColors.BgCardLight
-                )
-                Text(
-                    text = "or enter manually",
-                    fontSize = 13.sp,
-                    color = RunWearColors.TextMuted,
-                    modifier = Modifier.padding(horizontal = 12.dp)
-                )
-                HorizontalDivider(
-                    modifier = Modifier.weight(1f),
-                    color = RunWearColors.BgCardLight
-                )
-            }
-
-            // Search input
+            // Search input FIRST (at top, visible above keyboard)
             OutlinedTextField(
                 value = query,
                 onValueChange = {
                     query = it
                     if (it.length >= 2) onSearch(it)
                 },
-                placeholder = { Text("Enter city or ZIP code") },
+                placeholder = { Text("Enter city or ZIP code...") },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)
                 },
+                trailingIcon = {
+                    if (isSearching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = RunWearColors.Primary,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = RunWearColors.Primary,
                     unfocusedBorderColor = RunWearColors.BgCardLight
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = { focusManager.clearFocus() }
                 )
             )
 
-            Spacer(Modifier.height(16.dp))
-
-            // Results
+            // Results IMMEDIATELY below search (visible above keyboard)
             if (searchResults.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 300.dp)
+                    modifier = Modifier.heightIn(max = 200.dp)
                 ) {
                     items(searchResults) { result ->
                         Surface(
-                            onClick = { onSelectLocation(result.latitude, result.longitude, result.displayName) },
+                            onClick = {
+                                focusManager.clearFocus()
+                                onSelectLocation(result.latitude, result.longitude, result.displayName)
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             color = Color.Transparent
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp),
+                                    .padding(vertical = 10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = result.displayName,
-                                    color = RunWearColors.TextPrimary,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = result.name,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 15.sp,
+                                        color = RunWearColors.TextPrimary
+                                    )
+                                    if (result.detail.isNotEmpty()) {
+                                        Text(
+                                            text = result.detail,
+                                            fontSize = 13.sp,
+                                            color = RunWearColors.TextSecondary
+                                        )
+                                    }
+                                }
                                 Icon(
                                     Icons.Outlined.ChevronRight,
                                     contentDescription = null,
@@ -668,9 +612,113 @@ fun LocationPickerSheet(
                         HorizontalDivider(color = RunWearColors.BgCardLight)
                     }
                 }
+            } else if (query.length >= 2 && !isSearching) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "No locations found",
+                    fontSize = 14.sp,
+                    color = RunWearColors.TextMuted
+                )
             }
 
-            Spacer(Modifier.height(32.dp))
+            // Divider
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
+                Text(
+                    text = "or",
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextMuted,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
+            }
+
+            // Use Current Location Option (GPS)
+            Surface(
+                onClick = {
+                    focusManager.clearFocus()
+                    onUseCurrentLocation()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = if (isUsingGPS) Color(0x3300796B) else RunWearColors.BgCardLight,
+                border = if (isUsingGPS) BorderStroke(2.dp, RunWearColors.Primary) else null
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(RunWearColors.Primary, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.MyLocation,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Use Current Location",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = if (isUsingGPS) "GPS location enabled" else "Requires location permission",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary
+                        )
+                    }
+                    if (isUsingGPS) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0x3300796B), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("✓", fontSize = 12.sp, color = RunWearColors.Primary)
+                        }
+                    }
+                }
+            }
+
+            // Currently using indicator
+            if (currentLocation.isNotEmpty() && !isUsingGPS) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = RunWearColors.Primary.copy(alpha = 0.1f)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Currently using:", fontSize = 12.sp, color = RunWearColors.TextSecondary)
+                        Text(
+                            text = currentLocation,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = RunWearColors.Primary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
