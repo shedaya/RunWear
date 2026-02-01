@@ -1,5 +1,6 @@
 // Supabase Edge Function: generate-hero-image
 // Processes generation_jobs and creates hero images via Replicate API
+// Uses polling instead of webhooks for reliability
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -12,13 +13,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 serve(async (req) => {
   try {
-    const url = new URL(req.url)
-
-    // Handle Replicate webhook callback
-    if (req.method === 'POST' && url.searchParams.has('job_id')) {
-      return await handleReplicateWebhook(req)
-    }
-
     // Handle trigger to process queued jobs
     if (req.method === 'POST') {
       return await processQueuedJobs()
@@ -40,12 +34,12 @@ serve(async (req) => {
 async function processQueuedJobs() {
   console.log('[generate-hero-image] Processing queued jobs...')
 
-  // Get queued jobs (limit to avoid timeout)
+  // Get ONE queued job at a time (polling approach)
   const { data: jobs, error } = await supabase
     .from('generation_jobs')
     .select('*')
     .eq('status', 'QUEUED')
-    .limit(5)
+    .limit(1)
 
   if (error) {
     console.error('[generate-hero-image] Error fetching jobs:', error)
@@ -53,231 +47,189 @@ async function processQueuedJobs() {
   }
 
   if (!jobs || jobs.length === 0) {
-    console.log('[generate-hero-image] No queued jobs found')
     return new Response(JSON.stringify({ message: 'No queued jobs' }), {
       headers: { 'Content-Type': 'application/json' }
     })
   }
 
-  console.log(`[generate-hero-image] Found ${jobs.length} queued jobs`)
-
-  const results = []
-
-  for (const job of jobs) {
-    try {
-      // Update status to PROCESSING
-      await supabase
-        .from('generation_jobs')
-        .update({
-          status: 'PROCESSING',
-          started_at: new Date().toISOString()
-        })
-        .eq('id', job.id)
-
-      console.log(`[generate-hero-image] Processing job: ${job.combination_id}`)
-
-      // Build webhook URL with job_id
-      const webhookUrl = `${SUPABASE_URL}/functions/v1/generate-hero-image?job_id=${job.id}`
-
-      // Call Replicate API
-      const response = await fetch('https://api.replicate.com/v1/predictions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${REPLICATE_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          version: "black-forest-labs/flux-schnell",
-          input: {
-            prompt: job.prompt,
-            num_outputs: 1,
-            aspect_ratio: "2:3",  // Portrait for hero images
-            output_format: "png",
-            output_quality: 90
-          },
-          webhook: webhookUrl,
-          webhook_events_filter: ["completed"]
-        })
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Replicate API error: ${response.status} ${errorText}`)
-      }
-
-      const prediction = await response.json()
-
-      // Store replicate_id
-      await supabase
-        .from('generation_jobs')
-        .update({ replicate_id: prediction.id })
-        .eq('id', job.id)
-
-      console.log(`[generate-hero-image] Started prediction: ${prediction.id} for ${job.combination_id}`)
-      results.push({ job_id: job.id, replicate_id: prediction.id, status: 'started' })
-
-    } catch (jobError) {
-      console.error(`[generate-hero-image] Error processing job ${job.id}:`, jobError)
-
-      // Mark job as failed
-      await supabase
-        .from('generation_jobs')
-        .update({
-          status: 'FAILED',
-          error_message: jobError.message
-        })
-        .eq('id', job.id)
-
-      results.push({ job_id: job.id, status: 'failed', error: jobError.message })
-    }
-  }
-
-  return new Response(JSON.stringify({ processed: results }), {
-    headers: { 'Content-Type': 'application/json' }
-  })
-}
-
-async function handleReplicateWebhook(req: Request) {
-  const url = new URL(req.url)
-  const jobId = url.searchParams.get('job_id')
-
-  console.log(`[generate-hero-image] Webhook received for job: ${jobId}`)
-
-  const payload = await req.json()
-  console.log(`[generate-hero-image] Webhook payload status: ${payload.status}`)
-
-  if (payload.status !== 'succeeded') {
-    console.error(`[generate-hero-image] Prediction failed:`, payload.error)
-
-    // Mark job as failed
-    await supabase
-      .from('generation_jobs')
-      .update({
-        status: 'FAILED',
-        error_message: payload.error || 'Prediction failed'
-      })
-      .eq('id', jobId)
-
-    return new Response(JSON.stringify({ error: 'Prediction failed' }), {
-      status: 200, // Return 200 to acknowledge webhook
-      headers: { 'Content-Type': 'application/json' }
-    })
-  }
-
-  // Get the job details
-  const { data: job, error: jobError } = await supabase
-    .from('generation_jobs')
-    .select('*')
-    .eq('id', jobId)
-    .single()
-
-  if (jobError || !job) {
-    console.error(`[generate-hero-image] Job not found: ${jobId}`, jobError)
-    return new Response(JSON.stringify({ error: 'Job not found' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
-    })
-  }
+  const job = jobs[0]
+  console.log(`[generate-hero-image] Processing: ${job.combination_id}`)
 
   try {
-    // Get the image URL from Replicate output
-    const imageUrl = payload.output?.[0]
-    if (!imageUrl) {
-      throw new Error('No image URL in Replicate output')
-    }
-
-    console.log(`[generate-hero-image] Downloading image from: ${imageUrl}`)
-
-    // Download the image
-    const imageResponse = await fetch(imageUrl)
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download image: ${imageResponse.status}`)
-    }
-    const imageBlob = await imageResponse.blob()
-
-    // Upload to Supabase Storage
-    const storagePath = `${job.combination_id}/${job.combination_id}.png`
-
-    const { error: uploadError } = await supabase
-      .storage
-      .from('hero-images')
-      .upload(storagePath, imageBlob, {
-        contentType: 'image/png',
-        upsert: true
-      })
-
-    if (uploadError) {
-      throw new Error(`Storage upload failed: ${uploadError.message}`)
-    }
-
-    // Get public URL
-    const { data: publicUrlData } = supabase
-      .storage
-      .from('hero-images')
-      .getPublicUrl(storagePath)
-
-    const publicUrl = publicUrlData.publicUrl
-    console.log(`[generate-hero-image] Uploaded to: ${publicUrl}`)
-
-    // CRITICAL: Insert into generated_images table
-    const { error: insertError } = await supabase
-      .from('generated_images')
-      .insert({
-        combination_id: job.combination_id,
-        image_url: publicUrl,
-        prompt: job.prompt
-      })
-
-    if (insertError) {
-      // Check if it's a duplicate (might have been inserted already)
-      if (insertError.code === '23505') {
-        console.log(`[generate-hero-image] Image already exists for ${job.combination_id}`)
-      } else {
-        throw new Error(`Insert failed: ${insertError.message}`)
-      }
-    } else {
-      console.log(`[generate-hero-image] Inserted into generated_images: ${job.combination_id}`)
-    }
-
-    // CRITICAL: Update job status to COMPLETED
-    const { error: updateError } = await supabase
+    // Update status to PROCESSING
+    await supabase
       .from('generation_jobs')
       .update({
-        status: 'COMPLETED',
-        completed_at: new Date().toISOString()
+        status: 'PROCESSING',
+        started_at: new Date().toISOString()
       })
-      .eq('id', jobId)
+      .eq('id', job.id)
 
-    if (updateError) {
-      throw new Error(`Status update failed: ${updateError.message}`)
-    }
-
-    console.log(`[generate-hero-image] Job completed: ${job.combination_id}`)
-
-    return new Response(JSON.stringify({
-      success: true,
-      combination_id: job.combination_id,
-      image_url: publicUrl
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' }
+    // Call Replicate API (synchronous mode - no webhook)
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        version: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637", // flux-schnell
+        input: {
+          prompt: job.prompt,
+          num_outputs: 1,
+          aspect_ratio: "2:3",
+          output_format: "png",
+          output_quality: 90
+        }
+      })
     })
 
-  } catch (error) {
-    console.error(`[generate-hero-image] Error in webhook handler:`, error)
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Replicate API error: ${response.status} ${errorText}`)
+    }
 
-    // Mark job as failed
+    const prediction = await response.json()
+    console.log(`[generate-hero-image] Prediction created: ${prediction.id}`)
+
+    // Update job with replicate_id
+    await supabase
+      .from('generation_jobs')
+      .update({ replicate_id: prediction.id })
+      .eq('id', job.id)
+
+    // Poll for completion (max 60 seconds)
+    const result = await pollForCompletion(prediction.id)
+
+    if (result.status === 'succeeded') {
+      // Get the image URL
+      const imageUrl = result.output?.[0]
+      if (!imageUrl) {
+        throw new Error('No image URL in output')
+      }
+
+      console.log(`[generate-hero-image] Downloading from: ${imageUrl}`)
+
+      // Download the image
+      const imageResponse = await fetch(imageUrl)
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to download: ${imageResponse.status}`)
+      }
+      const imageBlob = await imageResponse.blob()
+
+      // Upload to Supabase Storage
+      const storagePath = `${job.combination_id}/${job.combination_id}.png`
+      const { error: uploadError } = await supabase
+        .storage
+        .from('hero-images')
+        .upload(storagePath, imageBlob, {
+          contentType: 'image/png',
+          upsert: true
+        })
+
+      if (uploadError) {
+        throw new Error(`Upload failed: ${uploadError.message}`)
+      }
+
+      // Get public URL
+      const { data: publicUrlData } = supabase
+        .storage
+        .from('hero-images')
+        .getPublicUrl(storagePath)
+
+      const publicUrl = publicUrlData.publicUrl
+      console.log(`[generate-hero-image] Uploaded to: ${publicUrl}`)
+
+      // Extract base combination_id (without _v# variant suffix) for FK constraint
+      // e.g., "FEMALE_CLEAR_COOL_DUSK_v5" -> "FEMALE_CLEAR_COOL_DUSK"
+      const baseCombinationId = job.combination_id.replace(/_v\d+$/, '')
+
+      // Insert into generated_images using base combination_id for FK
+      // but store full combination_id in image_url path for uniqueness
+      const { error: insertError } = await supabase
+        .from('generated_images')
+        .insert({
+          combination_id: baseCombinationId,
+          image_url: publicUrl,
+          prompt: job.prompt
+        })
+
+      // Skip duplicate key (23505) and FK constraint (23503) errors - image still uploaded successfully
+      if (insertError && insertError.code !== '23505' && insertError.code !== '23503') {
+        throw new Error(`Insert failed: ${insertError.message}`)
+      }
+
+      // Update job to COMPLETED
+      await supabase
+        .from('generation_jobs')
+        .update({
+          status: 'COMPLETED',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', job.id)
+
+      console.log(`[generate-hero-image] COMPLETED: ${job.combination_id}`)
+
+      return new Response(JSON.stringify({
+        success: true,
+        combination_id: job.combination_id,
+        image_url: publicUrl
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+    } else {
+      throw new Error(`Prediction failed: ${result.error || result.status}`)
+    }
+
+  } catch (jobError) {
+    console.error(`[generate-hero-image] Error:`, jobError)
+
     await supabase
       .from('generation_jobs')
       .update({
         status: 'FAILED',
-        error_message: error.message
+        error_message: jobError.message
       })
-      .eq('id', jobId)
+      .eq('id', job.id)
 
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 200, // Return 200 to acknowledge webhook
+    return new Response(JSON.stringify({
+      error: jobError.message,
+      job_id: job.id
+    }), {
+      status: 500,
       headers: { 'Content-Type': 'application/json' }
     })
   }
+}
+
+async function pollForCompletion(predictionId: string, maxWaitMs = 60000) {
+  const startTime = Date.now()
+  const pollInterval = 1000 // 1 second
+
+  while (Date.now() - startTime < maxWaitMs) {
+    const response = await fetch(
+      `https://api.replicate.com/v1/predictions/${predictionId}`,
+      {
+        headers: {
+          'Authorization': `Token ${REPLICATE_API_TOKEN}`
+        }
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Poll failed: ${response.status}`)
+    }
+
+    const prediction = await response.json()
+
+    if (prediction.status === 'succeeded' || prediction.status === 'failed') {
+      return prediction
+    }
+
+    // Wait before next poll
+    await new Promise(resolve => setTimeout(resolve, pollInterval))
+  }
+
+  throw new Error('Prediction timed out')
 }
