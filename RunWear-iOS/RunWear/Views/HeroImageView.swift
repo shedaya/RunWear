@@ -19,6 +19,7 @@ struct HeroImageView: View {
     var onLocationTapped: () -> Void = {}
     var onDateTapped: () -> Void = {}
     var onTimeTapped: () -> Void = {}
+    var onNowTapped: () -> Void = {}
 
     // State for crossfade
     @State private var showAIImage = false
@@ -207,7 +208,33 @@ struct HeroImageView: View {
                 .foregroundColor(.white)
                 .glassPill()
             }
+
+            // "Now" shortcut - only visible when viewing different time
+            if !isViewingNow {
+                Button(action: onNowTapped) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Now")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(Color(red: 0.3, green: 0.71, blue: 0.67)) // Teal #4DB6AC
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color(red: 0, green: 0.47, blue: 0.42).opacity(0.25)) // Teal bg
+                    .clipShape(Capsule())
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: isViewingNow)
+    }
+
+    // Check if viewing current date and hour
+    private var isViewingNow: Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        return calendar.isDateInToday(date) && hour == calendar.component(.hour, from: now)
     }
 
     // MARK: - Formatters

@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
                                     onSetGenderPreference = viewModel::setGenderPreference,
                                     onDateSelected = viewModel::selectDate,
                                     onTimeSelected = viewModel::selectHour,
+                                    onResetToNow = viewModel::resetToNow,
                                     onShopItem = { /* Handled in HeroMainScreen */ },
                                     onLocationSearch = viewModel::searchLocation,
                                     onLocationSelect = viewModel::selectManualLocation,

@@ -730,6 +730,36 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        /* Jump to Now shortcut */
+        .now-shortcut {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 4px;
+            padding: 8px 12px;
+            background: rgba(0, 121, 107, 0.25);
+            border-radius: 100px;
+            color: #4DB6AC;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .now-shortcut:hover {
+            background: rgba(0, 121, 107, 0.35);
+            transform: scale(1.02);
+        }
+
+        .now-shortcut:active {
+            transform: scale(0.98);
+        }
+
+        .now-shortcut svg {
+            width: 12px;
+            height: 12px;
+        }
+
         /* Temperature Display */
         .temp-display {
             margin-bottom: 8px;
@@ -3704,6 +3734,12 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             return d1.toDateString() === d2.toDateString();
         }
 
+        function isViewingNow() {
+            const now = new Date();
+            const selected = state.selectedDate;
+            return isSameDay(selected, now) && selected.getHours() === now.getHours();
+        }
+
         // ============ ACTIONS ============
         async function loadWeather() {
             state.loading = true;
@@ -4904,6 +4940,15 @@ Get your personalized running outfit at runwear.ai`;
                                 ${clockSvg}
                                 <span>${formatTime(state.selectedDate)}</span>
                             </div>
+                            ${!isViewingNow() ? `
+                            <div class="now-shortcut" onclick="event.stopPropagation(); resetToNow();">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                    <path d="M3 3v5h5"/>
+                                </svg>
+                                Now
+                            </div>
+                            ` : ''}
                         </div>
 
                         <!-- Temperature Display -->

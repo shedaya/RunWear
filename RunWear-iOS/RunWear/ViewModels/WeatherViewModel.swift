@@ -163,6 +163,13 @@ class WeatherViewModel: ObservableObject {
         Task { await loadHeroImage() }
     }
 
+    /// Reset to current date and time
+    func resetToNow() {
+        let now = Date()
+        let currentHour = Calendar.current.component(.hour, from: now)
+        updateSelectedTime(date: now, hour: currentHour)
+    }
+
     // MARK: - Private Methods
 
     private func updateSelectedWeatherSnapshot() {

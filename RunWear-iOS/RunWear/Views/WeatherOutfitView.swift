@@ -143,7 +143,8 @@ struct WeatherOutfitView: View {
             onShareTapped: shareOutfit,
             onLocationTapped: { withAnimation { showLocationPicker = true } },
             onDateTapped: { withAnimation { showDatePicker = true } },
-            onTimeTapped: { withAnimation { showTimePicker = true } }
+            onTimeTapped: { withAnimation { showTimePicker = true } },
+            onNowTapped: { viewModel.resetToNow() }
         )
     }
 

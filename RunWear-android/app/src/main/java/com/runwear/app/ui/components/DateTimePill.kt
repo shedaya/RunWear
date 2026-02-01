@@ -1,5 +1,10 @@
 package com.runwear.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarToday
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +38,7 @@ import java.time.format.DateTimeFormatter
 /**
  * Glass morphism date/time selector pill - PWA v2.9 style.
  * Shows current date and time as tappable segments.
+ * Includes "Now" shortcut when viewing a different time.
  *
  * PWA CSS reference:
  * - background: rgba(255, 255, 255, 0.12)
@@ -42,6 +49,7 @@ import java.time.format.DateTimeFormatter
  * @param dateTime The currently selected date/time
  * @param onDateClick Handler when date section is tapped
  * @param onTimeClick Handler when time section is tapped
+ * @param onNowClick Handler when "Now" shortcut is tapped (optional)
  * @param modifier Modifier for the pill
  */
 @Composable
@@ -49,10 +57,15 @@ fun DateTimePill(
     dateTime: LocalDateTime,
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
+    onNowClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val now = LocalDateTime.now()
     val isToday = dateTime.toLocalDate() == LocalDate.now()
     val isTomorrow = dateTime.toLocalDate() == LocalDate.now().plusDays(1)
+
+    // Check if viewing current time (same day and same hour)
+    val isViewingNow = isToday && dateTime.hour == now.hour
 
     val dateText = when {
         isToday -> "Today"
@@ -68,6 +81,9 @@ fun DateTimePill(
     val glassBorder = Color.White.copy(alpha = 0.15f)
     // PWA active section: rgba(255, 255, 255, 0.15) = 15% white
     val glassActiveSection = Color.White.copy(alpha = 0.15f)
+    // Teal accent for "Now" shortcut
+    val tealAccent = RunWearColors.Primary.copy(alpha = 0.25f)
+    val tealText = Color(0xFF4DB6AC)
 
     Surface(
         modifier = modifier,
@@ -136,6 +152,39 @@ fun DateTimePill(
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White.copy(alpha = 0.7f)
                     )
+                }
+            }
+
+            // "Now" shortcut - only visible when viewing different time
+            AnimatedVisibility(
+                visible = !isViewingNow && onNowClick != null,
+                enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                exit = fadeOut() + scaleOut(targetScale = 0.8f)
+            ) {
+                Surface(
+                    onClick = { onNowClick?.invoke() },
+                    shape = RoundedCornerShape(100.dp),
+                    color = tealAccent,
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Refresh,
+                            contentDescription = "Jump to now",
+                            tint = tealText,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "Now",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = tealText
+                        )
+                    }
                 }
             }
         }

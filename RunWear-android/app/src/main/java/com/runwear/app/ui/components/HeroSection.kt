@@ -81,6 +81,7 @@ fun HeroSection(
     scrollOffset: Float = 0f,
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
+    onNowClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onShareClick: () -> Unit,
@@ -235,10 +236,12 @@ fun HeroSection(
                 .padding(20.dp)
         ) {
             // Combined Date/Time Pill (PWA v2.9 frosted glass style)
+            // Shows "Now" shortcut when viewing different time
             DateTimePill(
                 dateTime = selectedDateTime,
                 onDateClick = onDateClick,
                 onTimeClick = onTimeClick,
+                onNowClick = onNowClick,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
