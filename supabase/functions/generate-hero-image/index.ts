@@ -140,22 +140,17 @@ async function processQueuedJobs() {
       const publicUrl = publicUrlData.publicUrl
       console.log(`[generate-hero-image] Uploaded to: ${publicUrl}`)
 
-      // Extract base combination_id (without _v# variant suffix) for FK constraint
-      // e.g., "FEMALE_CLEAR_COOL_DUSK_v5" -> "FEMALE_CLEAR_COOL_DUSK"
-      const baseCombinationId = job.combination_id.replace(/_v\d+$/, '')
-
-      // Insert into generated_images using base combination_id for FK
-      // but store full combination_id in image_url path for uniqueness
+      // Insert into generated_images with full combination_id (including variant)
       const { error: insertError } = await supabase
         .from('generated_images')
         .insert({
-          combination_id: baseCombinationId,
+          combination_id: job.combination_id,
           image_url: publicUrl,
           prompt: job.prompt
         })
 
-      // Skip duplicate key (23505) and FK constraint (23503) errors - image still uploaded successfully
-      if (insertError && insertError.code !== '23505' && insertError.code !== '23503') {
+      // Skip duplicate key errors (23505) - image already exists
+      if (insertError && insertError.code !== '23505') {
         throw new Error(`Insert failed: ${insertError.message}`)
       }
 
