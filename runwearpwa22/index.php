@@ -650,12 +650,23 @@
             flex-shrink: 0;
         }
 
+        /* Location button - constrain width to prevent overflow */
+        .hero-header > .glass-btn:first-child {
+            flex: 1;
+            min-width: 0; /* Allow flex item to shrink below content size */
+            max-width: calc(100vw - 160px); /* Leave room for share/settings buttons */
+        }
+
         /* Location button text overflow handling */
         .glass-btn span {
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            max-width: calc(100vw - 180px); /* Leave room for share/settings buttons */
+        }
+
+        /* Right-side buttons container - never shrink */
+        .hero-header > div:last-child {
+            flex-shrink: 0;
         }
 
         .glass-btn-icon {
