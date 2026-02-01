@@ -26,13 +26,15 @@ actor HeroImageService {
     ///   - feelsLikeTemp: Feels-like temperature in Fahrenheit
     ///   - hour: Hour of day (0-23)
     ///   - isWatch: Whether this is for watchOS (smaller image)
+    ///   - outfit: Optional outfit recommendation for dynamic prompt generation
     /// - Returns: HeroImageResult with image URL and fallback info
     func getHeroImage(
         gender: GenderPreference,
         weatherCode: Int,
         feelsLikeTemp: Double,
         hour: Int,
-        isWatch: Bool = false
+        isWatch: Bool = false,
+        outfit: OutfitRecommendation? = nil
     ) async -> HeroImageResult {
         // Convert to hero-specific types
         let heroGender = gender.forHeroImage()
@@ -59,7 +61,8 @@ actor HeroImageService {
         Task {
             await queueReplenishmentIfNeeded(
                 combination: combination,
-                result: result
+                result: result,
+                outfit: outfit
             )
         }
 
@@ -127,7 +130,8 @@ actor HeroImageService {
     /// Queues image generation if needed based on result
     private func queueReplenishmentIfNeeded(
         combination: HeroCombinationId,
-        result: HeroImageResult
+        result: HeroImageResult,
+        outfit: OutfitRecommendation? = nil
     ) async {
         // Check rate limit
         if let lastTime = lastQueueTime,
@@ -160,12 +164,12 @@ actor HeroImageService {
         }
 
         if shouldQueue {
-            await queueGeneration(for: combination)
+            await queueGeneration(for: combination, outfit: outfit)
         }
     }
 
     /// Queues a generation job
-    private func queueGeneration(for combination: HeroCombinationId) async {
+    private func queueGeneration(for combination: HeroCombinationId, outfit: OutfitRecommendation? = nil) async {
         // Find next variant number
         let variantNumber: Int
         do {
@@ -187,7 +191,7 @@ actor HeroImageService {
         )
 
         // Build prompt
-        let prompt = buildPrompt(for: fullCombination)
+        let prompt = buildPrompt(for: fullCombination, outfit: outfit)
 
         do {
             try await supabase.insertGenerationJob(
@@ -203,34 +207,69 @@ actor HeroImageService {
     }
 
     /// Builds a generation prompt for the combination
-    /// v3.12: Enhanced prompt with detailed outfit descriptions matching PWA format.
-    private func buildPrompt(for combination: HeroCombinationId) -> String {
+    /// v3.14: Uses actual outfit recommendation items instead of static descriptions.
+    /// Includes random backgrounds for variety per HERO_IMAGE_SPEC.md
+    private func buildPrompt(for combination: HeroCombinationId, outfit: OutfitRecommendation? = nil) -> String {
         let genderText = combination.gender == .MALE ? "male" : "female"
         let weatherText = combination.weather.rawValue.lowercased()
         let tempText = combination.temp.rawValue.lowercased().replacingOccurrences(of: "_", with: " ")
 
         let timeText: String
         switch combination.time {
-        case .DAWN: timeText = "early morning"
-        case .MIDDAY: timeText = "midday"
-        case .DUSK: timeText = "evening"
-        case .NIGHT: timeText = "night"
+        case .DAWN: timeText = "early morning golden hour"
+        case .MIDDAY: timeText = "bright midday"
+        case .DUSK: timeText = "evening golden hour"
+        case .NIGHT: timeText = "night with street lights"
         case .none: timeText = "midday"
         }
 
-        // Detailed outfit descriptions matching getOutfitRecommendation() logic
-        let outfitDescriptions: [HeroTempBracket: String] = [
-            .HOT: "lightweight breathable tank top, very short split running shorts, sunglasses, sweat-wicking headband",
-            .WARM: "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
-            .MILD: "fitted long sleeve moisture-wicking shirt, running shorts or light capris",
-            .COOL: "quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband",
-            .COLD: "thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter",
-            .FREEZING: "multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+        // Random backgrounds for variety
+        let backgrounds = [
+            "city street with buildings in background",
+            "urban park with trees",
+            "waterfront boardwalk",
+            "scenic trail with nature",
+            "downtown area with shops",
+            "bridge with city skyline",
+            "tree-lined avenue"
         ]
+        let background = backgrounds.randomElement() ?? backgrounds[0]
 
-        let outfitDesc = outfitDescriptions[combination.temp] ?? outfitDescriptions[.MILD]!
+        // Mood based on conditions
+        let mood: String
+        switch combination.weather {
+        case .RAIN: mood = "determined, pushing through the rain"
+        case .SNOW: mood = "resilient, winter warrior"
+        default:
+            switch combination.temp {
+            case .HOT: mood = "energetic, summer vibes"
+            case .FREEZING: mood = "tough, braving the cold"
+            default: mood = "focused, confident stride"
+            }
+        }
 
-        return "Professional running photography, \(genderText) runner in motion, \(weatherText) weather, \(tempText) temperature, \(timeText) lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus. OUTFIT: \(outfitDesc)"
+        // v3.14: Build outfit description from actual recommendation items if available
+        let outfitDesc: String
+        if let outfit = outfit {
+            // Filter out non-visible items (sunscreen, reflective gear)
+            let visibleItems = outfit.allItems.filter { item in
+                !item.name.contains("Sunscreen") && !item.name.contains("Reflective")
+            }
+            outfitDesc = visibleItems.map { $0.name.lowercased() }.joined(separator: ", ")
+        } else {
+            // Fallback to static descriptions if no outfit provided
+            let outfitDescriptions: [HeroTempBracket: String] = [
+                .HOT: "lightweight breathable tank top, very short split running shorts, sunglasses",
+                .WARM: "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
+                .MILD: "fitted long sleeve moisture-wicking shirt, running shorts or light capris",
+                .COOL: "quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband",
+                .COLD: "thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter",
+                .FREEZING: "multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+            ]
+            outfitDesc = outfitDescriptions[combination.temp] ?? outfitDescriptions[.MILD]!
+        }
+
+        return "A \(genderText) runner in their 30s running mid-stride along a \(background). They are wearing \(outfitDesc) appropriate for \(weatherText) \(tempText) weather. Time of day: \(timeText). Professional running photography, dynamic action shot, high quality, sharp focus. MOOD: \(mood)"
     }
 }
 
@@ -241,14 +280,16 @@ extension HeroImageService {
     func getHeroImage(
         gender: GenderPreference,
         weather: HourlyWeatherSnapshot,
-        isWatch: Bool = false
+        isWatch: Bool = false,
+        outfit: OutfitRecommendation? = nil
     ) async -> HeroImageResult {
         await getHeroImage(
             gender: gender,
             weatherCode: weather.weatherCode,
             feelsLikeTemp: weather.feelsLikeFahrenheit,
             hour: weather.hour,
-            isWatch: isWatch
+            isWatch: isWatch,
+            outfit: outfit
         )
     }
 }

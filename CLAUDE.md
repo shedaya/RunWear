@@ -64,23 +64,26 @@ Queries Supabase `generated_images` table with cascading fallback:
 
 If all queries fail, falls back to Unsplash API.
 
-### Generation Prompts (v3.12)
+### Generation Prompts (v3.14)
 
-Enhanced prompts now include detailed outfit descriptions matching the actual outfit recommendations:
+Prompts now use the **actual outfit recommendation items** instead of static descriptions per temperature bracket. This ensures the generated image matches what the app is suggesting to wear.
 
 ```
 Professional running photography, {gender} runner in motion, {weather} weather,
 {temp} temperature, {time} lighting, urban trail or park setting, dynamic action shot,
-high quality, sharp focus. OUTFIT: {detailed outfit description}
+high quality, sharp focus. OUTFIT: {dynamic outfit from recommendation}
 ```
 
-Outfit descriptions by temperature:
-- **HOT**: tank top, split shorts, sunglasses, headband
-- **WARM**: short sleeve tech shirt, running shorts, mesh cap
-- **MILD**: long sleeve moisture-wicking shirt, shorts or capris
-- **COOL**: quarter-zip pullover, tights, thin gloves, ear headband
-- **COLD**: thermal base layer, insulated jacket, thermal tights, beanie, gloves, gaiter
-- **FREEZING**: multiple thermal layers, heavy jacket with hood, thick tights, balaclava, mittens, visible breath
+**v3.14 Change**: Previously used static outfit descriptions per temp bracket (e.g., COOL always = "quarter-zip, tights"). Now builds the description from actual `OutfitRecommendation` items, which consider:
+- Temperature (adjusted for comfort preference)
+- Wind conditions (adds windbreaker, gloves earlier)
+- Rain (adds rain jacket)
+- Humidity (affects bottom choice)
+- UV index (sunglasses)
+
+Example: 55°F rainy now generates "light long sleeve, rain jacket, running shorts" instead of generic "quarter-zip, tights".
+
+Non-visible items (sunscreen, reflective gear) are filtered out of the prompt.
 
 ### Demand-Driven Replenishment (v3.11)
 

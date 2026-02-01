@@ -3523,17 +3523,17 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             if (!selectedImage) {
                 console.log('[Hero] No AI images found, queueing replenishment');
                 if (shouldQueueReplenishment()) {
-                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay, state.outfit);
                 }
             } else if (foundViaFallback) {
                 console.log('[Hero] Found via fallback, queueing for requested gender');
                 if (shouldQueueReplenishment()) {
-                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay, state.outfit);
                 }
             } else if (exactMatchCount < MIN_VARIANTS) {
                 console.log(`[Hero] Only ${exactMatchCount} variants, queueing more (target: ${MIN_VARIANTS})`);
                 if (shouldQueueReplenishment()) {
-                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay);
+                    queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay, state.outfit);
                 }
             } else {
                 console.log(`[Hero] Have ${exactMatchCount} variants, no replenishment needed`);
@@ -3541,7 +3541,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         }
 
         // Queue a hero image generation job with auto-incrementing variant number
-        async function queueHeroImageGeneration(gender, weather, temp, time) {
+        async function queueHeroImageGeneration(gender, weather, temp, time, outfit) {
             const baseCombo = `${gender}_${weather}_${temp}_${time}`;
 
             try {
@@ -3594,7 +3594,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     },
                     body: JSON.stringify({
                         combination_id: combinationId,
-                        prompt: buildHeroPrompt(gender, weather, temp, time),
+                        prompt: buildHeroPrompt(gender, weather, temp, time, outfit),
                         status: 'QUEUED'
                     })
                 });
@@ -3611,25 +3611,61 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         }
 
         // Build prompt for hero image generation
-        function buildHeroPrompt(gender, weather, temp, time) {
+        // v3.14: Uses actual outfit recommendation items instead of static descriptions
+        // Includes random backgrounds for variety per HERO_IMAGE_SPEC.md
+        function buildHeroPrompt(gender, weather, temp, time, outfit) {
             const genderDesc = gender === 'MALE' ? 'male' : gender === 'FEMALE' ? 'female' : 'person';
             const weatherDesc = weather.toLowerCase();
             const tempDesc = temp.toLowerCase().replace('_', ' ');
-            const timeDesc = time === 'DAWN' ? 'early morning' : time === 'MIDDAY' ? 'midday' : time === 'DUSK' ? 'evening' : 'night';
+            const timeDesc = {
+                DAWN: 'early morning golden hour',
+                MIDDAY: 'bright midday',
+                DUSK: 'evening golden hour',
+                NIGHT: 'night with street lights'
+            }[time] || 'midday';
 
-            // Detailed outfit descriptions matching getOutfitRecommendation() logic
-            const outfitDescriptions = {
-                HOT: 'lightweight breathable tank top, very short split running shorts, sunglasses, sweat-wicking headband',
-                WARM: 'breathable short sleeve tech shirt, standard running shorts, light mesh running cap',
-                MILD: 'fitted long sleeve moisture-wicking shirt, running shorts or light capris',
-                COOL: 'quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband',
-                COLD: 'thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter',
-                FREEZING: 'multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor'
-            };
+            // Random backgrounds for variety
+            const backgrounds = [
+                'city street with buildings in background',
+                'urban park with trees',
+                'waterfront boardwalk',
+                'scenic trail with nature',
+                'downtown area with shops',
+                'bridge with city skyline',
+                'tree-lined avenue'
+            ];
+            const background = backgrounds[Math.floor(Math.random() * backgrounds.length)];
 
-            const outfit = outfitDescriptions[temp] || outfitDescriptions.MILD;
+            // Mood based on conditions
+            let mood;
+            if (weather === 'RAIN') mood = 'determined, pushing through the rain';
+            else if (weather === 'SNOW') mood = 'resilient, winter warrior';
+            else if (temp === 'HOT') mood = 'energetic, summer vibes';
+            else if (temp === 'FREEZING') mood = 'tough, braving the cold';
+            else mood = 'focused, confident stride';
 
-            return `Professional running photography, ${genderDesc} runner in motion, ${weatherDesc} weather, ${tempDesc} temperature, ${timeDesc} lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus. OUTFIT: ${outfit}`;
+            // v3.14: Build outfit description from actual recommendation items
+            let outfitDesc;
+            if (outfit && outfit.items && outfit.items.length > 0) {
+                // Filter out non-visible items (sunscreen, reflective gear)
+                const visibleItems = outfit.items.filter(item =>
+                    item.name !== 'Sunscreen (SPF 30+)' && item.name !== 'Reflective Gear'
+                );
+                outfitDesc = visibleItems.map(item => item.name.toLowerCase()).join(', ');
+            } else {
+                // Fallback to static descriptions if no outfit provided
+                const outfitDescriptions = {
+                    HOT: 'lightweight breathable tank top, very short split running shorts, sunglasses',
+                    WARM: 'breathable short sleeve tech shirt, standard running shorts, light mesh running cap',
+                    MILD: 'fitted long sleeve moisture-wicking shirt, running shorts or light capris',
+                    COOL: 'quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband',
+                    COLD: 'thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter',
+                    FREEZING: 'multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor'
+                };
+                outfitDesc = outfitDescriptions[temp] || outfitDescriptions.MILD;
+            }
+
+            return `A ${genderDesc} runner in their 30s running mid-stride along a ${background}. They are wearing ${outfitDesc} appropriate for ${weatherDesc} ${tempDesc} weather. Time of day: ${timeDesc}. Professional running photography, dynamic action shot, high quality, sharp focus. MOOD: ${mood}`;
         }
 
         // Update hero image in DOM with crossfade

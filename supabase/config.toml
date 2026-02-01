@@ -1,0 +1,17 @@
+# Supabase configuration for RunWear
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
+
+[functions]
+[functions.generate-hero-image]
+enabled = true

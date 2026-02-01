@@ -297,7 +297,8 @@ class HeroImageRepository @Inject constructor() {
 
     /**
      * Build a prompt for AI image generation.
-     * v3.12: Enhanced prompt with detailed outfit descriptions matching PWA format.
+     * v3.14: Uses actual outfit recommendation items instead of static descriptions.
+     * Includes random backgrounds for variety per HERO_IMAGE_SPEC.md
      */
     private fun buildPrompt(
         combination: OutfitCombination,
@@ -313,25 +314,49 @@ class HeroImageRepository @Inject constructor() {
         val weatherDesc = heroWeather.name.lowercase()
         val tempDesc = combination.tempBracket.name.lowercase().replace("_", " ")
         val timeDesc = when (combination.timeOfDay) {
-            TimeOfDay.DAWN -> "early morning"
-            TimeOfDay.MIDDAY -> "midday"
-            TimeOfDay.DUSK -> "evening"
-            TimeOfDay.NIGHT -> "night"
+            TimeOfDay.DAWN -> "early morning golden hour"
+            TimeOfDay.MIDDAY -> "bright midday"
+            TimeOfDay.DUSK -> "evening golden hour"
+            TimeOfDay.NIGHT -> "night with street lights"
         }
 
-        // Detailed outfit descriptions matching getOutfitRecommendation() logic
-        val outfitDescriptions = mapOf(
-            TempBracket.HOT to "lightweight breathable tank top, very short split running shorts, sunglasses, sweat-wicking headband",
-            TempBracket.WARM to "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
-            TempBracket.MILD to "fitted long sleeve moisture-wicking shirt, running shorts or light capris",
-            TempBracket.COOL to "quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband",
-            TempBracket.COLD to "thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter",
-            TempBracket.FREEZING to "multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+        // Random backgrounds for variety
+        val backgrounds = listOf(
+            "city street with buildings in background",
+            "urban park with trees",
+            "waterfront boardwalk",
+            "scenic trail with nature",
+            "downtown area with shops",
+            "bridge with city skyline",
+            "tree-lined avenue"
         )
+        val background = backgrounds.random()
 
-        val outfitDesc = outfitDescriptions[combination.tempBracket] ?: outfitDescriptions[TempBracket.MILD]
+        // Mood based on conditions
+        val mood = when {
+            heroWeather == HeroWeatherCondition.RAIN -> "determined, pushing through the rain"
+            heroWeather == HeroWeatherCondition.SNOW -> "resilient, winter warrior"
+            combination.tempBracket == TempBracket.HOT -> "energetic, summer vibes"
+            combination.tempBracket == TempBracket.FREEZING -> "tough, braving the cold"
+            else -> "focused, confident stride"
+        }
 
-        return "Professional running photography, $genderDesc runner in motion, $weatherDesc weather, $tempDesc temperature, $timeDesc lighting, urban trail or park setting, dynamic action shot, high quality, sharp focus. OUTFIT: $outfitDesc"
+        // v3.14: Build outfit description from actual recommendation items
+        val outfitParts = mutableListOf<String>()
+        outfitParts.add(outfit.topBase.displayName.lowercase())
+        outfit.topOuter?.let { outfitParts.add(it.displayName.lowercase()) }
+        outfitParts.add(outfit.bottom.displayName.lowercase())
+        outfit.head?.let { outfitParts.add(it.displayName.lowercase()) }
+        outfit.hands?.let { outfitParts.add(it.displayName.lowercase()) }
+        outfit.accessories.filter { it.name != "SUNSCREEN" && it.name != "REFLECTIVE_GEAR" }
+            .forEach { outfitParts.add(it.displayName.lowercase()) }
+
+        val outfitDesc = outfitParts.joinToString(", ")
+
+        return "A $genderDesc runner in their 30s running mid-stride along a $background. " +
+               "They are wearing $outfitDesc appropriate for $weatherDesc $tempDesc weather. " +
+               "Time of day: $timeDesc. Professional running photography, dynamic action shot, " +
+               "high quality, sharp focus. MOOD: $mood"
     }
 
     /**
