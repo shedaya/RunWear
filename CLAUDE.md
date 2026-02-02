@@ -219,6 +219,23 @@ Head: running-cap, visor, headband, light-beanie, thermal-beanie, balaclava
 Hands: light-gloves, thermal-gloves, mittens
 Accessories: sunglasses, reflective-gear, neck-gaiter, sunscreen
 
+### Android Implementation
+
+Located in `RunWear-android/shared/src/main/java/com/runwear/shared/domain/service/ClothingThumbnailService.kt`:
+- Maps `ClothingItem` enum to thumbnail keys
+- `getThumbnailUrl(item, gender)` returns Supabase Storage URL
+- Used in `OutfitCard.kt` with Coil `AsyncImage`
+- Emoji icon shown as fallback while loading or on error
+
+### iOS Implementation
+
+Located in `RunWear-iOS/RunWear/Services/ClothingThumbnailService.swift`:
+- Maps item names (strings) to thumbnail keys
+- `getThumbnailURL(for:gender:)` returns Supabase Storage URL
+- Used in `DarkClothingItemCard` with SwiftUI `AsyncImage`
+- SF Symbol icon shown as fallback while loading or on error
+- Cards now link directly to Amazon (no modal) - PWA v3.12 pattern
+
 ## Direct Affiliate Links (v3.12)
 
 Clicking an outfit item now opens the Amazon affiliate link directly instead of showing a detail modal. This reduces friction for the user.

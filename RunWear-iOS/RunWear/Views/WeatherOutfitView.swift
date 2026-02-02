@@ -333,16 +333,65 @@ struct DarkClothingItemCard: View {
     var category: String? = nil
     var gender: GenderPreference = .unisex
 
+    private var thumbnailURL: URL? {
+        ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: gender)
+    }
+
     var body: some View {
+        // Direct link to Amazon affiliate (no modal) - PWA v3.12 pattern
+        if let url = item.affiliateURL(for: gender) {
+            Link(destination: url) {
+                cardContent
+            }
+            .buttonStyle(PlainButtonStyle())
+        } else {
+            cardContent
+        }
+    }
+
+    private var cardContent: some View {
         HStack(spacing: 16) {
-            // Icon
-            Text(item.icon)
-                .font(.system(size: 28))
-                .frame(width: 56, height: 56)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
-                )
+            // Thumbnail container - 56x56, border-radius 12 per PWA v3.12
+            ZStack {
+                // Background
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.1))
+
+                // Emoji icon (shown as fallback)
+                if thumbnailURL == nil {
+                    Image(systemName: item.icon)
+                        .font(.system(size: 28))
+                        .foregroundColor(.white)
+                }
+
+                // AI-generated thumbnail
+                if let url = thumbnailURL {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            // Loading state - show icon
+                            Image(systemName: item.icon)
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        case .failure:
+                            // Error state - show icon
+                            Image(systemName: item.icon)
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        @unknown default:
+                            Image(systemName: item.icon)
+                                .font(.system(size: 28))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+            }
+            .frame(width: 56, height: 56)
 
             // Info
             VStack(alignment: .leading, spacing: 4) {
@@ -362,17 +411,11 @@ struct DarkClothingItemCard: View {
 
             Spacer()
 
-            // Shop button
-            if let url = item.affiliateURL(for: gender) {
-                Link(destination: url) {
-                    Image(systemName: "cart.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(AppTheme.primaryColor)
-                        .cornerRadius(12)
-                }
-            }
+            // External link icon (matching PWA v3.12)
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.5))
+                .frame(width: 44, height: 44)
         }
         .padding(12)
         .background(

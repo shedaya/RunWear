@@ -270,13 +270,14 @@ Get your personalized running outfit at runwear.app
                             }
                         }
 
-                        // Outfit Cards
+                        // Outfit Cards with AI-generated thumbnails
                         val items = uiState.outfit.allItems
                         items(items.size) { index ->
                             OutfitCard(
                                 item = items[index],
                                 onClick = { selectedShopItem = items[index] },
                                 animationDelay = index * 50,
+                                gender = uiState.genderPreference,
                                 modifier = Modifier.padding(
                                     horizontal = 20.dp,
                                     vertical = 5.dp
@@ -301,7 +302,7 @@ Get your personalized running outfit at runwear.app
                         // Version footer
                         item {
                             Text(
-                                text = "v2.9",
+                                text = "v3.12",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = RunWearColors.TextMuted.copy(alpha = 0.5f),
                                 modifier = Modifier

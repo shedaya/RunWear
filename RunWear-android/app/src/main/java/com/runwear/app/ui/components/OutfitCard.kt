@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -40,15 +41,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
+import com.runwear.shared.domain.model.GenderPreference
+import com.runwear.shared.domain.service.ClothingThumbnailService
 import kotlinx.coroutines.delay
 
 /**
@@ -68,9 +75,17 @@ fun OutfitCard(
     item: ClothingItem,
     onClick: () -> Unit,
     animationDelay: Int = 0, // Stagger delay in ms (index * 50)
+    gender: GenderPreference = GenderPreference.UNISEX,
     modifier: Modifier = Modifier
 ) {
     val categoryColor = getCategoryColor(item.category)
+    val context = LocalContext.current
+    val thumbnailUrl = remember(item, gender) {
+        ClothingThumbnailService.getThumbnailUrl(item, gender)
+    }
+
+    // Track thumbnail load state for fallback
+    var thumbnailLoaded by remember { mutableStateOf(false) }
 
     // Staggered animation state
     var visible by remember { mutableStateOf(false) }
@@ -108,7 +123,7 @@ fun OutfitCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Emoji Icon - 48dp, border-radius 14dp per PWA v2.9
+            // Thumbnail container - 48dp, border-radius 14dp per PWA v3.12
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -116,10 +131,30 @@ fun OutfitCard(
                     .background(categoryColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = item.icon,
-                    style = TextStyle(fontSize = 24.sp)
-                )
+                // Emoji Icon (shown as fallback or while loading)
+                if (!thumbnailLoaded) {
+                    Text(
+                        text = item.icon,
+                        style = TextStyle(fontSize = 24.sp)
+                    )
+                }
+
+                // AI-generated thumbnail
+                if (thumbnailUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(thumbnailUrl)
+                            .crossfade(300)
+                            .build(),
+                        contentDescription = item.displayName,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .graphicsLayer { alpha = if (thumbnailLoaded) 1f else 0f },
+                        onSuccess = { thumbnailLoaded = true },
+                        onError = { thumbnailLoaded = false }
+                    )
+                }
             }
 
             // Text content
@@ -142,10 +177,10 @@ fun OutfitCard(
                 )
             }
 
-            // Chevron - 18dp per PWA
+            // External link icon (matching PWA v3.12 - direct affiliate link)
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "View details",
+                contentDescription = "Shop item",
                 tint = RunWearColors.TextMuted,
                 modifier = Modifier.size(18.dp)
             )
@@ -183,12 +218,14 @@ val ClothingCategory.displayName: String
  *
  * @param outfit The outfit recommendation containing items
  * @param onItemClick Handler when an item is clicked
+ * @param gender Gender preference for thumbnail selection
  * @param modifier Modifier for the section
  */
 @Composable
 fun OutfitSection(
     outfit: com.runwear.shared.domain.model.OutfitRecommendation?,
     onItemClick: (ClothingItem) -> Unit,
+    gender: GenderPreference = GenderPreference.UNISEX,
     modifier: Modifier = Modifier
 ) {
     val items = outfit?.allItems ?: emptyList()
@@ -210,7 +247,8 @@ fun OutfitSection(
             OutfitCard(
                 item = item,
                 onClick = { onItemClick(item) },
-                animationDelay = index * 50 // 50ms stagger
+                animationDelay = index * 50, // 50ms stagger
+                gender = gender
             )
         }
     }
