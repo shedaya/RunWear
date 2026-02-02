@@ -159,5 +159,91 @@ RunWear-iOS/
 - 44pt minimum touch targets
 - Watch Connectivity syncs preferences with iOS
 
+## Clothing Thumbnails System (v3.12)
+
+AI-generated clothing item thumbnails displayed in outfit recommendations.
+
+### Architecture
+- **52 thumbnails total**: 26 clothing items × 2 genders (male/female)
+- **Storage**: Supabase Storage bucket `clothing-thumbnails`
+- **Format**: WebP, 1:1 aspect ratio, ~90% quality
+- **Style**: Dark gray/charcoal clothing on pure black background, professional product photography
+
+### URL Pattern
+```
+https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/{item-key}-{gender}.webp
+```
+
+Example: `tank-top-male.webp`, `thermal-tights-female.webp`
+
+### PWA Integration (index.php)
+
+```javascript
+const CLOTHING_THUMBNAILS_URL = 'https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails';
+
+const CLOTHING_THUMBNAIL_KEYS = {
+    TANK_TOP: 'tank-top',
+    SHORT_SLEEVE: 'short-sleeve',
+    // ... 26 items mapped
+};
+
+function getClothingThumbnail(itemKey) {
+    const thumbnailKey = CLOTHING_THUMBNAIL_KEYS[itemKey];
+    if (!thumbnailKey) return null;
+    const gender = state.gender === 'female' ? 'female' : 'male';
+    return `${CLOTHING_THUMBNAILS_URL}/${thumbnailKey}-${gender}.webp`;
+}
+```
+
+### Generation Script
+
+Located at `runwear-thumbnails/generate-thumbnails.js`:
+- Uses Replicate Flux Dev model (~$0.025/image)
+- Uploads directly to Supabase Storage
+- Supports `--gender=male` or `--gender=female` filter
+- Rate limited (12s between generations)
+
+```bash
+cd runwear-thumbnails
+npm install
+# Create .env with REPLICATE_API_TOKEN and SUPABASE_SERVICE_KEY
+npm run generate
+npm run generate -- --gender=female  # Generate one gender only
+```
+
+### Thumbnail Items
+Tops: tank-top, short-sleeve, long-sleeve-light, thermal-long-sleeve
+Outer: light-vest, light-jacket, insulated-jacket, rain-jacket, windbreaker
+Bottoms: short-shorts, running-shorts, light-tights, thermal-tights
+Head: running-cap, visor, headband, light-beanie, thermal-beanie, balaclava
+Hands: light-gloves, thermal-gloves, mittens
+Accessories: sunglasses, reflective-gear, neck-gaiter, sunscreen
+
+## Direct Affiliate Links (v3.12)
+
+Clicking an outfit item now opens the Amazon affiliate link directly instead of showing a detail modal. This reduces friction for the user.
+
+- Removed: `showItemModal()` function and modal HTML
+- Changed: Outfit card `onclick` now calls `shopItem()` directly
+- Added: External link icon (arrow) on outfit cards to indicate clickable action
+
+## Location Race Condition Fix (v3.12)
+
+Fixed bug where manually selecting a location showed correct location name but weather/outfit data remained from original location.
+
+**Problem**: Multiple overlapping `loadWeather()` calls could complete out of order, with stale responses overwriting fresh data.
+
+**Solution**: Request ID counter pattern:
+```javascript
+let weatherRequestId = 0;
+
+async function loadWeather() {
+    const thisRequestId = ++weatherRequestId;
+    // ... async operations ...
+    if (thisRequestId !== weatherRequestId) return; // Discard stale
+    // ... update state ...
+}
+```
+
 ## Next Steps
 - UI/UX improvements (planning in progress)
