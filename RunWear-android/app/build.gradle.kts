@@ -30,11 +30,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.runwear.app"
+        applicationId = "com.runwear.wear"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -66,9 +66,6 @@ android {
 dependencies {
     // Shared module
     implementation(project(":shared"))
-
-    // Embed Wear OS app in phone app bundle
-    wearApp(project(":wear"))
     
     // Core Android
     implementation(libs.androidx.core.ktx)
