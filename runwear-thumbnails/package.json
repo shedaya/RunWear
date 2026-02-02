@@ -1,0 +1,14 @@
+{
+  "name": "runwear-thumbnails",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "generate": "node --env-file=.env generate-thumbnails.js",
+    "generate:male": "node --env-file=.env generate-thumbnails.js --gender=male",
+    "generate:female": "node --env-file=.env generate-thumbnails.js --gender=female"
+  },
+  "dependencies": {
+    "replicate": "^0.25.0",
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}

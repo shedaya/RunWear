@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- RunWear PWA v3.11 -->
+<!-- RunWear PWA v3.12 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -917,6 +917,43 @@
         .outfit-icon.cat-bottom { background: rgba(21, 101, 192, 0.15); color: var(--cat-bottom); }
         .outfit-icon.cat-hands { background: rgba(94, 53, 177, 0.15); color: var(--cat-hands); }
         .outfit-icon.cat-accessories { background: rgba(230, 81, 0, 0.15); color: var(--cat-accessories); }
+
+        /* AI-generated clothing thumbnails */
+        .outfit-thumb {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            object-fit: cover;
+            flex-shrink: 0;
+            background: var(--bg-card);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .outfit-thumb.loaded {
+            opacity: 1;
+        }
+
+        /* Container for thumbnail with icon fallback */
+        .outfit-thumb-container {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+        }
+
+        .outfit-thumb-container .outfit-icon {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .outfit-thumb-container .outfit-thumb {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
 
         .outfit-info {
             flex: 1;
@@ -1872,7 +1909,39 @@
         .shop-item-icon {
             font-size: 24px;
             width: 40px;
+            height: 40px;
             text-align: center;
+            line-height: 40px;
+        }
+
+        .shop-item-thumb-container {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            flex-shrink: 0;
+        }
+
+        .shop-item-thumb-container .shop-item-icon {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .shop-item-thumb {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .shop-item-thumb.loaded {
+            opacity: 1;
         }
 
         .shop-item-info { flex: 1; }
@@ -2592,6 +2661,9 @@
             locationSearchQuery: ''
         };
 
+        // Request ID to prevent race conditions when multiple loadWeather() calls overlap
+        let weatherRequestId = 0;
+
         // ============ PLATFORM DETECTION ============
         function isSafari() {
             const ua = navigator.userAgent;
@@ -2777,43 +2849,97 @@
         // ============ CLOTHING DATA ============
         const ClothingItems = {
             // Tops
-            TANK_TOP: { name: 'Tank Top / Singlet', desc: 'Lightweight, maximum airflow', icon: '👕', category: 'top', search: 'running tank top moisture wicking' },
-            SHORT_SLEEVE: { name: 'Short Sleeve Shirt', desc: 'Moisture-wicking technical fabric', icon: '👕', category: 'top', search: 'running short sleeve shirt dri-fit' },
-            LONG_SLEEVE_LIGHT: { name: 'Light Long Sleeve', desc: 'Thin, breathable long sleeve', icon: '👕', category: 'top', search: 'running long sleeve lightweight' },
-            LONG_SLEEVE_THERMAL: { name: 'Thermal Long Sleeve', desc: 'Insulated base layer for cold', icon: '🧥', category: 'top', search: 'running thermal base layer' },
-            
+            TANK_TOP: { key: 'TANK_TOP', name: 'Tank Top / Singlet', desc: 'Lightweight, maximum airflow', icon: '👕', category: 'top', search: 'running tank top moisture wicking' },
+            SHORT_SLEEVE: { key: 'SHORT_SLEEVE', name: 'Short Sleeve Shirt', desc: 'Moisture-wicking technical fabric', icon: '👕', category: 'top', search: 'running short sleeve shirt dri-fit' },
+            LONG_SLEEVE_LIGHT: { key: 'LONG_SLEEVE_LIGHT', name: 'Light Long Sleeve', desc: 'Thin, breathable long sleeve', icon: '👕', category: 'top', search: 'running long sleeve lightweight' },
+            LONG_SLEEVE_THERMAL: { key: 'LONG_SLEEVE_THERMAL', name: 'Thermal Long Sleeve', desc: 'Insulated base layer for cold', icon: '🧥', category: 'top', search: 'running thermal base layer' },
+
             // Outer layers
-            LIGHT_VEST: { name: 'Light Vest', desc: 'Wind protection without overheating', icon: '🦺', category: 'top', search: 'running vest lightweight' },
-            WINDBREAKER: { name: 'Windbreaker', desc: 'Lightweight wind and rain protection', icon: '🧥', category: 'top', search: 'running windbreaker jacket' },
-            LIGHT_JACKET: { name: 'Light Running Jacket', desc: 'Breathable jacket for cool temps', icon: '🧥', category: 'top', search: 'running jacket lightweight' },
-            RAIN_JACKET: { name: 'Rain Jacket', desc: 'Waterproof, breathable shell', icon: '🧥', category: 'top', search: 'running rain jacket waterproof' },
-            INSULATED_JACKET: { name: 'Insulated Jacket', desc: 'Warm jacket for cold conditions', icon: '🧥', category: 'top', search: 'running winter jacket insulated' },
-            
+            LIGHT_VEST: { key: 'LIGHT_VEST', name: 'Light Vest', desc: 'Wind protection without overheating', icon: '🦺', category: 'top', search: 'running vest lightweight' },
+            WINDBREAKER: { key: 'WINDBREAKER', name: 'Windbreaker', desc: 'Lightweight wind and rain protection', icon: '🧥', category: 'top', search: 'running windbreaker jacket' },
+            LIGHT_JACKET: { key: 'LIGHT_JACKET', name: 'Light Running Jacket', desc: 'Breathable jacket for cool temps', icon: '🧥', category: 'top', search: 'running jacket lightweight' },
+            RAIN_JACKET: { key: 'RAIN_JACKET', name: 'Rain Jacket', desc: 'Waterproof, breathable shell', icon: '🧥', category: 'top', search: 'running rain jacket waterproof' },
+            INSULATED_JACKET: { key: 'INSULATED_JACKET', name: 'Insulated Jacket', desc: 'Warm jacket for cold conditions', icon: '🧥', category: 'top', search: 'running winter jacket insulated' },
+
             // Bottoms
-            SHORT_SHORTS: { name: 'Short Shorts (3")', desc: 'Maximum breathability', icon: '🩳', category: 'bottom', search: 'running shorts 3 inch' },
-            SHORTS: { name: 'Running Shorts (5-7")', desc: 'Standard running shorts', icon: '🩳', category: 'bottom', search: 'running shorts 5 inch' },
-            LIGHT_TIGHTS: { name: 'Light Tights', desc: 'Full leg coverage, breathable', icon: '👖', category: 'bottom', search: 'running tights lightweight' },
-            THERMAL_TIGHTS: { name: 'Thermal Tights', desc: 'Insulated for cold weather', icon: '👖', category: 'bottom', search: 'running tights thermal winter' },
-            
+            SHORT_SHORTS: { key: 'SHORT_SHORTS', name: 'Short Shorts (3")', desc: 'Maximum breathability', icon: '🩳', category: 'bottom', search: 'running shorts 3 inch' },
+            SHORTS: { key: 'SHORTS', name: 'Running Shorts (5-7")', desc: 'Standard running shorts', icon: '🩳', category: 'bottom', search: 'running shorts 5 inch' },
+            LIGHT_TIGHTS: { key: 'LIGHT_TIGHTS', name: 'Light Tights', desc: 'Full leg coverage, breathable', icon: '👖', category: 'bottom', search: 'running tights lightweight' },
+            THERMAL_TIGHTS: { key: 'THERMAL_TIGHTS', name: 'Thermal Tights', desc: 'Insulated for cold weather', icon: '👖', category: 'bottom', search: 'running tights thermal winter' },
+
             // Head
-            VISOR: { name: 'Visor', desc: 'Sun protection, max ventilation', icon: '🧢', category: 'head', search: 'running visor' },
-            BASEBALL_CAP: { name: 'Running Cap', desc: 'Sun and light rain protection', icon: '🧢', category: 'head', search: 'running cap lightweight' },
-            HEADBAND: { name: 'Ear Warmer / Headband', desc: 'Keeps ears warm', icon: '🎧', category: 'head', search: 'running ear warmer headband' },
-            LIGHT_BEANIE: { name: 'Light Beanie', desc: 'Thin beanie for moderate cold', icon: '🧢', category: 'head', search: 'running beanie lightweight' },
-            THERMAL_BEANIE: { name: 'Thermal Beanie', desc: 'Warm hat for very cold weather', icon: '🧢', category: 'head', search: 'running beanie thermal winter' },
-            BALACLAVA: { name: 'Balaclava / Face Mask', desc: 'Full face protection', icon: '🎭', category: 'head', search: 'running balaclava face mask' },
-            
+            VISOR: { key: 'VISOR', name: 'Visor', desc: 'Sun protection, max ventilation', icon: '🧢', category: 'head', search: 'running visor' },
+            BASEBALL_CAP: { key: 'BASEBALL_CAP', name: 'Running Cap', desc: 'Sun and light rain protection', icon: '🧢', category: 'head', search: 'running cap lightweight' },
+            HEADBAND: { key: 'HEADBAND', name: 'Ear Warmer / Headband', desc: 'Keeps ears warm', icon: '🎧', category: 'head', search: 'running ear warmer headband' },
+            LIGHT_BEANIE: { key: 'LIGHT_BEANIE', name: 'Light Beanie', desc: 'Thin beanie for moderate cold', icon: '🧢', category: 'head', search: 'running beanie lightweight' },
+            THERMAL_BEANIE: { key: 'THERMAL_BEANIE', name: 'Thermal Beanie', desc: 'Warm hat for very cold weather', icon: '🧢', category: 'head', search: 'running beanie thermal winter' },
+            BALACLAVA: { key: 'BALACLAVA', name: 'Balaclava / Face Mask', desc: 'Full face protection', icon: '🎭', category: 'head', search: 'running balaclava face mask' },
+
             // Hands
-            LIGHT_GLOVES: { name: 'Light Gloves', desc: 'Thin running gloves', icon: '🧤', category: 'hands', search: 'running gloves lightweight touchscreen' },
-            THERMAL_GLOVES: { name: 'Thermal Gloves', desc: 'Insulated gloves for cold', icon: '🧤', category: 'hands', search: 'running gloves thermal winter' },
-            MITTENS: { name: 'Mittens', desc: 'Maximum warmth for extreme cold', icon: '🧤', category: 'hands', search: 'running mittens warm' },
-            
+            LIGHT_GLOVES: { key: 'LIGHT_GLOVES', name: 'Light Gloves', desc: 'Thin running gloves', icon: '🧤', category: 'hands', search: 'running gloves lightweight touchscreen' },
+            THERMAL_GLOVES: { key: 'THERMAL_GLOVES', name: 'Thermal Gloves', desc: 'Insulated gloves for cold', icon: '🧤', category: 'hands', search: 'running gloves thermal winter' },
+            MITTENS: { key: 'MITTENS', name: 'Mittens', desc: 'Maximum warmth for extreme cold', icon: '🧤', category: 'hands', search: 'running mittens warm' },
+
             // Accessories
-            SUNGLASSES: { name: 'Sunglasses', desc: 'Eye protection from sun and wind', icon: '🕶️', category: 'accessories', search: 'running sunglasses sport' },
-            SUNSCREEN: { name: 'Sunscreen (SPF 30+)', desc: 'Protect exposed skin', icon: '🧴', category: 'accessories', search: 'sport sunscreen spf 50' },
-            REFLECTIVE_GEAR: { name: 'Reflective Gear', desc: 'Visibility for low-light', icon: '🦺', category: 'accessories', search: 'running reflective vest' },
-            NECK_GAITER: { name: 'Neck Gaiter / Buff', desc: 'Versatile neck and face protection', icon: '🧣', category: 'accessories', search: 'running neck gaiter buff' }
+            SUNGLASSES: { key: 'SUNGLASSES', name: 'Sunglasses', desc: 'Eye protection from sun and wind', icon: '🕶️', category: 'accessories', search: 'running sunglasses sport' },
+            SUNSCREEN: { key: 'SUNSCREEN', name: 'Sunscreen (SPF 30+)', desc: 'Protect exposed skin', icon: '🧴', category: 'accessories', search: 'sport sunscreen spf 50' },
+            REFLECTIVE_GEAR: { key: 'REFLECTIVE_GEAR', name: 'Reflective Gear', desc: 'Visibility for low-light', icon: '🦺', category: 'accessories', search: 'running reflective vest' },
+            NECK_GAITER: { key: 'NECK_GAITER', name: 'Neck Gaiter / Buff', desc: 'Versatile neck and face protection', icon: '🧣', category: 'accessories', search: 'running neck gaiter buff' }
         };
+
+        // ============ CLOTHING THUMBNAILS ============
+        // AI-generated product thumbnails stored in Supabase Storage
+        const CLOTHING_THUMBNAILS_URL = 'https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails';
+
+        // Maps ClothingItems keys to thumbnail file keys
+        const CLOTHING_THUMBNAIL_KEYS = {
+            TANK_TOP: 'tank-top',
+            SHORT_SLEEVE: 'short-sleeve',
+            LONG_SLEEVE_LIGHT: 'long-sleeve-light',
+            LONG_SLEEVE_THERMAL: 'thermal-long-sleeve',
+            LIGHT_VEST: 'light-vest',
+            WINDBREAKER: 'windbreaker',
+            LIGHT_JACKET: 'light-jacket',
+            RAIN_JACKET: 'rain-jacket',
+            INSULATED_JACKET: 'insulated-jacket',
+            SHORT_SHORTS: 'short-shorts',
+            SHORTS: 'running-shorts',
+            LIGHT_TIGHTS: 'light-tights',
+            THERMAL_TIGHTS: 'thermal-tights',
+            VISOR: 'visor',
+            BASEBALL_CAP: 'running-cap',
+            HEADBAND: 'headband',
+            LIGHT_BEANIE: 'light-beanie',
+            THERMAL_BEANIE: 'thermal-beanie',
+            BALACLAVA: 'balaclava',
+            LIGHT_GLOVES: 'light-gloves',
+            THERMAL_GLOVES: 'thermal-gloves',
+            MITTENS: 'mittens',
+            SUNGLASSES: 'sunglasses',
+            SUNSCREEN: 'sunscreen',
+            REFLECTIVE_GEAR: 'reflective-gear',
+            NECK_GAITER: 'neck-gaiter'
+        };
+
+        // Get thumbnail URL for a clothing item based on user's gender preference
+        function getClothingThumbnail(itemKey) {
+            const thumbnailKey = CLOTHING_THUMBNAIL_KEYS[itemKey];
+            if (!thumbnailKey) return null;
+
+            // Use male/female based on gender preference, default to male for 'all'
+            const gender = state.gender === 'female' ? 'female' : 'male';
+            return `${CLOTHING_THUMBNAILS_URL}/${thumbnailKey}-${gender}.webp`;
+        }
+
+        // Find item key from ClothingItems object
+        function getItemKey(item) {
+            for (const [key, value] of Object.entries(ClothingItems)) {
+                if (value === item || value.name === item.name) {
+                    return key;
+                }
+            }
+            return null;
+        }
 
         // ============ RECOMMENDATION ENGINE ============
         function getOutfitRecommendation(weather) {
@@ -3475,7 +3601,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         }
 
         // Load hero image from Supabase with cascading fallback queries
-        // v3.11: Demand-driven replenishment - queues new variants when < 5 exist
+        // v3.12: Demand-driven replenishment - queues new variants when < 5 exist
         async function loadHeroImage() {
             if (!state.weather || !state.outfit) {
                 console.log('[Hero] No weather/outfit data yet');
@@ -3492,7 +3618,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
             console.log('[Hero] Building queries for:', { gender, weather, tempBracket, timeOfDay });
 
-            // v3.11: Extended cascade with opposite gender fallback
+            // v3.12: Extended cascade with opposite gender fallback
             const queries = [
                 `${gender}_${weather}_${tempBracket}_${timeOfDay}`,   // 1. Exact
                 `${gender}_${weather}_${tempBracket}`,                // 2. Any time
@@ -3556,7 +3682,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 }
             }
 
-            // v3.11: Demand-driven replenishment
+            // v3.12: Demand-driven replenishment
             // Queue new variant if:
             // 1. No images found at all, OR
             // 2. Found via fallback (missing for requested gender), OR
@@ -3753,11 +3879,14 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
         // ============ ACTIONS ============
         async function loadWeather() {
+            // Increment request ID to track this specific request
+            const thisRequestId = ++weatherRequestId;
+
             state.loading = true;
             state.error = null;
             state.errorCode = null;
             render();
-            
+
             try {
                 if (!state.location) {
                     // Check if we have saved manual location
@@ -3775,9 +3904,14 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     // No saved location - try GPS and save it
                     else {
                         state.location = await getCurrentLocation();
+                        // Check if this request is still current after async operation
+                        if (thisRequestId !== weatherRequestId) return;
+
                         state.hasPermission = true;
                         state.locationSource = 'auto';
                         state.locationName = await getLocationName(state.location.lat, state.location.lon);
+                        // Check again after async operation
+                        if (thisRequestId !== weatherRequestId) return;
 
                         // Save GPS location for future sessions
                         localStorage.setItem('autoLat', state.location.lat.toString());
@@ -3785,8 +3919,13 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                         localStorage.setItem('autoLocationName', state.locationName);
                     }
                 }
-                
-                state.weather = await fetchWeather(state.location.lat, state.location.lon, state.selectedDate);
+
+                const weather = await fetchWeather(state.location.lat, state.location.lon, state.selectedDate);
+
+                // Discard stale response if a newer request has been made
+                if (thisRequestId !== weatherRequestId) return;
+
+                state.weather = weather;
                 state.outfit = getOutfitRecommendation(state.weather);
 
                 // Immediately use default image for this temperature bracket AND weather condition
@@ -3798,6 +3937,9 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 // Then load specific hero image from Supabase in background
                 loadHeroImage();
             } catch (err) {
+                // Discard errors from stale requests
+                if (thisRequestId !== weatherRequestId) return;
+
                 state.loading = false;
                 state.error = err.message || 'Something went wrong';
                 state.errorCode = err.code || null;
@@ -3983,16 +4125,20 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         // Shop Modal
         function openShop() {
             const container = document.getElementById('shopItems');
-            container.innerHTML = state.outfit.items.map(item =>
-                `<div class="shop-item" onclick="shopItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-                    <span class="shop-item-icon">${item.icon}</span>
+            container.innerHTML = state.outfit.items.map(item => {
+                const thumbUrl = item.key ? getClothingThumbnail(item.key) : null;
+                return `<div class="shop-item" onclick="shopItem(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                    <div class="shop-item-thumb-container">
+                        <span class="shop-item-icon">${item.icon}</span>
+                        ${thumbUrl ? `<img src="${thumbUrl}" alt="${item.name}" class="shop-item-thumb" loading="lazy" onload="this.classList.add('loaded')" onerror="this.style.display='none'" />` : ''}
+                    </div>
                     <div class="shop-item-info">
                         <div class="shop-item-name">${item.name}</div>
                         <div class="shop-item-desc">${item.desc}</div>
                     </div>
                     <span class="shop-item-arrow">→</span>
-                </div>`
-            ).join('');
+                </div>`;
+            }).join('');
             document.getElementById('shopModal').classList.add('active');
         }
 
@@ -4908,6 +5054,7 @@ Get your personalized running outfit at runwear.ai`;
             const precipSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8zm0 18c-3.35 0-6-2.57-6-6.2 0-2.34 1.95-5.44 6-9.14 4.05 3.7 6 6.79 6 9.14 0 3.63-2.65 6.2-6 6.2z"/></svg>`;
             const uvSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"/></svg>`;
             const chevronSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>`;
+            const externalLinkSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>`;
             const bagSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg>`;
             const lightbulbSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>`;
             const shareSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`;
@@ -5011,20 +5158,32 @@ Get your personalized running outfit at runwear.ai`;
                     </div>
 
                     <div class="outfit-grid">
-                        ${state.outfit.items.map((item, index) => `
-                            <button class="outfit-card" onclick="showOutfitDetail(${JSON.stringify(item).replace(/"/g, '&quot;')})" style="animation-delay: ${0.05 + index * 0.05}s">
-                                <div class="outfit-icon cat-${item.category}">
-                                    ${getCategoryIcon(item.category)}
+                        ${state.outfit.items.map((item, index) => {
+                            const thumbUrl = item.key ? getClothingThumbnail(item.key) : null;
+                            return `
+                            <button class="outfit-card" onclick="shopItem(${JSON.stringify(item).replace(/"/g, '&quot;')})" style="animation-delay: ${0.05 + index * 0.05}s">
+                                <div class="outfit-thumb-container">
+                                    <div class="outfit-icon cat-${item.category}">
+                                        ${getCategoryIcon(item.category)}
+                                    </div>
+                                    ${thumbUrl ? `<img
+                                        src="${thumbUrl}"
+                                        alt="${item.name}"
+                                        class="outfit-thumb"
+                                        loading="lazy"
+                                        onload="this.classList.add('loaded')"
+                                        onerror="this.style.display='none'"
+                                    />` : ''}
                                 </div>
                                 <div class="outfit-info">
                                     <div class="outfit-name">${item.name}</div>
                                     <div class="outfit-category">${item.desc || item.category}</div>
                                 </div>
                                 <div class="outfit-action">
-                                    ${chevronSvg}
+                                    ${externalLinkSvg}
                                 </div>
                             </button>
-                        `).join('')}
+                        `}).join('')}
                     </div>
 
                     ${state.outfit.tips.length > 0 ? `
@@ -5042,7 +5201,7 @@ Get your personalized running outfit at runwear.ai`;
                         </div>
                     ` : ''}
 
-                    <div class="footer">v3.11</div>
+                    <div class="footer">v3.12</div>
                 </div>
 
                 <!-- Pull to Refresh Indicator -->

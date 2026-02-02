@@ -1,0 +1,106 @@
+{
+  "TANK_TOP": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/tank-top-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/tank-top-female.webp"
+  },
+  "SHORT_SLEEVE": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/short-sleeve-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/short-sleeve-female.webp"
+  },
+  "LONG_SLEEVE_LIGHT": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/long-sleeve-light-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/long-sleeve-light-female.webp"
+  },
+  "LONG_SLEEVE_THERMAL": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-long-sleeve-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-long-sleeve-female.webp"
+  },
+  "LIGHT_VEST": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-vest-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-vest-female.webp"
+  },
+  "LIGHT_JACKET": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-jacket-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-jacket-female.webp"
+  },
+  "INSULATED_JACKET": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/insulated-jacket-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/insulated-jacket-female.webp"
+  },
+  "RAIN_JACKET": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/rain-jacket-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/rain-jacket-female.webp"
+  },
+  "WINDBREAKER": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/windbreaker-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/windbreaker-female.webp"
+  },
+  "SHORT_SHORTS": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/short-shorts-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/short-shorts-female.webp"
+  },
+  "SHORTS": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/running-shorts-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/running-shorts-female.webp"
+  },
+  "LIGHT_TIGHTS": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-tights-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-tights-female.webp"
+  },
+  "THERMAL_TIGHTS": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-tights-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-tights-female.webp"
+  },
+  "BASEBALL_CAP": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/running-cap-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/running-cap-female.webp"
+  },
+  "VISOR": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/visor-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/visor-female.webp"
+  },
+  "HEADBAND": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/headband-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/headband-female.webp"
+  },
+  "LIGHT_BEANIE": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-beanie-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-beanie-female.webp"
+  },
+  "THERMAL_BEANIE": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-beanie-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-beanie-female.webp"
+  },
+  "BALACLAVA": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/balaclava-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/balaclava-female.webp"
+  },
+  "LIGHT_GLOVES": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-gloves-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/light-gloves-female.webp"
+  },
+  "THERMAL_GLOVES": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-gloves-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/thermal-gloves-female.webp"
+  },
+  "MITTENS": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/mittens-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/mittens-female.webp"
+  },
+  "SUNGLASSES": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/sunglasses-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/sunglasses-female.webp"
+  },
+  "REFLECTIVE_GEAR": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/reflective-gear-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/reflective-gear-female.webp"
+  },
+  "NECK_GAITER": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/neck-gaiter-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/neck-gaiter-female.webp"
+  },
+  "SUNSCREEN": {
+    "male": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/sunscreen-male.webp",
+    "female": "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails/sunscreen-female.webp"
+  }
+}
