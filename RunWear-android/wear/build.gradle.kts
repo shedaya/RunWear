@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.runwear.wear"
+        applicationId = "com.runwear.app"
         minSdk = 30
         targetSdk = 35
         versionCode = 2

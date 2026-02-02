@@ -66,6 +66,9 @@ android {
 dependencies {
     // Shared module
     implementation(project(":shared"))
+
+    // Embed Wear OS app in phone app bundle
+    wearApp(project(":wear"))
     
     // Core Android
     implementation(libs.androidx.core.ktx)

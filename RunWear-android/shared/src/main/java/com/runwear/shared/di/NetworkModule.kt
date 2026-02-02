@@ -14,19 +14,18 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
-import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-    
+
     private val json = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
         isLenient = true
     }
-    
+
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
@@ -45,10 +44,10 @@ object NetworkModule {
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
     }
-    
+
     @Provides
     @Singleton
-    @Named("weather")
+    @WeatherRetrofit
     fun provideWeatherRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .baseUrl("https://api.open-meteo.com/")
@@ -56,10 +55,10 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
-    
+
     @Provides
     @Singleton
-    @Named("geocoding")
+    @GeocodingRetrofit
     fun provideGeocodingRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .baseUrl("https://geocoding-api.open-meteo.com/")
@@ -67,10 +66,10 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
-    
+
     @Provides
     @Singleton
-    @Named("nominatim")
+    @NominatimRetrofit
     fun provideNominatimRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .baseUrl("https://nominatim.openstreetmap.org/")
@@ -78,22 +77,22 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
-    
+
     @Provides
     @Singleton
-    fun provideOpenMeteoApi(@Named("weather") retrofit: Retrofit): OpenMeteoApi {
+    fun provideOpenMeteoApi(@WeatherRetrofit retrofit: Retrofit): OpenMeteoApi {
         return retrofit.create(OpenMeteoApi::class.java)
     }
-    
+
     @Provides
     @Singleton
-    fun provideGeocodingApi(@Named("geocoding") retrofit: Retrofit): GeocodingApi {
+    fun provideGeocodingApi(@GeocodingRetrofit retrofit: Retrofit): GeocodingApi {
         return retrofit.create(GeocodingApi::class.java)
     }
-    
+
     @Provides
     @Singleton
-    fun provideNominatimApi(@Named("nominatim") retrofit: Retrofit): NominatimApi {
+    fun provideNominatimApi(@NominatimRetrofit retrofit: Retrofit): NominatimApi {
         return retrofit.create(NominatimApi::class.java)
     }
 }
