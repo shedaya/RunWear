@@ -87,4 +87,21 @@ dependencies {
 
     // Image Loading (Coil) - for hero images
     implementation(libs.coil.compose)
+
+    // Wear OS Tiles
+    implementation(libs.androidx.wear.tiles)
+    implementation(libs.androidx.wear.tiles.material)
+    implementation(libs.androidx.wear.protolayout)
+    implementation(libs.androidx.wear.protolayout.material)
+    implementation(libs.androidx.wear.protolayout.expression)
+    implementation(libs.horologist.tiles)
+
+    // Wear OS Complications
+    implementation(libs.androidx.wear.watchface.complications.data.source)
+    implementation(libs.androidx.wear.watchface.complications.data.source.ktx)
+
+    // Coroutines (for tiles)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.coroutines.play.services)
 }
