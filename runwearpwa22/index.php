@@ -2944,7 +2944,7 @@
         // ============ RECOMMENDATION ENGINE ============
         function getOutfitRecommendation(weather) {
             // Apply comfort preference: negative = run cold (dress warmer), positive = run hot (dress cooler)
-            const temp = weather.feelsLike - state.comfort;
+            const temp = weather.feelsLike + state.comfort;
             const isWindy = weather.windSpeed > 10;
             const isHumid = weather.humidity > 65;
             const isSunny = weather.cloudCover < 50 && weather.uvIndex > 2;
