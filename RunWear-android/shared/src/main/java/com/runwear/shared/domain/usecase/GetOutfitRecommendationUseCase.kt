@@ -104,7 +104,8 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         if (weather.uvIndex > 5) accessories.add(ClothingItem.SUNSCREEN)
         if (temp < 30) accessories.add(ClothingItem.NECK_GAITER)
         // Reflective gear for dawn/dusk/night
-        if (weather.cloudCover > 80 || weather.weatherCode.isPrecipitation) accessories.add(ClothingItem.REFLECTIVE_GEAR)
+        val hour = weather.dateTime.hour
+        if (hour < 7 || hour > 18) accessories.add(ClothingItem.REFLECTIVE_GEAR)
         return accessories
     }
 
@@ -151,7 +152,7 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         }
 
         // UV
-        if (weather.uvIndex >= 6) tips.add("☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.")
+        if (weather.uvIndex > 6) tips.add("☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.")
 
         // Shorts in cold encouragement
         if (temp in 40.0..49.0) {
