@@ -262,9 +262,9 @@ actor HeroImageService {
                 .HOT: "lightweight breathable tank top, very short split running shorts, sunglasses, visor",
                 .WARM: "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
                 .MILD: "short sleeve or lightweight long sleeve shirt, running shorts",
-                .COOL: "lightweight long sleeve shirt, windbreaker if windy, running shorts or light tights, ear-covering headband, light gloves",
+                .COOL: "lightweight long sleeve shirt, windbreaker shell if windy or below 40°F, running shorts or light tights, headband below 40°F, light gloves below 40°F",
                 .COLD: "lightweight long sleeve base layer, charcoal quarter-zip pullover mid-layer visible at collar, black windbreaker shell partially unzipped showing layers, light running tights, light beanie, light gloves, neck gaiter",
-                .FREEZING: "thermal long sleeve base layer visible at collar, teal thermal half-zip pullover heavyweight mid-layer, insulated running jacket outer shell, thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+                .FREEZING: "thermal long sleeve base layer visible at collar, teal fleece pullover or thermal half-zip mid-layer, windbreaker shell (10-19°F) or insulated jacket (below 10°F), thermal tights, thermal beanie, thermal gloves or mittens, neck gaiter, visible breath vapor"
             ]
             outfitDesc = outfitDescriptions[combination.temp] ?? outfitDescriptions[.MILD]!
         }

@@ -83,18 +83,18 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         if (weather.isRaining) return ClothingItem.BASEBALL_CAP
 
         return when {
-            temp >= 50 -> null
+            temp >= 40 -> null
             temp >= 30 -> ClothingItem.HEADBAND
-            temp >= 10 -> ClothingItem.LIGHT_BEANIE
-            temp >= 0 -> ClothingItem.THERMAL_BEANIE
+            temp >= 15 -> ClothingItem.LIGHT_BEANIE
+            temp >= 5 -> ClothingItem.THERMAL_BEANIE
             else -> ClothingItem.BALACLAVA
         }
     }
 
     private fun selectHands(temp: Double): ClothingItem? = when {
         temp >= 40 -> null
-        temp >= 20 -> ClothingItem.LIGHT_GLOVES
-        temp >= 10 -> ClothingItem.THERMAL_GLOVES
+        temp >= 25 -> ClothingItem.LIGHT_GLOVES
+        temp >= 15 -> ClothingItem.THERMAL_GLOVES
         else -> ClothingItem.MITTENS
     }
 

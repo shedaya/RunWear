@@ -2998,22 +2998,22 @@
             if (temp >= 65 && weather.uvIndex > 3) outfit.items.push(ClothingItems.VISOR);
             else if (temp >= 50 && weather.uvIndex > 3) outfit.items.push(ClothingItems.BASEBALL_CAP);
             else if (isRaining) outfit.items.push(ClothingItems.BASEBALL_CAP);
-            else if (temp < 50 && temp >= 30) outfit.items.push(ClothingItems.HEADBAND);
-            else if (temp < 30 && temp >= 10) outfit.items.push(ClothingItems.LIGHT_BEANIE);
-            else if (temp < 10 && temp >= 0) outfit.items.push(ClothingItems.THERMAL_BEANIE);
-            else if (temp < 0) outfit.items.push(ClothingItems.BALACLAVA);
+            else if (temp < 40 && temp >= 30) outfit.items.push(ClothingItems.HEADBAND);
+            else if (temp < 30 && temp >= 15) outfit.items.push(ClothingItems.LIGHT_BEANIE);
+            else if (temp < 15 && temp >= 5) outfit.items.push(ClothingItems.THERMAL_BEANIE);
+            else if (temp < 5) outfit.items.push(ClothingItems.BALACLAVA);
 
             // === HANDS ===
-            if (temp < 40 && temp >= 20) outfit.items.push(ClothingItems.LIGHT_GLOVES);
-            else if (temp < 20 && temp >= 10) outfit.items.push(ClothingItems.THERMAL_GLOVES);
-            else if (temp < 10) outfit.items.push(ClothingItems.MITTENS);
+            if (temp < 40 && temp >= 25) outfit.items.push(ClothingItems.LIGHT_GLOVES);
+            else if (temp < 25 && temp >= 15) outfit.items.push(ClothingItems.THERMAL_GLOVES);
+            else if (temp < 15) outfit.items.push(ClothingItems.MITTENS);
 
             // === ACCESSORIES ===
             if (weather.uvIndex > 3) outfit.items.push(ClothingItems.SUNGLASSES);
             if (weather.uvIndex > 5) outfit.items.push(ClothingItems.SUNSCREEN);
             if (temp < 30) outfit.items.push(ClothingItems.NECK_GAITER);
             // Reflective gear for dawn/dusk/night
-            const hour = weather.hour || new Date().getHours();
+            const hour = weather.hour ?? new Date().getHours();
             if (hour < 7 || hour > 18) outfit.items.push(ClothingItems.REFLECTIVE_GEAR);
 
             // === TIPS ===
@@ -3095,8 +3095,9 @@
                     isRaining: c.rain > 0,
                     isSnowing: c.snowfall > 0,
                     cloudCover: c.cloud_cover,
-                    uvIndex: c.uv_index || 0,
-                    weatherCode: c.weather_code
+                    uvIndex: c.uv_index ?? 0,
+                    weatherCode: c.weather_code,
+                    hour: date.getHours()
                 };
             } else {
                 const targetHour = date.toISOString().slice(0, 13);
@@ -3116,7 +3117,8 @@
                     isSnowing: hourly.snowfall[idx] > 0,
                     cloudCover: hourly.cloud_cover[idx],
                     uvIndex: hourly.uv_index[idx],
-                    weatherCode: hourly.weather_code[idx]
+                    weatherCode: hourly.weather_code[idx],
+                    hour: date.getHours()
                 };
             }
             
@@ -3857,9 +3859,9 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     HOT: 'lightweight breathable tank top, very short split running shorts, sunglasses, visor',
                     WARM: 'breathable short sleeve tech shirt, standard running shorts, light mesh running cap',
                     MILD: 'short sleeve or lightweight long sleeve shirt, running shorts',
-                    COOL: 'lightweight long sleeve shirt, windbreaker if windy, running shorts or light tights, ear-covering headband, light gloves',
+                    COOL: 'lightweight long sleeve shirt, windbreaker shell if windy or below 40°F, running shorts or light tights, headband below 40°F, light gloves below 40°F',
                     COLD: 'lightweight long sleeve base layer, charcoal quarter-zip pullover mid-layer visible at collar, black windbreaker shell partially unzipped showing layers, light running tights, light beanie, light gloves, neck gaiter',
-                    FREEZING: 'thermal long sleeve base layer visible at collar, teal thermal half-zip pullover heavyweight mid-layer, insulated running jacket outer shell, thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor'
+                    FREEZING: 'thermal long sleeve base layer visible at collar, teal fleece pullover or thermal half-zip mid-layer, windbreaker shell (10-19°F) or insulated jacket (below 10°F), thermal tights, thermal beanie, thermal gloves or mittens, neck gaiter, visible breath vapor'
                 };
                 outfitDesc = outfitDescriptions[temp] || outfitDescriptions.MILD;
             }
