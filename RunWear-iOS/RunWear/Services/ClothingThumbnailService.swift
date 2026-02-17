@@ -21,10 +21,16 @@ class ClothingThumbnailService {
         "Tank Top": "tank-top",
         "Short Sleeve Shirt": "short-sleeve",
         "Long Sleeve Shirt": "long-sleeve-light",
+        "Light Long Sleeve": "long-sleeve-light",
         "Thermal Long Sleeve": "thermal-long-sleeve",
         "Base Layer + Jacket": "thermal-long-sleeve",
         "Double Layer Top": "insulated-jacket",
         "Full Thermal System": "insulated-jacket",
+
+        // Tops - Mid Layer (v4.1)
+        "Quarter-Zip Pullover": "quarter-zip",
+        "Fleece Pullover": "fleece-pullover",
+        "Thermal Half-Zip": "half-zip-thermal",
 
         // Tops - Outer Layer
         "Light Vest": "light-vest",

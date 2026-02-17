@@ -27,6 +27,11 @@ object ClothingThumbnailService {
         ClothingItem.LONG_SLEEVE_LIGHT to "long-sleeve-light",
         ClothingItem.LONG_SLEEVE_THERMAL to "thermal-long-sleeve",
 
+        // Tops - Mid Layer
+        ClothingItem.QUARTER_ZIP to "quarter-zip",
+        ClothingItem.FLEECE_PULLOVER to "fleece-pullover",
+        ClothingItem.HALF_ZIP_THERMAL to "half-zip-thermal",
+
         // Tops - Outer Layer
         ClothingItem.LIGHT_VEST to "light-vest",
         ClothingItem.WINDBREAKER to "windbreaker",

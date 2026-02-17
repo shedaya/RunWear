@@ -1,7 +1,7 @@
 package com.runwear.shared.domain.model
 
 enum class ClothingCategory {
-    TOP_BASE, TOP_OUTER, BOTTOM, HEAD, HANDS, ACCESSORIES
+    TOP_BASE, TOP_MID, TOP_OUTER, BOTTOM, HEAD, HANDS, ACCESSORIES
 }
 
 enum class ClothingItem(
@@ -16,7 +16,12 @@ enum class ClothingItem(
     SHORT_SLEEVE(ClothingCategory.TOP_BASE, "Short Sleeve Shirt", "Moisture-wicking technical fabric", "👕", "running short sleeve shirt dri-fit"),
     LONG_SLEEVE_LIGHT(ClothingCategory.TOP_BASE, "Light Long Sleeve", "Thin, breathable long sleeve", "👕", "running long sleeve lightweight"),
     LONG_SLEEVE_THERMAL(ClothingCategory.TOP_BASE, "Thermal Long Sleeve", "Insulated base layer for cold", "🧥", "running thermal base layer"),
-    
+
+    // TOP MID LAYERS (v4.1 — layering system for cold-weather running)
+    QUARTER_ZIP(ClothingCategory.TOP_MID, "Quarter-Zip Pullover", "Lightweight mid-layer with zip ventilation", "🧥", "running quarter zip pullover"),
+    FLEECE_PULLOVER(ClothingCategory.TOP_MID, "Fleece Pullover", "Warm brushed fleece for cold days", "🧥", "running fleece pullover lightweight"),
+    HALF_ZIP_THERMAL(ClothingCategory.TOP_MID, "Thermal Half-Zip", "Heavy-weight thermal mid-layer", "🧥", "running thermal half zip"),
+
     // TOP OUTER LAYERS
     LIGHT_VEST(ClothingCategory.TOP_OUTER, "Light Vest", "Wind protection without overheating", "🦺", "running vest lightweight"),
     WINDBREAKER(ClothingCategory.TOP_OUTER, "Windbreaker", "Lightweight wind and light rain protection", "🧥", "running windbreaker jacket"),
@@ -54,15 +59,16 @@ enum class ClothingItem(
 data class OutfitRecommendation(
     val weather: WeatherConditions,
     val topBase: ClothingItem,
-    val topOuter: ClothingItem?,
+    val topMid: ClothingItem? = null,
+    val topOuter: ClothingItem? = null,
     val bottom: ClothingItem,
-    val head: ClothingItem?,
-    val hands: ClothingItem?,
-    val accessories: List<ClothingItem>,
-    val tips: List<String>
+    val head: ClothingItem? = null,
+    val hands: ClothingItem? = null,
+    val accessories: List<ClothingItem> = emptyList(),
+    val tips: List<String> = emptyList()
 ) {
     val allItems: List<ClothingItem>
-        get() = listOfNotNull(topBase, topOuter, bottom, head, hands) + accessories
+        get() = listOfNotNull(head, topBase, topMid, topOuter, bottom, hands) + accessories
     
     val summary: String
         get() {

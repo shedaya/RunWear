@@ -259,12 +259,12 @@ actor HeroImageService {
         } else {
             // Fallback to static descriptions if no outfit provided
             let outfitDescriptions: [HeroTempBracket: String] = [
-                .HOT: "lightweight breathable tank top, very short split running shorts, sunglasses",
+                .HOT: "lightweight breathable tank top, very short split running shorts, sunglasses, visor",
                 .WARM: "breathable short sleeve tech shirt, standard running shorts, light mesh running cap",
-                .MILD: "fitted long sleeve moisture-wicking shirt, running shorts or light capris",
-                .COOL: "quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband",
-                .COLD: "thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter",
-                .FREEZING: "multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
+                .MILD: "short sleeve or lightweight long sleeve shirt, running shorts",
+                .COOL: "lightweight long sleeve shirt, windbreaker if windy, running shorts or light tights, ear-covering headband, light gloves",
+                .COLD: "lightweight long sleeve base layer, charcoal quarter-zip pullover mid-layer visible at collar, black windbreaker shell partially unzipped showing layers, light running tights, light beanie, light gloves, neck gaiter",
+                .FREEZING: "thermal long sleeve base layer visible at collar, teal thermal half-zip pullover heavyweight mid-layer, insulated running jacket outer shell, thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor"
             ]
             outfitDesc = outfitDescriptions[combination.temp] ?? outfitDescriptions[.MILD]!
         }

@@ -2854,6 +2854,11 @@
             LONG_SLEEVE_LIGHT: { key: 'LONG_SLEEVE_LIGHT', name: 'Light Long Sleeve', desc: 'Thin, breathable long sleeve', icon: '👕', category: 'top', search: 'running long sleeve lightweight' },
             LONG_SLEEVE_THERMAL: { key: 'LONG_SLEEVE_THERMAL', name: 'Thermal Long Sleeve', desc: 'Insulated base layer for cold', icon: '🧥', category: 'top', search: 'running thermal base layer' },
 
+            // Mid layers (v4.1 — layering system for cold-weather running)
+            QUARTER_ZIP: { key: 'QUARTER_ZIP', name: 'Quarter-Zip Pullover', desc: 'Lightweight mid-layer with zip ventilation', icon: '🧥', category: 'top', search: 'running quarter zip pullover' },
+            FLEECE_PULLOVER: { key: 'FLEECE_PULLOVER', name: 'Fleece Pullover', desc: 'Warm brushed fleece for cold days', icon: '🧥', category: 'top', search: 'running fleece pullover lightweight' },
+            HALF_ZIP_THERMAL: { key: 'HALF_ZIP_THERMAL', name: 'Thermal Half-Zip', desc: 'Heavy-weight thermal mid-layer', icon: '🧥', category: 'top', search: 'running thermal half zip' },
+
             // Outer layers
             LIGHT_VEST: { key: 'LIGHT_VEST', name: 'Light Vest', desc: 'Wind protection without overheating', icon: '🦺', category: 'top', search: 'running vest lightweight' },
             WINDBREAKER: { key: 'WINDBREAKER', name: 'Windbreaker', desc: 'Lightweight wind and rain protection', icon: '🧥', category: 'top', search: 'running windbreaker jacket' },
@@ -2897,6 +2902,9 @@
             SHORT_SLEEVE: 'short-sleeve',
             LONG_SLEEVE_LIGHT: 'long-sleeve-light',
             LONG_SLEEVE_THERMAL: 'thermal-long-sleeve',
+            QUARTER_ZIP: 'quarter-zip',
+            FLEECE_PULLOVER: 'fleece-pullover',
+            HALF_ZIP_THERMAL: 'half-zip-thermal',
             LIGHT_VEST: 'light-vest',
             WINDBREAKER: 'windbreaker',
             LIGHT_JACKET: 'light-jacket',
@@ -2941,90 +2949,114 @@
             return null;
         }
 
-        // ============ RECOMMENDATION ENGINE ============
+        // ============ RECOMMENDATION ENGINE (v4.1) ============
+        // Brackets are mapped directly from real feels-like temperature to running-specific clothing.
+        // No arithmetic offset — the thresholds themselves reflect that runners generate 5-15× resting
+        // metabolic heat. Sources: Nike, Jeff Galloway, Marathon Handbook, Tina Muir, Fleet Feet.
         function getOutfitRecommendation(weather) {
-            // Apply comfort preference: negative = run cold (dress warmer), positive = run hot (dress cooler)
+            // Comfort adjustment only: "runs hot" (+10) shifts up, "runs cold" (-10) shifts down
             const temp = weather.feelsLike + state.comfort;
             const isWindy = weather.windSpeed > 10;
-            const isHumid = weather.humidity > 65;
-            const isSunny = weather.cloudCover < 50 && weather.uvIndex > 2;
             const isRaining = weather.isRaining;
-            
+
             let outfit = { items: [], tips: [] };
-            
-            // Top base layer
-            if (temp >= 70) outfit.items.push(ClothingItems.TANK_TOP);
-            else if (temp >= 60) outfit.items.push(ClothingItems.SHORT_SLEEVE);
-            else if (temp >= 45) outfit.items.push(ClothingItems.LONG_SLEEVE_LIGHT);
-            else if (temp >= 30) outfit.items.push(ClothingItems.LONG_SLEEVE_LIGHT);
+
+            // === TOP BASE LAYER ===
+            // Runners wear short sleeves down to 50°F — body heat makes up the difference
+            if (temp >= 80) outfit.items.push(ClothingItems.TANK_TOP);
+            else if (temp >= 50) outfit.items.push(ClothingItems.SHORT_SLEEVE);
+            else if (temp >= 20) outfit.items.push(ClothingItems.LONG_SLEEVE_LIGHT);
             else outfit.items.push(ClothingItems.LONG_SLEEVE_THERMAL);
-            
-            // Top outer layer
-            if (isRaining && weather.precipitation > 0.1) {
+
+            // === TOP MID LAYER (v4.1 — 3-layer running system) ===
+            // No mid-layer above 40°F. Below that, progressively warmer mid-layers.
+            if (temp < 40 && temp >= 20) outfit.items.push(ClothingItems.QUARTER_ZIP);
+            else if (temp < 20 && temp >= 10) outfit.items.push(ClothingItems.FLEECE_PULLOVER);
+            else if (temp < 10) outfit.items.push(ClothingItems.HALF_ZIP_THERMAL);
+
+            // === TOP OUTER LAYER ===
+            // Rain always gets a rain jacket. Wind shell beats heavy jacket for running.
+            // Insulated jacket ONLY below 10°F — the single biggest change from old engine.
+            if (isRaining) {
                 outfit.items.push(ClothingItems.RAIN_JACKET);
-            } else if (isWindy && temp >= 40 && temp < 60) {
+            } else if (temp < 50 && temp >= 40 && isWindy) {
                 outfit.items.push(ClothingItems.WINDBREAKER);
-            } else if (temp < 60 && temp >= 50 && isWindy) {
-                outfit.items.push(ClothingItems.LIGHT_VEST);
-            } else if (temp < 50 && temp >= 40) {
-                outfit.items.push(ClothingItems.LIGHT_JACKET);
-            } else if (temp < 40 && temp >= 25) {
-                outfit.items.push(ClothingItems.LIGHT_JACKET);
-            } else if (temp < 25) {
+            } else if (temp < 40 && temp >= 10) {
+                outfit.items.push(ClothingItems.WINDBREAKER);
+            } else if (temp < 10) {
                 outfit.items.push(ClothingItems.INSULATED_JACKET);
             }
-            
-            // Bottoms
-            const effectiveTemp = temp + (isHumid && temp > 50 ? 5 : 0);
-            if (effectiveTemp >= 75) outfit.items.push(ClothingItems.SHORT_SHORTS);
-            else if (effectiveTemp >= 50) outfit.items.push(ClothingItems.SHORTS);
-            else if (effectiveTemp >= 40) outfit.items.push(ClothingItems.LIGHT_TIGHTS);
+
+            // === BOTTOMS ===
+            // Runners wear shorts down to ~45°F — legs generate plenty of heat
+            if (temp >= 80) outfit.items.push(ClothingItems.SHORT_SHORTS);
+            else if (temp >= 45) outfit.items.push(ClothingItems.SHORTS);
+            else if (temp >= 30) outfit.items.push(ClothingItems.LIGHT_TIGHTS);
             else outfit.items.push(ClothingItems.THERMAL_TIGHTS);
-            
-            // Head
-            if (temp >= 60 && isSunny) outfit.items.push(ClothingItems.BASEBALL_CAP);
+
+            // === HEAD ===
+            if (temp >= 65 && weather.uvIndex > 3) outfit.items.push(ClothingItems.VISOR);
+            else if (temp >= 50 && weather.uvIndex > 3) outfit.items.push(ClothingItems.BASEBALL_CAP);
             else if (isRaining) outfit.items.push(ClothingItems.BASEBALL_CAP);
-            else if (temp < 50 && temp >= 40 && isWindy) outfit.items.push(ClothingItems.HEADBAND);
-            else if (temp < 40 && temp >= 30) outfit.items.push(ClothingItems.HEADBAND);
-            else if (temp < 30 && temp >= 20) outfit.items.push(ClothingItems.LIGHT_BEANIE);
-            else if (temp < 20 && temp >= 5) outfit.items.push(ClothingItems.THERMAL_BEANIE);
-            else if (temp < 5) outfit.items.push(ClothingItems.BALACLAVA);
-            
-            // Hands
-            const handTemp = temp + (isWindy ? -5 : 0);
-            if (handTemp < 45 && handTemp >= 35) outfit.items.push(ClothingItems.LIGHT_GLOVES);
-            else if (handTemp < 35 && handTemp >= 20) outfit.items.push(ClothingItems.THERMAL_GLOVES);
-            else if (handTemp < 20) outfit.items.push(ClothingItems.MITTENS);
-            
-            // Accessories
-            if (isSunny || weather.uvIndex >= 3) outfit.items.push(ClothingItems.SUNGLASSES);
-            if (weather.uvIndex >= 3) outfit.items.push(ClothingItems.SUNSCREEN);
-            if (weather.cloudCover > 80 || isRaining) outfit.items.push(ClothingItems.REFLECTIVE_GEAR);
-            if (temp < 30 && isWindy) outfit.items.push(ClothingItems.NECK_GAITER);
-            
-            // Tips
+            else if (temp < 50 && temp >= 30) outfit.items.push(ClothingItems.HEADBAND);
+            else if (temp < 30 && temp >= 10) outfit.items.push(ClothingItems.LIGHT_BEANIE);
+            else if (temp < 10 && temp >= 0) outfit.items.push(ClothingItems.THERMAL_BEANIE);
+            else if (temp < 0) outfit.items.push(ClothingItems.BALACLAVA);
+
+            // === HANDS ===
+            if (temp < 40 && temp >= 20) outfit.items.push(ClothingItems.LIGHT_GLOVES);
+            else if (temp < 20 && temp >= 10) outfit.items.push(ClothingItems.THERMAL_GLOVES);
+            else if (temp < 10) outfit.items.push(ClothingItems.MITTENS);
+
+            // === ACCESSORIES ===
+            if (weather.uvIndex > 3) outfit.items.push(ClothingItems.SUNGLASSES);
+            if (weather.uvIndex > 5) outfit.items.push(ClothingItems.SUNSCREEN);
+            if (temp < 30) outfit.items.push(ClothingItems.NECK_GAITER);
+            // Reflective gear for dawn/dusk/night
+            const hour = weather.hour || new Date().getHours();
+            if (hour < 7 || hour > 18) outfit.items.push(ClothingItems.REFLECTIVE_GEAR);
+
+            // === TIPS ===
+            // The key running tip — always show below 50°F
+            if (temp < 50) {
+                outfit.tips.push('🏃 You should feel slightly cool stepping outside. If you\'re comfortable standing still, you\'re overdressed for running.');
+            }
+            // 3-layer ventilation tip
+            if (temp < 40 && temp >= 10) {
+                outfit.tips.push('🧥 Your layered setup lets you regulate heat — unzip your mid-layer or shell if you warm up after the first mile.');
+            }
+            // Wind tip
+            if (isWindy && temp < 50) {
+                outfit.tips.push('💨 A wind shell beats a heavy jacket for running. It blocks wind chill while letting you vent excess heat.');
+            }
+            // Extreme cold
+            if (temp < 10) {
+                outfit.tips.push('🥶 Cover all exposed skin — frostbite risk increases below 10°F with wind. Vaseline on cheeks and nose helps.');
+            }
+            // Heat
             if (temp >= 80) {
-                outfit.tips.push('🌡️ High heat risk — consider running early morning or evening');
-                outfit.tips.push('💧 Hydrate well before, during, and after your run');
+                outfit.tips.push('🌡️ High heat risk — consider running early morning or evening.');
+                outfit.tips.push('💧 Hydrate well before, during, and after your run.');
             } else if (temp >= 70) {
-                outfit.tips.push('💧 Stay hydrated — consider carrying water');
+                outfit.tips.push('💧 Stay hydrated — consider carrying water.');
             }
-            if (temp < 20) {
-                outfit.tips.push('🥶 Extreme cold — keep your run shorter and stay close to home');
-                outfit.tips.push('🏠 Change out of wet clothes immediately after finishing');
-            } else if (temp < 32) {
-                outfit.tips.push('❄️ Watch for ice on paths and roads');
-            }
-            if (isWindy) outfit.tips.push('💨 Run into the wind first, return with wind at your back');
+            // Rain
             if (isRaining) {
-                outfit.tips.push('🌧️ Wear a hat to keep rain out of your eyes');
-                if (temp < 50) outfit.tips.push('⚠️ You\'ll get cold faster when wet — dress warmer');
+                outfit.tips.push('🌧️ Wear a cap under your hood to keep rain out of your eyes. Avoid cotton — it retains moisture.');
             }
-            if (isHumid && temp > 65) {
-                outfit.tips.push('💦 High humidity — wear looser clothes for better airflow');
+            // Humidity
+            if (weather.humidity > 65 && temp > 60) {
+                outfit.tips.push('💦 High humidity — sweat won\'t evaporate easily. Wear looser, lighter fabrics and hydrate more.');
             }
-            if (weather.uvIndex >= 6) outfit.tips.push('☀️ Very high UV — reapply sunscreen every 2 hours');
-            
+            // UV
+            if (weather.uvIndex > 6) {
+                outfit.tips.push('☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.');
+            }
+            // Shorts in cold encouragement
+            if (temp >= 40 && temp < 50) {
+                outfit.tips.push('🩳 Many runners still wear shorts at this temperature. Your legs generate plenty of heat — try it before adding tights.');
+            }
+
             outfit.tips = outfit.tips.slice(0, 3);
             return outfit;
         }
@@ -3822,12 +3854,12 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             } else {
                 // Fallback to static descriptions if no outfit provided
                 const outfitDescriptions = {
-                    HOT: 'lightweight breathable tank top, very short split running shorts, sunglasses',
+                    HOT: 'lightweight breathable tank top, very short split running shorts, sunglasses, visor',
                     WARM: 'breathable short sleeve tech shirt, standard running shorts, light mesh running cap',
-                    MILD: 'fitted long sleeve moisture-wicking shirt, running shorts or light capris',
-                    COOL: 'quarter-zip pullover or lightweight jacket, full-length running tights, thin gloves, ear-covering headband',
-                    COLD: 'thermal base layer, insulated wind-resistant jacket, thermal tights, warm fleece beanie, insulated gloves, neck gaiter',
-                    FREEZING: 'multiple thermal layers, heavy insulated jacket with hood, thick thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor'
+                    MILD: 'short sleeve or lightweight long sleeve shirt, running shorts',
+                    COOL: 'lightweight long sleeve shirt, windbreaker if windy, running shorts or light tights, ear-covering headband, light gloves',
+                    COLD: 'lightweight long sleeve base layer, charcoal quarter-zip pullover mid-layer visible at collar, black windbreaker shell partially unzipped showing layers, light running tights, light beanie, light gloves, neck gaiter',
+                    FREEZING: 'thermal long sleeve base layer visible at collar, teal thermal half-zip pullover heavyweight mid-layer, insulated running jacket outer shell, thermal tights, full balaclava covering face, thick insulated mittens, neck gaiter, visible breath vapor'
                 };
                 outfitDesc = outfitDescriptions[temp] || outfitDescriptions.MILD;
             }

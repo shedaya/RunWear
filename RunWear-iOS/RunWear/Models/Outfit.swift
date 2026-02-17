@@ -2,13 +2,17 @@ import Foundation
 
 struct OutfitRecommendation {
     let temperatureBracket: TemperatureBracket
-    let top: ClothingItem
+    let topBase: ClothingItem
+    let topMid: ClothingItem?
+    let topOuter: ClothingItem?
     let bottom: ClothingItem
+    let head: ClothingItem?
+    let hands: ClothingItem?
     let accessories: [ClothingItem]
-    let extras: [ClothingItem]
+    let tips: [String]
 
     var allItems: [ClothingItem] {
-        [top, bottom] + accessories + extras
+        [head, topBase, topMid, topOuter, bottom, hands].compactMap { $0 } + accessories
     }
 }
 
@@ -43,14 +47,17 @@ struct ClothingItem: Identifiable {
     }
 }
 
+/// Temperature brackets for outfit recommendations (v4.1)
+/// Thresholds reflect running-specific needs — runners generate 5-15× resting metabolic heat.
 enum TemperatureBracket: String, CaseIterable {
-    case hot = "70°F+"
-    case warm = "60-70°F"
-    case mild = "50-60°F"
-    case cool = "40-50°F"
-    case cold = "30-40°F"
-    case veryCold = "20-30°F"
-    case extreme = "<20°F"
+    case hot = "80°F+"
+    case warm = "65-79°F"
+    case mild = "50-64°F"
+    case cool = "40-49°F"
+    case cold = "30-39°F"
+    case veryCold = "20-29°F"
+    case frigid = "10-19°F"
+    case extreme = "<10°F"
 
     var description: String {
         switch self {
@@ -60,6 +67,7 @@ enum TemperatureBracket: String, CaseIterable {
         case .cool: return "Cool Weather Running"
         case .cold: return "Cold Weather Running"
         case .veryCold: return "Very Cold Weather Running"
+        case .frigid: return "Frigid Weather Running"
         case .extreme: return "Extreme Cold Running"
         }
     }
@@ -72,18 +80,20 @@ enum TemperatureBracket: String, CaseIterable {
         case .cool: return 0.6
         case .cold: return 0.7
         case .veryCold: return 0.8
+        case .frigid: return 0.85
         case .extreme: return 0.9
         }
     }
 
     static func from(temperature: Double) -> TemperatureBracket {
         switch temperature {
-        case 70...: return .hot
-        case 60..<70: return .warm
-        case 50..<60: return .mild
+        case 80...: return .hot
+        case 65..<80: return .warm
+        case 50..<65: return .mild
         case 40..<50: return .cool
         case 30..<40: return .cold
         case 20..<30: return .veryCold
+        case 10..<20: return .frigid
         default: return .extreme
         }
     }

@@ -234,48 +234,28 @@ struct WeatherOutfitView: View {
                 .padding(.horizontal, 16)
                 .staggeredAnimation(index: 0, isVisible: hasAppeared)
 
-            // Main clothing items
-            DarkClothingItemCard(
-                item: recommendation.top,
-                category: "Top",
-                gender: viewModel.genderPreference
-            )
-            .staggeredAnimation(index: 1, isVisible: hasAppeared)
-
-            DarkClothingItemCard(
-                item: recommendation.bottom,
-                category: "Bottom",
-                gender: viewModel.genderPreference
-            )
-            .staggeredAnimation(index: 2, isVisible: hasAppeared)
-
-            // Accessories
-            if !recommendation.accessories.isEmpty {
-                Text("Accessories")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .staggeredAnimation(index: 3, isVisible: hasAppeared)
-
-                ForEach(Array(recommendation.accessories.enumerated()), id: \.element.id) { index, item in
-                    DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
-                        .staggeredAnimation(index: 4 + index, isVisible: hasAppeared)
-                }
+            // All clothing items in layer order (v4.1)
+            ForEach(Array(recommendation.allItems.enumerated()), id: \.element.id) { index, item in
+                DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
+                    .staggeredAnimation(index: 1 + index, isVisible: hasAppeared)
             }
 
-            // Extras (rain gear, etc.)
-            if !recommendation.extras.isEmpty {
-                Text("Additional Gear")
+            // Tips (v4.1)
+            if !recommendation.tips.isEmpty {
+                Text("Tips")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.7))
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
-                    .staggeredAnimation(index: 4 + recommendation.accessories.count, isVisible: hasAppeared)
+                    .staggeredAnimation(index: 1 + recommendation.allItems.count, isVisible: hasAppeared)
 
-                ForEach(Array(recommendation.extras.enumerated()), id: \.element.id) { index, item in
-                    DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
-                        .staggeredAnimation(index: 5 + recommendation.accessories.count + index, isVisible: hasAppeared)
+                ForEach(Array(recommendation.tips.enumerated()), id: \.offset) { index, tip in
+                    Text(tip)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 4)
+                        .staggeredAnimation(index: 2 + recommendation.allItems.count + index, isVisible: hasAppeared)
                 }
             }
         }
@@ -290,7 +270,7 @@ struct WeatherOutfitView: View {
         )
         .padding(.horizontal, 16)
         .staggeredAnimation(
-            index: 5 + recommendation.accessories.count + recommendation.extras.count,
+            index: 5 + recommendation.allItems.count + recommendation.tips.count,
             isVisible: hasAppeared
         )
     }
@@ -304,9 +284,7 @@ struct WeatherOutfitView: View {
             "Temperature: \(Int(viewModel.currentTemperature))°\(viewModel.temperatureUnit == .fahrenheit ? "F" : "C")",
             "Condition: \(viewModel.currentCondition.rawValue)",
             "",
-            "Top: \(recommendation.top.name)",
-            "Bottom: \(recommendation.bottom.name)",
-            recommendation.accessories.isEmpty ? "" : "Accessories: \(recommendation.accessories.map { $0.name }.joined(separator: ", "))",
+            "Outfit: \(recommendation.allItems.map { $0.name }.joined(separator: ", "))",
             "",
             "Get your personalized running outfit at runwear.app"
         ].filter { !($0 as? String ?? "").isEmpty }

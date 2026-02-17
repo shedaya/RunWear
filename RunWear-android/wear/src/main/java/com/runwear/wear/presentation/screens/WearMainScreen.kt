@@ -267,7 +267,7 @@ private fun DateTimeSelector(
 @Composable
 private fun ClothingItemCard(item: ClothingItem) {
     val categoryColor = when (item.category) {
-        ClothingCategory.TOP_BASE, ClothingCategory.TOP_OUTER -> RunWearColors.Primary
+        ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER -> RunWearColors.Primary
         ClothingCategory.BOTTOM -> RunWearColors.Secondary
         ClothingCategory.HEAD -> RunWearColors.Tertiary
         ClothingCategory.HANDS -> MaterialTheme.colorScheme.tertiary
