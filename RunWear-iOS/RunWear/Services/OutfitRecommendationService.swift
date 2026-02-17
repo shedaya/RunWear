@@ -115,14 +115,14 @@ class OutfitRecommendationService {
         if isRaining {
             return ClothingItem(name: "Running Cap", description: "Keeps rain out of eyes", icon: "baseball.cap.fill", amazonSearchTerm: "running cap breathable")
         }
-        if temp >= 50 { return nil }
+        if temp >= 40 { return nil }
         if temp >= 30 {
             return ClothingItem(name: "Headband", description: "Ear warmer headband", icon: "ear.fill", amazonSearchTerm: "running ear warmer headband")
         }
-        if temp >= 10 {
+        if temp >= 15 {
             return ClothingItem(name: "Light Beanie", description: "Thin thermal beanie", icon: "brain.head.profile", amazonSearchTerm: "running beanie lightweight")
         }
-        if temp >= 0 {
+        if temp >= 5 {
             return ClothingItem(name: "Thermal Beanie", description: "Warm insulated beanie", icon: "brain.head.profile", amazonSearchTerm: "running beanie thermal winter")
         }
         return ClothingItem(name: "Balaclava", description: "Full face and neck coverage", icon: "face.dashed", amazonSearchTerm: "running balaclava cold weather")
@@ -130,10 +130,10 @@ class OutfitRecommendationService {
 
     private func selectHands(_ temp: Double) -> ClothingItem? {
         if temp >= 40 { return nil }
-        if temp >= 20 {
+        if temp >= 25 {
             return ClothingItem(name: "Light Gloves", description: "Thin touchscreen-compatible gloves", icon: "hand.raised.fill", amazonSearchTerm: "lightweight running gloves touchscreen")
         }
-        if temp >= 10 {
+        if temp >= 15 {
             return ClothingItem(name: "Thermal Gloves", description: "Insulated running gloves", icon: "hand.raised.fill", amazonSearchTerm: "insulated running gloves winter")
         }
         return ClothingItem(name: "Mittens", description: "Maximum warmth for extreme cold", icon: "hand.raised.fill", amazonSearchTerm: "running mittens warm")
