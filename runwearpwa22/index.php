@@ -3013,7 +3013,7 @@
             if (weather.uvIndex > 5) outfit.items.push(ClothingItems.SUNSCREEN);
             if (temp < 30) outfit.items.push(ClothingItems.NECK_GAITER);
             // Reflective gear for dawn/dusk/night
-            const hour = weather.hour || new Date().getHours();
+            const hour = weather.hour ?? new Date().getHours();
             if (hour < 7 || hour > 18) outfit.items.push(ClothingItems.REFLECTIVE_GEAR);
 
             // === TIPS ===
@@ -3095,8 +3095,9 @@
                     isRaining: c.rain > 0,
                     isSnowing: c.snowfall > 0,
                     cloudCover: c.cloud_cover,
-                    uvIndex: c.uv_index || 0,
-                    weatherCode: c.weather_code
+                    uvIndex: c.uv_index ?? 0,
+                    weatherCode: c.weather_code,
+                    hour: date.getHours()
                 };
             } else {
                 const targetHour = date.toISOString().slice(0, 13);
@@ -3116,7 +3117,8 @@
                     isSnowing: hourly.snowfall[idx] > 0,
                     cloudCover: hourly.cloud_cover[idx],
                     uvIndex: hourly.uv_index[idx],
-                    weatherCode: hourly.weather_code[idx]
+                    weatherCode: hourly.weather_code[idx],
+                    hour: date.getHours()
                 };
             }
             
