@@ -138,24 +138,8 @@ struct WatchOutfitView: View {
                     .background(temperatureColor.opacity(0.8))
                     .cornerRadius(8)
 
-                // Clothing Items
-                WatchClothingRow(
-                    item: recommendation.top,
-                    category: "Top",
-                    gender: viewModel.genderPreference
-                )
-
-                WatchClothingRow(
-                    item: recommendation.bottom,
-                    category: "Bottom",
-                    gender: viewModel.genderPreference
-                )
-
-                ForEach(recommendation.accessories) { item in
-                    WatchClothingRow(item: item, gender: viewModel.genderPreference)
-                }
-
-                ForEach(recommendation.extras) { item in
+                // Clothing Items (v4.1 — all items in layer order)
+                ForEach(recommendation.allItems) { item in
                     WatchClothingRow(item: item, gender: viewModel.genderPreference)
                 }
 

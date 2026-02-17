@@ -642,7 +642,7 @@ private fun WearPermissionScreen(onRequest: () -> Unit) {
 // ============================================================================
 
 private fun getCategoryColor(category: ClothingCategory): Color = when (category) {
-    ClothingCategory.TOP_BASE, ClothingCategory.TOP_OUTER -> RunWearColors.CategoryTop
+    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER -> RunWearColors.CategoryTop
     ClothingCategory.BOTTOM -> RunWearColors.CategoryBottom
     ClothingCategory.HEAD -> RunWearColors.CategoryHead
     ClothingCategory.HANDS -> RunWearColors.CategoryHands
@@ -651,6 +651,7 @@ private fun getCategoryColor(category: ClothingCategory): Color = when (category
 
 private fun getCategoryEmoji(category: ClothingCategory): String = when (category) {
     ClothingCategory.TOP_BASE -> "👕"
+    ClothingCategory.TOP_MID -> "🧥"
     ClothingCategory.TOP_OUTER -> "🧥"
     ClothingCategory.BOTTOM -> "👖"
     ClothingCategory.HEAD -> "🧢"

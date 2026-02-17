@@ -103,13 +103,24 @@ class WeatherViewModel: ObservableObject {
             // Get current hour snapshot or use current weather
             updateSelectedWeatherSnapshot()
 
-            // Generate recommendation based on selected weather
-            let temp = selectedWeatherSnapshot?.temperatureFahrenheit ?? weather.currentWeather.temperatureFahrenheit
-            let condition = selectedWeatherSnapshot?.condition ?? weather.currentWeather.condition
+            // Generate recommendation based on selected weather (v4.1: pass full weather data)
+            let snapshot = selectedWeatherSnapshot
+            let temp = snapshot?.temperatureFahrenheit ?? weather.currentWeather.temperatureFahrenheit
+            let condition = snapshot?.condition ?? weather.currentWeather.condition
+            let windSpeed = snapshot?.windSpeed ?? 0
+            let humidity = snapshot?.humidity ?? 50
+            let uvIndex = snapshot?.uvIndex ?? 0
+            let precipitation = Double(snapshot?.precipitationProbability ?? 0) / 100.0
+            let hour = snapshot?.hour ?? Calendar.current.component(.hour, from: Date())
 
             recommendation = outfitService.getRecommendation(
                 for: comfortLevel.adjustTemperature(temp),
-                condition: condition
+                condition: condition,
+                windSpeed: windSpeed,
+                humidity: humidity,
+                uvIndex: uvIndex,
+                precipitation: precipitation,
+                hour: hour
             )
 
             await reverseGeocode(location: location)

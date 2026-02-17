@@ -38,6 +38,17 @@ const BASE_ITEMS = [
     male: 'mens thermal compression base layer shirt, fitted athletic cut, brushed fleece interior, mock neck',
     female: 'womens thermal compression base layer shirt, slim fitted cut, brushed fleece interior, mock neck' },
 
+  // Tops - Mid Layer (v4.1 — layering system for cold-weather running)
+  { key: 'quarter-zip', pwaKey: 'QUARTER_ZIP',
+    male: 'mens running quarter-zip pullover, half-zip neckline, athletic fit, lightweight performance fabric, thumbholes at cuffs',
+    female: 'womens running quarter-zip pullover, half-zip neckline, slim fitted, lightweight performance fabric, thumbholes at cuffs' },
+  { key: 'fleece-pullover', pwaKey: 'FLEECE_PULLOVER',
+    male: 'mens lightweight running fleece pullover, crew neck, soft brushed interior, athletic fit, minimal seams',
+    female: 'womens lightweight running fleece pullover, crew neck, soft brushed interior, slim fit, minimal seams' },
+  { key: 'half-zip-thermal', pwaKey: 'HALF_ZIP_THERMAL',
+    male: 'mens thermal running half-zip top, insulated brushed interior, wind-resistant front panel, athletic fit, mock neck',
+    female: 'womens thermal running half-zip top, insulated brushed interior, wind-resistant front panel, slim fit, mock neck' },
+
   // Tops - Outer Layer
   { key: 'light-vest', pwaKey: 'LIGHT_VEST',
     male: 'mens lightweight running vest, wind-resistant front panel, mesh back, athletic fit',

@@ -341,9 +341,10 @@ class HeroImageRepository @Inject constructor() {
             else -> "focused, confident stride"
         }
 
-        // v3.14: Build outfit description from actual recommendation items
+        // v3.14/v4.1: Build outfit description from actual recommendation items
         val outfitParts = mutableListOf<String>()
         outfitParts.add(outfit.topBase.displayName.lowercase())
+        outfit.topMid?.let { outfitParts.add(it.displayName.lowercase()) }
         outfit.topOuter?.let { outfitParts.add(it.displayName.lowercase()) }
         outfitParts.add(outfit.bottom.displayName.lowercase())
         outfit.head?.let { outfitParts.add(it.displayName.lowercase()) }

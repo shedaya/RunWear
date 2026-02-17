@@ -192,7 +192,7 @@ fun OutfitCard(
  * Get the category accent color.
  */
 fun getCategoryColor(category: ClothingCategory): Color = when (category) {
-    ClothingCategory.TOP_BASE, ClothingCategory.TOP_OUTER -> RunWearColors.CategoryTop
+    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER -> RunWearColors.CategoryTop
     ClothingCategory.BOTTOM -> RunWearColors.CategoryBottom
     ClothingCategory.HEAD -> RunWearColors.CategoryHead
     ClothingCategory.HANDS -> RunWearColors.CategoryHands
@@ -205,6 +205,7 @@ fun getCategoryColor(category: ClothingCategory): Color = when (category) {
 val ClothingCategory.displayName: String
     get() = when (this) {
         ClothingCategory.TOP_BASE -> "Base Layer"
+        ClothingCategory.TOP_MID -> "Mid Layer"
         ClothingCategory.TOP_OUTER -> "Outer Layer"
         ClothingCategory.BOTTOM -> "Bottoms"
         ClothingCategory.HEAD -> "Head"
