@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">RunWear</string>
+
+    <!-- Tile -->
+    <string name="tile_outfit_label">Running Outfit</string>
+    <string name="tile_outfit_description">Weather and outfit recommendation for your run</string>
+
+    <!-- Complication -->
+    <string name="complication_outfit_label">RunWear Outfit</string>
 </resources>

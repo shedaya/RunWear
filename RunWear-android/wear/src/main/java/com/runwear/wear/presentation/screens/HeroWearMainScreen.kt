@@ -43,15 +43,13 @@ import androidx.wear.compose.foundation.rotary.rotaryScrollable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
-import androidx.wear.compose.foundation.rememberActiveFocusRequester
+// rememberActiveFocusRequester removed - using manual FocusRequester for pager pages
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.CardDefaults
 import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
-import androidx.wear.compose.material3.ScreenScaffold
-import androidx.wear.compose.material3.ScrollIndicator
 import coil.compose.AsyncImage
 import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
@@ -113,7 +111,8 @@ private fun HeroWearContent(
     Box(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 0
         ) { page ->
             when (page) {
                 0 -> HeroWeatherPage(
@@ -125,11 +124,13 @@ private fun HeroWearContent(
                 )
                 1 -> OutfitPage(
                     outfit = uiState.outfit!!,
-                    onRefresh = onRefresh
+                    onRefresh = onRefresh,
+                    isVisible = pagerState.currentPage == 1
                 )
                 2 -> TipsPage(
                     tips = uiState.outfit!!.tips,
-                    locationName = uiState.locationName
+                    locationName = uiState.locationName,
+                    isVisible = pagerState.currentPage == 2
                 )
             }
         }
@@ -340,51 +341,58 @@ private fun HeroWeatherPage(
 @Composable
 private fun OutfitPage(
     outfit: OutfitRecommendation,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    isVisible: Boolean = false
 ) {
-    val listState = rememberScalingLazyListState()
-    val focusRequester = rememberActiveFocusRequester()
+    val listState = rememberScalingLazyListState(initialCenterItemIndex = 0)
+    val focusRequester = remember { FocusRequester() }
 
-    ScreenScaffold(
-        scrollState = listState,
-        scrollIndicator = { ScrollIndicator(listState) }
+    LaunchedEffect(isVisible) {
+        if (isVisible) {
+            kotlinx.coroutines.delay(200)
+            focusRequester.requestFocus()
+        }
+    }
+
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .rotaryScrollable(
+                behavior = androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults.behavior(listState),
+                focusRequester = focusRequester
+            )
+            .focusable(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 24.dp),
+        autoCentering = null
     ) {
-        ScalingLazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .rotaryScrollable(
-                    behavior = androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults.behavior(listState),
-                    focusRequester = focusRequester
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
-        ) {
-            // Title
-            item {
-                Text(
-                    text = "Your Outfit",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = RunWearColors.Primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+        // Title
+        item {
+            Text(
+                text = "Your Outfit",
+                style = MaterialTheme.typography.labelMedium,
+                color = RunWearColors.Primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 2.dp)
+            )
+        }
 
-            // Outfit items as compact chips
-            items(outfit.allItems) { item ->
-                WearOutfitChip(item)
-            }
+        // Outfit items as compact chips
+        items(outfit.allItems) { item ->
+            WearOutfitChip(item)
+        }
 
-            // Refresh button
-            item {
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = onRefresh,
-                    modifier = Modifier.size(width = 100.dp, height = 36.dp)
-                ) {
-                    Text("Refresh", style = MaterialTheme.typography.labelSmall)
-                }
+        // Refresh button
+        item {
+            Spacer(Modifier.height(4.dp))
+            Button(
+                onClick = onRefresh,
+                modifier = Modifier.size(width = 80.dp, height = 32.dp)
+            ) {
+                Text("Refresh", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -394,57 +402,41 @@ private fun OutfitPage(
 private fun WearOutfitChip(item: ClothingItem) {
     val categoryColor = getCategoryColor(item.category)
 
-    Card(
-        onClick = { },
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = RunWearColors.SurfaceElevated
-        ),
-        shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(RunWearColors.SurfaceElevated)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        // Category color indicator
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Category color indicator
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(28.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(categoryColor)
-            )
+                .width(3.dp)
+                .height(20.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(categoryColor)
+        )
 
-            Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
 
-            // Icon
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(categoryColor.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = getCategoryEmoji(item.category),
-                    fontSize = 14.sp
-                )
-            }
+        // Icon
+        Text(
+            text = getCategoryEmoji(item.category),
+            fontSize = 12.sp
+        )
 
-            Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(6.dp))
 
-            // Name
-            Text(
-                text = item.displayName,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = RunWearColors.TextPrimary,
-                maxLines = 1,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        // Name
+        Text(
+            text = item.displayName,
+            style = MaterialTheme.typography.labelMedium,
+            color = RunWearColors.TextPrimary,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -455,62 +447,68 @@ private fun WearOutfitChip(item: ClothingItem) {
 @Composable
 private fun TipsPage(
     tips: List<String>,
-    locationName: String
+    locationName: String,
+    isVisible: Boolean = false
 ) {
-    val listState = rememberScalingLazyListState()
-    val focusRequester = rememberActiveFocusRequester()
+    val listState = rememberScalingLazyListState(initialCenterItemIndex = 0)
+    val focusRequester = remember { FocusRequester() }
 
-    ScreenScaffold(
-        scrollState = listState,
-        scrollIndicator = { ScrollIndicator(listState) }
+    LaunchedEffect(isVisible) {
+        if (isVisible) {
+            kotlinx.coroutines.delay(200)
+            focusRequester.requestFocus()
+        }
+    }
+
+    ScalingLazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .rotaryScrollable(
+                behavior = androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults.behavior(listState),
+                focusRequester = focusRequester
+            )
+            .focusable(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 24.dp),
+        autoCentering = null
     ) {
-        ScalingLazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .rotaryScrollable(
-                    behavior = androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults.behavior(listState),
-                    focusRequester = focusRequester
-                ),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
-        ) {
-            // Title
+        // Title
+        item {
+            Text(
+                text = "Tips",
+                style = MaterialTheme.typography.titleSmall,
+                color = RunWearColors.Primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        if (tips.isEmpty()) {
             item {
                 Text(
-                    text = "Tips",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = RunWearColors.Primary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (tips.isEmpty()) {
-                item {
-                    Text(
-                        text = "No specific tips for today. Enjoy your run!",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = RunWearColors.TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                items(tips) { tip ->
-                    WearTipCard(tip)
-                }
-            }
-
-            // Location footer
-            item {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = locationName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = RunWearColors.TextMuted,
+                    text = "No specific tips for today. Enjoy your run!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RunWearColors.TextSecondary,
                     textAlign = TextAlign.Center
                 )
             }
+        } else {
+            items(tips) { tip ->
+                WearTipCard(tip)
+            }
+        }
+
+        // Location footer
+        item {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = locationName,
+                style = MaterialTheme.typography.labelSmall,
+                color = RunWearColors.TextMuted,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

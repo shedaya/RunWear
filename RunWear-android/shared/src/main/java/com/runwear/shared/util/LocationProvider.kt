@@ -17,6 +17,12 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+private const val LOCATION_CACHE_PREFS = "location_cache"
+private const val KEY_LAT = "cached_lat"
+private const val KEY_LNG = "cached_lng"
+private const val KEY_TIME = "cached_time"
+private const val CACHE_MAX_AGE_MS = 3600_000L // 1 hour
+
 data class UserLocation(
     val latitude: Double,
     val longitude: Double
@@ -51,6 +57,49 @@ class LocationProvider @Inject constructor(
         ) == PackageManager.PERMISSION_GRANTED
     }
     
+    private fun cacheLocation(location: UserLocation) {
+        context.getSharedPreferences(LOCATION_CACHE_PREFS, Context.MODE_PRIVATE).edit()
+            .putFloat(KEY_LAT, location.latitude.toFloat())
+            .putFloat(KEY_LNG, location.longitude.toFloat())
+            .putLong(KEY_TIME, System.currentTimeMillis())
+            .apply()
+    }
+
+    fun getCachedLocation(): UserLocation? {
+        val prefs = context.getSharedPreferences(LOCATION_CACHE_PREFS, Context.MODE_PRIVATE)
+        val time = prefs.getLong(KEY_TIME, 0L)
+        if (time == 0L || System.currentTimeMillis() - time > CACHE_MAX_AGE_MS) return null
+        val lat = prefs.getFloat(KEY_LAT, 0f).toDouble()
+        val lng = prefs.getFloat(KEY_LNG, 0f).toDouble()
+        if (lat == 0.0 && lng == 0.0) return null
+        return UserLocation(lat, lng)
+    }
+
+    /**
+     * Get last known location instantly from cache. Returns null if no cached location.
+     * Ideal for background services (tiles, complications) where GPS may not be active.
+     */
+    suspend fun getLastKnownLocation(): UserLocation? {
+        if (!hasLocationPermission()) return null
+        return try {
+            suspendCancellableCoroutine { continuation ->
+                fusedLocationClient.lastLocation
+                    .addOnSuccessListener { location: Location? ->
+                        if (location != null) {
+                            continuation.resume(UserLocation(location.latitude, location.longitude))
+                        } else {
+                            continuation.resume(null)
+                        }
+                    }
+                    .addOnFailureListener {
+                        continuation.resume(null)
+                    }
+            }
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
     suspend fun getCurrentLocation(): Result<UserLocation> = runCatching {
         if (!hasLocationPermission()) {
             throw SecurityException("Location permission not granted")
@@ -69,12 +118,16 @@ class LocationProvider @Inject constructor(
                     cancellationTokenSource.token
                 ).addOnSuccessListener { location: Location? ->
                     if (location != null) {
-                        continuation.resume(UserLocation(location.latitude, location.longitude))
+                        val userLoc = UserLocation(location.latitude, location.longitude)
+                        cacheLocation(userLoc)
+                        continuation.resume(userLoc)
                     } else {
                         // Try to get last known location as fallback
                         fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation ->
                             if (lastLocation != null) {
-                                continuation.resume(UserLocation(lastLocation.latitude, lastLocation.longitude))
+                                val userLoc = UserLocation(lastLocation.latitude, lastLocation.longitude)
+                                cacheLocation(userLoc)
+                                continuation.resume(userLoc)
                             } else {
                                 continuation.resumeWithException(Exception("Unable to get location"))
                             }
@@ -114,12 +167,16 @@ class LocationProvider @Inject constructor(
                         cancellationTokenSource.token
                     ).addOnSuccessListener { location: Location? ->
                         if (location != null) {
-                            continuation.resume(UserLocation(location.latitude, location.longitude))
+                            val userLoc = UserLocation(location.latitude, location.longitude)
+                            cacheLocation(userLoc)
+                            continuation.resume(userLoc)
                         } else {
                             // Try last known location as fallback
                             fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation ->
                                 if (lastLocation != null) {
-                                    continuation.resume(UserLocation(lastLocation.latitude, lastLocation.longitude))
+                                    val userLoc = UserLocation(lastLocation.latitude, lastLocation.longitude)
+                                    cacheLocation(userLoc)
+                                    continuation.resume(userLoc)
                                 } else {
                                     continuation.resume(null)
                                 }

@@ -890,7 +890,7 @@ private fun ShopItemRow(
 
 private fun getCategoryColor(category: ClothingCategory): Color {
     return when (category) {
-        ClothingCategory.TOP_BASE, ClothingCategory.TOP_OUTER -> RunWearColors.CategoryTop
+        ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER -> RunWearColors.CategoryTop
         ClothingCategory.BOTTOM -> RunWearColors.CategoryBottom
         ClothingCategory.HEAD -> RunWearColors.CategoryHead
         ClothingCategory.HANDS -> RunWearColors.CategoryHands
@@ -901,6 +901,7 @@ private fun getCategoryColor(category: ClothingCategory): Color {
 private fun getCategoryDisplayName(category: ClothingCategory): String {
     return when (category) {
         ClothingCategory.TOP_BASE -> "Base Layer"
+        ClothingCategory.TOP_MID -> "Mid Layer"
         ClothingCategory.TOP_OUTER -> "Outer Layer"
         ClothingCategory.BOTTOM -> "Bottom"
         ClothingCategory.HEAD -> "Headwear"
