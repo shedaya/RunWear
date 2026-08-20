@@ -13,6 +13,7 @@ re-home of drafts, **not** a live-app transfer.
 | Type | Single-member domestic LLC (New York), member-managed |
 | Sole member | Sol Hedaya |
 | EIN | 99-4772290 (assigned 2024-09-04) |
+| D-U-N-S | 133510481 (received) |
 | IRS name control | UPTI |
 | NY DOS ID | 7411305 |
 | Formation date | 2024-09-03 (perpetual) |
@@ -44,9 +45,9 @@ re-home of drafts, **not** a live-app transfer.
 ## The long pole: D-U-N-S number
 
 Both Apple (Organization enrollment) and Google (organization account) require a
-**D-U-N-S number** for Uptime Ventures LLC. Everything below is gated on it.
+**D-U-N-S number** for Uptime Ventures LLC. This gate is now **cleared**.
 
-- [ ] D-U-N-S number issued (**applied for — in progress**)
+- [x] D-U-N-S number issued: **133510481**
 - [ ] LLC business bank account open (needed for store payouts)
 - [ ] W-9 / tax details ready for store payment profiles
 
