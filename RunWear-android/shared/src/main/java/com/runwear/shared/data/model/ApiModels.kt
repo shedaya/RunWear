@@ -25,7 +25,9 @@ data class CurrentWeather(
     @SerialName("cloud_cover") val cloudCover: Int,
     @SerialName("wind_speed_10m") val windSpeed: Double,
     @SerialName("wind_gusts_10m") val windGusts: Double,
-    @SerialName("uv_index") val uvIndex: Double? = null
+    @SerialName("uv_index") val uvIndex: Double? = null,
+    // Requested in the current= param list; default 0 keeps parsing safe if absent.
+    @SerialName("precipitation_probability") val precipitationProbability: Int = 0
 )
 
 @Serializable

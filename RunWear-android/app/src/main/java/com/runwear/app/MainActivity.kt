@@ -147,6 +147,15 @@ class MainActivity : ComponentActivity() {
         viewModel.checkLocationPermission()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Re-validate the saved GPS location against a fresh fix so the app
+        // never shows another city's weather indefinitely (F1). Manual
+        // locations are never overwritten; the check is debounced and
+        // distance-gated inside the ViewModel.
+        viewModel.onForegrounded()
+    }
+
     private fun requestLocationPermission() {
         locationPermissionLauncher.launch(
             arrayOf(

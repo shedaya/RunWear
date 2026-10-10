@@ -85,6 +85,11 @@ class MainViewModel @Inject constructor(
     private var currentLon: Double? = null
     private var searchJob: Job? = null
 
+    // Stale-location guard (F1): a saved GPS fix must not be reused forever.
+    // Re-poll GPS on foreground; only adopt the new fix if the user moved
+    // significantly, so we never cause a weather-refetch storm.
+    private var lastGpsRefreshMs: Long = 0L
+
     init {
         // Load affiliate partner
         viewModelScope.launch {
@@ -96,13 +101,15 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             val savedLocation = preferencesRepository.getSavedLocation()
             if (savedLocation != null) {
-                // Use saved manual location - skip GPS entirely
+                // Use saved location - skip GPS entirely for this launch.
+                // NOTE: the source is preserved ("manual" vs "gps") so a saved
+                // GPS fix can be re-validated on foreground (see onForegrounded).
                 currentLat = savedLocation.latitude
                 currentLon = savedLocation.longitude
                 _uiState.update {
                     it.copy(
                         locationName = savedLocation.name,
-                        locationSource = "manual",
+                        locationSource = savedLocation.source,
                         hasLocationPermission = true, // Bypass permission check
                         isLoading = true
                     )
@@ -166,6 +173,76 @@ class MainViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * Called from MainActivity.onResume(). Re-validates a saved GPS location
+     * against a fresh fix so the app never shows another city's weather
+     * forever (F1). A user-chosen MANUAL location is never overwritten.
+     * Debounced and distance-gated so this can't cause a refetch storm.
+     *
+     * @param force adopt the fresh fix regardless of distance (used when the
+     * user explicitly switches back to GPS).
+     */
+    fun onForegrounded(force: Boolean = false) {
+        // Never override an explicit manual location choice.
+        if (_uiState.value.locationSource == "manual") return
+        // Debounce: at most one background re-poll per 15 minutes.
+        val nowMs = System.currentTimeMillis()
+        if (!force && nowMs - lastGpsRefreshMs < GPS_REFRESH_DEBOUNCE_MS) return
+        // Nothing to re-validate yet (first launch is handled by checkLocationPermission).
+        if (currentLat == null || currentLon == null) return
+        if (!locationProvider.hasLocationPermission()) return
+
+        lastGpsRefreshMs = nowMs
+        viewModelScope.launch {
+            when (val result = locationProvider.getCurrentLocationWithTimeout()) {
+                is LocationFetchResult.Success -> {
+                    val newLat = result.location.latitude
+                    val newLon = result.location.longitude
+                    val movedKm = distanceKm(currentLat!!, currentLon!!, newLat, newLon)
+                    if (force || movedKm >= STALE_LOCATION_KM) {
+                        // User moved significantly: adopt the fresh fix.
+                        currentLat = newLat
+                        currentLon = newLon
+                        weatherRepository.reverseGeocode(newLat, newLon).fold(
+                            onSuccess = { name ->
+                                _uiState.update { it.copy(locationName = name, locationSource = "gps") }
+                                preferencesRepository.saveGPSLocation(newLat, newLon, name)
+                            },
+                            onFailure = {
+                                _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
+                                preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
+                            }
+                        )
+                        fetchWeather()
+                    }
+                    // Within STALE_LOCATION_KM: keep the saved fix, no refetch.
+                }
+                is LocationFetchResult.Error -> {
+                    // Keep the saved location silently; a failed background
+                    // re-poll must never surface an error or setup screen.
+                }
+            }
+        }
+    }
+
+    /** Haversine distance in kilometres. */
+    private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val r = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = Math.sin(dLat / 2).let { it * it } +
+                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                Math.sin(dLon / 2).let { it * it }
+        return 2 * r * Math.asin(Math.sqrt(a))
+    }
+
+    companion object {
+        /** Adopt a fresh GPS fix only if the user moved at least this far. */
+        private const val STALE_LOCATION_KM = 25.0
+        /** Minimum interval between background GPS re-polls. */
+        private const val GPS_REFRESH_DEBOUNCE_MS = 15 * 60 * 1000L
     }
     
     fun fetchCurrentLocation() {
@@ -471,7 +548,9 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesRepository.clearManualLocation()
             _uiState.update { it.copy(locationSource = "gps") }
-            // MainActivity will need to request permission if not granted
+            // Immediately re-poll GPS and adopt the fix unconditionally.
+            lastGpsRefreshMs = 0L
+            onForegrounded(force = true)
         }
     }
 

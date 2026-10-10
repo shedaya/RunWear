@@ -52,7 +52,7 @@ class WeatherRepository @Inject constructor(
             humidity = current.humidity,
             windSpeed = current.windSpeed,
             windGusts = current.windGusts,
-            precipitationProbability = 0,
+            precipitationProbability = current.precipitationProbability,
             precipitation = current.precipitation,
             isRaining = current.rain > 0,
             isSnowing = current.snowfall > 0,
@@ -80,10 +80,19 @@ class WeatherRepository @Inject constructor(
         )
         
         val hourly = response.hourly ?: throw Exception("No hourly weather data")
-        
-        // Find the closest hour in the forecast
+
+        // Find the closest hour in the forecast. A miss used to silently fall
+        // back to index 0 (potentially ~24h off); now it fails loudly so the
+        // UI shows the error screen with retry instead of wrong data (F2).
         val targetHour = dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH"))
-        val index = hourly.time.indexOfFirst { it.startsWith(targetHour) }.takeIf { it >= 0 } ?: 0
+        val index = hourly.time.indexOfFirst { it.startsWith(targetHour) }
+        if (index < 0) {
+            android.util.Log.e(
+                "WeatherRepository",
+                "No hourly entry for targetHour=$targetHour; refusing silent index-0 fallback"
+            )
+            throw Exception("No forecast data for the selected time")
+        }
         
         WeatherConditions(
             dateTime = dateTime,

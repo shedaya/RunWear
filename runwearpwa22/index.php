@@ -2954,8 +2954,9 @@
         // No arithmetic offset — the thresholds themselves reflect that runners generate 5-15× resting
         // metabolic heat. Sources: Nike, Jeff Galloway, Marathon Handbook, Tina Muir, Fleet Feet.
         function getOutfitRecommendation(weather) {
-            // Comfort adjustment only: "runs hot" (+10) shifts up, "runs cold" (-10) shifts down
-            const temp = weather.feelsLike + state.comfort;
+            // Comfort adjustment only: "runs hot" (+10) shifts up, "runs cold" (-10) shifts down.
+            // Engine thresholds are °F: normalize to Fahrenheit first (mirrors Android, F6).
+            const temp = (state.useCelsius ? weather.feelsLike * 9/5 + 32 : weather.feelsLike) + state.comfort;
             const isWindy = weather.windSpeed > 10;
             const isRaining = weather.isRaining;
 
@@ -3070,7 +3071,7 @@
             const params = new URLSearchParams({
                 latitude: lat,
                 longitude: lon,
-                current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
+                current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
                 hourly: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
                 temperature_unit: unit,
                 wind_speed_unit: windUnit,
@@ -3092,6 +3093,7 @@
                     windSpeed: c.wind_speed_10m,
                     windGusts: c.wind_gusts_10m,
                     precipitation: c.precipitation,
+                    precipitationProbability: c.precipitation_probability ?? 0,
                     isRaining: c.rain > 0,
                     isSnowing: c.snowfall > 0,
                     cloudCover: c.cloud_cover,
@@ -3100,10 +3102,17 @@
                     hour: date.getHours()
                 };
             } else {
-                const targetHour = date.toISOString().slice(0, 13);
+                // hourly.time entries are location-local (timezone=auto);
+                // toISOString() is UTC and was 4-5h off for US timezones (F5).
+                // Match on wall-clock components instead.
+                const p2 = n => String(n).padStart(2, '0');
+                const targetHour = `${date.getFullYear()}-${p2(date.getMonth() + 1)}-${p2(date.getDate())}T${p2(date.getHours())}`;
                 const hourly = data.hourly;
                 let idx = hourly.time.findIndex(t => t.startsWith(targetHour));
-                if (idx === -1) idx = 0;
+                if (idx === -1) {
+                    console.error(`[RunWear] no hourly entry for ${targetHour}; refusing silent index-0 fallback (F2)`);
+                    throw new Error('No forecast data for the selected time');
+                }
                 
                 weather = {
                     temp: hourly.temperature_2m[idx],
