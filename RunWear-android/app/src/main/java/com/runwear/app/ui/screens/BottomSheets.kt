@@ -2,12 +2,15 @@ package com.runwear.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import java.net.URLEncoder
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,18 +29,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.runwear.app.ui.components.getCategoryIconRes
 import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.domain.model.*
+import com.runwear.shared.domain.service.ClothingThumbnailService
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -49,15 +61,16 @@ import java.time.format.DateTimeFormatter
 private const val AMAZON_AFFILIATE_TAG = "runwear-20"
 private const val AMAZON_PLATFORM_SUBTAG = "android"
 
-private fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference): String {
+internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference): String {
     val genderPrefix = when (gender) {
-        GenderPreference.MALE -> "mens "
-        GenderPreference.FEMALE -> "womens "
+        GenderPreference.MALE -> "men's "
+        GenderPreference.FEMALE -> "women's "
         GenderPreference.UNISEX -> ""
     }
-    val searchTerm = "${genderPrefix}running ${item.displayName}"
-        .replace(" ", "+")
-    return "https://www.amazon.com/s?k=$searchTerm&tag=$AMAZON_AFFILIATE_TAG&ascsubtag=$AMAZON_PLATFORM_SUBTAG"
+    // Match web PWA buildAmazonLink: "premium " prefix, apostrophe gender forms, full encoding
+    val fullTerm = "premium $genderPrefix${item.amazonSearchTerm}".trim().replace("  ", " ")
+    val encoded = URLEncoder.encode(fullTerm, "UTF-8")
+    return "https://www.amazon.com/s?k=$encoded&tag=$AMAZON_AFFILIATE_TAG&ascsubtag=$AMAZON_PLATFORM_SUBTAG"
 }
 
 // ============================================================================
@@ -97,37 +110,43 @@ fun DatePickerSheet(
 
             Spacer(Modifier.height(24.dp))
 
-            // 2-column grid per PWA
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                days.chunked(2).forEach { rowDays ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        rowDays.forEach { date ->
-                            val isSelected = date == selectedDate
-                            val label = when {
-                                date == today -> "Today"
-                                date == today.plusDays(1) -> "Tomorrow"
-                                else -> date.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
-                            }
+            // Horizontal scroll row with two-line cells (matches web PWA)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                days.forEach { date ->
+                    val isSelected = date == selectedDate
+                    val label = when {
+                        date == today -> "Today"
+                        date == today.plusDays(1) -> "Tomorrow"
+                        else -> date.format(DateTimeFormatter.ofPattern("EEE"))
+                    }
+                    val sublabel = date.format(DateTimeFormatter.ofPattern("MMM d"))
 
-                            Surface(
-                                onClick = { onSelectDate(date) },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
-                            ) {
-                                Text(
-                                    text = label,
-                                    modifier = Modifier.padding(16.dp),
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else RunWearColors.TextPrimary
-                                )
-                            }
+                    Surface(
+                        onClick = { onSelectDate(date) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = label,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 14.sp,
+                                color = if (isSelected) Color.White else RunWearColors.TextPrimary
+                            )
+                            Text(
+                                text = sublabel,
+                                fontSize = 12.sp,
+                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else RunWearColors.TextSecondary
+                            )
                         }
-                        if (rowDays.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
@@ -729,9 +748,34 @@ fun LocationPickerSheet(
 // SHOP ALL SHEET - Shows all outfit items with Amazon links - PWA v2.9 Style
 // ============================================================================
 
-private fun buildShopAllUrl(): String {
-    val searchTerm = "running gear outfit".replace(" ", "+")
-    return "https://www.amazon.com/s?k=$searchTerm&tag=$AMAZON_AFFILIATE_TAG&ascsubtag=$AMAZON_PLATFORM_SUBTAG"
+private fun buildShopAllUrl(weatherCode: Int, gender: GenderPreference): String {
+    // Match web PWA shopAll(): weather-aware term through the same Amazon link builder
+    val weatherDesc = getWeatherDescription(weatherCode)
+    val genderPrefix = when (gender) {
+        GenderPreference.MALE -> "men's "
+        GenderPreference.FEMALE -> "women's "
+        GenderPreference.UNISEX -> ""
+    }
+    val fullTerm = "premium $genderPrefix$weatherDesc weather running gear".trim().replace("  ", " ")
+    val encoded = URLEncoder.encode(fullTerm, "UTF-8")
+    return "https://www.amazon.com/s?k=$encoded&tag=$AMAZON_AFFILIATE_TAG&ascsubtag=$AMAZON_PLATFORM_SUBTAG"
+}
+
+/**
+ * Weather description for search terms (ported from web PWA getWeatherDescription).
+ */
+private fun getWeatherDescription(code: Int): String {
+    return when {
+        code == 0 || code == 1 -> "sunny"
+        code in 2..3 -> "cloudy"
+        code in 45..48 -> "foggy"
+        code in 51..67 -> "rainy"
+        code in 71..77 -> "cold weather"
+        code in 80..82 -> "rainy"
+        code in 85..86 -> "snowy"
+        code >= 95 -> "stormy"
+        else -> "all weather"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -739,6 +783,7 @@ private fun buildShopAllUrl(): String {
 fun ShopAllSheet(
     items: List<ClothingItem>,
     genderPreference: GenderPreference,
+    weatherCode: Int,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
@@ -774,7 +819,7 @@ fun ShopAllSheet(
                 // Shop All button - PWA style
                 Surface(
                     onClick = {
-                        val url = buildShopAllUrl()
+                        val url = buildShopAllUrl(weatherCode, genderPreference)
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     },
                     shape = RoundedCornerShape(20.dp),
@@ -794,6 +839,7 @@ fun ShopAllSheet(
             items.forEach { item ->
                 ShopItemRow(
                     item = item,
+                    gender = genderPreference,
                     onClick = {
                         val url = buildAmazonSearchUrl(item, genderPreference)
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -801,7 +847,7 @@ fun ShopAllSheet(
                 )
             }
 
-            // FTC Disclosure
+            // FTC Disclosure (web PWA wording verbatim)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -813,10 +859,30 @@ fun ShopAllSheet(
                     .padding(14.dp)
             ) {
                 Text(
-                    text = "Affiliate Disclosure: As an Amazon Associate, RunWear earns from qualifying purchases. This helps support the app at no extra cost to you.",
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append("Affiliate Disclosure: ")
+                        }
+                        append("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
+                    },
                     fontSize = 11.sp,
                     color = RunWearColors.TextMuted,
                     lineHeight = 16.sp
+                )
+            }
+
+            // Close button (matches web PWA explicit Close)
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    "Close",
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
 
@@ -828,9 +894,15 @@ fun ShopAllSheet(
 @Composable
 private fun ShopItemRow(
     item: ClothingItem,
+    gender: GenderPreference,
     onClick: () -> Unit
 ) {
     val categoryColor = getCategoryColor(item.category)
+    val context = LocalContext.current
+    val thumbnailUrl = remember(item, gender) {
+        ClothingThumbnailService.getThumbnailUrl(item, gender)
+    }
+    var thumbnailLoaded by remember { mutableStateOf(false) }
 
     Surface(
         onClick = onClick,
@@ -846,20 +918,39 @@ private fun ShopItemRow(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon
+            // Icon box: SVG category icon base + AI thumbnail overlay (matches web PWA)
             Box(
                 modifier = Modifier
                     .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(
-                        categoryColor.copy(alpha = 0.15f),
-                        RoundedCornerShape(10.dp)
+                        categoryColor.copy(alpha = 0.15f)
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = item.icon,
-                    fontSize = 20.sp
-                )
+                if (!thumbnailLoaded) {
+                    Icon(
+                        painter = painterResource(id = getCategoryIconRes(item.category)),
+                        contentDescription = null,
+                        tint = categoryColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                if (thumbnailUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(thumbnailUrl)
+                            .crossfade(300)
+                            .build(),
+                        contentDescription = item.displayName,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(10.dp))
+                            .graphicsLayer { alpha = if (thumbnailLoaded) 1f else 0f },
+                        onSuccess = { thumbnailLoaded = true },
+                        onError = { thumbnailLoaded = false }
+                    )
+                }
             }
 
             Spacer(Modifier.width(12.dp))
@@ -907,96 +998,6 @@ private fun getCategoryDisplayName(category: ClothingCategory): String {
         ClothingCategory.HEAD -> "Headwear"
         ClothingCategory.HANDS -> "Gloves"
         ClothingCategory.ACCESSORIES -> "Accessories"
-    }
-}
-
-// ============================================================================
-// SINGLE ITEM SHOP SHEET
-// ============================================================================
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ShopSheet(
-    item: ClothingItem,
-    genderPreference: GenderPreference,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState()
-    val context = LocalContext.current
-    val categoryColor = getCategoryColor(item.category)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = RunWearColors.Surface,
-        dragHandle = { ModalDragHandle() }
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Item icon
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(
-                        categoryColor.copy(alpha = 0.15f),
-                        RoundedCornerShape(20.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = item.icon, fontSize = 40.sp)
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Text(
-                text = item.displayName,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
-            )
-
-            Text(
-                text = getCategoryDisplayName(item.category),
-                fontSize = 14.sp,
-                color = RunWearColors.TextSecondary
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            // Item description
-            Text(
-                text = item.description,
-                fontSize = 14.sp,
-                color = RunWearColors.TextSecondary,
-                textAlign = TextAlign.Center,
-                lineHeight = 20.sp
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            // Amazon button
-            Button(
-                onClick = {
-                    val url = buildAmazonSearchUrl(item, genderPreference)
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text(
-                    "Shop on Amazon",
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
-
-            Spacer(Modifier.height(32.dp))
-        }
     }
 }
 
@@ -1079,14 +1080,27 @@ private fun WindDetail(weather: WeatherConditions) {
         Spacer(Modifier.height(16.dp))
         DetailRow("Speed", "${weather.windSpeed.toInt()} $unit")
         DetailRow("Gusts", "${weather.windGusts.toInt()} $unit")
+        DetailRow("Direction", "${windDirectionLabel(weather.windDirection)} (${weather.windDirection}°)")
         Spacer(Modifier.height(12.dp))
         Text(
-            text = "Wind can make it feel cooler. Dress slightly warmer on windy days.",
+            text = "A headwind cools you faster — layer up on the outbound leg. A tailwind means you'll warm up quicker on the return.",
             fontSize = 14.sp,
             color = RunWearColors.TextSecondary,
             lineHeight = 20.sp
         )
     }
+}
+
+/**
+ * Convert wind direction degrees to 16-point compass label.
+ */
+private fun windDirectionLabel(degrees: Int): String {
+    val directions = listOf(
+        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
+    )
+    val index = (((degrees % 360) + 11.25) / 22.5).toInt() % 16
+    return directions[index]
 }
 
 @Composable
@@ -1145,15 +1159,23 @@ private fun PrecipitationDetail(weather: WeatherConditions) {
         }
         Spacer(Modifier.height(16.dp))
         DetailRow("Chance of Rain", "${weather.precipitationProbability}%")
-        if (weather.precipitation > 0) {
-            DetailRow("Expected Amount", "${weather.precipitation} mm")
+        // Match web: show "None" when 0, use in/mm by unit (Open-Meteo returns mm)
+        val amountText = when {
+            weather.precipitation <= 0 -> "None"
+            weather.isCelsius -> "${weather.precipitation} mm"
+            else -> "${String.format("%.2f", weather.precipitation / 25.4)} in"
         }
+        DetailRow("Expected Amount", amountText)
         Spacer(Modifier.height(12.dp))
         Text(
-            text = if (weather.precipitationProbability > 50)
-                "High chance of rain. Consider a water-resistant jacket."
-            else
-                "Low chance of rain, but be prepared for changing conditions.",
+            text = when {
+                weather.precipitationProbability > 70 ->
+                    "High chance of rain — a water-resistant jacket is worth it. Trails will be slick; road running is the safer call."
+                weather.precipitationProbability > 40 ->
+                    "Decent chance of rain. A light rain shell packs small and saves the run if skies open up."
+                else ->
+                    "Low chance of rain, but conditions can shift. A packable shell is cheap insurance."
+            },
             fontSize = 14.sp,
             color = RunWearColors.TextSecondary,
             lineHeight = 20.sp
@@ -1169,6 +1191,11 @@ private fun UVDetail(weather: WeatherConditions) {
         weather.uvIndex >= 6 -> "High"
         weather.uvIndex >= 3 -> "Moderate"
         else -> "Low"
+    }
+    val protection = when {
+        weather.uvIndex >= 6 -> "Sunscreen, sunglasses, hat"
+        weather.uvIndex >= 3 -> "Sunglasses recommended"
+        else -> "No protection needed"
     }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1189,10 +1216,12 @@ private fun UVDetail(weather: WeatherConditions) {
         Spacer(Modifier.height(16.dp))
         DetailRow("UV Index", "${weather.uvIndex.toInt()}")
         DetailRow("Risk Level", riskLevel)
+        DetailRow("Protection", protection)
+        DetailRow("Peak Hours", "10am – 4pm")
         Spacer(Modifier.height(12.dp))
         Text(
             text = if (weather.uvIndex >= 6)
-                "High UV! Wear sunscreen, sunglasses, and a hat. Avoid peak hours (10am-4pm)."
+                "High UV! Wear sunscreen, sunglasses, and a hat. Avoid peak hours (10am-4pm) or run early."
             else
                 "Moderate UV exposure. Sunglasses recommended for comfort.",
             fontSize = 14.sp,

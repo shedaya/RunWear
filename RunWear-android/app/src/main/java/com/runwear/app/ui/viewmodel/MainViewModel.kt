@@ -49,7 +49,6 @@ data class MainUiState(
     val showDatePicker: Boolean = false,
     val showTimePicker: Boolean = false,
     val showSettings: Boolean = false,
-    val showShopSheet: Boolean = false,
     val affiliatePartner: AffiliatePartner = AffiliatePartner.AMAZON,
     // Location fallback state
     val showLocationSetup: Boolean = false,
@@ -584,10 +583,6 @@ class MainViewModel @Inject constructor(
             fetchHeroImage(weather, outfit)
         }
     }
-
-    // Shop Sheet
-    fun showShopSheet() { _uiState.update { it.copy(showShopSheet = true) } }
-    fun hideShopSheet() { _uiState.update { it.copy(showShopSheet = false) } }
 
     fun getAffiliateLinkForItem(item: ClothingItem): String {
         val partner = _uiState.value.affiliatePartner

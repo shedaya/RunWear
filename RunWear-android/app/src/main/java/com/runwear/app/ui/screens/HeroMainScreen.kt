@@ -1,6 +1,7 @@
 package com.runwear.app.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -8,17 +9,22 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -92,7 +98,6 @@ fun HeroMainScreen(
     onDateSelected: (LocalDate) -> Unit,
     onTimeSelected: (Int) -> Unit,
     onResetToNow: () -> Unit,
-    onShopItem: (ClothingItem) -> Unit,
     onLocationSearch: (String) -> Unit,
     onLocationSelect: (Double, Double, String) -> Unit,
     onUseCurrentLocation: () -> Unit = {},
@@ -105,7 +110,6 @@ fun HeroMainScreen(
     var showSettings by remember { mutableStateOf(false) }
     var showLocationPicker by remember { mutableStateOf(false) }
     var showShopAll by remember { mutableStateOf(false) }
-    var selectedShopItem by remember { mutableStateOf<ClothingItem?>(null) }
     var weatherDetailType by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
@@ -118,25 +122,27 @@ fun HeroMainScreen(
         }
     }
 
-    // Share function
+    // Share function - matches web PWA shareOutfit verbatim
     fun shareOutfit() {
         val weather = uiState.weather ?: return
         val outfit = uiState.outfit ?: return
         val unit = if (weather.isCelsius) "°C" else "°F"
+        val tempBracket = getTempBracket(weather.effectiveTemperature, weather.isCelsius)
 
         val itemsList = outfit.allItems.joinToString("\n") { "• ${it.displayName}" }
         val shareText = """
-🏃 RunWear Outfit Recommendation
+🏃 RunWear Recommendation
 
 📍 ${uiState.locationName}
-🌡️ Feels like ${weather.effectiveTemperature.toInt()}$unit
+🌡️ Feels like ${weather.effectiveTemperature.toInt()}$unit ($tempBracket)
+${weather.weatherCode.icon} ${weather.weatherCode.description}
 
-${outfit.allItems.size} Items for Your Run:
+What to wear:
 $itemsList
 
 ${if (outfit.tips.isNotEmpty()) "💡 Tip: ${outfit.tips.first()}" else ""}
 
-Get your personalized running outfit at runwear.app
+Get your personalized running outfit at runwear.ai
         """.trimIndent()
 
         val sendIntent = Intent().apply {
@@ -147,11 +153,21 @@ Get your personalized running outfit at runwear.app
         context.startActivity(Intent.createChooser(sendIntent, "Share your outfit"))
     }
 
-    Box(
+    // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned)
+    // COMPACT: phone portrait (< 600dp) — single column
+    // MEDIUM: foldable unfolded / tablet portrait (600-840dp) — centered max-width column
+    // EXPANDED: tablet landscape / desktop (> 840dp) — two-pane
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
+        val layout = when {
+            maxWidth < 600.dp -> AdaptiveLayout.COMPACT
+            maxWidth < 840.dp -> AdaptiveLayout.MEDIUM
+            else -> AdaptiveLayout.EXPANDED
+        }
+
         when {
             uiState.isLoading -> HeroShimmerPlaceholder()
             uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
@@ -170,146 +186,123 @@ Get your personalized running outfit at runwear.app
                     state = pullToRefreshState,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 60.dp)
-                    ) {
-                        // Hero Section
-                        item {
-                            AnimatedVisibility(
-                                visible = contentVisible,
-                                enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+                    when (layout) {
+                        AdaptiveLayout.COMPACT -> {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 60.dp)
                             ) {
-                                HeroSection(
-                                    weather = uiState.weather,
-                                    outfit = uiState.outfit,
-                                    locationName = uiState.locationName,
-                                    selectedDateTime = uiState.selectedDateTime,
-                                    heroImageUrl = uiState.heroImageUrl,
-                                    scrollOffset = scrollOffset.value,
-                                    onDateClick = { showDatePicker = true },
-                                    onTimeClick = { showTimePicker = true },
-                                    onNowClick = onResetToNow,
-                                    onLocationClick = { showLocationPicker = true },
-                                    onSettingsClick = { showSettings = true },
-                                    onShareClick = { shareOutfit() },
-                                    onTempClick = onToggleUnit,
-                                    onWeatherPillClick = { type -> weatherDetailType = type },
-                                    modifier = Modifier.fillMaxWidth()
+                                item {
+                                    HeroSectionContent(
+                                        uiState = uiState,
+                                        contentVisible = contentVisible,
+                                        scrollOffset = scrollOffset.value,
+                                        onDateClick = { showDatePicker = true },
+                                        onTimeClick = { showTimePicker = true },
+                                        onNowClick = onResetToNow,
+                                        onLocationClick = { showLocationPicker = true },
+                                        onSettingsClick = { showSettings = true },
+                                        onShareClick = { shareOutfit() },
+                                        onTempClick = onToggleUnit,
+                                        onWeatherPillClick = { type -> weatherDetailType = type },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                                outfitListItems(
+                                    uiState = uiState,
+                                    contentVisible = contentVisible,
+                                    onShopAllClick = { showShopAll = true },
+                                    onItemClick = { item ->
+                                        val url = buildAmazonSearchUrl(item, uiState.genderPreference)
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    }
                                 )
                             }
                         }
-
-                        // Outfit Section Header
-                        item {
-                            AnimatedVisibility(
-                                visible = contentVisible,
-                                enter = fadeIn(tween(300, delayMillis = 200))
+                        AdaptiveLayout.MEDIUM -> {
+                            // Centered column, max 600dp wide (foldable unfolded, tablet portrait)
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.TopCenter
                             ) {
-                                Row(
+                                LazyColumn(
+                                    state = listState,
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp)
-                                        .padding(top = 24.dp, bottom = 16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .widthIn(max = 600.dp)
+                                        .fillMaxSize(),
+                                    contentPadding = PaddingValues(bottom = 60.dp)
                                 ) {
-                                    // "X Items for Your Run"
-                                    Text(
-                                        text = "${uiState.outfit.allItems.size} Items for Your Run",
-                                        fontFamily = BebasNeueFontFamily,
-                                        fontSize = 28.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = RunWearColors.TextPrimary,
-                                        letterSpacing = 0.56.sp
-                                    )
-
-                                    // Shop button - opens shop modal
-                                    Box(
-                                        modifier = Modifier
-                                            .shadow(
-                                                elevation = 8.dp,
-                                                shape = RoundedCornerShape(50),
-                                                ambientColor = RunWearColors.PrimaryGlow,
-                                                spotColor = RunWearColors.PrimaryGlow
-                                            )
-                                            .background(
-                                                brush = Brush.linearGradient(
-                                                    colors = listOf(
-                                                        RunWearColors.Primary,
-                                                        RunWearColors.PrimaryLight
-                                                    ),
-                                                    start = Offset(0f, 0f),
-                                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                                                ),
-                                                shape = RoundedCornerShape(50)
-                                            )
-                                            .clickable { showShopAll = true }
-                                            .padding(horizontal = 18.dp, vertical = 10.dp)
-                                    ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.ShoppingBag,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                                tint = Color.White
-                                            )
-                                            Text(
-                                                text = "Shop",
-                                                fontWeight = FontWeight.SemiBold,
-                                                fontSize = 13.sp,
-                                                color = Color.White
-                                            )
-                                        }
+                                    item {
+                                        HeroSectionContent(
+                                            uiState = uiState,
+                                            contentVisible = contentVisible,
+                                            scrollOffset = scrollOffset.value,
+                                            onDateClick = { showDatePicker = true },
+                                            onTimeClick = { showTimePicker = true },
+                                            onNowClick = onResetToNow,
+                                            onLocationClick = { showLocationPicker = true },
+                                            onSettingsClick = { showSettings = true },
+                                            onShareClick = { shareOutfit() },
+                                            onTempClick = onToggleUnit,
+                                            onWeatherPillClick = { type -> weatherDetailType = type },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
                                     }
+                                    outfitListItems(
+                                        uiState = uiState,
+                                        contentVisible = contentVisible,
+                                        onShopAllClick = { showShopAll = true },
+                                        onItemClick = { item ->
+                                            val url = buildAmazonSearchUrl(item, uiState.genderPreference)
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        }
+                                    )
                                 }
                             }
                         }
-
-                        // Outfit Cards with AI-generated thumbnails
-                        val items = uiState.outfit.allItems
-                        items(items.size) { index ->
-                            OutfitCard(
-                                item = items[index],
-                                onClick = { selectedShopItem = items[index] },
-                                animationDelay = index * 50,
-                                gender = uiState.genderPreference,
-                                modifier = Modifier.padding(
-                                    horizontal = 20.dp,
-                                    vertical = 5.dp
-                                )
-                            )
-                        }
-
-                        // PRO TIP Section
-                        if (uiState.outfit.tips.isNotEmpty()) {
-                            item {
-                                TipsSection(
-                                    tips = uiState.outfit.tips,
+                        AdaptiveLayout.EXPANDED -> {
+                            // Two-pane: weather/overview left, outfit list right (tablet landscape, desktop)
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                // Left pane: Hero section (fixed, 40%)
+                                Box(
                                     modifier = Modifier
-                                        .padding(horizontal = 20.dp)
-                                        .padding(top = 20.dp)
-                                )
+                                        .weight(0.4f)
+                                        .fillMaxHeight()
+                                ) {
+                                    HeroSectionContent(
+                                        uiState = uiState,
+                                        contentVisible = contentVisible,
+                                        scrollOffset = 0f,
+                                        onDateClick = { showDatePicker = true },
+                                        onTimeClick = { showTimePicker = true },
+                                        onNowClick = onResetToNow,
+                                        onLocationClick = { showLocationPicker = true },
+                                        onSettingsClick = { showSettings = true },
+                                        onShareClick = { shareOutfit() },
+                                        onTempClick = onToggleUnit,
+                                        onWeatherPillClick = { type -> weatherDetailType = type },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                                // Right pane: outfit list (scrollable, 60%)
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(0.6f)
+                                        .fillMaxHeight(),
+                                    contentPadding = PaddingValues(bottom = 60.dp)
+                                ) {
+                                    outfitListItems(
+                                        uiState = uiState,
+                                        contentVisible = contentVisible,
+                                        onShopAllClick = { showShopAll = true },
+                                        onItemClick = { item ->
+                                            val url = buildAmazonSearchUrl(item, uiState.genderPreference)
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                        }
+                                    )
+                                }
                             }
-                        }
-
-                        item { Spacer(Modifier.height(16.dp)) }
-
-                        // Version footer
-                        item {
-                            Text(
-                                text = "v3.12",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = RunWearColors.TextMuted.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 24.dp),
-                                textAlign = TextAlign.Center
-                            )
                         }
                     }
                 }
@@ -375,20 +368,12 @@ Get your personalized running outfit at runwear.app
     }
 
     // Shop All Modal (shows all outfit items)
-    if (showShopAll && uiState.outfit != null) {
+    if (showShopAll && uiState.outfit != null && uiState.weather != null) {
         ShopAllSheet(
             items = uiState.outfit.allItems,
             genderPreference = uiState.genderPreference,
+            weatherCode = uiState.weather.weatherCode.code,
             onDismiss = { showShopAll = false }
-        )
-    }
-
-    // Individual Item Shop Sheet
-    selectedShopItem?.let { item ->
-        ShopSheet(
-            item = item,
-            genderPreference = uiState.genderPreference,
-            onDismiss = { selectedShopItem = null }
         )
     }
 
@@ -405,8 +390,203 @@ Get your personalized running outfit at runwear.app
 }
 
 // ============================================================================
+// ADAPTIVE LAYOUT HELPERS
+// ============================================================================
+
+/**
+ * Adaptive layout breakpoints aligned with Material3 WindowSizeClass.
+ * BoxWithConstraints is used (no new dependencies) to handle foldables,
+ * tablets, and desktop windows — recomposes automatically on posture changes.
+ */
+private enum class AdaptiveLayout { COMPACT, MEDIUM, EXPANDED }
+
+/**
+ * Hero section with entrance animation (shared across all adaptive layouts).
+ */
+@Composable
+private fun HeroSectionContent(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    scrollOffset: Float,
+    onDateClick: () -> Unit,
+    onTimeClick: () -> Unit,
+    onNowClick: () -> Unit,
+    onLocationClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onTempClick: () -> Unit,
+    onWeatherPillClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = contentVisible,
+        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+    ) {
+        HeroSection(
+            weather = uiState.weather,
+            outfit = uiState.outfit,
+            locationName = uiState.locationName,
+            selectedDateTime = uiState.selectedDateTime,
+            heroImageUrl = uiState.heroImageUrl,
+            scrollOffset = scrollOffset,
+            onDateClick = onDateClick,
+            onTimeClick = onTimeClick,
+            onNowClick = onNowClick,
+            onLocationClick = onLocationClick,
+            onSettingsClick = onSettingsClick,
+            onShareClick = onShareClick,
+            onTempClick = onTempClick,
+            onWeatherPillClick = onWeatherPillClick,
+            modifier = modifier
+        )
+    }
+}
+
+/**
+ * Outfit list items for a LazyColumn: section header, cards, tips, footer.
+ * Shared across COMPACT/MEDIUM (full list) and EXPANDED (right pane) layouts.
+ */
+private fun LazyListScope.outfitListItems(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    onShopAllClick: () -> Unit,
+    onItemClick: (ClothingItem) -> Unit
+) {
+    val outfit = uiState.outfit ?: return
+
+    // Outfit Section Header
+    item {
+        AnimatedVisibility(
+            visible = contentVisible,
+            enter = fadeIn(tween(300, delayMillis = 200))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 24.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // "X Items for Your Run"
+                Text(
+                    text = "${outfit.allItems.size} Items for Your Run",
+                    fontFamily = BebasNeueFontFamily,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = RunWearColors.TextPrimary,
+                    letterSpacing = 0.56.sp
+                )
+
+                // Shop button - opens shop modal
+                Box(
+                    modifier = Modifier
+                        .shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(50),
+                            ambientColor = RunWearColors.PrimaryGlow,
+                            spotColor = RunWearColors.PrimaryGlow
+                        )
+                        .background(
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    RunWearColors.Primary,
+                                    RunWearColors.PrimaryLight
+                                ),
+                                start = Offset(0f, 0f),
+                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                            ),
+                            shape = RoundedCornerShape(50)
+                        )
+                        .clickable { onShopAllClick() }
+                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ShoppingBag,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            text = "Shop",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Outfit Cards with AI-generated thumbnails
+    // Tap opens Amazon directly (matches web PWA - no intermediate sheet)
+    val items = outfit.allItems
+    items(items.size) { index ->
+        val item = items[index]
+        OutfitCard(
+            item = item,
+            onClick = { onItemClick(item) },
+            animationDelay = index * 50,
+            gender = uiState.genderPreference,
+            modifier = Modifier.padding(
+                horizontal = 20.dp,
+                vertical = 5.dp
+            )
+        )
+    }
+
+    // Pro Tip Section
+    if (outfit.tips.isNotEmpty()) {
+        item {
+            TipsSection(
+                tips = outfit.tips,
+                modifier = Modifier
+                    .padding(horizontal = 20.dp)
+                    .padding(top = 20.dp)
+            )
+        }
+    }
+
+    item { Spacer(Modifier.height(16.dp)) }
+
+    // Version footer
+    item {
+        Text(
+            text = "v3.12",
+            style = MaterialTheme.typography.bodySmall,
+            color = RunWearColors.TextMuted.copy(alpha = 0.5f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+// ============================================================================
 // ERROR SCREEN
 // ============================================================================
+
+/**
+ * Temperature bracket label (ported from web PWA getTempBracket).
+ * Used in share text to describe conditions.
+ */
+private fun getTempBracket(temp: Double, isCelsius: Boolean): String {
+    val f = if (isCelsius) temp * 9 / 5 + 32 else temp
+    return when {
+        f >= 80 -> "hot"
+        f >= 65 -> "warm"
+        f >= 50 -> "mild"
+        f >= 35 -> "cool"
+        f >= 20 -> "cold"
+        else -> "freezing"
+    }
+}
 
 @Composable
 private fun HeroErrorScreen(

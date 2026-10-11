@@ -97,7 +97,6 @@ class MainActivity : ComponentActivity() {
                                     onDateSelected = viewModel::selectDate,
                                     onTimeSelected = viewModel::selectHour,
                                     onResetToNow = viewModel::resetToNow,
-                                    onShopItem = { /* Handled in HeroMainScreen */ },
                                     onLocationSearch = viewModel::searchLocation,
                                     onLocationSelect = viewModel::selectManualLocation,
                                     isUsingGPS = uiState.locationSource == "gps",

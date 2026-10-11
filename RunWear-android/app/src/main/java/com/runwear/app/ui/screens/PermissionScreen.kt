@@ -3,8 +3,15 @@ package com.runwear.app.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -18,6 +25,8 @@ fun PermissionScreen(
     onSetManualLocation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showGpsHelp by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -69,6 +78,42 @@ fun PermissionScreen(
                 Text("Set Location Manually")
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // GPS troubleshooting (ported from web PWA renderGPSHelp)
+            TextButton(
+                onClick = { showGpsHelp = !showGpsHelp },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.HelpOutline,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Trouble enabling location?")
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = if (showGpsHelp) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            if (showGpsHelp) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GpsHelpStep(1, "When prompted, tap Allow")
+                    GpsHelpStep(2, "If you previously denied: open Settings → Apps → RunWear → Permissions")
+                    GpsHelpStep(3, "Tap Location and select \"Allow only while using the app\"")
+                    GpsHelpStep(4, "Return here and tap \"Grant Location Access\" again")
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
@@ -78,5 +123,27 @@ fun PermissionScreen(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+private fun GpsHelpStep(number: Int, text: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = "$number",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(end = 10.dp, top = 1.dp)
+        )
+        Text(
+            text = text,
+            fontSize = 13.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = 19.sp
+        )
     }
 }

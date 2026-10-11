@@ -68,6 +68,8 @@ fun OnboardingScreen(
     var temperatureUnit by remember { mutableStateOf(TemperatureUnit.FAHRENHEIT) }
     var genderPreference by remember { mutableStateOf(GenderPreference.UNISEX) } // Neither selected
     var comfortPreference by remember { mutableStateOf(ComfortPreference.NEUTRAL) }
+    // Two-step flow matching web PWA: preferences first, then location
+    var showLocationStep by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -105,7 +107,7 @@ fun OnboardingScreen(
 
             Spacer(Modifier.height(24.dp))
 
-            // Title: "Welcome! 👋"
+            // Title: "Welcome! 👋" (matches web PWA verbatim)
             Text(
                 text = "Welcome! 👋",
                 fontSize = 28.sp,
@@ -115,7 +117,7 @@ fun OnboardingScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Subtitle
+            // Subtitle (matches web PWA verbatim)
             Text(
                 text = "Let's prepare your perfect run. You can always change these later.",
                 fontSize = 16.sp,
@@ -127,103 +129,141 @@ fun OnboardingScreen(
 
             Spacer(Modifier.height(40.dp))
 
-            // ========================================
-            // 1. Temperature Unit Toggle
-            // ========================================
-            PreferenceSection(title = "Temperature Unit") {
-                FullWidthToggle(
-                    options = listOf("°F", "°C"),
-                    selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
-                    onSelect = { index ->
-                        temperatureUnit = if (index == 0) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
-                    }
-                )
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // ========================================
-            // 2. Fit Preference (Male / Female)
-            // ========================================
-            PreferenceSection(title = "Fit Preference") {
-                FullWidthToggle(
-                    options = listOf("Male", "Female"),
-                    selectedIndex = when (genderPreference) {
-                        GenderPreference.MALE -> 0
-                        GenderPreference.FEMALE -> 1
-                        GenderPreference.UNISEX -> -1 // Neither selected
-                    },
-                    onSelect = { index ->
-                        val newPref = if (index == 0) GenderPreference.MALE else GenderPreference.FEMALE
-                        // Toggle behavior: if already selected, deselect
-                        genderPreference = if (genderPreference == newPref) {
-                            GenderPreference.UNISEX
-                        } else {
-                            newPref
+            if (!showLocationStep) {
+                // ========================================
+                // STEP 1: Preferences (web PWA copy verbatim)
+                // ========================================
+                PreferenceSection(
+                    title = "Temperature",
+                    sublabel = "How do you measure the weather?"
+                ) {
+                    FullWidthToggle(
+                        options = listOf("°F", "°C"),
+                        selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
+                        onSelect = { index ->
+                            temperatureUnit = if (index == 0) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
                         }
-                    },
-                    allowDeselect = true
-                )
-            }
+                    )
+                }
 
-            Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
 
-            // ========================================
-            // 3. Body Temperature (Comfort Slider)
-            // ========================================
-            PreferenceSection(title = "Body Temperature") {
+                PreferenceSection(
+                    title = "Fit Preference",
+                    sublabel = "We'll tailor product recommendations"
+                ) {
+                    FullWidthToggle(
+                        options = listOf("Male", "Female"),
+                        selectedIndex = when (genderPreference) {
+                            GenderPreference.MALE -> 0
+                            GenderPreference.FEMALE -> 1
+                            GenderPreference.UNISEX -> -1 // Neither selected
+                        },
+                        onSelect = { index ->
+                            val newPref = if (index == 0) GenderPreference.MALE else GenderPreference.FEMALE
+                            // Toggle behavior: if already selected, deselect
+                            genderPreference = if (genderPreference == newPref) {
+                                GenderPreference.UNISEX
+                            } else {
+                                newPref
+                            }
+                        },
+                        allowDeselect = true
+                    )
+                }
+
+                Spacer(Modifier.height(24.dp))
+
+                PreferenceSection(
+                    title = "Do you get cold easily or overheat quickly?",
+                    sublabel = "We'll adjust outfit recommendations"
+                ) {
+                    WebComfortSelector(
+                        selected = comfortPreference,
+                        onSelect = { comfortPreference = it }
+                    )
+                }
+
+                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(32.dp))
+
+                // "Let's Go! 🏃" CTA (matches web PWA verbatim)
+                Button(
+                    onClick = { showLocationStep = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RunWearColors.Primary
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(
+                        "Let's Go! 🏃",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+            } else {
+                // ========================================
+                // STEP 2: Location (web PWA second step)
+                // ========================================
+                Spacer(Modifier.height(16.dp))
+
                 Text(
-                    text = "How do you typically feel when running?",
-                    fontSize = 14.sp,
+                    text = "Set Your Location",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = RunWearColors.TextPrimary
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = "We need your location to get accurate weather for your run",
+                    fontSize = 15.sp,
                     color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                ComfortSelector(
-                    selected = comfortPreference,
-                    onSelect = { comfortPreference = it }
-                )
-            }
 
-            Spacer(Modifier.weight(1f))
-            Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(32.dp))
 
-            // ========================================
-            // Action Buttons
-            // ========================================
-            Button(
-                onClick = {
-                    onRequestLocationPermission()
-                    onComplete(temperatureUnit, genderPreference, comfortPreference)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = RunWearColors.Primary
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.LocationOn,
-                    contentDescription = null,
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-                Text(
-                    "Enable Location",
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
-            }
+                Button(
+                    onClick = {
+                        onRequestLocationPermission()
+                        onComplete(temperatureUnit, genderPreference, comfortPreference)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = RunWearColors.Primary
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                    Text(
+                        "Use Current Location",
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
 
-            Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(12.dp))
 
-            OutlinedButton(
-                onClick = { onComplete(temperatureUnit, genderPreference, comfortPreference) },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text(
-                    "Set Location Manually",
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                OutlinedButton(
+                    onClick = { onComplete(temperatureUnit, genderPreference, comfortPreference) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(
+                        "Set Location Manually",
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))
@@ -234,6 +274,7 @@ fun OnboardingScreen(
 @Composable
 private fun PreferenceSection(
     title: String,
+    sublabel: String? = null,
     content: @Composable () -> Unit
 ) {
     Column(
@@ -244,8 +285,16 @@ private fun PreferenceSection(
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = RunWearColors.TextPrimary,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = if (sublabel != null) 4.dp else 12.dp)
         )
+        sublabel?.let {
+            Text(
+                text = it,
+                fontSize = 14.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
         content()
     }
 }
@@ -299,7 +348,53 @@ private fun FullWidthToggle(
 }
 
 /**
- * Body Temperature / Comfort selector.
+ * Comfort selector matching web PWA verbatim: 🥶 / "Get cold" / "Neither" / "Overheat" / 🥵
+ * Maps to ComfortPreference values -10 / -5 / 0 / 5 / 10 (same order as enum).
+ */
+@Composable
+private fun WebComfortSelector(
+    selected: ComfortPreference,
+    onSelect: (ComfortPreference) -> Unit
+) {
+    // Web labels in enum order: RUNS_VERY_COLD, RUNS_COLD, NEUTRAL, RUNS_WARM, RUNS_VERY_WARM
+    val webLabels = listOf("🥶", "Get cold", "Neither", "Overheat", "🥵")
+    val prefs = ComfortPreference.entries
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(RunWearColors.BgCardLight)
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        prefs.forEachIndexed { index, preference ->
+            val isSelected = preference == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
+                    .clickable { onSelect(preference) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = webLabels[index],
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) Color.White else RunWearColors.TextSecondary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    lineHeight = 13.sp
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Body Temperature / Comfort selector (legacy 5-option, kept for Settings sheet use).
  * PWA spec: 5 options - "Run Cold" / "Slightly Cold" / "Neutral" / "Slightly Hot" / "Run Hot"
  */
 @Composable
