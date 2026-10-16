@@ -7,7 +7,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -25,6 +24,9 @@ import javax.inject.Singleton
  * opens a connection for analytics or crash reports. Feedback is different:
  * it is the user deliberately talking to us, so it sends on their tap
  * regardless of the analytics toggle.
+ *
+ * Every payload is built by [TelemetryPayloads] — the exact shapes the
+ * intake's allowlists accept (see [TelemetryConfig]).
  */
 @Singleton
 class TelemetryClient @Inject constructor(
@@ -41,35 +43,21 @@ class TelemetryClient @Inject constructor(
         }
     }
 
-    /** Common envelope fields for every payload (spec §2.2). */
-    private suspend fun envelope(schema: String): JSONObject = JSONObject().apply {
-        put("schema", schema)
-        put("app", TelemetryConfig.APP_ID)
-        put("platform", TelemetryConfig.PLATFORM)
-        put("appVersion", BuildConfig.VERSION_NAME)
-        put("appVersionCode", BuildConfig.VERSION_CODE)
-        put("installId", store.installId())
-    }
-
     // ── Analytics events ────────────────────────────────────────────────────
 
     /**
      * Records one analytics event. No-op unless the user has opted in: no
      * queueing, no network, nothing counted. Events batch in a local queue
      * and flush on app start and whenever the queue grows past a few items.
+     * Event names and prop keys come from [RunWearEvents] — the intake's
+     * allowlists, nothing else.
      */
     fun recordEvent(name: String, props: Map<String, Any?> = emptyMap()) {
         if (!analyticsOptedIn) return
         scope.launch {
             // Re-check inside the coroutine: the toggle may have flipped.
             if (!store.isAnalyticsOptedIn()) return@launch
-            val event = JSONObject().apply {
-                put("name", name)
-                put("at", System.currentTimeMillis())
-                put("props", JSONObject().apply {
-                    props.forEach { (key, value) -> if (value != null) put(key, value) }
-                })
-            }
+            val event = TelemetryPayloads.event(name, System.currentTimeMillis(), props)
             store.enqueuePendingEvent(event.toString())
             if (store.peekPendingEvents().size >= FLUSH_THRESHOLD) {
                 flushEvents()
@@ -82,9 +70,11 @@ class TelemetryClient @Inject constructor(
         if (!store.isAnalyticsOptedIn()) return
         val queued = store.peekPendingEvents()
         if (queued.isEmpty()) return
-        val payload = envelope(TelemetryConfig.EVENTS_SCHEMA).apply {
-            put("events", JSONArray().apply { queued.forEach { put(JSONObject(it)) } })
-        }
+        val payload = TelemetryPayloads.eventsBatch(
+            BuildConfig.VERSION_NAME,
+            store.installId(),
+            queued
+        )
         if (postJson(TelemetryConfig.EVENTS_ENDPOINT, payload)) {
             store.clearPendingEvents()
         }
@@ -99,19 +89,22 @@ class TelemetryClient @Inject constructor(
     suspend fun sendFeedbackNow(report: JSONObject): Boolean =
         postJson(TelemetryConfig.FEEDBACK_ENDPOINT, report)
 
-    /** Builds the full feedback payload (spec §2.2 envelope + report fields). */
+    /** Builds the full feedback payload (envelope + report fields). */
     suspend fun buildFeedbackPayload(
         category: FeedbackCategory,
-        message: String,
+        text: String,
         replyEmail: String?,
+        entryPoint: String?,
         bundle: JSONObject
-    ): JSONObject = envelope(TelemetryConfig.FEEDBACK_SCHEMA).apply {
-        put("category", category.id)
-        put("message", message)
-        if (!replyEmail.isNullOrBlank()) put("replyEmail", replyEmail.trim())
-        put("bundle", bundle)
-        put("sentAt", System.currentTimeMillis())
-    }
+    ): JSONObject = TelemetryPayloads.feedback(
+        appVersion = BuildConfig.VERSION_NAME,
+        installId = store.installId(),
+        category = category,
+        text = text,
+        replyEmail = replyEmail,
+        entryPoint = entryPoint,
+        bundle = bundle
+    )
 
     /** Retries any feedback that failed to send earlier. */
     suspend fun flushPendingFeedback() {
@@ -133,13 +126,17 @@ class TelemetryClient @Inject constructor(
      * Sends a stored crash report. Gated on the same opt-in toggle as
      * analytics (owner decision: crash reports are automatic with plain
      * disclosure, covered by the same opt-out). Returns false — and sends
-     * nothing — while the toggle is off.
+     * nothing — while the toggle is off. [crash] is the on-device crash
+     * file [CrashReporter] wrote; [TelemetryPayloads] flattens it into
+     * the intake's crash shape.
      */
     suspend fun sendCrashReport(crash: JSONObject): Boolean {
         if (!store.isAnalyticsOptedIn()) return false
-        val payload = envelope(TelemetryConfig.CRASH_SCHEMA).apply {
-            put("crash", crash)
-        }
+        val payload = TelemetryPayloads.crash(
+            BuildConfig.VERSION_NAME,
+            store.installId(),
+            crash
+        )
         return postJson(TelemetryConfig.CRASH_ENDPOINT, payload)
     }
 

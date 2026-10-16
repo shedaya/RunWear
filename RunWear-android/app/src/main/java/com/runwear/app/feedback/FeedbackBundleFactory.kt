@@ -27,7 +27,12 @@ object FeedbackBundleFactory {
         val json: JSONObject
     )
 
-    fun build(state: MainUiState, sessionItemChanges: List<String>): Bundle {
+    fun build(
+        state: MainUiState,
+        sessionItemChanges: List<String>,
+        swappedItems: List<String>,
+        removedItems: List<String>
+    ): Bundle {
         val weather = state.weather
         val outfit = state.outfit
         val unitSymbol = if (weather?.isCelsius == true) "°C" else "°F"
@@ -75,41 +80,43 @@ object FeedbackBundleFactory {
             fields += "Changes this session" to sessionItemChanges.joinToString("; ")
         }
 
+        // The wire bundle: exactly the intake's runwear-feedback/1
+        // allowlist (feedback-intake/src/schemas.js) — flat scalars and
+        // string arrays only, no nested objects, no unlisted keys, or
+        // the Worker rejects the whole report with 422.
         val json = JSONObject().apply {
             put("engineVersion", GetOutfitRecommendationUseCase.ENGINE_VERSION)
-            put("appVersion", BuildConfig.VERSION_NAME)
-            put("platform", "Android")
-            put("city", state.locationName)
+            put("cityLabel", state.locationName.take(64))
             if (weather != null) {
-                put("temperature", weather.temperature)
+                put("effectiveTemp", weather.effectiveTemperature)
+                put("tempUnits", if (weather.isCelsius) "C" else "F")
                 put("feelsLike", weather.feelsLike)
-                put("temperatureUnits", if (weather.isCelsius) "C" else "F")
                 put("humidity", weather.humidity)
                 put("windSpeed", weather.windSpeed)
                 put("windGusts", weather.windGusts)
-                put("precipitationProbability", weather.precipitationProbability)
-                put("weatherDescription", weather.weatherCode.description)
+                put("precipProbability", weather.precipitationProbability)
+                put("weatherDescription", weather.weatherCode.description.take(64))
                 put("uvIndex", weather.uvIndex)
             }
-            put("frame", if (state.isNowSelected) "now" else "explicit")
-            put("localDateTime", state.selectedDateTime.toString())
+            put("timeFrame", if (state.isNowSelected) "now" else "explicit")
+            put("localDate", state.selectedDateTime.toLocalDate().toString())
+            put("localHour", state.selectedDateTime.hour)
             if (outfit != null) {
-                put("outfit", JSONObject().apply {
-                    put("base", outfit.topBase.displayName)
-                    put("mid", outfit.topMid?.displayName ?: JSONObject.NULL)
-                    put("outer", outfit.topOuter?.displayName ?: JSONObject.NULL)
-                    put("bottom", outfit.bottom.displayName)
-                    put("head", outfit.head?.displayName ?: JSONObject.NULL)
-                    put("hands", outfit.hands?.displayName ?: JSONObject.NULL)
-                    put("accessories", JSONArray().apply {
-                        outfit.accessories.forEach { put(it.displayName) }
-                    })
+                put("outfitItems", JSONArray().apply {
+                    outfit.allItems.take(16).forEach { put(it.displayName.take(64)) }
                 })
-                put("tipsShown", outfit.tips.size)
+                put("tipsShownCount", outfit.tips.size)
             }
-            put("sessionItemChanges", JSONArray().apply {
-                sessionItemChanges.forEach { put(it) }
-            })
+            if (swappedItems.isNotEmpty()) {
+                put("swappedItems", JSONArray().apply {
+                    swappedItems.take(16).forEach { put(it.take(64)) }
+                })
+            }
+            if (removedItems.isNotEmpty()) {
+                put("removedItems", JSONArray().apply {
+                    removedItems.take(16).forEach { put(it.take(64)) }
+                })
+            }
             put("comfortPreference", state.comfortPreference.shortLabel)
             put("fitPreference", fitLabel)
         }

@@ -128,4 +128,10 @@ dependencies {
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Unit tests: JUnit plus the real org.json (the mockable android.jar's
+    // org.json is stubbed; the standalone jar shadows it on the test
+    // runtime classpath so the telemetry payload builders run as-is).
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

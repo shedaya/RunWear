@@ -60,6 +60,11 @@ class MainActivity : ComponentActivity() {
                 // (recommendation pre-selected).
                 var showFeedback by remember { mutableStateOf(false) }
                 var feedbackPreselect by remember { mutableStateOf<FeedbackCategory?>(null) }
+                // The intake's entryPoint: "contextual" when the screen
+                // opens from the outfit (category pre-selected),
+                // "settings" from the neutral entry, null (field
+                // omitted) when opened from the rating moment.
+                var feedbackEntryPoint by remember { mutableStateOf<String?>(null) }
 
                 // Rating moment (spec Addendum 2): shown only when the
                 // ViewModel's triggers and suppression rules say so.
@@ -134,6 +139,8 @@ class MainActivity : ComponentActivity() {
                                     onAnalyticsOptInChange = viewModel::setAnalyticsOptIn,
                                     onOpenFeedback = { category ->
                                         feedbackPreselect = category
+                                        feedbackEntryPoint =
+                                            if (category != null) "contextual" else "settings"
                                         showFeedback = true
                                     },
                                     onItemTapped = viewModel::onAffiliateItemTapped
@@ -157,7 +164,9 @@ class MainActivity : ComponentActivity() {
                             bundle = bundle,
                             preselectedCategory = feedbackPreselect,
                             onSend = { category, message, email, onResult ->
-                                viewModel.submitFeedback(category, message, email, onResult)
+                                viewModel.submitFeedback(
+                                    category, message, email, feedbackEntryPoint, onResult
+                                )
                             },
                             onDismiss = { showFeedback = false }
                         )
@@ -169,6 +178,7 @@ class MainActivity : ComponentActivity() {
                             onSendFeedback = {
                                 showRatingMoment = false
                                 feedbackPreselect = null
+                                feedbackEntryPoint = null
                                 showFeedback = true
                             },
                             onRate = {

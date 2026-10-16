@@ -24,6 +24,7 @@ import com.runwear.shared.util.LocationProvider
 import com.runwear.app.feedback.FeedbackBundleFactory
 import com.runwear.app.feedback.FeedbackCategory
 import com.runwear.app.feedback.FeedbackStore
+import com.runwear.app.feedback.RunWearEvents
 import com.runwear.app.feedback.TelemetryClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -38,7 +39,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -124,8 +124,12 @@ class MainViewModel @Inject constructor(
     private var lastOutfitSlots: Map<String, ClothingItem?>? = null
     private var lastAccessories: Set<ClothingItem> = emptySet()
 
-    /** Human-readable per-slot changes this session; rides in the feedback bundle. */
+    /** Human-readable per-slot changes this session; shown in the feedback bundle display. */
     private val sessionItemChanges = mutableListOf<String>()
+
+    /** Structured changes for the bundle's allowlisted swappedItems / removedItems arrays. */
+    private val sessionSwappedItems = mutableListOf<String>()
+    private val sessionRemovedItems = mutableListOf<String>()
 
     /** Frame state for the now_vs_explicit event; starts in NOW (the default). */
     private var lastFrameMode: String = "now"
@@ -543,7 +547,10 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(selectedDateTime = dt, isNowSelected = false) }
         if (lastFrameMode != "explicit") {
             lastFrameMode = "explicit"
-            telemetryClient.recordEvent("now_vs_explicit", mapOf("mode" to "explicit"))
+            telemetryClient.recordEvent(
+                RunWearEvents.NOW_VS_EXPLICIT,
+                RunWearEvents.nowVsExplicitProps("explicit")
+            )
         }
         fetchWeather()
     }
@@ -585,7 +592,10 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(isNowSelected = true, selectedDateTime = now, locationNow = now) }
         if (lastFrameMode != "now") {
             lastFrameMode = "now"
-            telemetryClient.recordEvent("now_vs_explicit", mapOf("mode" to "now"))
+            telemetryClient.recordEvent(
+                RunWearEvents.NOW_VS_EXPLICIT,
+                RunWearEvents.nowVsExplicitProps("now")
+            )
         }
         fetchWeather()
     }
@@ -789,7 +799,12 @@ class MainViewModel @Inject constructor(
 
     /** The bundle the feedback screen shows the user before they send. */
     fun buildFeedbackBundle(): FeedbackBundleFactory.Bundle =
-        FeedbackBundleFactory.build(_uiState.value, sessionItemChanges.toList())
+        FeedbackBundleFactory.build(
+            _uiState.value,
+            sessionItemChanges.toList(),
+            sessionSwappedItems.toList(),
+            sessionRemovedItems.toList()
+        )
 
     /**
      * Sends a feedback report on the user's tap. On failure the report is
@@ -800,6 +815,7 @@ class MainViewModel @Inject constructor(
         category: FeedbackCategory,
         message: String,
         replyEmail: String?,
+        entryPoint: String?,
         onResult: (sentNow: Boolean) -> Unit
     ) {
         viewModelScope.launch {
@@ -810,8 +826,9 @@ class MainViewModel @Inject constructor(
             val bundle = buildFeedbackBundle()
             val payload = telemetryClient.buildFeedbackPayload(
                 category = category,
-                message = message.trim(),
+                text = message.trim(),
                 replyEmail = replyEmail,
+                entryPoint = entryPoint,
                 bundle = bundle.json
             )
             val sent = telemetryClient.sendFeedbackNow(payload)
@@ -825,15 +842,18 @@ class MainViewModel @Inject constructor(
     /** Category only — never the product, never the price (spec §3.1). */
     fun onAffiliateItemTapped(item: ClothingItem) {
         telemetryClient.recordEvent(
-            "affiliate_tapped",
-            mapOf("category" to item.category.name.lowercase())
+            RunWearEvents.AFFILIATE_TAPPED,
+            RunWearEvents.affiliateTappedProps(item.category.name.lowercase())
         )
     }
 
     /** Called when the rating-moment card actually appears on screen. */
     fun onRatingMomentShown() {
         viewModelScope.launch { feedbackStore.markRatingMomentShown() }
-        telemetryClient.recordEvent("rating_moment_shown")
+        // No analytics event: the intake's runwear-events/1 allowlist
+        // has no rating-moment event name, and one unlisted event
+        // would reject the whole queued batch (422). The moment is
+        // stamped in the store only.
     }
 
     private fun slotMap(outfit: OutfitRecommendation): Map<String, ClothingItem?> = linkedMapOf(
@@ -869,17 +889,23 @@ class MainViewModel @Inject constructor(
                 when {
                     oldItem != null && newItem == null -> {
                         sessionItemChanges += "${slotLabel(slot)} removed: ${oldItem.displayName}"
+                        sessionRemovedItems += oldItem.displayName
                         telemetryClient.recordEvent(
-                            "item_removed",
-                            mapOf("slot" to slot, "item" to oldItem.displayName)
+                            RunWearEvents.ITEM_REMOVED,
+                            RunWearEvents.itemRemovedProps(slot, oldItem.displayName)
                         )
                     }
                     oldItem != null && newItem != null && oldItem != newItem -> {
                         sessionItemChanges +=
                             "${slotLabel(slot)} changed: ${oldItem.displayName} to ${newItem.displayName}"
+                        sessionSwappedItems += newItem.displayName
                         telemetryClient.recordEvent(
-                            "item_swapped",
-                            mapOf("slot" to slot, "from" to oldItem.displayName, "to" to newItem.displayName)
+                            RunWearEvents.ITEM_SWAPPED,
+                            RunWearEvents.itemSwappedProps(
+                                slot,
+                                oldItem.displayName,
+                                newItem.displayName
+                            )
                         )
                     }
                 }
@@ -887,9 +913,10 @@ class MainViewModel @Inject constructor(
             val newAccessories = outfit.accessories.toSet()
             for (removed in lastAccessories - newAccessories) {
                 sessionItemChanges += "Accessory removed: ${removed.displayName}"
+                sessionRemovedItems += removed.displayName
                 telemetryClient.recordEvent(
-                    "item_removed",
-                    mapOf("slot" to "accessories", "item" to removed.displayName)
+                    RunWearEvents.ITEM_REMOVED,
+                    RunWearEvents.itemRemovedProps("accessories", removed.displayName)
                 )
             }
             lastAccessories = newAccessories
@@ -899,18 +926,13 @@ class MainViewModel @Inject constructor(
         lastWeather = weather
         lastOutfitSlots = slotMap(outfit)
 
-        val counts = JSONObject()
-        outfit.allItems.groupingBy { it.category.name.lowercase() }.eachCount()
-            .forEach { (category, count) -> counts.put(category, count) }
         telemetryClient.recordEvent(
-            "outfit_generated",
-            mapOf(
-                "engineVersion" to GetOutfitRecommendationUseCase.ENGINE_VERSION,
-                "tempBand" to tempBand(weather.feelsLikeInFahrenheit),
-                "comfortClass" to _uiState.value.comfortPreference.shortLabel,
-                "totalItems" to outfit.allItems.size,
-                "itemCounts" to counts,
-                "countedGeneration" to countGeneration
+            RunWearEvents.OUTFIT_GENERATED,
+            RunWearEvents.outfitGeneratedProps(
+                engineVersion = GetOutfitRecommendationUseCase.ENGINE_VERSION,
+                tempBand = tempBand(weather.feelsLikeInFahrenheit),
+                comfortClass = _uiState.value.comfortPreference.shortLabel,
+                itemCount = outfit.allItems.size
             )
         )
     }
