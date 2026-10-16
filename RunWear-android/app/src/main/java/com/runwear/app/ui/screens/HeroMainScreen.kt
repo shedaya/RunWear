@@ -313,6 +313,7 @@ Get your personalized running outfit at runwear.ai
     if (showDatePicker) {
         DatePickerSheet(
             selectedDate = uiState.selectedDateTime.toLocalDate(),
+            today = uiState.locationNow.toLocalDate(),
             onSelectDate = {
                 onDateSelected(it)
                 showDatePicker = false
@@ -426,6 +427,8 @@ private fun HeroSectionContent(
             outfit = uiState.outfit,
             locationName = uiState.locationName,
             selectedDateTime = uiState.selectedDateTime,
+            locationNow = uiState.locationNow,
+            isNowSelected = uiState.isNowSelected,
             heroImageUrl = uiState.heroImageUrl,
             scrollOffset = scrollOffset,
             onDateClick = onDateClick,

@@ -77,6 +77,8 @@ fun HeroSection(
     outfit: OutfitRecommendation?,
     locationName: String,
     selectedDateTime: LocalDateTime,
+    locationNow: LocalDateTime,
+    isNowSelected: Boolean,
     heroImageUrl: String?,
     scrollOffset: Float = 0f,
     onDateClick: () -> Unit,
@@ -239,6 +241,8 @@ fun HeroSection(
             // Shows "Now" shortcut when viewing different time
             DateTimePill(
                 dateTime = selectedDateTime,
+                referenceNow = locationNow,
+                isNowSelected = isNowSelected,
                 onDateClick = onDateClick,
                 onTimeClick = onTimeClick,
                 onNowClick = onNowClick,

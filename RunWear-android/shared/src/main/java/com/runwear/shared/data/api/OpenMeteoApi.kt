@@ -20,6 +20,20 @@ interface OpenMeteoApi {
         @Query("timezone") timezone: String = "auto",
         @Query("forecast_days") forecastDays: Int = 7
     ): OpenMeteoResponse
+
+    /**
+     * Lightweight timezone lookup: with no current/hourly variables requested,
+     * the response carries just the location metadata — including the IANA
+     * `timezone` (resolved from the coordinates because timezone=auto).
+     * This is the source of the selected location's frame for all date/time UI.
+     */
+    @GET("v1/forecast")
+    suspend fun getTimeZone(
+        @Query("latitude") latitude: Double,
+        @Query("longitude") longitude: Double,
+        @Query("timezone") timezone: String = "auto",
+        @Query("forecast_days") forecastDays: Int = 1
+    ): OpenMeteoResponse
 }
 
 interface GeocodingApi {

@@ -81,11 +81,12 @@ internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference):
 @Composable
 fun DatePickerSheet(
     selectedDate: LocalDate,
+    /** "Today" in the SELECTED LOCATION's frame — the 7-day window starts there. */
+    today: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
-    val today = LocalDate.now()
     val days = (0..6).map { today.plusDays(it.toLong()) }
 
     ModalBottomSheet(

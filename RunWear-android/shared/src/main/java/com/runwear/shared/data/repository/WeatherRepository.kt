@@ -8,6 +8,7 @@ import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,7 +28,25 @@ class WeatherRepository @Inject constructor(
     private val geocodingApi: GeocodingApi,
     private val nominatimApi: NominatimApi
 ) {
-    
+
+    // Timezone cache keyed by ~11 km coordinate cell — a fixed point's zone
+    // effectively never changes, so this is one small lookup per location.
+    private val timeZoneCache = mutableMapOf<String, ZoneId>()
+
+    /**
+     * The IANA timezone of the SELECTED LOCATION, from the weather API's own
+     * response (timezone=auto resolves it from the coordinates). Every date/time
+     * the UI shows for a location must be framed in this zone — never silently
+     * in the phone's zone.
+     */
+    suspend fun getLocationTimeZone(latitude: Double, longitude: Double): Result<ZoneId> = runCatching {
+        val key = "%.2f,%.2f".format(latitude, longitude)
+        timeZoneCache[key]?.let { return@runCatching it }
+        val zone = ZoneId.of(weatherApi.getTimeZone(latitude, longitude).timezone)
+        timeZoneCache[key] = zone
+        zone
+    }
+
     suspend fun getCurrentWeather(
         latitude: Double,
         longitude: Double,
@@ -44,9 +63,19 @@ class WeatherRepository @Inject constructor(
         )
         
         val current = response.current ?: throw Exception("No current weather data")
-        
+
+        // The API's current.time is already location-local (timezone=auto).
+        // Using the phone's clock here was one source of the frame mix-up:
+        // "current" conditions were stamped with the device's timezone time.
+        val locationNow = runCatching { LocalDateTime.parse(current.time) }
+            .getOrElse {
+                val zone = runCatching { ZoneId.of(response.timezone) }
+                    .getOrDefault(ZoneId.systemDefault())
+                LocalDateTime.now(zone)
+            }
+
         WeatherConditions(
-            dateTime = LocalDateTime.now(),
+            dateTime = locationNow,
             temperature = current.temperature,
             feelsLike = current.apparentTemperature,
             humidity = current.humidity,

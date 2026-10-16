@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import javax.inject.Inject
 
 data class MainUiState(
@@ -40,7 +41,17 @@ data class MainUiState(
     val weather: WeatherConditions? = null,
     val hourlyForecast: List<HourlyForecast> = emptyList(),
     val locationName: String = "Getting location...",
+    /**
+     * The selected moment, ALWAYS expressed as a naive wall-clock time in the
+     * SELECTED LOCATION's frame — never the phone's. When [isNowSelected] is
+     * true this is kept equal to [locationNow] and the weather comes from the
+     * API's current-conditions block.
+     */
     val selectedDateTime: LocalDateTime = LocalDateTime.now(),
+    /** First-class NOW selection state. Any explicit date/time pick clears it. */
+    val isNowSelected: Boolean = true,
+    /** "Now" in the selected location's timezone; drives Today/Tomorrow labels. */
+    val locationNow: LocalDateTime = LocalDateTime.now(),
     val temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
     val comfortPreference: ComfortPreference = ComfortPreference.NEUTRAL,
     val genderPreference: GenderPreference = GenderPreference.UNISEX,
@@ -84,6 +95,36 @@ class MainViewModel @Inject constructor(
     private var currentLon: Double? = null
     private var searchJob: Job? = null
 
+    /**
+     * Timezone of the selected location (from the weather API). All selection
+     * state is framed in this zone. Falls back to the phone's zone only until
+     * the first lookup resolves — or if the lookup fails, which degrades to
+     * the pre-fix behavior for the GPS case (where the frames coincide).
+     */
+    private var locationZone: ZoneId = ZoneId.systemDefault()
+
+    /** Current wall-clock time at the selected location. */
+    private fun locationNow(): LocalDateTime = LocalDateTime.now(locationZone)
+
+    /**
+     * (Re)resolve the selected location's timezone and re-anchor the selection
+     * in that frame. In NOW mode the selected moment becomes the location's
+     * now; an explicit selection keeps its wall-clock numbers (they are
+     * location-local by definition) and is reinterpreted in the new frame.
+     */
+    private suspend fun resolveLocationZone(lat: Double, lon: Double) {
+        weatherRepository.getLocationTimeZone(lat, lon).onSuccess { zone ->
+            locationZone = zone
+        }
+        val now = locationNow()
+        _uiState.update {
+            it.copy(
+                locationNow = now,
+                selectedDateTime = if (it.isNowSelected) now else it.selectedDateTime
+            )
+        }
+    }
+
     // Stale-location guard (F1): a saved GPS fix must not be reused forever.
     // Re-poll GPS on foreground; only adopt the new fix if the user moved
     // significantly, so we never cause a weather-refetch storm.
@@ -113,6 +154,7 @@ class MainViewModel @Inject constructor(
                         isLoading = true
                     )
                 }
+                resolveLocationZone(savedLocation.latitude, savedLocation.longitude)
                 fetchWeather()
             }
             // If no saved location, MainActivity will call checkLocationPermission()
@@ -130,6 +172,28 @@ class MainViewModel @Inject constructor(
                     )
                 }
                 if (currentLat != null) fetchWeather()
+            }
+        }
+
+        // NOW tracking: while NOW is selected, keep the displayed moment glued
+        // to the location's real time. Refetch only when the hour (or day)
+        // rolls over, so the weather never silently goes stale inside NOW.
+        viewModelScope.launch {
+            while (true) {
+                delay(NOW_TICK_MS)
+                val now = locationNow()
+                val displayed = _uiState.value.selectedDateTime
+                _uiState.update {
+                    it.copy(
+                        locationNow = now,
+                        selectedDateTime = if (it.isNowSelected) now else it.selectedDateTime
+                    )
+                }
+                if (_uiState.value.isNowSelected && currentLat != null &&
+                    (now.hour != displayed.hour || now.toLocalDate() != displayed.toLocalDate())
+                ) {
+                    fetchWeather()
+                }
             }
         }
     }
@@ -184,6 +248,18 @@ class MainViewModel @Inject constructor(
      * user explicitly switches back to GPS).
      */
     fun onForegrounded(force: Boolean = false) {
+        // NOW re-anchor (all location sources): if the hour rolled over while
+        // the app was backgrounded, NOW must show the location's new hour.
+        if (_uiState.value.isNowSelected) {
+            val now = locationNow()
+            val displayed = _uiState.value.selectedDateTime
+            _uiState.update { it.copy(locationNow = now, selectedDateTime = now) }
+            if (currentLat != null &&
+                (now.hour != displayed.hour || now.toLocalDate() != displayed.toLocalDate())
+            ) {
+                fetchWeather()
+            }
+        }
         // Never override an explicit manual location choice.
         if (_uiState.value.locationSource == "manual") return
         // Debounce: at most one background re-poll per 15 minutes.
@@ -214,6 +290,7 @@ class MainViewModel @Inject constructor(
                                 preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
                             }
                         )
+                        resolveLocationZone(newLat, newLon)
                         fetchWeather()
                     }
                     // Within STALE_LOCATION_KM: keep the saved fix, no refetch.
@@ -242,6 +319,8 @@ class MainViewModel @Inject constructor(
         private const val STALE_LOCATION_KM = 25.0
         /** Minimum interval between background GPS re-polls. */
         private const val GPS_REFRESH_DEBOUNCE_MS = 15 * 60 * 1000L
+        /** How often the NOW selection re-checks the location's clock. */
+        private const val NOW_TICK_MS = 30_000L
     }
     
     fun fetchCurrentLocation() {
@@ -266,6 +345,7 @@ class MainViewModel @Inject constructor(
                         }
                     )
 
+                    resolveLocationZone(result.location.latitude, result.location.longitude)
                     fetchWeather()
                 }
                 is LocationFetchResult.Error -> {
@@ -282,6 +362,7 @@ class MainViewModel @Inject constructor(
                                 isLoading = true
                             )
                         }
+                        resolveLocationZone(savedLocation.latitude, savedLocation.longitude)
                         fetchWeather()
                     } else {
                         // No fallback - show location setup screen
@@ -304,12 +385,24 @@ class MainViewModel @Inject constructor(
         
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            
+
+            // Re-anchor NOW in the location frame on every fetch: if the hour
+            // rolled over since the last render, NOW follows the location clock.
+            val now = locationNow()
+            _uiState.update {
+                it.copy(
+                    locationNow = now,
+                    selectedDateTime = if (it.isNowSelected) now else it.selectedDateTime
+                )
+            }
+
             val dt = _uiState.value.selectedDateTime
             val unit = _uiState.value.temperatureUnit
-            
-            // Fetch weather for selected time
-            val weatherResult = if (isNow(dt)) {
+
+            // NOW uses the API's current-conditions block (location's real now);
+            // an explicit selection is a location-local wall time matched
+            // against the location-local hourly forecast.
+            val weatherResult = if (_uiState.value.isNowSelected) {
                 weatherRepository.getCurrentWeather(lat, lon, unit)
             } else {
                 weatherRepository.getWeatherForDateTime(lat, lon, dt, unit)
@@ -348,11 +441,6 @@ class MainViewModel @Inject constructor(
         }
     }
     
-    private fun isNow(dt: LocalDateTime): Boolean {
-        val now = LocalDateTime.now()
-        return dt.toLocalDate() == now.toLocalDate() && dt.hour == now.hour
-    }
-
     /**
      * Fetch hero image with zero-lag architecture:
      * 1. INSTANTLY set weather-aware fallback image (no waiting)
@@ -385,8 +473,9 @@ class MainViewModel @Inject constructor(
         }
     }
     
+    /** Any explicit date/time pick exits NOW into an explicit location-local time. */
     fun setDateTime(dt: LocalDateTime) {
-        _uiState.update { it.copy(selectedDateTime = dt) }
+        _uiState.update { it.copy(selectedDateTime = dt, isNowSelected = false) }
         fetchWeather()
     }
     
@@ -404,19 +493,28 @@ class MainViewModel @Inject constructor(
     
     fun goToNextDay() {
         val newDateTime = _uiState.value.selectedDateTime.plusDays(1)
-        if (newDateTime.toLocalDate() <= LocalDate.now().plusDays(6)) {
+        // Forecast horizon is 7 days starting at the LOCATION's today.
+        if (newDateTime.toLocalDate() <= locationNow().toLocalDate().plusDays(6)) {
             setDateTime(newDateTime)
         }
     }
-    
+
     fun goToPreviousDay() {
         val prev = _uiState.value.selectedDateTime.minusDays(1)
-        val now = LocalDateTime.now()
-        setDateTime(if (prev.isAfter(now.minusHours(1))) prev else now)
+        // The forecast starts at the location's today 00:00 — stepping before
+        // it lands back on NOW instead of a time with no data.
+        if (prev.toLocalDate().isBefore(locationNow().toLocalDate())) {
+            resetToNow()
+        } else {
+            setDateTime(prev)
+        }
     }
-    
+
+    /** Re-enter NOW: the current instant in the selected location's frame. */
     fun resetToNow() {
-        setDateTime(LocalDateTime.now())
+        val now = locationNow()
+        _uiState.update { it.copy(isNowSelected = true, selectedDateTime = now, locationNow = now) }
+        fetchWeather()
     }
     
     fun toggleUnit() {
@@ -494,6 +592,8 @@ class MainViewModel @Inject constructor(
                 )
             }
             _locationSearch.update { LocationSearchState() }
+            // New location = new frame: NOW (if active) is recomputed there.
+            resolveLocationZone(location.latitude, location.longitude)
             fetchWeather()
         }
     }
@@ -515,6 +615,8 @@ class MainViewModel @Inject constructor(
                 )
             }
             _locationSearch.update { LocationSearchState() }
+            // New location = new frame: NOW (if active) is recomputed there.
+            resolveLocationZone(lat, lon)
             fetchWeather()
         }
     }
