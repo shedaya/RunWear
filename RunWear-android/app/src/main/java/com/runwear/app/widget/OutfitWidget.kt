@@ -48,11 +48,13 @@ import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
+import com.runwear.shared.util.LocationFetchResult
 import com.runwear.shared.util.LocationProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -118,12 +120,35 @@ class OutfitWidget : GlanceAppWidget() {
 
         return try {
             val prefs = preferencesRepository.preferencesFlow.first()
-            val location = locationProvider.getCurrentLocation().getOrThrow()
-            val weather = weatherRepository.getCurrentWeather(
+            // Resilient location chain (mirrors OutfitTileService.loadTileData):
+            // a widget refresh runs in the background, where a fresh
+            // high-accuracy fix is often unavailable (indoors, high-rise) —
+            // demanding one on every refresh made the widget error out.
+            // Prefer the cached fix, then the system's last-known location,
+            // and only then a fresh fix with a timeout. The Error state is
+            // reached only when no source yields a location at all.
+            val location = locationProvider.getCachedLocation()
+                ?: locationProvider.getLastKnownLocation()
+                ?: when (val fresh = locationProvider.getCurrentLocationWithTimeout()) {
+                    is LocationFetchResult.Success -> fresh.location
+                    is LocationFetchResult.Error -> throw Exception("Location: ${fresh.reason}")
+                }
+            // One retry on the weather fetch, so a transient network failure
+            // does not blank the widget until the next refresh cycle.
+            var weatherResult = weatherRepository.getCurrentWeather(
                 location.latitude,
                 location.longitude,
                 prefs.temperatureUnit
-            ).getOrThrow()
+            )
+            if (weatherResult.isFailure) {
+                delay(1000)
+                weatherResult = weatherRepository.getCurrentWeather(
+                    location.latitude,
+                    location.longitude,
+                    prefs.temperatureUnit
+                )
+            }
+            val weather = weatherResult.getOrThrow()
 
             val locationName = weatherRepository.reverseGeocode(
                 location.latitude,
