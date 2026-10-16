@@ -21,14 +21,24 @@ import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import com.runwear.shared.util.LocationErrorReason
 import com.runwear.shared.util.LocationFetchResult
 import com.runwear.shared.util.LocationProvider
+import com.runwear.app.feedback.FeedbackBundleFactory
+import com.runwear.app.feedback.FeedbackCategory
+import com.runwear.app.feedback.FeedbackStore
+import com.runwear.app.feedback.TelemetryClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -82,7 +92,9 @@ class MainViewModel @Inject constructor(
     private val affiliateRepository: AffiliateRepository,
     private val heroImageRepository: HeroImageRepository,
     private val locationProvider: LocationProvider,
-    private val getOutfitRecommendation: GetOutfitRecommendationUseCase
+    private val getOutfitRecommendation: GetOutfitRecommendationUseCase,
+    private val feedbackStore: FeedbackStore,
+    private val telemetryClient: TelemetryClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())
@@ -94,6 +106,33 @@ class MainViewModel @Inject constructor(
     private var currentLat: Double? = null
     private var currentLon: Double? = null
     private var searchJob: Job? = null
+
+    // ── Feedback + analytics (spec) ─────────────────────────────────────────
+    // Everything here is inert unless the user opts in to analytics; feedback
+    // sends only on the user's own tap. See the feedback package.
+
+    /** The Settings opt-in toggle state (default OFF — owner's decision). */
+    val analyticsOptIn: StateFlow<Boolean> = feedbackStore.analyticsOptInFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _ratingMomentDue = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Emits when a rating moment should be shown (triggers + suppression checked). */
+    val ratingMomentDue: SharedFlow<Unit> = _ratingMomentDue.asSharedFlow()
+
+    /** Last weather the engine dressed for — outfit diffs only count under identical conditions. */
+    private var lastWeather: WeatherConditions? = null
+    private var lastOutfitSlots: Map<String, ClothingItem?>? = null
+    private var lastAccessories: Set<ClothingItem> = emptySet()
+
+    /** Human-readable per-slot changes this session; rides in the feedback bundle. */
+    private val sessionItemChanges = mutableListOf<String>()
+
+    /** Frame state for the now_vs_explicit event; starts in NOW (the default). */
+    private var lastFrameMode: String = "now"
+
+    /** Set by refresh(): the outfit on screen just before a conditions refresh. */
+    private var preRefreshItems: List<ClothingItem>? = null
+    private var pendingRefreshCheck: Boolean = false
 
     /**
      * Timezone of the selected location (from the weather API). All selection
@@ -131,6 +170,14 @@ class MainViewModel @Inject constructor(
     private var lastGpsRefreshMs: Long = 0L
 
     init {
+        // Retry anything the feedback system owes the intake (a report that
+        // failed to send earlier, queued events). No-ops where not applicable:
+        // event flush respects the opt-in toggle inside the client.
+        viewModelScope.launch {
+            telemetryClient.flushPendingFeedback()
+            telemetryClient.flushEvents()
+        }
+
         // Load affiliate partner
         viewModelScope.launch {
             val partner = affiliateRepository.getUserPartner()
@@ -223,6 +270,10 @@ class MainViewModel @Inject constructor(
 
     fun onPermissionResult(granted: Boolean) {
         _uiState.update { it.copy(hasLocationPermission = granted) }
+        if (!granted) {
+            // A permission denial makes today a bad day for the rating moment.
+            viewModelScope.launch { feedbackStore.markBadDay() }
+        }
         if (granted) {
             _uiState.update { it.copy(showLocationSetup = false) }
             fetchCurrentLocation()
@@ -321,6 +372,8 @@ class MainViewModel @Inject constructor(
         private const val GPS_REFRESH_DEBOUNCE_MS = 15 * 60 * 1000L
         /** How often the NOW selection re-checks the location's clock. */
         private const val NOW_TICK_MS = 30_000L
+        /** Rating moment fires at the fifth outfit generation (spec addendum). */
+        private const val RATING_TRIGGER_GENERATION = 5
     }
     
     fun fetchCurrentLocation() {
@@ -416,6 +469,16 @@ class MainViewModel @Inject constructor(
                     val outfit = getOutfitRecommendation.execute(weather, _uiState.value.comfortPreference)
                     val forecast = forecastResult.getOrDefault(emptyList())
 
+                    // Feedback + analytics bookkeeping (all inert unless the
+                    // user opted in): outfit diff under identical conditions,
+                    // the outfit_generated event, and the rating-moment check.
+                    val keptThroughRefresh = pendingRefreshCheck &&
+                        preRefreshItems != null && preRefreshItems == outfit.allItems
+                    pendingRefreshCheck = false
+                    preRefreshItems = null
+                    onOutfitProduced(weather, outfit, countGeneration = true)
+                    evaluateRatingMoment(keptThroughRefresh)
+
                     // PWA v2.9: Set default hero image IMMEDIATELY based on temp bracket
                     val defaultImageUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
                         weather, outfit, _uiState.value.genderPreference
@@ -436,6 +499,8 @@ class MainViewModel @Inject constructor(
                 },
                 onFailure = { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
+                    // A failed day suppresses the rating moment (addendum rules).
+                    viewModelScope.launch { feedbackStore.markBadDay() }
                 }
             )
         }
@@ -476,6 +541,10 @@ class MainViewModel @Inject constructor(
     /** Any explicit date/time pick exits NOW into an explicit location-local time. */
     fun setDateTime(dt: LocalDateTime) {
         _uiState.update { it.copy(selectedDateTime = dt, isNowSelected = false) }
+        if (lastFrameMode != "explicit") {
+            lastFrameMode = "explicit"
+            telemetryClient.recordEvent("now_vs_explicit", mapOf("mode" to "explicit"))
+        }
         fetchWeather()
     }
     
@@ -514,6 +583,10 @@ class MainViewModel @Inject constructor(
     fun resetToNow() {
         val now = locationNow()
         _uiState.update { it.copy(isNowSelected = true, selectedDateTime = now, locationNow = now) }
+        if (lastFrameMode != "now") {
+            lastFrameMode = "now"
+            telemetryClient.recordEvent("now_vs_explicit", mapOf("mode" to "now"))
+        }
         fetchWeather()
     }
     
@@ -535,6 +608,9 @@ class MainViewModel @Inject constructor(
             val weather = _uiState.value.weather ?: return@launch
             val outfit = getOutfitRecommendation.execute(weather, preference)
             _uiState.update { it.copy(outfit = outfit) }
+            // Same conditions, new outfit, user's own action: this is the one
+            // true "swap" the app can observe, so the diff is recorded here.
+            onOutfitProduced(weather, outfit, countGeneration = false)
             // Hero image depends on outfit hash - must reload
             fetchHeroImage(weather, outfit)
         }
@@ -547,7 +623,13 @@ class MainViewModel @Inject constructor(
     fun showSettings() { _uiState.update { it.copy(showSettings = true) } }
     fun hideSettings() { _uiState.update { it.copy(showSettings = false) } }
     
-    fun refresh() = fetchWeather()
+    fun refresh() {
+        // Snapshot the outfit on screen so a refresh that leaves it unchanged
+        // counts as "kept" — one of the two rating-moment triggers.
+        preRefreshItems = _uiState.value.outfit?.allItems
+        pendingRefreshCheck = preRefreshItems != null
+        fetchWeather()
+    }
     
     fun searchLocation(query: String) {
         _locationSearch.update { it.copy(query = query) }
@@ -690,5 +772,173 @@ class MainViewModel @Inject constructor(
         val partner = _uiState.value.affiliatePartner
         val gender = _uiState.value.genderPreference
         return affiliateRepository.buildAffiliateLink(partner, item, gender)
+    }
+
+    // ── Feedback + analytics plumbing ───────────────────────────────────────
+
+    fun setAnalyticsOptIn(enabled: Boolean) {
+        viewModelScope.launch {
+            feedbackStore.setAnalyticsOptIn(enabled)
+            if (enabled) {
+                // Opting in starts the flow: anything queued goes out now.
+                telemetryClient.flushPendingFeedback()
+                telemetryClient.flushEvents()
+            }
+        }
+    }
+
+    /** The bundle the feedback screen shows the user before they send. */
+    fun buildFeedbackBundle(): FeedbackBundleFactory.Bundle =
+        FeedbackBundleFactory.build(_uiState.value, sessionItemChanges.toList())
+
+    /**
+     * Sends a feedback report on the user's tap. On failure the report is
+     * queued on the device and retried later; [onResult] receives true when
+     * the intake accepted it now, false when it was saved for retry.
+     */
+    fun submitFeedback(
+        category: FeedbackCategory,
+        message: String,
+        replyEmail: String?,
+        onResult: (sentNow: Boolean) -> Unit
+    ) {
+        viewModelScope.launch {
+            if (category.isNegative) {
+                // Suppresses the rating moment for the rest of this session.
+                feedbackStore.negativeFeedbackThisSession = true
+            }
+            val bundle = buildFeedbackBundle()
+            val payload = telemetryClient.buildFeedbackPayload(
+                category = category,
+                message = message.trim(),
+                replyEmail = replyEmail,
+                bundle = bundle.json
+            )
+            val sent = telemetryClient.sendFeedbackNow(payload)
+            if (!sent) {
+                feedbackStore.enqueuePendingFeedback(payload.toString())
+            }
+            onResult(sent)
+        }
+    }
+
+    /** Category only — never the product, never the price (spec §3.1). */
+    fun onAffiliateItemTapped(item: ClothingItem) {
+        telemetryClient.recordEvent(
+            "affiliate_tapped",
+            mapOf("category" to item.category.name.lowercase())
+        )
+    }
+
+    /** Called when the rating-moment card actually appears on screen. */
+    fun onRatingMomentShown() {
+        viewModelScope.launch { feedbackStore.markRatingMomentShown() }
+        telemetryClient.recordEvent("rating_moment_shown")
+    }
+
+    private fun slotMap(outfit: OutfitRecommendation): Map<String, ClothingItem?> = linkedMapOf(
+        "base" to outfit.topBase,
+        "mid" to outfit.topMid,
+        "outer" to outfit.topOuter,
+        "bottom" to outfit.bottom,
+        "head" to outfit.head,
+        "hands" to outfit.hands
+    )
+
+    private fun slotLabel(slot: String): String = when (slot) {
+        "base" -> "Base layer"
+        "mid" -> "Mid layer"
+        "outer" -> "Outer layer"
+        "bottom" -> "Bottom"
+        "head" -> "Head"
+        "hands" -> "Hands"
+        else -> slot
+    }
+
+    /**
+     * Bookkeeping for every outfit the engine produces: the swap/removal diff
+     * (only meaningful under identical conditions — a comfort change, or a
+     * refetch that returned the same weather) and the outfit_generated event.
+     */
+    private fun onOutfitProduced(weather: WeatherConditions, outfit: OutfitRecommendation, countGeneration: Boolean) {
+        if (lastWeather == weather && lastOutfitSlots != null) {
+            val previous = lastOutfitSlots!!
+            val current = slotMap(outfit)
+            for ((slot, oldItem) in previous) {
+                val newItem = current[slot]
+                when {
+                    oldItem != null && newItem == null -> {
+                        sessionItemChanges += "${slotLabel(slot)} removed: ${oldItem.displayName}"
+                        telemetryClient.recordEvent(
+                            "item_removed",
+                            mapOf("slot" to slot, "item" to oldItem.displayName)
+                        )
+                    }
+                    oldItem != null && newItem != null && oldItem != newItem -> {
+                        sessionItemChanges +=
+                            "${slotLabel(slot)} changed: ${oldItem.displayName} to ${newItem.displayName}"
+                        telemetryClient.recordEvent(
+                            "item_swapped",
+                            mapOf("slot" to slot, "from" to oldItem.displayName, "to" to newItem.displayName)
+                        )
+                    }
+                }
+            }
+            val newAccessories = outfit.accessories.toSet()
+            for (removed in lastAccessories - newAccessories) {
+                sessionItemChanges += "Accessory removed: ${removed.displayName}"
+                telemetryClient.recordEvent(
+                    "item_removed",
+                    mapOf("slot" to "accessories", "item" to removed.displayName)
+                )
+            }
+            lastAccessories = newAccessories
+        } else if (lastWeather != weather) {
+            lastAccessories = outfit.accessories.toSet()
+        }
+        lastWeather = weather
+        lastOutfitSlots = slotMap(outfit)
+
+        val counts = JSONObject()
+        outfit.allItems.groupingBy { it.category.name.lowercase() }.eachCount()
+            .forEach { (category, count) -> counts.put(category, count) }
+        telemetryClient.recordEvent(
+            "outfit_generated",
+            mapOf(
+                "engineVersion" to GetOutfitRecommendationUseCase.ENGINE_VERSION,
+                "tempBand" to tempBand(weather.feelsLikeInFahrenheit),
+                "comfortClass" to _uiState.value.comfortPreference.shortLabel,
+                "totalItems" to outfit.allItems.size,
+                "itemCounts" to counts,
+                "countedGeneration" to countGeneration
+            )
+        )
+    }
+
+    /**
+     * The rating moment's two triggers (spec addendum): the fifth outfit
+     * generation, or an outfit kept unchanged through a conditions refresh.
+     * All suppression rules are checked inside the store.
+     */
+    private fun evaluateRatingMoment(keptThroughRefresh: Boolean) {
+        viewModelScope.launch {
+            val generation = feedbackStore.recordOutfitGeneration()
+            val triggered = generation == RATING_TRIGGER_GENERATION || keptThroughRefresh
+            if (triggered && feedbackStore.isRatingMomentEligible()) {
+                _ratingMomentDue.tryEmit(Unit)
+            }
+        }
+    }
+
+    /** Feels-like temperature bands for the outfit_generated event. */
+    private fun tempBand(feelsLikeF: Double): String = when {
+        feelsLikeF < 20 -> "under_20"
+        feelsLikeF < 32 -> "20_32"
+        feelsLikeF < 45 -> "32_45"
+        feelsLikeF < 55 -> "45_55"
+        feelsLikeF < 65 -> "55_65"
+        feelsLikeF < 75 -> "65_75"
+        feelsLikeF < 85 -> "75_85"
+        else -> "85_plus"
     }
 }

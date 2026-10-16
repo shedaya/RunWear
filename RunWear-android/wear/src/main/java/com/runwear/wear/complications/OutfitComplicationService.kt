@@ -64,8 +64,10 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             if (weather == null) {
                 val reason = result.exceptionOrNull()?.message ?: "unknown"
                 Log.w(TAG, "onComplicationRequest: no weather, reason=$reason")
-                // Show error reason in complication for debugging
-                return createDebugComplication(request.complicationType, reason)
+                // Failure states render the plain no-data complication. The
+                // raw reason is for the log only — internal error strings
+                // must never appear on the user's watch face.
+                return createNoDataComplication(request.complicationType)
             }
 
             when (request.complicationType) {
@@ -76,7 +78,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "onComplicationRequest: error", e)
-            createDebugComplication(request.complicationType, "err:${e.message?.take(20)}")
+            createNoDataComplication(request.complicationType)
         }
     }
 
@@ -122,35 +124,6 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
         } catch (e: Exception) {
             Log.e(TAG, "loadWeatherData: error", e)
             Result.failure(Exception("exc:${e.message?.take(20)}"))
-        }
-    }
-
-    private fun createDebugComplication(type: ComplicationType, reason: String): ComplicationData? {
-        return when (type) {
-            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(
-                text = PlainComplicationText.Builder(reason.take(7)).build(),
-                contentDescription = PlainComplicationText.Builder(reason).build()
-            )
-                .setTapAction(createTapAction())
-                .build()
-
-            ComplicationType.LONG_TEXT -> LongTextComplicationData.Builder(
-                text = PlainComplicationText.Builder(reason).build(),
-                contentDescription = PlainComplicationText.Builder(reason).build()
-            )
-                .setTitle(PlainComplicationText.Builder("Error").build())
-                .setTapAction(createTapAction())
-                .build()
-
-            ComplicationType.RANGED_VALUE -> RangedValueComplicationData.Builder(
-                value = 0f, min = 0f, max = 100f,
-                contentDescription = PlainComplicationText.Builder(reason).build()
-            )
-                .setText(PlainComplicationText.Builder(reason.take(7)).build())
-                .setTapAction(createTapAction())
-                .build()
-
-            else -> null
         }
     }
 

@@ -31,6 +31,15 @@ import javax.inject.Singleton
 @Singleton
 class GetOutfitRecommendationUseCase @Inject constructor() {
 
+    companion object {
+        /**
+         * Engine version, surfaced in feedback diagnostic bundles so a report
+         * always names the exact rules that produced the outfit. Bump this
+         * whenever the selection tables below change.
+         */
+        const val ENGINE_VERSION = "4.2"
+    }
+
     fun execute(weather: WeatherConditions, comfort: ComfortPreference = ComfortPreference.NEUTRAL): OutfitRecommendation {
         // Convert to Fahrenheit for consistent logic (engine uses F internally)
         val baseTemp = if (weather.isCelsius) weather.feelsLike * 9 / 5 + 32 else weather.feelsLike

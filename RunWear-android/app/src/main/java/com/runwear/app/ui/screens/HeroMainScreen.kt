@@ -100,7 +100,11 @@ fun HeroMainScreen(
     onLocationSearch: (String) -> Unit,
     onLocationSelect: (Double, Double, String) -> Unit,
     onUseCurrentLocation: () -> Unit = {},
-    isUsingGPS: Boolean = false
+    isUsingGPS: Boolean = false,
+    analyticsOptIn: Boolean = false,
+    onAnalyticsOptInChange: (Boolean) -> Unit = {},
+    onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
+    onItemTapped: (ClothingItem) -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -213,9 +217,11 @@ Get your personalized running outfit at runwear.ai
                                     contentVisible = contentVisible,
                                     onShopAllClick = { showShopAll = true },
                                     onItemClick = { item ->
+                                        onItemTapped(item)
                                         val url = buildAmazonSearchUrl(item, uiState.genderPreference)
                                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                    }
+                                    },
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
                                 )
                             }
                         }
@@ -253,9 +259,11 @@ Get your personalized running outfit at runwear.ai
                                         contentVisible = contentVisible,
                                         onShopAllClick = { showShopAll = true },
                                         onItemClick = { item ->
+                                            onItemTapped(item)
                                             val url = buildAmazonSearchUrl(item, uiState.genderPreference)
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        }
+                                        },
+                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
                                     )
                                 }
                             }
@@ -296,9 +304,11 @@ Get your personalized running outfit at runwear.ai
                                         contentVisible = contentVisible,
                                         onShopAllClick = { showShopAll = true },
                                         onItemClick = { item ->
+                                            onItemTapped(item)
                                             val url = buildAmazonSearchUrl(item, uiState.genderPreference)
                                             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        }
+                                        },
+                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
                                     )
                                 }
                             }
@@ -343,6 +353,12 @@ Get your personalized running outfit at runwear.ai
             onToggleUnit = onToggleUnit,
             onSetComfortPreference = onSetComfortPreference,
             onSetGenderPreference = onSetGenderPreference,
+            analyticsOptIn = analyticsOptIn,
+            onAnalyticsOptInChange = onAnalyticsOptInChange,
+            onSendFeedback = {
+                showSettings = false
+                onOpenFeedback(null)
+            },
             onDismiss = { showSettings = false }
         )
     }
@@ -452,7 +468,8 @@ private fun LazyListScope.outfitListItems(
     uiState: MainUiState,
     contentVisible: Boolean,
     onShopAllClick: () -> Unit,
-    onItemClick: (ClothingItem) -> Unit
+    onItemClick: (ClothingItem) -> Unit,
+    onFeedbackClick: () -> Unit
 ) {
     val outfit = uiState.outfit ?: return
 
@@ -555,6 +572,22 @@ private fun LazyListScope.outfitListItems(
     }
 
     item { Spacer(Modifier.height(16.dp)) }
+
+    // Contextual feedback entry (spec §1.1): the moment the user is most
+    // likely to disagree with the outfit is right here, looking at it.
+    item {
+        Text(
+            text = "Not what you'd wear? Tell us",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = RunWearColors.Primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onFeedbackClick() }
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+        )
+    }
 
     // Version footer
     item {

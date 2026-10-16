@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -243,6 +244,9 @@ fun SettingsSheet(
     onToggleUnit: () -> Unit,
     onSetComfortPreference: (ComfortPreference) -> Unit,
     onSetGenderPreference: (GenderPreference) -> Unit,
+    analyticsOptIn: Boolean,
+    onAnalyticsOptInChange: (Boolean) -> Unit,
+    onSendFeedback: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
@@ -256,6 +260,7 @@ fun SettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp)
         ) {
             Text(
@@ -319,6 +324,86 @@ fun SettingsSheet(
                 GenderToggleSettings(
                     selected = genderPreference,
                     onSelect = onSetGenderPreference
+                )
+            }
+
+            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+
+            // Send feedback — the durable route into the feedback system.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { onSendFeedback() }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Send feedback",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Text(
+                        text = "Tell us what happened, in your own words.",
+                        fontSize = 12.sp,
+                        color = RunWearColors.TextMuted,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Outlined.ChevronRight,
+                    contentDescription = null,
+                    tint = RunWearColors.TextMuted
+                )
+            }
+
+            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+
+            // Help improve the app — the analytics opt-in (spec §4.3 copy).
+            // The toggle is OFF until the user turns it on; while it is off,
+            // nothing is counted and nothing is sent, crash reports included.
+            Column {
+                SettingRow(
+                    label = "Help improve the app",
+                    sublabel = "Count how the app is used"
+                ) {
+                    Switch(
+                        checked = analyticsOptIn,
+                        onCheckedChange = onAnalyticsOptInChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = RunWearColors.Primary,
+                            uncheckedThumbColor = RunWearColors.TextMuted,
+                            uncheckedTrackColor = RunWearColors.BgCardLight
+                        )
+                    )
+                }
+                Text(
+                    text = "We count how the app is used — which features get used and where " +
+                        "recommendations miss — and nothing else. No account, no advertising ID, " +
+                        "and your location never leaves the phone more precisely than the city " +
+                        "name. Turn this off and nothing is counted or sent.",
+                    fontSize = 12.sp,
+                    color = RunWearColors.TextMuted,
+                    modifier = Modifier.padding(top = 10.dp)
+                )
+                if (!analyticsOptIn) {
+                    Text(
+                        text = "Off. Nothing is being counted.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = RunWearColors.TextPrimary,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+                Text(
+                    text = "If the app crashes, it can send us the technical details so we can " +
+                        "fix it. This happens only after a crash, and only with your permission here.",
+                    fontSize = 12.sp,
+                    color = RunWearColors.TextMuted,
+                    modifier = Modifier.padding(top = 10.dp)
                 )
             }
 

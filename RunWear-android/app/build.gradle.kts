@@ -117,6 +117,9 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
 
+    // Play In-App Review (rating moment — no-ops on non-Play installs)
+    implementation(libs.play.review)
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
