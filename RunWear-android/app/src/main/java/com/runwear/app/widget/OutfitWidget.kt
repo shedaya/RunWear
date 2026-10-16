@@ -7,9 +7,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.actionStartActivity
@@ -30,6 +33,7 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -39,9 +43,9 @@ import com.runwear.app.MainActivity
 import com.runwear.app.R
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
+import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.OutfitRecommendation
-import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import com.runwear.shared.util.LocationProvider
@@ -52,6 +56,18 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+
+// Widget palette mirrors the phone app's kit (ui/theme RunWearColors):
+// background #0A0A0A, card #262626, text #FFFFFF / #B3B3B3 / #737373,
+// primary teal #00796B, and the app's per-category colors for item icons.
+// Glance cannot load the app's Bebas font, so display type is Bold system
+// at display size (per the widgets/watch audit re-skin spec).
+private val WidgetBackground = Color(0xFF0A0A0A)
+private val WidgetCard = Color(0xFF262626)
+private val WidgetTextPrimary = Color(0xFFFFFFFF)
+private val WidgetTextSecondary = Color(0xFFB3B3B3)
+private val WidgetTextMuted = Color(0xFF737373)
+private val WidgetPrimary = Color(0xFF00796B)
 
 class OutfitWidget : GlanceAppWidget() {
 
@@ -132,7 +148,7 @@ private fun WidgetContent(state: WidgetState) {
     Box(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(Color(0xFF1A1A1A))
+            .background(WidgetBackground)
             .cornerRadius(16.dp)
             .clickable(actionStartActivity<MainActivity>())
             .padding(12.dp)
@@ -140,7 +156,7 @@ private fun WidgetContent(state: WidgetState) {
         when (state) {
             is WidgetState.Loading -> LoadingContent()
             is WidgetState.NoPermission -> NoPermissionContent()
-            is WidgetState.Error -> ErrorContent(state.message)
+            is WidgetState.Error -> ErrorContent()
             is WidgetState.Success -> {
                 when {
                     size.width >= 250.dp && size.height >= 150.dp -> LargeWidgetContent(state)
@@ -154,24 +170,25 @@ private fun WidgetContent(state: WidgetState) {
 
 @Composable
 private fun SmallWidgetContent(state: WidgetState.Success) {
-    val tempColor = getTemperatureColorProvider(state.weather.effectiveTemperature, state.weather.isCelsius)
-    val tempText = formatTemperature(state.weather)
-
     Column(
         modifier = GlanceModifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = getWeatherEmoji(state.weather.weatherCode),
-            style = TextStyle(fontSize = 28.sp)
-        )
-        Spacer(modifier = GlanceModifier.height(4.dp))
-        Text(
-            text = tempText,
+            text = state.weather.weatherCode.description,
             style = TextStyle(
-                color = tempColor,
-                fontSize = 24.sp,
+                color = ColorProvider(WidgetTextSecondary),
+                fontSize = 10.sp
+            ),
+            maxLines = 1
+        )
+        Spacer(modifier = GlanceModifier.height(2.dp))
+        Text(
+            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+            style = TextStyle(
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold
             )
         )
@@ -179,14 +196,14 @@ private fun SmallWidgetContent(state: WidgetState.Success) {
         Text(
             text = state.outfit.topBase.displayName.split(" ").take(2).joinToString(" "),
             style = TextStyle(
-                color = ColorProvider(Color.White),
+                color = ColorProvider(WidgetTextPrimary),
                 fontSize = 12.sp
             )
         )
         Text(
             text = state.outfit.bottom.displayName.split(" ").take(2).joinToString(" "),
             style = TextStyle(
-                color = ColorProvider(Color(0xFFB0B0B0)),
+                color = ColorProvider(WidgetTextSecondary),
                 fontSize = 11.sp
             )
         )
@@ -195,29 +212,27 @@ private fun SmallWidgetContent(state: WidgetState.Success) {
 
 @Composable
 private fun HorizontalWidgetContent(state: WidgetState.Success) {
-    val tempColor = getTemperatureColorProvider(state.weather.effectiveTemperature, state.weather.isCelsius)
-    val tempText = formatTemperature(state.weather)
-
     Row(
         modifier = GlanceModifier.fillMaxSize(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Weather section
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // Weather section: feels-like hero in white + condition label
+        Column {
             Text(
-                text = getWeatherEmoji(state.weather.weatherCode),
-                style = TextStyle(fontSize = 24.sp)
-            )
-            Spacer(modifier = GlanceModifier.width(6.dp))
-            Text(
-                text = tempText,
+                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
                 style = TextStyle(
-                    color = tempColor,
+                    color = ColorProvider(WidgetTextPrimary),
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
+            )
+            Text(
+                text = state.weather.weatherCode.description,
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextSecondary),
+                    fontSize = 10.sp
+                ),
+                maxLines = 1
             )
         }
 
@@ -228,7 +243,7 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
             modifier = GlanceModifier
                 .width(1.dp)
                 .height(30.dp)
-                .background(Color(0xFF404040))
+                .background(WidgetCard)
         ) {}
 
         Spacer(modifier = GlanceModifier.width(12.dp))
@@ -237,7 +252,7 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
         Text(
             text = buildOutfitSummary(state.outfit),
             style = TextStyle(
-                color = ColorProvider(Color.White),
+                color = ColorProvider(WidgetTextPrimary),
                 fontSize = 13.sp
             ),
             maxLines = 2
@@ -249,7 +264,7 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
         Text(
             text = "→",
             style = TextStyle(
-                color = ColorProvider(Color(0xFF808080)),
+                color = ColorProvider(WidgetTextMuted),
                 fontSize = 16.sp
             )
         )
@@ -258,9 +273,6 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
 
 @Composable
 private fun LargeWidgetContent(state: WidgetState.Success) {
-    val tempColor = getTemperatureColorProvider(state.weather.effectiveTemperature, state.weather.isCelsius)
-    val tempText = formatTemperature(state.weather)
-    val feelsLikeText = "Feels ${state.weather.feelsLike.toInt()}°"
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
     Column(
@@ -271,26 +283,23 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
             modifier = GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = getWeatherEmoji(state.weather.weatherCode),
-                style = TextStyle(fontSize = 28.sp)
-            )
-            Spacer(modifier = GlanceModifier.width(8.dp))
             Column {
                 Text(
-                    text = tempText,
+                    text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
                     style = TextStyle(
-                        color = tempColor,
-                        fontSize = 24.sp,
+                        color = ColorProvider(WidgetTextPrimary),
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
                 )
                 Text(
-                    text = feelsLikeText,
+                    text = "${state.weather.weatherCode.description} · " +
+                        formatTemperature(state.weather.effectiveTemperature, state.weather.isCelsius) + " actual",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFFB0B0B0)),
+                        color = ColorProvider(WidgetTextSecondary),
                         fontSize = 12.sp
-                    )
+                    ),
+                    maxLines = 1
                 )
             }
             Spacer(modifier = GlanceModifier.defaultWeight())
@@ -300,14 +309,15 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
                 Text(
                     text = state.locationName.take(15),
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFFB0B0B0)),
+                        color = ColorProvider(WidgetTextSecondary),
                         fontSize = 11.sp
-                    )
+                    ),
+                    maxLines = 1
                 )
                 Text(
-                    text = state.lastUpdated.format(timeFormatter),
+                    text = "Updated ${state.lastUpdated.format(timeFormatter)}",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFF808080)),
+                        color = ColorProvider(WidgetTextMuted),
                         fontSize = 10.sp
                     )
                 )
@@ -321,12 +331,12 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
             modifier = GlanceModifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(Color(0xFF303030))
+                .background(WidgetCard)
         ) {}
 
         Spacer(modifier = GlanceModifier.height(8.dp))
 
-        // Outfit items grid
+        // Outfit items grid — full item names at this size
         Column {
             // Primary items row
             Row(
@@ -334,11 +344,11 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
             ) {
                 OutfitItemChip(state.outfit.topBase)
                 state.outfit.topMid?.let {
-                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Spacer(modifier = GlanceModifier.width(6.dp))
                     OutfitItemChip(it)
                 }
                 state.outfit.topOuter?.let {
-                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Spacer(modifier = GlanceModifier.width(6.dp))
                     OutfitItemChip(it)
                 }
             }
@@ -360,15 +370,15 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
             ) {
                 state.outfit.head?.let {
                     OutfitItemChip(it)
-                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Spacer(modifier = GlanceModifier.width(6.dp))
                 }
                 state.outfit.hands?.let {
                     OutfitItemChip(it)
-                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Spacer(modifier = GlanceModifier.width(6.dp))
                 }
                 state.outfit.accessories.take(2).forEach { item ->
                     OutfitItemChip(item)
-                    Spacer(modifier = GlanceModifier.width(8.dp))
+                    Spacer(modifier = GlanceModifier.width(6.dp))
                 }
             }
         }
@@ -379,22 +389,25 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
 private fun OutfitItemChip(item: ClothingItem) {
     Row(
         modifier = GlanceModifier
-            .background(Color(0xFF2A2A2A))
+            .background(WidgetCard)
             .cornerRadius(8.dp)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = item.icon,
-            style = TextStyle(fontSize = 12.sp)
+        Image(
+            provider = ImageProvider(getCategoryIconRes(item.category)),
+            contentDescription = null,
+            modifier = GlanceModifier.size(14.dp),
+            colorFilter = ColorFilter.tint(ColorProvider(getCategoryColor(item.category)))
         )
         Spacer(modifier = GlanceModifier.width(4.dp))
         Text(
-            text = item.displayName.split(" ").take(2).joinToString(" "),
+            text = item.displayName,
             style = TextStyle(
-                color = ColorProvider(Color.White),
+                color = ColorProvider(WidgetTextPrimary),
                 fontSize = 11.sp
-            )
+            ),
+            maxLines = 1
         )
     }
 }
@@ -407,15 +420,19 @@ private fun LoadingContent() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "🏃",
-            style = TextStyle(fontSize = 32.sp)
-        )
-        Spacer(modifier = GlanceModifier.height(8.dp))
-        Text(
-            text = "Loading...",
+            text = "RunWear",
             style = TextStyle(
-                color = ColorProvider(Color(0xFFB0B0B0)),
-                fontSize = 14.sp
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold
+            )
+        )
+        Spacer(modifier = GlanceModifier.height(4.dp))
+        Text(
+            text = "Loading…",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextSecondary),
+                fontSize = 12.sp
             )
         )
     }
@@ -429,21 +446,18 @@ private fun NoPermissionContent() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "📍",
-            style = TextStyle(fontSize = 24.sp)
+            text = "Location needed",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold
+            )
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         Text(
-            text = "Location needed",
-            style = TextStyle(
-                color = ColorProvider(Color.White),
-                fontSize = 12.sp
-            )
-        )
-        Text(
             text = "Tap to enable",
             style = TextStyle(
-                color = ColorProvider(Color(0xFFFF6B35)),
+                color = ColorProvider(WidgetPrimary),
                 fontSize = 11.sp
             )
         )
@@ -451,74 +465,66 @@ private fun NoPermissionContent() {
 }
 
 @Composable
-private fun ErrorContent(message: String) {
+private fun ErrorContent() {
     Column(
         modifier = GlanceModifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "⚠️",
-            style = TextStyle(fontSize = 24.sp)
+            text = "Couldn't load weather",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = 13.sp
+            )
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         Text(
             text = "Tap to retry",
             style = TextStyle(
-                color = ColorProvider(Color(0xFFFF6B35)),
+                color = ColorProvider(WidgetPrimary),
                 fontSize = 12.sp
             )
         )
     }
 }
 
-private fun formatTemperature(weather: WeatherConditions): String {
-    return if (weather.isCelsius) {
-        "${weather.effectiveTemperature.toInt()}°C"
+private fun formatTemperature(value: Double, isCelsius: Boolean): String {
+    return if (isCelsius) {
+        "${value.toInt()}°C"
     } else {
-        "${weather.effectiveTemperature.toInt()}°F"
+        "${value.toInt()}°F"
     }
 }
 
 private fun buildOutfitSummary(outfit: OutfitRecommendation): String {
     val items = mutableListOf<String>()
     items.add(outfit.topBase.displayName.split(" ").take(2).joinToString(" "))
-    outfit.topMid?.let { items.add(it.displayName.split(" ").take(1).joinToString(" ")) }
-    outfit.topOuter?.let { items.add(it.displayName.split(" ").take(1).joinToString(" ")) }
+    outfit.topMid?.let { items.add(it.displayName.split(" ").take(2).joinToString(" ")) }
+    outfit.topOuter?.let { items.add(it.displayName.split(" ").take(2).joinToString(" ")) }
     items.add(outfit.bottom.displayName.split(" ").take(2).joinToString(" "))
-    outfit.head?.let { items.add(it.displayName.split(" ").take(1).joinToString(" ")) }
+    outfit.head?.let { items.add(it.displayName.split(" ").take(2).joinToString(" ")) }
     return items.joinToString(" • ")
 }
 
-private fun getWeatherEmoji(code: WeatherCode): String = when (code) {
-    WeatherCode.CLEAR_SKY -> "☀️"
-    WeatherCode.MAINLY_CLEAR -> "🌤️"
-    WeatherCode.PARTLY_CLOUDY -> "⛅"
-    WeatherCode.OVERCAST -> "☁️"
-    WeatherCode.FOG, WeatherCode.DEPOSITING_RIME_FOG -> "🌫️"
-    WeatherCode.DRIZZLE_LIGHT, WeatherCode.DRIZZLE_MODERATE, WeatherCode.DRIZZLE_DENSE -> "🌧️"
-    WeatherCode.FREEZING_DRIZZLE_LIGHT, WeatherCode.FREEZING_DRIZZLE_DENSE -> "🌨️"
-    WeatherCode.RAIN_SLIGHT, WeatherCode.RAIN_MODERATE, WeatherCode.RAIN_HEAVY -> "🌧️"
-    WeatherCode.FREEZING_RAIN_LIGHT, WeatherCode.FREEZING_RAIN_HEAVY -> "🌨️"
-    WeatherCode.SNOW_SLIGHT, WeatherCode.SNOW_MODERATE, WeatherCode.SNOW_HEAVY -> "❄️"
-    WeatherCode.SNOW_GRAINS -> "🌨️"
-    WeatherCode.RAIN_SHOWERS_SLIGHT, WeatherCode.RAIN_SHOWERS_MODERATE, WeatherCode.RAIN_SHOWERS_VIOLENT -> "🌦️"
-    WeatherCode.SNOW_SHOWERS_SLIGHT, WeatherCode.SNOW_SHOWERS_HEAVY -> "🌨️"
-    WeatherCode.THUNDERSTORM, WeatherCode.THUNDERSTORM_HAIL_SLIGHT, WeatherCode.THUNDERSTORM_HAIL_HEAVY -> "⛈️"
-    WeatherCode.UNKNOWN -> "🌡️"
+/** Category accent color — mirrors the phone app's kit (ui/theme RunWearColors). */
+private fun getCategoryColor(category: ClothingCategory): Color = when (category) {
+    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER ->
+        Color(0xFF00796B)
+    ClothingCategory.BOTTOM -> Color(0xFF1565C0)
+    ClothingCategory.HEAD -> Color(0xFF2E7D32)
+    ClothingCategory.HANDS -> Color(0xFF5E35B1)
+    ClothingCategory.ACCESSORIES -> Color(0xFFE65100)
 }
 
-private fun getTemperatureColorProvider(temp: Double, isCelsius: Boolean): ColorProvider {
-    val tempF = if (isCelsius) temp * 9 / 5 + 32 else temp
-    val color = when {
-        tempF >= 80 -> Color(0xFFFF5722) // Hot - Orange
-        tempF >= 65 -> Color(0xFFFF9800) // Warm - Amber
-        tempF >= 50 -> Color(0xFF4CAF50) // Mild - Green
-        tempF >= 35 -> Color(0xFF2196F3) // Cool - Blue
-        tempF >= 20 -> Color(0xFF3F51B5) // Cold - Indigo
-        else -> Color(0xFF9C27B0) // Freezing - Purple
-    }
-    return ColorProvider(color)
+/** Category icon drawable — mirrors the phone app's OutfitCard mapping. */
+private fun getCategoryIconRes(category: ClothingCategory): Int = when (category) {
+    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER ->
+        R.drawable.ic_category_top
+    ClothingCategory.BOTTOM -> R.drawable.ic_category_bottom
+    ClothingCategory.HEAD -> R.drawable.ic_category_head
+    ClothingCategory.HANDS -> R.drawable.ic_category_hands
+    ClothingCategory.ACCESSORIES -> R.drawable.ic_category_accessories
 }
 
 sealed class WidgetState {

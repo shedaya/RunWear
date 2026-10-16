@@ -2,10 +2,12 @@ package com.runwear.wear.complications
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.util.Log
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.LongTextComplicationData
+import androidx.wear.watchface.complications.data.MonochromaticImage
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
@@ -13,7 +15,6 @@ import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
-import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import com.runwear.shared.util.LocationProvider
@@ -131,6 +132,13 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
         private const val TAG = "OutfitComplication"
     }
 
+    /** The thermometer monochromatic icon (ic_complication) used in place of emoji titles. */
+    private fun complicationIcon(): MonochromaticImage {
+        return MonochromaticImage.Builder(
+            Icon.createWithResource(this, R.drawable.ic_complication)
+        ).build()
+    }
+
     private fun createTapAction(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -150,7 +158,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             text = PlainComplicationText.Builder(tempText).build(),
             contentDescription = PlainComplicationText.Builder("Temperature: $tempText").build()
         )
-            .setTitle(PlainComplicationText.Builder(getWeatherEmoji(weather.weatherCode)).build())
+            .setMonochromaticImage(complicationIcon())
             .setTapAction(createTapAction())
             .build()
     }
@@ -176,7 +184,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             text = PlainComplicationText.Builder(outfitItems).build(),
             contentDescription = PlainComplicationText.Builder("Outfit recommendation: $outfitItems").build()
         )
-            .setTitle(PlainComplicationText.Builder("$tempText ${getWeatherEmoji(weather.weatherCode)}").build())
+            .setTitle(PlainComplicationText.Builder(tempText).build())
             .setTapAction(createTapAction())
             .build()
     }
@@ -205,7 +213,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             contentDescription = PlainComplicationText.Builder("Temperature: $tempText").build()
         )
             .setText(PlainComplicationText.Builder(tempText).build())
-            .setTitle(PlainComplicationText.Builder(getWeatherEmoji(weather.weatherCode)).build())
+            .setTitle(PlainComplicationText.Builder(weather.weatherCode.description).build())
             .setTapAction(createTapAction())
             .build()
     }
@@ -216,7 +224,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
                 text = PlainComplicationText.Builder("--°").build(),
                 contentDescription = PlainComplicationText.Builder("No data").build()
             )
-                .setTitle(PlainComplicationText.Builder("🏃").build())
+                .setMonochromaticImage(complicationIcon())
                 .setTapAction(createTapAction())
                 .build()
 
@@ -247,7 +255,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             text = PlainComplicationText.Builder("72°").build(),
             contentDescription = PlainComplicationText.Builder("Temperature").build()
         )
-            .setTitle(PlainComplicationText.Builder("☀️").build())
+            .setMonochromaticImage(complicationIcon())
             .build()
     }
 
@@ -256,7 +264,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             text = PlainComplicationText.Builder("Shorts, Tank Top, Cap").build(),
             contentDescription = PlainComplicationText.Builder("Outfit preview").build()
         )
-            .setTitle(PlainComplicationText.Builder("72°F ☀️").build())
+            .setTitle(PlainComplicationText.Builder("72°F").build())
             .build()
     }
 
@@ -268,25 +276,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             contentDescription = PlainComplicationText.Builder("Temperature preview").build()
         )
             .setText(PlainComplicationText.Builder("72°F").build())
-            .setTitle(PlainComplicationText.Builder("☀️").build())
+            .setTitle(PlainComplicationText.Builder("Clear sky").build())
             .build()
-    }
-
-    private fun getWeatherEmoji(code: WeatherCode): String = when (code) {
-        WeatherCode.CLEAR_SKY -> "☀️"
-        WeatherCode.MAINLY_CLEAR -> "🌤️"
-        WeatherCode.PARTLY_CLOUDY -> "⛅"
-        WeatherCode.OVERCAST -> "☁️"
-        WeatherCode.FOG, WeatherCode.DEPOSITING_RIME_FOG -> "🌫️"
-        WeatherCode.DRIZZLE_LIGHT, WeatherCode.DRIZZLE_MODERATE, WeatherCode.DRIZZLE_DENSE -> "🌧️"
-        WeatherCode.FREEZING_DRIZZLE_LIGHT, WeatherCode.FREEZING_DRIZZLE_DENSE -> "🌨️"
-        WeatherCode.RAIN_SLIGHT, WeatherCode.RAIN_MODERATE, WeatherCode.RAIN_HEAVY -> "🌧️"
-        WeatherCode.FREEZING_RAIN_LIGHT, WeatherCode.FREEZING_RAIN_HEAVY -> "🌨️"
-        WeatherCode.SNOW_SLIGHT, WeatherCode.SNOW_MODERATE, WeatherCode.SNOW_HEAVY -> "❄️"
-        WeatherCode.SNOW_GRAINS -> "🌨️"
-        WeatherCode.RAIN_SHOWERS_SLIGHT, WeatherCode.RAIN_SHOWERS_MODERATE, WeatherCode.RAIN_SHOWERS_VIOLENT -> "🌦️"
-        WeatherCode.SNOW_SHOWERS_SLIGHT, WeatherCode.SNOW_SHOWERS_HEAVY -> "🌨️"
-        WeatherCode.THUNDERSTORM, WeatherCode.THUNDERSTORM_HAIL_SLIGHT, WeatherCode.THUNDERSTORM_HAIL_HEAVY -> "⛈️"
-        WeatherCode.UNKNOWN -> "🌡️"
     }
 }

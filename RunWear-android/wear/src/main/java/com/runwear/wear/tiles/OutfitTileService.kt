@@ -20,11 +20,12 @@ import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import com.google.android.horologist.annotations.ExperimentalHorologistApi
 import com.google.android.horologist.tiles.SuspendingTileService
+import com.runwear.wear.R
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
+import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.OutfitRecommendation
-import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import com.runwear.shared.util.LocationProvider
@@ -36,7 +37,15 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val RESOURCES_VERSION = "1"
+private const val RESOURCES_VERSION = "2"
+
+// Tile palette mirrors the phone app's kit: white display type, #B3B3B3
+// secondary, #737373 muted, primary teal #00796B. Item rows use the app's
+// category icons (baked in category colors — ProtoLayout cannot tint).
+private const val TILE_TEXT_PRIMARY = 0xFFFFFFFF.toInt()
+private const val TILE_TEXT_SECONDARY = 0xFFB3B3B3.toInt()
+private const val TILE_TEXT_MUTED = 0xFF737373.toInt()
+private const val TILE_PRIMARY = 0xFF00796B.toInt()
 
 @OptIn(ExperimentalHorologistApi::class)
 class OutfitTileService : SuspendingTileService() {
@@ -64,6 +73,22 @@ class OutfitTileService : SuspendingTileService() {
     ): ResourceBuilders.Resources {
         return ResourceBuilders.Resources.Builder()
             .setVersion(RESOURCES_VERSION)
+            .addIdToImageMapping("header_icon", imageResource(R.drawable.ic_tile_outfit))
+            .addIdToImageMapping("cat_top", imageResource(R.drawable.ic_tile_cat_top))
+            .addIdToImageMapping("cat_bottom", imageResource(R.drawable.ic_tile_cat_bottom))
+            .addIdToImageMapping("cat_head", imageResource(R.drawable.ic_tile_cat_head))
+            .addIdToImageMapping("cat_hands", imageResource(R.drawable.ic_tile_cat_hands))
+            .addIdToImageMapping("cat_accessories", imageResource(R.drawable.ic_tile_cat_accessories))
+            .build()
+    }
+
+    private fun imageResource(resId: Int): ResourceBuilders.ImageResource {
+        return ResourceBuilders.ImageResource.Builder()
+            .setAndroidResourceByResId(
+                ResourceBuilders.AndroidImageResourceByResId.Builder()
+                    .setResourceId(resId)
+                    .build()
+            )
             .build()
     }
 
@@ -155,13 +180,9 @@ class OutfitTileService : SuspendingTileService() {
         outfit: OutfitRecommendation,
         locationName: String
     ): LayoutElementBuilders.LayoutElement {
-        val tempColor = getTemperatureColor(weather.effectiveTemperature, weather.isCelsius)
-        val tempText = if (weather.isCelsius) {
-            "${weather.effectiveTemperature.toInt()}°C"
-        } else {
-            "${weather.effectiveTemperature.toInt()}°F"
-        }
-        val weatherEmoji = getWeatherEmoji(weather.weatherCode)
+        val unit = if (weather.isCelsius) "°C" else "°F"
+        val feelsText = "${weather.feelsLike.toInt()}$unit"
+        val actualText = "${weather.effectiveTemperature.toInt()}$unit"
 
         val clickable = ModifiersBuilders.Clickable.Builder()
             .setId("open_app")
@@ -197,26 +218,23 @@ class OutfitTileService : SuspendingTileService() {
                             .setWidth(wrap())
                             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
                             .addContent(
-                                Text.Builder()
-                                    .setText(weatherEmoji)
-                                    .setFontStyle(
-                                        LayoutElementBuilders.FontStyle.Builder()
-                                            .setSize(sp(28f))
-                                            .build()
-                                    )
+                                LayoutElementBuilders.Image.Builder()
+                                    .setResourceId("header_icon")
+                                    .setWidth(dp(24f))
+                                    .setHeight(dp(24f))
                                     .build()
                             )
                             .addContent(
-                                Spacer.Builder().setWidth(dp(8f)).build()
+                                Spacer.Builder().setWidth(dp(6f)).build()
                             )
                             .addContent(
                                 Text.Builder()
-                                    .setText(tempText)
+                                    .setText(feelsText)
                                     .setFontStyle(
                                         LayoutElementBuilders.FontStyle.Builder()
-                                            .setSize(sp(32f))
+                                            .setSize(sp(30f))
                                             .setWeight(LayoutElementBuilders.FONT_WEIGHT_BOLD)
-                                            .setColor(argb(tempColor))
+                                            .setColor(argb(TILE_TEXT_PRIMARY))
                                             .build()
                                     )
                                     .build()
@@ -225,13 +243,15 @@ class OutfitTileService : SuspendingTileService() {
                     )
                     .addContent(
                         Text.Builder()
-                            .setText("Feels ${weather.feelsLike.toInt()}°")
+                            .setText("${weather.weatherCode.description} · $actualText actual")
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(sp(12f))
-                                    .setColor(argb(0xFFB0B0B0.toInt()))
+                                    .setSize(sp(11f))
+                                    .setColor(argb(TILE_TEXT_SECONDARY))
                                     .build()
                             )
+                            .setMaxLines(1)
+                            .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                             .build()
                     )
                     .addContent(
@@ -249,7 +269,7 @@ class OutfitTileService : SuspendingTileService() {
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(10f))
-                                    .setColor(argb(0xFF808080.toInt()))
+                                    .setColor(argb(TILE_TEXT_MUTED))
                                     .build()
                             )
                             .build()
@@ -260,19 +280,13 @@ class OutfitTileService : SuspendingTileService() {
     }
 
     private fun createOutfitSummary(outfit: OutfitRecommendation): LayoutElementBuilders.LayoutElement {
-        val items = mutableListOf<Pair<String, String>>()
+        val items = mutableListOf<ClothingItem>()
 
-        items.add(outfit.topBase.icon to outfit.topBase.displayName.split(" ").take(2).joinToString(" "))
-        outfit.topMid?.let {
-            items.add(it.icon to it.displayName.split(" ").take(2).joinToString(" "))
-        }
-        outfit.topOuter?.let {
-            items.add(it.icon to it.displayName.split(" ").take(2).joinToString(" "))
-        }
-        items.add(outfit.bottom.icon to outfit.bottom.displayName.split(" ").take(2).joinToString(" "))
-        outfit.head?.let {
-            items.add(it.icon to it.displayName.split(" ").take(2).joinToString(" "))
-        }
+        items.add(outfit.topBase)
+        outfit.topMid?.let { items.add(it) }
+        outfit.topOuter?.let { items.add(it) }
+        items.add(outfit.bottom)
+        outfit.head?.let { items.add(it) }
 
         val displayItems = items.take(4)
 
@@ -280,33 +294,32 @@ class OutfitTileService : SuspendingTileService() {
             .setWidth(wrap())
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
             .apply {
-                displayItems.forEach { (icon, name) ->
+                displayItems.forEach { item ->
                     addContent(
                         Row.Builder()
                             .setWidth(wrap())
                             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
                             .addContent(
-                                Text.Builder()
-                                    .setText(icon)
-                                    .setFontStyle(
-                                        LayoutElementBuilders.FontStyle.Builder()
-                                            .setSize(sp(14f))
-                                            .build()
-                                    )
+                                LayoutElementBuilders.Image.Builder()
+                                    .setResourceId(tileCategoryIconId(item.category))
+                                    .setWidth(dp(16f))
+                                    .setHeight(dp(16f))
                                     .build()
                             )
                             .addContent(
-                                Spacer.Builder().setWidth(dp(4f)).build()
+                                Spacer.Builder().setWidth(dp(5f)).build()
                             )
                             .addContent(
                                 Text.Builder()
-                                    .setText(name)
+                                    .setText(item.displayName)
                                     .setFontStyle(
                                         LayoutElementBuilders.FontStyle.Builder()
                                             .setSize(sp(13f))
-                                            .setColor(argb(0xFFE0E0E0.toInt()))
+                                            .setColor(argb(TILE_TEXT_PRIMARY))
                                             .build()
                                     )
+                                    .setMaxLines(1)
+                                    .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                                     .build()
                             )
                             .build()
@@ -319,6 +332,18 @@ class OutfitTileService : SuspendingTileService() {
             .build()
     }
 
+    /** Tile image-resource id for a category — mirrors the phone app's category set. */
+    private fun tileCategoryIconId(category: ClothingCategory): String =
+        when (category) {
+            ClothingCategory.TOP_BASE,
+            ClothingCategory.TOP_MID,
+            ClothingCategory.TOP_OUTER -> "cat_top"
+            ClothingCategory.BOTTOM -> "cat_bottom"
+            ClothingCategory.HEAD -> "cat_head"
+            ClothingCategory.HANDS -> "cat_hands"
+            ClothingCategory.ACCESSORIES -> "cat_accessories"
+        }
+
     private fun createLoadingLayout(): LayoutElementBuilders.LayoutElement {
         return Box.Builder()
             .setWidth(expand())
@@ -330,14 +355,14 @@ class OutfitTileService : SuspendingTileService() {
                     .setWidth(wrap())
                     .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                     .addContent(
-                        Text.Builder()
-                            .setText("🏃")
-                            .setFontStyle(
-                                LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(sp(32f))
-                                    .build()
-                            )
+                        LayoutElementBuilders.Image.Builder()
+                            .setResourceId("header_icon")
+                            .setWidth(dp(28f))
+                            .setHeight(dp(28f))
                             .build()
+                    )
+                    .addContent(
+                        Spacer.Builder().setHeight(dp(6f)).build()
                     )
                     .addContent(
                         Text.Builder()
@@ -345,7 +370,7 @@ class OutfitTileService : SuspendingTileService() {
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(14f))
-                                    .setColor(argb(0xFFB0B0B0.toInt()))
+                                    .setColor(argb(TILE_TEXT_SECONDARY))
                                     .build()
                             )
                             .build()
@@ -386,13 +411,17 @@ class OutfitTileService : SuspendingTileService() {
                     .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                     .addContent(
                         Text.Builder()
-                            .setText("⚠️")
+                            .setText("Couldn't load weather")
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(sp(24f))
+                                    .setSize(sp(13f))
+                                    .setColor(argb(TILE_TEXT_PRIMARY))
                                     .build()
                             )
                             .build()
+                    )
+                    .addContent(
+                        Spacer.Builder().setHeight(dp(4f)).build()
                     )
                     .addContent(
                         Text.Builder()
@@ -400,7 +429,7 @@ class OutfitTileService : SuspendingTileService() {
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(14f))
-                                    .setColor(argb(0xFFFF6B35.toInt()))
+                                    .setColor(argb(TILE_PRIMARY))
                                     .build()
                             )
                             .build()
@@ -441,24 +470,17 @@ class OutfitTileService : SuspendingTileService() {
                     .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
                     .addContent(
                         Text.Builder()
-                            .setText("📍")
+                            .setText("Location needed")
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(sp(24f))
+                                    .setSize(sp(14f))
+                                    .setColor(argb(TILE_TEXT_PRIMARY))
                                     .build()
                             )
                             .build()
                     )
                     .addContent(
-                        Text.Builder()
-                            .setText("Location needed")
-                            .setFontStyle(
-                                LayoutElementBuilders.FontStyle.Builder()
-                                    .setSize(sp(14f))
-                                    .setColor(argb(0xFFE0E0E0.toInt()))
-                                    .build()
-                            )
-                            .build()
+                        Spacer.Builder().setHeight(dp(4f)).build()
                     )
                     .addContent(
                         Text.Builder()
@@ -466,7 +488,7 @@ class OutfitTileService : SuspendingTileService() {
                             .setFontStyle(
                                 LayoutElementBuilders.FontStyle.Builder()
                                     .setSize(sp(12f))
-                                    .setColor(argb(0xFFFF6B35.toInt()))
+                                    .setColor(argb(TILE_PRIMARY))
                                     .build()
                             )
                             .build()
@@ -474,36 +496,6 @@ class OutfitTileService : SuspendingTileService() {
                     .build()
             )
             .build()
-    }
-
-    private fun getWeatherEmoji(code: WeatherCode): String = when (code) {
-        WeatherCode.CLEAR_SKY -> "☀️"
-        WeatherCode.MAINLY_CLEAR -> "🌤️"
-        WeatherCode.PARTLY_CLOUDY -> "⛅"
-        WeatherCode.OVERCAST -> "☁️"
-        WeatherCode.FOG, WeatherCode.DEPOSITING_RIME_FOG -> "🌫️"
-        WeatherCode.DRIZZLE_LIGHT, WeatherCode.DRIZZLE_MODERATE, WeatherCode.DRIZZLE_DENSE -> "🌧️"
-        WeatherCode.FREEZING_DRIZZLE_LIGHT, WeatherCode.FREEZING_DRIZZLE_DENSE -> "🌨️"
-        WeatherCode.RAIN_SLIGHT, WeatherCode.RAIN_MODERATE, WeatherCode.RAIN_HEAVY -> "🌧️"
-        WeatherCode.FREEZING_RAIN_LIGHT, WeatherCode.FREEZING_RAIN_HEAVY -> "🌨️"
-        WeatherCode.SNOW_SLIGHT, WeatherCode.SNOW_MODERATE, WeatherCode.SNOW_HEAVY -> "❄️"
-        WeatherCode.SNOW_GRAINS -> "🌨️"
-        WeatherCode.RAIN_SHOWERS_SLIGHT, WeatherCode.RAIN_SHOWERS_MODERATE, WeatherCode.RAIN_SHOWERS_VIOLENT -> "🌦️"
-        WeatherCode.SNOW_SHOWERS_SLIGHT, WeatherCode.SNOW_SHOWERS_HEAVY -> "🌨️"
-        WeatherCode.THUNDERSTORM, WeatherCode.THUNDERSTORM_HAIL_SLIGHT, WeatherCode.THUNDERSTORM_HAIL_HEAVY -> "⛈️"
-        WeatherCode.UNKNOWN -> "🌡️"
-    }
-
-    private fun getTemperatureColor(temp: Double, isCelsius: Boolean): Int {
-        val tempF = if (isCelsius) temp * 9 / 5 + 32 else temp
-        return when {
-            tempF >= 80 -> 0xFFFF5722.toInt() // Hot - Orange
-            tempF >= 65 -> 0xFFFF9800.toInt() // Warm - Amber
-            tempF >= 50 -> 0xFF4CAF50.toInt() // Mild - Green
-            tempF >= 35 -> 0xFF2196F3.toInt() // Cool - Blue
-            tempF >= 20 -> 0xFF3F51B5.toInt() // Cold - Indigo
-            else -> 0xFF9C27B0.toInt() // Freezing - Purple
-        }
     }
 
     private sealed class TileState {
