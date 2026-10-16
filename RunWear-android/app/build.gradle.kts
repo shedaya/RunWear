@@ -19,6 +19,20 @@ android {
     compileSdk = 35
 
     signingConfigs {
+        // Pinned debug keystore (~/workspace/.android-debug, survives VM replacements).
+        // Without this, AGP auto-generates a debug key under the JVM user.home
+        // (/root/.android), which is wiped on VM replacement -> new signing cert ->
+        // every subsequent APK fails to update with "App not installed". Falls back
+        // to AGP's default when the pinned keystore is absent (e.g. fresh clone).
+        getByName("debug") {
+            val pinned = rootProject.file("../../.android-debug/runwear-debug.keystore")
+            if (pinned.exists()) {
+                storeFile = pinned
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 keyAlias = keystoreProperties["keyAlias"] as String
