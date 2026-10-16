@@ -5,7 +5,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * THE BRAIN: Running-Specific Clothing Recommendation Engine (v4.1)
+ * THE BRAIN: Running-Specific Clothing Recommendation Engine (v4.2)
  *
  * Brackets are mapped directly from real feels-like temperature to running-appropriate clothing.
  * No arithmetic offset — the thresholds themselves reflect that runners generate 5-15× resting
@@ -16,6 +16,17 @@ import javax.inject.Singleton
  *
  * Key insight: No credible running source recommends an insulated jacket at 20°F.
  * That threshold sits at 0-10°F for active runners.
+ *
+ * v4.2 cool-band recalibration (field report, Oct 2026): 47°F actual / ~40°F feels-like in
+ * 11 mph wind produced THREE torso layers — light long sleeve + quarter-zip + windbreaker.
+ * Causes: (a) the mid-layer band started at 40°F, (b) the windbreaker was unconditional
+ * across 10–39°F, and (c) the three torso selectors all keyed off the same feels-like with
+ * no mutual exclusion, so a raw feels-like of 39.x (displayed as "40°") fired every layer at
+ * once — crossing 40.0 → 39.9°F added FOUR items in a single step (2 → 6 total).
+ * Fixes: mid-layers now start at 32°F, the shell is wind-gated through the whole cool band
+ * (it only becomes standard issue below 25°F, where cold — not wind — dominates), and in
+ * the 25–40°F band a wind shell and a mid-layer are alternatives, never a stack.
+ * NOTE: the PWA mirrors these tables and needs the same update (out of scope here).
  */
 @Singleton
 class GetOutfitRecommendationUseCase @Inject constructor() {
@@ -27,11 +38,21 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         // No separate running offset — the bracket thresholds are already running-specific.
         val adjustedTemp = baseTemp + comfort.tempAdjustment
 
+        val topMid = selectTopMid(adjustedTemp)
+        val topOuter = selectTopOuter(adjustedTemp, weather)
+        // Cool-band rule (25–39.9°F): a wind shell and a mid-layer are alternatives,
+        // never a stack. If the wind calls for the shell, the mid-layer comes off.
+        // (Feels-like already prices in the wind chill; dressing for both double-counts it.)
+        val effectiveTopMid =
+            if (topOuter == ClothingItem.WINDBREAKER && topMid != null &&
+                adjustedTemp >= 25 && adjustedTemp < 40
+            ) null else topMid
+
         return OutfitRecommendation(
             weather = weather,
             topBase = selectTopBase(adjustedTemp),
-            topMid = selectTopMid(adjustedTemp),
-            topOuter = selectTopOuter(adjustedTemp, weather),
+            topMid = effectiveTopMid,
+            topOuter = topOuter,
             bottom = selectBottom(adjustedTemp),
             head = selectHead(adjustedTemp, weather),
             hands = selectHands(adjustedTemp),
@@ -44,27 +65,34 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
     private fun selectTopBase(temp: Double): ClothingItem = when {
         temp >= 80 -> ClothingItem.TANK_TOP
         temp >= 50 -> ClothingItem.SHORT_SLEEVE
-        temp >= 20 -> ClothingItem.LONG_SLEEVE_LIGHT
+        temp >= 25 -> ClothingItem.LONG_SLEEVE_LIGHT
         else -> ClothingItem.LONG_SLEEVE_THERMAL
     }
 
-    // No mid-layer above 40°F. Below that, progressively warmer mid-layers.
+    // No mid-layer above 32°F: at 32–49°F a single long-sleeve layer (plus an
+    // optional wind shell) is what mainstream dress charts call for. Below 32°F,
+    // progressively warmer mid-layers.
     private fun selectTopMid(temp: Double): ClothingItem? = when {
-        temp >= 40 -> null
-        temp >= 20 -> ClothingItem.QUARTER_ZIP
+        temp >= 32 -> null
+        temp >= 25 -> ClothingItem.QUARTER_ZIP
         temp >= 10 -> ClothingItem.FLEECE_PULLOVER
         else -> ClothingItem.HALF_ZIP_THERMAL
     }
 
     // Rain always gets rain jacket. Wind shell beats heavy jacket for running.
-    // Insulated jacket ONLY below 10°F — the single biggest change from old engine.
+    // Insulated jacket ONLY below 10°F.
+    // The shell is wind-GATED through the whole cool band (25–49°F): feels-like
+    // already includes wind chill, so an automatic shell on top of it double-counts
+    // the wind. Below 25°F the shell becomes standard (cold dominates, and it seals
+    // the mid-layer). In the 25–40°F band, execute() drops the mid-layer when the
+    // shell is on — the two are alternatives there, never a stack.
     private fun selectTopOuter(temp: Double, weather: WeatherConditions): ClothingItem? {
         if (weather.isRaining && weather.precipitation > 0.1) return ClothingItem.RAIN_JACKET
 
         return when {
             temp >= 50 -> null
-            temp >= 40 -> if (weather.isWindy) ClothingItem.WINDBREAKER else null
-            temp >= 10 -> ClothingItem.WINDBREAKER  // Wind shell for 10-39°F — NOT insulated
+            temp >= 25 -> if (weather.isWindy) ClothingItem.WINDBREAKER else null
+            temp >= 10 -> ClothingItem.WINDBREAKER  // Wind shell for 10–24°F — NOT insulated
             else -> ClothingItem.INSULATED_JACKET    // Insulated ONLY below 10°F
         }
     }
@@ -117,8 +145,8 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
             tips.add("🏃 You should feel slightly cool stepping outside. If you're comfortable standing still, you're overdressed for running.")
         }
 
-        // 3-layer ventilation tip
-        if (temp < 40 && temp >= 10) {
+        // Layered-setup ventilation tip (2+ torso layers happen below 32°F)
+        if (temp < 32 && temp >= 10) {
             tips.add("🧥 Your layered setup lets you regulate heat — unzip your mid-layer or shell if you warm up after the first mile.")
         }
 
