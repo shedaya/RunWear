@@ -546,8 +546,7 @@ class OutfitRulesSweepTest {
                 appendLine("sunscreen) off the COMFORT-ADJUSTED temperature, so shifting comfort moves sun")
                 appendLine("gear across its 50/65°F thresholds — an inversion of total count can be caused")
                 appendLine("purely by sun gear appearing/disappearing, with warmth layering unchanged.")
-                violations.take(400).forEach { appendLine(it) }
-                if (violations.size > 400) appendLine("... and ${violations.size - 400} more")
+                violations.forEach { appendLine(it) }
             }
         )
         assertTrue("inv7: ${violations.size} profile-ordering inversions", violations.isEmpty())
