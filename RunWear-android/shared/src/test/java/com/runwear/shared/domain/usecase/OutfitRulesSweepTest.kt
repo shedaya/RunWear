@@ -54,7 +54,7 @@ class OutfitRulesSweepTest {
         val env: Env
     ) {
         /** The temperature the engine's brackets actually see. */
-        val adjusted: Double get() = feels + comfort.tempAdjustment
+        val adjusted: Double get() = feels.toDouble() + comfort.tempAdjustment
         fun describe(): String =
             "feels=${feels}F actual=${feels}F wind=${wind}mph cond=$cond comfort=$comfort(adj=${comfort.tempAdjustment}) humidity=$humidity env=$env adjusted=${adjusted}F"
     }
@@ -83,7 +83,7 @@ class OutfitRulesSweepTest {
             for (feels in FEELS) for (wind in WINDS) for (cond in CONDS)
                 for (comfort in COMFORTS) for (humidity in HUMIDITIES) for (env in ENVS) {
                     val s = Scenario(feels, wind, cond, comfort, humidity, env)
-                    map[s] = recOf(engine.execute(weatherFor(s)))
+                    map[s] = recOf(engine.execute(weatherFor(s), s.comfort))
                 }
             map
         }
@@ -563,7 +563,7 @@ class OutfitRulesSweepTest {
         // (a) 47°F actual / 40°F feels / 11 mph / NEUTRAL — the case that produced
         // three torso layers pre-v4.2.
         val caseA = Scenario(40, 11.0, Cond.DRY, ComfortPreference.NEUTRAL, 30, Env.DAY_GREY)
-        val outfitA = engine.execute(weatherFor(caseA, actualF = 47.0))
+        val outfitA = engine.execute(weatherFor(caseA, actualF = 47.0), caseA.comfort)
         val recA = recOf(outfitA)
         sb.appendLine("Case (a) feels=40F actual=47F wind=11mph NEUTRAL dry day-grey:")
         sb.appendLine("  ${outfitString(outfitA)}")
@@ -575,7 +575,7 @@ class OutfitRulesSweepTest {
 
         // (b) 39°F feels / calm / NEUTRAL — the shipped v4.2 result: 4 items, 1 torso layer.
         val caseB = Scenario(39, 0.0, Cond.DRY, ComfortPreference.NEUTRAL, 30, Env.DAY_GREY)
-        val outfitB = engine.execute(weatherFor(caseB))
+        val outfitB = engine.execute(weatherFor(caseB), caseB.comfort)
         val recB = recOf(outfitB)
         sb.appendLine("Case (b) feels=39F wind=0mph NEUTRAL dry day-grey:")
         sb.appendLine("  ${outfitString(outfitB)}")
@@ -649,7 +649,7 @@ class OutfitRulesSweepTest {
             val baseMask = GRID.getValue(base).mask
             for (delta in listOf(-10.0, 10.0)) {
                 checks++
-                val outfit = engine.execute(weatherFor(base, actualF = feels + delta))
+                val outfit = engine.execute(weatherFor(base, actualF = feels + delta), base.comfort)
                 if (recOf(outfit).mask != baseMask) {
                     mismatches += "MISMATCH actual=${feels + delta}F vs ${feels}F at ${base.describe()}"
                 }
@@ -683,7 +683,7 @@ class OutfitRulesSweepTest {
                     isCelsius = true
                 )
                 checks++
-                val outfit = engine.execute(celsiusWeather)
+                val outfit = engine.execute(celsiusWeather, comfort)
                 val expected = GRID.getValue(s)
                 if (recOf(outfit).mask != expected.mask) {
                     val roundTripped = (feelsF - 32.0) * 5.0 / 9.0 * 9.0 / 5.0 + 32.0
