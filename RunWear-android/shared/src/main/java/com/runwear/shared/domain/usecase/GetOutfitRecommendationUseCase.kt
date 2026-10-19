@@ -27,6 +27,14 @@ import javax.inject.Singleton
  * (it only becomes standard issue below 25°F, where cold — not wind — dominates), and in
  * the 25–40°F band a wind shell and a mid-layer are alternatives, never a stack.
  * NOTE: the PWA mirrors these tables and needs the same update (out of scope here).
+ *
+ * v4.3 sun-gear frame fix (owner decision, Oct 2026): sun protection is not layering.
+ * The visor/cap sun gates in selectHead() read the comfort-ADJUSTED temperature, so a
+ * warmer comfort profile could gain a running cap the colder profile didn't get at the
+ * same weather (640 profile-ordering inversions in the Oct 17 sweep, inv7). The sun
+ * gates now read the RAW temperature (baseTemp, before the comfort shift); warmth
+ * headgear stays on the adjusted frame. Sunglasses/sunscreen were already UV-only.
+ * The PWA mirror needs the same sun-gate change.
  */
 @Singleton
 class GetOutfitRecommendationUseCase @Inject constructor() {
@@ -37,7 +45,7 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
          * always names the exact rules that produced the outfit. Bump this
          * whenever the selection tables below change.
          */
-        const val ENGINE_VERSION = "4.2"
+        const val ENGINE_VERSION = "4.3"
     }
 
     fun execute(weather: WeatherConditions, comfort: ComfortPreference = ComfortPreference.NEUTRAL): OutfitRecommendation {
@@ -63,7 +71,7 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
             topMid = effectiveTopMid,
             topOuter = topOuter,
             bottom = selectBottom(adjustedTemp),
-            head = selectHead(adjustedTemp, weather),
+            head = selectHead(adjustedTemp, baseTemp, weather),
             hands = selectHands(adjustedTemp),
             accessories = selectAccessories(weather, adjustedTemp),
             tips = generateTips(weather, adjustedTemp)
@@ -114,11 +122,18 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         else -> ClothingItem.THERMAL_TIGHTS
     }
 
-    private fun selectHead(temp: Double, weather: WeatherConditions): ClothingItem? {
-        if (temp >= 65 && weather.uvIndex > 3) return ClothingItem.VISOR
-        if (temp >= 50 && weather.uvIndex > 3) return ClothingItem.BASEBALL_CAP
+    private fun selectHead(temp: Double, rawTemp: Double, weather: WeatherConditions): ClothingItem? {
+        // Sun protection is NOT layering (v4.3): the visor/cap sun gates key off
+        // the RAW temperature (rawTemp = baseTemp, before the comfort
+        // adjustment), never the comfort-adjusted frame — "I run hot" must not
+        // put a cap on your head, and "I run cold" must not take one off.
+        if (rawTemp >= 65 && weather.uvIndex > 3) return ClothingItem.VISOR
+        if (rawTemp >= 50 && weather.uvIndex > 3) return ClothingItem.BASEBALL_CAP
+        // Same item, different job: in rain the cap is rain gear, keyed to rain
+        // itself — not a temperature decision. Unchanged.
         if (weather.isRaining) return ClothingItem.BASEBALL_CAP
 
+        // Warmth headgear below stays on the comfort-adjusted frame (temp).
         return when {
             temp >= 40 -> null
             temp >= 30 -> ClothingItem.HEADBAND
@@ -137,6 +152,8 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
 
     private fun selectAccessories(weather: WeatherConditions, temp: Double): List<ClothingItem> {
         val accessories = mutableListOf<ClothingItem>()
+        // Sun protection, UV-only: never read the temperature in any frame, so
+        // the comfort preference cannot move them (classification audited v4.3).
         if (weather.uvIndex > 3) accessories.add(ClothingItem.SUNGLASSES)
         if (weather.uvIndex > 5) accessories.add(ClothingItem.SUNSCREEN)
         if (temp < 30) accessories.add(ClothingItem.NECK_GAITER)
