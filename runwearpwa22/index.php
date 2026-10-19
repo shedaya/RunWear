@@ -2949,14 +2949,20 @@
             return null;
         }
 
-        // ============ RECOMMENDATION ENGINE (v4.1) ============
+        // ============ RECOMMENDATION ENGINE (v4.3) ============
         // Brackets are mapped directly from real feels-like temperature to running-specific clothing.
         // No arithmetic offset — the thresholds themselves reflect that runners generate 5-15× resting
         // metabolic heat. Sources: Nike, Jeff Galloway, Marathon Handbook, Tina Muir, Fleet Feet.
+        // v4.3 (mirrors Android engine): sun protection is not layering — the visor/cap
+        // sun gates in the HEAD section read the RAW temperature (baseTemp, before the
+        // comfort shift), not the comfort-adjusted frame. Everything else unchanged.
         function getOutfitRecommendation(weather) {
             // Comfort adjustment only: "runs hot" (+10) shifts up, "runs cold" (-10) shifts down.
             // Engine thresholds are °F: normalize to Fahrenheit first (mirrors Android, F6).
-            const temp = (state.useCelsius ? weather.feelsLike * 9/5 + 32 : weather.feelsLike) + state.comfort;
+            // baseTemp is the RAW feels-like (°F, before the comfort shift); temp is the
+            // comfort-adjusted frame. Only the sun gates read baseTemp (v4.3, HEAD below).
+            const baseTemp = state.useCelsius ? weather.feelsLike * 9/5 + 32 : weather.feelsLike;
+            const temp = baseTemp + state.comfort;
             const isWindy = weather.windSpeed > 10;
             const isRaining = weather.isRaining;
 
@@ -2996,8 +3002,14 @@
             else outfit.items.push(ClothingItems.THERMAL_TIGHTS);
 
             // === HEAD ===
-            if (temp >= 65 && weather.uvIndex > 3) outfit.items.push(ClothingItems.VISOR);
-            else if (temp >= 50 && weather.uvIndex > 3) outfit.items.push(ClothingItems.BASEBALL_CAP);
+            // Sun protection is NOT layering (v4.3): the visor/cap sun gates key off
+            // the RAW temperature (baseTemp, before the comfort adjustment), never the
+            // comfort-adjusted frame — "I run hot" must not put a cap on your head, and
+            // "I run cold" must not take one off. Same item, different job: in rain the
+            // cap is rain gear, keyed to rain itself — unchanged. Warmth headgear
+            // below stays on the comfort-adjusted frame (temp).
+            if (baseTemp >= 65 && weather.uvIndex > 3) outfit.items.push(ClothingItems.VISOR);
+            else if (baseTemp >= 50 && weather.uvIndex > 3) outfit.items.push(ClothingItems.BASEBALL_CAP);
             else if (isRaining) outfit.items.push(ClothingItems.BASEBALL_CAP);
             else if (temp < 40 && temp >= 30) outfit.items.push(ClothingItems.HEADBAND);
             else if (temp < 30 && temp >= 15) outfit.items.push(ClothingItems.LIGHT_BEANIE);
@@ -3010,6 +3022,8 @@
             else if (temp < 15) outfit.items.push(ClothingItems.MITTENS);
 
             // === ACCESSORIES ===
+            // Sun protection, UV-only: never read the temperature in any frame, so
+            // the comfort preference cannot move them (classification audited v4.3).
             if (weather.uvIndex > 3) outfit.items.push(ClothingItems.SUNGLASSES);
             if (weather.uvIndex > 5) outfit.items.push(ClothingItems.SUNSCREEN);
             if (temp < 30) outfit.items.push(ClothingItems.NECK_GAITER);
