@@ -176,7 +176,7 @@ class TelemetryContractTest {
         val keys = keysOf(bundle)
         assertTrue("bundle keys outside allowlist: ${keys - bundleKeys}", keys.all { it in bundleKeys })
         // engineVersion is the one required bundle field.
-        assertEquals("4.2", bundle.getString("engineVersion"))
+        assertEquals("4.3", bundle.getString("engineVersion"))
         assertEquals("Hong Kong", bundle.getString("cityLabel"))
         assertEquals(39.0, bundle.getDouble("feelsLike"), 0.001)
         assertEquals(39.0, bundle.getDouble("effectiveTemp"), 0.001)

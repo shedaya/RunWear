@@ -14,7 +14,8 @@ import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Outfit engine v4.2 — full scenario sweep (QA harness, 2026-10-17).
+ * Outfit engine sweep (QA harness, 2026-10-17; inv7 re-reviewed 2026-10-19
+ * for engine v4.3, which keys sun gear to the RAW temperature).
  *
  * Sweeps the REAL [GetOutfitRecommendationUseCase] over its full input space
  * (209,600 main-grid scenarios plus divergence and Celsius slices) and checks
@@ -184,12 +185,12 @@ class OutfitRulesSweepTest {
     @Test
     fun inv0_engineVersionPin() {
         assertEquals(
-            "Harness written against engine 4.2; re-review invariants before bumping this pin.",
-            "4.2", GetOutfitRecommendationUseCase.ENGINE_VERSION
+            "Harness written against engine 4.3; re-review invariants before bumping this pin.",
+            "4.3", GetOutfitRecommendationUseCase.ENGINE_VERSION
         )
         section(
             "inv0",
-            "## inv0 — engine version pin\nENGINE_VERSION = ${GetOutfitRecommendationUseCase.ENGINE_VERSION} (asserted == \"4.2\")"
+            "## inv0 — engine version pin\nENGINE_VERSION = ${GetOutfitRecommendationUseCase.ENGINE_VERSION} (asserted == \"4.3\")"
         )
     }
 
@@ -490,28 +491,49 @@ class OutfitRulesSweepTest {
         assertTrue("inv6: ${violations.size} wind-sanity violations", violations.isEmpty())
     }
 
-    // ── inv7: profile ordering ────────────────────────────────────────────
+    // ── inv7: profile ordering + sun gear keys to RAW temperature ─────────
+    //
+    // Owner decision (2026-10-19): sun protection is NOT layering. Through
+    // engine v4.2 the visor/cap sun gates in selectHead() read the
+    // comfort-ADJUSTED temperature, so at identical weather a warmer comfort
+    // profile could gain a Running Cap the colder profile didn't — 640
+    // profile-ordering inversions in the 2026-10-17 sweep, every one of them
+    // sun gear. v4.3 keys the sun gates to the RAW temperature (feels-like
+    // before the comfort shift). inv7 asserts both halves of that decision:
+    //  (a) Profile ordering on TOTAL count: runs-cold >= neutral >= runs-warm
+    //      at identical weather — zero inversions, no sun-gear exclusion
+    //      accounting needed any more.
+    //  (b) Raw keying, exactly: at identical weather the sun-protection
+    //      outcome (sun headgear + sunglasses + sunscreen) is identical for
+    //      all five comfort profiles, and in dry/snow conditions the sun
+    //      headgear is a pure function of (raw feels-like, UV): VISOR iff
+    //      raw >= 65 and UV > 3, BASEBALL_CAP iff 50 <= raw < 65 and UV > 3,
+    //      no sun headgear below 50 raw or without UV — at EVERY profile.
+    // Rain/drizzle are excluded from (b)'s threshold half: there the cap is
+    // rain gear (selectHead's rain branch), not sun gear.
 
-    private fun sunGearCount(mask: Int, cond: Cond): Int {
-        var n = 0
-        if (has(mask, ClothingItem.SUNGLASSES)) n++
-        if (has(mask, ClothingItem.SUNSCREEN)) n++
-        // Visor/cap count as sun gear only when they are not rain gear.
-        val head = ClothingItem.entries.firstOrNull {
-            has(mask, it) && it.category.name == "HEAD"
-        }
-        if (cond != Cond.RAIN && cond != Cond.DRIZZLE &&
+    private fun headOf(mask: Int): ClothingItem? =
+        ClothingItem.entries.firstOrNull { has(mask, it) && it.category.name == "HEAD" }
+
+    /** The sun-protection outcome of an outfit, as a comparable signature:
+     *  sun headgear (dry/snow only — in rain the cap is rain gear) plus the
+     *  UV accessories. */
+    private fun sunSignature(mask: Int, cond: Cond): String {
+        val head = headOf(mask)
+        val sunHead = if (cond != Cond.RAIN && cond != Cond.DRIZZLE &&
             (head == ClothingItem.VISOR || head == ClothingItem.BASEBALL_CAP)
-        ) n++
-        return n
+        ) head else null
+        return "sunHead=$sunHead sunglasses=${has(mask, ClothingItem.SUNGLASSES)} " +
+            "sunscreen=${has(mask, ClothingItem.SUNSCREEN)}"
     }
 
     @Test
     fun inv7_profileOrdering() {
         var rows = 0
         var comparisons = 0
-        val violations = mutableListOf<String>()
-        var explainedBySunGear = 0
+        var keyingChecks = 0
+        val orderingViolations = mutableListOf<String>()
+        val keyingViolations = mutableListOf<String>()
         for (feels in FEELS) for (wind in WINDS) for (cond in CONDS)
             for (humidity in HUMIDITIES) for (env in ENVS) {
                 rows++
@@ -519,37 +541,74 @@ class OutfitRulesSweepTest {
                     val s = Scenario(feels, wind, cond, c, humidity, env)
                     s to GRID.getValue(s)
                 }
+                // (a) Total-count ordering along the coldest->warmest chain.
                 for (i in 0 until chain.size - 1) {
                     comparisons++
                     val (sCold, rCold) = chain[i]
                     val (sWarm, rWarm) = chain[i + 1]
                     if (rWarm.total > rCold.total) {
-                        val exCold = rCold.total - sunGearCount(rCold.mask, cond)
-                        val exWarm = rWarm.total - sunGearCount(rWarm.mask, cond)
-                        val sunNote = if (exWarm <= exCold) {
-                            explainedBySunGear++
-                            " [ordering holds once sun gear is excluded: $exCold vs $exWarm]"
-                        } else " [NOT explained by sun gear]"
-                        violations += "VIOLATION ${sCold.comfort} total=${rCold.total} < ${sWarm.comfort} total=${rWarm.total}$sunNote: " +
+                        orderingViolations += "VIOLATION ${sCold.comfort} total=${rCold.total} < ${sWarm.comfort} total=${rWarm.total}: " +
                             "${sCold.describe()} -> ${describe(rCold.mask, rCold.total, rCold.torso)} || " +
                             "${sWarm.describe()} -> ${describe(rWarm.mask, rWarm.total, rWarm.torso)}"
+                    }
+                }
+                // (b) Sun gear is comfort-invariant at identical weather...
+                keyingChecks++
+                val sigs = chain.map { (_, r) -> sunSignature(r.mask, cond) }
+                if (sigs.toSet().size != 1) {
+                    keyingViolations += "VIOLATION sun gear differs across comfort profiles at identical weather: " +
+                        chain.joinToString(" || ") { (s, r) ->
+                            "${s.comfort} ${sunSignature(r.mask, cond)} [${s.describe()} -> ${describe(r.mask, r.total, r.torso)}]"
+                        }
+                }
+                // ...and in dry/snow it is exactly the raw-temperature function.
+                if (cond != Cond.RAIN && cond != Cond.DRIZZLE) {
+                    val uv = when (env) {
+                        Env.DAY_SUN, Env.DAWN_UV -> 8.0
+                        Env.DAY_GREY, Env.NIGHT -> 0.0
+                    }
+                    val expectedSunHead = when {
+                        uv > 3 && feels >= 65 -> ClothingItem.VISOR
+                        uv > 3 && feels >= 50 -> ClothingItem.BASEBALL_CAP
+                        else -> null
+                    }
+                    for ((s, r) in chain) {
+                        keyingChecks++
+                        val head = headOf(r.mask)
+                        val sunHead = if (head == ClothingItem.VISOR ||
+                            head == ClothingItem.BASEBALL_CAP
+                        ) head else null
+                        if (sunHead != expectedSunHead) {
+                            keyingViolations += "VIOLATION sun headgear $sunHead != expected $expectedSunHead " +
+                                "from RAW feels=${feels}F uv=$uv: ${s.describe()} -> ${describe(r.mask, r.total, r.torso)}"
+                        }
                     }
                 }
             }
         section(
             "inv7",
             buildString {
-                appendLine("## inv7 — profile ordering (runs-cold count >= neutral >= runs-warm at identical weather)")
+                appendLine("## inv7 — profile ordering + sun gear keyed to RAW temperature (v4.3)")
                 appendLine("Rows: $rows; adjacent comfort comparisons (coldest->warmest chain of 5): $comparisons")
-                appendLine("Strict inversions: ${violations.size} (of which fully explained by sun-gear thresholds: $explainedBySunGear)")
-                appendLine("Mechanism note: selectHead()/accessories key sun protection (visor/cap/sunglasses/")
-                appendLine("sunscreen) off the COMFORT-ADJUSTED temperature, so shifting comfort moves sun")
-                appendLine("gear across its 50/65°F thresholds — an inversion of total count can be caused")
-                appendLine("purely by sun gear appearing/disappearing, with warmth layering unchanged.")
-                violations.forEach { appendLine(it) }
+                appendLine("Raw-keying checks (per-row profile-invariance + per-profile raw thresholds): $keyingChecks")
+                appendLine("Strict ordering inversions: ${orderingViolations.size}")
+                appendLine("Raw-keying violations: ${keyingViolations.size}")
+                appendLine("Mechanism note: selectHead()'s visor/cap sun gates read the RAW temperature")
+                appendLine("(feels-like before the comfort shift), so the comfort preference cannot add or")
+                appendLine("remove sun protection; sunglasses/sunscreen are UV-only. In rain/drizzle the cap")
+                appendLine("is rain gear (selectHead's rain branch) and is excluded from the threshold half.")
+                orderingViolations.forEach { appendLine(it) }
+                keyingViolations.forEach { appendLine(it) }
             }
         )
-        assertTrue("inv7: ${violations.size} profile-ordering inversions", violations.isEmpty())
+        assertTrue(
+            "inv7: ${orderingViolations.size} profile-ordering inversions",
+            orderingViolations.isEmpty()
+        )
+        assertTrue(
+            "inv7: ${keyingViolations.size} raw-temperature keying violations",
+            keyingViolations.isEmpty()
+        )
     }
 
     // ── inv8: field-case regressions (Sol's real cases behind v4.2) ──────
