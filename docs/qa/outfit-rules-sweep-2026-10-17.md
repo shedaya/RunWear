@@ -23,6 +23,10 @@ bug is a design call (sun gear keyed off adjusted rather than actual temperature
 reported here, not fixed. **This finding keeps `:shared:testDebugUnitTest` red by design**
 (13 tests, 12 pass, `inv7_profileOrdering` fails) until someone decides.
 
+> **Resolved 2026-10-19:** the owner decided — sun gear is not layering and keys to the
+> RAW temperature. Fixed in engine v4.3; harness green end-to-end (13/13, 0 inv7
+> inversions). See [outfit-rules-sweep-v43-addendum-2026-10-19.md](outfit-rules-sweep-v43-addendum-2026-10-19.md).
+
 Everything else below is passes and observations. No engine code was changed in this task.
 
 ## What was tested
