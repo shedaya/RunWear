@@ -37,6 +37,7 @@ import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.runwear.app.MainActivity
@@ -195,42 +196,51 @@ private fun WidgetContent(state: WidgetState) {
 
 @Composable
 private fun SmallWidgetContent(state: WidgetState.Success) {
+    // The outfit is the product — it leads even at this size. The weather
+    // is demoted to one small grounding line at the bottom.
     Column(
         modifier = GlanceModifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = state.weather.weatherCode.description,
+            text = "FOR NOW",
             style = TextStyle(
-                color = ColorProvider(WidgetTextSecondary),
-                fontSize = 10.sp
-            ),
-            maxLines = 1
-        )
-        Spacer(modifier = GlanceModifier.height(2.dp))
-        Text(
-            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
-            style = TextStyle(
-                color = ColorProvider(WidgetTextPrimary),
-                fontSize = 26.sp,
+                color = ColorProvider(WidgetTextMuted),
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold
             )
         )
-        Spacer(modifier = GlanceModifier.height(4.dp))
+        Spacer(modifier = GlanceModifier.height(3.dp))
         Text(
-            text = state.outfit.topBase.displayName.split(" ").take(2).joinToString(" "),
+            text = state.outfit.topBase.displayName,
             style = TextStyle(
                 color = ColorProvider(WidgetTextPrimary),
-                fontSize = 12.sp
-            )
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 2
         )
         Text(
-            text = state.outfit.bottom.displayName.split(" ").take(2).joinToString(" "),
+            text = state.outfit.bottom.displayName,
             style = TextStyle(
                 color = ColorProvider(WidgetTextSecondary),
-                fontSize = 11.sp
-            )
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 1
+        )
+        Spacer(modifier = GlanceModifier.height(4.dp))
+        Text(
+            text = "Feels like ${formatTemperature(state.weather.feelsLike, state.weather.isCelsius)}" +
+                " · ${state.weather.weatherCode.description}",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextMuted),
+                fontSize = 10.sp,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 1
         )
     }
 }
@@ -241,23 +251,24 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
         modifier = GlanceModifier.fillMaxSize(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Weather section: feels-like hero in white + condition label
-        Column {
+        // Outfit summary leads — largest text in the strip.
+        Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+                text = "FOR NOW",
                 style = TextStyle(
-                    color = ColorProvider(WidgetTextPrimary),
-                    fontSize = 20.sp,
+                    color = ColorProvider(WidgetTextMuted),
+                    fontSize = 8.sp,
                     fontWeight = FontWeight.Bold
                 )
             )
             Text(
-                text = state.weather.weatherCode.description,
+                text = buildOutfitSummary(state.outfit),
                 style = TextStyle(
-                    color = ColorProvider(WidgetTextSecondary),
-                    fontSize = 10.sp
+                    color = ColorProvider(WidgetTextPrimary),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
                 ),
-                maxLines = 1
+                maxLines = 2
             )
         }
 
@@ -273,60 +284,56 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
 
         Spacer(modifier = GlanceModifier.width(12.dp))
 
-        // Outfit summary
-        Text(
-            text = buildOutfitSummary(state.outfit),
-            style = TextStyle(
-                color = ColorProvider(WidgetTextPrimary),
-                fontSize = 13.sp
-            ),
-            maxLines = 2
-        )
-
-        Spacer(modifier = GlanceModifier.defaultWeight())
-
-        // Arrow indicator
-        Text(
-            text = "→",
-            style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
-                fontSize = 16.sp
+        // Weather compressed to a supporting stack: feels-like + wind.
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextPrimary),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
             )
-        )
+            Text(
+                text = "Wind ${formatWind(state.weather)}",
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextMuted),
+                    fontSize = 9.sp
+                ),
+                maxLines = 1
+            )
+        }
     }
 }
 
 @Composable
 private fun LargeWidgetContent(state: WidgetState.Success) {
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+    val outfit = state.outfit
 
     Column(
         modifier = GlanceModifier.fillMaxSize()
     ) {
-        // Header row with weather and location
+        // Brand strip: the RunWear mark, location and freshness at the right.
         Row(
             modifier = GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextPrimary),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            Box(
+                modifier = GlanceModifier
+                    .size(8.dp)
+                    .background(WidgetPrimary)
+                    .cornerRadius(2.dp)
+            ) {}
+            Spacer(modifier = GlanceModifier.width(6.dp))
+            Text(
+                text = "RunWear",
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextPrimary),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = "${state.weather.weatherCode.description} · " +
-                        formatTemperature(state.weather.effectiveTemperature, state.weather.isCelsius) + " actual",
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextSecondary),
-                        fontSize = 12.sp
-                    ),
-                    maxLines = 1
-                )
-            }
+            )
             Spacer(modifier = GlanceModifier.defaultWeight())
             Column(
                 horizontalAlignment = Alignment.End
@@ -349,64 +356,82 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
             }
         }
 
-        Spacer(modifier = GlanceModifier.height(8.dp))
+        Spacer(modifier = GlanceModifier.height(10.dp))
 
-        // Divider
-        Box(
-            modifier = GlanceModifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(WidgetCard)
-        ) {}
+        // The outfit is the hero: the moment it is for, then the main
+        // pieces at display size with their garment icons.
+        Text(
+            text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextMuted),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+        )
+        Spacer(modifier = GlanceModifier.height(4.dp))
+        HeroItemRow(outfit.topBase)
+        val layers = listOfNotNull(outfit.topMid, outfit.topOuter)
+        if (layers.isNotEmpty()) {
+            Text(
+                text = layers.joinToString(" + ") { it.displayName },
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextSecondary),
+                    fontSize = 14.sp
+                ),
+                maxLines = 1
+            )
+        }
+        HeroItemRow(outfit.bottom)
 
-        Spacer(modifier = GlanceModifier.height(8.dp))
-
-        // Outfit items grid — full item names at this size
-        Column {
-            // Primary items row
-            Row(
-                modifier = GlanceModifier.fillMaxWidth()
-            ) {
-                OutfitItemChip(state.outfit.topBase)
-                state.outfit.topMid?.let {
-                    Spacer(modifier = GlanceModifier.width(6.dp))
-                    OutfitItemChip(it)
-                }
-                state.outfit.topOuter?.let {
-                    Spacer(modifier = GlanceModifier.width(6.dp))
-                    OutfitItemChip(it)
-                }
-            }
-
-            Spacer(modifier = GlanceModifier.height(6.dp))
-
-            // Bottom row
-            Row(
-                modifier = GlanceModifier.fillMaxWidth()
-            ) {
-                OutfitItemChip(state.outfit.bottom)
-            }
-
-            Spacer(modifier = GlanceModifier.height(6.dp))
-
-            // Accessories row
-            Row(
-                modifier = GlanceModifier.fillMaxWidth()
-            ) {
-                state.outfit.head?.let {
-                    OutfitItemChip(it)
-                    Spacer(modifier = GlanceModifier.width(6.dp))
-                }
-                state.outfit.hands?.let {
-                    OutfitItemChip(it)
-                    Spacer(modifier = GlanceModifier.width(6.dp))
-                }
-                state.outfit.accessories.take(2).forEach { item ->
+        // Secondary pieces keep their icon chips under the hero.
+        val secondary = listOfNotNull(outfit.head, outfit.hands) + outfit.accessories.take(2)
+        if (secondary.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(8.dp))
+            Row(modifier = GlanceModifier.fillMaxWidth()) {
+                secondary.forEachIndexed { index, item ->
+                    if (index > 0) Spacer(modifier = GlanceModifier.width(6.dp))
                     OutfitItemChip(item)
-                    Spacer(modifier = GlanceModifier.width(6.dp))
                 }
             }
         }
+
+        Spacer(modifier = GlanceModifier.defaultWeight())
+
+        // Weather demoted to one grounding line: feels-like, actual, wind.
+        Text(
+            text = "Feels like ${formatTemperature(state.weather.feelsLike, state.weather.isCelsius)}" +
+                " · Actual ${formatTemperature(state.weather.temperature, state.weather.isCelsius)}" +
+                " · Wind ${formatWind(state.weather)}" +
+                " · ${state.weather.weatherCode.description}",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextSecondary),
+                fontSize = 11.sp
+            ),
+            maxLines = 1
+        )
+    }
+}
+
+/** One hero outfit line: the garment icon at display size + the full item name. */
+@Composable
+private fun HeroItemRow(item: ClothingItem) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Image(
+            provider = ImageProvider(getCategoryIconRes(item.category)),
+            contentDescription = null,
+            modifier = GlanceModifier.size(20.dp),
+            colorFilter = ColorFilter.tint(ColorProvider(getCategoryColor(item.category)))
+        )
+        Spacer(modifier = GlanceModifier.width(8.dp))
+        Text(
+            text = item.displayName,
+            style = TextStyle(
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = 19.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
+        )
     }
 }
 
@@ -520,6 +545,11 @@ private fun formatTemperature(value: Double, isCelsius: Boolean): String {
     } else {
         "${value.toInt()}°F"
     }
+}
+
+/** Wind in the app's own unit convention (WeatherConditionsRow): mph, or km/h when Celsius. */
+private fun formatWind(weather: WeatherConditions): String {
+    return "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}"
 }
 
 private fun buildOutfitSummary(outfit: OutfitRecommendation): String {
