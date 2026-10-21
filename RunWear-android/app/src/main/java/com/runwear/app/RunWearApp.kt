@@ -4,6 +4,7 @@ import android.app.Application
 import com.runwear.app.feedback.CrashReporter
 import com.runwear.app.feedback.FeedbackStore
 import com.runwear.app.feedback.TelemetryClient
+import com.runwear.app.widget.WidgetRefreshScheduler
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,10 @@ class RunWearApp : Application() {
         // The report is only stored here; sending happens below, and only
         // while the user's improvement toggle is on.
         CrashReporter.install(this)
+
+        // Widget recovery backstop (spec §B.3.3): periodic refresh with
+        // backoff so a failed widget load heals itself. KEEP = idempotent.
+        WidgetRefreshScheduler.schedule(this)
 
         appScope.launch {
             // One session per process start (rating-moment suppression needs it).

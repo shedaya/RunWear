@@ -117,6 +117,12 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
 
+    // Widget last-good store (its own DataStore file in the app module)
+    implementation(libs.datastore.preferences)
+
+    // Widget refresh backstop (periodic, network-constrained, backoff)
+    implementation(libs.androidx.work.runtime.ktx)
+
     // Play In-App Review (rating moment — no-ops on non-Play installs)
     implementation(libs.play.review)
 

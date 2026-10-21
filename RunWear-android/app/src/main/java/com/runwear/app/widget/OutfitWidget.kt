@@ -1,29 +1,34 @@
 package com.runwear.app.widget
 
 import android.content.Context
-import android.content.Intent
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.Preferences
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
-import androidx.glance.LocalContext
 import androidx.glance.LocalSize
+import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
+import androidx.glance.appwidget.CircularProgressIndicator
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -35,6 +40,7 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -49,14 +55,11 @@ import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
-import com.runwear.shared.util.LocationFetchResult
 import com.runwear.shared.util.LocationProvider
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -72,6 +75,16 @@ private val WidgetTextSecondary = Color(0xFFB3B3B3)
 private val WidgetTextMuted = Color(0xFF737373)
 private val WidgetPrimary = Color(0xFF00796B)
 
+/**
+ * Home-screen outfit widget (redesign spec §B.3).
+ *
+ * The widget has a MEMORY now: [provideGlance] renders the persisted
+ * last-good data immediately when it exists and only pays for a reload when
+ * that data is older than [WidgetFreshness.FRESH_ENOUGH_MS]. A failed reload
+ * keeps the last-good on screen with its age — the error card exists only
+ * for a widget that has NEVER loaded (fresh install) — and a tiny ↻ in the
+ * corner of every state re-runs the load in place via [RefreshWidgetAction].
+ */
 class OutfitWidget : GlanceAppWidget() {
 
     companion object {
@@ -84,113 +97,155 @@ class OutfitWidget : GlanceAppWidget() {
         setOf(SMALL_SQUARE, HORIZONTAL_RECTANGLE, LARGE_RECTANGLE)
     )
 
+    override val stateDefinition = PreferencesGlanceStateDefinition
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val entryPoint = EntryPointAccessors.fromApplication(
             context.applicationContext,
             WidgetEntryPoint::class.java
         )
+        val store = WidgetLastGoodStore(context)
+        val lastGood = store.read()
+        val nowMs = System.currentTimeMillis()
 
-        val weatherRepository = entryPoint.weatherRepository()
-        val preferencesRepository = entryPoint.preferencesRepository()
-        val locationProvider = entryPoint.locationProvider()
-        val getOutfitRecommendation = entryPoint.getOutfitRecommendation()
+        val state: WidgetState = when {
+            lastGood != null &&
+                WidgetFreshness.ageMs(lastGood.savedAtEpochMs, nowMs) < WidgetFreshness.FRESH_ENOUGH_MS ->
+                lastGood.toWidgetState()
 
-        val widgetState = loadWidgetData(
-            weatherRepository,
-            preferencesRepository,
-            locationProvider,
-            getOutfitRecommendation
-        )
+            else -> when (val outcome = WidgetDataLoader.load(
+                weatherRepository = entryPoint.weatherRepository(),
+                preferencesRepository = entryPoint.preferencesRepository(),
+                locationProvider = entryPoint.locationProvider(),
+                getOutfitRecommendation = entryPoint.getOutfitRecommendation()
+            )) {
+                is WidgetDataLoader.Outcome.Success -> {
+                    // Just persist; this very render shows the fresh data and
+                    // the publisher's updateAll belongs to out-of-band writes.
+                    store.write(outcome.lastGood)
+                    outcome.lastGood.toWidgetState()
+                }
+                WidgetDataLoader.Outcome.NoPermission ->
+                    lastGood?.toWidgetState() ?: WidgetState.NoPermission
+                is WidgetDataLoader.Outcome.Failed ->
+                    lastGood?.toWidgetState()
+                        ?: WidgetState.Error(outcome.category, outcome.detail)
+            }
+        }
 
         provideContent {
+            val prefs = currentState<Preferences>()
+            val refreshing = WidgetFreshness.isRefreshActive(
+                prefs[RefreshFlag.KEY],
+                System.currentTimeMillis()
+            )
             GlanceTheme {
-                WidgetContent(widgetState)
+                WidgetContent(state, refreshing)
             }
         }
     }
+}
 
-    private suspend fun loadWidgetData(
-        weatherRepository: WeatherRepository,
-        preferencesRepository: PreferencesRepository,
-        locationProvider: LocationProvider,
-        getOutfitRecommendation: GetOutfitRecommendationUseCase
-    ): WidgetState {
-        if (!locationProvider.hasLocationPermission()) {
-            return WidgetState.NoPermission
+/** The ↻ corner icon: a real in-place reload, NOT an open-app shortcut (spec §B.3.3). */
+class RefreshWidgetAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        Log.w("OutfitWidget", "loadWidgetData: manual refresh tapped")
+        RefreshFlag.set(context, glanceId)
+        OutfitWidget().update(context, glanceId)
+        try {
+            val entryPoint = EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                WidgetEntryPoint::class.java
+            )
+            when (val outcome = WidgetDataLoader.load(
+                weatherRepository = entryPoint.weatherRepository(),
+                preferencesRepository = entryPoint.preferencesRepository(),
+                locationProvider = entryPoint.locationProvider(),
+                getOutfitRecommendation = entryPoint.getOutfitRecommendation()
+            )) {
+                is WidgetDataLoader.Outcome.Success ->
+                    WidgetPublisher.publish(context, outcome.lastGood)
+                else -> {
+                    RefreshFlag.clear(context, glanceId)
+                    OutfitWidget().update(context, glanceId)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("OutfitWidget", "loadWidgetData: manual refresh failed", e)
+            runCatching {
+                RefreshFlag.clear(context, glanceId)
+                OutfitWidget().update(context, glanceId)
+            }
+        }
+    }
+}
+
+private fun WidgetLastGood.toWidgetState(): WidgetState.Success = WidgetState.Success(
+    weather = weather,
+    outfit = outfit,
+    locationName = locationName,
+    lastUpdated = savedAtLocal,
+    savedAtEpochMs = savedAtEpochMs,
+    laterTodayLine = laterTodayLine
+)
+
+@Composable
+private fun WidgetContent(state: WidgetState, refreshing: Boolean) {
+    val size = LocalSize.current
+
+    Box(modifier = GlanceModifier.fillMaxSize()) {
+        Box(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(WidgetBackground)
+                .cornerRadius(16.dp)
+                .clickable(actionStartActivity<MainActivity>())
+                .padding(12.dp)
+        ) {
+            when (state) {
+                is WidgetState.Loading -> LoadingContent()
+                is WidgetState.NoPermission -> NoPermissionContent()
+                is WidgetState.Error -> ErrorContent(state)
+                is WidgetState.Success -> {
+                    when {
+                        size.width >= 250.dp && size.height >= 150.dp -> LargeWidgetContent(state)
+                        size.width >= 250.dp -> HorizontalWidgetContent(state)
+                        else -> SmallWidgetContent(state)
+                    }
+                }
+            }
         }
 
-        return try {
-            val prefs = preferencesRepository.preferencesFlow.first()
-            // Resilient location chain (mirrors OutfitTileService.loadTileData):
-            // a widget refresh runs in the background, where a fresh
-            // high-accuracy fix is often unavailable (indoors, high-rise) —
-            // demanding one on every refresh made the widget error out.
-            // Prefer the cached fix, then the system's last-known location,
-            // and only then a fresh fix with a timeout. The Error state is
-            // reached only when no source yields a location at all.
-            val location = locationProvider.getCachedLocation()
-                ?: locationProvider.getLastKnownLocation()
-                ?: when (val fresh = locationProvider.getCurrentLocationWithTimeout()) {
-                    is LocationFetchResult.Success -> fresh.location
-                    is LocationFetchResult.Error -> throw Exception("Location: ${fresh.reason}")
-                }
-            // One retry on the weather fetch, so a transient network failure
-            // does not blank the widget until the next refresh cycle.
-            var weatherResult = weatherRepository.getCurrentWeather(
-                location.latitude,
-                location.longitude,
-                prefs.temperatureUnit
-            )
-            if (weatherResult.isFailure) {
-                delay(1000)
-                weatherResult = weatherRepository.getCurrentWeather(
-                    location.latitude,
-                    location.longitude,
-                    prefs.temperatureUnit
-                )
-            }
-            val weather = weatherResult.getOrThrow()
-
-            val locationName = weatherRepository.reverseGeocode(
-                location.latitude,
-                location.longitude
-            ).getOrElse { "Your Location" }
-
-            val outfit = getOutfitRecommendation.execute(weather, prefs.comfortPreference)
-            val lastUpdated = LocalDateTime.now()
-
-            WidgetState.Success(weather, outfit, locationName, lastUpdated)
-        } catch (e: Exception) {
-            WidgetState.Error(e.message ?: "Unable to load weather")
+        // Standing manual refresh — every state, corner, quiet (spec §B.3.3).
+        Box(
+            modifier = GlanceModifier.fillMaxSize().padding(6.dp),
+            contentAlignment = Alignment.TopEnd
+        ) {
+            RefreshAffordance(refreshing)
         }
     }
 }
 
 @Composable
-private fun WidgetContent(state: WidgetState) {
-    val size = LocalSize.current
-    val context = LocalContext.current
-
-    Box(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .background(WidgetBackground)
-            .cornerRadius(16.dp)
-            .clickable(actionStartActivity<MainActivity>())
-            .padding(12.dp)
-    ) {
-        when (state) {
-            is WidgetState.Loading -> LoadingContent()
-            is WidgetState.NoPermission -> NoPermissionContent()
-            is WidgetState.Error -> ErrorContent()
-            is WidgetState.Success -> {
-                when {
-                    size.width >= 250.dp && size.height >= 150.dp -> LargeWidgetContent(state)
-                    size.width >= 250.dp -> HorizontalWidgetContent(state)
-                    else -> SmallWidgetContent(state)
-                }
-            }
-        }
+private fun RefreshAffordance(refreshing: Boolean) {
+    if (refreshing) {
+        CircularProgressIndicator(
+            modifier = GlanceModifier.size(15.dp),
+            color = ColorProvider(WidgetTextMuted)
+        )
+    } else {
+        Image(
+            provider = ImageProvider(R.drawable.ic_widget_refresh),
+            contentDescription = "Refresh",
+            modifier = GlanceModifier
+                .size(15.dp)
+                .clickable(actionRunCallback<RefreshWidgetAction>()),
+            colorFilter = ColorFilter.tint(ColorProvider(WidgetTextMuted))
+        )
     }
 }
 
@@ -204,7 +259,7 @@ private fun SmallWidgetContent(state: WidgetState.Success) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "FOR NOW",
+            text = WidgetFreshness.forNowEyebrow(state.savedAtEpochMs, System.currentTimeMillis()),
             style = TextStyle(
                 color = ColorProvider(WidgetTextMuted),
                 fontSize = 9.sp,
@@ -254,7 +309,7 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
         // Outfit summary leads — largest text in the strip.
         Column(modifier = GlanceModifier.defaultWeight()) {
             Text(
-                text = "FOR NOW",
+                text = WidgetFreshness.forNowEyebrow(state.savedAtEpochMs, System.currentTimeMillis()),
                 style = TextStyle(
                     color = ColorProvider(WidgetTextMuted),
                     fontSize = 8.sp,
@@ -347,7 +402,11 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
                     maxLines = 1
                 )
                 Text(
-                    text = "Updated ${state.lastUpdated.format(timeFormatter)}",
+                    text = WidgetFreshness.updatedLabel(
+                        state.lastUpdated,
+                        state.savedAtEpochMs,
+                        System.currentTimeMillis()
+                    ),
                     style = TextStyle(
                         color = ColorProvider(WidgetTextMuted),
                         fontSize = 10.sp
@@ -395,7 +454,22 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
             }
         }
 
-        Spacer(modifier = GlanceModifier.defaultWeight())
+        // The "Later today" line fills the old defaultWeight void with the
+        // one thing that changes before the weather does: the outfit.
+        if (state.laterTodayLine != null) {
+            Spacer(modifier = GlanceModifier.height(8.dp))
+            Text(
+                text = state.laterTodayLine,
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextSecondary),
+                    fontSize = 11.sp
+                ),
+                maxLines = 1
+            )
+            Spacer(modifier = GlanceModifier.defaultWeight())
+        } else {
+            Spacer(modifier = GlanceModifier.defaultWeight())
+        }
 
         // Weather demoted to one grounding line: feels-like, actual, wind.
         Text(
@@ -514,28 +588,59 @@ private fun NoPermissionContent() {
     }
 }
 
+/**
+ * Never-succeeded-only (spec §B.3.1): a fresh install that has never loaded
+ * gets the plain-words reason and a REAL retry — never two generic lines
+ * that wait for the user to fix the widget.
+ */
 @Composable
-private fun ErrorContent() {
+private fun ErrorContent(state: WidgetState.Error) {
     Column(
         modifier = GlanceModifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "Couldn't load weather",
+            text = state.category.headline,
             style = TextStyle(
                 color = ColorProvider(WidgetTextPrimary),
-                fontSize = 13.sp
-            )
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 1
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         Text(
-            text = "Tap to retry",
+            text = state.category.reason,
             style = TextStyle(
-                color = ColorProvider(WidgetPrimary),
-                fontSize = 12.sp
-            )
+                color = ColorProvider(WidgetTextSecondary),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            ),
+            maxLines = 2
         )
+        Spacer(modifier = GlanceModifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = GlanceModifier.clickable(actionRunCallback<RefreshWidgetAction>())
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_widget_refresh),
+                contentDescription = null,
+                modifier = GlanceModifier.size(13.dp),
+                colorFilter = ColorFilter.tint(ColorProvider(WidgetPrimary))
+            )
+            Spacer(modifier = GlanceModifier.width(5.dp))
+            Text(
+                text = "Retry",
+                style = TextStyle(
+                    color = ColorProvider(WidgetPrimary),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        }
     }
 }
 
@@ -585,12 +690,18 @@ private fun getCategoryIconRes(category: ClothingCategory): Int = when (category
 sealed class WidgetState {
     object Loading : WidgetState()
     object NoPermission : WidgetState()
-    data class Error(val message: String) : WidgetState()
+    data class Error(
+        val category: WidgetErrorCategory,
+        /** Raw diagnostic detail — logged, and kept on the state for debugging; the UI shows [category] copy. */
+        val detail: String
+    ) : WidgetState()
     data class Success(
         val weather: WeatherConditions,
         val outfit: OutfitRecommendation,
         val locationName: String,
-        val lastUpdated: LocalDateTime
+        val lastUpdated: LocalDateTime,
+        val savedAtEpochMs: Long,
+        val laterTodayLine: String?
     ) : WidgetState()
 }
 
@@ -605,4 +716,11 @@ interface WidgetEntryPoint {
 
 class OutfitWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = OutfitWidget()
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        // First placement: make sure the recovery backstop exists even if
+        // the app itself hasn't been opened yet.
+        WidgetRefreshScheduler.schedule(context)
+    }
 }

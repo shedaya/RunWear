@@ -1,5 +1,6 @@
 package com.runwear.app.ui.viewmodel
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -26,7 +27,11 @@ import com.runwear.app.feedback.FeedbackCategory
 import com.runwear.app.feedback.FeedbackStore
 import com.runwear.app.feedback.RunWearEvents
 import com.runwear.app.feedback.TelemetryClient
+import com.runwear.app.widget.LaterTodayLine
+import com.runwear.app.widget.WidgetLastGood
+import com.runwear.app.widget.WidgetPublisher
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -94,7 +99,8 @@ class MainViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val getOutfitRecommendation: GetOutfitRecommendationUseCase,
     private val feedbackStore: FeedbackStore,
-    private val telemetryClient: TelemetryClient
+    private val telemetryClient: TelemetryClient,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MainUiState())
@@ -496,6 +502,43 @@ class MainViewModel @Inject constructor(
                             hourlyForecast = forecast,
                             heroImageUrl = defaultImageUrl // Show default immediately
                         )
+                    }
+
+                    // Widget write-through (redesign spec §B.3.3): the app
+                    // just loaded in the foreground, where location always
+                    // succeeds — the home-screen widget inherits the result
+                    // via its last-good store instead of re-loading (and
+                    // historically, failing) on its own. NOW loads only:
+                    // the widget is a "for now" surface.
+                    if (_uiState.value.isNowSelected) {
+                        viewModelScope.launch {
+                            runCatching {
+                                val laterLine = LaterTodayLine.compute(
+                                    weatherRepository = weatherRepository,
+                                    latitude = lat,
+                                    longitude = lon,
+                                    unit = unit,
+                                    current = weather,
+                                    currentOutfit = outfit,
+                                    comfort = _uiState.value.comfortPreference,
+                                    getOutfit = getOutfitRecommendation,
+                                    hourly = forecast
+                                )
+                                WidgetPublisher.publish(
+                                    appContext,
+                                    WidgetLastGood(
+                                        weather = weather,
+                                        outfit = outfit,
+                                        locationName = _uiState.value.locationName,
+                                        latitude = lat,
+                                        longitude = lon,
+                                        laterTodayLine = laterLine,
+                                        savedAtLocal = LocalDateTime.now(),
+                                        savedAtEpochMs = System.currentTimeMillis()
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     // Then fetch AI hero image in background (upgrades if found)
