@@ -3,6 +3,7 @@ package com.runwear.app.ui.screens
 import android.content.Intent
 import android.net.Uri
 import java.net.URLEncoder
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -17,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Thermostat
@@ -170,7 +173,13 @@ fun TimePickerSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
-    val availableHours = (5..21).toList() // 5 AM to 9 PM
+    // Option B: the 5 AM–9 PM peak grid stays primary; the remaining hours
+    // live under a "Night & early morning" tier in the same sheet. If the
+    // current selection IS a night hour, the tier opens expanded so the
+    // selection is visible.
+    var nightExpanded by remember {
+        mutableStateOf(TimePickerHours.isNightHour(selectedHour))
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -194,39 +203,92 @@ fun TimePickerSheet(
 
             Spacer(Modifier.height(24.dp))
 
-            // 3-column grid per PWA
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                availableHours.chunked(3).forEach { rowHours ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        rowHours.forEach { hour ->
-                            val isSelected = hour == selectedHour
-                            val timeText = LocalTime.of(hour, 0)
-                                .format(DateTimeFormatter.ofPattern("h a"))
+            // Peak tier — 3-column grid per PWA, unchanged
+            HourGrid(
+                hours = TimePickerHours.PEAK_HOURS,
+                selectedHour = selectedHour,
+                onSelectTime = onSelectTime
+            )
 
-                            Surface(
-                                onClick = { onSelectTime(hour) },
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
-                            ) {
-                                Text(
-                                    text = timeText,
-                                    modifier = Modifier.padding(14.dp),
-                                    textAlign = TextAlign.Center,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isSelected) Color.White else RunWearColors.TextPrimary
-                                )
-                            }
-                        }
-                        repeat(3 - rowHours.size) { Spacer(Modifier.weight(1f)) }
-                    }
+            Spacer(Modifier.height(20.dp))
+
+            // Night & early morning tier toggle (same sheet, same language)
+            Surface(
+                onClick = { nightExpanded = !nightExpanded },
+                shape = RoundedCornerShape(12.dp),
+                color = RunWearColors.BgCardLight,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Night & early morning",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 14.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Icon(
+                        imageVector = if (nightExpanded) Icons.Outlined.ExpandLess
+                        else Icons.Outlined.ExpandMore,
+                        contentDescription = if (nightExpanded) "Hide night hours" else "Show night hours",
+                        tint = RunWearColors.TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            AnimatedVisibility(visible = nightExpanded) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    HourGrid(
+                        hours = TimePickerHours.NIGHT_HOURS,
+                        selectedHour = selectedHour,
+                        onSelectTime = onSelectTime
+                    )
                 }
             }
 
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+/** The picker's 3-column hour grid, shared by the peak and night tiers. */
+@Composable
+private fun HourGrid(
+    hours: List<Int>,
+    selectedHour: Int,
+    onSelectTime: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        hours.chunked(3).forEach { rowHours ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                rowHours.forEach { hour ->
+                    val isSelected = hour == selectedHour
+
+                    Surface(
+                        onClick = { onSelectTime(hour) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
+                    ) {
+                        Text(
+                            text = TimePickerHours.label(hour),
+                            modifier = Modifier.padding(14.dp),
+                            textAlign = TextAlign.Center,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color.White else RunWearColors.TextPrimary
+                        )
+                    }
+                }
+                repeat(3 - rowHours.size) { Spacer(Modifier.weight(1f)) }
+            }
         }
     }
 }
@@ -985,9 +1047,16 @@ private fun ShopItemRow(
 ) {
     val categoryColor = getCategoryColor(item.category)
     val context = LocalContext.current
+    // Bundled asset first; remote URL is the fallback only (see OutfitCard).
+    val thumbnailAssetUri = remember(item, gender) {
+        ClothingThumbnailService.getThumbnailAssetUri(item, gender)
+    }
     val thumbnailUrl = remember(item, gender) {
         ClothingThumbnailService.getThumbnailUrl(item, gender)
     }
+    var assetFailed by remember(item, gender) { mutableStateOf(false) }
+    val thumbnailModel =
+        if (thumbnailAssetUri != null && !assetFailed) thumbnailAssetUri else thumbnailUrl
     var thumbnailLoaded by remember { mutableStateOf(false) }
 
     Surface(
@@ -1022,10 +1091,10 @@ private fun ShopItemRow(
                         modifier = Modifier.size(20.dp)
                     )
                 }
-                if (thumbnailUrl != null) {
+                if (thumbnailModel != null) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(thumbnailUrl)
+                            .data(thumbnailModel)
                             .crossfade(300)
                             .build(),
                         contentDescription = item.displayName,
@@ -1034,7 +1103,13 @@ private fun ShopItemRow(
                             .clip(RoundedCornerShape(10.dp))
                             .graphicsLayer { alpha = if (thumbnailLoaded) 1f else 0f },
                         onSuccess = { thumbnailLoaded = true },
-                        onError = { thumbnailLoaded = false }
+                        onError = {
+                            if (!assetFailed && thumbnailAssetUri != null) {
+                                assetFailed = true // retry once from the remote URL
+                            } else {
+                                thumbnailLoaded = false
+                            }
+                        }
                     )
                 }
             }

@@ -172,8 +172,12 @@ Get your personalized running outfit at runwear.ai
         }
 
         when {
-            uiState.isLoading -> HeroShimmerPlaceholder()
-            uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
+            // Content wins over the loading flag: once anything is on screen
+            // (fresh fetch or the seeded last-good snapshot), a refresh
+            // updates it IN PLACE — the full-screen shimmer is reserved for
+            // the no-content first-ever load. Swapping the whole screen for
+            // the skeleton on every refresh also unmounted HeroSection and
+            // replayed its (intentional) count-up sweep on unchanged values.
             uiState.outfit != null && uiState.weather != null -> {
                 val pullToRefreshState = rememberPullToRefreshState()
 
@@ -316,6 +320,11 @@ Get your personalized running outfit at runwear.ai
                     }
                 }
             }
+            // No content yet: skeleton while the first load runs, the error
+            // screen only when a load actually failed with nothing to show.
+            uiState.isLoading -> HeroShimmerPlaceholder()
+            uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
+            else -> HeroShimmerPlaceholder()
         }
     }
 

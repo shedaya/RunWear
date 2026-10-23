@@ -29,11 +29,15 @@ import com.runwear.app.feedback.RunWearEvents
 import com.runwear.app.feedback.TelemetryClient
 import com.runwear.app.widget.LaterTodayLine
 import com.runwear.app.widget.WidgetLastGood
+import com.runwear.app.widget.WidgetLastGoodStore
 import com.runwear.app.widget.WidgetPublisher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -113,6 +117,20 @@ class MainViewModel @Inject constructor(
     private var currentLon: Double? = null
     private var searchJob: Job? = null
 
+    /**
+     * The in-flight weather fetch. A new [fetchWeather] call CANCELS the
+     * previous one instead of stacking: duplicate triggers (init, preferences
+     * collector, foregrounding, the NOW tick) used to race and land in
+     * completion order, so a slow stale fetch could overwrite a newer one.
+     */
+    private var fetchJob: Job? = null
+
+    /** The in-flight hero-image resolution (see [resolveHeroImage]). */
+    private var heroResolveJob: Job? = null
+
+    /** The widget's last-good store — the main screen seeds from it at startup. */
+    private val lastGoodStore by lazy { WidgetLastGoodStore(appContext) }
+
     // ── Feedback + analytics (spec) ─────────────────────────────────────────
     // Everything here is inert unless the user opts in to analytics; feedback
     // sends only on the user's own tap. See the feedback package.
@@ -156,20 +174,48 @@ class MainViewModel @Inject constructor(
     private fun locationNow(): LocalDateTime = LocalDateTime.now(locationZone)
 
     /**
-     * (Re)resolve the selected location's timezone and re-anchor the selection
-     * in that frame. In NOW mode the selected moment becomes the location's
-     * now; an explicit selection keeps its wall-clock numbers (they are
-     * location-local by definition) and is reinterpreted in the new frame.
+     * Re-anchor the selection in the selected location's frame. In NOW mode
+     * the selected moment becomes the location's now; an explicit selection
+     * keeps its wall-clock numbers (they are location-local by definition)
+     * and is reinterpreted in the new frame.
+     *
+     * This performs NO network call: the zone itself is derived from the
+     * weather response in [fetchWeather] (`WeatherRepository.recordZone`).
+     * A dedicated pre-fetch timezone round-trip used to gate every startup
+     * behind a third serial network call before any weather could load.
      */
-    private suspend fun resolveLocationZone(lat: Double, lon: Double) {
-        weatherRepository.getLocationTimeZone(lat, lon).onSuccess { zone ->
-            locationZone = zone
-        }
+    private fun resolveLocationZone() {
         val now = locationNow()
         _uiState.update {
             it.copy(
                 locationNow = now,
                 selectedDateTime = if (it.isNowSelected) now else it.selectedDateTime
+            )
+        }
+    }
+
+    /**
+     * Seed the first frame from the widget's last-good snapshot when it was
+     * saved for (approximately) this location, so a warm-data open paints
+     * real content instantly instead of the skeleton; the fetch that follows
+     * refreshes it in place. No-op once content exists or when the snapshot
+     * belongs to a different place.
+     */
+    private suspend fun seedFromLastGood(lat: Double, lon: Double) {
+        if (_uiState.value.outfit != null) return
+        val lastGood = runCatching { lastGoodStore.read() }.getOrNull() ?: return
+        val dLat = lastGood.latitude - lat
+        val dLon = lastGood.longitude - lon
+        if (dLat * dLat + dLon * dLon > SEED_COORD_TOLERANCE_DEG * SEED_COORD_TOLERANCE_DEG) return
+        _uiState.update { state ->
+            if (state.outfit != null) state else state.copy(
+                isLoading = false,
+                weather = lastGood.weather,
+                outfit = lastGood.outfit,
+                locationName = lastGood.locationName,
+                heroImageUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
+                    lastGood.weather, lastGood.outfit, state.genderPreference
+                )
             )
         }
     }
@@ -211,7 +257,8 @@ class MainViewModel @Inject constructor(
                         isLoading = true
                     )
                 }
-                resolveLocationZone(savedLocation.latitude, savedLocation.longitude)
+                seedFromLastGood(savedLocation.latitude, savedLocation.longitude)
+                resolveLocationZone()
                 fetchWeather()
             }
             // If no saved location, MainActivity will call checkLocationPermission()
@@ -351,7 +398,7 @@ class MainViewModel @Inject constructor(
                                 preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
                             }
                         )
-                        resolveLocationZone(newLat, newLon)
+                        resolveLocationZone()
                         fetchWeather()
                     }
                     // Within STALE_LOCATION_KM: keep the saved fix, no refetch.
@@ -384,6 +431,10 @@ class MainViewModel @Inject constructor(
         private const val NOW_TICK_MS = 30_000L
         /** Rating moment fires at the fifth outfit generation (spec addendum). */
         private const val RATING_TRIGGER_GENERATION = 5
+        /** Last-good seeding accepts a snapshot within ~0.05° (~5 km) of the fetch target. */
+        private const val SEED_COORD_TOLERANCE_DEG = 0.05
+        /** Time box for the AI hero lookup; past it the session keeps the default hero. */
+        private const val HERO_RESOLVE_TIMEOUT_MS = 2_000L
     }
     
     fun fetchCurrentLocation() {
@@ -408,7 +459,8 @@ class MainViewModel @Inject constructor(
                         }
                     )
 
-                    resolveLocationZone(result.location.latitude, result.location.longitude)
+                    seedFromLastGood(result.location.latitude, result.location.longitude)
+                    resolveLocationZone()
                     fetchWeather()
                 }
                 is LocationFetchResult.Error -> {
@@ -425,7 +477,8 @@ class MainViewModel @Inject constructor(
                                 isLoading = true
                             )
                         }
-                        resolveLocationZone(savedLocation.latitude, savedLocation.longitude)
+                        seedFromLastGood(savedLocation.latitude, savedLocation.longitude)
+                        resolveLocationZone()
                         fetchWeather()
                     } else {
                         // No fallback - show location setup screen
@@ -445,8 +498,13 @@ class MainViewModel @Inject constructor(
     private fun fetchWeather() {
         val lat = currentLat ?: return
         val lon = currentLon ?: return
-        
-        viewModelScope.launch {
+
+        // Dedup: a new fetch supersedes the in-flight one. Triggers stack up
+        // (init, preferences collector, foregrounding, NOW tick, user picks)
+        // and used to land in completion order — a slow stale fetch could
+        // overwrite fresher state.
+        fetchJob?.cancel()
+        fetchJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             // Re-anchor NOW in the location frame on every fetch: if the hour
@@ -461,23 +519,45 @@ class MainViewModel @Inject constructor(
 
             val dt = _uiState.value.selectedDateTime
             val unit = _uiState.value.temperatureUnit
+            val nowSelected = _uiState.value.isNowSelected
 
-            // NOW uses the API's current-conditions block (location's real now);
-            // an explicit selection is a location-local wall time matched
-            // against the location-local hourly forecast.
-            val weatherResult = if (_uiState.value.isNowSelected) {
-                weatherRepository.getCurrentWeather(lat, lon, unit)
-            } else {
-                weatherRepository.getWeatherForDateTime(lat, lon, dt, unit)
-            }
-            
-            // Fetch hourly forecast
-            val forecastResult = weatherRepository.getHourlyForecast(lat, lon, unit)
-            
-            weatherResult.fold(
-                onSuccess = { weather ->
+            // ONE forecast fetch per refresh: current conditions, the
+            // selected hour and the hourly list all parse from the same
+            // response (this used to be two identical serial requests, plus
+            // a timezone round-trip ahead of them).
+            val forecastResult = weatherRepository.getForecast(lat, lon, unit)
+
+            // The repository's runCatching also wraps CancellationException:
+            // a superseded fetch must land nowhere, not even as an error.
+            if (!isActive) return@launch
+
+            forecastResult.fold(
+                onSuccess = { response ->
+                    // The frame comes FROM this response — no separate
+                    // timezone call gates the weather anymore.
+                    locationZone = weatherRepository.recordZone(lat, lon, response)
+
+                    val weather = runCatching {
+                        // NOW uses the API's current-conditions block
+                        // (location's real now); an explicit selection is a
+                        // location-local wall time matched against the
+                        // location-local hourly forecast.
+                        if (nowSelected) {
+                            weatherRepository.parseCurrentWeather(response, unit)
+                        } else {
+                            weatherRepository.parseWeatherForDateTime(response, dt, unit)
+                        }
+                    }.getOrElse { e ->
+                        _uiState.update {
+                            it.copy(isLoading = false, error = e.message ?: "Weather error")
+                        }
+                        viewModelScope.launch { feedbackStore.markBadDay() }
+                        return@fold
+                    }
                     val outfit = getOutfitRecommendation.execute(weather, _uiState.value.comfortPreference)
-                    val forecast = forecastResult.getOrDefault(emptyList())
+                    val forecast = runCatching {
+                        weatherRepository.parseHourlyForecast(response, unit)
+                    }.getOrDefault(emptyList())
 
                     // Feedback + analytics bookkeeping (all inert unless the
                     // user opted in): outfit diff under identical conditions,
@@ -489,18 +569,16 @@ class MainViewModel @Inject constructor(
                     onOutfitProduced(weather, outfit, countGeneration = true)
                     evaluateRatingMoment(keptThroughRefresh)
 
-                    // PWA v2.9: Set default hero image IMMEDIATELY based on temp bracket
-                    val defaultImageUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
-                        weather, outfit, _uiState.value.genderPreference
-                    )
-
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             weather = weather,
                             outfit = outfit,
                             hourlyForecast = forecast,
-                            heroImageUrl = defaultImageUrl // Show default immediately
+                            // NOW re-anchors on the API's own location-local
+                            // current time from this response.
+                            locationNow = if (nowSelected) weather.dateTime else it.locationNow,
+                            selectedDateTime = if (nowSelected) weather.dateTime else it.selectedDateTime
                         )
                     }
 
@@ -541,10 +619,12 @@ class MainViewModel @Inject constructor(
                         }
                     }
 
-                    // Then fetch AI hero image in background (upgrades if found)
-                    fetchHeroImage(weather, outfit)
+                    // Resolve the hero image for this load — exactly one
+                    // URL is chosen and set (see resolveHeroImage).
+                    resolveHeroImage(weather, outfit)
                 },
                 onFailure = { e ->
+                    if (e is CancellationException) return@fold
                     _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
                     // A failed day suppresses the rating moment (addendum rules).
                     viewModelScope.launch { feedbackStore.markBadDay() }
@@ -554,34 +634,34 @@ class MainViewModel @Inject constructor(
     }
     
     /**
-     * Fetch hero image with zero-lag architecture:
-     * 1. INSTANTLY set weather-aware fallback image (no waiting)
-     * 2. BACKGROUND: Try to upgrade to AI image from Supabase
+     * Resolve the hero image for one load — the final URL is chosen BEFORE
+     * it is set, so the hero loads exactly once per load. The previous
+     * design set the default image instantly and then swapped to the
+     * Supabase AI image when it arrived: two large downloads and two
+     * crossfades for one hero. Now the AI lookup runs first (time-boxed);
+     * whichever URL wins — AI image or the weather-aware default — is the
+     * only one the UI ever loads for this weather/outfit. While resolution
+     * runs, the previous hero (or the seeded last-good hero) stays on
+     * screen; on a true first-ever load the gradient shows briefly.
      */
-    private fun fetchHeroImage(weather: WeatherConditions, outfit: OutfitRecommendation) {
+    private fun resolveHeroImage(weather: WeatherConditions, outfit: OutfitRecommendation) {
         val gender = _uiState.value.genderPreference
-
-        // INSTANT: Set weather-aware fallback immediately (no network wait)
-        val fallbackUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
-            weather, outfit, gender
-        )
-        _uiState.update { it.copy(heroImageUrl = fallbackUrl) }
-
-        // BACKGROUND: Try to get better AI image from Supabase (don't block UI)
-        viewModelScope.launch {
-            try {
-                val result = heroImageRepository.getHeroImage(
-                    weather = weather,
-                    outfit = outfit,
-                    gender = gender
-                )
-                // Only update if we got a valid URL (Supabase AI image found)
-                result.imageUrl?.let { url ->
-                    _uiState.update { it.copy(heroImageUrl = url) }
+        heroResolveJob?.cancel()
+        heroResolveJob = viewModelScope.launch {
+            val aiUrl = runCatching {
+                withTimeoutOrNull(HERO_RESOLVE_TIMEOUT_MS) {
+                    heroImageRepository.getHeroImage(
+                        weather = weather,
+                        outfit = outfit,
+                        gender = gender
+                    ).imageUrl
                 }
-            } catch (e: Exception) {
-                // Silently ignore - fallback is already showing
-            }
+            }.getOrNull()
+            if (!isActive) return@launch
+            val finalUrl = aiUrl ?: com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
+                weather, outfit, gender
+            )
+            _uiState.update { it.copy(heroImageUrl = finalUrl) }
         }
     }
     
@@ -665,7 +745,7 @@ class MainViewModel @Inject constructor(
             // true "swap" the app can observe, so the diff is recorded here.
             onOutfitProduced(weather, outfit, countGeneration = false)
             // Hero image depends on outfit hash - must reload
-            fetchHeroImage(weather, outfit)
+            resolveHeroImage(weather, outfit)
         }
     }
     
@@ -728,7 +808,7 @@ class MainViewModel @Inject constructor(
             }
             _locationSearch.update { LocationSearchState() }
             // New location = new frame: NOW (if active) is recomputed there.
-            resolveLocationZone(location.latitude, location.longitude)
+            resolveLocationZone()
             fetchWeather()
         }
     }
@@ -751,7 +831,7 @@ class MainViewModel @Inject constructor(
             }
             _locationSearch.update { LocationSearchState() }
             // New location = new frame: NOW (if active) is recomputed there.
-            resolveLocationZone(lat, lon)
+            resolveLocationZone()
             fetchWeather()
         }
     }
@@ -817,7 +897,7 @@ class MainViewModel @Inject constructor(
             // Hero image depends on gender - reload with new combination ID
             val weather = _uiState.value.weather ?: return@launch
             val outfit = _uiState.value.outfit ?: return@launch
-            fetchHeroImage(weather, outfit)
+            resolveHeroImage(weather, outfit)
         }
     }
 

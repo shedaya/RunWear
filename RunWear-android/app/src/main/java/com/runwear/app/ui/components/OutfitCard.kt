@@ -84,9 +84,18 @@ fun OutfitCard(
 ) {
     val categoryColor = getCategoryColor(item.category)
     val context = LocalContext.current
+    // Bundled asset first (the set is closed and ships with the app — no
+    // network wait); the remote URL is the fallback only, if the asset
+    // fails to load.
+    val thumbnailAssetUri = remember(item, gender) {
+        ClothingThumbnailService.getThumbnailAssetUri(item, gender)
+    }
     val thumbnailUrl = remember(item, gender) {
         ClothingThumbnailService.getThumbnailUrl(item, gender)
     }
+    var assetFailed by remember(item, gender) { mutableStateOf(false) }
+    val thumbnailModel =
+        if (thumbnailAssetUri != null && !assetFailed) thumbnailAssetUri else thumbnailUrl
 
     // Track thumbnail load state for fallback
     var thumbnailLoaded by remember { mutableStateOf(false) }
@@ -146,11 +155,11 @@ fun OutfitCard(
                     )
                 }
 
-                // AI-generated thumbnail
-                if (thumbnailUrl != null) {
+                // AI-generated thumbnail (bundled asset, remote fallback)
+                if (thumbnailModel != null) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(thumbnailUrl)
+                            .data(thumbnailModel)
                             .crossfade(300)
                             .build(),
                         contentDescription = item.displayName,
@@ -159,7 +168,13 @@ fun OutfitCard(
                             .clip(RoundedCornerShape(14.dp))
                             .graphicsLayer { alpha = if (thumbnailLoaded) 1f else 0f },
                         onSuccess = { thumbnailLoaded = true },
-                        onError = { thumbnailLoaded = false }
+                        onError = {
+                            if (!assetFailed && thumbnailAssetUri != null) {
+                                assetFailed = true // retry once from the remote URL
+                            } else {
+                                thumbnailLoaded = false
+                            }
+                        }
                     )
                 }
             }

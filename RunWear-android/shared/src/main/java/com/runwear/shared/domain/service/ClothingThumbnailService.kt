@@ -66,6 +66,11 @@ object ClothingThumbnailService {
         ClothingItem.NECK_GAITER to "neck-gaiter"
     )
 
+    private fun genderSuffix(gender: GenderPreference): String = when (gender) {
+        GenderPreference.FEMALE -> "female"
+        else -> "male" // MALE and UNISEX both use male thumbnails
+    }
+
     /**
      * Get the thumbnail URL for a clothing item based on gender preference.
      *
@@ -75,12 +80,25 @@ object ClothingThumbnailService {
      */
     fun getThumbnailUrl(item: ClothingItem, gender: GenderPreference): String? {
         val thumbnailKey = THUMBNAIL_KEYS[item] ?: return null
-        val genderSuffix = when (gender) {
-            GenderPreference.FEMALE -> "female"
-            else -> "male" // MALE and UNISEX both use male thumbnails
-        }
-        return "$BASE_URL/$thumbnailKey-$genderSuffix.webp"
+        return "$BASE_URL/$thumbnailKey-${genderSuffix(gender)}.webp"
     }
+
+    /**
+     * Path of the BUNDLED copy of the thumbnail inside the app's assets
+     * (`assets/thumbnails/…`), or null if the item has no thumbnail. The set
+     * is closed (26 items × 2 genders), so the full set ships with the app
+     * and cards never wait on the network for a known item; the remote URL
+     * from [getThumbnailUrl] is the fallback only (e.g. an asset that fails
+     * to decode, or an item added before its bundle ships).
+     */
+    fun getThumbnailAssetPath(item: ClothingItem, gender: GenderPreference): String? {
+        val thumbnailKey = THUMBNAIL_KEYS[item] ?: return null
+        return "thumbnails/$thumbnailKey-${genderSuffix(gender)}.webp"
+    }
+
+    /** `file:///android_asset/` URI for [getThumbnailAssetPath], loadable by Coil as-is. */
+    fun getThumbnailAssetUri(item: ClothingItem, gender: GenderPreference): String? =
+        getThumbnailAssetPath(item, gender)?.let { "file:///android_asset/$it" }
 
     /**
      * Check if a clothing item has a thumbnail available.
