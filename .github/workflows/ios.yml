@@ -1,0 +1,55 @@
+# iOS build verification on a macOS runner.
+#
+# This exists because iOS development for this repo happens in a Linux cloud
+# environment that cannot compile Swift — this workflow is the compile
+# feedback loop for the native iOS app in RunWear-iOS/. It runs only on iOS
+# branches and on manual dispatch to conserve macOS runner minutes (billed
+# at 10x on private repos).
+#
+# It is NOT the shipping pipeline: signing, archiving, and TestFlight come
+# later (an App Store Connect record for RunWear iOS does not exist yet).
+name: iOS Build
+
+on:
+  push:
+    branches:
+      - "ios/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: xcodebuild -version
+
+      - name: Build iOS app (simulator, unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project RunWear-iOS/RunWear.xcodeproj \
+            -scheme RunWear \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee xcodebuild.log | grep -E "error:|warning:|BUILD" || true
+          if ! tail -5 xcodebuild.log | grep -q "BUILD SUCCEEDED"; then
+            echo "=================== xcodebuild.log tail (diagnostics) ==================="
+            tail -220 xcodebuild.log
+            exit 1
+          fi
+
+      - name: Upload full build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+          if-no-files-found: ignore
