@@ -124,6 +124,7 @@ class WatchViewModel: NSObject, ObservableObject {
             let adjustedTemp = comfortLevel.adjustTemperature(weather.currentWeather.temperatureFahrenheit)
             let recommendation = outfitService.getRecommendation(
                 for: adjustedTemp,
+                rawTemperature: weather.currentWeather.temperatureFahrenheit,
                 condition: weather.currentWeather.condition,
                 windSpeed: weather.currentWeather.windspeed,
                 hour: Calendar.current.component(.hour, from: Date())

@@ -752,6 +752,7 @@ struct TipsCard: View {
         ),
         recommendation: OutfitRecommendationService.shared.getRecommendation(
             for: 59,
+            rawTemperature: 59,
             condition: .clear
         ),
         isRefreshing: false,

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Running-Specific Clothing Recommendation Engine (v4.1)
+/// Running-Specific Clothing Recommendation Engine (v4.3)
 ///
 /// Brackets are mapped directly from real feels-like temperature to running-appropriate clothing.
 /// No arithmetic offset — the thresholds themselves reflect that runners generate 5-15× resting
@@ -8,14 +8,50 @@ import Foundation
 ///
 /// Sources: Nike, Jeff Galloway (US Olympian), Marathon Handbook, Tina Muir (2:36 marathoner),
 /// Fleet Feet, Luke Humphrey (Hanson's Brooks Distance Project), NCBI exercise physiology.
+///
+/// Key insight: No credible running source recommends an insulated jacket at 20°F.
+/// That threshold sits at 0-10°F for active runners.
+///
+/// v4.2 cool-band recalibration (field report, Oct 2026): 47°F actual / ~40°F feels-like in
+/// 11 mph wind produced THREE torso layers — light long sleeve + quarter-zip + windbreaker.
+/// Causes: (a) the mid-layer band started at 40°F, (b) the windbreaker was unconditional
+/// across 10–39°F, and (c) the three torso selectors all keyed off the same feels-like with
+/// no mutual exclusion, so a raw feels-like of 39.x (displayed as "40°") fired every layer at
+/// once — crossing 40.0 → 39.9°F added FOUR items in a single step (2 → 6 total).
+/// Fixes: mid-layers now start at 32°F, the shell is wind-gated through the whole cool band
+/// (it only becomes standard issue below 25°F, where cold — not wind — dominates), and in
+/// the 25–40°F band a wind shell and a mid-layer are alternatives, never a stack.
+///
+/// v4.3 sun-gear frame fix (owner decision, Oct 2026): sun protection is not layering.
+/// The visor/cap sun gates in selectHead() read the comfort-ADJUSTED temperature, so a
+/// warmer comfort profile could gain a running cap the colder profile didn't get at the
+/// same weather (640 profile-ordering inversions in the Oct 17 sweep, inv7). The sun
+/// gates now read the RAW temperature (before the comfort shift); warmth headgear stays
+/// on the adjusted frame. Sunglasses/sunscreen were already UV-only.
+///
+/// This is a hand port of the Kotlin engine (GetOutfitRecommendationUseCase, :shared).
+/// The port is pinned by OutfitRulesSweepTest (RunWearTests), a line port of the Kotlin
+/// sweep harness: if the Kotlin tables change and this file doesn't, CI fails.
 class OutfitRecommendationService {
     static let shared = OutfitRecommendationService()
+
+    /// Engine version, surfaced in feedback diagnostic bundles so a report
+    /// always names the exact rules that produced the outfit. Bump this
+    /// whenever the selection tables below change. (Mirrors the Kotlin
+    /// engine's ENGINE_VERSION.)
+    static let engineVersion = "4.3"
 
     private init() {}
 
     /// Generate outfit recommendation from weather conditions.
     /// - Parameters:
-    ///   - temperature: Feels-like temperature in Fahrenheit (after comfort adjustment)
+    ///   - temperature: Feels-like temperature in Fahrenheit, AFTER the comfort
+    ///     adjustment — the frame every warmth selector reads (the Kotlin
+    ///     engine's `adjustedTemp`).
+    ///   - rawTemperature: Feels-like temperature in Fahrenheit BEFORE the
+    ///     comfort adjustment (the Kotlin engine's `baseTemp`). Read ONLY by
+    ///     the visor/cap sun gates (v4.3); required so no caller can silently
+    ///     keep the pre-v4.3 single-frame behavior.
     ///   - condition: Current weather condition
     ///   - windSpeed: Wind speed in km/h (default 0)
     ///   - humidity: Humidity percentage (default 50)
@@ -24,6 +60,7 @@ class OutfitRecommendationService {
     ///   - hour: Current hour (default 12)
     func getRecommendation(
         for temperature: Double,
+        rawTemperature: Double,
         condition: WeatherCondition,
         windSpeed: Double = 0,
         humidity: Int = 50,
@@ -36,13 +73,26 @@ class OutfitRecommendationService {
         let isWindy = windSpeed > 10 // km/h ~= 6 mph threshold adjusts for metric
         let isRaining = condition == .rain || condition == .drizzle || condition == .thunderstorm
 
+        let topMid = selectTopMid(temp)
+        let topOuter = selectTopOuter(temp, isWindy: isWindy, isRaining: isRaining, precipitation: precipitation)
+        // Cool-band rule (25–39.9°F): a wind shell and a mid-layer are alternatives,
+        // never a stack. If the wind calls for the shell, the mid-layer comes off.
+        // (Feels-like already prices in the wind chill; dressing for both double-counts it.)
+        // Kotlin compares the outer layer by enum identity; Swift's ClothingItem is a
+        // struct whose only stable identity is its name (its `id` is a fresh UUID per
+        // construction), so the comparison goes by name — the item names are unique
+        // across every selector in this file.
+        let effectiveTopMid = (topOuter?.name == "Windbreaker" && topMid != nil && temp >= 25 && temp < 40)
+            ? nil
+            : topMid
+
         return OutfitRecommendation(
             temperatureBracket: bracket,
             topBase: selectTopBase(temp),
-            topMid: selectTopMid(temp),
-            topOuter: selectTopOuter(temp, isWindy: isWindy, isRaining: isRaining, precipitation: precipitation),
+            topMid: effectiveTopMid,
+            topOuter: topOuter,
             bottom: selectBottom(temp),
-            head: selectHead(temp, uvIndex: uvIndex, isRaining: isRaining),
+            head: selectHead(temp, rawTemp: rawTemperature, uvIndex: uvIndex, isRaining: isRaining),
             hands: selectHands(temp),
             accessories: selectAccessories(temp, uvIndex: uvIndex, isRaining: isRaining, hour: hour),
             tips: generateTips(temp, isWindy: isWindy, isRaining: isRaining, humidity: humidity, uvIndex: uvIndex)
@@ -57,17 +107,19 @@ class OutfitRecommendationService {
             return ClothingItem(name: "Tank Top", description: "Lightweight, breathable singlet", icon: "tshirt.fill", amazonSearchTerm: "running tank top moisture wicking")
         } else if temp >= 50 {
             return ClothingItem(name: "Short Sleeve Shirt", description: "Moisture-wicking technical tee", icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit")
-        } else if temp >= 20 {
+        } else if temp >= 25 {
             return ClothingItem(name: "Light Long Sleeve", description: "Lightweight technical long sleeve", icon: "tshirt.fill", amazonSearchTerm: "running long sleeve lightweight")
         } else {
             return ClothingItem(name: "Thermal Long Sleeve", description: "Insulated base layer for extreme cold", icon: "tshirt.fill", amazonSearchTerm: "running thermal base layer")
         }
     }
 
-    /// No mid-layer above 40°F. Below that, progressively warmer mid-layers.
+    /// No mid-layer above 32°F: at 32–49°F a single long-sleeve layer (plus an
+    /// optional wind shell) is what mainstream dress charts call for. Below 32°F,
+    /// progressively warmer mid-layers.
     private func selectTopMid(_ temp: Double) -> ClothingItem? {
-        if temp >= 40 { return nil }
-        if temp >= 20 {
+        if temp >= 32 { return nil }
+        if temp >= 25 {
             return ClothingItem(name: "Quarter-Zip Pullover", description: "Lightweight mid-layer with zip ventilation", icon: "tshirt.fill", amazonSearchTerm: "running quarter zip pullover")
         } else if temp >= 10 {
             return ClothingItem(name: "Fleece Pullover", description: "Warm brushed fleece for cold days", icon: "tshirt.fill", amazonSearchTerm: "running fleece pullover lightweight")
@@ -78,12 +130,17 @@ class OutfitRecommendationService {
 
     /// Rain always gets rain jacket. Wind shell beats heavy jacket for running.
     /// Insulated jacket ONLY below 10°F.
+    /// The shell is wind-GATED through the whole cool band (25–49°F): feels-like
+    /// already includes wind chill, so an automatic shell on top of it double-counts
+    /// the wind. Below 25°F the shell becomes standard (cold dominates, and it seals
+    /// the mid-layer). In the 25–40°F band, getRecommendation drops the mid-layer
+    /// when the shell is on — the two are alternatives there, never a stack.
     private func selectTopOuter(_ temp: Double, isWindy: Bool, isRaining: Bool, precipitation: Double) -> ClothingItem? {
         if isRaining {
             return ClothingItem(name: "Rain Jacket", description: "Lightweight waterproof running jacket", icon: "cloud.rain.fill", amazonSearchTerm: "waterproof running jacket")
         }
         if temp >= 50 { return nil }
-        if temp >= 40 {
+        if temp >= 25 {
             return isWindy ? ClothingItem(name: "Windbreaker", description: "Lightweight wind protection", icon: "wind", amazonSearchTerm: "running windbreaker jacket") : nil
         }
         if temp >= 10 {
@@ -105,16 +162,23 @@ class OutfitRecommendationService {
         }
     }
 
-    private func selectHead(_ temp: Double, uvIndex: Double, isRaining: Bool) -> ClothingItem? {
-        if temp >= 65 && uvIndex > 3 {
+    private func selectHead(_ temp: Double, rawTemp: Double, uvIndex: Double, isRaining: Bool) -> ClothingItem? {
+        // Sun protection is NOT layering (v4.3): the visor/cap sun gates key off
+        // the RAW temperature (rawTemp = feels-like before the comfort
+        // adjustment), never the comfort-adjusted frame — "I run hot" must not
+        // put a cap on your head, and "I run cold" must not take one off.
+        if rawTemp >= 65 && uvIndex > 3 {
             return ClothingItem(name: "Visor", description: "Sun protection, max ventilation", icon: "sun.max.fill", amazonSearchTerm: "running visor")
         }
-        if temp >= 50 && uvIndex > 3 {
+        if rawTemp >= 50 && uvIndex > 3 {
             return ClothingItem(name: "Running Cap", description: "Breathable mesh cap for sun protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap breathable")
         }
+        // Same item, different job: in rain the cap is rain gear, keyed to rain
+        // itself — not a temperature decision. Unchanged.
         if isRaining {
             return ClothingItem(name: "Running Cap", description: "Keeps rain out of eyes", icon: "baseball.cap.fill", amazonSearchTerm: "running cap breathable")
         }
+        // Warmth headgear below stays on the comfort-adjusted frame (temp).
         if temp >= 40 { return nil }
         if temp >= 30 {
             return ClothingItem(name: "Headband", description: "Ear warmer headband", icon: "ear.fill", amazonSearchTerm: "running ear warmer headband")
@@ -142,6 +206,8 @@ class OutfitRecommendationService {
     private func selectAccessories(_ temp: Double, uvIndex: Double, isRaining: Bool, hour: Int) -> [ClothingItem] {
         var items: [ClothingItem] = []
 
+        // Sun protection, UV-only: never read the temperature in any frame, so
+        // the comfort preference cannot move them (classification audited v4.3).
         if uvIndex > 3 {
             items.append(ClothingItem(name: "Sunglasses", description: "UV protection running sunglasses", icon: "sunglasses.fill", amazonSearchTerm: "running sunglasses"))
         }
@@ -166,7 +232,8 @@ class OutfitRecommendationService {
         if temp < 50 {
             tips.append("You should feel slightly cool stepping outside. If you're comfortable standing still, you're overdressed for running.")
         }
-        if temp < 40 && temp >= 10 {
+        // Layered-setup ventilation tip (2+ torso layers happen below 32°F)
+        if temp < 32 && temp >= 10 {
             tips.append("Your layered setup lets you regulate heat — unzip your mid-layer or shell if you warm up after the first mile.")
         }
         if isWindy && temp < 50 {

@@ -65,6 +65,14 @@
 		B10002000000000000000105 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
 		B10002000000000000000106 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
 		B10002000000000000000107 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
+		/* Engine sweep test target — added 2026-10-25 */
+		C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000001 /* OutfitRulesSweepTest.swift */; };
+		C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012233456780000009 /* OutfitRecommendationService.swift */; };
+		C10002000000000000000003 /* Outfit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C233456780000006 /* Outfit.swift */; };
+		C10002000000000000000004 /* Weather.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A233456780000005 /* Weather.swift */; };
+		C10002000000000000000005 /* ComfortLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000001 /* ComfortLevel.swift */; };
+		C10002000000000000000006 /* GenderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000002 /* GenderPreference.swift */; };
+		C10002000000000000000007 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -114,6 +122,9 @@
 		/* Watch App File References — added 2026-10-25 */
 		B10001000000000000000001 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
 		B10001000000000000000002 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
+		/* Engine sweep test target — added 2026-10-25 */
+		C1000000233456780000000 /* RunWearTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunWearTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C10001000000000000000001 /* OutfitRulesSweepTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitRulesSweepTest.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,6 +136,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B10000FD233456780000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000FD233456780000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -213,6 +231,7 @@
 			children = (
 				A1000020233456780000001 /* RunWear */,
 				B1000020233456780000001 /* RunWearWatch */,
+				C1000020233456780000001 /* RunWearTests */,
 				A10000FF233456780000000 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -222,6 +241,7 @@
 			children = (
 				A1000000233456780000000 /* RunWear.app */,
 				B1000000233456780000000 /* RunWear Watch.app */,
+				C1000000233456780000000 /* RunWearTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -271,6 +291,14 @@
 			path = Onboarding;
 			sourceTree = "<group>";
 		};
+		C1000020233456780000001 /* RunWearTests */ = {
+			isa = PBXGroup;
+			children = (
+				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
+			);
+			path = RunWearTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -308,6 +336,22 @@
 			productReference = B1000000233456780000000 /* RunWear Watch.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C10000FE233456780000000 /* RunWearTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1000107233456780000000 /* Build configuration list for PBXNativeTarget "RunWearTests" */;
+			buildPhases = (
+				C10000FC233456780000000 /* Sources */,
+				C10000FD233456780000000 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RunWearTests;
+			productName = RunWearTests;
+			productReference = C1000000233456780000000 /* RunWearTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -322,6 +366,9 @@
 						CreatedOnToolsVersion = 15.0;
 					};
 					B10000FE233456780000000 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					C10000FE233456780000000 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -341,6 +388,7 @@
 			targets = (
 				A10000FE233456780000000 /* RunWear */,
 				B10000FE233456780000000 /* RunWear Watch */,
+				C10000FE233456780000000 /* RunWearTests */,
 			);
 		};
 /* End PBXProject section */
@@ -427,6 +475,20 @@
 				B10002000000000000000105 /* HeroImageService.swift in Sources */,
 				B10002000000000000000106 /* FallbackImageProvider.swift in Sources */,
 				B10002000000000000000107 /* SupabaseClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000FC233456780000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */,
+				C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */,
+				C10002000000000000000003 /* Outfit.swift in Sources */,
+				C10002000000000000000004 /* Weather.swift in Sources */,
+				C10002000000000000000005 /* ComfortLevel.swift in Sources */,
+				C10002000000000000000006 /* GenderPreference.swift in Sources */,
+				C10002000000000000000007 /* HeroImageModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -682,6 +744,53 @@
 			};
 			name = Release;
 		};
+		C1000108233456780000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q3FS685XN8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.runwear.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C1000109233456780000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Q3FS685XN8;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.runwear.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -708,6 +817,15 @@
 			buildConfigurations = (
 				B1000108233456780000000 /* Debug */,
 				B1000109233456780000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C1000107233456780000000 /* Build configuration list for PBXNativeTarget "RunWearTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1000108233456780000000 /* Debug */,
+				C1000109233456780000000 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

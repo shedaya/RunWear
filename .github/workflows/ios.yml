@@ -67,6 +67,31 @@ jobs:
             exit 1
           fi
 
+      - name: Run engine sweep tests (iOS simulator)
+        # The RunWearTests target is the Swift port of the Kotlin outfit
+        # engine sweep (OutfitRulesSweepTest): 209,600 scenarios checking
+        # the v4.3 invariants against the real OutfitRecommendationService.
+        # It compiles the engine + models directly (no UI), so a Kotlin
+        # engine change that isn't ported to Swift fails here even though
+        # the app itself still builds. if: always() — the sweep verdict
+        # must land even when a build step above failed.
+        if: always()
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project RunWear-iOS/RunWear.xcodeproj \
+            -scheme RunWear \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:RunWearTests \
+            CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee xcodebuild-test.log | grep -E "error:|Test Suite|TEST" || true
+          if ! grep -q "TEST SUCCEEDED" xcodebuild-test.log; then
+            echo "=================== xcodebuild-test.log tail (diagnostics) ==================="
+            tail -220 xcodebuild-test.log
+            exit 1
+          fi
+
       - name: Upload full build logs
         # always() so the watch log is captured even when the watch step
         # ran (and possibly failed) after an app-step failure.
@@ -77,4 +102,5 @@ jobs:
           path: |
             xcodebuild.log
             xcodebuild-watch.log
+            xcodebuild-test.log
           if-no-files-found: ignore

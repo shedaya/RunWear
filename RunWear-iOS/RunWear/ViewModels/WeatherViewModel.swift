@@ -115,6 +115,7 @@ class WeatherViewModel: ObservableObject {
 
             recommendation = outfitService.getRecommendation(
                 for: comfortLevel.adjustTemperature(temp),
+                rawTemperature: temp,
                 condition: condition,
                 windSpeed: windSpeed,
                 humidity: humidity,
@@ -166,6 +167,7 @@ class WeatherViewModel: ObservableObject {
             let adjustedTemp = comfortLevel.adjustTemperature(snapshot.temperatureFahrenheit)
             recommendation = outfitService.getRecommendation(
                 for: adjustedTemp,
+                rawTemperature: snapshot.temperatureFahrenheit,
                 condition: snapshot.condition
             )
         }
