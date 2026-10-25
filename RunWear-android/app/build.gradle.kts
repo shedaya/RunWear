@@ -75,6 +75,12 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            // Robolectric render harness needs the merged resources.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -140,4 +146,11 @@ dependencies {
     // runtime classpath so the telemetry payload builders run as-is).
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+
+    // Widget render harness (WidgetRenderTest): Robolectric native
+    // graphics + the WorkManager test initializer the Glance session
+    // needs. Matches the versions the JetLagKiller harness uses.
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.work:work-testing:2.9.1")
+    testImplementation("androidx.test:core:1.6.1")
 }

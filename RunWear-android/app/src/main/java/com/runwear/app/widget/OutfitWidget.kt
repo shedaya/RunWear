@@ -85,25 +85,30 @@ private val WidgetPrimary = Color(0xFF00796B)
  * for a widget that has NEVER loaded (fresh install) — and a tiny ↻ in the
  * corner of every state re-runs the load in place via [RefreshWidgetAction].
  */
-class OutfitWidget : GlanceAppWidget() {
+open class OutfitWidget : GlanceAppWidget() {
 
     companion object {
         private val SMALL_SQUARE = DpSize(100.dp, 100.dp)
         private val HORIZONTAL_RECTANGLE = DpSize(250.dp, 60.dp)
-        private val LARGE_RECTANGLE = DpSize(250.dp, 150.dp)
+        // 190 tall (was 150): the large composition's honest budget —
+        // hero rows + all pieces + later/conditions + grounding — does
+        // not fit 150 without clipping its own bottom (render-caught,
+        // 2026-10-25). Shorter placements get the strip composition.
+        private val LARGE_RECTANGLE = DpSize(250.dp, 190.dp)
     }
 
-    override val sizeMode = SizeMode.Responsive(
+    override val sizeMode: SizeMode = SizeMode.Responsive(
         setOf(SMALL_SQUARE, HORIZONTAL_RECTANGLE, LARGE_RECTANGLE)
     )
 
     override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            WidgetEntryPoint::class.java
-        )
+        // The persisted last-good is read FIRST and the Hilt entry
+        // point is only resolved when a reload is actually needed —
+        // the fresh path (the common one) shouldn't pay for, or depend
+        // on, the DI graph at all. (Also the render-harness seam: a
+        // seeded fresh store renders with no Hilt app present.)
         val store = WidgetLastGoodStore(context)
         val lastGood = store.read()
         val nowMs = System.currentTimeMillis()
@@ -114,10 +119,10 @@ class OutfitWidget : GlanceAppWidget() {
                 lastGood.toWidgetState()
 
             else -> when (val outcome = WidgetDataLoader.load(
-                weatherRepository = entryPoint.weatherRepository(),
-                preferencesRepository = entryPoint.preferencesRepository(),
-                locationProvider = entryPoint.locationProvider(),
-                getOutfitRecommendation = entryPoint.getOutfitRecommendation()
+                weatherRepository = entryPoint(context).weatherRepository(),
+                preferencesRepository = entryPoint(context).preferencesRepository(),
+                locationProvider = entryPoint(context).locationProvider(),
+                getOutfitRecommendation = entryPoint(context).getOutfitRecommendation()
             )) {
                 is WidgetDataLoader.Outcome.Success -> {
                     // Just persist; this very render shows the fresh data and
@@ -288,8 +293,11 @@ private fun SmallWidgetContent(state: WidgetState.Success) {
         )
         Spacer(modifier = GlanceModifier.height(4.dp))
         Text(
-            text = "Feels like ${formatTemperature(state.weather.feelsLike, state.weather.isCelsius)}" +
-                " · ${state.weather.weatherCode.description}",
+            // Feels-like only: with the condition word appended, this
+            // line truncated at the small width ("Feels like 33°F · C…",
+            // render-caught 2026-10-25). The number is the truth that
+            // drives the outfit; the condition word lives in the app.
+            text = "Feels like ${formatTemperature(state.weather.feelsLike, state.weather.isCelsius)}",
             style = TextStyle(
                 color = ColorProvider(WidgetTextMuted),
                 fontSize = 10.sp,
@@ -316,14 +324,26 @@ private fun HorizontalWidgetContent(state: WidgetState.Success) {
                     fontWeight = FontWeight.Bold
                 )
             )
+            // Two composed lines with full garment names — the top
+            // stack, then bottom + head (2026-10-25; replaces the
+            // flowing two-word-chopped summary).
+            val (topLine, bottomLine) = outfitSummaryLines(state.outfit)
             Text(
-                text = buildOutfitSummary(state.outfit),
+                text = topLine,
                 style = TextStyle(
                     color = ColorProvider(WidgetTextPrimary),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 ),
-                maxLines = 2
+                maxLines = 1
+            )
+            Text(
+                text = bottomLine,
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextSecondary),
+                    fontSize = 12.sp
+                ),
+                maxLines = 1
             )
         }
 
@@ -366,120 +386,89 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
     val outfit = state.outfit
 
+    // Budgeted composition (2026-10-25 restructure). The declared
+    // large breakpoint is 250x190 (~166dp usable after padding); every
+    // element below is sized against it. The previous composition —
+    // brand strip, two hero rows, a layers line, a chips row, a later
+    // line and a weather line — summed past 190dp at the OLD 150
+    // breakpoint and silently clipped its own bottom third in a real
+    // cell (render-caught). The wordmark went; the outfit stayed.
     Column(
         modifier = GlanceModifier.fillMaxSize()
     ) {
-        // Brand strip: the RunWear mark, location and freshness at the right.
+        // Eyebrow row: the moment, and the feels-like number that
+        // drives the outfit, at the right.
         Row(
             modifier = GlanceModifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = GlanceModifier
-                    .size(8.dp)
-                    .background(WidgetPrimary)
-                    .cornerRadius(2.dp)
-            ) {}
-            Spacer(modifier = GlanceModifier.width(6.dp))
             Text(
-                text = "RunWear",
+                text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
                 style = TextStyle(
-                    color = ColorProvider(WidgetTextPrimary),
-                    fontSize = 13.sp,
+                    color = ColorProvider(WidgetTextMuted),
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold
                 )
             )
             Spacer(modifier = GlanceModifier.defaultWeight())
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = state.locationName.take(15),
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextSecondary),
-                        fontSize = 11.sp
-                    ),
-                    maxLines = 1
-                )
-                Text(
-                    text = WidgetFreshness.updatedLabel(
-                        state.lastUpdated,
-                        state.savedAtEpochMs,
-                        System.currentTimeMillis()
-                    ),
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextMuted),
-                        fontSize = 10.sp
-                    )
-                )
-            }
-        }
-
-        Spacer(modifier = GlanceModifier.height(10.dp))
-
-        // The outfit is the hero: the moment it is for, then the main
-        // pieces at display size with their garment icons.
-        Text(
-            text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
-            style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold
-            )
-        )
-        Spacer(modifier = GlanceModifier.height(4.dp))
-        HeroItemRow(outfit.topBase)
-        val layers = listOfNotNull(outfit.topMid, outfit.topOuter)
-        if (layers.isNotEmpty()) {
             Text(
-                text = layers.joinToString(" + ") { it.displayName },
+                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
                 style = TextStyle(
-                    color = ColorProvider(WidgetTextSecondary),
-                    fontSize = 14.sp
-                ),
-                maxLines = 1
+                    color = ColorProvider(WidgetTextPrimary),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
             )
         }
+        Spacer(modifier = GlanceModifier.height(4.dp))
+
+        // The heroes: base layer and bottom, at display size.
+        HeroItemRow(outfit.topBase)
         HeroItemRow(outfit.bottom)
 
-        // Secondary pieces keep their icon chips under the hero.
-        val secondary = listOfNotNull(outfit.head, outfit.hands) + outfit.accessories.take(2)
-        if (secondary.isNotEmpty()) {
-            Spacer(modifier = GlanceModifier.height(8.dp))
-            Row(modifier = GlanceModifier.fillMaxWidth()) {
-                secondary.forEachIndexed { index, item ->
-                    if (index > 0) Spacer(modifier = GlanceModifier.width(6.dp))
-                    OutfitItemChip(item)
-                }
-            }
-        }
-
-        // The "Later today" line fills the old defaultWeight void with the
-        // one thing that changes before the weather does: the outfit.
-        if (state.laterTodayLine != null) {
-            Spacer(modifier = GlanceModifier.height(8.dp))
+        // Every remaining piece — layers, head, hands, accessories —
+        // as one wrapping block of FULL names (2026-10-25: the old
+        // take(2) chip row silently dropped pieces the recommendation
+        // actually made, and chips could clip mid-name at this width).
+        val rest = listOfNotNull(outfit.topMid, outfit.topOuter, outfit.head, outfit.hands) +
+            outfit.accessories
+        if (rest.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(6.dp))
             Text(
-                text = state.laterTodayLine,
+                text = rest.joinToString(" · ") { it.displayName },
                 style = TextStyle(
                     color = ColorProvider(WidgetTextSecondary),
                     fontSize = 11.sp
                 ),
-                maxLines = 1
+                maxLines = 3
             )
-            Spacer(modifier = GlanceModifier.defaultWeight())
-        } else {
-            Spacer(modifier = GlanceModifier.defaultWeight())
         }
 
-        // Weather demoted to one grounding line: feels-like, actual, wind.
+        // The middle band always carries truth: "Later today" when the
+        // outfit changes later, otherwise the conditions detail — the
+        // numbers behind this recommendation (the old null-branch left
+        // a bare defaultWeight void here).
+        Spacer(modifier = GlanceModifier.height(8.dp))
         Text(
-            text = "Feels like ${formatTemperature(state.weather.feelsLike, state.weather.isCelsius)}" +
-                " · Actual ${formatTemperature(state.weather.temperature, state.weather.isCelsius)}" +
-                " · Wind ${formatWind(state.weather)}" +
-                " · ${state.weather.weatherCode.description}",
+            text = state.laterTodayLine ?: conditionsDetailLine(state.weather),
             style = TextStyle(
                 color = ColorProvider(WidgetTextSecondary),
-                fontSize = 11.sp
+                fontSize = 10.sp
+            ),
+            maxLines = 1
+        )
+        Spacer(modifier = GlanceModifier.defaultWeight())
+
+        // Grounding line: where this weather is for, and its freshness.
+        Text(
+            text = "${state.locationName} · " + WidgetFreshness.updatedLabel(
+                state.lastUpdated,
+                state.savedAtEpochMs,
+                System.currentTimeMillis()
+            ),
+            style = TextStyle(
+                color = ColorProvider(WidgetTextMuted),
+                fontSize = 10.sp
             ),
             maxLines = 1
         )
@@ -503,33 +492,6 @@ private fun HeroItemRow(item: ClothingItem) {
                 color = ColorProvider(WidgetTextPrimary),
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold
-            ),
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun OutfitItemChip(item: ClothingItem) {
-    Row(
-        modifier = GlanceModifier
-            .background(WidgetCard)
-            .cornerRadius(8.dp)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            provider = ImageProvider(getCategoryIconRes(item.category)),
-            contentDescription = null,
-            modifier = GlanceModifier.size(14.dp),
-            colorFilter = ColorFilter.tint(ColorProvider(getCategoryColor(item.category)))
-        )
-        Spacer(modifier = GlanceModifier.width(4.dp))
-        Text(
-            text = item.displayName,
-            style = TextStyle(
-                color = ColorProvider(WidgetTextPrimary),
-                fontSize = 11.sp
             ),
             maxLines = 1
         )
@@ -657,15 +619,55 @@ private fun formatWind(weather: WeatherConditions): String {
     return "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}"
 }
 
-private fun buildOutfitSummary(outfit: OutfitRecommendation): String {
+/**
+ * The outfit summary with FULL garment names (2026-10-25 redesign).
+ * The old version chopped every name to its first two words
+ * ("Light Long" for "Light Long Sleeve") — truncated language is a
+ * defect class, not a layout strategy.
+ */
+internal fun buildOutfitSummary(outfit: OutfitRecommendation): String {
     val items = mutableListOf<String>()
-    items.add(outfit.topBase.displayName.split(" ").take(2).joinToString(" "))
-    outfit.topMid?.let { items.add(it.displayName.split(" ").take(2).joinToString(" ")) }
-    outfit.topOuter?.let { items.add(it.displayName.split(" ").take(2).joinToString(" ")) }
-    items.add(outfit.bottom.displayName.split(" ").take(2).joinToString(" "))
-    outfit.head?.let { items.add(it.displayName.split(" ").take(2).joinToString(" ")) }
+    items.add(outfit.topBase.displayName)
+    outfit.topMid?.let { items.add(it.displayName) }
+    outfit.topOuter?.let { items.add(it.displayName) }
+    items.add(outfit.bottom.displayName)
+    outfit.head?.let { items.add(it.displayName) }
     return items.joinToString(" • ")
 }
+
+/** Strip line budgets, in characters at the strip's sizes (14sp bold / 12sp). */
+private const val STRIP_LINE1_MAX_CHARS = 22
+private const val STRIP_LINE2_MAX_CHARS = 25
+
+/**
+ * The horizontal strip's two composed lines. The strip's text column is
+ * ~150dp wide — a full five-piece summary CANNOT fit it at readable
+ * sizes (render-caught: even two full names per line ellipsized). So
+ * the lines are composed greedily in glance priority — base, then
+ * layers; bottom, then head — adding a piece only while the line still
+ * fits its budget. Every name that appears is WHOLE; pieces that don't
+ * fit the strip live in the large widget and the app. No truncation is
+ * possible by construction (the longest catalog name fits a budget).
+ */
+internal fun outfitSummaryLines(outfit: OutfitRecommendation): Pair<String, String> {
+    var line1 = outfit.topBase.displayName
+    for (layer in listOfNotNull(outfit.topMid, outfit.topOuter)) {
+        val candidate = "$line1 + ${layer.displayName}"
+        if (candidate.length <= STRIP_LINE1_MAX_CHARS) line1 = candidate else break
+    }
+    var line2 = outfit.bottom.displayName
+    outfit.head?.let { head ->
+        val candidate = "$line2 • ${head.displayName}"
+        if (candidate.length <= STRIP_LINE2_MAX_CHARS) line2 = candidate
+    }
+    return line1 to line2
+}
+
+/** The large cell's conditions detail: the numbers behind the recommendation. */
+internal fun conditionsDetailLine(weather: WeatherConditions): String =
+    "Humidity ${weather.humidity}% · Rain ${weather.precipitationProbability}% · " +
+        "UV ${weather.uvIndex.toInt()} · Gusts ${weather.windGusts.toInt()} " +
+        if (weather.isCelsius) "km/h" else "mph"
 
 /** Category accent color — mirrors the phone app's kit (ui/theme RunWearColors). */
 private fun getCategoryColor(category: ClothingCategory): Color = when (category) {
@@ -704,6 +706,13 @@ sealed class WidgetState {
         val laterTodayLine: String?
     ) : WidgetState()
 }
+
+/** Resolved lazily by callers that genuinely need a reload (see provideGlance). */
+internal fun entryPoint(context: Context): WidgetEntryPoint =
+    EntryPointAccessors.fromApplication(
+        context.applicationContext,
+        WidgetEntryPoint::class.java
+    )
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
