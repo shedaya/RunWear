@@ -434,6 +434,9 @@ struct DarkTipsCard: View {
         case .veryCold:
             result.append("Keep your core warm - the body prioritizes vital organs")
             result.append("Shorten your run or consider indoor alternatives")
+        case .frigid:
+            result.append("Protect your hands and head - mittens and a warm hat are essential")
+            result.append("Layer up so you can vent heat once you warm up")
         case .extreme:
             result.append("Consider running indoors - frostbite risk is real")
             result.append("If running outside, tell someone your route")
@@ -563,6 +566,7 @@ struct TemperatureBracketBadge: View {
         case .cool: return 45
         case .cold: return 35
         case .veryCold: return 25
+        case .frigid: return 15
         case .extreme: return 10
         }
     }
@@ -685,6 +689,9 @@ struct TipsCard: View {
         case .veryCold:
             result.append("Keep your core warm - the body prioritizes vital organs")
             result.append("Shorten your run or consider indoor alternatives")
+        case .frigid:
+            result.append("Protect your hands and head - mittens and a warm hat are essential")
+            result.append("Layer up so you can vent heat once you warm up")
         case .extreme:
             result.append("Consider running indoors - frostbite risk is real")
             result.append("If running outside, tell someone your route and expected return time")
