@@ -31,6 +31,40 @@
 		B100000D233456780000008 /* Outfit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C233456780000006 /* Outfit.swift */; };
 		B100000E233456780000009 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233456780000007 /* WeatherService.swift */; };
 		B100000F233456780000010 /* OutfitRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012233456780000009 /* OutfitRecommendationService.swift */; };
+		/* Files added 2026-10-25: previously on disk but missing from the project */
+		A10002000000000000000001 /* ComfortLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000001 /* ComfortLevel.swift */; };
+		A10002000000000000000002 /* GenderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000002 /* GenderPreference.swift */; };
+		A10002000000000000000003 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
+		A10002000000000000000004 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000004 /* TemperatureUnit.swift */; };
+		A10002000000000000000005 /* ClothingThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000005 /* ClothingThumbnailService.swift */; };
+		A10002000000000000000006 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
+		A10002000000000000000007 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
+		A10002000000000000000008 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
+		A10002000000000000000009 /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000009 /* WatchConnectivityManager.swift */; };
+		A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
+		A10002000000000000000011 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
+		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		A10002000000000000000013 /* ToggleableGenderSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000013 /* ToggleableGenderSelector.swift */; };
+		A10002000000000000000014 /* WeatherPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000014 /* WeatherPill.swift */; };
+		A10002000000000000000015 /* WeatherPillsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000015 /* WeatherPillsRow.swift */; };
+		A10002000000000000000016 /* DatePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000016 /* DatePickerSheet.swift */; };
+		A10002000000000000000017 /* LocationPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000017 /* LocationPickerSheet.swift */; };
+		A10002000000000000000018 /* SettingsModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000018 /* SettingsModal.swift */; };
+		A10002000000000000000019 /* ShopModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000019 /* ShopModal.swift */; };
+		A10002000000000000000020 /* TimePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000020 /* TimePickerSheet.swift */; };
+		A10002000000000000000021 /* WeatherDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000021 /* WeatherDetailSheet.swift */; };
+		A10002000000000000000022 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000022 /* OnboardingView.swift */; };
+		/* Watch App Build Files — added 2026-10-25 */
+		B10002000000000000000001 /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001000000000000000001 /* WatchConnectivityManager.swift */; };
+		B10002000000000000000002 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001000000000000000002 /* WatchSettingsView.swift */; };
+		/* Shared files for Watch — added 2026-10-25 */
+		B10002000000000000000101 /* GenderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000002 /* GenderPreference.swift */; };
+		B10002000000000000000102 /* ComfortLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000001 /* ComfortLevel.swift */; };
+		B10002000000000000000103 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000004 /* TemperatureUnit.swift */; };
+		B10002000000000000000104 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
+		B10002000000000000000105 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
+		B10002000000000000000106 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
+		B10002000000000000000107 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +88,32 @@
 		B1000006233456780000003 /* WatchOutfitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchOutfitView.swift; sourceTree = "<group>"; };
 		B1000008233456780000004 /* WatchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchViewModel.swift; sourceTree = "<group>"; };
 		B100000A233456780000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		/* File references added 2026-10-25 */
+		A10001000000000000000001 /* ComfortLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComfortLevel.swift; sourceTree = "<group>"; };
+		A10001000000000000000002 /* GenderPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenderPreference.swift; sourceTree = "<group>"; };
+		A10001000000000000000003 /* HeroImageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageModels.swift; sourceTree = "<group>"; };
+		A10001000000000000000004 /* TemperatureUnit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemperatureUnit.swift; sourceTree = "<group>"; };
+		A10001000000000000000005 /* ClothingThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClothingThumbnailService.swift; sourceTree = "<group>"; };
+		A10001000000000000000006 /* FallbackImageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FallbackImageProvider.swift; sourceTree = "<group>"; };
+		A10001000000000000000007 /* HeroImageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageService.swift; sourceTree = "<group>"; };
+		A10001000000000000000008 /* SupabaseClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseClient.swift; sourceTree = "<group>"; };
+		A10001000000000000000009 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
+		A10001000000000000000010 /* GlassMorphismModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMorphismModifiers.swift; sourceTree = "<group>"; };
+		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
+		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
+		A10001000000000000000013 /* ToggleableGenderSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToggleableGenderSelector.swift; sourceTree = "<group>"; };
+		A10001000000000000000014 /* WeatherPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherPill.swift; sourceTree = "<group>"; };
+		A10001000000000000000015 /* WeatherPillsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherPillsRow.swift; sourceTree = "<group>"; };
+		A10001000000000000000016 /* DatePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePickerSheet.swift; sourceTree = "<group>"; };
+		A10001000000000000000017 /* LocationPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerSheet.swift; sourceTree = "<group>"; };
+		A10001000000000000000018 /* SettingsModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsModal.swift; sourceTree = "<group>"; };
+		A10001000000000000000019 /* ShopModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopModal.swift; sourceTree = "<group>"; };
+		A10001000000000000000020 /* TimePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimePickerSheet.swift; sourceTree = "<group>"; };
+		A10001000000000000000021 /* WeatherDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherDetailSheet.swift; sourceTree = "<group>"; };
+		A10001000000000000000022 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		/* Watch App File References — added 2026-10-25 */
+		B10001000000000000000001 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
+		B10001000000000000000002 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -93,6 +153,10 @@
 			children = (
 				A100000A233456780000005 /* Weather.swift */,
 				A100000C233456780000006 /* Outfit.swift */,
+				A10001000000000000000001 /* ComfortLevel.swift */,
+				A10001000000000000000002 /* GenderPreference.swift */,
+				A10001000000000000000003 /* HeroImageModels.swift */,
+				A10001000000000000000004 /* TemperatureUnit.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -103,6 +167,10 @@
 				A1000004233456780000002 /* ContentView.swift */,
 				A1000016233456780000011 /* WeatherOutfitView.swift */,
 				A1000018233456780000012 /* SupportingViews.swift */,
+				A10001000000000000000012 /* HeroImageView.swift */,
+				A10003000000000000000001 /* Components */,
+				A10003000000000000000002 /* Modals */,
+				A10003000000000000000003 /* Onboarding */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -121,6 +189,11 @@
 				A100000E233456780000007 /* WeatherService.swift */,
 				A1000010233456780000008 /* LocationService.swift */,
 				A1000012233456780000009 /* OutfitRecommendationService.swift */,
+				A10001000000000000000005 /* ClothingThumbnailService.swift */,
+				A10001000000000000000006 /* FallbackImageProvider.swift */,
+				A10001000000000000000007 /* HeroImageService.swift */,
+				A10001000000000000000008 /* SupabaseClient.swift */,
+				A10001000000000000000009 /* WatchConnectivityManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -129,6 +202,8 @@
 			isa = PBXGroup;
 			children = (
 				A1000008233456780000004 /* AppTheme.swift */,
+				A10001000000000000000010 /* GlassMorphismModifiers.swift */,
+				A10001000000000000000011 /* StaggeredAnimation.swift */,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -159,8 +234,41 @@
 				B1000006233456780000003 /* WatchOutfitView.swift */,
 				B1000008233456780000004 /* WatchViewModel.swift */,
 				B100000A233456780000005 /* Assets.xcassets */,
+				B10001000000000000000001 /* WatchConnectivityManager.swift */,
+				B10001000000000000000002 /* WatchSettingsView.swift */,
 			);
 			path = RunWearWatch;
+			sourceTree = "<group>";
+		};
+		A10003000000000000000001 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				A10001000000000000000013 /* ToggleableGenderSelector.swift */,
+				A10001000000000000000014 /* WeatherPill.swift */,
+				A10001000000000000000015 /* WeatherPillsRow.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		A10003000000000000000002 /* Modals */ = {
+			isa = PBXGroup;
+			children = (
+				A10001000000000000000016 /* DatePickerSheet.swift */,
+				A10001000000000000000017 /* LocationPickerSheet.swift */,
+				A10001000000000000000018 /* SettingsModal.swift */,
+				A10001000000000000000019 /* ShopModal.swift */,
+				A10001000000000000000020 /* TimePickerSheet.swift */,
+				A10001000000000000000021 /* WeatherDetailSheet.swift */,
+			);
+			path = Modals;
+			sourceTree = "<group>";
+		};
+		A10003000000000000000003 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				A10001000000000000000022 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -272,6 +380,28 @@
 				A1000013233456780000010 /* WeatherViewModel.swift in Sources */,
 				A1000015233456780000011 /* WeatherOutfitView.swift in Sources */,
 				A1000017233456780000012 /* SupportingViews.swift in Sources */,
+				A10002000000000000000001 /* ComfortLevel.swift in Sources */,
+				A10002000000000000000002 /* GenderPreference.swift in Sources */,
+				A10002000000000000000003 /* HeroImageModels.swift in Sources */,
+				A10002000000000000000004 /* TemperatureUnit.swift in Sources */,
+				A10002000000000000000005 /* ClothingThumbnailService.swift in Sources */,
+				A10002000000000000000006 /* FallbackImageProvider.swift in Sources */,
+				A10002000000000000000007 /* HeroImageService.swift in Sources */,
+				A10002000000000000000008 /* SupabaseClient.swift in Sources */,
+				A10002000000000000000009 /* WatchConnectivityManager.swift in Sources */,
+				A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */,
+				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
+				A10002000000000000000012 /* HeroImageView.swift in Sources */,
+				A10002000000000000000013 /* ToggleableGenderSelector.swift in Sources */,
+				A10002000000000000000014 /* WeatherPill.swift in Sources */,
+				A10002000000000000000015 /* WeatherPillsRow.swift in Sources */,
+				A10002000000000000000016 /* DatePickerSheet.swift in Sources */,
+				A10002000000000000000017 /* LocationPickerSheet.swift in Sources */,
+				A10002000000000000000018 /* SettingsModal.swift in Sources */,
+				A10002000000000000000019 /* ShopModal.swift in Sources */,
+				A10002000000000000000020 /* TimePickerSheet.swift in Sources */,
+				A10002000000000000000021 /* WeatherDetailSheet.swift in Sources */,
+				A10002000000000000000022 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -288,6 +418,15 @@
 				B100000D233456780000008 /* Outfit.swift in Sources */,
 				B100000E233456780000009 /* WeatherService.swift in Sources */,
 				B100000F233456780000010 /* OutfitRecommendationService.swift in Sources */,
+				B10002000000000000000001 /* WatchConnectivityManager.swift in Sources */,
+				B10002000000000000000002 /* WatchSettingsView.swift in Sources */,
+				B10002000000000000000101 /* GenderPreference.swift in Sources */,
+				B10002000000000000000102 /* ComfortLevel.swift in Sources */,
+				B10002000000000000000103 /* TemperatureUnit.swift in Sources */,
+				B10002000000000000000104 /* HeroImageModels.swift in Sources */,
+				B10002000000000000000105 /* HeroImageService.swift in Sources */,
+				B10002000000000000000106 /* FallbackImageProvider.swift in Sources */,
+				B10002000000000000000107 /* SupabaseClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

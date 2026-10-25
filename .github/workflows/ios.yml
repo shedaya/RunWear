@@ -46,10 +46,30 @@ jobs:
             exit 1
           fi
 
+      - name: Build watch app (simulator, unsigned)
+        # The watch target is a separate product (not embedded in the iOS
+        # app target), so it gets its own scheme and build step here.
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project RunWear-iOS/RunWear.xcodeproj \
+            -scheme RunWearWatch \
+            -configuration Debug \
+            -destination 'generic/platform=watchOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee xcodebuild-watch.log | grep -E "error:|warning:|BUILD" || true
+          if ! tail -5 xcodebuild-watch.log | grep -q "BUILD SUCCEEDED"; then
+            echo "=================== xcodebuild-watch.log tail (diagnostics) ==================="
+            tail -220 xcodebuild-watch.log
+            exit 1
+          fi
+
       - name: Upload full build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-log
-          path: xcodebuild.log
+          path: |
+            xcodebuild.log
+            xcodebuild-watch.log
           if-no-files-found: ignore

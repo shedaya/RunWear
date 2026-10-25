@@ -729,7 +729,7 @@ struct TipsCard: View {
     let viewModel = WeatherViewModel()
     let locationService = LocationService()
 
-    return WeatherOutfitView(
+    WeatherOutfitView(
         viewModel: viewModel,
         locationService: locationService,
         weather: WeatherData(
