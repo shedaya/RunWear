@@ -49,6 +49,9 @@ jobs:
       - name: Build watch app (simulator, unsigned)
         # The watch target is a separate product (not embedded in the iOS
         # app target), so it gets its own scheme and build step here.
+        # if: always() — the watch verdict must land even when the app
+        # build above failed, so one run always yields both verdicts.
+        if: always()
         run: |
           set -o pipefail
           xcodebuild \
@@ -64,8 +67,10 @@ jobs:
             exit 1
           fi
 
-      - name: Upload full build log on failure
-        if: failure()
+      - name: Upload full build logs
+        # always() so the watch log is captured even when the watch step
+        # ran (and possibly failed) after an app-step failure.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: xcodebuild-log

@@ -298,7 +298,7 @@ struct WatchClothingRow: View {
         condition: weather.currentWeather.condition
     )
 
-    return WatchOutfitView(
+    WatchOutfitView(
         viewModel: viewModel,
         weather: weather,
         recommendation: recommendation

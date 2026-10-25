@@ -11,7 +11,13 @@ struct WeatherData: Codable {
         case currentWeather = "current_weather"
         case hourly
     }
+}
 
+// The custom Decodable init lives in this extension on purpose: an
+// initializer written in the main declaration suppresses the synthesized
+// memberwise initializer, which the #Preview fixtures (app + watch) rely on
+// to construct WeatherData directly. Do not move it back into the struct.
+extension WeatherData {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         latitude = try container.decode(Double.self, forKey: .latitude)
