@@ -253,7 +253,7 @@ final class OutfitRulesSweepTest: XCTestCase {
                 let s = Scenario(feels: feels, wind: wind, cond: cond, comfort: comfort, humidity: humidity, env: env)
                 map[s] = Self.recOf(engine: Self.runEngine(s))
             } }
-        } } }
+        } } } }
         return map
     }()
 
