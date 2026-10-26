@@ -16,7 +16,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.runwear.app"
-    compileSdk = 35
+    compileSdk = 36
 
     signingConfigs {
         // Pinned debug keystore (~/workspace/.android-debug, survives VM replacements).
@@ -46,7 +46,7 @@ android {
     defaultConfig {
         applicationId = "com.runwear.wear"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 5
         versionName = "1.1.1"
 
