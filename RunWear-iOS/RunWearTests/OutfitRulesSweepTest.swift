@@ -248,10 +248,10 @@ final class OutfitRulesSweepTest: XCTestCase {
     static let grid: [Scenario: Rec] = {
         var map: [Scenario: Rec] = [:]
         map.reserveCapacity(210_000)
-        for feels in Self.feelsAxis { for wind in Self.windsAxis { for cond in Self.condsAxis {
-            for comfort in Self.comfortsAxis { for humidity in Self.humiditiesAxis { for env in Self.envsAxis {
+        for feels in OutfitRulesSweepTest.feelsAxis { for wind in OutfitRulesSweepTest.windsAxis { for cond in OutfitRulesSweepTest.condsAxis {
+            for comfort in OutfitRulesSweepTest.comfortsAxis { for humidity in OutfitRulesSweepTest.humiditiesAxis { for env in OutfitRulesSweepTest.envsAxis {
                 let s = Scenario(feels: feels, wind: wind, cond: cond, comfort: comfort, humidity: humidity, env: env)
-                map[s] = Self.recOf(engine: Self.runEngine(s))
+                map[s] = OutfitRulesSweepTest.recOf(engine: OutfitRulesSweepTest.runEngine(s))
             } }
         } } } }
         return map
