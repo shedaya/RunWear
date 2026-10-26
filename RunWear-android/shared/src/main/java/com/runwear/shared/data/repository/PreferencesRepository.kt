@@ -7,6 +7,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
@@ -18,7 +20,10 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "runwear_preferences")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "runwear_preferences",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
+)
 
 data class UserPreferences(
     val temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,

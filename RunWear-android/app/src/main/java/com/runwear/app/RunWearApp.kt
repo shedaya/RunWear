@@ -34,7 +34,9 @@ class RunWearApp : Application() {
 
         // Widget recovery backstop (spec §B.3.3): periodic refresh with
         // backoff so a failed widget load heals itself. KEEP = idempotent.
-        WidgetRefreshScheduler.schedule(this)
+        // Scheduling the backstop must never take the app down with it:
+        // WorkManager.getInstance throws if initialization was disturbed.
+        runCatching { WidgetRefreshScheduler.schedule(this) }
 
         appScope.launch {
             // One session per process start (rating-moment suppression needs it).
