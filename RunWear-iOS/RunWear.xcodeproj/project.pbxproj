@@ -74,7 +74,32 @@
 		C10002000000000000000005 /* ComfortLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000001 /* ComfortLevel.swift */; };
 		C10002000000000000000006 /* GenderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000002 /* GenderPreference.swift */; };
 		C10002000000000000000007 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
+		D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B1000000233456780000000 /* RunWear Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D10000FF233456780000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000F8233456780000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B10000FE233456780000000;
+			remoteInfo = "RunWear Watch";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D10000FC233456780000001 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A1000000233456780000000 /* RunWear.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RunWear.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -312,10 +337,12 @@
 				A10000FC233456780000000 /* Sources */,
 				A10000FD233456780000000 /* Frameworks */,
 				A10000FE233456790000000 /* Resources */,
+				D10000FC233456780000001 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D1000100233456780000001 /* PBXTargetDependency */,
 			);
 			name = RunWear;
 			productName = RunWear;
@@ -498,6 +525,14 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		D1000100233456780000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000FE233456780000000 /* RunWear Watch */;
+			targetProxy = D10000FF233456780000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		A1000105233456780000000 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -621,9 +656,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q3FS685XN8;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RunWear/Info.plist;
@@ -641,6 +677,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.runwear.app;
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear App Store";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -656,9 +693,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q3FS685XN8;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RunWear/Info.plist;
@@ -676,6 +714,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.runwear.app;
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear App Store";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -691,9 +730,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q3FS685XN8;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "RunWear Watch";
@@ -706,6 +746,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.runwear.app.watchkitapp;
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear Watch App Store";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -722,9 +763,10 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = Q3FS685XN8;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "RunWear Watch";
@@ -737,6 +779,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.runwear.app.watchkitapp;
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear Watch App Store";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
