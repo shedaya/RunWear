@@ -18,6 +18,7 @@
 		A1000011233456780000009 /* OutfitRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012233456780000009 /* OutfitRecommendationService.swift */; };
 		A1000013233456780000010 /* WeatherViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014233456780000010 /* WeatherViewModel.swift */; };
 		A1000015233456780000011 /* WeatherOutfitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016233456780000011 /* WeatherOutfitView.swift */; };
+		A10003000000000000000001 /* DuoArrangement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10003000000000000000002 /* DuoArrangement.swift */; };
 		A1000017233456780000012 /* SupportingViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018233456780000012 /* SupportingViews.swift */; };
 		/* Watch App Build Files */
 		B1000001233456780000001 /* RunWearWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002233456780000001 /* RunWearWatchApp.swift */; };
@@ -88,6 +89,7 @@
 		A1000012233456780000009 /* OutfitRecommendationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitRecommendationService.swift; sourceTree = "<group>"; };
 		A1000014233456780000010 /* WeatherViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherViewModel.swift; sourceTree = "<group>"; };
 		A1000016233456780000011 /* WeatherOutfitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherOutfitView.swift; sourceTree = "<group>"; };
+		A10003000000000000000002 /* DuoArrangement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoArrangement.swift; sourceTree = "<group>"; };
 		A1000018233456780000012 /* SupportingViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportingViews.swift; sourceTree = "<group>"; };
 		/* Watch App File References */
 		B1000000233456780000000 /* RunWear Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RunWear Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -184,6 +186,7 @@
 			children = (
 				A1000004233456780000002 /* ContentView.swift */,
 				A1000016233456780000011 /* WeatherOutfitView.swift */,
+				A10003000000000000000002 /* DuoArrangement.swift */,
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
 				A10003000000000000000001 /* Components */,
@@ -427,6 +430,7 @@
 				A1000011233456780000009 /* OutfitRecommendationService.swift in Sources */,
 				A1000013233456780000010 /* WeatherViewModel.swift in Sources */,
 				A1000015233456780000011 /* WeatherOutfitView.swift in Sources */,
+				A10003000000000000000001 /* DuoArrangement.swift in Sources */,
 				A1000017233456780000012 /* SupportingViews.swift in Sources */,
 				A10002000000000000000001 /* ComfortLevel.swift in Sources */,
 				A10002000000000000000002 /* GenderPreference.swift in Sources */,
@@ -629,7 +633,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -664,7 +668,7 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

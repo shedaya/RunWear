@@ -29,30 +29,107 @@ enum WeatherDetailType {
     }
 }
 
+/// The five weather metrics the detail view tabs between.
+enum WeatherMetricKind: String, CaseIterable, Hashable {
+    case condition, wind, humidity, precipitation, uvIndex
+
+    var shortTitle: String {
+        switch self {
+        case .condition: return "Condition"
+        case .wind: return "Wind"
+        case .humidity: return "Humidity"
+        case .precipitation: return "Rain"
+        case .uvIndex: return "UV"
+        }
+    }
+}
+
+extension WeatherDetailType {
+    var kind: WeatherMetricKind {
+        switch self {
+        case .condition: return .condition
+        case .wind: return .wind
+        case .humidity: return .humidity
+        case .precipitation: return .precipitation
+        case .uvIndex: return .uvIndex
+        }
+    }
+
+    /// One-line value for list rows ("Clear", "12 mph", "50%"...).
+    var summaryValue: String {
+        switch self {
+        case .condition(let condition): return condition.rawValue
+        case .wind(let speed, _, _): return "\(Int(round(speed))) mph"
+        case .humidity(let percentage): return "\(percentage)%"
+        case .precipitation(let percentage): return "\(percentage)%"
+        case .uvIndex(let value): return String(format: "%.1f", value)
+        }
+    }
+}
+
 struct WeatherDetailSheet: View {
-    let detailType: WeatherDetailType
+    /// The metric the sheet was opened on; the live selection is
+    /// state the picker and the sidebar share.
+    let initialDetail: WeatherDetailType
+    /// All five metrics, for the segmented picker / sidebar.
+    let allDetails: [WeatherDetailType]
+    /// Context lines for the split view's sidebar (location, date,
+    /// temperature, bracket) — where these numbers belong.
+    let contextLines: [String]
     @Binding var isPresented: Bool
 
-    @State private var dragOffset: CGFloat = 0
-    private let dismissThreshold: CGFloat = 100
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var selectedKind: WeatherMetricKind
+    @State private var showMetricInspector = false
 
+    init(
+        detailType: WeatherDetailType,
+        allDetails: [WeatherDetailType],
+        contextLines: [String],
+        isPresented: Binding<Bool>
+    ) {
+        self.initialDetail = detailType
+        self.allDetails = allDetails
+        self.contextLines = contextLines
+        self._isPresented = isPresented
+        self._selectedKind = State(initialValue: detailType.kind)
+    }
+
+    /// The metric all the content below renders — the existing
+    /// content builders switch on this, unchanged.
+    private var detailType: WeatherDetailType {
+        allDetails.first { $0.kind == selectedKind } ?? initialDetail
+    }
+
+    // Presented as a real .sheet (design record §5.2). At regular
+    // width the sheet's content is a NavigationSplitView — context
+    // sidebar, the selected hour's metric detail in the center,
+    // and a metric inspector carrying the segmented picker. At
+    // compact/medium sizes it is the picker over the same content.
     var body: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
+        Group {
+            if horizontalSizeClass == .regular {
+                splitLayout
+            } else {
+                pickerLayout
+            }
+        }
+        .background(AppTheme.darkBackground.ignoresSafeArea())
+    }
+
+    private var pickerLayout: some View {
+        VStack(spacing: 20) {
+            Picker("", selection: $selectedKind) {
+                ForEach(WeatherMetricKind.allCases, id: \.self) { kind in
+                    Text(kind.shortTitle).tag(kind)
                 }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
 
-            // Sheet content
-            VStack(spacing: 0) {
-                Spacer()
-
+            ScrollView {
                 VStack(spacing: 20) {
-                    // Drag handle
-                    dragHandle
-
                     // Icon and title
                     headerSection
 
@@ -65,25 +142,104 @@ struct WeatherDetailSheet: View {
                     Spacer().frame(height: 16)
                 }
                 .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.modalCornerRadius)
-                        .fill(AppTheme.darkBackground)
-                )
-                .offset(y: dragOffset)
-                .gesture(dragGesture)
             }
-            .ignoresSafeArea(edges: .bottom)
         }
-        .transition(.opacity)
     }
 
-    // MARK: - Drag Handle
+    /// List selection is optional-typed; the picker wants the
+    /// plain kind. One state, two bindings.
+    private var listSelection: Binding<WeatherMetricKind?> {
+        Binding(
+            get: { selectedKind },
+            set: { kind in
+                if let kind { selectedKind = kind }
+            }
+        )
+    }
 
-    private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.white.opacity(0.3))
-            .frame(width: 40, height: 5)
-            .padding(.top, 8)
+    private var splitLayout: some View {
+        NavigationSplitView {
+            List(selection: listSelection) {
+                Section {
+                    ForEach(contextLines, id: \.self) { line in
+                        Text(line)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                } header: {
+                    Text("Context")
+                }
+                Section {
+                    ForEach(allDetails, id: \.kind) { detail in
+                        HStack(spacing: 10) {
+                            Image(systemName: detail.icon)
+                                .foregroundColor(.white.opacity(0.7))
+                            Text(detail.title)
+                                .font(.system(size: 15))
+                                .foregroundColor(.white)
+                            Spacer()
+                            Text(detail.summaryValue)
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                        .tag(detail.kind)
+                    }
+                } header: {
+                    Text("Metrics")
+                }
+            }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Weather Detail")
+        } detail: {
+            NavigationStack {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        headerSection
+                        detailContent
+                        Spacer().frame(height: 16)
+                    }
+                    .padding(24)
+                }
+                .navigationTitle(detailType.title)
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            showMetricInspector.toggle()
+                        } label: {
+                            Label("Metric", systemImage: "sidebar.right")
+                        }
+                    }
+                }
+                .inspector(isPresented: $showMetricInspector) {
+                    metricInspector
+                }
+            }
+        }
+        .navigationSplitViewStyle(.prominentDetail)
+    }
+
+    /// The metric inspector: the native segmented Picker switches
+    /// the metric, and the running tip for the selection sits
+    /// beneath it. An inspector gets no bar of its own — it lives
+    /// inside the detail's container.
+    private var metricInspector: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Picker("", selection: $selectedKind) {
+                    ForEach(WeatherMetricKind.allCases, id: \.self) { kind in
+                        Text(kind.shortTitle).tag(kind)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                tipsSection
+            }
+            .padding(20)
+        }
+        .background(AppTheme.darkBackground.ignoresSafeArea())
+        .navigationTitle(detailType.title)
+        .inspectorColumnWidth(min: 260, ideal: 320, max: 380)
     }
 
     // MARK: - Header
@@ -347,25 +503,6 @@ struct WeatherDetailSheet: View {
         }
     }
 
-    // MARK: - Gestures
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if value.translation.height > 0 {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > dismissThreshold {
-                    dismiss()
-                } else {
-                    withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
 
     private func dismiss() {
         withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
@@ -380,6 +517,8 @@ struct WeatherDetailSheet: View {
     VStack {
         WeatherDetailSheet(
             detailType: .uvIndex(value: 7.5),
+            allDetails: [.uvIndex(value: 7.5)],
+            contextLines: ["Preview"],
             isPresented: .constant(true)
         )
     }

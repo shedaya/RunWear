@@ -4,62 +4,31 @@ struct DatePickerSheet: View {
     @Binding var selectedDate: Date
     @Binding var isPresented: Bool
 
-    @State private var dragOffset: CGFloat = 0
-    private let dismissThreshold: CGFloat = 100
 
     private let calendar = Calendar.current
     private var availableDates: [Date] {
         (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: Date())) }
     }
 
+    // Presented as a real .sheet (design record §5.2): the system
+    // owns the backdrop, drag handle, and dismissal.
     var body: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
-                }
+        VStack(spacing: 20) {
+            // Title
+            Text("Select Date")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
 
-            // Sheet content
-            VStack(spacing: 0) {
-                Spacer()
+            // Date grid
+            dateGrid
 
-                VStack(spacing: 20) {
-                    // Drag handle
-                    dragHandle
-
-                    // Title
-                    Text("Select Date")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-
-                    // Date grid
-                    dateGrid
-
-                    Spacer().frame(height: 16)
-                }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.modalCornerRadius)
-                        .fill(AppTheme.darkBackground)
-                )
-                .offset(y: dragOffset)
-                .gesture(dragGesture)
-            }
-            .ignoresSafeArea(edges: .bottom)
+            Spacer().frame(height: 16)
         }
-        .transition(.opacity)
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.darkBackground.ignoresSafeArea())
     }
 
-    // MARK: - Drag Handle
-
-    private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.white.opacity(0.3))
-            .frame(width: 40, height: 5)
-            .padding(.top, 8)
-    }
 
     // MARK: - Date Grid
 
@@ -82,25 +51,6 @@ struct DatePickerSheet: View {
         }
     }
 
-    // MARK: - Gestures
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if value.translation.height > 0 {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > dismissThreshold {
-                    dismiss()
-                } else {
-                    withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
 
     private func dismiss() {
         withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
