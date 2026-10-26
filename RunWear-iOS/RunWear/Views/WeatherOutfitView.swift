@@ -1,18 +1,5 @@
 import SwiftUI
 
-extension View {
-    /// navigationSubtitle is iOS 18; the app floor is 17, so the
-    /// date subtitle applies where the OS offers it and the title
-    /// stands alone before that.
-    @ViewBuilder func navSubtitle(_ text: String) -> some View {
-        if #available(iOS 18, *) {
-            self.navigationSubtitle(text)
-        } else {
-            self
-        }
-    }
-}
-
 struct WeatherOutfitView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject var viewModel: WeatherViewModel
@@ -59,7 +46,13 @@ struct WeatherOutfitView: View {
                 }
             }
             .navigationTitle(viewModel.locationName)
-            .navSubtitle(navDateString)
+            // The design record's date-as-subtitle needs
+            // navigationSubtitle, which the current iOS SDK marks
+            // unavailable on iPhone (it is a newer-platform API
+            // there) — CI 40394130506 is the evidence. The date
+            // stays visible on the hero's date pill, the title
+            // menu, and the weather detail's context until the
+            // build SDK offers the subtitle on iOS.
             .navigationBarTitleDisplayMode(.inline)
             .toolbarTitleMenu {
                 Button {
