@@ -3600,6 +3600,8 @@ ENVIRONMENT: ${getEnvironmentDesc(weather, tempBracket)}
 
 STYLE: Professional athletic action photography. Full body mid-stride, natural running gait, dynamic motion. Sharp focus on runner, soft bokeh background. Authentic and aspirational, like a Nike campaign.
 
+ANATOMY & QUALITY: anatomically correct human body with natural proportions; arms bent at the elbows and swinging naturally beside the torso, hands relaxed at the runner's sides — never reaching across the back or touching the shoulders; each hand with five correct fingers; legs in a natural mid-stride gait with knees and feet pointing in the direction of travel; if the runner is seen from behind, arms, legs and hands must remain anatomically coherent from the back view. Photorealistic, shot on a full-frame camera. Avoid: distorted or merged limbs, extra fingers, hands or limbs, warped joints, backwards-bending arms.
+
 MOOD: ${getMoodDesc(tempBracket)}`;
         }
 

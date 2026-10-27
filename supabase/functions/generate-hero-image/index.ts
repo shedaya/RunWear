@@ -11,6 +11,26 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
+// Prompt hardening + review gate (2026-10-27), mirrors HeroPoolPolicy.kt.
+// Every prompt is hardened HERE, server-side, so jobs queued by older
+// clients (whose buildPrompt predates the anatomy block) are covered too.
+// FLUX has no negative-prompt channel, so guidance is phrased as positive
+// constraints plus one explicit Avoid clause.
+const QUALITY_MARKER = 'ANATOMY & QUALITY:'
+const QUALITY_SUFFIX =
+  ` ${QUALITY_MARKER} anatomically correct human body with natural proportions; ` +
+  `arms bent at the elbows and swinging naturally beside the torso, hands relaxed ` +
+  `at the runner's sides — never reaching across the back or touching the shoulders; ` +
+  `each hand with five correct fingers; legs in a natural mid-stride gait with knees ` +
+  `and feet pointing in the direction of travel; if the runner is seen from behind, ` +
+  `arms, legs and hands must remain anatomically coherent from the back view. ` +
+  `Photorealistic, shot on a full-frame camera. Avoid: distorted or merged limbs, ` +
+  `extra fingers, hands or limbs, warped joints, backwards-bending arms.`
+
+function ensureQualitySuffix(prompt: string): string {
+  return prompt.includes(QUALITY_MARKER) ? prompt : prompt + QUALITY_SUFFIX
+}
+
 serve(async (req) => {
   try {
     // Handle trigger to process queued jobs
@@ -65,6 +85,8 @@ async function processQueuedJobs() {
       })
       .eq('id', job.id)
 
+    const prompt = ensureQualitySuffix(job.prompt)
+
     // Call Replicate API (synchronous mode - no webhook)
     const response = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
@@ -75,7 +97,7 @@ async function processQueuedJobs() {
       body: JSON.stringify({
         version: "5599ed30703defd1d160a25a63321b4dec97101d98b4674bcc56e41f62f35637", // flux-schnell
         input: {
-          prompt: job.prompt,
+          prompt: prompt,
           num_outputs: 1,
           aspect_ratio: "2:3",
           output_format: "png",
@@ -140,14 +162,33 @@ async function processQueuedJobs() {
       const publicUrl = publicUrlData.publicUrl
       console.log(`[generate-hero-image] Uploaded to: ${publicUrl}`)
 
-      // Insert into generated_images with full combination_id (including variant)
-      const { error: insertError } = await supabase
+      // Insert into generated_images with full combination_id (including
+      // variant). Review gate: new generations land as 'pending' and are
+      // NOT served until a human approves them (clients only serve
+      // 'approved'/legacy rows). If the review-gate migration has not been
+      // applied yet (column missing: PG 42703 / PostgREST PGRST204), fall
+      // back to the legacy insert so generation never breaks — the row is
+      // then immediately servable, exactly as before the gate existed.
+      let { error: insertError } = await supabase
         .from('generated_images')
         .insert({
           combination_id: job.combination_id,
           image_url: publicUrl,
-          prompt: job.prompt
+          prompt: prompt,
+          review_status: 'pending'
         })
+
+      if (insertError && (insertError.code === '42703' || insertError.code === 'PGRST204')) {
+        console.warn('[generate-hero-image] review_status column missing — legacy insert (apply the 2026-10-27 migration)')
+        const retry = await supabase
+          .from('generated_images')
+          .insert({
+            combination_id: job.combination_id,
+            image_url: publicUrl,
+            prompt: prompt
+          })
+        insertError = retry.error
+      }
 
       // Skip duplicate key errors (23505) - image already exists
       if (insertError && insertError.code !== '23505') {
