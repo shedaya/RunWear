@@ -9,8 +9,8 @@ flux-schnell) fulfills `generation_jobs`, but nothing invoked it after
 Mar 2026 — no cron, no CI, only manual scripts — so the pool stopped
 growing and 3 jobs sat QUEUED for ~8 months. This revival adds a batch
 drain to the function, schedules it every 30 minutes, caps daily spend,
-and keeps every new image behind the review gate until a human approves
-it.
+and serves every new image immediately (auto-replenishment — no review
+queue; `review_status` stays available as a retraction lever).
 
 **Parameters chosen (all in code, all one-line changes):**
 
@@ -32,9 +32,10 @@ Dashboard → SQL Editor → run
 
 This adds `generated_images.review_status`. Until it exists, the edge
 function falls back to legacy inserts (new images immediately servable,
-no gate) — so the gate migration must land before the revival is
-considered "on". Existing rows default to `approved`; the current pool
-serves unchanged.
+no status recorded) — so this migration must land before the revival is
+considered "on": it is what makes retraction (and the v5 rejection at the
+bottom of the file) possible. Existing rows default to `approved`; the
+current pool serves unchanged.
 
 ## Step 1 — Verify the Replicate secret exists
 
