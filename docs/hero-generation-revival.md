@@ -145,7 +145,7 @@ where combination_id in (
 );
 -- Expect: all COMPLETED.
 
--- Their images exist and are BEHIND THE GATE (not yet served):
+-- Their images exist and are SERVED immediately (auto-replenishment):
 select combination_id, review_status, image_url
 from public.generated_images
 where combination_id in (
@@ -153,7 +153,7 @@ where combination_id in (
   'FEMALE_CLEAR_COLD_DUSK_v936',
   'MALE_RAIN_COLD_NIGHT_v1'
 );
--- Expect: 3 rows, review_status = 'pending'.
+-- Expect: 3 rows, review_status = 'approved'.
 ```
 
 After that, confirm the schedule is armed:
@@ -165,21 +165,24 @@ select jobid, jobname, schedule, active from cron.job;
 
 ---
 
-## Working the pending-review queue
+## Spot-checks and retraction (no review queue)
 
-New generations are **never served** until approved — clients only serve
-`approved` rows (and legacy rows with no status). Review is Tank's job.
+Auto-replenishment (Sol's call, 2026-10-27): new generations are inserted
+as `approved` and **served immediately** — nothing waits for review.
+`review_status` remains as a retraction lever: setting a row to `rejected`
+pulls it from rotation (clients only serve `approved` rows and legacy rows
+with no status).
 
-**List what's waiting:**
+**List recent generations for a spot-check:**
 
 ```sql
 select id, combination_id, image_url, created_at
 from public.generated_images
-where review_status = 'pending'
-order by created_at;
+order by created_at desc
+limit 50;
 ```
 
-**Judge each image against the anatomy criteria** (the same rules the
+**Judge an image against the anatomy criteria** (the same rules the
 generation prompt now enforces). Open the `image_url` and check:
 
 - Natural human proportions; photorealistic.
@@ -204,8 +207,8 @@ set review_status = 'rejected'
 where id in ('<id>');
 ```
 
-Approved images join the servable rotation on the client's next pool
-fetch; rejected ones are never served (the row stays for audit).
+New images are in the servable rotation from the moment they are
+generated; setting a row to `rejected` pulls it (the row stays for audit).
 
 ## Operations
 

@@ -277,8 +277,8 @@ type ProcessJobResult = {
 }
 
 // Process a single generation job end to end: claim it, generate via
-// Replicate, store the image, insert it into the pool as 'pending'
-// (review gate), and mark the job COMPLETED — or mark it FAILED and
+// Replicate, store the image, insert it into the pool as 'approved'
+// (auto-replenishment), and mark the job COMPLETED — or mark it FAILED and
 // report the error. Never throws; the caller decides how to present the
 // outcome. With guardedClaim, the claim only lands if the job is still
 // QUEUED, so concurrent drains cannot double-process it.
@@ -399,19 +399,21 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
     console.log(`[generate-hero-image] Uploaded to: ${publicUrl}`)
 
     // Insert into generated_images with full combination_id (including
-    // variant). Review gate: new generations land as 'pending' and are
-    // NOT served until a human approves them (clients only serve
-    // 'approved'/legacy rows). If the review-gate migration has not been
-    // applied yet (column missing: PG 42703 / PostgREST PGRST204), fall
-    // back to the legacy insert so generation never breaks — the row is
-    // then immediately servable, exactly as before the gate existed.
+    // variant). Auto-replenishment (Sol's call, 2026-10-27): new generations
+    // are inserted as 'approved' and served immediately — there is no
+    // pending-review queue. review_status remains as a retraction lever:
+    // setting a row to 'rejected' pulls it from rotation (clients only
+    // serve 'approved'/legacy rows). If the review-gate migration has not
+    // been applied yet (column missing: PG 42703 / PostgREST PGRST204),
+    // fall back to the legacy insert so generation never breaks — the row
+    // is then immediately servable, exactly as before the column existed.
     let { error: insertError } = await supabase
       .from('generated_images')
       .insert({
         combination_id: job.combination_id,
         image_url: publicUrl,
         prompt: prompt,
-        review_status: 'pending'
+        review_status: 'approved'
       })
 
     if (insertError && (insertError.code === '42703' || insertError.code === 'PGRST204')) {

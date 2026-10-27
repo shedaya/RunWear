@@ -4,9 +4,11 @@
 -- pool in generated_images. That is how an image with a visible anatomy
 -- artifact (a back-view runner whose arm bends across his back and
 -- clutches his own shoulder blade, MALE_CLEAR_MILD_DUSK_v5) could be
--- served to users on repeat. From this migration on, the generate-hero-
--- image edge function inserts new generations as 'pending'; a human
--- approves them before any client will serve them.
+-- served to users on repeat. From this migration on, every pool row
+-- carries a review_status. Per Sol's auto-replenishment call
+-- (2026-10-27), the edge function inserts new generations as 'approved'
+-- so they serve immediately; 'rejected' is the retraction lever that
+-- pulls a bad image (like v5, below) out of rotation.
 --
 -- APPLY IN THE SUPABASE DASHBOARD (SQL editor) for project
 -- ebicqznlcjbqcukjfzcf — the repo carries no service-role credential.
@@ -37,14 +39,13 @@ create index if not exists generated_images_review_status_idx
     on public.generated_images (review_status);
 
 comment on column public.generated_images.review_status is
-    'Curation gate: approved = servable; pending = generated, awaiting human review; rejected = never served. Added 2026-10-27.';
+    'Pool status: approved = servable (new generations are inserted approved — auto-replenishment); pending = held, not served; rejected = retracted, never served. Added 2026-10-27.';
 
--- Review workflow (dashboard Table editor or SQL):
---   * See what awaits review:
+-- Retraction workflow (dashboard Table editor or SQL):
+--   * Spot-check recent generations:
 --       select id, combination_id, image_url, prompt
---       from public.generated_images where review_status = 'pending';
---   * Approve / reject:
---       update public.generated_images set review_status = 'approved' where id = '<id>';
+--       from public.generated_images order by created_at desc limit 50;
+--   * Pull a bad image from rotation:
 --       update public.generated_images set review_status = 'rejected' where id = '<id>';
 --
 -- Known-bad image from the 2026-10-27 audit — Sol may reject it with:
