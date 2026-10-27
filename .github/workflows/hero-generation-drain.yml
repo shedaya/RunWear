@@ -1,0 +1,46 @@
+name: Hero generation drain (fallback scheduler)
+
+# Fallback scheduler for the generate-hero-image edge function, for use
+# ONLY if pg_cron / pg_net cannot be enabled on the Supabase project
+# (see supabase/migrations/20261027130000_hero_generation_scheduler.sql).
+# Do NOT enable this while the pg_cron job is active — both firing would
+# just race for the same QUEUED jobs (the function's guarded claims keep
+# that safe, but there is no reason to run two schedulers).
+#
+# Disabled by default: the schedule below is commented out, so this
+# workflow only runs when triggered manually (workflow_dispatch).
+# To enable: uncomment the schedule block, and add the repository secret
+# SUPABASE_SERVICE_ROLE_KEY (the project's service-role key — treat it
+# like a password; it is never stored in this repo).
+
+on:
+  workflow_dispatch:
+    inputs:
+      drain:
+        description: 'Max queued jobs to process in this run'
+        required: false
+        default: '5'
+  # schedule:
+  #   - cron: '*/30 * * * *'
+
+jobs:
+  drain:
+    name: Drain hero image generation queue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger hero image drain
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DRAIN: ${{ inputs.drain || '5' }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "::error::SUPABASE_SERVICE_ROLE_KEY repository secret is not set."
+            exit 1
+          fi
+          curl -sS -X POST \
+            "https://ebicqznlcjbqcukjfzcf.supabase.co/functions/v1/generate-hero-image?drain=${DRAIN}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H 'Content-Type: application/json' \
+            -d '{}'
+          echo
