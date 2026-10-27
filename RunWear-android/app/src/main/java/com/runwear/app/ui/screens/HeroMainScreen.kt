@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.components.HeroSection
 import com.runwear.app.ui.components.HeroShimmerPlaceholder
 import com.runwear.app.ui.components.OutfitCard
@@ -107,6 +108,14 @@ fun HeroMainScreen(
     onItemTapped: (ClothingItem) -> Unit = {}
 ) {
     val context = LocalContext.current
+
+    // Safe-boot diagnostic (1.1.3): the home destination composable was
+    // entered — its body executed during composition. remember{} so the
+    // mark fires once per composition instance, not per recomposition.
+    remember {
+        StartupTrace.mark(context.applicationContext, "home-composable-entered")
+        Unit
+    }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }

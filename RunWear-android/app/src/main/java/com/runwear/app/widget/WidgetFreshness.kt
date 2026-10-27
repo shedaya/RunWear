@@ -72,6 +72,19 @@ object WidgetFreshness {
         }
     }
 
+    /**
+     * Small eyebrow (1.1.8): the data's save time is ALWAYS stated — a clock
+     * time while fresh, the age once stale — so "FOR NOW" never quietly
+     * presents an old record as live (findings §4.3).
+     */
+    fun smallEyebrow(savedAtLocal: LocalDateTime, savedAtEpochMs: Long, nowEpochMs: Long): String {
+        return if (isStale(savedAtEpochMs, nowEpochMs)) {
+            "FOR NOW · ${ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs))}"
+        } else {
+            "FOR NOW · ${savedAtLocal.format(TIME_FORMAT)}"
+        }
+    }
+
     /** True while a manual refresh is genuinely in flight (flag set recently). */
     fun isRefreshActive(flagSetAtEpochMs: Long?, nowEpochMs: Long): Boolean {
         if (flagSetAtEpochMs == null || flagSetAtEpochMs <= 0L) return false

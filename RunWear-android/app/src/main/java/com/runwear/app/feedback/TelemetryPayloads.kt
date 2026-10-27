@@ -77,8 +77,9 @@ object TelemetryPayloads {
      * crash file [CrashReporter] wrote at crash time; only the
      * allowlisted fields are carried over, capped at the schema's
      * lengths. The stored file's local bookkeeping fields
-     * (occurredAt, sdkInt, causeClass, appVersionCode, …) never
-     * reach the wire.
+     * (occurredAt, sdkInt, appVersionCode, …) never reach the wire as
+     * fields of their own; the causeClass/causeMessage bookkeeping
+     * values ride INSIDE the stackTrace text (see [stackTraceOf]).
      */
     fun crash(appVersion: String, installId: String, stored: JSONObject): JSONObject =
         envelope(TelemetryConfig.CRASH_SCHEMA, appVersion, installId).apply {
@@ -99,17 +100,47 @@ object TelemetryPayloads {
         }
     }
 
-    /** Header line (exception class, message, thread) followed by the stored frames. */
+    /**
+     * The wire stack trace. Since 1.1.3 the stored file carries
+     * "fullStackTrace" — the complete printStackTrace output with every
+     * "Caused by:" level — and that chain is what ships: a wrapped crash
+     * (e.g. "Unable to start activity") is undiagnosable from the top
+     * exception's frames alone, which is all the pre-1.1.3 shape sent.
+     * Stored files from older builds have no full chain, so they fall
+     * back to the original header + top-frames rendering.
+     *
+     * Belt-and-braces: the stored file also separates the immediate
+     * cause's class and message into bookkeeping fields; when present,
+     * they are appended as explicit lines so the root cause is named
+     * even if the chain above them was capped.
+     */
     private fun stackTraceOf(stored: JSONObject): String {
-        val frames = stored.optString("stackTrace")
-        val header = buildString {
-            append(stored.optString("exceptionClass").ifBlank { "Unknown exception" })
-            stored.optString("message").takeIf { it.isNotBlank() }
-                ?.let { append(": ").append(it) }
-            stored.optString("thread").takeIf { it.isNotBlank() }
-                ?.let { append(" (thread: ").append(it).append(")") }
+        val fullChain = stored.optString("fullStackTrace").trimEnd()
+        val base = if (fullChain.isNotBlank()) {
+            fullChain
+        } else {
+            val frames = stored.optString("stackTrace")
+            val header = buildString {
+                append(stored.optString("exceptionClass").ifBlank { "Unknown exception" })
+                stored.optString("message").takeIf { it.isNotBlank() }
+                    ?.let { append(": ").append(it) }
+                stored.optString("thread").takeIf { it.isNotBlank() }
+                    ?.let { append(" (thread: ").append(it).append(")") }
+            }
+            if (frames.isBlank()) header else "$header\n$frames"
         }
-        return if (frames.isBlank()) header else "$header\n$frames"
+        val causeClass = stored.optString("causeClass")
+        val causeMessage = stored.optString("causeMessage")
+        if (causeClass.isBlank() && causeMessage.isBlank()) return base
+        return buildString {
+            append(base)
+            if (causeClass.isNotBlank()) {
+                append("\n[stored causeClass: ").append(causeClass).append(']')
+            }
+            if (causeMessage.isNotBlank()) {
+                append("\n[stored causeMessage: ").append(causeMessage).append(']')
+            }
+        }
     }
 
     /** ISO-8601 local timestamp of the crash, from the stored epoch millis. */

@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.getTemperatureColor
@@ -113,6 +114,14 @@ fun HeroSection(
     // Haptic feedback
     val hapticFeedback = LocalHapticFeedback.current
     val context = LocalContext.current
+
+    // Safe-boot diagnostic (1.1.3): the outfit hero card composable was
+    // entered — its body executed during composition. remember{} so the
+    // mark fires once per composition instance, not per recomposition.
+    remember {
+        StartupTrace.mark(context.applicationContext, "hero-card-entered")
+        Unit
+    }
 
     // Animated temperature counter
     val actualTemp = weather?.effectiveTemperature?.roundToInt() ?: 0

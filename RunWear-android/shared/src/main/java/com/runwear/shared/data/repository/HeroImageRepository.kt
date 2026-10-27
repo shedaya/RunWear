@@ -35,14 +35,30 @@ import kotlin.random.Random
 @Singleton
 class HeroImageRepository @Inject constructor() {
 
-    private val supabase: SupabaseClient = createSupabaseClient(
-        supabaseUrl = SUPABASE_URL,
-        supabaseKey = SUPABASE_ANON_KEY
-    ) {
-        // v3.9: Ignore unknown fields from DB (style, served_count, rating, etc.)
-        defaultSerializer = KotlinXSerializer(Json { ignoreUnknownKeys = true })
-        install(Postgrest)
-        install(Storage)
+    /**
+     * 1.1.2 safe-boot change: the client is built LAZILY, on first actual
+     * use — constructing it eagerly in this constructor meant network
+     * machinery (Ktor engines, serializers) was created during app
+     * startup, inside the window where the 1.1.x crash loop dies.
+     * Construction is guarded: if it fails, [supabase] stays null and
+     * every use site falls back (bundled/Unsplash hero, no replenishment
+     * queueing) instead of taking the app down. Once construction
+     * succeeds, behavior is exactly as before.
+     */
+    private val supabase: SupabaseClient? by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        runCatching {
+            createSupabaseClient(
+                supabaseUrl = SUPABASE_URL,
+                supabaseKey = SUPABASE_ANON_KEY
+            ) {
+                // v3.9: Ignore unknown fields from DB (style, served_count, rating, etc.)
+                defaultSerializer = KotlinXSerializer(Json { ignoreUnknownKeys = true })
+                install(Postgrest)
+                install(Storage)
+            }
+        }.onFailure {
+            android.util.Log.w("HeroImage", "[Hero] Supabase client construction failed", it)
+        }.getOrNull()
     }
 
     /**
@@ -168,6 +184,8 @@ class HeroImageRepository @Inject constructor() {
      * | 5        | Opposite Gender + Clear + Temp   | MALE_CLEAR_COLD_%          |
      */
     private suspend fun getRandomImage(combination: OutfitCombination): ImageSearchResult {
+        // Lazy client (1.1.2): unavailable → the caller falls back.
+        val client = supabase ?: return ImageSearchResult(null, 0, false)
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
         val gender = combination.genderPreference.name
         val weather = heroWeather.name
@@ -197,7 +215,7 @@ class HeroImageRepository @Inject constructor() {
             try {
                 android.util.Log.d("HeroImage", "[Hero] Trying: $pattern")
 
-                val images = supabase.from("generated_images")
+                val images = client.from("generated_images")
                     .select {
                         filter {
                             like("combination_id", pattern)
@@ -236,13 +254,15 @@ class HeroImageRepository @Inject constructor() {
         combination: OutfitCombination,
         outfit: OutfitRecommendation
     ) {
+        // Lazy client (1.1.2): unavailable → nothing to queue into.
+        val client = supabase ?: return
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
         val baseCombo = "${combination.genderPreference.name}_${heroWeather.name}_${combination.tempBracket.name}_${combination.timeOfDay.name}"
 
         try {
             // Find highest existing variant number in generation_jobs
             var maxVariant = 0
-            val existingJobs = supabase.from("generation_jobs")
+            val existingJobs = client.from("generation_jobs")
                 .select {
                     filter {
                         like("combination_id", "${baseCombo}_%")
@@ -258,7 +278,7 @@ class HeroImageRepository @Inject constructor() {
             }
 
             // Also check generated_images for existing variants
-            val existingImages = supabase.from("generated_images")
+            val existingImages = client.from("generated_images")
                 .select {
                     filter {
                         like("combination_id", "${baseCombo}_%")
@@ -280,7 +300,7 @@ class HeroImageRepository @Inject constructor() {
 
             // Queue new generation (only send fields that exist in table)
             val prompt = buildPrompt(combination, outfit)
-            supabase.from("generation_jobs")
+            client.from("generation_jobs")
                 .insert(
                     GenerationJobInsert(
                         combinationId = combinationId,
@@ -404,7 +424,9 @@ class HeroImageRepository @Inject constructor() {
      * Get the public URL for a storage path.
      */
     private fun getPublicUrl(storagePath: String): String {
-        return supabase.storage.from("hero-images").publicUrl(storagePath)
+        // Lazy client (1.1.2): unavailable → no URL to hand out.
+        val client = supabase ?: return ""
+        return client.storage.from("hero-images").publicUrl(storagePath)
     }
 
     companion object {
