@@ -252,13 +252,18 @@ class WidgetLayoutTest {
                     val secondary = WidgetLayout.secondaryItems(outfit)
                     assertEquals(secondary.take(plan.chips.size), plan.chips)
                     // Representation: every secondary item is a chip, behind
-                    // the marker, or in the compact line. The one documented
-                    // exception: font scale 1.3 + a layered outfit with 3+
-                    // secondary items may shed the zone entirely — it sheds
-                    // last, after every other optional slot.
+                    // the marker, or in the compact line. The documented
+                    // exceptions shed the zone entirely — it sheds last,
+                    // after every other optional slot: font scale 1.3 + a
+                    // layered outfit with 3+ secondary items, and (since
+                    // 1.2.1 budgets the layer line at its wrapped count)
+                    // font scale 1.15+ when a layered outfit's own layer
+                    // line wraps to two lines with 3+ secondary items.
                     if (secondary.isNotEmpty() && kind != WidgetLayout.Kind.HORIZONTAL) {
                         val hasLayer = outfit.topMid != null || outfit.topOuter != null
-                        val documentedMaxStack = fontScale == 1.3f && hasLayer && secondary.size >= 3
+                        val documentedMaxStack = hasLayer && secondary.size >= 3 &&
+                            (fontScale == 1.3f ||
+                                (fontScale >= 1.15f && plan.layerLines >= 2))
                         assertTrue(
                             "$kind lost secondary representation at fs=$fontScale",
                             plan.secondaryMode != WidgetLayout.SecondaryMode.NONE || documentedMaxStack
@@ -331,6 +336,10 @@ class WidgetLayoutTest {
             WidgetLayout.Kind.MEDIUM_SQUARE, bare51Sun,
             fontScale = 1.0f, later = null, bucket = 180 to 180
         )
+        // The cap's chip plus the "+2 more" marker fits the 156 dp inner
+        // width ("Running Cap" is short), so the sun set stays in chips:
+        // one worn item visible, the other two counted — the 1.2.1
+        // marker carries the word "more" and the budget still holds it.
         assertEquals(WidgetLayout.SecondaryMode.CHIPS, plan.secondaryMode)
         assertEquals(listOf(ClothingItem.BASEBALL_CAP), plan.chips)
         assertEquals(2, plan.chipsHiddenCount)
@@ -370,12 +379,22 @@ class WidgetLayoutTest {
         }
         val large = planFor(WidgetLayout.Kind.LARGE, bare51, fontScale = 1.0f)
         assertTrue(large.showLaterToday)
-        // Large with the sun set: chips (2 shown + marker) outrank later-today.
+        // Large with the sun set: the cap stays a chip and both remaining
+        // items sit behind the "+2 more" marker — since 1.2.1 the marker
+        // carries the word "more" and is wider, so the chip budget
+        // trades the second chip for the count rather than leaving an
+        // item silently unrepresented.
         val largeSun = planFor(WidgetLayout.Kind.LARGE, bare51Sun, fontScale = 1.0f)
         assertEquals(WidgetLayout.SecondaryMode.CHIPS, largeSun.secondaryMode)
-        assertEquals(2, largeSun.chips.size)
-        assertEquals(1, largeSun.chipsHiddenCount)
+        assertEquals(listOf(ClothingItem.BASEBALL_CAP), largeSun.chips)
+        assertEquals(2, largeSun.chipsHiddenCount)
         assertTrue(largeSun.showOverflowMarker)
+        // But the guidance yields here: the sun set's names ("Running
+        // Shorts (5-7")") cannot sit beside the temperature column, so
+        // Large stacks — brand header + hero band + chips fill the
+        // 190 dp honestly, and later-today, first in the shed order,
+        // is what gives. Chips outrank it and survive, as documented.
+        assertFalse(largeSun.showLaterToday)
     }
 
     @Test
@@ -434,6 +453,128 @@ class WidgetLayoutTest {
         assertTrue(plan.secondaryLine!!.isNotEmpty())
         assertEquals(1, plan.footerLines.size)
         assertTrue(plan.footerLines.first().contains("Feels like 51°F"))
+    }
+
+    // ---- 1.2.1: hero temperature, guidance wrap, overflow count ---------------
+
+    /** Sol's field tile, Oct 28 2026: ~240×248 dp on the Fold — overcast, feels 42°F. */
+    private val solTileOutfit = OutfitRecommendation(
+        weather = weather(feelsLike = 42.0, code = WeatherCode.OVERCAST),
+        topBase = ClothingItem.LONG_SLEEVE_LIGHT,
+        bottom = ClothingItem.LIGHT_TIGHTS
+    )
+
+    private val solGuidance = "By 1 PM: drop the Light Long Sleeve · add the Light Jacket"
+
+    @Test
+    fun `sol tile - guidance is budgeted at two wrapped lines, never one clipped line`() {
+        val plan = planFor(
+            WidgetLayout.Kind.MEDIUM_SQUARE, solTileOutfit,
+            fontScale = 1.0f, later = solGuidance, bucket = 240 to 248
+        )
+        // At this width the BESIDE column cannot hold "Light Long
+        // Sleeve" whole beside the temperature column, so the plan
+        // stacks (full-width garment rows, temperature band below) —
+        // garment names never clip either.
+        assertEquals(WidgetLayout.TempArrangement.STACKED, plan.tempArrangement)
+        assertTrue(plan.fitsHeight)
+        assertTrue("guidance must survive at the field size", plan.showLaterToday)
+        // The defect: this text cannot fit one line at this width. The
+        // plan must budget the two lines it wraps to — a one-line budget
+        // is what rendered the mid-word clip on the 1.2.0 tile.
+        assertEquals(2, plan.laterTodayLines)
+        assertTrue(
+            WidgetLayout.textWidthDp(solGuidance, plan.laterSp, 1.0f) >
+                216f // inner width at the field bucket
+        )
+    }
+
+    @Test
+    fun `guidance never budgets one line for a two-line text at any square size`() {
+        for (kind in listOf(WidgetLayout.Kind.MEDIUM_SQUARE, WidgetLayout.Kind.LARGE)) {
+            for (bucket in listOf(160 to 160, 180 to 180, 240 to 248, 250 to 190, 300 to 200)) {
+                val plan = planFor(kind, solTileOutfit, fontScale = 1.0f, later = solGuidance, bucket = bucket)
+                if (plan.showLaterToday) {
+                    val (innerW, _) = innerFor(kind, bucket.first, bucket.second)
+                    val needs = WidgetLayout.wrappedLineEstimate(solGuidance, plan.laterSp, innerW, 1.0f)
+                    assertEquals(
+                        "$kind@$bucket budgeted ${plan.laterTodayLines} lines for a $needs-line text",
+                        needs, plan.laterTodayLines
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `temperature is a hero in the square compositions, support lines exclude the feels-like`() {
+        val medium = planFor(
+            WidgetLayout.Kind.MEDIUM_SQUARE, solTileOutfit,
+            fontScale = 1.0f, later = solGuidance, bucket = 240 to 248
+        )
+        // STACKED at this width (see the sol tile test): the hero
+        // number starts 4 sp under the BESIDE base.
+        assertEquals(WidgetLayout.Sizes.MEDIUM_TEMP - 4f, medium.tempSp)
+        assertTrue(medium.showTempLabel)
+        assertEquals(
+            listOf("Actual 45°F", "Wind 8 mph", "Overcast"),
+            medium.footerLines
+        )
+        val large = planFor(
+            WidgetLayout.Kind.LARGE, solTileOutfit,
+            fontScale = 1.0f, later = solGuidance, bucket = 300 to 200
+        )
+        assertEquals(WidgetLayout.Sizes.LARGE_TEMP, large.tempSp)
+        assertTrue(large.footerLines.none { it.contains("Feels like") })
+        // Below the beside threshold the hero bands under the outfit instead.
+        val narrow = planFor(
+            WidgetLayout.Kind.MEDIUM_SQUARE, solTileOutfit,
+            fontScale = 1.0f, later = null, bucket = 180 to 180
+        )
+        assertEquals(WidgetLayout.TempArrangement.STACKED, narrow.tempArrangement)
+        assertTrue(narrow.tempSp > 0f)
+    }
+
+    @Test
+    fun `deep winter - secondary overflow is a computed count of the actual recommendation`() {
+        val winter = OutfitRecommendation(
+            weather = weather(feelsLike = 8.0, code = WeatherCode.SNOW_SLIGHT),
+            topBase = ClothingItem.LONG_SLEEVE_THERMAL,
+            topMid = ClothingItem.QUARTER_ZIP,
+            topOuter = ClothingItem.INSULATED_JACKET,
+            bottom = ClothingItem.THERMAL_TIGHTS,
+            head = ClothingItem.THERMAL_BEANIE,
+            hands = ClothingItem.THERMAL_GLOVES,
+            accessories = listOf(ClothingItem.NECK_GAITER)
+        )
+        val plan = planFor(
+            WidgetLayout.Kind.MEDIUM_SQUARE, winter,
+            fontScale = 1.0f, later = "By 2 PM: drop the Insulated Jacket · snow 40%",
+            bucket = 240 to 248
+        )
+        assertTrue(plan.fitsHeight)
+        // "Thermal Long Sleeve" stacks the composition, and the joined
+        // layer line (two layers, each with its emoji) is budgeted at
+        // the two lines it wraps to — the outer layer never ellipsizes
+        // off the tile. The guidance survives too.
+        assertEquals(WidgetLayout.TempArrangement.STACKED, plan.tempArrangement)
+        assertEquals(2, plan.layerLines)
+        assertTrue(plan.showLaterToday)
+        val secondary = WidgetLayout.secondaryItems(winter)
+        assertEquals(3, secondary.size)
+        // Every secondary item is accounted for: shown as a chip or
+        // counted behind the marker — the count is derived, not decorative.
+        assertEquals(secondary, plan.chips + secondary.drop(plan.chips.size))
+        assertEquals(secondary.size - plan.chips.size, plan.chipsHiddenCount)
+        assertTrue("the winter set cannot all fit as chips at this width", plan.chipsHiddenCount > 0)
+        assertTrue(plan.showOverflowMarker)
+        // The marker's budgeted width is the width of the text it renders.
+        val markerWidth = WidgetLayout.overflowMarkerWidthDp(plan.chipsHiddenCount, WidgetLayout.Sizes.MEDIUM_CHIP, 1.0f)
+        assertEquals(
+            markerWidth,
+            12f + WidgetLayout.textWidthDp("+${plan.chipsHiddenCount} more", WidgetLayout.Sizes.MEDIUM_CHIP, 1.0f),
+            0.01f
+        )
     }
 
     @Test

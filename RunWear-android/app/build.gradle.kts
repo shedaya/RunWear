@@ -47,8 +47,8 @@ android {
         applicationId = "com.runwear.wear"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.2.0"
+        versionCode = 15
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -74,6 +74,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    testOptions {
+        unitTests {
+            // Robolectric render tests load the real manifest/resources.
+            isIncludeAndroidResources = true
+        }
     }
 }
 
@@ -140,4 +146,10 @@ dependencies {
     // runtime classpath so the telemetry payload builders run as-is).
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    // Widget render tests: Robolectric native graphics produces genuine
+    // renders of the production Glance widget (no emulator on the build VM).
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.test.ext:junit-ktx:1.2.1")
+    testImplementation("androidx.work:work-testing:2.9.1")
 }

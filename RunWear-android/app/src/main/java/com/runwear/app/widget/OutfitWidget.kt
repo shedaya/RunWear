@@ -101,10 +101,11 @@ class OutfitWidget : GlanceAppWidget() {
     override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            WidgetEntryPoint::class.java
-        )
+        // The persisted last-good is read FIRST and the Hilt entry
+        // point is only resolved when a reload is actually needed —
+        // the fresh path (the common one) shouldn't pay for, or depend
+        // on, the DI graph at all. (Also the render-harness seam: a
+        // seeded fresh store renders with no Hilt app present.)
         val store = WidgetLastGoodStore(context)
         val lastGood = store.read()
         val nowMs = System.currentTimeMillis()
@@ -115,10 +116,10 @@ class OutfitWidget : GlanceAppWidget() {
                 lastGood.toWidgetState()
 
             else -> when (val outcome = WidgetDataLoader.load(
-                weatherRepository = entryPoint.weatherRepository(),
-                preferencesRepository = entryPoint.preferencesRepository(),
-                locationProvider = entryPoint.locationProvider(),
-                getOutfitRecommendation = entryPoint.getOutfitRecommendation()
+                weatherRepository = entryPoint(context).weatherRepository(),
+                preferencesRepository = entryPoint(context).preferencesRepository(),
+                locationProvider = entryPoint(context).locationProvider(),
+                getOutfitRecommendation = entryPoint(context).getOutfitRecommendation()
             )) {
                 is WidgetDataLoader.Outcome.Success -> {
                     // Just persist; this very render shows the fresh data and
@@ -256,7 +257,12 @@ private fun RefreshAffordance(refreshing: Boolean) {
     }
 }
 
-/** Footer segments for the packed footer lines; [full] adds actual + wind (Medium/Large). */
+/**
+ * Weather segments in plan order: feels-like first (the square
+ * compositions' hero number since 1.2.1), then its support segments —
+ * actual and wind on the full form (Medium/Large); Small packs the
+ * short form (feels-like + condition) into its weather line.
+ */
 private fun footerSegments(state: WidgetState.Success, full: Boolean): List<String> {
     val w = state.weather
     val feels = "Feels like ${formatTemperature(w.feelsLike, w.isCelsius)}"
@@ -272,15 +278,21 @@ private fun footerSegments(state: WidgetState.Success, full: Boolean): List<Stri
 private fun actualSegment(state: WidgetState.Success): String =
     "Actual ${formatTemperature(state.weather.temperature, state.weather.isCelsius)}"
 
-/** One garment row: category icon + name. The outfit is the hero at every size. */
+/**
+ * One garment row: the item's garment emoji as its marker + name (Sol,
+ * Oct 28: emoji markers instead of line icons — the model's curated
+ * per-item emoji: 👕 tee/long-sleeve, 🧥 jacket, 👖 tights, 🧢 hat,
+ * 🧤 gloves, 🧣 buff). Emoji appear ONLY as item markers — header,
+ * hero temperature, and guidance stay clean type. The outfit is the
+ * hero at every size.
+ */
 @Composable
-private fun GarmentRow(item: ClothingItem, textSp: Float, iconSizeDp: Int, bold: Boolean) {
+private fun GarmentRow(item: ClothingItem, textSp: Float, bold: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Image(
-            provider = ImageProvider(getCategoryIconRes(item.category)),
-            contentDescription = null,
-            modifier = GlanceModifier.size(iconSizeDp.dp),
-            colorFilter = ColorFilter.tint(ColorProvider(getCategoryColor(item.category)))
+        Text(
+            text = item.icon,
+            style = TextStyle(fontSize = textSp.sp),
+            maxLines = 1
         )
         Spacer(modifier = GlanceModifier.width(6.dp))
         Text(
@@ -295,24 +307,17 @@ private fun GarmentRow(item: ClothingItem, textSp: Float, iconSizeDp: Int, bold:
     }
 }
 
-/** The combined mid+outer layer line, with the outermost layer's icon. */
+/** The combined mid+outer layer line; each layer carries its own emoji marker. */
 @Composable
-private fun LayerLine(layers: List<ClothingItem>, textSp: Float, iconSizeDp: Int) {
+private fun LayerLine(layers: List<ClothingItem>, textSp: Float, maxLines: Int = 1) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Image(
-            provider = ImageProvider(getCategoryIconRes(layers.last().category)),
-            contentDescription = null,
-            modifier = GlanceModifier.size(iconSizeDp.dp),
-            colorFilter = ColorFilter.tint(ColorProvider(getCategoryColor(layers.last().category)))
-        )
-        Spacer(modifier = GlanceModifier.width(6.dp))
         Text(
-            text = layers.joinToString(" + ") { it.displayName },
+            text = layers.joinToString(" + ") { "${it.icon} ${it.displayName}" },
             style = TextStyle(
                 color = ColorProvider(WidgetTextSecondary),
                 fontSize = textSp.sp
             ),
-            maxLines = 1
+            maxLines = maxLines
         )
     }
 }
@@ -354,13 +359,13 @@ private fun SmallWidgetContent(
             maxLines = 1
         )
         Spacer(modifier = GlanceModifier.height(3.dp))
-        GarmentRow(outfit.topBase, plan.heroSp, iconSizeDp = 16, bold = true)
+        GarmentRow(outfit.topBase, plan.heroSp, bold = true)
         if (layers.isNotEmpty()) {
             Spacer(modifier = GlanceModifier.height(2.dp))
-            LayerLine(layers, plan.layerSp, iconSizeDp = 14)
+            LayerLine(layers, plan.layerSp)
         }
         Spacer(modifier = GlanceModifier.height(2.dp))
-        GarmentRow(outfit.bottom, plan.bottomSp, iconSizeDp = 16, bold = false)
+        GarmentRow(outfit.bottom, plan.bottomSp, bold = false)
         if (plan.secondaryLine != null) {
             Spacer(modifier = GlanceModifier.height(3.dp))
             Text(
@@ -393,10 +398,13 @@ private fun MediumWidgetContent(
     innerW: Float,
     innerH: Float
 ) {
-    // The size the field screenshot proved missing: a real square
-    // composition. Header (FOR NOW · time, location + updated at the
-    // right), the full garment stack with icons, budgeted secondary
-    // chips, later-today when it fits, weather footer anchored bottom.
+    // The square composition (1.2.1): a spaced header (FOR NOW · time at
+    // the left; location + updated at the right, inset clear of the ↻
+    // corner), the outfit stack with the hero feels-like beside it (or
+    // banded under it at narrower widths), budgeted secondary chips, and
+    // the later-today guidance band at the bottom — budgeted at its
+    // wrapped line count, never clipped. Free height is distributed
+    // between the zones by the weighted spacers, never pooled in a void.
     val outfit = state.outfit
     val plan = WidgetLayout.plan(
         kind = WidgetLayout.Kind.MEDIUM_SQUARE,
@@ -408,12 +416,11 @@ private fun MediumWidgetContent(
         innerHeightDp = innerH,
         fontScale = fontScale
     )
-    val layers = listOfNotNull(outfit.topMid, outfit.topOuter)
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
     Column(modifier = GlanceModifier.fillMaxSize()) {
         Row(
-            modifier = GlanceModifier.fillMaxWidth(),
+            modifier = GlanceModifier.fillMaxWidth().padding(end = 22.dp),
             verticalAlignment = Alignment.Top
         ) {
             Text(
@@ -448,38 +455,157 @@ private fun MediumWidgetContent(
             }
         }
         Spacer(modifier = GlanceModifier.height(4.dp))
-        GarmentRow(outfit.topBase, plan.heroSp, iconSizeDp = 20, bold = true)
-        if (layers.isNotEmpty()) {
-            Spacer(modifier = GlanceModifier.height(3.dp))
-            LayerLine(layers, plan.layerSp, iconSizeDp = 16)
-        }
-        Spacer(modifier = GlanceModifier.height(3.dp))
-        GarmentRow(outfit.bottom, plan.heroSp, iconSizeDp = 20, bold = true)
+        Spacer(modifier = GlanceModifier.defaultWeight())
+        MainZone(state, plan)
         if (plan.secondaryMode != WidgetLayout.SecondaryMode.NONE) {
-            Spacer(modifier = GlanceModifier.height(6.dp))
+            Spacer(modifier = GlanceModifier.height(4.dp))
             SecondaryZone(plan, WidgetLayout.Sizes.MEDIUM_CHIP)
         }
+        Spacer(modifier = GlanceModifier.defaultWeight())
         if (plan.showLaterToday && state.laterTodayLine != null) {
-            Spacer(modifier = GlanceModifier.height(6.dp))
             Text(
                 text = state.laterTodayLine,
                 style = TextStyle(
                     color = ColorProvider(WidgetTextSecondary),
-                    fontSize = WidgetLayout.Sizes.MEDIUM_LATER.sp
+                    fontSize = plan.laterSp.sp
+                ),
+                maxLines = plan.laterTodayLines
+            )
+        }
+    }
+}
+
+/**
+ * The main zone of the square compositions: the garment stack with the
+ * hero temperature beside it ([WidgetLayout.TempArrangement.BESIDE]) or
+ * the stack with the temperature band under it (STACKED).
+ */
+@Composable
+private fun MainZone(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
+    when (plan.tempArrangement) {
+        WidgetLayout.TempArrangement.BESIDE -> Row(
+            modifier = GlanceModifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Column(modifier = GlanceModifier.defaultWeight()) {
+                GarmentStack(state, plan)
+            }
+            Spacer(modifier = GlanceModifier.width(10.dp))
+            TempSideColumn(state, plan)
+        }
+        WidgetLayout.TempArrangement.STACKED -> Column(modifier = GlanceModifier.fillMaxWidth()) {
+            GarmentStack(state, plan)
+            Spacer(modifier = GlanceModifier.height(4.dp))
+            TempBand(state, plan)
+        }
+    }
+}
+
+/** The worn-garment stack: base, combined layer line, bottom — never sheds. */
+@Composable
+private fun GarmentStack(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
+    val outfit = state.outfit
+    val layers = listOfNotNull(outfit.topMid, outfit.topOuter)
+    GarmentRow(outfit.topBase, plan.heroSp, bold = true)
+    if (layers.isNotEmpty()) {
+        Spacer(modifier = GlanceModifier.height(2.dp))
+        LayerLine(layers, plan.layerSp, plan.layerLines)
+    }
+    Spacer(modifier = GlanceModifier.height(2.dp))
+    GarmentRow(outfit.bottom, plan.heroSp, bold = true)
+}
+
+/**
+ * The hero temperature as a side column (BESIDE): "FEELS LIKE" eyebrow,
+ * the number at display size, and its support lines (actual, wind,
+ * condition) stacked under it — right-aligned against the tile edge.
+ */
+@Composable
+private fun TempSideColumn(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
+    Column(horizontalAlignment = Alignment.End) {
+        if (plan.showTempLabel) {
+            Text(
+                text = "FEELS LIKE",
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextMuted),
+                    fontSize = WidgetLayout.Sizes.TEMP_LABEL.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                maxLines = 1
+            )
+            Spacer(modifier = GlanceModifier.height(2.dp))
+        }
+        Text(
+            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+            style = TextStyle(
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = plan.tempSp.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
+        )
+        if (plan.footerLines.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(2.dp))
+            plan.footerLines.forEach { segment ->
+                Text(
+                    text = segment,
+                    style = TextStyle(
+                        color = ColorProvider(WidgetTextSecondary),
+                        fontSize = plan.footerSp.sp
+                    ),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The hero temperature as a band (STACKED): number column at the left,
+ * support lines stacked at the right — the band's height is the taller
+ * of the two columns, as the plan budgets it.
+ */
+@Composable
+private fun TempBand(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
+    Row(
+        modifier = GlanceModifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column {
+            if (plan.showTempLabel) {
+                Text(
+                    text = "FEELS LIKE",
+                    style = TextStyle(
+                        color = ColorProvider(WidgetTextMuted),
+                        fontSize = WidgetLayout.Sizes.TEMP_LABEL.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1
+                )
+                Spacer(modifier = GlanceModifier.height(2.dp))
+            }
+            Text(
+                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextPrimary),
+                    fontSize = plan.tempSp.sp,
+                    fontWeight = FontWeight.Bold
                 ),
                 maxLines = 1
             )
         }
         Spacer(modifier = GlanceModifier.defaultWeight())
-        plan.footerLines.forEach { line ->
-            Text(
-                text = line,
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextSecondary),
-                    fontSize = plan.footerSp.sp
-                ),
-                maxLines = 1
-            )
+        Column(horizontalAlignment = Alignment.End) {
+            plan.footerLines.forEach { segment ->
+                Text(
+                    text = segment,
+                    style = TextStyle(
+                        color = ColorProvider(WidgetTextSecondary),
+                        fontSize = plan.footerSp.sp
+                    ),
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -585,11 +711,11 @@ private fun LargeWidgetContent(
 ) {
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
     val outfit = state.outfit
-    // 1.1.8: every optional slot is budget-decided by the plan — chips are
-    // width-budgeted (no more four chips in a non-wrapping row), the
-    // later-today line renders only when the height budget holds it, and
-    // the footer packs into as many lines as its width needs instead of
-    // truncating four facts into one.
+    // 1.2.1: the Large composition shares the square language — spaced
+    // header with the location column inset clear of the ↻ corner, the
+    // outfit stack with the hero feels-like beside it, budgeted
+    // secondary chips, and the guidance band budgeted at its wrapped
+    // line count. Free height is distributed, never pooled in a void.
     val plan = WidgetLayout.plan(
         kind = WidgetLayout.Kind.LARGE,
         outfit = outfit,
@@ -600,14 +726,13 @@ private fun LargeWidgetContent(
         innerHeightDp = innerH,
         fontScale = fontScale
     )
-    val layers = listOfNotNull(outfit.topMid, outfit.topOuter)
 
     Column(
         modifier = GlanceModifier.fillMaxSize()
     ) {
         // Brand strip: the RunWear mark, location and freshness at the right.
         Row(
-            modifier = GlanceModifier.fillMaxWidth(),
+            modifier = GlanceModifier.fillMaxWidth().padding(end = 22.dp),
             verticalAlignment = Alignment.Top
         ) {
             Box(
@@ -654,8 +779,7 @@ private fun LargeWidgetContent(
 
         Spacer(modifier = GlanceModifier.height(4.dp))
 
-        // The outfit is the hero: the moment it is for, then the main
-        // pieces at display size with their garment icons.
+        // The moment the outfit is for.
         Text(
             text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
             style = TextStyle(
@@ -665,54 +789,35 @@ private fun LargeWidgetContent(
             ),
             maxLines = 1
         )
-        Spacer(modifier = GlanceModifier.height(2.dp))
-        GarmentRow(outfit.topBase, plan.heroSp, iconSizeDp = 20, bold = true)
-        if (layers.isNotEmpty()) {
-            LayerLine(layers, plan.layerSp, iconSizeDp = 16)
-        }
-        GarmentRow(outfit.bottom, plan.heroSp, iconSizeDp = 20, bold = true)
+        Spacer(modifier = GlanceModifier.defaultWeight())
+        MainZone(state, plan)
 
-        // Secondary pieces keep their icon chips under the hero — as many
-        // as the width budget honestly fits, in priority order, with the
-        // "+N" marker for the rest (or the compact line if height forced
-        // the chips out entirely).
+        // Secondary pieces keep their icon chips under the main zone —
+        // as many as the width budget honestly fits, in priority order,
+        // with the "+N more" marker for the rest (or the compact line
+        // if height forced the chips out entirely).
         if (plan.secondaryMode != WidgetLayout.SecondaryMode.NONE) {
-            Spacer(modifier = GlanceModifier.height(6.dp))
+            Spacer(modifier = GlanceModifier.height(4.dp))
             SecondaryZone(plan, WidgetLayout.Sizes.LARGE_CHIP)
-        }
-
-        // The "Later today" line — only when the height budget holds it
-        // without displacing the weather footer.
-        if (plan.showLaterToday && state.laterTodayLine != null) {
-            Spacer(modifier = GlanceModifier.height(6.dp))
-            Text(
-                text = state.laterTodayLine,
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextSecondary),
-                    fontSize = WidgetLayout.Sizes.LARGE_LATER.sp
-                ),
-                maxLines = 1
-            )
         }
 
         Spacer(modifier = GlanceModifier.defaultWeight())
 
-        // Weather grounding: feels-like, actual, wind, condition — packed
-        // by the plan into the lines its width actually needs.
-        plan.footerLines.forEach { line ->
+        // The guidance band — budgeted at its wrapped line count.
+        if (plan.showLaterToday && state.laterTodayLine != null) {
             Text(
-                text = line,
+                text = state.laterTodayLine,
                 style = TextStyle(
                     color = ColorProvider(WidgetTextSecondary),
-                    fontSize = plan.footerSp.sp
+                    fontSize = plan.laterSp.sp
                 ),
-                maxLines = 1
+                maxLines = plan.laterTodayLines
             )
         }
     }
 }
 
-/** The "+N" marker chip: secondary items the row's width budget couldn't fit stay represented. */
+/** The "+N more" marker chip: secondary items the row's width budget couldn't fit stay represented — a computed count, never an ellipsis. */
 @Composable
 private fun OverflowChip(hiddenCount: Int, chipSp: Float) {
     Box(
@@ -722,7 +827,7 @@ private fun OverflowChip(hiddenCount: Int, chipSp: Float) {
             .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
         Text(
-            text = "+$hiddenCount",
+            text = "+$hiddenCount more",
             style = TextStyle(
                 color = ColorProvider(WidgetTextSecondary),
                 fontSize = chipSp.sp
@@ -756,7 +861,7 @@ private fun SecondaryZone(plan: WidgetLayout.SlotPlan, chipSp: Float) {
             text = plan.secondaryLine ?: "",
             style = TextStyle(
                 color = ColorProvider(WidgetTextMuted),
-                fontSize = WidgetLayout.Sizes.SECONDARY_LINE.sp
+                fontSize = plan.secondaryLineSp.sp
             ),
             maxLines = 1
         )
@@ -773,11 +878,10 @@ private fun OutfitItemChip(item: ClothingItem) {
             .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Image(
-            provider = ImageProvider(getCategoryIconRes(item.category)),
-            contentDescription = null,
-            modifier = GlanceModifier.size(14.dp),
-            colorFilter = ColorFilter.tint(ColorProvider(getCategoryColor(item.category)))
+        Text(
+            text = item.icon,
+            style = TextStyle(fontSize = 11.sp),
+            maxLines = 1
         )
         Spacer(modifier = GlanceModifier.width(4.dp))
         Text(
@@ -1034,26 +1138,6 @@ private fun formatWind(weather: WeatherConditions): String {
     return "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}"
 }
 
-/** Category accent color — mirrors the phone app's kit (ui/theme RunWearColors). */
-private fun getCategoryColor(category: ClothingCategory): Color = when (category) {
-    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER ->
-        Color(0xFF00796B)
-    ClothingCategory.BOTTOM -> Color(0xFF1565C0)
-    ClothingCategory.HEAD -> Color(0xFF2E7D32)
-    ClothingCategory.HANDS -> Color(0xFF5E35B1)
-    ClothingCategory.ACCESSORIES -> Color(0xFFE65100)
-}
-
-/** Category icon drawable — mirrors the phone app's OutfitCard mapping. */
-private fun getCategoryIconRes(category: ClothingCategory): Int = when (category) {
-    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER ->
-        R.drawable.ic_category_top
-    ClothingCategory.BOTTOM -> R.drawable.ic_category_bottom
-    ClothingCategory.HEAD -> R.drawable.ic_category_head
-    ClothingCategory.HANDS -> R.drawable.ic_category_hands
-    ClothingCategory.ACCESSORIES -> R.drawable.ic_category_accessories
-}
-
 sealed class WidgetState {
     object Loading : WidgetState()
     object NoPermission : WidgetState()
@@ -1071,6 +1155,13 @@ sealed class WidgetState {
         val laterTodayLine: String?
     ) : WidgetState()
 }
+
+/** Resolved lazily by callers that genuinely need a reload (see provideGlance). */
+internal fun entryPoint(context: Context): WidgetEntryPoint =
+    EntryPointAccessors.fromApplication(
+        context.applicationContext,
+        WidgetEntryPoint::class.java
+    )
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)

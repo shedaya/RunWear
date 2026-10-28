@@ -15,15 +15,34 @@ import kotlin.math.ceil
  *
  *  - [layoutFor] — size dispatch by width + height;
  *  - the type scale each composition renders at ([Sizes]);
- *  - slot budgeting — secondary chips are width-budgeted with a "+N"
+ *  - slot budgeting — secondary chips are width-budgeted with a "+N more"
  *    overflow marker, and optional slots shed in a fixed priority order
- *    (later-today → footer step-down → lowest-value footer segments →
- *    type step-downs → chips) instead of clipping or floating. Worn
- *    garment slots (base, layers, bottom) NEVER shed, and secondary
- *    garments are represented somehow (chips, a "+N" marker, or the
- *    compact line) at every font scale up to 1.15; only at font scale
- *    1.3 with a layered outfit carrying the maximum secondary set does
- *    the secondary zone shed — last, after every other slot.
+ *    instead of clipping or floating. Worn garment slots (base, layers,
+ *    bottom) NEVER shed, and secondary garments are represented somehow
+ *    (chips, a "+N more" marker, or the compact line) at every font scale
+ *    up to 1.15; only at font scale 1.3 with a layered outfit carrying
+ *    the maximum secondary set does the secondary zone shed — last,
+ *    after every other slot.
+ *
+ * 1.2.1 (field verdict on the 1.2.0 tile, Oct 28 2026) adds, for the
+ * square compositions (Medium/Large):
+ *  - the feels-like temperature is a HERO, not a footer segment: it
+ *    renders at display size ([Sizes.MEDIUM_TEMP] / [Sizes.LARGE_TEMP])
+ *    with the remaining weather segments (actual, wind, condition) as
+ *    its support lines. Where the tile is wide enough the hero sits
+ *    BESIDE the outfit stack ([TempArrangement.BESIDE]); below that
+ *    width it forms a band under the outfit ([TempArrangement.STACKED]).
+ *    Shed order for the square compositions: support segments
+ *    (condition, then wind) → actual segment → temperature step-down →
+ *    guidance step-down, then guidance → garment step-downs →
+ *    temperature label → temperature compression interleaved with the
+ *    secondary demote/drop (secondary sheds last). The
+ *    feels-like number itself never sheds.
+ *  - the later-today guidance is budgeted at its WRAPPED line count
+ *    (capped at two lines, stepping its type down until two lines hold
+ *    it) — it is never budgeted at one line and clipped mid-word.
+ *  - the header reserves the refresh affordance's corner: the location
+ *    column is inset from the top-right so no text runs under the ↻.
  *
  * Everything here is pure Kotlin on dp/sp numbers so the full render
  * matrix (sizes × outfit shapes × font scales) is unit-testable — see
@@ -34,6 +53,18 @@ import kotlin.math.ceil
 object WidgetLayout {
 
     enum class Kind { SMALL, MEDIUM_SQUARE, HORIZONTAL, LARGE }
+
+    /**
+     * How the hero temperature sits against the outfit in the square
+     * compositions: BESIDE it in its own column when the column left
+     * after the temperature column holds the widest garment name
+     * whole, STACKED as a band under the outfit when it cannot —
+     * garment names never clip.
+     */
+    enum class TempArrangement { BESIDE, STACKED }
+
+    /** Inner width below which the square compositions never attempt the BESIDE arrangement. */
+    const val BESIDE_MIN_INNER_WIDTH_DP = 190f
 
     /** Type scale per composition — the composables read these too. */
     object Sizes {
@@ -52,6 +83,7 @@ object WidgetLayout {
         const val MEDIUM_CHIP = 11f
         const val MEDIUM_LATER = 11f
         const val MEDIUM_FOOTER = 10f
+        const val MEDIUM_TEMP = 27f
 
         const val LARGE_BRAND = 13f
         const val LARGE_LOCATION = 11f
@@ -62,6 +94,13 @@ object WidgetLayout {
         const val LARGE_CHIP = 11f
         const val LARGE_LATER = 11f
         const val LARGE_FOOTER = 11f
+        const val LARGE_TEMP = 30f
+
+        /** The "FEELS LIKE" eyebrow over the hero temperature (Medium/Large). */
+        const val TEMP_LABEL = 8f
+
+        /** Support lines beside the hero temperature: actual, wind, condition. */
+        const val TEMP_SUPPORT = 9f
 
         const val HORIZ_SUMMARY = 15f
         const val HORIZ_TEMP = 14f
@@ -106,6 +145,24 @@ object WidgetLayout {
     fun textWidthDp(text: String, fontSizeSp: Float, fontScale: Float, bold: Boolean = false): Float =
         text.length * fontSizeSp * (if (bold) CHAR_WIDTH_BOLD else CHAR_WIDTH_REGULAR) * fontScale
 
+    /**
+     * Wrapped line estimate for a text rendered at [fontSizeSp] in
+     * [innerWidthDp], capped at [maxLines]. The guidance line is budgeted
+     * at this count — never at one line by assumption (the 1.2.0 defect:
+     * a two-line guidance rendered at maxLines = 1 and clipped mid-word).
+     */
+    fun wrappedLineEstimate(
+        text: String,
+        fontSizeSp: Float,
+        innerWidthDp: Float,
+        fontScale: Float,
+        maxLines: Int = 2
+    ): Int {
+        if (text.isEmpty() || innerWidthDp <= 0f) return 0
+        return ceil(textWidthDp(text, fontSizeSp, fontScale) / innerWidthDp)
+            .toInt().coerceIn(1, maxLines)
+    }
+
     // ---- shared slot pieces -------------------------------------------------
 
     /** Secondary garments in render priority order: head, hands, accessories. */
@@ -118,9 +175,9 @@ object WidgetLayout {
     fun chipHeightDp(chipSp: Float, fontScale: Float): Float =
         maxOf(14f, lineDp(chipSp, fontScale)) + 8f // icon vs text, + 4+4 vertical padding (OutfitItemChip)
 
-    /** Width of the "+N" overflow marker chip (text-only). */
+    /** Width of the "+N more" overflow marker chip (text-only). */
     fun overflowMarkerWidthDp(hiddenCount: Int, chipSp: Float, fontScale: Float): Float =
-        12f + textWidthDp("+$hiddenCount", chipSp, fontScale)
+        12f + textWidthDp("+$hiddenCount more", chipSp, fontScale)
 
     data class ChipBudget(
         val shown: List<ClothingItem>,
@@ -150,11 +207,22 @@ object WidgetLayout {
             used += w
             shown.add(item)
         }
-        val hidden = items.size - shown.size
-        val markerShown = hidden > 0 &&
+        var hidden = items.size - shown.size
+        fun markerFits(): Boolean = hidden > 0 &&
             used + (if (shown.isEmpty()) 0f else 6f) +
             overflowMarkerWidthDp(hidden, chipSp, fontScale) <= innerWidthDp
-        return ChipBudget(shown, hidden, markerShown)
+        // The count is part of the representation: when items remain
+        // hidden but the "+N more" marker cannot fit behind the greedy
+        // prefix, trade the last chip for the marker — a counted
+        // remainder beats one more visible chip with the rest silently
+        // dropped. (Since 1.2.1 the marker carries the word "more" and
+        // is wider; this trade is what keeps it on the row.)
+        while (hidden > 0 && !markerFits() && shown.size > 1) {
+            val removed = shown.removeAt(shown.lastIndex)
+            used -= chipWidthDp(removed, chipSp, fontScale) + 6f
+            hidden += 1
+        }
+        return ChipBudget(shown.toList(), hidden, markerFits())
     }
 
     /**
@@ -229,12 +297,30 @@ object WidgetLayout {
         val showOverflowMarker: Boolean,
         /** Compact secondary line text (LINE mode). */
         val secondaryLine: String?,
+        /** Compact secondary line font size after any step-down (Medium/Large). */
+        val secondaryLineSp: Float,
         /** Whether the "Later today" line renders. */
         val showLaterToday: Boolean,
-        /** Footer segments packed into lines at [footerSp]. */
+        /**
+         * Footer lines at [footerSp]. Small: the packed weather lines.
+         * Medium/Large (1.2.1): the hero temperature's SUPPORT lines —
+         * the weather segments after the feels-like (actual, wind,
+         * condition), each rendered on its own line beside/under the
+         * hero number; the feels-like itself is [tempSp], never a line.
+         */
         val footerLines: List<String>,
-        /** Footer font size after any step-down. */
+        /** Footer/support font size after any step-down. */
         val footerSp: Float,
+        /** How the hero temperature sits against the outfit (Medium/Large). */
+        val tempArrangement: TempArrangement,
+        /** Hero feels-like font size (Medium/Large); 0 for Small/Horizontal. */
+        val tempSp: Float,
+        /** Whether the "FEELS LIKE" eyebrow renders over the hero temperature. */
+        val showTempLabel: Boolean,
+        /** Later-today font size after any width step-down (Medium/Large). */
+        val laterSp: Float,
+        /** Lines the later-today text is budgeted at (0 when not shown; capped at 2). */
+        val laterTodayLines: Int,
         /** Freshness-label font size after any step-down (Medium meta / Large updated). */
         val metaSp: Float,
         /** Horizontal only: garment names in the summary, priority-kept. */
@@ -247,6 +333,8 @@ object WidgetLayout {
         val heroSp: Float,
         /** Layer-line font size after any step-down. */
         val layerSp: Float,
+        /** Lines the layer line is budgeted at (Medium/Large; 1 elsewhere). */
+        val layerLines: Int,
         /** Small only: bottom-row font size after any step-down. */
         val bottomSp: Float,
         /** Eyebrow font size after any step-down (Small steps it; other kinds return their constant). */
@@ -332,17 +420,24 @@ object WidgetLayout {
             secondaryLine = if (showSecondary) {
                 compactItemLine(secondary, microSp, innerWidthDp, fontScale)
             } else null,
+            secondaryLineSp = Sizes.SECONDARY_LINE,
             showLaterToday = false,
             footerLines = if (showWeather) {
                 packLines(footerSegments, Sizes.SMALL_WEATHER, innerWidthDp, fontScale).take(1)
             } else emptyList(),
             footerSp = Sizes.SMALL_WEATHER,
+            tempArrangement = TempArrangement.STACKED,
+            tempSp = 0f,
+            showTempLabel = false,
+            laterSp = 0f,
+            laterTodayLines = 0,
             metaSp = 0f,
             summaryItems = emptyList(),
             summaryLineEstimate = 0,
             showWind = false,
             heroSp = heroSp,
             layerSp = layerSp,
+            layerLines = 1,
             bottomSp = bottomSp,
             eyebrowSp = eyebrowSp,
             microSp = microSp,
@@ -351,13 +446,235 @@ object WidgetLayout {
         )
     }
 
-    // MEDIUM SQUARE — canonical 160×160 / 180×180. Header = eyebrow left,
-    // location + updated stacked right. Then top row, layer line, bottom
-    // row, chips (or the compact secondary line), later-today, footer.
-    // Shed order: later-today → footer −1 sp → drop actual segment →
-    // drop trailing footer segments (never feels-like) → footer to 8 sp →
-    // hero −2 → layer −2 → meta −1 → hero −2 → chips (demoted to the
-    // compact line, then dropped) → hero −2 again.
+    // MEDIUM SQUARE / LARGE — the square compositions share one planner
+    // (1.2.1). Medium: header = eyebrow left, location + updated stacked
+    // right. Large: brand row (location + updated stacked right), then
+    // the eyebrow on its own line. Both: outfit stack, hero temperature
+    // beside or banded under it, secondary chips (or the compact line),
+    // later-today guidance, in that order. Shed order documented on the
+    // class: support segments → actual → temperature step-down →
+    // guidance step-down, then guidance → garment step-downs →
+    // temperature label → temperature compression interleaved with the
+    // secondary demote/drop (the secondary zone sheds last).
+    private fun planSquare(
+        kind: Kind,
+        outfit: OutfitRecommendation,
+        laterTodayLine: String?,
+        footerSegments: List<String>,
+        droppableFooterSegment: String?,
+        innerWidthDp: Float,
+        innerHeightDp: Float,
+        fontScale: Float,
+        chipSp: Float,
+        heroBase: Float,
+        layerBase: Float,
+        tempBase: Float,
+        metaBase: Float,
+        laterBase: Float,
+        headerHeight: (metaSp: Float) -> Float,
+        extraHeaderHeight: Float
+    ): SlotPlan {
+        val hasLayer = outfit.topMid != null || outfit.topOuter != null
+        val secondary = secondaryItems(outfit)
+        val chipBudget = budgetedChips(secondary, chipSp, innerWidthDp, fontScale)
+        var chips: List<ClothingItem> = chipBudget.shown
+        var secondaryMode = when {
+            secondary.isEmpty() -> SecondaryMode.NONE
+            // Chips only when every hidden item is counted by the
+            // marker; an uncounted remainder takes the compact line,
+            // which always carries its count.
+            chipBudget.markerShown || (chips.isNotEmpty() && chipBudget.hiddenCount == 0) ->
+                SecondaryMode.CHIPS
+            else -> SecondaryMode.LINE
+        }
+        var secondaryLineSp = Sizes.SECONDARY_LINE
+        // Temperature: segment 0 is the feels-like — since 1.2.1 it is
+        // the hero number, never a footer line. The rest support it.
+        var supportSegments = footerSegments.drop(1)
+
+        // Temperature arrangement. BESIDE (the temperature column next
+        // to the garment stack) only when the widest hero garment name
+        // fits the remaining column at a hero size of at least 15 sp —
+        // garment rows never clip, so when the column is too narrow
+        // (long names like "Thermal Long Sleeve" beside a wide support
+        // column) the composition stacks: full-width garment rows with
+        // the temperature band underneath. In STACKED the number
+        // starts 4 sp smaller — the band is full-width, and the saved
+        // height keeps the guidance alive at tight sizes.
+        val heroNumberText = footerSegments.firstOrNull()
+            ?.removePrefix("Feels like ") ?: ""
+        val tempColumnWidth = maxOf(
+            textWidthDp(heroNumberText, tempBase, fontScale, bold = true),
+            textWidthDp("FEELS LIKE", Sizes.TEMP_LABEL, fontScale),
+            supportSegments.maxOfOrNull {
+                textWidthDp(it, Sizes.TEMP_SUPPORT, fontScale)
+            } ?: 0f
+        )
+        val besideColumnWidth = innerWidthDp - tempColumnWidth - 10f
+        fun heroNamesFit(sp: Float): Boolean {
+            // Column minus the emoji marker (one glyph at hero size)
+            // and its 6 dp gap.
+            val nameAvail = besideColumnWidth - (sp + 6f)
+            return listOf(outfit.topBase, outfit.bottom).all {
+                textWidthDp(it.displayName, sp, fontScale, bold = true) <= nameAvail
+            }
+        }
+        var heroSp = heroBase
+        val arrangement = when {
+            innerWidthDp < BESIDE_MIN_INNER_WIDTH_DP -> TempArrangement.STACKED
+            else -> {
+                while (heroSp > 15f && !heroNamesFit(heroSp)) heroSp -= 1f
+                if (heroNamesFit(heroSp)) TempArrangement.BESIDE
+                else {
+                    heroSp = heroBase
+                    TempArrangement.STACKED
+                }
+            }
+        }
+        var tempSp = if (arrangement == TempArrangement.STACKED) tempBase - 4f else tempBase
+        var showTempLabel = true
+
+        // The layer line carries each layer's emoji + name; like the
+        // guidance it is budgeted at its wrapped line count (cap 2),
+        // stepping its type down toward one line first — a joined
+        // layer line that ellipsizes would hide a worn layer entirely.
+        val layers = listOfNotNull(outfit.topMid, outfit.topOuter)
+        val layerText = layers.joinToString(" + ") { "${it.icon} ${it.displayName}" }
+        var layerSp = layerBase
+        val layerAvailWidth =
+            if (arrangement == TempArrangement.BESIDE) besideColumnWidth else innerWidthDp
+        fun layerLineCount(): Int =
+            if (layers.isEmpty()) 0
+            else wrappedLineEstimate(layerText, layerSp, layerAvailWidth, fontScale)
+        if (layers.isNotEmpty()) {
+            while (layerSp > 11f && layerLineCount() > 1) layerSp -= 1f
+        }
+        val layerLines = layerLineCount()
+
+        var metaSp = metaBase
+        var showLater = laterTodayLine != null
+        // Guidance type steps down until its wrapped estimate holds in
+        // two lines — the plan never budgets it at a clipped one line.
+        var laterSp = laterBase
+        if (laterTodayLine != null) {
+            while (laterSp > 9f &&
+                ceil(textWidthDp(laterTodayLine, laterSp, fontScale) / innerWidthDp) > 2
+            ) laterSp -= 1f
+        }
+
+        fun laterLines(): Int =
+            if (showLater && laterTodayLine != null) {
+                wrappedLineEstimate(laterTodayLine, laterSp, innerWidthDp, fontScale)
+            } else 0
+
+        fun tempZoneHeight(): Float {
+            val labelH = if (showTempLabel) lineDp(Sizes.TEMP_LABEL, fontScale) + 2f else 0f
+            val numberH = lineDp(tempSp, fontScale)
+            val supportH = supportSegments.size * lineDp(Sizes.TEMP_SUPPORT, fontScale)
+            return when (arrangement) {
+                // Beside: one column — label, number, support stacked.
+                TempArrangement.BESIDE ->
+                    labelH + numberH + if (supportSegments.isNotEmpty()) 2f + supportH else 0f
+                // Stacked: a band — the number column beside the support column.
+                TempArrangement.STACKED -> maxOf(labelH + numberH, supportH)
+            }
+        }
+
+        fun height(): Float {
+            var h = headerHeight(metaSp) + extraHeaderHeight
+            val outfitH = maxOf(20f, lineDp(heroSp, fontScale)) + 2f +
+                (if (hasLayer) {
+                    maxOf(16f, layerLines * lineDp(layerSp, fontScale)) + 2f
+                } else 0f) +
+                maxOf(20f, lineDp(heroSp, fontScale))
+            h += when (arrangement) {
+                TempArrangement.BESIDE -> maxOf(outfitH, tempZoneHeight())
+                TempArrangement.STACKED -> outfitH + 4f + tempZoneHeight()
+            }
+            when (secondaryMode) {
+                SecondaryMode.CHIPS -> h += 4f + chipHeightDp(chipSp, fontScale)
+                SecondaryMode.LINE -> h += 4f + lineDp(secondaryLineSp, fontScale)
+                SecondaryMode.NONE -> {}
+            }
+            if (showLater) h += 6f + laterLines() * lineDp(laterSp, fontScale)
+            return h
+        }
+
+        // Support sheds first: trailing segments (condition, then wind),
+        // then the actual — the hero keeps its label and number longest.
+        while (height() > innerHeightDp && supportSegments.size > 1) {
+            supportSegments = supportSegments.dropLast(1)
+        }
+        if (height() > innerHeightDp && droppableFooterSegment != null &&
+            supportSegments.contains(droppableFooterSegment)
+        ) {
+            supportSegments = supportSegments - droppableFooterSegment
+        }
+        if (height() > innerHeightDp && tempSp > 22f) tempSp -= 4f
+        // Guidance type steps down under pressure before the line sheds.
+        if (height() > innerHeightDp) {
+            while (laterSp > 9f && height() > innerHeightDp) laterSp -= 1f
+        }
+        if (height() > innerHeightDp) showLater = false
+        if (height() > innerHeightDp) heroSp -= 2f
+        if (height() > innerHeightDp) layerSp -= 2f
+        if (height() > innerHeightDp) metaSp -= 1f
+        if (height() > innerHeightDp) heroSp -= 2f
+        if (height() > innerHeightDp) metaSp -= 1f
+        if (height() > innerHeightDp) showTempLabel = false
+        // The secondary zone sheds last: the temperature compresses
+        // toward its floor around the demote/drop steps first, and the
+        // compact line steps down before it drops. (Temperature floor
+        // 15 sp: still the largest figure on the tile — at that point
+        // the garment rows have stepped down to 13 sp.)
+        if (height() > innerHeightDp && tempSp > 15f) tempSp = maxOf(15f, tempSp - 4f)
+        if (height() > innerHeightDp && secondaryMode == SecondaryMode.CHIPS) {
+            // Demote chips to the compact line before dropping them outright.
+            secondaryMode = SecondaryMode.LINE
+            chips = emptyList()
+        }
+        if (height() > innerHeightDp && secondaryMode == SecondaryMode.LINE && secondaryLineSp > 8f) {
+            secondaryLineSp -= 1f
+        }
+        if (height() > innerHeightDp && tempSp > 15f) tempSp = maxOf(15f, tempSp - 4f)
+        if (height() > innerHeightDp && secondaryMode == SecondaryMode.LINE) {
+            secondaryMode = SecondaryMode.NONE
+        }
+        if (height() > innerHeightDp) heroSp -= 2f
+
+        return SlotPlan(
+            kind = kind,
+            secondaryMode = secondaryMode,
+            chips = chips,
+            chipsHiddenCount = chipBudget.hiddenCount,
+            showOverflowMarker = secondaryMode == SecondaryMode.CHIPS && chipBudget.markerShown,
+            secondaryLine = if (secondaryMode == SecondaryMode.LINE) {
+                compactItemLine(secondary, secondaryLineSp, innerWidthDp, fontScale)
+            } else null,
+            secondaryLineSp = secondaryLineSp,
+            showLaterToday = showLater,
+            footerLines = supportSegments,
+            footerSp = Sizes.TEMP_SUPPORT,
+            tempArrangement = arrangement,
+            tempSp = tempSp,
+            showTempLabel = showTempLabel,
+            laterSp = laterSp,
+            laterTodayLines = laterLines(),
+            metaSp = metaSp,
+            summaryItems = emptyList(),
+            summaryLineEstimate = 0,
+            showWind = false,
+            heroSp = heroSp,
+            layerSp = layerSp,
+            layerLines = layerLines,
+            bottomSp = heroSp,
+            eyebrowSp = if (kind == Kind.LARGE) Sizes.LARGE_EYEBROW else Sizes.MEDIUM_EYEBROW,
+            microSp = Sizes.SECONDARY_LINE,
+            estimatedHeightDp = height(),
+            fitsHeight = height() <= innerHeightDp
+        )
+    }
+
     private fun planMedium(
         outfit: OutfitRecommendation,
         laterTodayLine: String?,
@@ -366,107 +683,30 @@ object WidgetLayout {
         innerWidthDp: Float,
         innerHeightDp: Float,
         fontScale: Float
-    ): SlotPlan {
-        val hasLayer = outfit.topMid != null || outfit.topOuter != null
-        val secondary = secondaryItems(outfit)
-        val chipBudget = budgetedChips(secondary, Sizes.MEDIUM_CHIP, innerWidthDp, fontScale)
-        var chips: List<ClothingItem> = chipBudget.shown
-        var secondaryMode = when {
-            secondary.isEmpty() -> SecondaryMode.NONE
-            chips.isNotEmpty() || chipBudget.markerShown -> SecondaryMode.CHIPS
-            else -> SecondaryMode.LINE
-        }
-        var showLater = laterTodayLine != null
-        var heroSp = Sizes.MEDIUM_HERO
-        var layerSp = Sizes.MEDIUM_LAYER
-        var metaSp = Sizes.MEDIUM_META
-        var footerSp = Sizes.MEDIUM_FOOTER
-        var segments = footerSegments
-        var footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-
-        fun height(): Float {
-            var h = maxOf(
+    ): SlotPlan = planSquare(
+        kind = Kind.MEDIUM_SQUARE,
+        outfit = outfit,
+        laterTodayLine = laterTodayLine,
+        footerSegments = footerSegments,
+        droppableFooterSegment = droppableFooterSegment,
+        innerWidthDp = innerWidthDp,
+        innerHeightDp = innerHeightDp,
+        fontScale = fontScale,
+        chipSp = Sizes.MEDIUM_CHIP,
+        heroBase = Sizes.MEDIUM_HERO,
+        layerBase = Sizes.MEDIUM_LAYER,
+        tempBase = Sizes.MEDIUM_TEMP,
+        metaBase = Sizes.MEDIUM_META,
+        laterBase = Sizes.MEDIUM_LATER,
+        headerHeight = { meta ->
+            maxOf(
                 lineDp(Sizes.MEDIUM_EYEBROW, fontScale),
-                lineDp(Sizes.MEDIUM_LOCATION, fontScale) + lineDp(metaSp, fontScale)
+                lineDp(Sizes.MEDIUM_LOCATION, fontScale) + lineDp(meta, fontScale)
             ) + 4f // header + gap
-            h += maxOf(20f, lineDp(heroSp, fontScale)) + 3f // top row
-            if (hasLayer) h += maxOf(16f, lineDp(layerSp, fontScale)) + 3f
-            h += maxOf(20f, lineDp(heroSp, fontScale)) // bottom row
-            when (secondaryMode) {
-                SecondaryMode.CHIPS -> h += 6f + chipHeightDp(Sizes.MEDIUM_CHIP, fontScale)
-                SecondaryMode.LINE -> h += 6f + lineDp(Sizes.SECONDARY_LINE, fontScale)
-                SecondaryMode.NONE -> {}
-            }
-            if (showLater) h += 6f + lineDp(Sizes.MEDIUM_LATER, fontScale)
-            h += 6f + footerLines.size * lineDp(footerSp, fontScale)
-            return h
-        }
+        },
+        extraHeaderHeight = 0f
+    )
 
-        if (height() > innerHeightDp) showLater = false
-        if (height() > innerHeightDp && footerSp > 9f) {
-            footerSp -= 1f
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        if (height() > innerHeightDp && droppableFooterSegment != null && segments.contains(droppableFooterSegment)) {
-            segments = segments - droppableFooterSegment
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        // Trailing footer segments (condition, then wind) shed before any
-        // type size does — the feels-like segment always stays.
-        while (height() > innerHeightDp && segments.size > 1) {
-            segments = segments.dropLast(1)
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        if (height() > innerHeightDp && footerSp > 8f) {
-            footerSp -= 1f
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        if (height() > innerHeightDp) heroSp -= 2f
-        if (height() > innerHeightDp) layerSp -= 2f
-        if (height() > innerHeightDp) metaSp -= 1f
-        if (height() > innerHeightDp) heroSp -= 2f
-        if (height() > innerHeightDp && secondaryMode == SecondaryMode.CHIPS) {
-            // Demote chips to the compact line before dropping them outright.
-            secondaryMode = SecondaryMode.LINE
-            chips = emptyList()
-        }
-        if (height() > innerHeightDp && secondaryMode == SecondaryMode.LINE) {
-            secondaryMode = SecondaryMode.NONE
-        }
-        if (height() > innerHeightDp) heroSp -= 2f
-
-        return SlotPlan(
-            kind = Kind.MEDIUM_SQUARE,
-            secondaryMode = secondaryMode,
-            chips = chips,
-            chipsHiddenCount = chipBudget.hiddenCount,
-            showOverflowMarker = secondaryMode == SecondaryMode.CHIPS && chipBudget.markerShown,
-            secondaryLine = if (secondaryMode == SecondaryMode.LINE) {
-                compactItemLine(secondary, Sizes.SECONDARY_LINE, innerWidthDp, fontScale)
-            } else null,
-            showLaterToday = showLater,
-            footerLines = footerLines,
-            footerSp = footerSp,
-            metaSp = metaSp,
-            summaryItems = emptyList(),
-            summaryLineEstimate = 0,
-            showWind = false,
-            heroSp = heroSp,
-            layerSp = layerSp,
-            bottomSp = heroSp,
-            eyebrowSp = Sizes.MEDIUM_EYEBROW,
-            microSp = Sizes.SECONDARY_LINE,
-            estimatedHeightDp = height(),
-            fitsHeight = height() <= innerHeightDp
-        )
-    }
-
-    // LARGE — canonical 250×190. Brand row (location + updated stacked at
-    // the right), eyebrow, top row, layer line, bottom row, chips (or the
-    // compact line), later-today, footer. Shed order: later-today → footer
-    // −1 sp → drop actual segment → drop trailing footer segments (never
-    // feels-like) → footer −1 sp again → hero −2 → layer −2 → updated −1 →
-    // hero −2 → chips (demote, then drop) → hero −2 again.
     private fun planLarge(
         outfit: OutfitRecommendation,
         laterTodayLine: String?,
@@ -475,98 +715,26 @@ object WidgetLayout {
         innerWidthDp: Float,
         innerHeightDp: Float,
         fontScale: Float
-    ): SlotPlan {
-        val hasLayer = outfit.topMid != null || outfit.topOuter != null
-        val secondary = secondaryItems(outfit)
-        val chipBudget = budgetedChips(secondary, Sizes.LARGE_CHIP, innerWidthDp, fontScale)
-        var chips: List<ClothingItem> = chipBudget.shown
-        var secondaryMode = when {
-            secondary.isEmpty() -> SecondaryMode.NONE
-            chips.isNotEmpty() || chipBudget.markerShown -> SecondaryMode.CHIPS
-            else -> SecondaryMode.LINE
-        }
-        var showLater = laterTodayLine != null
-        var heroSp = Sizes.LARGE_HERO
-        var layerSp = Sizes.LARGE_LAYER
-        var updatedSp = Sizes.LARGE_UPDATED
-        var footerSp = Sizes.LARGE_FOOTER
-        var segments = footerSegments
-        var footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-
-        fun height(): Float {
-            var h = lineDp(Sizes.LARGE_LOCATION, fontScale) +
-                lineDp(updatedSp, fontScale) + 4f // brand row + gap
-            h += lineDp(Sizes.LARGE_EYEBROW, fontScale) + 2f // FOR NOW · time + gap
-            h += maxOf(20f, lineDp(heroSp, fontScale)) // top row
-            if (hasLayer) h += lineDp(layerSp, fontScale)
-            h += maxOf(20f, lineDp(heroSp, fontScale)) // bottom row
-            when (secondaryMode) {
-                SecondaryMode.CHIPS -> h += 6f + chipHeightDp(Sizes.LARGE_CHIP, fontScale)
-                SecondaryMode.LINE -> h += 6f + lineDp(Sizes.SECONDARY_LINE, fontScale)
-                SecondaryMode.NONE -> {}
-            }
-            if (showLater) h += 6f + lineDp(Sizes.LARGE_LATER, fontScale)
-            h += 6f + footerLines.size * lineDp(footerSp, fontScale)
-            return h
-        }
-
-        if (height() > innerHeightDp) showLater = false
-        if (height() > innerHeightDp && footerSp > 9f) {
-            footerSp -= 1f
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        if (height() > innerHeightDp && droppableFooterSegment != null && segments.contains(droppableFooterSegment)) {
-            segments = segments - droppableFooterSegment
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        // Trailing footer segments (condition, then wind) shed before any
-        // type size does — the feels-like segment always stays.
-        while (height() > innerHeightDp && segments.size > 1) {
-            segments = segments.dropLast(1)
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        if (height() > innerHeightDp && footerSp > 8f) {
-            footerSp -= 1f
-            footerLines = packLines(segments, footerSp, innerWidthDp, fontScale)
-        }
-        if (height() > innerHeightDp) heroSp -= 2f
-        if (height() > innerHeightDp) layerSp -= 2f
-        if (height() > innerHeightDp) updatedSp -= 1f
-        if (height() > innerHeightDp) heroSp -= 2f
-        if (height() > innerHeightDp && secondaryMode == SecondaryMode.CHIPS) {
-            secondaryMode = SecondaryMode.LINE
-            chips = emptyList()
-        }
-        if (height() > innerHeightDp && secondaryMode == SecondaryMode.LINE) {
-            secondaryMode = SecondaryMode.NONE
-        }
-        if (height() > innerHeightDp) heroSp -= 2f
-
-        return SlotPlan(
-            kind = Kind.LARGE,
-            secondaryMode = secondaryMode,
-            chips = chips,
-            chipsHiddenCount = chipBudget.hiddenCount,
-            showOverflowMarker = secondaryMode == SecondaryMode.CHIPS && chipBudget.markerShown,
-            secondaryLine = if (secondaryMode == SecondaryMode.LINE) {
-                compactItemLine(secondary, Sizes.SECONDARY_LINE, innerWidthDp, fontScale)
-            } else null,
-            showLaterToday = showLater,
-            footerLines = footerLines,
-            footerSp = footerSp,
-            metaSp = updatedSp,
-            summaryItems = emptyList(),
-            summaryLineEstimate = 0,
-            showWind = false,
-            heroSp = heroSp,
-            layerSp = layerSp,
-            bottomSp = heroSp,
-            eyebrowSp = Sizes.LARGE_EYEBROW,
-            microSp = Sizes.SECONDARY_LINE,
-            estimatedHeightDp = height(),
-            fitsHeight = height() <= innerHeightDp
-        )
-    }
+    ): SlotPlan = planSquare(
+        kind = Kind.LARGE,
+        outfit = outfit,
+        laterTodayLine = laterTodayLine,
+        footerSegments = footerSegments,
+        droppableFooterSegment = droppableFooterSegment,
+        innerWidthDp = innerWidthDp,
+        innerHeightDp = innerHeightDp,
+        fontScale = fontScale,
+        chipSp = Sizes.LARGE_CHIP,
+        heroBase = Sizes.LARGE_HERO,
+        layerBase = Sizes.LARGE_LAYER,
+        tempBase = Sizes.LARGE_TEMP,
+        metaBase = Sizes.LARGE_UPDATED,
+        laterBase = Sizes.LARGE_LATER,
+        headerHeight = { meta ->
+            lineDp(Sizes.LARGE_LOCATION, fontScale) + lineDp(meta, fontScale) + 4f // brand row + gap
+        },
+        extraHeaderHeight = lineDp(Sizes.LARGE_EYEBROW, fontScale) + 2f // FOR NOW · time + gap
+    )
 
     // HORIZONTAL — canonical 250×60 strip. Left: the outfit summary (full
     // names, rendered at most two lines); right: temp / condition / wind
@@ -615,15 +783,22 @@ object WidgetLayout {
             chipsHiddenCount = 0,
             showOverflowMarker = false,
             secondaryLine = null,
+            secondaryLineSp = Sizes.SECONDARY_LINE,
             showLaterToday = false,
             footerLines = emptyList(),
             footerSp = Sizes.HORIZ_SUB,
+            tempArrangement = TempArrangement.STACKED,
+            tempSp = 0f,
+            showTempLabel = false,
+            laterSp = 0f,
+            laterTodayLines = 0,
             metaSp = 0f,
             summaryItems = kept.map { it.displayName },
             summaryLineEstimate = summaryLines(kept),
             showWind = showWind,
             heroSp = summarySp,
             layerSp = 0f,
+            layerLines = 1,
             bottomSp = 0f,
             eyebrowSp = 0f,
             microSp = 0f,
