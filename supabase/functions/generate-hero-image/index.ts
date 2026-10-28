@@ -143,7 +143,7 @@ async function processQueuedJobs() {
     .from('generation_jobs')
     .select('*')
     .eq('status', 'QUEUED')
-    .order('created_at', { ascending: true })
+    .order('requested_at', { ascending: true })
     .limit(1)
 
   if (error) {
@@ -205,7 +205,7 @@ async function drainQueuedJobs(limit: number) {
     .from('generation_jobs')
     .select('*')
     .eq('status', 'QUEUED')
-    .order('created_at', { ascending: true })
+    .order('requested_at', { ascending: true })
     .limit(batchSize)
 
   if (error) {
