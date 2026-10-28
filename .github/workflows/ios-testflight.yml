@@ -1,0 +1,272 @@
+# RunWear iOS archive + TestFlight upload via GitHub Actions.
+#
+# Mirrors the proven JetLagKiller pipeline (same repo family, same
+# Uptime Ventures LLC team L2D8SN7BJ4, same distribution certificate
+# and App Store Connect API key), adapted for RunWear's differences:
+# - Pure Swift, checked-in .xcodeproj: no Gradle/Kotlin framework link,
+#   no XcodeGen generation, no Local.xcconfig secrets step.
+# - Two provisioning profiles, not three (no widget target):
+#     com.uptimeventures.runwear             -> RunWear App Store
+#     com.uptimeventures.runwear.watchkitapp -> RunWear Watch App Store
+# - The watch app is embedded in the iOS app target ("Embed Watch
+#   Content" copy phase + target dependency in project.pbxproj); the
+#   archive of scheme RunWear therefore carries both products.
+#
+# Toolchain: macos-26 runner's default Xcode (Xcode 26). Apple
+# requires uploads built with the current SDK; JLK's ship history
+# showed a macos-15/Xcode 16 archive pass locally but get rejected at
+# App Store validation ("built with the iOS 18.5 SDK"). The compile
+# gate (ios.yml) may lag on macos-15; this ship workflow must not.
+#
+# KEYCHAIN_PASSWORD is generated fresh inside each run (openssl
+# rand); the keychain is ephemeral, so no stored secret is needed.
+#
+# Required GitHub repository secrets (values NEVER in this repo —
+# names and sources only):
+#
+#   ASC_API_KEY_ID            App Store Connect API Key ID
+#                             (SVAT48T6VU, shared with JetLagKiller).
+#   ASC_API_ISSUER_ID         ASC Issuer ID (same key, same issuer).
+#   ASC_API_KEY_P8_BASE64     Base64 of AuthKey_SVAT48T6VU.p8. The .p8
+#                             downloads ONCE from ASC; it reaches this
+#                             repo's secret via the Secure Vault
+#                             handoff, never via chat or files.
+#   APPLE_TEAM_ID             Team ID L2D8SN7BJ4 (Uptime Ventures LLC).
+#   BUILD_CERTIFICATE_BASE64  Base64 of the Apple Distribution .p12
+#                             (same certificate as JetLagKiller —
+#                             one distribution cert serves the team).
+#   P12_PASSWORD              Password set at .p12 conversion.
+#   PROVISIONING_PROFILE_APP_BASE64
+#                             Base64 of "RunWear App Store"
+#                             .mobileprovision.
+#   PROVISIONING_PROFILE_WATCH_BASE64
+#                             Same, "RunWear Watch App Store".
+#
+# Signing settings are pinned in BOTH places: project.pbxproj sets
+# CODE_SIGN_STYLE=Manual, CODE_SIGN_IDENTITY="Apple Distribution",
+# DEVELOPMENT_TEAM and per-target PROVISIONING_PROFILE_SPECIFIER,
+# and the archive step passes the same values as build-setting
+# overrides (JLK run #2 history: any gap lets Xcode default to a
+# nonexistent "iOS Development" identity).
+#
+# CURRENT_PROJECT_VERSION is overridden with this workflow's run
+# number. A new workflow's run numbers start at 1, and the project's
+# build number is 1 with nothing uploaded yet, so the first upload is
+# version 1.0 build 1 and every later run increments. If an upload
+# ever collides with an existing build number, add an offset.
+#
+# Upload uses `xcrun altool` (ships with Xcode), as in the JLK
+# pipeline. Manual dispatch ONLY — macOS minutes bill at 10x on
+# private repos; ship runs are infrequent by design.
+
+name: iOS TestFlight (GitHub Actions)
+
+on:
+  workflow_dispatch:
+    inputs:
+      marketing_version:
+        description: "Marketing version to archive"
+        required: true
+        default: "1.0"
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  archive-and-upload:
+    name: Archive and upload to TestFlight
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      BUNDLE_ID: com.uptimeventures.runwear
+      WATCH_BUNDLE_ID: com.uptimeventures.runwear.watchkitapp
+      SCHEME: RunWear
+      PROJECT: RunWear-iOS/RunWear.xcodeproj
+      # Provisioning profile names — must match the portal-created
+      # profiles character for character (see header).
+      PROFILE_NAME_APP: RunWear App Store
+      PROFILE_NAME_WATCH: RunWear Watch App Store
+
+    steps:
+      - name: Check out the exact commit to ship
+        uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          xcrun altool --version || true
+
+      - name: Generate an ephemeral keychain password for this run
+        run: echo "KEYCHAIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      - name: Import the Apple Distribution certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+          keychain-password: ${{ env.KEYCHAIN_PASSWORD }}
+
+      - name: Install the App Store provisioning profiles (app, watch)
+        env:
+          PROFILE_APP_BASE64: ${{ secrets.PROVISIONING_PROFILE_APP_BASE64 }}
+          PROFILE_WATCH_BASE64: ${{ secrets.PROVISIONING_PROFILE_WATCH_BASE64 }}
+        run: |
+          set -euo pipefail
+          # Modern Xcode (16+, the runner default) reads profiles
+          # from ~/Library/Developer/Xcode/UserData/Provisioning
+          # Profiles, keyed by the profile's UUID as the filename.
+          # (JLK run #2 installed them in the pre-Xcode-16 location
+          # under descriptive names and the archive found no matching
+          # profile.) Install each profile under its own embedded
+          # UUID in BOTH directories, and verify the embedded Name
+          # matches the expected specifier so a mismatch fails HERE
+          # instead of mysteriously at archive time. Each stage is
+          # validated with a message naming the suspect secret (JLK
+          # run #3: a bad secret surfaced as an xmllint error two
+          # stages downstream of the actual decode failure).
+          PROFILE_DIRS=(
+            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+            "$HOME/Library/MobileDevice/Provisioning Profiles"
+          )
+          install_profile() {
+            local b64="$1" expected_name="$2" secret_name="$3"
+            local tmp plist uuid name dir decoded_bytes
+            if [ -z "$b64" ]; then
+              echo "Secret $secret_name arrived EMPTY in this run (0 characters): the secret is missing or blank. Re-set it from the local .b64 original." >&2
+              exit 1
+            fi
+            tmp="$(mktemp)"
+            plist="$(mktemp)"
+            if ! printf '%s' "$b64" | base64 --decode > "$tmp"; then
+              echo "Secret $secret_name is not valid base64. Re-set it from the local .b64 original." >&2
+              exit 1
+            fi
+            decoded_bytes="$(wc -c < "$tmp" | tr -d ' ')"
+            echo "Secret $secret_name: ${#b64} base64 chars -> $decoded_bytes decoded bytes"
+            if [ "$decoded_bytes" -eq 0 ]; then
+              echo "Secret $secret_name decoded to 0 bytes: the stored value is not base64 of the .mobileprovision. Re-set it from the local .b64 original." >&2
+              exit 1
+            fi
+            if ! security cms -D -i "$tmp" -o "$plist"; then
+              echo "security cms could not decode the profile from secret $secret_name ($decoded_bytes decoded bytes): the stored value does not decode to this profile's CMS data. Re-set it from the local .b64 original." >&2
+              exit 1
+            fi
+            uuid="$(xmllint --xpath "string(//key[text()='UUID']/following-sibling::string[1])" "$plist")"
+            name="$(xmllint --xpath "string(//key[text()='Name']/following-sibling::string[1])" "$plist")"
+            if [ -z "$uuid" ]; then
+              echo "Profile from secret $secret_name decoded but its plist has no UUID." >&2
+              exit 1
+            fi
+            if [ "$name" != "$expected_name" ]; then
+              echo "Provisioning profile name mismatch: got '$name', expected '$expected_name'" >&2
+              exit 1
+            fi
+            for dir in "${PROFILE_DIRS[@]}"; do
+              mkdir -p "$dir"
+              cp "$tmp" "$dir/$uuid.mobileprovision"
+            done
+            rm -f "$tmp" "$plist"
+            echo "Installed '$name' as $uuid.mobileprovision"
+          }
+          install_profile "$PROFILE_APP_BASE64" "$PROFILE_NAME_APP" "PROVISIONING_PROFILE_APP_BASE64"
+          install_profile "$PROFILE_WATCH_BASE64" "$PROFILE_NAME_WATCH" "PROVISIONING_PROFILE_WATCH_BASE64"
+
+      - name: Write the App Store Connect API key for altool
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$KEY_DIR"
+          printf '%s' "$ASC_KEY_P8_BASE64" | base64 --decode > "$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: Archive the app (signed, Release)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/RunWear.xcarchive" \
+            MARKETING_VERSION="${{ inputs.marketing_version }}" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            archive
+
+      - name: Write ExportOptions.plist
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>signingCertificate</key>
+            <string>Apple Distribution</string>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>stripSwiftSymbols</key>
+            <true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${PROFILE_NAME_APP}</string>
+              <key>${WATCH_BUNDLE_ID}</key>
+              <string>${PROFILE_NAME_WATCH}</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Export the IPA
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/RunWear.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Upload to App Store Connect / TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA_PATH="$(find "$RUNNER_TEMP/export" -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Upload the IPA as a workflow artifact (debugging a failed upload)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runwear-ios-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          if-no-files-found: ignore
