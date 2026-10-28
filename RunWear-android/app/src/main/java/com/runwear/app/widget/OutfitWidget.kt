@@ -61,7 +61,6 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 // Widget palette mirrors the phone app's kit (ui/theme RunWearColors):
 // background #0A0A0A, card #262626, text #FFFFFF / #B3B3B3 / #737373,
@@ -70,6 +69,15 @@ import java.time.format.DateTimeFormatter
 // at display size (per the widgets/watch audit re-skin spec).
 private val WidgetBackground = Color(0xFF0A0A0A)
 private val WidgetCard = Color(0xFF262626)
+
+/**
+ * The garment panel's raised surface (square compositions): a subtle
+ * tint step above the tile background (#0A0A0A). Glance has no shadow
+ * primitive — the tint step plus rounded corners is the approximation.
+ * The secondary chips keep the lighter WidgetCard tint so they still
+ * read as raised on the panel.
+ */
+private val WidgetPanel = Color(0xFF1A1A1A)
 private val WidgetTextPrimary = Color(0xFFFFFFFF)
 private val WidgetTextSecondary = Color(0xFFB3B3B3)
 private val WidgetTextMuted = Color(0xFF737373)
@@ -221,9 +229,11 @@ private fun WidgetContent(state: WidgetState, refreshing: Boolean) {
                 is WidgetState.Error -> ErrorContent(state, kind)
                 is WidgetState.Success -> when (kind) {
                     WidgetLayout.Kind.SMALL -> SmallWidgetContent(state, fontScale, innerW, innerH)
-                    WidgetLayout.Kind.MEDIUM_SQUARE -> MediumWidgetContent(state, fontScale, innerW, innerH)
+                    WidgetLayout.Kind.MEDIUM_SQUARE ->
+                        SquareWidgetContent(state, WidgetLayout.Kind.MEDIUM_SQUARE, fontScale, innerW, innerH)
                     WidgetLayout.Kind.HORIZONTAL -> HorizontalWidgetContent(state, fontScale, innerW, innerH)
-                    WidgetLayout.Kind.LARGE -> LargeWidgetContent(state, fontScale, innerW, innerH)
+                    WidgetLayout.Kind.LARGE ->
+                        SquareWidgetContent(state, WidgetLayout.Kind.LARGE, fontScale, innerW, innerH)
                 }
             }
         }
@@ -392,22 +402,25 @@ private fun SmallWidgetContent(
 }
 
 @Composable
-private fun MediumWidgetContent(
+private fun SquareWidgetContent(
     state: WidgetState.Success,
+    kind: WidgetLayout.Kind,
     fontScale: Float,
     innerW: Float,
     innerH: Float
 ) {
-    // The square composition (1.2.1): a spaced header (FOR NOW · time at
-    // the left; location + updated at the right, inset clear of the ↻
-    // corner), the outfit stack with the hero feels-like beside it (or
-    // banded under it at narrower widths), budgeted secondary chips, and
-    // the later-today guidance band at the bottom — budgeted at its
-    // wrapped line count, never clipped. Free height is distributed
-    // between the zones by the weighted spacers, never pooled in a void.
+    // The square composition after the hierarchy pass (Oct 28 2026):
+    // a whisper header (location + freshness on ONE muted line, inset
+    // clear of the ↻ corner — no FOR NOW eyebrow, no two-column
+    // header, no brand row), the hero temperature block ON TOP, the
+    // outfit zoned on one raised panel, and the later-today guidance
+    // as one unboxed line under the panel — budgeted at its wrapped
+    // line count, never clipped. Two text colors only: primary and
+    // the muted secondary. Free height is distributed between the
+    // zones by the weighted spacers, never pooled in a void.
     val outfit = state.outfit
     val plan = WidgetLayout.plan(
-        kind = WidgetLayout.Kind.MEDIUM_SQUARE,
+        kind = kind,
         outfit = outfit,
         laterTodayLine = state.laterTodayLine,
         footerSegments = footerSegments(state, full = true),
@@ -416,53 +429,31 @@ private fun MediumWidgetContent(
         innerHeightDp = innerH,
         fontScale = fontScale
     )
-    val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+    val chipSp = if (kind == WidgetLayout.Kind.LARGE) {
+        WidgetLayout.Sizes.LARGE_CHIP
+    } else {
+        WidgetLayout.Sizes.MEDIUM_CHIP
+    }
 
     Column(modifier = GlanceModifier.fillMaxSize()) {
-        Row(
-            modifier = GlanceModifier.fillMaxWidth().padding(end = 22.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Text(
-                text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextMuted),
-                    fontSize = WidgetLayout.Sizes.MEDIUM_EYEBROW.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                maxLines = 1
-            )
-            Spacer(modifier = GlanceModifier.defaultWeight())
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = state.locationName,
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextSecondary),
-                        fontSize = WidgetLayout.Sizes.MEDIUM_LOCATION.sp
-                    ),
-                    maxLines = 1
-                )
-                Text(
-                    text = WidgetFreshness.updatedLabel(
-                        state.lastUpdated, state.savedAtEpochMs, System.currentTimeMillis()
-                    ),
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextMuted),
-                        fontSize = plan.metaSp.sp
-                    ),
-                    maxLines = 1
-                )
-            }
-        }
-        Spacer(modifier = GlanceModifier.height(4.dp))
+        Text(
+            text = "${state.locationName} · ${WidgetFreshness.updatedLabel(
+                state.lastUpdated, state.savedAtEpochMs, System.currentTimeMillis()
+            )}",
+            style = TextStyle(
+                color = ColorProvider(WidgetTextSecondary),
+                fontSize = plan.metaSp.sp
+            ),
+            maxLines = 1,
+            modifier = GlanceModifier.fillMaxWidth().padding(end = 22.dp)
+        )
         Spacer(modifier = GlanceModifier.defaultWeight())
-        MainZone(state, plan)
-        if (plan.secondaryMode != WidgetLayout.SecondaryMode.NONE) {
-            Spacer(modifier = GlanceModifier.height(4.dp))
-            SecondaryZone(plan, WidgetLayout.Sizes.MEDIUM_CHIP)
-        }
+        HeroBlock(state, plan)
+        Spacer(modifier = GlanceModifier.height(WidgetLayout.HERO_PANEL_GAP_DP.dp))
+        GarmentPanel(state, plan, chipSp)
         Spacer(modifier = GlanceModifier.defaultWeight())
         if (plan.showLaterToday && state.laterTodayLine != null) {
+            Spacer(modifier = GlanceModifier.height(WidgetLayout.PANEL_GUIDANCE_GAP_DP.dp))
             Text(
                 text = state.laterTodayLine,
                 style = TextStyle(
@@ -476,27 +467,48 @@ private fun MediumWidgetContent(
 }
 
 /**
- * The main zone of the square compositions: the garment stack with the
- * hero temperature beside it ([WidgetLayout.TempArrangement.BESIDE]) or
- * the stack with the temperature band under it (STACKED).
+ * The hero temperature block: "FEELS LIKE" eyebrow (small caps,
+ * muted), the feels-like number as the tile's dominant element, and
+ * its support segments merged into ONE muted line under it (the plan
+ * packs them at segment boundaries — a second line only when the
+ * tile is too narrow for the merged line whole).
  */
 @Composable
-private fun MainZone(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
-    when (plan.tempArrangement) {
-        WidgetLayout.TempArrangement.BESIDE -> Row(
-            modifier = GlanceModifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
-        ) {
-            Column(modifier = GlanceModifier.defaultWeight()) {
-                GarmentStack(state, plan)
-            }
-            Spacer(modifier = GlanceModifier.width(10.dp))
-            TempSideColumn(state, plan)
+private fun HeroBlock(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
+    Column(modifier = GlanceModifier.fillMaxWidth()) {
+        if (plan.showTempLabel) {
+            Text(
+                text = "FEELS LIKE",
+                style = TextStyle(
+                    color = ColorProvider(WidgetTextSecondary),
+                    fontSize = WidgetLayout.Sizes.TEMP_LABEL.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                maxLines = 1
+            )
+            Spacer(modifier = GlanceModifier.height(2.dp))
         }
-        WidgetLayout.TempArrangement.STACKED -> Column(modifier = GlanceModifier.fillMaxWidth()) {
-            GarmentStack(state, plan)
-            Spacer(modifier = GlanceModifier.height(4.dp))
-            TempBand(state, plan)
+        Text(
+            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+            style = TextStyle(
+                color = ColorProvider(WidgetTextPrimary),
+                fontSize = plan.tempSp.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1
+        )
+        if (plan.footerLines.isNotEmpty()) {
+            Spacer(modifier = GlanceModifier.height(3.dp))
+            plan.footerLines.forEach { line ->
+                Text(
+                    text = line,
+                    style = TextStyle(
+                        color = ColorProvider(WidgetTextSecondary),
+                        fontSize = plan.footerSp.sp
+                    ),
+                    maxLines = 1
+                )
+            }
         }
     }
 }
@@ -516,95 +528,34 @@ private fun GarmentStack(state: WidgetState.Success, plan: WidgetLayout.SlotPlan
 }
 
 /**
- * The hero temperature as a side column (BESIDE): "FEELS LIKE" eyebrow,
- * the number at display size, and its support lines (actual, wind,
- * condition) stacked under it — right-aligned against the tile edge.
+ * The garment panel: the whole outfit — worn rows, the layer line,
+ * and the secondary zone (budgeted chips with the "+N more" marker,
+ * or the compact line) — zoned on ONE raised surface. Glance has no
+ * shadow primitive; the raised read is a background tint step from
+ * the tile background plus rounded corners, and the secondary chips
+ * keep the lighter card tint so they still read as raised on it.
  */
 @Composable
-private fun TempSideColumn(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
-    Column(horizontalAlignment = Alignment.End) {
-        if (plan.showTempLabel) {
-            Text(
-                text = "FEELS LIKE",
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextMuted),
-                    fontSize = WidgetLayout.Sizes.TEMP_LABEL.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                maxLines = 1
+private fun GarmentPanel(
+    state: WidgetState.Success,
+    plan: WidgetLayout.SlotPlan,
+    chipSp: Float
+) {
+    Box(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .background(WidgetPanel)
+            .cornerRadius(16.dp)
+            .padding(
+                horizontal = WidgetLayout.PANEL_PAD_H_DP.dp,
+                vertical = WidgetLayout.PANEL_PAD_V_DP.dp
             )
-            Spacer(modifier = GlanceModifier.height(2.dp))
-        }
-        Text(
-            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
-            style = TextStyle(
-                color = ColorProvider(WidgetTextPrimary),
-                fontSize = plan.tempSp.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            maxLines = 1
-        )
-        if (plan.footerLines.isNotEmpty()) {
-            Spacer(modifier = GlanceModifier.height(2.dp))
-            plan.footerLines.forEach { segment ->
-                Text(
-                    text = segment,
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextSecondary),
-                        fontSize = plan.footerSp.sp
-                    ),
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-/**
- * The hero temperature as a band (STACKED): number column at the left,
- * support lines stacked at the right — the band's height is the taller
- * of the two columns, as the plan budgets it.
- */
-@Composable
-private fun TempBand(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
-    Row(
-        modifier = GlanceModifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
     ) {
-        Column {
-            if (plan.showTempLabel) {
-                Text(
-                    text = "FEELS LIKE",
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextMuted),
-                        fontSize = WidgetLayout.Sizes.TEMP_LABEL.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1
-                )
-                Spacer(modifier = GlanceModifier.height(2.dp))
-            }
-            Text(
-                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextPrimary),
-                    fontSize = plan.tempSp.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                maxLines = 1
-            )
-        }
-        Spacer(modifier = GlanceModifier.defaultWeight())
-        Column(horizontalAlignment = Alignment.End) {
-            plan.footerLines.forEach { segment ->
-                Text(
-                    text = segment,
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextSecondary),
-                        fontSize = plan.footerSp.sp
-                    ),
-                    maxLines = 1
-                )
+        Column(modifier = GlanceModifier.fillMaxWidth()) {
+            GarmentStack(state, plan)
+            if (plan.secondaryMode != WidgetLayout.SecondaryMode.NONE) {
+                Spacer(modifier = GlanceModifier.height(WidgetLayout.PANEL_SEC_GAP_DP.dp))
+                SecondaryZone(plan, chipSp)
             }
         }
     }
@@ -702,121 +653,6 @@ private fun HorizontalWidgetContent(
     }
 }
 
-@Composable
-private fun LargeWidgetContent(
-    state: WidgetState.Success,
-    fontScale: Float,
-    innerW: Float,
-    innerH: Float
-) {
-    val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-    val outfit = state.outfit
-    // 1.2.1: the Large composition shares the square language — spaced
-    // header with the location column inset clear of the ↻ corner, the
-    // outfit stack with the hero feels-like beside it, budgeted
-    // secondary chips, and the guidance band budgeted at its wrapped
-    // line count. Free height is distributed, never pooled in a void.
-    val plan = WidgetLayout.plan(
-        kind = WidgetLayout.Kind.LARGE,
-        outfit = outfit,
-        laterTodayLine = state.laterTodayLine,
-        footerSegments = footerSegments(state, full = true),
-        droppableFooterSegment = actualSegment(state),
-        innerWidthDp = innerW,
-        innerHeightDp = innerH,
-        fontScale = fontScale
-    )
-
-    Column(
-        modifier = GlanceModifier.fillMaxSize()
-    ) {
-        // Brand strip: the RunWear mark, location and freshness at the right.
-        Row(
-            modifier = GlanceModifier.fillMaxWidth().padding(end = 22.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            Box(
-                modifier = GlanceModifier
-                    .size(8.dp)
-                    .background(WidgetPrimary)
-                    .cornerRadius(2.dp)
-            ) {}
-            Spacer(modifier = GlanceModifier.width(6.dp))
-            Text(
-                text = "RunWear",
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextPrimary),
-                    fontSize = WidgetLayout.Sizes.LARGE_BRAND.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            )
-            Spacer(modifier = GlanceModifier.defaultWeight())
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                Text(
-                    text = state.locationName,
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextSecondary),
-                        fontSize = WidgetLayout.Sizes.LARGE_LOCATION.sp
-                    ),
-                    maxLines = 1
-                )
-                Text(
-                    text = WidgetFreshness.updatedLabel(
-                        state.lastUpdated,
-                        state.savedAtEpochMs,
-                        System.currentTimeMillis()
-                    ),
-                    style = TextStyle(
-                        color = ColorProvider(WidgetTextMuted),
-                        fontSize = plan.metaSp.sp
-                    ),
-                    maxLines = 1
-                )
-            }
-        }
-
-        Spacer(modifier = GlanceModifier.height(4.dp))
-
-        // The moment the outfit is for.
-        Text(
-            text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
-            style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
-                fontSize = WidgetLayout.Sizes.LARGE_EYEBROW.sp,
-                fontWeight = FontWeight.Bold
-            ),
-            maxLines = 1
-        )
-        Spacer(modifier = GlanceModifier.defaultWeight())
-        MainZone(state, plan)
-
-        // Secondary pieces keep their icon chips under the main zone —
-        // as many as the width budget honestly fits, in priority order,
-        // with the "+N more" marker for the rest (or the compact line
-        // if height forced the chips out entirely).
-        if (plan.secondaryMode != WidgetLayout.SecondaryMode.NONE) {
-            Spacer(modifier = GlanceModifier.height(4.dp))
-            SecondaryZone(plan, WidgetLayout.Sizes.LARGE_CHIP)
-        }
-
-        Spacer(modifier = GlanceModifier.defaultWeight())
-
-        // The guidance band — budgeted at its wrapped line count.
-        if (plan.showLaterToday && state.laterTodayLine != null) {
-            Text(
-                text = state.laterTodayLine,
-                style = TextStyle(
-                    color = ColorProvider(WidgetTextSecondary),
-                    fontSize = plan.laterSp.sp
-                ),
-                maxLines = plan.laterTodayLines
-            )
-        }
-    }
-}
-
 /** The "+N more" marker chip: secondary items the row's width budget couldn't fit stay represented — a computed count, never an ellipsis. */
 @Composable
 private fun OverflowChip(hiddenCount: Int, chipSp: Float) {
@@ -860,7 +696,7 @@ private fun SecondaryZone(plan: WidgetLayout.SlotPlan, chipSp: Float) {
         WidgetLayout.SecondaryMode.LINE -> Text(
             text = plan.secondaryLine ?: "",
             style = TextStyle(
-                color = ColorProvider(WidgetTextMuted),
+                color = ColorProvider(WidgetTextSecondary),
                 fontSize = plan.secondaryLineSp.sp
             ),
             maxLines = 1

@@ -307,7 +307,13 @@ class WidgetLayoutTest {
         val plan = planFor(WidgetLayout.Kind.MEDIUM_SQUARE, bare51, fontScale = 1.0f, later = null)
         assertTrue(plan.fitsHeight)
         assertEquals(WidgetLayout.Sizes.MEDIUM_HERO, plan.heroSp) // no step-down needed
-        assertTrue(plan.footerLines.isNotEmpty())
+        // The outfit itself is complete. The hero's support line is the
+        // lowest-priority slot: at the smallest bucket the top-hero
+        // hierarchy (whisper + hero block + garment panel) spends the
+        // whole 136 dp, so the support sheds in full here — it is
+        // present at the field sizes (see the sol tile test).
+        assertTrue(plan.footerLines.isEmpty())
+        assertTrue(plan.tempSp > 0f)
     }
 
     @Test
@@ -327,23 +333,25 @@ class WidgetLayoutTest {
         )
         assertTrue(plan.fitsHeight)
         assertEquals(WidgetLayout.Sizes.MEDIUM_HERO, plan.heroSp) // no step-down needed
-        assertTrue(plan.footerLines.isNotEmpty())
+        // As at 160: the outfit is complete; the support line sheds.
+        assertTrue(plan.footerLines.isEmpty())
     }
 
     @Test
-    fun `medium 180 field case - cap is a chip, the rest sit behind the overflow marker`() {
+    fun `medium 180 field case - the sun set demotes to the compact line inside the panel`() {
         val plan = planFor(
             WidgetLayout.Kind.MEDIUM_SQUARE, bare51Sun,
             fontScale = 1.0f, later = null, bucket = 180 to 180
         )
-        // The cap's chip plus the "+2 more" marker fits the 156 dp inner
-        // width ("Running Cap" is short), so the sun set stays in chips:
-        // one worn item visible, the other two counted — the 1.2.1
-        // marker carries the word "more" and the budget still holds it.
-        assertEquals(WidgetLayout.SecondaryMode.CHIPS, plan.secondaryMode)
-        assertEquals(listOf(ClothingItem.BASEBALL_CAP), plan.chips)
-        assertEquals(2, plan.chipsHiddenCount)
-        assertTrue(plan.showOverflowMarker)
+        // The hierarchy pass zones the secondary row INSIDE the garment
+        // panel, so the chip budget runs against the panel's inner
+        // width (156 - 2x10 = 136 dp): the cap chip plus the "+2 more"
+        // marker no longer fits (150.9 dp), and with a single chip
+        // shown there is nothing to trade for the marker. The set
+        // demotes to the compact line — every item still represented,
+        // the hidden count still computed, never an ellipsis.
+        assertEquals(WidgetLayout.SecondaryMode.LINE, plan.secondaryMode)
+        assertEquals("Running Cap +2 more", plan.secondaryLine)
     }
 
     @Test
@@ -389,11 +397,10 @@ class WidgetLayoutTest {
         assertEquals(listOf(ClothingItem.BASEBALL_CAP), largeSun.chips)
         assertEquals(2, largeSun.chipsHiddenCount)
         assertTrue(largeSun.showOverflowMarker)
-        // But the guidance yields here: the sun set's names ("Running
-        // Shorts (5-7")") cannot sit beside the temperature column, so
-        // Large stacks — brand header + hero band + chips fill the
-        // 190 dp honestly, and later-today, first in the shed order,
-        // is what gives. Chips outrank it and survive, as documented.
+        // But the guidance yields here: whisper header + hero block +
+        // garment panel + chips fill the 166 dp inner height honestly,
+        // and later-today, first in the shed order, is what gives.
+        // Chips outrank it and survive, as documented.
         assertFalse(largeSun.showLaterToday)
     }
 
@@ -472,10 +479,9 @@ class WidgetLayoutTest {
             WidgetLayout.Kind.MEDIUM_SQUARE, solTileOutfit,
             fontScale = 1.0f, later = solGuidance, bucket = 240 to 248
         )
-        // At this width the BESIDE column cannot hold "Light Long
-        // Sleeve" whole beside the temperature column, so the plan
-        // stacks (full-width garment rows, temperature band below) —
-        // garment names never clip either.
+        // The hierarchy pass stacks at every square size: whisper
+        // header, hero temperature block on top, garment panel,
+        // guidance — full-width garment rows, so names never clip.
         assertEquals(WidgetLayout.TempArrangement.STACKED, plan.tempArrangement)
         assertTrue(plan.fitsHeight)
         assertTrue("guidance must survive at the field size", plan.showLaterToday)
@@ -512,12 +518,14 @@ class WidgetLayoutTest {
             WidgetLayout.Kind.MEDIUM_SQUARE, solTileOutfit,
             fontScale = 1.0f, later = solGuidance, bucket = 240 to 248
         )
-        // STACKED at this width (see the sol tile test): the hero
-        // number starts 4 sp under the BESIDE base.
-        assertEquals(WidgetLayout.Sizes.MEDIUM_TEMP - 4f, medium.tempSp)
+        // STACKED at every width (see the sol tile test), and the
+        // hero number renders at the full base size — the retired
+        // BESIDE arrangement's 4 sp stacked discount is gone. The
+        // support segments merge into ONE muted line under the number.
+        assertEquals(WidgetLayout.Sizes.MEDIUM_TEMP, medium.tempSp)
         assertTrue(medium.showTempLabel)
         assertEquals(
-            listOf("Actual 45°F", "Wind 8 mph", "Overcast"),
+            listOf("Actual 45°F · Wind 8 mph · Overcast"),
             medium.footerLines
         )
         val large = planFor(
@@ -526,7 +534,7 @@ class WidgetLayoutTest {
         )
         assertEquals(WidgetLayout.Sizes.LARGE_TEMP, large.tempSp)
         assertTrue(large.footerLines.none { it.contains("Feels like") })
-        // Below the beside threshold the hero bands under the outfit instead.
+        // The narrow bucket stacks the same way — one order everywhere.
         val narrow = planFor(
             WidgetLayout.Kind.MEDIUM_SQUARE, solTileOutfit,
             fontScale = 1.0f, later = null, bucket = 180 to 180
@@ -553,10 +561,10 @@ class WidgetLayoutTest {
             bucket = 240 to 248
         )
         assertTrue(plan.fitsHeight)
-        // "Thermal Long Sleeve" stacks the composition, and the joined
-        // layer line (two layers, each with its emoji) is budgeted at
-        // the two lines it wraps to — the outer layer never ellipsizes
-        // off the tile. The guidance survives too.
+        // The joined layer line (two layers, each with its emoji) is
+        // budgeted at the two lines it wraps to inside the panel —
+        // the outer layer never ellipsizes off the tile. The guidance
+        // survives too.
         assertEquals(WidgetLayout.TempArrangement.STACKED, plan.tempArrangement)
         assertEquals(2, plan.layerLines)
         assertTrue(plan.showLaterToday)
