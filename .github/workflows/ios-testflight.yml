@@ -6,8 +6,8 @@
 # - Pure Swift, checked-in .xcodeproj: no Gradle/Kotlin framework link,
 #   no XcodeGen generation, no Local.xcconfig secrets step.
 # - Two provisioning profiles, not three (no widget target):
-#     com.runwear.app             -> RunWear App Store
-#     com.runwear.app.watchkitapp -> RunWear Watch App Store
+#     com.uptimeventures.runwear             -> RunWear App Store
+#     com.uptimeventures.runwear.watchkitapp -> RunWear Watch App Store
 # - The watch app is embedded in the iOS app target ("Embed Watch
 #   Content" copy phase + target dependency in project.pbxproj); the
 #   archive of scheme RunWear therefore carries both products.
@@ -83,8 +83,8 @@ jobs:
     timeout-minutes: 60
 
     env:
-      BUNDLE_ID: com.runwear.app
-      WATCH_BUNDLE_ID: com.runwear.app.watchkitapp
+      BUNDLE_ID: com.uptimeventures.runwear
+      WATCH_BUNDLE_ID: com.uptimeventures.runwear.watchkitapp
       SCHEME: RunWear
       PROJECT: RunWear-iOS/RunWear.xcodeproj
       # Provisioning profile names — must match the portal-created
