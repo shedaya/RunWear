@@ -69,7 +69,7 @@ class WatchViewModel: NSObject, ObservableObject {
         }
 
         if let saved = UserDefaults.standard.object(forKey: "comfortLevel") as? Int,
-           let level = ComfortLevel(rawValue: saved) {
+           let level = ComfortLevel.fromStoredRawValue(saved) {
             comfortLevel = level
         }
     }
