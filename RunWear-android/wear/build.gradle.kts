@@ -67,6 +67,17 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            all {
+                // WearScreenshotTest is a screenshot-generation harness
+                // (Robolectric native-graphics renders of the production
+                // pages), and its shots leak window/focus state into each
+                // other inside one fork: solo, every shot renders; in one
+                // shared fork the ScalingLazyColumn pages degrade to
+                // fully transparent captures from the second activity on
+                // (bisected 2026-10-29). Fork per test class so each
+                // render gets the fresh sandbox it demonstrably needs.
+                it.forkEvery = 1
+            }
         }
     }
 }

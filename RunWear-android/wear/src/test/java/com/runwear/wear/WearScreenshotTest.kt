@@ -51,20 +51,25 @@ import org.robolectric.annotation.GraphicsMode
  *
  * A plain [Application] stands in for the Hilt app class: the harness
  * renders composables directly and never touches the DI graph.
+ *
+ * One test class per shot (below), and wear/build.gradle.kts forks the
+ * test JVM per class: inside one shared fork the shots leak window /
+ * focus state into each other and the ScalingLazyColumn pages degrade
+ * to fully transparent captures from the second activity on (bisected
+ * 2026-10-29 — every shot renders solo). Process isolation is the
+ * harness's contract, not a workaround for the app: on-device the
+ * pages render in sequence all day.
  */
 class ShotApplication : Application()
 
-@RunWith(RobolectricTestRunner::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
-class WearScreenshotTest {
+abstract class WearShotHarness {
 
-    private val engine = GetOutfitRecommendationUseCase()
+    protected val engine = GetOutfitRecommendationUseCase()
 
     private val outDir: File =
         File(System.getProperty("wearShotsDir") ?: "build/wear-screenshots")
 
-    private fun weather(
+    protected fun weather(
         tempF: Double,
         feelsF: Double,
         code: WeatherCode,
@@ -89,11 +94,11 @@ class WearScreenshotTest {
         isCelsius = false
     )
 
-    private val mildWeather = weather(60.0, 58.0, WeatherCode.CLEAR_SKY, 45, 6.0, 5.5, 10)
-    private val coldWeather = weather(30.0, 24.0, WeatherCode.OVERCAST, 55, 14.0, 0.5, 90)
-    private val hotWeather = weather(91.0, 96.0, WeatherCode.CLEAR_SKY, 62, 5.0, 9.0, 5)
+    protected val mildWeather = weather(60.0, 58.0, WeatherCode.CLEAR_SKY, 45, 6.0, 5.5, 10)
+    protected val coldWeather = weather(30.0, 24.0, WeatherCode.OVERCAST, 55, 14.0, 0.5, 90)
+    protected val hotWeather = weather(91.0, 96.0, WeatherCode.CLEAR_SKY, 62, 5.0, 9.0, 5)
 
-    private fun shoot(name: String, settleSteps: Int = 60, content: @Composable () -> Unit) {
+    protected fun shoot(name: String, settleSteps: Int = 60, content: @Composable () -> Unit) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java)
         // visible() attaches the window — without it the ComposeView never
         // attaches and has no windowRecomposer to compose into
@@ -119,6 +124,20 @@ class WearScreenshotTest {
         shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.SECONDS)
         shadowOf(Looper.getMainLooper()).idle()
 
+        // Place focus before capturing: the outfit/tips pages carry a
+        // focus chain on their ScalingLazyColumn (focusRequester +
+        // rotaryScrollable + focusable), and under Robolectric a
+        // focusable ScalingLazyColumn draws nothing until focus lands in
+        // the tree (bisected 2026-10-29: a bare ScalingLazyColumn renders
+        // at 39,601 opaque px and rotaryScrollable alone renders, but
+        // adding .focusable() blanks it). On-device a real window places
+        // focus through normal traversal; here, dispatch window focus and
+        // request focus on the host view, then drain the traversal.
+        composeView.dispatchWindowFocusChanged(true)
+        composeView.requestFocus()
+        shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS)
+        shadowOf(Looper.getMainLooper()).idle()
+
         val size = 456
         fun capture(): Pair<Bitmap, Int> {
             val spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
@@ -136,13 +155,9 @@ class WearScreenshotTest {
         var (bitmap, opaque) = capture()
         val firstPassOpaque = opaque
         if (opaque <= size * size / 4) {
-            // CI runners settle composition noticeably slower than a local
-            // workstation — ScalingLazyColumn's first layout in particular
-            // can lag the scheduler walk above, leaving a fully transparent
-            // first capture (seen on GitHub's ubuntu image, 2026-10-29:
-            // outfit/tips pages at 0 opaque pixels while hero pages, which
-            // are plain layouts, rendered). Settle a second, longer round
-            // and capture again before concluding nothing rendered.
+            // Slow hosts can lag ScalingLazyColumn's first layout behind
+            // even the long settle above. One more settle + capture round
+            // before concluding nothing rendered.
             repeat(50) {
                 scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
                 shadowOf(Looper.getMainLooper()).idle()
@@ -174,7 +189,12 @@ class WearScreenshotTest {
         }
         controller.pause().stop().destroy()
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
+class Shot01HeroMildTest : WearShotHarness() {
     @Test
     fun shot01_heroMild() {
         val outfit = engine.execute(mildWeather, ComfortPreference.NEUTRAL)
@@ -188,7 +208,12 @@ class WearScreenshotTest {
             )
         }
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
+class Shot02OutfitMildTest : WearShotHarness() {
     @Test
     fun shot02_outfitMild() {
         val outfit = engine.execute(mildWeather, ComfortPreference.NEUTRAL)
@@ -196,15 +221,32 @@ class WearScreenshotTest {
             OutfitPage(outfit = outfit, onRefresh = {}, isVisible = false)
         }
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
+class Shot03TipsHotTest : WearShotHarness() {
     @Test
-    fun shot03_tipsMild() {
-        val outfit = engine.execute(mildWeather, ComfortPreference.NEUTRAL)
-        shoot("03-tips-mild", settleSteps = 150) {
+    fun shot03_tipsHot() {
+        // Hot weather on purpose: the mild scenario produces ZERO tips
+        // (every generateTips rule correctly stays silent at 58°F, calm,
+        // dry, UV 5.5), so a "tips" shot of it depicts the empty state —
+        // and failed this harness's opaque-pixel check in the Oct 2026
+        // Wear release session for exactly that reason (465 px = the
+        // title alone; the release shipped without a tips screenshot).
+        // The hot scenario yields three real tips (heat, hydration, UV).
+        val outfit = engine.execute(hotWeather, ComfortPreference.NEUTRAL)
+        shoot("03-tips-hot", settleSteps = 150) {
             TipsPage(tips = outfit.tips, locationName = "New York", isVisible = false)
         }
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
+class Shot04HeroColdTest : WearShotHarness() {
     @Test
     fun shot04_heroCold() {
         val outfit = engine.execute(coldWeather, ComfortPreference.NEUTRAL)
@@ -218,7 +260,12 @@ class WearScreenshotTest {
             )
         }
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
+class Shot05OutfitColdTest : WearShotHarness() {
     @Test
     fun shot05_outfitCold() {
         val outfit = engine.execute(coldWeather, ComfortPreference.NEUTRAL)
@@ -226,7 +273,12 @@ class WearScreenshotTest {
             OutfitPage(outfit = outfit, onRefresh = {}, isVisible = false)
         }
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w228dp-h228dp-xhdpi")
+class Shot06HeroHotTest : WearShotHarness() {
     @Test
     fun shot06_heroHot() {
         val outfit = engine.execute(hotWeather, ComfortPreference.NEUTRAL)
