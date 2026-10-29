@@ -75,7 +75,11 @@ jobs:
             export RUNWEAR_FIXTURE_WRITE=1
             echo "RUNWEAR_FIXTURE_WRITE=1 (generation mode)"
           fi
-          ./gradlew :engine:testDebugUnitTest :shared:testDebugUnitTest \
+          # Branch-scoped adaptation (fix/android-cold-start-prod-2026-10-29):
+          # the production lineage predates the :engine extraction — the
+          # engine and its sweep live inside :shared here, so :engine: is
+          # dropped from the task list. All other suites identical to main.
+          ./gradlew :shared:testDebugUnitTest \
             :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug \
             --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
           code=${PIPESTATUS[0]}
