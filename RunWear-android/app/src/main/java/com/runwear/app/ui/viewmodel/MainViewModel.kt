@@ -85,7 +85,16 @@ data class MainUiState(
     val locationSource: String = "gps", // "gps" or "manual"
     val locationErrorReason: LocationErrorReason? = null,
     // Hero image from AI service
-    val heroImageUrl: String? = null
+    val heroImageUrl: String? = null,
+    /**
+     * Identity of the hero photo on screen, for flag reports: the
+     * Supabase pool row id when [heroImageUrl] came from the pool
+     * (null for fallback/curated photos) and the combination context
+     * to record with a flag (the served row's own cell when known,
+     * otherwise the requested combination).
+     */
+    val heroImageRowId: String? = null,
+    val heroCombinationId: String? = null
 )
 
 data class LocationSearchState(
@@ -208,15 +217,20 @@ class MainViewModel @Inject constructor(
         val dLon = lastGood.longitude - lon
         if (dLat * dLat + dLon * dLon > SEED_COORD_TOLERANCE_DEG * SEED_COORD_TOLERANCE_DEG) return
         _uiState.update { state ->
-            if (state.outfit != null) state else state.copy(
-                isLoading = false,
-                weather = lastGood.weather,
-                outfit = lastGood.outfit,
-                locationName = lastGood.locationName,
-                heroImageUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
+            if (state.outfit != null) state else {
+                val seededHero = com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
                     lastGood.weather, lastGood.outfit, state.genderPreference
                 )
-            )
+                state.copy(
+                    isLoading = false,
+                    weather = lastGood.weather,
+                    outfit = lastGood.outfit,
+                    locationName = lastGood.locationName,
+                    heroImageUrl = seededHero.imageUrl,
+                    heroImageRowId = null,
+                    heroCombinationId = seededHero.combinationId
+                )
+            }
         }
     }
 
@@ -672,20 +686,50 @@ class MainViewModel @Inject constructor(
         val gender = _uiState.value.genderPreference
         heroResolveJob?.cancel()
         heroResolveJob = viewModelScope.launch {
-            val aiUrl = runCatching {
+            val result = runCatching {
                 withTimeoutOrNull(HERO_RESOLVE_TIMEOUT_MS) {
                     heroImageRepository.getHeroImage(
                         weather = weather,
                         outfit = outfit,
                         gender = gender
-                    ).imageUrl
+                    )
                 }
             }.getOrNull()
             if (!isActive) return@launch
-            val finalUrl = aiUrl ?: com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
-                weather, outfit, gender
+            // Keep the winning result whole: its row id / served cell are
+            // the identity a hero-flag report needs. A pool result with
+            // no URL (shouldn't happen) degrades to the curated fallback.
+            val hero = result?.takeIf { it.imageUrl != null }
+                ?: com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
+                    weather, outfit, gender
+                )
+            _uiState.update {
+                it.copy(
+                    heroImageUrl = hero.imageUrl,
+                    heroImageRowId = hero.imageRowId,
+                    heroCombinationId = hero.servedCombinationId ?: hero.combinationId
+                )
+            }
+        }
+    }
+
+    /**
+     * Send a hero-flag report for the photo currently on screen.
+     * Fire-and-forget: the repository swallows all failures, so this
+     * never disturbs the run screen; the UI confirms optimistically.
+     */
+    fun flagCurrentHero(reason: com.runwear.shared.domain.model.HeroFlagReason) {
+        val state = _uiState.value
+        val url = state.heroImageUrl ?: return
+        viewModelScope.launch {
+            heroImageRepository.flagHeroImage(
+                imageUrl = url,
+                imageRowId = state.heroImageRowId,
+                servedCombinationId = state.heroCombinationId,
+                requestedCombinationId = state.heroCombinationId,
+                reason = reason,
+                appVersion = com.runwear.app.BuildConfig.VERSION_NAME
             )
-            _uiState.update { it.copy(heroImageUrl = finalUrl) }
         }
     }
     

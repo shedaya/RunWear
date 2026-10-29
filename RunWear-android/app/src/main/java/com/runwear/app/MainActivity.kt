@@ -188,7 +188,8 @@ class MainActivity : ComponentActivity() {
                                             if (category != null) "contextual" else "settings"
                                         showFeedback = true
                                     },
-                                    onItemTapped = viewModel::onAffiliateItemTapped
+                                    onItemTapped = viewModel::onAffiliateItemTapped,
+                                    onFlagHero = viewModel::flagCurrentHero
                                 )
                             }
                         }
