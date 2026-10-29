@@ -37,6 +37,13 @@ kotlin {
         iosSimulatorArm64(),
         iosX64(),
         watchosArm64(),
+        // watchosDeviceArm64 is NOT optional either: Kotlin's
+        // watchosArm64 emits the arm64_32 device slice only, while
+        // Xcode archives the watch app for arm64 + arm64_32, and a
+        // missing arm64 slice fails the watch link with undefined
+        // RunWearEngine symbols. Simulator-only CI cannot see this —
+        // it first fired on the TestFlight archive of 2026-10-29.
+        watchosDeviceArm64(),
         watchosSimulatorArm64(),
         // watchosX64 is NOT optional: Xcode builds the watch app for
         // arm64 + x86_64 on the watchOS simulator, and a missing x86_64
