@@ -190,11 +190,17 @@ struct HourlyWeatherSnapshot {
             weatherCode: hourly.weatherCode?[safe: index] ?? 0
         )
     }
+}
 
+extension HourlyWeatherSnapshot {
     /// Snapshot from the current-conditions blocks, used when the
     /// selected hour lies outside the hourly forecast window. Values
     /// are the real measured current values (extended `current=` list
     /// first, legacy block as backstop) — never fabricated defaults.
+    /// (In an extension, like WeatherData's Decodable init: an
+    /// initializer in the main declaration would suppress the
+    /// synthesized memberwise initializer `from(hourly:at:)` and the
+    /// boundary fixtures rely on.)
     init(hour: Int, current: CurrentWeather, detail: CurrentDetail?) {
         self.hour = hour
         self.temperature = detail?.temperature2m ?? current.temperature
