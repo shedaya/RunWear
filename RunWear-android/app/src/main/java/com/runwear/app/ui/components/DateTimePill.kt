@@ -46,7 +46,15 @@ import java.time.format.DateTimeFormatter
  * - border: 1px solid rgba(255, 255, 255, 0.15)
  * - .active section: rgba(255, 255, 255, 0.15)
  *
- * @param dateTime The currently selected date/time
+ * All values are framed in the SELECTED LOCATION's timezone: [dateTime] is a
+ * location-local wall time and [referenceNow] is the location's current time.
+ * Nothing here reads the phone's clock — when a different city is selected,
+ * "Today" and "Now" belong to that city, not to the device.
+ *
+ * @param dateTime The currently selected date/time (location-local)
+ * @param referenceNow The current date/time at the selected location
+ * @param isNowSelected Whether the first-class NOW state is active; the time
+ * segment then reads "Now" instead of a clock time
  * @param onDateClick Handler when date section is tapped
  * @param onTimeClick Handler when time section is tapped
  * @param onNowClick Handler when "Now" shortcut is tapped (optional)
@@ -55,17 +63,15 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun DateTimePill(
     dateTime: LocalDateTime,
+    referenceNow: LocalDateTime,
+    isNowSelected: Boolean,
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
     onNowClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val now = LocalDateTime.now()
-    val isToday = dateTime.toLocalDate() == LocalDate.now()
-    val isTomorrow = dateTime.toLocalDate() == LocalDate.now().plusDays(1)
-
-    // Check if viewing current time (same day and same hour)
-    val isViewingNow = isToday && dateTime.hour == now.hour
+    val isToday = dateTime.toLocalDate() == referenceNow.toLocalDate()
+    val isTomorrow = dateTime.toLocalDate() == referenceNow.toLocalDate().plusDays(1)
 
     val dateText = when {
         isToday -> "Today"
@@ -73,7 +79,8 @@ fun DateTimePill(
         else -> dateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
     }
 
-    val timeText = dateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+    val timeText = if (isNowSelected) "Now"
+        else dateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
 
     // PWA glass morphism: rgba(255, 255, 255, 0.12) = 12% white
     val glassBackground = Color.White.copy(alpha = 0.12f)
@@ -129,7 +136,9 @@ fun DateTimePill(
                     .background(Color.White.copy(alpha = 0.2f))
             )
 
-            // Time button
+            // Time button — in the NOW state it reads "Now" in the teal accent
+            // (the selection IS the location's current time; a clock reading
+            // here would invite reading it in the phone's frame).
             Surface(
                 onClick = onTimeClick,
                 shape = RoundedCornerShape(100.dp),
@@ -143,21 +152,21 @@ fun DateTimePill(
                     Icon(
                         Icons.Outlined.Schedule,
                         contentDescription = "Select time",
-                        tint = Color.White.copy(alpha = 0.7f),
+                        tint = if (isNowSelected) tealText else Color.White.copy(alpha = 0.7f),
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = timeText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White.copy(alpha = 0.7f)
+                        color = if (isNowSelected) tealText else Color.White.copy(alpha = 0.7f)
                     )
                 }
             }
 
-            // "Now" shortcut - only visible when viewing different time
+            // "Now" shortcut - only visible when an explicit time is selected
             AnimatedVisibility(
-                visible = !isViewingNow && onNowClick != null,
+                visible = !isNowSelected && onNowClick != null,
                 enter = fadeIn() + scaleIn(initialScale = 0.8f),
                 exit = fadeOut() + scaleOut(targetScale = 0.8f)
             ) {

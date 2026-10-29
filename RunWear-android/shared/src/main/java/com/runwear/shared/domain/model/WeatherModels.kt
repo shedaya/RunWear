@@ -9,6 +9,7 @@ data class WeatherConditions(
     val humidity: Int,
     val windSpeed: Double,
     val windGusts: Double,
+    val windDirection: Int = 0,
     val precipitationProbability: Int,
     val precipitation: Double,
     val isRaining: Boolean,

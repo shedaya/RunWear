@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FF6B35</color>
+    <!-- Fusion icon background token (Sol's handover package): bg-dark-teal #17262A. -->
+    <color name="ic_launcher_background">#FF17262A</color>
+    <!-- RunWearColors.Background (#0A0A0A) — the app's own dark surface. -->
+    <color name="runwear_background">#FF0A0A0A</color>
 </resources>

@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.RunWear" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- Dark parent + branded windowBackground: the app is a dark-first
+         design (RunWearColors), and the starting window must open on the
+         brand surface — previously this was a plain light Material theme
+         with no windowBackground, so cold starts flashed a bare system
+         frame before Compose painted. -->
+    <style name="Theme.RunWear" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

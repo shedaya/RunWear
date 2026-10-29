@@ -64,4 +64,7 @@ dependencies {
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.storage)
     implementation(libs.ktor.client.android)
+
+    // Unit tests (same pin as the app module)
+    testImplementation("junit:junit:4.13.2")
 }

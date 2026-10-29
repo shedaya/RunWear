@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -51,6 +53,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.runwear.app.R
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
@@ -80,9 +84,18 @@ fun OutfitCard(
 ) {
     val categoryColor = getCategoryColor(item.category)
     val context = LocalContext.current
+    // Bundled asset first (the set is closed and ships with the app — no
+    // network wait); the remote URL is the fallback only, if the asset
+    // fails to load.
+    val thumbnailAssetUri = remember(item, gender) {
+        ClothingThumbnailService.getThumbnailAssetUri(item, gender)
+    }
     val thumbnailUrl = remember(item, gender) {
         ClothingThumbnailService.getThumbnailUrl(item, gender)
     }
+    var assetFailed by remember(item, gender) { mutableStateOf(false) }
+    val thumbnailModel =
+        if (thumbnailAssetUri != null && !assetFailed) thumbnailAssetUri else thumbnailUrl
 
     // Track thumbnail load state for fallback
     var thumbnailLoaded by remember { mutableStateOf(false) }
@@ -131,19 +144,22 @@ fun OutfitCard(
                     .background(categoryColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                // Emoji Icon (shown as fallback or while loading)
+                // Category SVG icon (shown as fallback or while thumbnail loads)
+                // Matches web PWA: SVG category icon as base layer, no emoji
                 if (!thumbnailLoaded) {
-                    Text(
-                        text = item.icon,
-                        style = TextStyle(fontSize = 24.sp)
+                    Icon(
+                        painter = painterResource(id = getCategoryIconRes(item.category)),
+                        contentDescription = null,
+                        tint = categoryColor,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
-                // AI-generated thumbnail
-                if (thumbnailUrl != null) {
+                // AI-generated thumbnail (bundled asset, remote fallback)
+                if (thumbnailModel != null) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(thumbnailUrl)
+                            .data(thumbnailModel)
                             .crossfade(300)
                             .build(),
                         contentDescription = item.displayName,
@@ -152,7 +168,13 @@ fun OutfitCard(
                             .clip(RoundedCornerShape(14.dp))
                             .graphicsLayer { alpha = if (thumbnailLoaded) 1f else 0f },
                         onSuccess = { thumbnailLoaded = true },
-                        onError = { thumbnailLoaded = false }
+                        onError = {
+                            if (!assetFailed && thumbnailAssetUri != null) {
+                                assetFailed = true // retry once from the remote URL
+                            } else {
+                                thumbnailLoaded = false
+                            }
+                        }
                     )
                 }
             }
@@ -197,6 +219,18 @@ fun getCategoryColor(category: ClothingCategory): Color = when (category) {
     ClothingCategory.HEAD -> RunWearColors.CategoryHead
     ClothingCategory.HANDS -> RunWearColors.CategoryHands
     ClothingCategory.ACCESSORIES -> RunWearColors.CategoryAccessories
+}
+
+/**
+ * Get the SVG category icon drawable (ported from web PWA categoryIcons).
+ * Replaces the emoji fallback for deterministic, on-brand rendering.
+ */
+fun getCategoryIconRes(category: ClothingCategory): Int = when (category) {
+    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER -> R.drawable.ic_category_top
+    ClothingCategory.BOTTOM -> R.drawable.ic_category_bottom
+    ClothingCategory.HEAD -> R.drawable.ic_category_head
+    ClothingCategory.HANDS -> R.drawable.ic_category_hands
+    ClothingCategory.ACCESSORIES -> R.drawable.ic_category_accessories
 }
 
 /**
@@ -256,13 +290,13 @@ fun OutfitSection(
 }
 
 /**
- * PWA v2.7 aligned PRO TIP card.
+ * PWA-aligned Pro Tip card: shows first tip, tap to expand the rest.
  *
- * PWA CSS values:
+ * PWA values:
  * - background: linear-gradient(135deg, rgba(0, 121, 107, 0.15), rgba(0, 121, 107, 0.05))
  * - border: 1px solid rgba(0, 121, 107, 0.2)
- * - border-radius: 16px
- * - padding: 18px
+ * - border-radius: 16px, padding: 18px
+ * - label: "Pro Tip" (title case), tap toggles additional tips
  */
 @Composable
 fun TipsSection(
@@ -270,6 +304,8 @@ fun TipsSection(
     modifier: Modifier = Modifier
 ) {
     if (tips.isEmpty()) return
+
+    var expanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -290,6 +326,7 @@ fun TipsSection(
                 color = Color(0x3300796B),  // rgba(0, 121, 107, 0.2)
                 shape = RoundedCornerShape(16.dp)
             )
+            .clickable { if (tips.size > 1) expanded = !expanded }
             .padding(18.dp)
     ) {
         // Header Row
@@ -314,9 +351,9 @@ fun TipsSection(
                 )
             }
 
-            // "PRO TIP" label
+            // "Pro Tip" label (title case, matches web PWA)
             Text(
-                text = "PRO TIP",
+                text = "Pro Tip",
                 style = TextStyle(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -324,21 +361,42 @@ fun TipsSection(
                     letterSpacing = 0.5.sp
                 )
             )
+
+            // Expand indicator when there are more tips
+            if (tips.size > 1) {
+                Spacer(Modifier.weight(1f))
+                Icon(
+                    imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                    contentDescription = if (expanded) "Show less" else "Show more",
+                    tint = RunWearColors.TextMuted,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
 
-        // Tip texts
-        tips.forEachIndexed { index, tip ->
-            if (index > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            Text(
-                text = tip,
-                style = TextStyle(
-                    fontSize = 14.sp,
-                    lineHeight = 21.sp,
-                    color = RunWearColors.TextSecondary
-                )
+        // First tip always visible
+        Text(
+            text = tips[0],
+            style = TextStyle(
+                fontSize = 14.sp,
+                lineHeight = 21.sp,
+                color = RunWearColors.TextSecondary
             )
+        )
+
+        // Additional tips revealed on expand
+        if (expanded) {
+            tips.drop(1).forEach { tip ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = tip,
+                    style = TextStyle(
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                )
+            }
         }
     }
 }

@@ -13,12 +13,26 @@ interface OpenMeteoApi {
     suspend fun getWeather(
         @Query("latitude") latitude: Double,
         @Query("longitude") longitude: Double,
-        @Query("current") current: String = "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index",
-        @Query("hourly") hourly: String = "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index",
+        @Query("current") current: String = "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index",
+        @Query("hourly") hourly: String = "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index",
         @Query("temperature_unit") temperatureUnit: String = "fahrenheit",
         @Query("wind_speed_unit") windSpeedUnit: String = "mph",
         @Query("timezone") timezone: String = "auto",
         @Query("forecast_days") forecastDays: Int = 7
+    ): OpenMeteoResponse
+
+    /**
+     * Lightweight timezone lookup: with no current/hourly variables requested,
+     * the response carries just the location metadata — including the IANA
+     * `timezone` (resolved from the coordinates because timezone=auto).
+     * This is the source of the selected location's frame for all date/time UI.
+     */
+    @GET("v1/forecast")
+    suspend fun getTimeZone(
+        @Query("latitude") latitude: Double,
+        @Query("longitude") longitude: Double,
+        @Query("timezone") timezone: String = "auto",
+        @Query("forecast_days") forecastDays: Int = 1
     ): OpenMeteoResponse
 }
 

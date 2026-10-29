@@ -264,3 +264,6 @@ async function loadWeather() {
 
 ## Next Steps
 - UI/UX improvements (planning in progress)
+
+## Localization
+All user-facing copy follows the studio localization standard — see `docs/localization-standard.md`. Working rule: no new hard-coded user-facing strings; copy resolves at runtime from the platform's standard resource mechanism. Extraction of existing copy is tracked in the studio i18n prep (`runwear-string-inventory.md`).

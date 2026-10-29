@@ -44,10 +44,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 // rememberActiveFocusRequester removed - using manual FocusRequester for pager pages
+import androidx.compose.ui.res.painterResource
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.CardDefaults
 import androidx.wear.compose.material3.CircularProgressIndicator
+import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import coil.compose.AsyncImage
@@ -63,7 +65,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
 /**
- * Hero-image design WearMainScreen with 3-page horizontal layout.
+ * Hero-image design wear main screen with 3-page horizontal layout.
  *
  * Pages:
  * 1. Hero Weather - Image with temp tint, large temperature display
@@ -229,14 +231,17 @@ private fun HeroWeatherPage(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top: Weather icon and condition
+            // Top: Condition label and location (the phone app's condition
+            // treatment is a text label, not an emoji glyph)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 16.dp)
             ) {
                 Text(
-                    text = weather.weatherCode.icon,
-                    fontSize = 24.sp
+                    text = weather.weatherCode.description,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White.copy(alpha = 0.9f),
+                    maxLines = 1
                 )
                 Text(
                     text = locationName,
@@ -421,10 +426,13 @@ private fun WearOutfitChip(item: ClothingItem) {
 
         Spacer(Modifier.width(6.dp))
 
-        // Icon
-        Text(
-            text = getCategoryEmoji(item.category),
-            fontSize = 12.sp
+        // Category icon — same vector set the phone app uses, tinted with
+        // the category color (mirrors OutfitCard.getCategoryIconRes)
+        Icon(
+            painter = painterResource(id = getCategoryIconRes(item.category)),
+            contentDescription = null,
+            tint = categoryColor,
+            modifier = Modifier.size(16.dp)
         )
 
         Spacer(Modifier.width(6.dp))
@@ -527,8 +535,14 @@ private fun WearTipCard(tip: String) {
             modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Text(text = "💡", fontSize = 12.sp)
-            Spacer(Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .padding(top = 5.dp)
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(RunWearColors.Primary)
+            )
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = tip,
                 style = MaterialTheme.typography.bodySmall,
@@ -595,8 +609,6 @@ private fun WearErrorScreen(error: String, onRetry: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(text = "⚠️", fontSize = 28.sp)
-            Spacer(Modifier.height(6.dp))
             Text(
                 text = error,
                 style = MaterialTheme.typography.bodySmall,
@@ -619,8 +631,6 @@ private fun WearPermissionScreen(onRequest: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(text = "📍", fontSize = 28.sp)
-            Spacer(Modifier.height(6.dp))
             Text(
                 text = "Location needed",
                 style = MaterialTheme.typography.bodySmall,
@@ -647,12 +657,12 @@ private fun getCategoryColor(category: ClothingCategory): Color = when (category
     ClothingCategory.ACCESSORIES -> RunWearColors.CategoryAccessories
 }
 
-private fun getCategoryEmoji(category: ClothingCategory): String = when (category) {
-    ClothingCategory.TOP_BASE -> "👕"
-    ClothingCategory.TOP_MID -> "🧥"
-    ClothingCategory.TOP_OUTER -> "🧥"
-    ClothingCategory.BOTTOM -> "👖"
-    ClothingCategory.HEAD -> "🧢"
-    ClothingCategory.HANDS -> "🧤"
-    ClothingCategory.ACCESSORIES -> "🕶️"
+/** Category icon drawable — mirrors the phone app's OutfitCard mapping. */
+private fun getCategoryIconRes(category: ClothingCategory): Int = when (category) {
+    ClothingCategory.TOP_BASE, ClothingCategory.TOP_MID, ClothingCategory.TOP_OUTER ->
+        com.runwear.wear.R.drawable.ic_category_top
+    ClothingCategory.BOTTOM -> com.runwear.wear.R.drawable.ic_category_bottom
+    ClothingCategory.HEAD -> com.runwear.wear.R.drawable.ic_category_head
+    ClothingCategory.HANDS -> com.runwear.wear.R.drawable.ic_category_hands
+    ClothingCategory.ACCESSORIES -> com.runwear.wear.R.drawable.ic_category_accessories
 }

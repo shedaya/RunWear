@@ -3,11 +3,13 @@ package com.runwear.shared.data.repository
 import com.runwear.shared.data.api.GeocodingApi
 import com.runwear.shared.data.api.NominatimApi
 import com.runwear.shared.data.api.OpenMeteoApi
+import com.runwear.shared.data.model.OpenMeteoResponse
 import com.runwear.shared.domain.model.HourlyForecast
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,31 +29,85 @@ class WeatherRepository @Inject constructor(
     private val geocodingApi: GeocodingApi,
     private val nominatimApi: NominatimApi
 ) {
-    
-    suspend fun getCurrentWeather(
+
+    // Timezone cache keyed by ~11 km coordinate cell — a fixed point's zone
+    // effectively never changes, so this is one small lookup per location.
+    private val timeZoneCache = mutableMapOf<String, ZoneId>()
+
+    /**
+     * The IANA timezone of the SELECTED LOCATION, from the weather API's own
+     * response (timezone=auto resolves it from the coordinates). Every date/time
+     * the UI shows for a location must be framed in this zone — never silently
+     * in the phone's zone.
+     */
+    suspend fun getLocationTimeZone(latitude: Double, longitude: Double): Result<ZoneId> = runCatching {
+        val key = "%.2f,%.2f".format(latitude, longitude)
+        timeZoneCache[key]?.let { return@runCatching it }
+        val zone = ZoneId.of(weatherApi.getTimeZone(latitude, longitude).timezone)
+        timeZoneCache[key] = zone
+        zone
+    }
+
+    /**
+     * The ONE forecast fetch. Current conditions, an explicit-hour selection
+     * and the hourly list are all parsed from this single `v1/forecast`
+     * response — callers must never issue a second identical request for the
+     * same refresh (startup fix: three serial round-trips became one).
+     */
+    suspend fun getForecast(
         latitude: Double,
         longitude: Double,
         unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
-    ): Result<WeatherConditions> = runCatching {
+    ): Result<OpenMeteoResponse> = runCatching {
         val tempUnit = if (unit == TemperatureUnit.CELSIUS) "celsius" else "fahrenheit"
         val windUnit = if (unit == TemperatureUnit.CELSIUS) "kmh" else "mph"
-        
-        val response = weatherApi.getWeather(
+        weatherApi.getWeather(
             latitude = latitude,
             longitude = longitude,
             temperatureUnit = tempUnit,
             windSpeedUnit = windUnit
         )
-        
+    }
+
+    /**
+     * The location's IANA zone as carried by a forecast response
+     * (`timezone=auto` resolves it from the coordinates). Deriving the frame
+     * from the weather response itself removes the standalone timezone
+     * round-trip from the startup path; the zone is also cached by
+     * coordinate cell for [getLocationTimeZone] callers.
+     */
+    fun recordZone(latitude: Double, longitude: Double, response: OpenMeteoResponse): ZoneId {
+        val zone = runCatching { ZoneId.of(response.timezone) }
+            .getOrDefault(ZoneId.systemDefault())
+        timeZoneCache["%.2f,%.2f".format(latitude, longitude)] = zone
+        return zone
+    }
+
+    /** Parse the current-conditions block of a shared forecast response. */
+    fun parseCurrentWeather(
+        response: OpenMeteoResponse,
+        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    ): WeatherConditions {
         val current = response.current ?: throw Exception("No current weather data")
-        
-        WeatherConditions(
-            dateTime = LocalDateTime.now(),
+
+        // The API's current.time is already location-local (timezone=auto).
+        // Using the phone's clock here was one source of the frame mix-up:
+        // "current" conditions were stamped with the device's timezone time.
+        val locationNow = runCatching { LocalDateTime.parse(current.time) }
+            .getOrElse {
+                val zone = runCatching { ZoneId.of(response.timezone) }
+                    .getOrDefault(ZoneId.systemDefault())
+                LocalDateTime.now(zone)
+            }
+
+        return WeatherConditions(
+            dateTime = locationNow,
             temperature = current.temperature,
             feelsLike = current.apparentTemperature,
             humidity = current.humidity,
             windSpeed = current.windSpeed,
             windGusts = current.windGusts,
+            windDirection = current.windDirection,
             precipitationProbability = current.precipitationProbability,
             precipitation = current.precipitation,
             isRaining = current.rain > 0,
@@ -62,23 +118,21 @@ class WeatherRepository @Inject constructor(
             isCelsius = unit == TemperatureUnit.CELSIUS
         )
     }
-    
-    suspend fun getWeatherForDateTime(
+
+    /** Convenience: one fetch + current-conditions parse. */
+    suspend fun getCurrentWeather(
         latitude: Double,
         longitude: Double,
+        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    ): Result<WeatherConditions> =
+        getForecast(latitude, longitude, unit).mapCatching { parseCurrentWeather(it, unit) }
+
+    /** Parse the hourly entry matching [dateTime]'s hour from a shared response. */
+    fun parseWeatherForDateTime(
+        response: OpenMeteoResponse,
         dateTime: LocalDateTime,
         unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
-    ): Result<WeatherConditions> = runCatching {
-        val tempUnit = if (unit == TemperatureUnit.CELSIUS) "celsius" else "fahrenheit"
-        val windUnit = if (unit == TemperatureUnit.CELSIUS) "kmh" else "mph"
-        
-        val response = weatherApi.getWeather(
-            latitude = latitude,
-            longitude = longitude,
-            temperatureUnit = tempUnit,
-            windSpeedUnit = windUnit
-        )
-        
+    ): WeatherConditions {
         val hourly = response.hourly ?: throw Exception("No hourly weather data")
 
         // Find the closest hour in the forecast. A miss used to silently fall
@@ -93,14 +147,15 @@ class WeatherRepository @Inject constructor(
             )
             throw Exception("No forecast data for the selected time")
         }
-        
-        WeatherConditions(
+
+        return WeatherConditions(
             dateTime = dateTime,
             temperature = hourly.temperature[index],
             feelsLike = hourly.apparentTemperature[index],
             humidity = hourly.humidity[index],
             windSpeed = hourly.windSpeed[index],
             windGusts = hourly.windGusts[index],
+            windDirection = hourly.windDirection.getOrElse(index) { 0 },
             precipitationProbability = hourly.precipitationProbability[index],
             precipitation = hourly.precipitation[index],
             isRaining = hourly.rain[index] > 0,
@@ -111,26 +166,27 @@ class WeatherRepository @Inject constructor(
             isCelsius = unit == TemperatureUnit.CELSIUS
         )
     }
-    
-    suspend fun getHourlyForecast(
+
+    /** Convenience: one fetch + explicit-hour parse. */
+    suspend fun getWeatherForDateTime(
         latitude: Double,
         longitude: Double,
+        dateTime: LocalDateTime,
         unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
-    ): Result<List<HourlyForecast>> = runCatching {
-        val tempUnit = if (unit == TemperatureUnit.CELSIUS) "celsius" else "fahrenheit"
-        val windUnit = if (unit == TemperatureUnit.CELSIUS) "kmh" else "mph"
-        
-        val response = weatherApi.getWeather(
-            latitude = latitude,
-            longitude = longitude,
-            temperatureUnit = tempUnit,
-            windSpeedUnit = windUnit
-        )
-        
+    ): Result<WeatherConditions> =
+        getForecast(latitude, longitude, unit).mapCatching {
+            parseWeatherForDateTime(it, dateTime, unit)
+        }
+
+    /** Parse the hourly forecast list from a shared response. */
+    fun parseHourlyForecast(
+        response: OpenMeteoResponse,
+        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    ): List<HourlyForecast> {
         val hourly = response.hourly ?: throw Exception("No hourly weather data")
         val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
-        
-        hourly.time.mapIndexed { index, time ->
+
+        return hourly.time.mapIndexed { index, time ->
             HourlyForecast(
                 dateTime = LocalDateTime.parse(time, formatter),
                 temperature = hourly.temperature[index],
@@ -144,7 +200,15 @@ class WeatherRepository @Inject constructor(
             )
         }
     }
-    
+
+    /** Convenience: one fetch + hourly-list parse. */
+    suspend fun getHourlyForecast(
+        latitude: Double,
+        longitude: Double,
+        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    ): Result<List<HourlyForecast>> =
+        getForecast(latitude, longitude, unit).mapCatching { parseHourlyForecast(it, unit) }
+
     suspend fun searchLocation(query: String): Result<List<LocationResult>> = runCatching {
         val results = nominatimApi.searchLocation(query)
         results

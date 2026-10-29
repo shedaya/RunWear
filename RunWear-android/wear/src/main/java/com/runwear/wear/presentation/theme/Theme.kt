@@ -20,10 +20,6 @@ object RunWearColors {
     val PrimaryLight = Color(0xFF4DB6AC)
     val PrimaryDark = Color(0xFF004D40)
 
-    // Legacy colors for backward compatibility with old WearMainScreen
-    val Secondary = Color(0xFF1565C0)         // Blue
-    val Tertiary = Color(0xFF2E7D32)          // Green
-
     // Category Colors (for outfit chips)
     val CategoryTop = Color(0xFF00796B)       // Teal (tops)
     val CategoryBottom = Color(0xFF1565C0)    // Blue (bottoms)

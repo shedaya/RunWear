@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +78,8 @@ fun HeroSection(
     outfit: OutfitRecommendation?,
     locationName: String,
     selectedDateTime: LocalDateTime,
+    locationNow: LocalDateTime,
+    isNowSelected: Boolean,
     heroImageUrl: String?,
     scrollOffset: Float = 0f,
     onDateClick: () -> Unit,
@@ -91,6 +94,10 @@ fun HeroSection(
 ) {
     val configuration = LocalConfiguration.current
     val heroHeight = (configuration.screenHeightDp * 0.75).dp
+    // Decode the hero at display size, not at the source's full 800×1200.
+    val density = LocalDensity.current
+    val heroWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
+    val heroHeightPx = with(density) { heroHeight.roundToPx() }
 
     // Calculate temperature color with smooth animation (500ms transition)
     val tempFahrenheit = weather?.feelsLikeInFahrenheit ?: 65.0
@@ -142,6 +149,7 @@ fun HeroSection(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(heroImageUrl)
+                        .size(heroWidthPx, heroHeightPx)
                         .crossfade(500)
                         .build(),
                     contentDescription = generateHeroAltText(weather, outfit),
@@ -239,6 +247,8 @@ fun HeroSection(
             // Shows "Now" shortcut when viewing different time
             DateTimePill(
                 dateTime = selectedDateTime,
+                referenceNow = locationNow,
+                isNowSelected = isNowSelected,
                 onDateClick = onDateClick,
                 onTimeClick = onTimeClick,
                 onNowClick = onNowClick,

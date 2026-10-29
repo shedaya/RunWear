@@ -16,9 +16,23 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.runwear.app"
-    compileSdk = 35
+    compileSdk = 36
 
     signingConfigs {
+        // Pinned debug keystore (~/workspace/.android-debug, survives VM replacements).
+        // Without this, AGP auto-generates a debug key under the JVM user.home
+        // (/root/.android), which is wiped on VM replacement -> new signing cert ->
+        // every subsequent APK fails to update with "App not installed". Falls back
+        // to AGP's default when the pinned keystore is absent (e.g. fresh clone).
+        getByName("debug") {
+            val pinned = rootProject.file("../../.android-debug/runwear-debug.keystore")
+            if (pinned.exists()) {
+                storeFile = pinned
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 keyAlias = keystoreProperties["keyAlias"] as String
@@ -32,9 +46,9 @@ android {
     defaultConfig {
         applicationId = "com.runwear.wear"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 4
-        versionName = "1.1.0"
+        targetSdk = 36
+        versionCode = 5
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -103,6 +117,15 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.androidx.glance.material3)
 
+    // Widget last-good store (its own DataStore file in the app module)
+    implementation(libs.datastore.preferences)
+
+    // Widget refresh backstop (periodic, network-constrained, backoff)
+    implementation(libs.androidx.work.runtime.ktx)
+
+    // Play In-App Review (rating moment — no-ops on non-Play installs)
+    implementation(libs.play.review)
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
@@ -111,4 +134,10 @@ dependencies {
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Unit tests: JUnit plus the real org.json (the mockable android.jar's
+    // org.json is stubbed; the standalone jar shadows it on the test
+    // runtime classpath so the telemetry payload builders run as-is).
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
