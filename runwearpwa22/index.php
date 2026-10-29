@@ -524,6 +524,100 @@
             transform: translateX(-50%) translateY(0);
         }
 
+        /* ========== HERO PHOTO FLAG ========== */
+        /* Quiet flag affordance on the hero photo (parity with the Android
+           app): a small translucent disc floating just above the weather
+           pills at the hero's bottom-trailing corner. */
+        .hero-flag-btn {
+            position: absolute;
+            right: 16px;
+            bottom: 72px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            cursor: pointer;
+            z-index: 10;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .hero-flag-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .hero-flag-btn:active {
+            transform: scale(0.94);
+        }
+
+        .hero-flag-btn.flagged {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .hero-flag-sheet {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border-radius: 24px 24px 0 0;
+            padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1001;
+        }
+
+        .hero-flag-sheet.active {
+            transform: translateY(0);
+        }
+
+        .hero-flag-title {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .hero-flag-reason {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .hero-flag-reason:active {
+            transform: scale(0.99);
+        }
+
+        .hero-flag-cancel {
+            display: block;
+            width: 100%;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            padding: 12px 16px 4px;
+            cursor: pointer;
+        }
+
         /* ========== SHARE BUTTON ========== */
         .share-btn {
             display: flex;
@@ -2587,6 +2681,17 @@
         </div>
     </div>
 
+    <!-- Hero Photo Flag Sheet -->
+    <div class="sheet-overlay" id="heroFlagOverlay" onclick="closeHeroFlagSheet()"></div>
+    <div class="hero-flag-sheet" id="heroFlagSheet">
+        <div class="outfit-detail-handle"></div>
+        <div class="hero-flag-title">Flag this photo</div>
+        <button class="hero-flag-reason" onclick="submitHeroFlag('looks_broken')">Looks broken</button>
+        <button class="hero-flag-reason" onclick="submitHeroFlag('inappropriate')">Inappropriate</button>
+        <button class="hero-flag-reason" onclick="submitHeroFlag('outfit_mismatch')">Doesn't match the outfit</button>
+        <button class="hero-flag-cancel" onclick="closeHeroFlagSheet()">Cancel</button>
+    </div>
+
     <!-- Onboarding Modal -->
     <div class="onboarding-overlay" id="onboardingModal">
         <div class="onboarding-card">
@@ -3376,6 +3481,24 @@
         // Current hero image URL (updated asynchronously)
         let currentHeroImageUrl = PLACEHOLDER_IMAGE;
 
+        // Identity of the currently displayed hero photo (for flagging):
+        // the served pool row's id + its own combination_id when the photo
+        // came from generated_images; null while a fallback photo is shown.
+        let currentHeroImageRowId = null;
+        let currentHeroCombinationId = null;
+        // Most recent combination requested from the pool — recorded as
+        // context on flags for fallback photos, which have no row.
+        let lastRequestedCombinationId = null;
+        // Identity key of the photo view already flagged (one flag per view)
+        let heroFlaggedKey = null;
+
+        // Show a non-pool (fallback) hero photo: clears the pool identity
+        function setFallbackHeroImage(url) {
+            currentHeroImageUrl = url;
+            currentHeroImageRowId = null;
+            currentHeroCombinationId = null;
+        }
+
         // Map weather codes to weather categories (v3.7 - simplified to 4 categories)
         function getWeatherCode(code) {
             if (code === 0 || code === 1) return 'CLEAR';
@@ -3673,6 +3796,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             const gender = getHeroImageGender();
 
             const requestedCombo = `${gender}_${weather}_${tempBracket}_${timeOfDay}`;
+            lastRequestedCombinationId = requestedCombo;
             const MIN_VARIANTS = 5;  // Target number of variants per combination
 
             console.log('[Hero] Building queries for:', { gender, weather, tempBracket, timeOfDay });
@@ -3733,6 +3857,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                         console.log('[Hero] ✓ Found via', baseQuery, '→', selectedImage.combination_id);
 
                         currentHeroImageUrl = selectedImage.image_url || selectedImage.public_url;
+                        currentHeroImageRowId = selectedImage.id || null;
+                        currentHeroCombinationId = selectedImage.combination_id || null;
                         updateHeroImage();
                         break;  // Found an image, stop searching
                     }
@@ -3905,11 +4031,93 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 };
                 heroImg.src = currentHeroImageUrl;
             }
+            syncHeroFlagChip();
         }
 
         // Get current hero image URL (for render)
         function getHeroImageUrl() {
             return currentHeroImageUrl;
+        }
+
+        // ============ HERO PHOTO FLAG ============
+        // Parity with the Android app (2026-10-29): users can flag the hero
+        // photo as broken / inappropriate / not matching the outfit. Flags
+        // land in public.hero_flags (anon INSERT-only, same contract as the
+        // app) and are reviewed manually — nothing acts on a flag
+        // automatically. Fire-and-forget: a failed send is silent.
+        const HERO_FLAG_APP_VERSION = '3.12';  // Site build (matches footer)
+
+        // Identity key for the photo currently on screen; a new photo view
+        // (different row or URL) re-arms the flag chip.
+        function currentHeroFlagKey() {
+            if (!currentHeroImageUrl) return null;
+            return currentHeroImageRowId ? `pool:${currentHeroImageRowId}` : `fallback:${currentHeroImageUrl}`;
+        }
+
+        function isCurrentHeroFlagged() {
+            const key = currentHeroFlagKey();
+            return key !== null && key === heroFlaggedKey;
+        }
+
+        function syncHeroFlagChip() {
+            const chip = document.querySelector('.hero-flag-btn');
+            if (chip) chip.classList.toggle('flagged', isCurrentHeroFlagged());
+        }
+
+        function openHeroFlagSheet() {
+            if (isCurrentHeroFlagged()) return;  // One flag per photo view
+            const overlay = document.getElementById('heroFlagOverlay');
+            const sheet = document.getElementById('heroFlagSheet');
+            if (overlay) overlay.classList.add('active');
+            if (sheet) sheet.classList.add('active');
+        }
+
+        function closeHeroFlagSheet() {
+            const overlay = document.getElementById('heroFlagOverlay');
+            const sheet = document.getElementById('heroFlagSheet');
+            if (overlay) overlay.classList.remove('active');
+            if (sheet) sheet.classList.remove('active');
+        }
+
+        function submitHeroFlag(reason) {
+            closeHeroFlagSheet();
+            const key = currentHeroFlagKey();
+            if (!key || key === heroFlaggedKey) return;
+            heroFlaggedKey = key;
+            syncHeroFlagChip();
+            showToast("Thanks — we'll review this photo");
+
+            const payload = {
+                image_row_id: currentHeroImageRowId || null,
+                image_url: currentHeroImageUrl,
+                combination_id: currentHeroCombinationId || lastRequestedCombinationId || null,
+                image_source: currentHeroImageRowId ? 'pool' : 'fallback',
+                reason: reason,
+                platform: 'PWA',
+                app_version: HERO_FLAG_APP_VERSION,
+                created_at: new Date().toISOString()
+            };
+
+            // One silent retry, then swallow — never disturb the run screen
+            (async () => {
+                for (let attempt = 0; attempt < 2; attempt++) {
+                    try {
+                        const response = await fetch(`${SUPABASE_URL}/rest/v1/hero_flags`, {
+                            method: 'POST',
+                            headers: {
+                                'apikey': SUPABASE_ANON_KEY,
+                                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                                'Content-Type': 'application/json',
+                                'Prefer': 'return=minimal'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+                        if (response.ok) return;
+                    } catch (e) {
+                        // Silent by design
+                    }
+                }
+            })();
         }
 
         function formatDate(date) {
@@ -3989,7 +4197,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
                 // Immediately use default image for this temperature bracket AND weather condition
                 const tempBracket = getTempBracket(state.weather.feelsLike);
-                currentHeroImageUrl = getDefaultHeroImage(tempBracket, state.weather.weatherCode);
+                setFallbackHeroImage(getDefaultHeroImage(tempBracket, state.weather.weatherCode));
 
                 state.loading = false;
 
@@ -4088,7 +4296,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         function setHour(hour) {
             state.selectedDate.setHours(hour, 0, 0, 0);
             // Reset hero image to placeholder while new one loads
-            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+            setFallbackHeroImage(PLACEHOLDER_IMAGE);
             loadWeather();
             closeTimePicker();
         }
@@ -4099,7 +4307,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             newDate.setHours(state.selectedDate.getHours(), 0, 0, 0);
             state.selectedDate = newDate;
             // Reset hero image to placeholder while new one loads
-            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+            setFallbackHeroImage(PLACEHOLDER_IMAGE);
             closeDatePicker();
             loadWeather();
         }
@@ -4447,7 +4655,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             state.locationName = loc.displayName;
 
             // Reset hero image to placeholder while new one loads
-            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+            setFallbackHeroImage(PLACEHOLDER_IMAGE);
 
             // Save to localStorage
             localStorage.setItem('locationSource', 'manual');
@@ -4468,7 +4676,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             state.autoLocationName = null;
 
             // Reset hero image to placeholder while new one loads
-            currentHeroImageUrl = PLACEHOLDER_IMAGE;
+            setFallbackHeroImage(PLACEHOLDER_IMAGE);
 
             localStorage.setItem('locationSource', 'auto');
             localStorage.removeItem('manualLat');
@@ -4619,7 +4827,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             if (pullDistance > 80 && !isRefreshing) {
                 isRefreshing = true;
                 // Reset hero image to placeholder while new one loads
-                currentHeroImageUrl = PLACEHOLDER_IMAGE;
+                setFallbackHeroImage(PLACEHOLDER_IMAGE);
                 if (indicator) {
                     indicator.classList.remove('pulling');
                     indicator.classList.add('refreshing');
@@ -5117,6 +5325,7 @@ Get your personalized running outfit at runwear.ai`;
             const bagSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 6h-2c0-2.21-1.79-4-4-4S8 3.79 8 6H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6-2c1.1 0 2 .9 2 2h-4c0-1.1.9-2 2-2zm6 16H6V8h2v2c0 .55.45 1 1 1s1-.45 1-1V8h4v2c0 .55.45 1 1 1s1-.45 1-1V8h2v12z"/></svg>`;
             const lightbulbSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>`;
             const shareSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`;
+            const flagSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>`;
 
             app.innerHTML = `
                 <!-- HERO SECTION -->
@@ -5202,6 +5411,9 @@ Get your personalized running outfit at runwear.ai`;
                             ` : ''}
                         </div>
                     </div>
+
+                    <!-- Flag this photo (quiet, bottom-trailing) -->
+                    <button class="hero-flag-btn${isCurrentHeroFlagged() ? ' flagged' : ''}" onclick="openHeroFlagSheet()" title="Flag this photo" aria-label="Flag this photo">${flagSvg}</button>
                 </div>
 
                 <!-- OUTFIT SECTION -->
