@@ -110,7 +110,9 @@ jobs:
               if len(out) >= 4:
                   break
           tfails = []
-          for f in glob.glob('RunWear-android/**/build/test-results/**/TEST-*.xml', recursive=True):
+          import os
+          ws = os.environ.get('GITHUB_WORKSPACE', '.')
+          for f in glob.glob(ws + '/RunWear-android/**/build/test-results/**/TEST-*.xml', recursive=True):
               try:
                   root = ET.parse(f).getroot()
               except Exception:

@@ -37,7 +37,12 @@ kotlin {
         iosSimulatorArm64(),
         iosX64(),
         watchosArm64(),
-        watchosSimulatorArm64()
+        watchosSimulatorArm64(),
+        // watchosX64 is NOT optional: Xcode builds the watch app for
+        // arm64 + x86_64 on the watchOS simulator, and a missing x86_64
+        // slice fails the watch link with undefined RunWearEngine
+        // symbols (found the hard way in Stage 2 CI, 2026-10-29).
+        watchosX64()
     ).forEach { target ->
         target.binaries.framework {
             baseName = "RunWearEngine"
