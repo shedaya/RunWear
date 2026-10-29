@@ -22,48 +22,57 @@ struct FallbackImageProvider {
         }
     }
 
-    /// Unsplash photo IDs organized by temperature and weather
-    /// 24 unique images: 6 temps × 4 weather conditions
+    /// Unsplash photo IDs organized by temperature and weather —
+    /// an exact mirror of Android's FALLBACK_IMAGES_2D
+    /// (HeroImageRepository): 22 populated cells. HOT and WARM have
+    /// no SNOW cell on either platform; the lookup below falls back
+    /// to the bracket's CLEAR image, as Android's does.
+    ///
+    /// The previous iOS table was a different, uncurated set: its
+    /// HOT/CLOUDY cell was a desk with code on monitors (the photo
+    /// Sol was served as a "Miami hero") and MILD/CLEAR was a lake at
+    /// sunset. Both are gone.
     private let photoIds: [HeroTempBracket: [HeroWeatherCondition: String]] = [
         .FREEZING: [
-            .CLEAR: "photo-1483664852095-d6cc6870702d",   // Snowy clear mountain
-            .CLOUDY: "photo-1491002052546-bf38f186af56",  // Overcast winter
-            .RAIN: "photo-1519003722824-194d4455a60c",    // Winter rain
-            .SNOW: "photo-1517299321609-52687d1bc55a"     // Heavy snow
+            .CLEAR: "photo-1544899489-a083461b088c",   // Winter gear sunny
+            .CLOUDY: "photo-1544899489-a083461b088c",  // Freezing overcast
+            .RAIN: "photo-1519692933481-e162a57d6721", // Freezing rain/sleet
+            .SNOW: "photo-1418985991508-e47386d96a71"  // Heavy snow
         ],
         .COLD: [
-            .CLEAR: "photo-1544829099-b9a0c07fad1a",      // Cold clear morning
-            .CLOUDY: "photo-1485236715568-ddc5ee6ca227",  // Cold cloudy day
-            .RAIN: "photo-1534274988757-a28bf1a57c17",    // Cold rain
-            .SNOW: "photo-1418985991508-e47386d96a71"     // Light snow
+            .CLEAR: "photo-1517649763962-0c623066013b",   // Jacket sunny
+            .CLOUDY: "photo-1517649763962-0c623066013b",  // Cold overcast
+            .RAIN: "photo-1519692933481-e162a57d6721",    // Cold rain/sleet
+            .SNOW: "photo-1483921020237-2ff51e8e4b22"     // Snowy run
         ],
         .COOL: [
-            .CLEAR: "photo-1476400424721-e25994a9b1d3",   // Cool clear day
-            .CLOUDY: "photo-1499346030926-9a72daac6c63",  // Cool overcast
-            .RAIN: "photo-1515694346937-94d85e41e6f0",    // Light rain
-            .SNOW: "photo-1491824989090-8cb88b5e00e7"     // Cool snow
+            .CLEAR: "photo-1476480862126-209bfaa8edc8",   // Long sleeves sunny
+            .CLOUDY: "photo-1571019613454-1cb2f99b2d8b",  // Cool overcast
+            .RAIN: "photo-1515191107209-c28698631303",    // Cool rainy
+            .SNOW: "photo-1491002052546-bf38f186af56"     // Cool snow
         ],
         .MILD: [
-            .CLEAR: "photo-1532274402911-5a369e4c4bb5",   // Perfect running weather
-            .CLOUDY: "photo-1504701954957-2010ec3bcec1",  // Mild cloudy
-            .RAIN: "photo-1534088568595-a066f410bcda",    // Mild rain
-            .SNOW: "photo-1478827387698-1527781a4887"     // Rare mild snow
+            .CLEAR: "photo-1552674605-db6ffd4facb5",   // Light layers sunny
+            .CLOUDY: "photo-1558017487-06bf9f82613a",  // Mild overcast
+            .RAIN: "photo-1515191107209-c28698631303", // Spring/fall rain
+            .SNOW: "photo-1491002052546-bf38f186af56"  // Light snow
         ],
         .WARM: [
-            .CLEAR: "photo-1523464862212-d6631e2ebc4a",   // Warm sunny day
-            .CLOUDY: "photo-1504150558240-0b4fd8946624",  // Warm overcast
-            .RAIN: "photo-1527766833261-b09c3163a791",    // Summer rain
-            .SNOW: "photo-1518458028785-8fbcd101ebb9"     // Warm snow (rare)
+            .CLEAR: "photo-1486218119243-13883505764c",   // T-shirt sunny
+            .CLOUDY: "photo-1558017487-06bf9f82613a",    // Warm overcast
+            .RAIN: "photo-1534258936925-c58bed479fcb"     // Warm rain
         ],
         .HOT: [
-            .CLEAR: "photo-1504714146340-959ca07e1f38",   // Hot sunny day
-            .CLOUDY: "photo-1504639725590-34d0984388bd",  // Hot hazy
-            .RAIN: "photo-1501691223387-dd0500403074",    // Hot rain/monsoon
-            .SNOW: "photo-1504701954957-2010ec3bcec1"     // Hot snow (placeholder, very rare)
+            .CLEAR: "photo-1571008887538-b36bb32f4571",   // Tank top, bright sunny
+            .CLOUDY: "photo-1571019613454-1cb2f99b2d8b",  // Summer overcast
+            .RAIN: "photo-1534258936925-c58bed479fcb"     // Summer rain
         ]
     ]
 
-    /// Returns a fallback Unsplash URL for the given conditions
+    /// Returns a fallback Unsplash URL for the given conditions.
+    /// Lookup mirrors Android's getWeatherAwareFallback: exact cell,
+    /// then the bracket's CLEAR cell (e.g. HOT + SNOW), then
+    /// MILD/CLEAR as the ultimate default.
     /// - Parameters:
     ///   - temp: Temperature bracket
     ///   - weather: Weather condition
@@ -74,7 +83,10 @@ struct FallbackImageProvider {
         weather: HeroWeatherCondition,
         size: ImageSize = .iOS
     ) -> String {
-        let photoId = photoIds[temp]?[weather] ?? photoIds[.MILD]?[.CLEAR] ?? "photo-1532274402911-5a369e4c4bb5"
+        let photoId = photoIds[temp]?[weather]
+            ?? photoIds[temp]?[.CLEAR]
+            ?? photoIds[.MILD]?[.CLEAR]
+            ?? "photo-1571008887538-b36bb32f4571"
         return "\(baseURL)/\(photoId)?\(size.parameters)"
     }
 
