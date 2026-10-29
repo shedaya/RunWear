@@ -7,13 +7,21 @@
 # until now the only iOS workflow archived for upload without
 # running a single test.
 #
-# Manual dispatch ONLY — macOS minutes bill at 10x on private
-# repos. Batch changes, then dispatch once per verification round.
+# Triggers: workflow_dispatch works only once this file exists on
+# the default branch (GitHub registers dispatchable workflows
+# there). During Stage 1 verification (2026-10-29) the push trigger
+# below — scoped to the stage-1 branch ONLY — is how the gate runs:
+# pushing the branch runs the suite. Drop the push trigger when
+# the branch lands; afterwards dispatch manually, batched, since
+# macOS minutes bill at 10x on private repos.
 
 name: iOS Tests (GitHub Actions)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ios/stage1-parity-2026-10-29
 
 permissions:
   contents: read
