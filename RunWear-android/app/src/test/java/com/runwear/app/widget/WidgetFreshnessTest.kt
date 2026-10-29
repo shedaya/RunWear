@@ -39,6 +39,21 @@ class WidgetFreshnessTest {
     }
 
     @Test
+    fun `small eyebrow always states the data time or age`() {
+        val savedLocal = LocalDateTime.of(2026, 10, 27, 13, 13)
+        // Fresh: the save clock time is shown — "FOR NOW" never implies live silently.
+        assertEquals(
+            "FOR NOW · 1:13 PM",
+            WidgetFreshness.smallEyebrow(savedLocal, savedEpoch, savedEpoch + 10 * 60_000)
+        )
+        // Stale: the age form takes over.
+        assertEquals(
+            "FOR NOW · 2H AGO",
+            WidgetFreshness.smallEyebrow(savedLocal, savedEpoch, savedEpoch + 125 * 60_000)
+        )
+    }
+
+    @Test
     fun `large label is a clock time while recent, an age past 90 minutes`() {
         val savedLocal = LocalDateTime.of(2026, 10, 22, 7, 5)
         assertEquals(

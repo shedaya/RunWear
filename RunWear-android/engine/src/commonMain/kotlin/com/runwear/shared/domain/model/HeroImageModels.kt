@@ -150,7 +150,21 @@ data class OutfitCombination(
 data class HeroImageResult(
     val imageUrl: String?,
     val thumbnailUrl: String?,
-    val combinationId: String
+    val combinationId: String,
+    /**
+     * Supabase `generated_images` row id, set only when the image was
+     * served from the pool. Null for fallback/curated images (Unsplash),
+     * which have no pool row. Hero-flag reports key off this: a non-null
+     * value identifies the exact photo a user is looking at.
+     */
+    val imageRowId: String? = null,
+    /**
+     * The served pool row's own combination_id. Differs from
+     * [combinationId] (the *requested* combination) when the selection
+     * cascade fell back to a neighbouring cell (different time of day or
+     * the opposite gender). Null for fallback/curated images.
+     */
+    val servedCombinationId: String? = null
 )
 
 /**

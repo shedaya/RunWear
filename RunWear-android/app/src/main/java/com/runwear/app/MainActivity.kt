@@ -3,6 +3,8 @@ package com.runwear.app
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -19,8 +21,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.google.android.play.core.review.ReviewManagerFactory
 import com.runwear.app.feedback.FeedbackCategory
+import com.runwear.app.feedback.StartupTrace
+import com.runwear.app.feedback.StartupWatchdog
 import com.runwear.app.ui.screens.FeedbackScreen
 import com.runwear.app.ui.screens.HeroMainScreen
 import com.runwear.app.ui.screens.LocationPickerSheet
@@ -46,9 +51,34 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Safe-boot diagnostic (1.1.3): first line after super.onCreate,
+        // before setContent — entry into the Activity half of startup.
+        // The startup watchdog arms here: if the process is still alive
+        // 8 s from now but no first frame has drawn, it captures the
+        // main thread's stack (hang evidence; its absence = death).
+        StartupTrace.mark(this, "setcontent-entry")
+        StartupWatchdog.arm(this)
+
+        // Safe-boot diagnostic (1.1.2): the Activity phase was reached.
+        StartupTrace.mark(this, "mainactivity-created")
+
         enableEdgeToEdge()
 
+        // Safe-boot diagnostic (1.1.4): edge-to-edge setup returned.
+        // The 1.1.3 trace ended at setcontent-entry with setcontent-
+        // called never reached, leaving enableEdgeToEdge() and the
+        // setContent{} call itself as the two suspects; this mark
+        // splits them.
+        StartupTrace.mark(this, "edge-to-edge-done")
+
         setContent {
+            // Safe-boot diagnostic (1.1.2): composition started, and —
+            // once the scaffold's content composes — the first screen is up.
+            val traceContext = LocalContext.current.applicationContext
+            LaunchedEffect(Unit) {
+                StartupTrace.mark(traceContext, "composition-start")
+            }
             RunWearTheme {
                 val uiState by viewModel.uiState.collectAsState()
                 val locationSearchState by viewModel.locationSearch.collectAsState()
@@ -89,6 +119,21 @@ class MainActivity : ComponentActivity() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        // Safe-boot diagnostic (1.1.3): the navigation
+                        // host was entered. This app has no androidx
+                        // NavHost composable — the Scaffold content lambda
+                        // is where the root destination `when` below
+                        // dispatches, so its entry is the host entry.
+                        // remember{} so the mark fires once, when this
+                        // node's composition first executes.
+                        remember {
+                            StartupTrace.mark(traceContext, "navhost-entered")
+                            Unit
+                        }
+                        // Safe-boot diagnostic (1.1.2): home content composed.
+                        LaunchedEffect(Unit) {
+                            StartupTrace.mark(traceContext, "home-content-ready")
+                        }
                         when {
                             // Show onboarding for first-time users
                             !uiState.hasCompletedOnboarding -> {
@@ -143,7 +188,8 @@ class MainActivity : ComponentActivity() {
                                             if (category != null) "contextual" else "settings"
                                         showFeedback = true
                                     },
-                                    onItemTapped = viewModel::onAffiliateItemTapped
+                                    onItemTapped = viewModel::onAffiliateItemTapped,
+                                    onFlagHero = viewModel::flagCurrentHero
                                 )
                             }
                         }
@@ -209,6 +255,36 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+
+        // Safe-boot diagnostic (1.1.3): setContent has returned — the
+        // synchronous half of onCreate (edge-to-edge setup + ComposeView
+        // creation) completed. Anything between this mark and
+        // "composition-start" is the first composition pass itself.
+        StartupTrace.mark(this, "setcontent-called")
+
+        // Safe-boot diagnostic (1.1.3): the first frame. A one-shot
+        // pre-draw listener on the content view marks the moment the
+        // first frame is about to draw, and disarms the watchdog.
+        try {
+            val contentView = findViewById<View>(android.R.id.content)
+            val listener = object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    try {
+                        StartupTrace.mark(this@MainActivity, "first-frame")
+                        StartupWatchdog.noteFirstFrame()
+                    } catch (_: Throwable) {
+                        // Best effort only.
+                    }
+                    if (contentView.viewTreeObserver.isAlive) {
+                        contentView.viewTreeObserver.removeOnPreDrawListener(this)
+                    }
+                    return true
+                }
+            }
+            contentView.viewTreeObserver.addOnPreDrawListener(listener)
+        } catch (_: Throwable) {
+            // Best effort only.
         }
 
         viewModel.checkLocationPermission()

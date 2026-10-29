@@ -87,7 +87,16 @@ data class MainUiState(
     val locationSource: String = "gps", // "gps" or "manual"
     val locationErrorReason: LocationErrorReason? = null,
     // Hero image from AI service
-    val heroImageUrl: String? = null
+    val heroImageUrl: String? = null,
+    /**
+     * Identity of the hero photo on screen, for flag reports: the
+     * Supabase pool row id when [heroImageUrl] came from the pool
+     * (null for fallback/curated photos) and the combination context
+     * to record with a flag (the served row's own cell when known,
+     * otherwise the requested combination).
+     */
+    val heroImageRowId: String? = null,
+    val heroCombinationId: String? = null
 )
 
 data class LocationSearchState(
@@ -210,15 +219,20 @@ class MainViewModel @Inject constructor(
         val dLon = lastGood.longitude - lon
         if (dLat * dLat + dLon * dLon > SEED_COORD_TOLERANCE_DEG * SEED_COORD_TOLERANCE_DEG) return
         _uiState.update { state ->
-            if (state.outfit != null) state else state.copy(
-                isLoading = false,
-                weather = lastGood.weather,
-                outfit = lastGood.outfit,
-                locationName = lastGood.locationName,
-                heroImageUrl = com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
+            if (state.outfit != null) state else {
+                val seededHero = com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
                     lastGood.weather, lastGood.outfit, state.genderPreference
                 )
-            )
+                state.copy(
+                    isLoading = false,
+                    weather = lastGood.weather,
+                    outfit = lastGood.outfit,
+                    locationName = lastGood.locationName,
+                    heroImageUrl = seededHero.imageUrl,
+                    heroImageRowId = null,
+                    heroCombinationId = seededHero.combinationId
+                )
+            }
         }
     }
 
@@ -443,27 +457,19 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, showLocationSetup = false) }
 
+            // Fast path: Fused's last-known fix resolves instantly when one
+            // exists. Painting from it beats blocking the first screen on a
+            // fresh GPS fix (seconds on a cold radio, up to the 15 s
+            // timeout); onForegrounded's re-validation refines it later.
+            val lastKnown = runCatching { locationProvider.getLastKnownLocation() }.getOrNull()
+            if (lastKnown != null) {
+                adoptGpsFix(lastKnown.latitude, lastKnown.longitude)
+                return@launch
+            }
+
             when (val result = locationProvider.getCurrentLocationWithTimeout()) {
                 is LocationFetchResult.Success -> {
-                    currentLat = result.location.latitude
-                    currentLon = result.location.longitude
-
-                    // Get friendly location name and save for future use
-                    weatherRepository.reverseGeocode(result.location.latitude, result.location.longitude).fold(
-                        onSuccess = { name ->
-                            _uiState.update { it.copy(locationName = name, locationSource = "gps") }
-                            // Save GPS location for next app launch
-                            preferencesRepository.saveGPSLocation(result.location.latitude, result.location.longitude, name)
-                        },
-                        onFailure = {
-                            _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
-                            preferencesRepository.saveGPSLocation(result.location.latitude, result.location.longitude, "Your Location")
-                        }
-                    )
-
-                    seedFromLastGood(result.location.latitude, result.location.longitude)
-                    resolveLocationZone()
-                    fetchWeather()
+                    adoptGpsFix(result.location.latitude, result.location.longitude)
                 }
                 is LocationFetchResult.Error -> {
                     // GPS failed - try to use last saved location as fallback
@@ -497,6 +503,38 @@ class MainViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Adopt a GPS fix (last-known or fresh) and load weather for it. The
+     * friendly name is cosmetic, so reverse geocoding runs OFF the critical
+     * path: it used to be awaited between the fix and the forecast, putting
+     * a Nominatim round trip (seconds on a cold connection) in front of the
+     * first content on every cold start. The name — and the saved-location
+     * record, which carries it — lands whenever the geocode returns.
+     */
+    private suspend fun adoptGpsFix(lat: Double, lon: Double) {
+        currentLat = lat
+        currentLon = lon
+        _uiState.update { it.copy(locationSource = "gps") }
+
+        viewModelScope.launch {
+            weatherRepository.reverseGeocode(lat, lon).fold(
+                onSuccess = { name ->
+                    _uiState.update { it.copy(locationName = name, locationSource = "gps") }
+                    // Save GPS location for next app launch
+                    preferencesRepository.saveGPSLocation(lat, lon, name)
+                },
+                onFailure = {
+                    _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
+                    preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
+                }
+            )
+        }
+
+        seedFromLastGood(lat, lon)
+        resolveLocationZone()
+        fetchWeather()
+    }
+
     private fun fetchWeather() {
         val lat = currentLat ?: return
         val lon = currentLon ?: return
@@ -650,20 +688,50 @@ class MainViewModel @Inject constructor(
         val gender = _uiState.value.genderPreference
         heroResolveJob?.cancel()
         heroResolveJob = viewModelScope.launch {
-            val aiUrl = runCatching {
+            val result = runCatching {
                 withTimeoutOrNull(HERO_RESOLVE_TIMEOUT_MS) {
                     heroImageRepository.getHeroImage(
                         weather = weather,
                         outfit = outfit,
                         gender = gender
-                    ).imageUrl
+                    )
                 }
             }.getOrNull()
             if (!isActive) return@launch
-            val finalUrl = aiUrl ?: com.runwear.shared.domain.model.HeroImageSelector.getImageUrl(
-                weather, outfit, gender
+            // Keep the winning result whole: its row id / served cell are
+            // the identity a hero-flag report needs. A pool result with
+            // no URL (shouldn't happen) degrades to the curated fallback.
+            val hero = result?.takeIf { it.imageUrl != null }
+                ?: com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
+                    weather, outfit, gender
+                )
+            _uiState.update {
+                it.copy(
+                    heroImageUrl = hero.imageUrl,
+                    heroImageRowId = hero.imageRowId,
+                    heroCombinationId = hero.servedCombinationId ?: hero.combinationId
+                )
+            }
+        }
+    }
+
+    /**
+     * Send a hero-flag report for the photo currently on screen.
+     * Fire-and-forget: the repository swallows all failures, so this
+     * never disturbs the run screen; the UI confirms optimistically.
+     */
+    fun flagCurrentHero(reason: com.runwear.shared.domain.model.HeroFlagReason) {
+        val state = _uiState.value
+        val url = state.heroImageUrl ?: return
+        viewModelScope.launch {
+            heroImageRepository.flagHeroImage(
+                imageUrl = url,
+                imageRowId = state.heroImageRowId,
+                servedCombinationId = state.heroCombinationId,
+                requestedCombinationId = state.heroCombinationId,
+                reason = reason,
+                appVersion = com.runwear.app.BuildConfig.VERSION_NAME
             )
-            _uiState.update { it.copy(heroImageUrl = finalUrl) }
         }
     }
     

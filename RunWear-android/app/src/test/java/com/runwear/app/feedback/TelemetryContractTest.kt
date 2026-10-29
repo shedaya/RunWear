@@ -7,6 +7,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.PrintWriter
+import java.io.StringWriter
 
 /**
  * Telemetry contract pins.
@@ -337,6 +339,91 @@ class TelemetryContractTest {
         assertEquals(expectedTimestamp, timestamp)
         val deep = mutableSetOf<String>().also { allKeysDeep(payload, it) }
         assertTrue((deep intersect forbiddenKeys).isEmpty())
+    }
+
+    /**
+     * The 1.1.3 cause-chain pin. Field crash reports (D1 ids 3–5,
+     * 2026-10-27) arrived as a bare "Unable to start activity" wrapper
+     * with framework frames only: the pre-fix stored file kept just the
+     * top exception's frames, and the nested cause — the actual failure —
+     * never reached the wire. The stored file now carries the complete
+     * printStackTrace output in "fullStackTrace", and the wire payload
+     * must carry that chain verbatim.
+     */
+    @Test
+    fun crash_payloadCarriesTheFullCauseChain() {
+        // The exact shape of the field failure: a framework wrapper on
+        // top, the real failure nested as its cause.
+        val cause = IllegalStateException("the real failure, nested")
+        val wrapper = RuntimeException(
+            "Unable to start activity " +
+                "ComponentInfo{com.runwear.wear/com.runwear.app.MainActivity}",
+            cause
+        )
+        val fullTrace = StringWriter().also { writer ->
+            wrapper.printStackTrace(PrintWriter(writer))
+        }.toString()
+        // Sanity: the rendered chain really does contain the cause level.
+        assertTrue(fullTrace.contains("Caused by: java.lang.IllegalStateException"))
+
+        // The stored file exactly as the 1.1.3 CrashReporter writes it.
+        val stored = JSONObject().apply {
+            put("occurredAt", 1_760_659_200_000L)
+            put("crashDate", "2025-10-17")
+            put("thread", "main")
+            put("exceptionClass", "java.lang.RuntimeException")
+            put("message", wrapper.message ?: "")
+            put(
+                "stackTrace",
+                wrapper.stackTrace.take(40).joinToString("\n") { it.toString() }
+            )
+            put("fullStackTrace", fullTrace)
+            put("causeClass", "java.lang.IllegalStateException")
+            put("causeMessage", "the real failure, nested")
+            put("osVersion", "15")
+            put("sdkInt", 35)
+            put("deviceModel", "Google Pixel 8")
+            put("appVersion", "1.1.2")
+            put("appVersionCode", 6)
+        }
+
+        val payload = TelemetryPayloads.crash(appVersion, installId, stored)
+        val trace = payload.getString("stackTrace")
+        assertTrue(
+            "wire trace lost the wrapper: $trace",
+            trace.contains("java.lang.RuntimeException: Unable to start activity")
+        )
+        assertTrue(
+            "wire trace lost the cause chain: $trace",
+            trace.contains("Caused by: java.lang.IllegalStateException")
+        )
+        assertTrue(
+            "wire trace lost the cause message: $trace",
+            trace.contains("the real failure, nested")
+        )
+        // Belt-and-braces: the separated cause fields ride as lines too.
+        assertTrue(trace.contains("[stored causeClass: java.lang.IllegalStateException]"))
+        assertTrue(trace.contains("[stored causeMessage: the real failure, nested]"))
+        // The payload stays flat and contract-shaped.
+        assertEquals(crashKeys - "turnstileToken", keysOf(payload))
+    }
+
+    /**
+     * A stored file written by a pre-1.1.3 build (frames-only, but with
+     * the separated cause fields) still names its cause on the wire via
+     * the appended bookkeeping lines.
+     */
+    @Test
+    fun crash_payloadLegacyFileStillNamesItsCause() {
+        val stored = storedCrash().apply {
+            put("causeClass", "java.lang.IllegalStateException")
+            put("causeMessage", "legacy nested failure")
+        }
+        val trace = TelemetryPayloads.crash(appVersion, installId, stored)
+            .getString("stackTrace")
+        assertTrue(trace.startsWith("java.lang.IllegalStateException: Boom (thread: main)\n"))
+        assertTrue(trace.contains("[stored causeClass: java.lang.IllegalStateException]"))
+        assertTrue(trace.contains("[stored causeMessage: legacy nested failure]"))
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,11 +24,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.getTemperatureColor
@@ -90,6 +96,10 @@ fun HeroSection(
     onShareClick: () -> Unit,
     onTempClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit = {},
+    /** Hero-flag affordance: shown only when a hero photo is displayed. */
+    showFlagButton: Boolean = false,
+    flagEnabled: Boolean = true,
+    onFlagClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -113,6 +123,14 @@ fun HeroSection(
     // Haptic feedback
     val hapticFeedback = LocalHapticFeedback.current
     val context = LocalContext.current
+
+    // Safe-boot diagnostic (1.1.3): the outfit hero card composable was
+    // entered — its body executed during composition. remember{} so the
+    // mark fires once per composition instance, not per recomposition.
+    remember {
+        StartupTrace.mark(context.applicationContext, "hero-card-entered")
+        Unit
+    }
 
     // Animated temperature counter
     val actualTemp = weather?.effectiveTemperature?.roundToInt() ?: 0
@@ -299,6 +317,52 @@ fun HeroSection(
                 onPillClick = onWeatherPillClick
             )
         }
+
+        // 6. Hero-flag chip — bottom-trailing corner of the photo.
+        // Deliberately quiet: a small dark translucent disc, no label.
+        // It floats above the weather-pills row (bottom inset 64.dp
+        // clears that row, which shares the hero's bottom edge) and
+        // clear of the top controls and the date/time pill (bottom-
+        // leading). Rendered only while a photo is actually on screen.
+        if (showFlagButton && heroImageUrl != null) {
+            HeroFlagChip(
+                enabled = flagEnabled,
+                onClick = onFlagClick,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 14.dp, bottom = 64.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The flag affordance overlaid on the hero photo: a 32dp dark
+ * translucent disc with a flag glyph. Once a photo has been flagged it
+ * renders dimmed and inert — one flag per photo view is enough.
+ */
+@Composable
+private fun HeroFlagChip(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(32.dp),
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = if (enabled) 0.35f else 0.22f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Flag,
+            contentDescription = "Flag this photo",
+            tint = Color.White.copy(alpha = if (enabled) 0.9f else 0.45f),
+            modifier = Modifier
+                .padding(8.dp)
+                .size(16.dp)
+        )
     }
 }
 

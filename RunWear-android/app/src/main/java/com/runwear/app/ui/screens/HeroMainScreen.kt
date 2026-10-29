@@ -38,6 +38,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -48,6 +50,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,8 +63,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.runwear.app.feedback.StartupTrace
+import com.runwear.app.ui.components.BrandedLoadingScreen
 import com.runwear.app.ui.components.HeroSection
-import com.runwear.app.ui.components.HeroShimmerPlaceholder
+import com.runwear.app.ui.components.loadingStatusText
 import com.runwear.app.ui.components.OutfitCard
 import com.runwear.app.ui.components.OutfitListShimmer
 import com.runwear.app.ui.components.TipsSection
@@ -72,6 +77,7 @@ import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.GenderPreference
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 /**
  * Hero-image design MainScreen - PWA v2.9 aligned.
@@ -104,9 +110,18 @@ fun HeroMainScreen(
     analyticsOptIn: Boolean = false,
     onAnalyticsOptInChange: (Boolean) -> Unit = {},
     onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
+    onFlagHero: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit = {},
     onItemTapped: (ClothingItem) -> Unit = {}
 ) {
     val context = LocalContext.current
+
+    // Safe-boot diagnostic (1.1.3): the home destination composable was
+    // entered — its body executed during composition. remember{} so the
+    // mark fires once per composition instance, not per recomposition.
+    remember {
+        StartupTrace.mark(context.applicationContext, "home-composable-entered")
+        Unit
+    }
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
@@ -114,6 +129,13 @@ fun HeroMainScreen(
     var showLocationPicker by remember { mutableStateOf(false) }
     var showShopAll by remember { mutableStateOf(false) }
     var weatherDetailType by remember { mutableStateOf<String?>(null) }
+
+    // Hero-flag flow: the sheet, plus the URL already flagged in this
+    // view (one flag per photo view — the chip goes inert for it).
+    var showHeroFlagSheet by remember { mutableStateOf(false) }
+    var flaggedHeroUrl by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val screenScope = rememberCoroutineScope()
 
     val listState = rememberLazyListState()
 
@@ -213,6 +235,8 @@ Get your personalized running outfit at runwear.ai
                                         onShareClick = { shareOutfit() },
                                         onTempClick = onToggleUnit,
                                         onWeatherPillClick = { type -> weatherDetailType = type },
+                                        onFlagClick = { showHeroFlagSheet = true },
+                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
@@ -255,6 +279,8 @@ Get your personalized running outfit at runwear.ai
                                             onShareClick = { shareOutfit() },
                                             onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
+                                            onFlagClick = { showHeroFlagSheet = true },
+                                            heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -293,6 +319,8 @@ Get your personalized running outfit at runwear.ai
                                         onShareClick = { shareOutfit() },
                                         onTempClick = onToggleUnit,
                                         onWeatherPillClick = { type -> weatherDetailType = type },
+                                        onFlagClick = { showHeroFlagSheet = true },
+                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
@@ -320,12 +348,26 @@ Get your personalized running outfit at runwear.ai
                     }
                 }
             }
-            // No content yet: skeleton while the first load runs, the error
-            // screen only when a load actually failed with nothing to show.
-            uiState.isLoading -> HeroShimmerPlaceholder()
+            // No content yet: the branded loading state while the first
+            // load runs (the low-contrast shimmer read as a black screen),
+            // the error screen only when a load actually failed with
+            // nothing to show.
+            uiState.isLoading -> BrandedLoadingScreen(
+                statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
+            )
             uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
-            else -> HeroShimmerPlaceholder()
+            else -> BrandedLoadingScreen(
+                statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
+            )
         }
+
+        // Hero-flag confirmation ("Thanks — we'll review this photo").
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 24.dp)
+        )
     }
 
     // Date Picker
@@ -412,6 +454,24 @@ Get your personalized running outfit at runwear.ai
             )
         }
     }
+
+    // Hero Flag Sheet — picking a reason sends the flag (fire-and-
+    // forget in the ViewModel), marks this photo as flagged so the
+    // chip goes inert, and confirms with a snackbar. The send itself
+    // has no failure UI: a flag is best-effort feedback.
+    if (showHeroFlagSheet) {
+        HeroFlagSheet(
+            onSelectReason = { reason ->
+                showHeroFlagSheet = false
+                flaggedHeroUrl = uiState.heroImageUrl
+                onFlagHero(reason)
+                screenScope.launch {
+                    snackbarHostState.showSnackbar("Thanks — we'll review this photo")
+                }
+            },
+            onDismiss = { showHeroFlagSheet = false }
+        )
+    }
 }
 
 // ============================================================================
@@ -441,6 +501,8 @@ private fun HeroSectionContent(
     onShareClick: () -> Unit,
     onTempClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit,
+    onFlagClick: () -> Unit,
+    heroFlagEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -464,6 +526,9 @@ private fun HeroSectionContent(
             onShareClick = onShareClick,
             onTempClick = onTempClick,
             onWeatherPillClick = onWeatherPillClick,
+            showFlagButton = uiState.heroImageUrl != null,
+            flagEnabled = heroFlagEnabled,
+            onFlagClick = onFlagClick,
             modifier = modifier
         )
     }
@@ -609,6 +674,66 @@ private fun LazyListScope.outfitListItems(
                 .padding(bottom = 24.dp),
             textAlign = TextAlign.Center
         )
+    }
+}
+
+// ============================================================================
+// HERO FLAG SHEET
+// ============================================================================
+
+/**
+ * "Flag this photo" — three reasons and Cancel, nothing else: no
+ * account, no text field. Picking a reason reports the exact photo on
+ * screen (pool row id, or its URL for a curated fallback) so it can be
+ * reviewed and pulled from rotation if it's bad.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HeroFlagSheet(
+    onSelectReason: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = RunWearColors.Surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Flag this photo",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            com.runwear.shared.domain.model.HeroFlagReason.entries.forEach { reason ->
+                Text(
+                    text = reason.label,
+                    fontSize = 16.sp,
+                    color = RunWearColors.TextPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectReason(reason) }
+                        .padding(vertical = 14.dp)
+                )
+            }
+            Text(
+                text = "Cancel",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onDismiss() }
+                    .padding(vertical = 14.dp)
+            )
+        }
     }
 }
 

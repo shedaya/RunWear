@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -13,7 +14,35 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.RunWear">
-        
+
+        <!-- Safe-boot diagnostic (1.1.2; crash handler added 1.1.3):
+             runs in the provider phase, before Application.onCreate and
+             (via initOrder) ahead of androidx.startup's
+             InitializationProvider. Uploads any stored crash report,
+             installs the crash handler, and writes the first startup
+             breadcrumb. -->
+        <provider
+            android:name=".diag.DiagBootProvider"
+            android:authorities="${applicationId}.diagboot"
+            android:exported="false"
+            android:initOrder="1000" />
+
+        <!-- Safe-boot diagnostic (1.1.2, kept in 1.1.3): WorkManager's androidx.startup
+             initializer is a named suspect in the pre-Application crash
+             window, so it is out of the boot path in this build.
+             WorkManager initializes on demand instead, via the
+             Configuration.Provider on RunWearApp. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
