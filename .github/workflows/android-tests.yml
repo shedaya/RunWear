@@ -13,7 +13,7 @@ name: Android Tests
 # sdkmanager must never be the gate.
 on:
   push:
-    branches: [ios/stage2-kmp-2026-10-29]
+    branches: [main]
   workflow_dispatch:
     inputs:
       generate_fixtures:
