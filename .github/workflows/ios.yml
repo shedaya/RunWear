@@ -38,8 +38,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK (the KMP module has an Android target)
-        uses: android-actions/setup-android@v3
+      # No setup-android action: v3 fails on current runner images
+      # (verified 2026-10-29). GitHub macOS images ship the Android SDK
+      # with licenses pre-accepted; AGP downloads any missing platform.
 
       - name: Build the shared engine XCFramework
         run: bash scripts/build-engine-framework.sh

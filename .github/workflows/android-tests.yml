@@ -43,9 +43,11 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
+      # No setup-android action: v3 fails on current runner images
+      # (verified 2026-10-29 on ubuntu-24.04 and macos-15 — the step
+      # dies in ~10s before anything else runs). GitHub images ship the
+      # Android SDK with licenses pre-accepted; AGP downloads any
+      # missing platform itself. The step below is diagnostic only.
       - name: SDK platforms (diagnostic)
         continue-on-error: true
         run: |
@@ -54,8 +56,10 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           ls "$ANDROID_HOME" || true
           ls "$ANDROID_HOME/platforms" || true
-          sdkmanager --version || true
-          yes | sdkmanager "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" || true
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
+          "$SDKMANAGER" --version || true
+          yes | "$SDKMANAGER" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" || true
           ls "$ANDROID_HOME/platforms" || true
 
       - name: Run unit tests + debug assemble
