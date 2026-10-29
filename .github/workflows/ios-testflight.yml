@@ -3,8 +3,13 @@
 # Mirrors the proven JetLagKiller pipeline (same repo family, same
 # Uptime Ventures LLC team L2D8SN7BJ4, same distribution certificate
 # and App Store Connect API key), adapted for RunWear's differences:
-# - Pure Swift, checked-in .xcodeproj: no Gradle/Kotlin framework link,
-#   no XcodeGen generation, no Local.xcconfig secrets step.
+# - Checked-in .xcodeproj, no XcodeGen generation, no Local.xcconfig
+#   secrets step. Since Stage 2 (2026-10-29) the app DOES link a
+#   Kotlin framework — the shared :engine module as
+#   RunWearEngine.xcframework — built by this workflow's `engine` job
+#   on macos-15 (Xcode 16, the toolchain Kotlin 2.0.21 supports) and
+#   handed over as an artifact, because this archive job must stay on
+#   the current SDK (see Toolchain below).
 # - Two provisioning profiles, not three (no widget target):
 #     com.uptimeventures.runwear             -> RunWear App Store
 #     com.uptimeventures.runwear.watchkitapp -> RunWear Watch App Store
@@ -77,8 +82,36 @@ permissions:
   contents: read
 
 jobs:
+  engine:
+    name: Build RunWearEngine.xcframework (shared :engine module)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out the exact commit to ship
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK (the KMP module has an Android target)
+        uses: android-actions/setup-android@v3
+
+      - name: Build the XCFramework
+        run: bash scripts/build-engine-framework.sh
+
+      - name: Upload the XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          if-no-files-found: error
+
   archive-and-upload:
     name: Archive and upload to TestFlight
+    needs: engine
     runs-on: macos-26
     timeout-minutes: 60
 
@@ -95,6 +128,12 @@ jobs:
     steps:
       - name: Check out the exact commit to ship
         uses: actions/checkout@v4
+
+      - name: Download the XCFramework
+        uses: actions/download-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
 
       - name: Tool versions
         run: |

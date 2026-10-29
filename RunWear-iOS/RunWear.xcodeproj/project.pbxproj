@@ -82,6 +82,18 @@
 		C10002000000000000000013 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
 		C10002000000000000000014 /* ClothingThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000005 /* ClothingThumbnailService.swift */; };
 		C10002000000000000000015 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000004 /* TemperatureUnit.swift */; };
+		/* Shared engine framework (Stage 2, 2026-10-29): RunWearEngine.xcframework, CI-built from RunWear-android :engine */
+		E10002000000000000000001 /* RunWearEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; };
+		E10002000000000000000002 /* RunWearEngine.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E10002000000000000000003 /* RunWearEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; };
+		E10002000000000000000004 /* RunWearEngine.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E10002000000000000000005 /* RunWearEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; };
+		E10002000000000000000006 /* RunWearEngine.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E10002000000000000000011 /* EngineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000002 /* EngineBridge.swift */; };
+		E10002000000000000000012 /* EngineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000002 /* EngineBridge.swift */; };
+		E10002000000000000000013 /* EngineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000002 /* EngineBridge.swift */; };
+		E10002000000000000000014 /* EngineFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000003 /* EngineFixtureTests.swift */; };
+		E10002000000000000000015 /* engine_fixtures.json in Resources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000004 /* engine_fixtures.json */; };
 		D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B1000000233456780000000 /* RunWear Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -105,6 +117,39 @@
 				D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E10000FC2334567800000001 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E10002000000000000000002 /* RunWearEngine.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E10000FC2334567800000002 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E10002000000000000000004 /* RunWearEngine.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E10000FC2334567800000003 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E10002000000000000000006 /* RunWearEngine.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -161,6 +206,11 @@
 		C1000000233456780000000 /* RunWearTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunWearTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10001000000000000000001 /* OutfitRulesSweepTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitRulesSweepTest.swift; sourceTree = "<group>"; };
 		C10001000000000000000002 /* EngineBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBoundaryTests.swift; sourceTree = "<group>"; };
+		/* Shared engine framework + Stage 2 bridge/test files — added 2026-10-29 */
+		E10001000000000000000001 /* RunWearEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/RunWearEngine.xcframework; sourceTree = "<group>"; };
+		E10001000000000000000002 /* EngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBridge.swift; sourceTree = "<group>"; };
+		E10001000000000000000003 /* EngineFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineFixtureTests.swift; sourceTree = "<group>"; };
+		E10001000000000000000004 /* engine_fixtures.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = engine_fixtures.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +218,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E10002000000000000000001 /* RunWearEngine.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -175,6 +226,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E10002000000000000000003 /* RunWearEngine.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -182,6 +234,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E10002000000000000000005 /* RunWearEngine.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -244,6 +297,7 @@
 				A100000E233456780000007 /* WeatherService.swift */,
 				A1000010233456780000008 /* LocationService.swift */,
 				A1000012233456780000009 /* OutfitRecommendationService.swift */,
+				E10001000000000000000002 /* EngineBridge.swift */,
 				A10001000000000000000005 /* ClothingThumbnailService.swift */,
 				A10001000000000000000006 /* FallbackImageProvider.swift */,
 				A10001000000000000000007 /* HeroImageService.swift */,
@@ -269,6 +323,7 @@
 				A1000020233456780000001 /* RunWear */,
 				B1000020233456780000001 /* RunWearWatch */,
 				C1000020233456780000001 /* RunWearTests */,
+				E10001000000000000000001 /* RunWearEngine.xcframework */,
 				A10000FF233456780000000 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -333,6 +388,8 @@
 			children = (
 				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
+				E10001000000000000000003 /* EngineFixtureTests.swift */,
+				E10001000000000000000004 /* engine_fixtures.json */,
 			);
 			path = RunWearTests;
 			sourceTree = "<group>";
@@ -348,6 +405,7 @@
 				A10000FD233456780000000 /* Frameworks */,
 				A10000FE233456790000000 /* Resources */,
 				D10000FC233456780000001 /* Embed Watch Content */,
+				E10000FC2334567800000001 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -366,6 +424,7 @@
 				B10000FC233456780000000 /* Sources */,
 				B10000FD233456780000000 /* Frameworks */,
 				B10000FE233456790000000 /* Resources */,
+				E10000FC2334567800000002 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -382,6 +441,8 @@
 			buildPhases = (
 				C10000FC233456780000000 /* Sources */,
 				C10000FD233456780000000 /* Frameworks */,
+				C10000FE233456790000000 /* Resources */,
+				E10000FC2334567800000003 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -450,6 +511,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C10000FE233456790000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E10002000000000000000015 /* engine_fixtures.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -465,6 +534,7 @@
 				A100000D233456780000007 /* WeatherService.swift in Sources */,
 				A100000F233456780000008 /* LocationService.swift in Sources */,
 				A1000011233456780000009 /* OutfitRecommendationService.swift in Sources */,
+				E10002000000000000000011 /* EngineBridge.swift in Sources */,
 				A1000013233456780000010 /* WeatherViewModel.swift in Sources */,
 				A1000015233456780000011 /* WeatherOutfitView.swift in Sources */,
 				A10004000000000000000001 /* DuoArrangement.swift in Sources */,
@@ -507,6 +577,7 @@
 				B100000D233456780000008 /* Outfit.swift in Sources */,
 				B100000E233456780000009 /* WeatherService.swift in Sources */,
 				B100000F233456780000010 /* OutfitRecommendationService.swift in Sources */,
+				E10002000000000000000012 /* EngineBridge.swift in Sources */,
 				B10002000000000000000001 /* WatchConnectivityManager.swift in Sources */,
 				B10002000000000000000002 /* WatchSettingsView.swift in Sources */,
 				B10002000000000000000101 /* GenderPreference.swift in Sources */,
@@ -525,6 +596,8 @@
 			files = (
 				C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */,
 				C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */,
+				E10002000000000000000013 /* EngineBridge.swift in Sources */,
+				E10002000000000000000014 /* EngineFixtureTests.swift in Sources */,
 				C10002000000000000000003 /* Outfit.swift in Sources */,
 				C10002000000000000000004 /* Weather.swift in Sources */,
 				C10002000000000000000005 /* ComfortLevel.swift in Sources */,

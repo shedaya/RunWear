@@ -6,10 +6,11 @@ import XCTest
 ///
 /// Sweeps the REAL `OutfitRecommendationService` over its full input space
 /// (209,600 main-grid scenarios plus divergence and Celsius slices) and checks
-/// the invariants the v4.2 recalibration is supposed to guarantee. This target
-/// is the drift alarm for the hand-ported Swift engine: the scenario axes,
-/// invariant logic, and assertion messages mirror the Kotlin harness, so a
-/// Kotlin engine change that is not ported to Swift fails here loudly.
+/// the invariants the v4.2 recalibration is supposed to guarantee. Since
+/// Stage 2 (2026-10-29) the service delegates to the shared Kotlin `:engine`
+/// module, so this sweep now runs the SAME tables Android runs; it remains
+/// the invariant gate for the iOS call path, and EngineFixtureTests pins
+/// decision-for-decision equality with the Kotlin side from shared data.
 ///
 /// Port notes (where the Swift surface forced a different shape — the
 /// invariants and expectations are unchanged):

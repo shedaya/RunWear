@@ -8,6 +8,11 @@
 #
 # It is NOT the shipping pipeline: signing, archiving, and TestFlight come
 # later (an App Store Connect record for RunWear iOS does not exist yet).
+#
+# Stage 2 (2026-10-29): the app links the shared :engine KMP module as
+# RunWearEngine.xcframework, so this job builds it first (same runner —
+# macos-15/Xcode 16 is the toolchain Kotlin 2.0.21 supports). The
+# framework directory is gitignored and never committed.
 name: iOS Build
 
 on:
@@ -26,6 +31,18 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK (the KMP module has an Android target)
+        uses: android-actions/setup-android@v3
+
+      - name: Build the shared engine XCFramework
+        run: bash scripts/build-engine-framework.sh
 
       - name: Tool versions
         run: xcodebuild -version
