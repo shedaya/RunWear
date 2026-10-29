@@ -120,12 +120,39 @@ class WearScreenshotTest {
         shadowOf(Looper.getMainLooper()).idle()
 
         val size = 456
-        val spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
-        composeView.measure(spec, spec)
-        composeView.layout(0, 0, size, size)
+        fun capture(): Pair<Bitmap, Int> {
+            val spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
+            composeView.measure(spec, spec)
+            composeView.layout(0, 0, size, size)
+            val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            composeView.draw(Canvas(bmp))
+            val px = IntArray(size * size)
+            bmp.getPixels(px, 0, size, 0, 0, size, size)
+            var op = 0
+            for (p in px) if (p ushr 24 == 0xFF) op++
+            return bmp to op
+        }
 
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        composeView.draw(Canvas(bitmap))
+        var (bitmap, opaque) = capture()
+        val firstPassOpaque = opaque
+        if (opaque <= size * size / 4) {
+            // CI runners settle composition noticeably slower than a local
+            // workstation — ScalingLazyColumn's first layout in particular
+            // can lag the scheduler walk above, leaving a fully transparent
+            // first capture (seen on GitHub's ubuntu image, 2026-10-29:
+            // outfit/tips pages at 0 opaque pixels while hero pages, which
+            // are plain layouts, rendered). Settle a second, longer round
+            // and capture again before concluding nothing rendered.
+            repeat(50) {
+                scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
+                shadowOf(Looper.getMainLooper()).idle()
+            }
+            shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.SECONDS)
+            shadowOf(Looper.getMainLooper()).idle()
+            val second = capture()
+            bitmap = second.first
+            opaque = second.second
+        }
 
         assertEquals("capture must be square", bitmap.width, bitmap.height)
         assertTrue(
@@ -136,12 +163,8 @@ class WearScreenshotTest {
         // frame, but the outfit/tips pages paint the round viewport only —
         // their square corners stay transparent by design. So instead of a
         // single corner pixel, require a solid share of opaque pixels.
-        var opaque = 0
-        val pixels = IntArray(size * size)
-        bitmap.getPixels(pixels, 0, size, 0, 0, size, size)
-        for (p in pixels) if (p ushr 24 == 0xFF) opaque++
         assertTrue(
-            "only $opaque/${size * size} opaque pixels — nothing rendered?",
+            "only $opaque/${size * size} opaque pixels (first pass $firstPassOpaque) — nothing rendered?",
             opaque > size * size / 4
         )
 
