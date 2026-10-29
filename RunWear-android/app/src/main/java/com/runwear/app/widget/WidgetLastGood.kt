@@ -4,6 +4,8 @@ import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
+import kotlinx.datetime.toJavaLocalDateTime
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -34,7 +36,7 @@ data class WidgetLastGood(
         val w = weather
         val o = outfit
         val entries = mutableMapOf(
-            "w_datetime" to w.dateTime.format(FMT),
+            "w_datetime" to w.dateTime.toJavaLocalDateTime().format(FMT),
             "w_temperature" to w.temperature.toString(),
             "w_feels_like" to w.feelsLike.toString(),
             "w_humidity" to w.humidity.toString(),
@@ -81,7 +83,7 @@ data class WidgetLastGood(
             }
 
             val weatherDateTime = req("w_datetime")?.let {
-                runCatching { LocalDateTime.parse(it, FMT) }.getOrNull()
+                runCatching { LocalDateTime.parse(it, FMT) }.getOrNull()?.toKotlinLocalDateTime()
             } ?: return null
             val weather = WeatherConditions(
                 dateTime = weatherDateTime,

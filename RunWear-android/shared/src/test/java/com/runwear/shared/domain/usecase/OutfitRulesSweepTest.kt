@@ -10,7 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -118,7 +118,7 @@ class OutfitRulesSweepTest {
                 Cond.SNOW -> CondSpec(false, true, 0.4, 80, WeatherCode.SNOW_MODERATE)
             }
             return WeatherConditions(
-                dateTime = LocalDateTime.of(2026, 6, 15, hour, 0),
+                dateTime = LocalDateTime(2026, 6, 15, hour, 0),
                 temperature = actualF,
                 feelsLike = s.feels.toDouble(),
                 humidity = s.humidity,

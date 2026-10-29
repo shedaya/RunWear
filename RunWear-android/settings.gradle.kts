@@ -18,3 +18,4 @@ rootProject.name = "RunWear"
 include(":app")
 include(":wear")
 include(":shared")
+include(":engine")

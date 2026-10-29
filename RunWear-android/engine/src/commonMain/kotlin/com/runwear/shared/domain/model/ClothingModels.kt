@@ -53,7 +53,15 @@ enum class ClothingItem(
     SUNGLASSES(ClothingCategory.ACCESSORIES, "Sunglasses", "Eye protection from sun and wind", "🕶️", "running sunglasses sport"),
     SUNSCREEN(ClothingCategory.ACCESSORIES, "Sunscreen (SPF 30+)", "Protect exposed skin", "🧴", "sport sunscreen spf 50"),
     REFLECTIVE_GEAR(ClothingCategory.ACCESSORIES, "Reflective Gear", "Visibility for low-light", "🦺", "running reflective vest"),
-    NECK_GAITER(ClothingCategory.ACCESSORIES, "Neck Gaiter / Buff", "Versatile neck and face protection", "🧣", "running neck gaiter buff")
+    NECK_GAITER(ClothingCategory.ACCESSORIES, "Neck Gaiter / Buff", "Versatile neck and face protection", "🧣", "running neck gaiter buff");
+
+    /**
+     * Stable cross-platform identity of the item: the enum case name.
+     * The Apple bridge and the thumbnail key map key off this, never off
+     * presentation copy (display names drifted historically — "Split
+     * Shorts" vs "Short Shorts" — which silently broke thumbnails).
+     */
+    val key: String get() = name
 }
 
 data class OutfitRecommendation(
@@ -76,4 +84,25 @@ data class OutfitRecommendation(
                           else "${weather.effectiveTemperature.toInt()}°F"
             return "Feels like $tempStr — ${weather.weatherCode.description}"
         }
+}
+
+/**
+ * The engine's decision, without the weather echo: the slot selections and
+ * tips produced by `GetOutfitRecommendationUseCase.recommendFrames`. This is
+ * the return type the Apple platforms consume from the shared module (they
+ * have no [WeatherConditions] to hand back), and [OutfitRecommendation] is
+ * assembled from it on Android so both platforms expose the same decision.
+ */
+data class OutfitSelection(
+    val topBase: ClothingItem,
+    val topMid: ClothingItem? = null,
+    val topOuter: ClothingItem? = null,
+    val bottom: ClothingItem,
+    val head: ClothingItem? = null,
+    val hands: ClothingItem? = null,
+    val accessories: List<ClothingItem> = emptyList(),
+    val tips: List<String> = emptyList()
+) {
+    val allItems: List<ClothingItem>
+        get() = listOfNotNull(head, topBase, topMid, topOuter, bottom, hands) + accessories
 }

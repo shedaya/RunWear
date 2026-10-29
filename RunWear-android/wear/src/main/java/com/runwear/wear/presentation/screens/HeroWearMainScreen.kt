@@ -60,6 +60,7 @@ import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.wear.presentation.theme.RunWearColors
 import com.runwear.wear.presentation.theme.WeatherColors
 import com.runwear.wear.presentation.viewmodel.WearUiState
+import kotlinx.datetime.toJavaLocalDateTime
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
@@ -306,9 +307,9 @@ internal fun HeroWeatherPage(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(bottom = 16.dp)
             ) {
-                val isToday = weather.dateTime.toLocalDate() == LocalDate.now()
+                val isToday = weather.dateTime.toJavaLocalDateTime().toLocalDate() == LocalDate.now()
                 Text(
-                    text = if (isToday) "Today" else weather.dateTime.format(
+                    text = if (isToday) "Today" else weather.dateTime.toJavaLocalDateTime().format(
                         DateTimeFormatter.ofPattern("EEE")
                     ),
                     style = MaterialTheme.typography.labelMedium,

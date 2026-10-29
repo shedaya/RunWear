@@ -115,13 +115,18 @@ data class OutfitCombination(
             val timeOfDay = TimeOfDay.fromHour(weather.dateTime.hour)
             val heroWeather = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
 
-            // 8-char hex hash from sorted outfit item names (per spec)
+            // 8-char hex hash from sorted outfit item names (per spec).
+            // Common-code replacement for java's Integer.toHexString with
+            // identical semantics: String.hashCode() is the same 31-based
+            // UTF-16 hash on every Kotlin target, and toUInt().toString(16)
+            // renders the same unsigned lowercase hex Integer.toHexString
+            // produced (two's-complement form for negative hashes).
             val outfitHash = outfit.allItems
                 .map { it.name }
                 .sorted()
                 .joinToString("-")
                 .hashCode()
-                .let { Integer.toHexString(it).takeLast(8).padStart(8, '0') }
+                .let { it.toUInt().toString(16).takeLast(8).padStart(8, '0') }
 
             // Combination ID format: {GENDER}_{WEATHER}_{TEMP}_{TIME}_{HASH}
             val combinationId = "${gender.name}_${heroWeather.name}_${tempBracket.name}_${timeOfDay.name}_$outfitHash"
@@ -267,4 +272,28 @@ object HeroImageSelector {
     ): String? {
         return getFallbackImage(weather, outfit, gender).imageUrl
     }
+}
+
+/**
+ * The hero combination mappings in frame form — the Apple-platform seam for
+ * the hero decision logic. The Swift hero pipeline builds combination-ID
+ * prefix patterns ({GENDER}_{WEATHER}_{TEMP}_{TIME}, no outfit hash), so it
+ * consumes the three classification mappings by NAME and keeps its own
+ * pattern assembly and pool cascade; the mapping tables themselves (WMO
+ * code → condition class, feels-like → bracket, hour → time of day) live
+ * only here, shared with Android's [OutfitCombination.fromConditions].
+ */
+object HeroFrameMapping {
+
+    /** [TempBracket] name for a feels-like temperature in Fahrenheit. */
+    fun tempBracketName(feelsLikeF: Double): String =
+        TempBracket.fromFahrenheit(feelsLikeF).name
+
+    /** [HeroWeatherCondition] name for an Open-Meteo WMO weather code. */
+    fun weatherConditionName(weatherCode: Int): String =
+        HeroWeatherCondition.fromWeatherCode(WeatherCode.fromCode(weatherCode)).name
+
+    /** [TimeOfDay] name for a location-local hour (0–23). */
+    fun timeOfDayName(hour: Int): String =
+        TimeOfDay.fromHour(hour).name
 }

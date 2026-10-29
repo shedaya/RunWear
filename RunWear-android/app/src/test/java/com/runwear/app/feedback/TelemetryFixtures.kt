@@ -7,6 +7,7 @@ import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
 
 /**
@@ -18,7 +19,7 @@ import java.time.LocalDateTime
 object TelemetryFixtures {
 
     val weather = WeatherConditions(
-        dateTime = LocalDateTime.of(2026, 10, 17, 7, 0),
+        dateTime = LocalDateTime.of(2026, 10, 17, 7, 0).toKotlinLocalDateTime(),
         temperature = 41.0,
         feelsLike = 39.0,
         humidity = 62,

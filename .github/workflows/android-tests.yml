@@ -1,0 +1,64 @@
+name: Android Tests
+
+# Stage 2 (2026-10-29): the Android side of the parity gate. There was no
+# Android CI before this — the suite ran on a local VM that also hosts
+# other builds. This workflow runs the full unit-test suite for every
+# module (including the 209,600-scenario engine sweep in :shared and the
+# cross-platform fixture test) and keeps the JUnit XML as durable evidence.
+on:
+  push:
+    branches: [ios/stage2-kmp-2026-10-29]
+  workflow_dispatch:
+    inputs:
+      generate_fixtures:
+        description: 'Regenerate engine_fixtures.json from the Kotlin engine (artifact: engine-fixtures)'
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    name: Android unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK platforms
+        run: sdkmanager "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
+
+      - name: Run unit tests + debug assemble
+        working-directory: RunWear-android
+        env:
+          RUNWEAR_FIXTURE_WRITE: ${{ inputs.generate_fixtures && '1' || '' }}
+        run: >
+          ./gradlew :engine:testDebugUnitTest :shared:testDebugUnitTest
+          :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug
+          --stacktrace
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: |
+            RunWear-android/**/build/test-results/**/*.xml
+            RunWear-android/**/build/outputs/androidTest-results/**
+          if-no-files-found: warn
+
+      - name: Upload generated engine fixtures
+        if: ${{ inputs.generate_fixtures }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-fixtures
+          path: RunWear-iOS/RunWearTests/engine_fixtures.json
+          if-no-files-found: error

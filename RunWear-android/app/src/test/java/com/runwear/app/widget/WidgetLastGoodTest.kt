@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
 
 /**
@@ -18,7 +19,7 @@ import java.time.LocalDateTime
 class WidgetLastGoodTest {
 
     private fun sampleWeather() = WeatherConditions(
-        dateTime = LocalDateTime.of(2026, 10, 22, 7, 3),
+        dateTime = LocalDateTime.of(2026, 10, 22, 7, 3).toKotlinLocalDateTime(),
         temperature = 46.4,
         feelsLike = 40.2,
         humidity = 71,

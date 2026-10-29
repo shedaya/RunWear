@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
 
 /**
@@ -22,7 +23,7 @@ class LaterTodayLineTest {
         feelsLike: Double = 45.0,
         precipProb: Int = 0
     ) = WeatherConditions(
-        dateTime = time,
+        dateTime = time.toKotlinLocalDateTime(),
         temperature = feelsLike + 4,
         feelsLike = feelsLike,
         humidity = 60,
@@ -103,7 +104,7 @@ class LaterTodayLineTest {
     @Test
     fun `stable fallback states the feels-like range and peak rain`() {
         fun hour(offset: Long, feels: Double, rain: Int) = HourlyForecast(
-            dateTime = now.plusHours(offset),
+            dateTime = now.plusHours(offset).toKotlinLocalDateTime(),
             temperature = feels + 4,
             feelsLike = feels,
             humidity = 60,
@@ -122,7 +123,7 @@ class LaterTodayLineTest {
     @Test
     fun `stable fallback without rain risk or hours`() {
         fun hour(feels: Double) = HourlyForecast(
-            dateTime = now.plusHours(2),
+            dateTime = now.plusHours(2).toKotlinLocalDateTime(),
             temperature = feels + 4,
             feelsLike = feels,
             humidity = 60,

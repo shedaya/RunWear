@@ -1,6 +1,6 @@
 package com.runwear.shared.domain.model
 
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
 
 data class WeatherConditions(
     val dateTime: LocalDateTime,

@@ -17,6 +17,7 @@ import com.runwear.wear.presentation.screens.OutfitPage
 import com.runwear.wear.presentation.screens.TipsPage
 import com.runwear.wear.presentation.theme.RunWearWatchTheme
 import java.io.File
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
@@ -72,7 +73,7 @@ class WearScreenshotTest {
         uv: Double,
         cloudCover: Int
     ) = WeatherConditions(
-        dateTime = LocalDateTime.now(),
+        dateTime = LocalDateTime.now().toKotlinLocalDateTime(),
         temperature = tempF,
         feelsLike = feelsF,
         humidity = humidity,
