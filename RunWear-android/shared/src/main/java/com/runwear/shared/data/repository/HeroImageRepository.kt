@@ -193,6 +193,7 @@ class HeroImageRepository @Inject constructor() {
         )
     }
 
+    /**
      * Report the hero photo on screen as bad (user tapped the flag).
      *
      * Fire-and-forget by contract: builds the [HeroFlagInsert] for the

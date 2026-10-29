@@ -8,7 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
 
 /**
  * The 1.1.8 render matrix: size dispatch + slot budgets. This repo has no
@@ -36,7 +36,7 @@ class WidgetLayoutTest {
         code: WeatherCode = WeatherCode.CLEAR_SKY,
         celsius: Boolean = false
     ) = WeatherConditions(
-        dateTime = LocalDateTime.of(2026, 10, 27, 13, 15),
+        dateTime = LocalDateTime(2026, 10, 27, 13, 15),
         temperature = feelsLike + 3,
         feelsLike = feelsLike,
         humidity = 55,

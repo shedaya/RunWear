@@ -33,7 +33,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 import java.io.FileOutputStream
-import java.time.LocalDateTime
+import kotlinx.datetime.LocalDateTime
+import java.time.LocalDateTime as JavaLocalDateTime
 
 /**
  * Genuine renders of the production widget (Robolectric native
@@ -99,7 +100,7 @@ class WidgetRenderTest {
         weather: WeatherConditions,
         outfit: OutfitRecommendation,
         laterTodayLine: String?,
-        savedAt: LocalDateTime
+        savedAt: JavaLocalDateTime
     ) = WidgetLastGood(
         weather = weather,
         outfit = outfit,
@@ -114,7 +115,7 @@ class WidgetRenderTest {
     /** Sol's Oct 28 screenshot scenario: cold overcast morning, two pieces, daypart change. */
     @Test
     fun renderMildDayTile() {
-        val at = LocalDateTime.of(2026, 10, 28, 10, 15)
+        val at = LocalDateTime(2026, 10, 28, 10, 15)
         val w = weather(at, temp = 49.0, feels = 42.0, wind = 6.0, code = WeatherCode.OVERCAST)
         val lastGood = fixture(
             weather = w,
@@ -124,7 +125,7 @@ class WidgetRenderTest {
                 bottom = ClothingItem.LIGHT_TIGHTS
             ),
             laterTodayLine = "By 1 PM: drop the Light Long Sleeve \u00B7 add the Light Jacket",
-            savedAt = LocalDateTime.of(2026, 10, 28, 10, 25)
+            savedAt = JavaLocalDateTime.of(2026, 10, 28, 10, 25)
         )
         render(lastGood, "runwear-widget-121-mild.png")
     }
@@ -132,7 +133,7 @@ class WidgetRenderTest {
     /** Deep winter: seven pieces — garment rows, one chip, and the computed "+2 more". */
     @Test
     fun renderDeepWinterTile() {
-        val at = LocalDateTime.of(2026, 1, 15, 7, 30)
+        val at = LocalDateTime(2026, 1, 15, 7, 30)
         val w = weather(at, temp = 14.0, feels = 8.0, wind = 14.0, code = WeatherCode.SNOW_SLIGHT)
         val lastGood = fixture(
             weather = w,
@@ -147,7 +148,7 @@ class WidgetRenderTest {
                 accessories = listOf(ClothingItem.NECK_GAITER)
             ),
             laterTodayLine = "By 2 PM: drop the Insulated Jacket \u00B7 snow 40%",
-            savedAt = LocalDateTime.of(2026, 1, 15, 7, 32)
+            savedAt = JavaLocalDateTime.of(2026, 1, 15, 7, 32)
         )
         render(lastGood, "runwear-widget-121-winter.png")
     }
