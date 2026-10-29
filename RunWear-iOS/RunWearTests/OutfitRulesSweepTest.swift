@@ -24,10 +24,16 @@ import XCTest
 ///    `wind_speed_unit=mph` in WeatherService — so the production
 ///    boundary feeds the same frame; aligned in Stage 1, 2026-10-29.
 ///    Before that, production passed km/h numbers into this parameter.)
-///  - Swift's `ClothingItem` is a struct identified by its `name` (its `id`
-///    is a fresh UUID per construction), so item identity here is a
-///    name → ItemKind map. ItemKind's case order, categories and display
-///    names mirror Kotlin's `ClothingItem` verbatim.
+///  - Swift's `ClothingItem` is a struct whose `id` is a fresh UUID per
+///    construction, so item identity here is a name → ItemKind map.
+///    ItemKind's case order, categories and display names mirror
+///    Kotlin's `ClothingItem` verbatim — and since the Stage 1 copy
+///    alignment the Swift engine's display names are those same names,
+///    so the map's keys are Kotlin's displayNames. (The struct also
+///    carries a stable `key` — the Kotlin enum case name — which the
+///    thumbnail service and the engine's own Windbreaker comparison
+///    key off; this harness keeps the name map because its violation
+///    strings are written in display names, like Kotlin's.)
 ///  - Precipitation is passed with the Kotlin values (drizzle 0.05, rain
 ///    0.5), and `isRaining` is fed as data — true for the rain and
 ///    drizzle scenarios, false for dry and snow — exactly how the
@@ -136,9 +142,11 @@ final class OutfitRulesSweepTest: XCTestCase {
     }
 
     /// The Swift engine constructs items by name; this is the identity map.
-    /// Every name the service can produce appears exactly once.
+    /// Every name the service can produce appears exactly once. Since the
+    /// Stage 1 copy alignment (2026-10-29) the Swift display names ARE the
+    /// Kotlin displayNames verbatim, so the keys below are Kotlin's names.
     static let kindBySwiftName: [String: ItemKind] = [
-        "Tank Top": .tankTop,
+        "Tank Top / Singlet": .tankTop,
         "Short Sleeve Shirt": .shortSleeve,
         "Light Long Sleeve": .longSleeveLight,
         "Thermal Long Sleeve": .longSleeveThermal,
@@ -148,22 +156,22 @@ final class OutfitRulesSweepTest: XCTestCase {
         "Windbreaker": .windbreaker,
         "Rain Jacket": .rainJacket,
         "Insulated Jacket": .insulatedJacket,
-        "Short Shorts": .shortShorts,
-        "Running Shorts": .shorts,
+        "Short Shorts (3\")": .shortShorts,
+        "Running Shorts (5-7\")": .shorts,
         "Light Tights": .lightTights,
         "Thermal Tights": .thermalTights,
         "Visor": .visor,
         "Running Cap": .baseballCap,
-        "Headband": .headband,
+        "Ear Warmer / Headband": .headband,
         "Light Beanie": .lightBeanie,
         "Thermal Beanie": .thermalBeanie,
-        "Balaclava": .balaclava,
+        "Balaclava / Face Mask": .balaclava,
         "Light Gloves": .lightGloves,
         "Thermal Gloves": .thermalGloves,
         "Mittens": .mittens,
         "Sunglasses": .sunglasses,
-        "Sunscreen": .sunscreen,
-        "Neck Gaiter": .neckGaiter,
+        "Sunscreen (SPF 30+)": .sunscreen,
+        "Neck Gaiter / Buff": .neckGaiter,
         "Reflective Gear": .reflectiveGear,
     ]
 

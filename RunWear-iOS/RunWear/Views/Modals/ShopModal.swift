@@ -245,9 +245,9 @@ private struct ShopItemRow: View {
 #Preview {
     ShopModal(
         items: [
-            ClothingItem(name: "Running Shorts", description: "Lightweight breathable shorts", icon: "🩳", amazonSearchTerm: "running shorts"),
-            ClothingItem(name: "Tech Shirt", description: "Moisture-wicking performance top", icon: "👕", amazonSearchTerm: "running shirt"),
-            ClothingItem(name: "Running Cap", description: "Sun protection for your run", icon: "🧢", amazonSearchTerm: "running cap")
+            ClothingItem(key: "SHORTS", name: "Running Shorts (5-7\")", description: "Standard running shorts", icon: "figure.run", amazonSearchTerm: "running shorts 5 inch"),
+            ClothingItem(key: "SHORT_SLEEVE", name: "Short Sleeve Shirt", description: "Moisture-wicking technical fabric", icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit"),
+            ClothingItem(key: "BASEBALL_CAP", name: "Running Cap", description: "Sun and light rain protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
         ],
         genderPreference: .male,
         isPresented: .constant(true)

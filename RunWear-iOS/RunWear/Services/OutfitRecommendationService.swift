@@ -83,11 +83,11 @@ class OutfitRecommendationService {
         // Cool-band rule (25–39.9°F): a wind shell and a mid-layer are alternatives,
         // never a stack. If the wind calls for the shell, the mid-layer comes off.
         // (Feels-like already prices in the wind chill; dressing for both double-counts it.)
-        // Kotlin compares the outer layer by enum identity; Swift's ClothingItem is a
-        // struct whose only stable identity is its name (its `id` is a fresh UUID per
-        // construction), so the comparison goes by name — the item names are unique
-        // across every selector in this file.
-        let effectiveTopMid = (topOuter?.name == "Windbreaker" && topMid != nil && temp >= 25 && temp < 40)
+        // Kotlin compares the outer layer by enum identity; Swift's ClothingItem
+        // is a struct, so the comparison goes by its stable `key` — the Kotlin
+        // enum case name every construction site sets (its `id` is a fresh UUID
+        // per construction and its display name is presentation copy).
+        let effectiveTopMid = (topOuter?.key == "WINDBREAKER" && topMid != nil && temp >= 25 && temp < 40)
             ? nil
             : topMid
 
@@ -109,13 +109,13 @@ class OutfitRecommendationService {
     /// Runners wear short sleeves down to 50°F — body heat makes up the difference
     private func selectTopBase(_ temp: Double) -> ClothingItem {
         if temp >= 80 {
-            return ClothingItem(name: "Tank Top", description: "Lightweight, breathable singlet", icon: "tshirt.fill", amazonSearchTerm: "running tank top moisture wicking")
+            return ClothingItem(key: "TANK_TOP", name: "Tank Top / Singlet", description: "Lightweight, breathable, maximum airflow", icon: "tshirt.fill", amazonSearchTerm: "running tank top moisture wicking")
         } else if temp >= 50 {
-            return ClothingItem(name: "Short Sleeve Shirt", description: "Moisture-wicking technical tee", icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit")
+            return ClothingItem(key: "SHORT_SLEEVE", name: "Short Sleeve Shirt", description: "Moisture-wicking technical fabric", icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit")
         } else if temp >= 25 {
-            return ClothingItem(name: "Light Long Sleeve", description: "Lightweight technical long sleeve", icon: "tshirt.fill", amazonSearchTerm: "running long sleeve lightweight")
+            return ClothingItem(key: "LONG_SLEEVE_LIGHT", name: "Light Long Sleeve", description: "Thin, breathable long sleeve", icon: "tshirt.fill", amazonSearchTerm: "running long sleeve lightweight")
         } else {
-            return ClothingItem(name: "Thermal Long Sleeve", description: "Insulated base layer for extreme cold", icon: "tshirt.fill", amazonSearchTerm: "running thermal base layer")
+            return ClothingItem(key: "LONG_SLEEVE_THERMAL", name: "Thermal Long Sleeve", description: "Insulated base layer for cold", icon: "tshirt.fill", amazonSearchTerm: "running thermal base layer")
         }
     }
 
@@ -125,11 +125,11 @@ class OutfitRecommendationService {
     private func selectTopMid(_ temp: Double) -> ClothingItem? {
         if temp >= 32 { return nil }
         if temp >= 25 {
-            return ClothingItem(name: "Quarter-Zip Pullover", description: "Lightweight mid-layer with zip ventilation", icon: "tshirt.fill", amazonSearchTerm: "running quarter zip pullover")
+            return ClothingItem(key: "QUARTER_ZIP", name: "Quarter-Zip Pullover", description: "Lightweight mid-layer with zip ventilation", icon: "tshirt.fill", amazonSearchTerm: "running quarter zip pullover")
         } else if temp >= 10 {
-            return ClothingItem(name: "Fleece Pullover", description: "Warm brushed fleece for cold days", icon: "tshirt.fill", amazonSearchTerm: "running fleece pullover lightweight")
+            return ClothingItem(key: "FLEECE_PULLOVER", name: "Fleece Pullover", description: "Warm brushed fleece for cold days", icon: "tshirt.fill", amazonSearchTerm: "running fleece pullover lightweight")
         } else {
-            return ClothingItem(name: "Thermal Half-Zip", description: "Heavy-weight thermal mid-layer", icon: "tshirt.fill", amazonSearchTerm: "running thermal half zip")
+            return ClothingItem(key: "HALF_ZIP_THERMAL", name: "Thermal Half-Zip", description: "Heavy-weight thermal mid-layer", icon: "tshirt.fill", amazonSearchTerm: "running thermal half zip")
         }
     }
 
@@ -146,28 +146,28 @@ class OutfitRecommendationService {
         // (isRaining, ≤ 0.1 mm) falls through to the temperature bands;
         // the rain cap and rain tip key off isRaining alone.
         if isRaining && precipitation > 0.1 {
-            return ClothingItem(name: "Rain Jacket", description: "Lightweight waterproof running jacket", icon: "cloud.rain.fill", amazonSearchTerm: "waterproof running jacket")
+            return ClothingItem(key: "RAIN_JACKET", name: "Rain Jacket", description: "Waterproof, breathable shell", icon: "cloud.rain.fill", amazonSearchTerm: "running rain jacket waterproof")
         }
         if temp >= 50 { return nil }
         if temp >= 25 {
-            return isWindy ? ClothingItem(name: "Windbreaker", description: "Lightweight wind protection", icon: "wind", amazonSearchTerm: "running windbreaker jacket") : nil
+            return isWindy ? ClothingItem(key: "WINDBREAKER", name: "Windbreaker", description: "Lightweight wind and light rain protection", icon: "wind", amazonSearchTerm: "running windbreaker jacket") : nil
         }
         if temp >= 10 {
-            return ClothingItem(name: "Windbreaker", description: "Lightweight wind shell", icon: "wind", amazonSearchTerm: "running windbreaker jacket")
+            return ClothingItem(key: "WINDBREAKER", name: "Windbreaker", description: "Lightweight wind and light rain protection", icon: "wind", amazonSearchTerm: "running windbreaker jacket")
         }
-        return ClothingItem(name: "Insulated Jacket", description: "Warm jacket for extreme cold", icon: "snow", amazonSearchTerm: "running winter jacket insulated")
+        return ClothingItem(key: "INSULATED_JACKET", name: "Insulated Jacket", description: "Warm jacket for cold conditions", icon: "snow", amazonSearchTerm: "running winter jacket insulated")
     }
 
     /// Runners wear shorts down to ~45°F — legs generate plenty of heat
     private func selectBottom(_ temp: Double) -> ClothingItem {
         if temp >= 80 {
-            return ClothingItem(name: "Short Shorts", description: "Light 3-inch running shorts", icon: "figure.run", amazonSearchTerm: "running shorts 3 inch split")
+            return ClothingItem(key: "SHORT_SHORTS", name: "Short Shorts (3\")", description: "Maximum breathability", icon: "figure.run", amazonSearchTerm: "running shorts 3 inch")
         } else if temp >= 45 {
-            return ClothingItem(name: "Running Shorts", description: "Standard 5-7 inch shorts", icon: "figure.run", amazonSearchTerm: "running shorts 5 inch")
+            return ClothingItem(key: "SHORTS", name: "Running Shorts (5-7\")", description: "Standard running shorts", icon: "figure.run", amazonSearchTerm: "running shorts 5 inch")
         } else if temp >= 30 {
-            return ClothingItem(name: "Light Tights", description: "Lightweight running tights", icon: "figure.run", amazonSearchTerm: "running tights lightweight")
+            return ClothingItem(key: "LIGHT_TIGHTS", name: "Light Tights", description: "Full leg coverage, breathable", icon: "figure.run", amazonSearchTerm: "running tights lightweight")
         } else {
-            return ClothingItem(name: "Thermal Tights", description: "Fleece-lined running tights", icon: "figure.run", amazonSearchTerm: "fleece lined running tights")
+            return ClothingItem(key: "THERMAL_TIGHTS", name: "Thermal Tights", description: "Insulated for cold weather", icon: "figure.run", amazonSearchTerm: "running tights thermal winter")
         }
     }
 
@@ -177,39 +177,39 @@ class OutfitRecommendationService {
         // adjustment), never the comfort-adjusted frame — "I run hot" must not
         // put a cap on your head, and "I run cold" must not take one off.
         if rawTemp >= 65 && uvIndex > 3 {
-            return ClothingItem(name: "Visor", description: "Sun protection, max ventilation", icon: "sun.max.fill", amazonSearchTerm: "running visor")
+            return ClothingItem(key: "VISOR", name: "Visor", description: "Sun protection, max ventilation", icon: "sun.max.fill", amazonSearchTerm: "running visor")
         }
         if rawTemp >= 50 && uvIndex > 3 {
-            return ClothingItem(name: "Running Cap", description: "Breathable mesh cap for sun protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap breathable")
+            return ClothingItem(key: "BASEBALL_CAP", name: "Running Cap", description: "Sun and light rain protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
         }
         // Same item, different job: in rain the cap is rain gear, keyed to rain
         // itself — not a temperature decision. Unchanged.
         if isRaining {
-            return ClothingItem(name: "Running Cap", description: "Keeps rain out of eyes", icon: "baseball.cap.fill", amazonSearchTerm: "running cap breathable")
+            return ClothingItem(key: "BASEBALL_CAP", name: "Running Cap", description: "Sun and light rain protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
         }
         // Warmth headgear below stays on the comfort-adjusted frame (temp).
         if temp >= 40 { return nil }
         if temp >= 30 {
-            return ClothingItem(name: "Headband", description: "Ear warmer headband", icon: "ear.fill", amazonSearchTerm: "running ear warmer headband")
+            return ClothingItem(key: "HEADBAND", name: "Ear Warmer / Headband", description: "Keeps ears warm", icon: "ear.fill", amazonSearchTerm: "running ear warmer headband")
         }
         if temp >= 15 {
-            return ClothingItem(name: "Light Beanie", description: "Thin thermal beanie", icon: "brain.head.profile", amazonSearchTerm: "running beanie lightweight")
+            return ClothingItem(key: "LIGHT_BEANIE", name: "Light Beanie", description: "Thin beanie for moderate cold", icon: "brain.head.profile", amazonSearchTerm: "running beanie lightweight")
         }
         if temp >= 5 {
-            return ClothingItem(name: "Thermal Beanie", description: "Warm insulated beanie", icon: "brain.head.profile", amazonSearchTerm: "running beanie thermal winter")
+            return ClothingItem(key: "THERMAL_BEANIE", name: "Thermal Beanie", description: "Warm hat for very cold weather", icon: "brain.head.profile", amazonSearchTerm: "running beanie thermal winter")
         }
-        return ClothingItem(name: "Balaclava", description: "Full face and neck coverage", icon: "face.dashed", amazonSearchTerm: "running balaclava cold weather")
+        return ClothingItem(key: "BALACLAVA", name: "Balaclava / Face Mask", description: "Full face protection", icon: "face.dashed", amazonSearchTerm: "running balaclava face mask")
     }
 
     private func selectHands(_ temp: Double) -> ClothingItem? {
         if temp >= 40 { return nil }
         if temp >= 25 {
-            return ClothingItem(name: "Light Gloves", description: "Thin touchscreen-compatible gloves", icon: "hand.raised.fill", amazonSearchTerm: "lightweight running gloves touchscreen")
+            return ClothingItem(key: "LIGHT_GLOVES", name: "Light Gloves", description: "Thin running gloves", icon: "hand.raised.fill", amazonSearchTerm: "running gloves lightweight touchscreen")
         }
         if temp >= 15 {
-            return ClothingItem(name: "Thermal Gloves", description: "Insulated running gloves", icon: "hand.raised.fill", amazonSearchTerm: "insulated running gloves winter")
+            return ClothingItem(key: "THERMAL_GLOVES", name: "Thermal Gloves", description: "Insulated gloves for cold", icon: "hand.raised.fill", amazonSearchTerm: "running gloves thermal winter")
         }
-        return ClothingItem(name: "Mittens", description: "Maximum warmth for extreme cold", icon: "hand.raised.fill", amazonSearchTerm: "running mittens warm")
+        return ClothingItem(key: "MITTENS", name: "Mittens", description: "Maximum warmth for extreme cold", icon: "hand.raised.fill", amazonSearchTerm: "running mittens warm")
     }
 
     private func selectAccessories(_ temp: Double, uvIndex: Double, isRaining: Bool, hour: Int) -> [ClothingItem] {
@@ -218,16 +218,16 @@ class OutfitRecommendationService {
         // Sun protection, UV-only: never read the temperature in any frame, so
         // the comfort preference cannot move them (classification audited v4.3).
         if uvIndex > 3 {
-            items.append(ClothingItem(name: "Sunglasses", description: "UV protection running sunglasses", icon: "sunglasses.fill", amazonSearchTerm: "running sunglasses"))
+            items.append(ClothingItem(key: "SUNGLASSES", name: "Sunglasses", description: "Eye protection from sun and wind", icon: "sunglasses.fill", amazonSearchTerm: "running sunglasses sport"))
         }
         if uvIndex > 5 {
-            items.append(ClothingItem(name: "Sunscreen", description: "Sport SPF 50 sunscreen", icon: "sun.max.fill", amazonSearchTerm: "sport sunscreen spf 50"))
+            items.append(ClothingItem(key: "SUNSCREEN", name: "Sunscreen (SPF 30+)", description: "Protect exposed skin", icon: "sun.max.fill", amazonSearchTerm: "sport sunscreen spf 50"))
         }
         if temp < 30 {
-            items.append(ClothingItem(name: "Neck Gaiter", description: "Fleece neck warmer", icon: "scribble.variable", amazonSearchTerm: "running neck gaiter buff"))
+            items.append(ClothingItem(key: "NECK_GAITER", name: "Neck Gaiter / Buff", description: "Versatile neck and face protection", icon: "scribble.variable", amazonSearchTerm: "running neck gaiter buff"))
         }
         if hour < 7 || hour > 18 {
-            items.append(ClothingItem(name: "Reflective Gear", description: "High-visibility vest", icon: "light.beacon.max.fill", amazonSearchTerm: "running reflective vest"))
+            items.append(ClothingItem(key: "REFLECTIVE_GEAR", name: "Reflective Gear", description: "Visibility for low-light", icon: "light.beacon.max.fill", amazonSearchTerm: "running reflective vest"))
         }
 
         return items
