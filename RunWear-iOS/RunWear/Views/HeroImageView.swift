@@ -21,6 +21,13 @@ struct HeroImageView: View {
     var onTimeTapped: () -> Void = {}
     var onNowTapped: () -> Void = {}
 
+    // Hero-photo flag (2026-10-29, parity with Android): the exact
+    // photo on screen and the callback for when the user picks a
+    // reason. A nil target renders no chip — there is no resolved
+    // photo to flag yet.
+    var flagTarget: HeroFlagTarget? = nil
+    var onFlagHero: (HeroFlagReason) -> Void = { _ in }
+
     /// How the hero's height is derived (design record §5.2: no
     /// UIScreen.main anywhere — the container decides).
     enum HeightMode {
@@ -44,6 +51,12 @@ struct HeroImageView: View {
     @State private var showAIImage = false
     @State private var aiImageLoaded = false
 
+    // State for the flag chip: the reason sheet's presentation, and
+    // the URL of the photo already flagged in this view (the chip
+    // goes inert for that photo; a different photo re-arms it).
+    @State private var showFlagSheet = false
+    @State private var flaggedImageUrl: String?
+
     var body: some View {
         Group {
             if heightMode == .fill {
@@ -58,6 +71,21 @@ struct HeroImageView: View {
                     .containerRelativeFrame(.vertical) { length, _ in
                         length * AppTheme.heroHeightRatio
                     }
+            }
+        }
+        // Flag chip over the photo, bottom-trailing (see flagChip).
+        // Attached as an overlay on the hero frame itself so its
+        // hit area is only the chip — a full-size clear layer here
+        // would swallow taps meant for the hero's own controls.
+        // The 64pt bottom inset matches Android's: it keeps the
+        // chip clear of the hero's bottom content and of the
+        // weather-pills row the parent overlaps onto the hero's
+        // lower edge in the single-column layouts.
+        .overlay(alignment: .bottomTrailing) {
+            if let flagTarget {
+                flagChip(for: flagTarget)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 64)
             }
         }
     }
@@ -147,6 +175,48 @@ struct HeroImageView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Flag Chip
+
+    /// The flag affordance: a 32pt translucent disc with a flag
+    /// glyph — deliberately quieter than the 44pt glass share and
+    /// settings buttons. Tapping it presents the reason sheet
+    /// ("Flag this photo"); picking a reason fires the flag and
+    /// leaves the chip dimmed and inert for the rest of this
+    /// photo's view (one flag per photo view, as on Android).
+    private func flagChip(for target: HeroFlagTarget) -> some View {
+        let alreadyFlagged = flaggedImageUrl == target.imageUrl
+        return Button {
+            showFlagSheet = true
+        } label: {
+            Image(systemName: "flag")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(alreadyFlagged ? 0.45 : 1.0))
+                .frame(width: 32, height: 32)
+                .background(
+                    Circle().fill(Color.black.opacity(alreadyFlagged ? 0.22 : 0.35))
+                )
+                .overlay(
+                    Circle().stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(alreadyFlagged)
+        .accessibilityLabel("Flag this photo")
+        .confirmationDialog(
+            "Flag this photo",
+            isPresented: $showFlagSheet,
+            titleVisibility: .visible
+        ) {
+            ForEach(HeroFlagReason.allCases, id: \.self) { reason in
+                Button(reason.label) {
+                    flaggedImageUrl = target.imageUrl
+                    onFlagHero(reason)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 

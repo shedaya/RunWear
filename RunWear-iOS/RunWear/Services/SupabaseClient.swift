@@ -90,6 +90,39 @@ actor SupabaseClient {
         }
     }
 
+    /// Inserts a user flag against a hero photo into `hero_flags`.
+    /// The table's RLS grants the anon role INSERT only — flags are
+    /// write-only from the client by design (review reads happen
+    /// through service-role tooling, never from the app).
+    /// - Parameter flag: The insert row built by `HeroFlagPayload`.
+    func insertHeroFlag(_ flag: HeroFlagInsert) async throws {
+        let endpoint = "/rest/v1/hero_flags"
+
+        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
+            throw SupabaseError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
+        request.addValue(anonKey, forHTTPHeaderField: "apikey")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("return=minimal", forHTTPHeaderField: "Prefer")
+
+        let encoder = JSONEncoder()
+        request.httpBody = try encoder.encode(flag)
+
+        let (_, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.invalidResponse
+        }
+
+        guard httpResponse.statusCode == 201 || httpResponse.statusCode == 200 else {
+            throw SupabaseError.httpError(httpResponse.statusCode)
+        }
+    }
+
     /// Counts existing variants for a combination prefix
     /// - Parameter prefix: Combination ID prefix (without variant number)
     /// - Returns: Count of existing variants

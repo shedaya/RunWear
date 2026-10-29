@@ -114,7 +114,15 @@ enum HeroPoolPolicy {
 struct HeroImageResult {
     let imageUrl: String
     let thumbnailUrl: String?
+    /// The served row's own combination_id (pool matches only; can
+    /// differ from the requested combination when the cascade fell
+    /// back to a neighbouring cell).
     let combinationId: String?
+    /// The served row's `generated_images.id` (pool matches only).
+    /// Carried so a hero-photo flag can name the exact photo —
+    /// before 2026-10-29 the cascade discarded it and only a URL
+    /// reached the UI (the same gap Android's flag work closed).
+    let imageRowId: String?
     let isFromFallback: Bool
     let fallbackLevel: Int // 0 = exact match, 1-5 = cascade level, 6 = Unsplash
 
@@ -127,6 +135,7 @@ struct HeroImageResult {
             imageUrl: image.imageUrl,
             thumbnailUrl: image.thumbnailUrl,
             combinationId: image.combinationId,
+            imageRowId: image.id,
             isFromFallback: fallbackLevel > 0,
             fallbackLevel: fallbackLevel
         )
@@ -138,6 +147,7 @@ struct HeroImageResult {
             imageUrl: url,
             thumbnailUrl: nil,
             combinationId: nil,
+            imageRowId: nil,
             isFromFallback: true,
             fallbackLevel: 6
         )

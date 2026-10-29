@@ -22,6 +22,10 @@ struct WeatherOutfitView: View {
     // Animation state
     @State private var hasAppeared = false
 
+    // Hero-flag confirmation toast (the snackbar equivalent):
+    // shown briefly after the user flags the hero photo.
+    @State private var showFlagThanks = false
+
     var body: some View {
         // Home lives in a NavigationStack (design record §5.2):
         // the location is the navigation title, the date its
@@ -43,6 +47,31 @@ struct WeatherOutfitView: View {
                     ProgressView()
                         .scaleEffect(1.5)
                         .tint(.white)
+                }
+
+                // Hero-flag confirmation toast, bottom-center of
+                // the run screen (Android's snackbar placement).
+                if showFlagThanks {
+                    VStack {
+                        Spacer()
+                        Text("Thanks — we'll review this photo")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Color.black.opacity(0.75)))
+                            .padding(.bottom, 32)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+            }
+            .onChange(of: showFlagThanks) { _, visible in
+                if visible {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showFlagThanks = false }
+                    }
                 }
             }
             .navigationTitle(viewModel.locationName)
@@ -323,6 +352,11 @@ struct WeatherOutfitView: View {
             onDateTapped: { showDatePicker = true },
             onTimeTapped: { showTimePicker = true },
             onNowTapped: { viewModel.resetToNow() },
+            flagTarget: viewModel.currentHeroFlagTarget,
+            onFlagHero: { reason in
+                viewModel.flagCurrentHero(reason: reason)
+                withAnimation { showFlagThanks = true }
+            },
             heightMode: heightMode,
             // The navigation container carries the chrome now:
             // location is the title, Settings/Share are toolbar

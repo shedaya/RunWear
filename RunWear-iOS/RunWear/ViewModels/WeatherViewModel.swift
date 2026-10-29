@@ -17,6 +17,14 @@ class WeatherViewModel: ObservableObject {
     @Published var fallbackImageUrl: String?
     @Published var isHeroImageLoading = false
 
+    // Identity of the hero currently resolved, for the flag action
+    // (mirrors Android's MainUiState hero identity, 2026-10-29): the
+    // served pool row's id and its own combination, kept alongside
+    // the URL so a flag names the exact photo on screen.
+    @Published var heroImageRowId: String?
+    @Published var heroServedCombinationId: String?
+    private var heroRequestedCombinationId: String?
+
     // Date/time selection
     @Published var selectedDate: Date = Date()
     @Published var selectedHour: Int = Calendar.current.component(.hour, from: Date())
@@ -261,6 +269,21 @@ class WeatherViewModel: ObservableObject {
             return
         }
 
+        // The combination this screen asks the pool for, built from
+        // the same raw inputs the service call below uses (the
+        // service rebuilds it internally from identical inputs).
+        // Recorded so a hero-photo flag carries the requested cell
+        // as context when the served photo has no cell of its own
+        // (the curated fallback).
+        let requestedCombination = HeroCombinationId(
+            gender: genderPreference.forHeroImage(),
+            weather: HeroWeatherCondition.from(weatherCode: weatherCode),
+            temp: HeroTempBracket.from(feelsLikeTemperature: feelsLike),
+            time: HeroTimeOfDay.from(hour: hour),
+            variant: nil
+        )
+        heroRequestedCombinationId = requestedCombination.fullId
+
         // Set fallback image immediately (zero-lag)
         let tempBracket = HeroTempBracket.from(feelsLikeTemperature: feelsLike)
         let weatherCondition = HeroWeatherCondition.from(weatherCode: weatherCode)
@@ -282,11 +305,48 @@ class WeatherViewModel: ObservableObject {
         // Only set hero image if it's from Supabase (not Unsplash fallback)
         if result.fallbackLevel < 6 {
             heroImageUrl = result.imageUrl
+            heroImageRowId = result.imageRowId
+            heroServedCombinationId = result.combinationId
         } else {
             heroImageUrl = nil // Will use fallback
+            heroImageRowId = nil
+            heroServedCombinationId = nil
         }
 
         isHeroImageLoading = false
+    }
+
+    /// The photo a flag would report right now: the pool photo while
+    /// one is displayed (carrying its served row identity), otherwise
+    /// the curated fallback, which is identified by URL alone. Nil
+    /// before the first hero resolution — the views show no flag
+    /// chip then.
+    var currentHeroFlagTarget: HeroFlagTarget? {
+        if let url = heroImageUrl {
+            return HeroFlagTarget(
+                imageUrl: url,
+                imageRowId: heroImageRowId,
+                servedCombinationId: heroServedCombinationId,
+                requestedCombinationId: heroRequestedCombinationId
+            )
+        }
+        if let url = fallbackImageUrl {
+            return HeroFlagTarget(
+                imageUrl: url,
+                imageRowId: nil,
+                servedCombinationId: nil,
+                requestedCombinationId: heroRequestedCombinationId
+            )
+        }
+        return nil
+    }
+
+    /// Reports the displayed hero photo with the given reason.
+    /// Fire-and-forget: the send is best-effort, retried once, and
+    /// never surfaces an error or disturbs the run screen.
+    func flagCurrentHero(reason: HeroFlagReason) {
+        guard let target = currentHeroFlagTarget else { return }
+        HeroFlagService.flag(target: target, reason: reason)
     }
 
     private func reloadHeroImage() async {
