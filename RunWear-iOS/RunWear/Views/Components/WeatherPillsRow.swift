@@ -68,7 +68,7 @@ extension WeatherPillsRow {
         onUVTapped: @escaping () -> Void = {}
     ) {
         self.condition = snapshot.condition
-        self.windSpeed = snapshot.windSpeed * 0.621371 // km/h to mph
+        self.windSpeed = snapshot.windSpeed // already mph (requested unit)
         self.windDirection = snapshot.windDirectionCompass
         self.humidity = snapshot.humidity
         self.precipitationProbability = snapshot.precipitationProbability

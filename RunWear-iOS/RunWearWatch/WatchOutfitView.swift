@@ -296,7 +296,7 @@ struct WatchClothingRow: View {
     let recommendation = OutfitRecommendationService.shared.getRecommendation(
         for: weather.currentWeather.temperatureFahrenheit,
         rawTemperature: weather.currentWeather.temperatureFahrenheit,
-        condition: weather.currentWeather.condition
+        isRaining: false
     )
 
     WatchOutfitView(

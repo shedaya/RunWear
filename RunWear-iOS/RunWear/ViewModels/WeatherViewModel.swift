@@ -44,6 +44,11 @@ class WeatherViewModel: ObservableObject {
     @Published var comfortLevel: ComfortLevel {
         didSet {
             UserDefaults.standard.set(comfortLevel.rawValue, forKey: "comfortLevel")
+            // A comfort change re-runs the engine through the same
+            // assembly as every other path (Android re-runs its use
+            // case on a comfort change too) — the outfit must not stay
+            // stale until the next fetch.
+            makeRecommendation()
             Task { await reloadHeroImage() }
         }
     }
@@ -100,29 +105,10 @@ class WeatherViewModel: ObservableObject {
             )
             weatherData = weather
 
-            // Get current hour snapshot or use current weather
+            // Select the snapshot for the chosen date/hour, then run the
+            // ONE engine-call assembly (see makeRecommendation).
             updateSelectedWeatherSnapshot()
-
-            // Generate recommendation based on selected weather (v4.1: pass full weather data)
-            let snapshot = selectedWeatherSnapshot
-            let temp = snapshot?.temperatureFahrenheit ?? weather.currentWeather.temperatureFahrenheit
-            let condition = snapshot?.condition ?? weather.currentWeather.condition
-            let windSpeed = snapshot?.windSpeed ?? 0
-            let humidity = snapshot?.humidity ?? 50
-            let uvIndex = snapshot?.uvIndex ?? 0
-            let precipitation = Double(snapshot?.precipitationProbability ?? 0) / 100.0
-            let hour = snapshot?.hour ?? Calendar.current.component(.hour, from: Date())
-
-            recommendation = outfitService.getRecommendation(
-                for: comfortLevel.adjustTemperature(temp),
-                rawTemperature: temp,
-                condition: condition,
-                windSpeed: windSpeed,
-                humidity: humidity,
-                uvIndex: uvIndex,
-                precipitation: precipitation,
-                hour: hour
-            )
+            makeRecommendation()
 
             await reverseGeocode(location: location)
 
@@ -162,18 +148,43 @@ class WeatherViewModel: ObservableObject {
         selectedHour = hour
         updateSelectedWeatherSnapshot()
 
-        // Update recommendation for new time
-        if let snapshot = selectedWeatherSnapshot {
-            let adjustedTemp = comfortLevel.adjustTemperature(snapshot.temperatureFahrenheit)
-            recommendation = outfitService.getRecommendation(
-                for: adjustedTemp,
-                rawTemperature: snapshot.temperatureFahrenheit,
-                condition: snapshot.condition
-            )
-        }
+        // A time change re-runs the FULL input set through the same
+        // assembly as the initial load — before Stage 1 this path
+        // passed only temperature + condition, so wind, humidity, UV
+        // and precipitation silently fell back to the engine defaults
+        // (0 / 50 / 0 / 0) on every re-run.
+        makeRecommendation()
 
         // Reload hero image for new conditions
         Task { await loadHeroImage() }
+    }
+
+    /// THE engine-call assembly — the single construction every path
+    /// (initial load, time change, comfort change) runs, mirroring
+    /// Android's MainViewModel → GetOutfitRecommendationUseCase
+    /// boundary: feels-like in both frames (comfort-adjusted for the
+    /// warmth selectors, raw for the sun gates), measured rain as the
+    /// rain signal (rain > 0, never the weather-code class), wind in
+    /// mph, precipitation in mm, and the selected hour. Internal (not
+    /// private) so the boundary fixtures in RunWearTests drive this
+    /// exact production construction.
+    func makeRecommendation() {
+        guard let snapshot = selectedWeatherSnapshot else {
+            recommendation = nil
+            return
+        }
+
+        let feelsLike = snapshot.feelsLikeFahrenheit
+        recommendation = outfitService.getRecommendation(
+            for: comfortLevel.adjustTemperature(feelsLike),
+            rawTemperature: feelsLike,
+            isRaining: snapshot.rain > 0,
+            windSpeed: snapshot.windSpeed,
+            humidity: snapshot.humidity,
+            uvIndex: snapshot.uvIndex,
+            precipitation: snapshot.precipitation,
+            hour: snapshot.hour
+        )
     }
 
     /// Reset to current date and time
@@ -185,61 +196,64 @@ class WeatherViewModel: ObservableObject {
 
     // MARK: - Private Methods
 
-    private func updateSelectedWeatherSnapshot() {
-        guard let hourly = weatherData?.hourly else {
+    /// Selects the hourly snapshot for the chosen date/hour. Internal
+    /// (not private) so the boundary fixtures exercise the production
+    /// selection, not a copy of it.
+    func updateSelectedWeatherSnapshot() {
+        guard let weatherData else {
             selectedWeatherSnapshot = nil
             return
         }
 
-        // Find the index for selected date/hour
-        let calendar = Calendar.current
-        let targetComponents = calendar.dateComponents([.year, .month, .day], from: selectedDate)
-
-        for (index, timeString) in hourly.time.enumerated() {
-            // Parse time string (format: "2024-01-15T14:00")
-            if let date = ISO8601DateFormatter().date(from: timeString + ":00+00:00") {
-                let components = calendar.dateComponents([.year, .month, .day, .hour], from: date)
-                if components.year == targetComponents.year &&
-                    components.month == targetComponents.month &&
-                    components.day == targetComponents.day &&
-                    components.hour == selectedHour {
-                    selectedWeatherSnapshot = HourlyWeatherSnapshot.from(hourly: hourly, at: index)
-                    return
-                }
+        if let hourly = weatherData.hourly {
+            // Hourly timestamps are LOCATION-local wall times
+            // (timezone=auto). Android matches the "yyyy-MM-dd'T'HH"
+            // prefix textually; do the same. The pre-Stage-1 code
+            // parsed the strings as GMT and compared device-local
+            // calendar components, which shifted the selected hour by
+            // the viewer's UTC offset whenever the location's zone
+            // differed from the device's.
+            let components = Calendar.current.dateComponents([.year, .month, .day], from: selectedDate)
+            let prefix = String(
+                format: "%04d-%02d-%02dT%02d",
+                components.year ?? 0, components.month ?? 0, components.day ?? 0, selectedHour
+            )
+            if let index = hourly.time.firstIndex(where: { $0.hasPrefix(prefix) }),
+               let snapshot = HourlyWeatherSnapshot.from(hourly: hourly, at: index) {
+                selectedWeatherSnapshot = snapshot
+                return
             }
         }
 
-        // Fallback to current weather if specific hour not found
-        if let current = weatherData?.currentWeather {
-            selectedWeatherSnapshot = HourlyWeatherSnapshot(
-                hour: selectedHour,
-                temperature: current.temperature,
-                feelsLike: current.temperature, // Approximation
-                humidity: 50,
-                precipitationProbability: 0,
-                uvIndex: 0,
-                windSpeed: current.windspeed,
-                windDirection: 0,
-                windGusts: current.windspeed,
-                weatherCode: current.weathercode
-            )
-        }
+        // Selected hour outside the forecast window: fall back to the
+        // current-conditions snapshot (real measured values from the
+        // extended current block — see HourlyWeatherSnapshot.init).
+        selectedWeatherSnapshot = HourlyWeatherSnapshot(
+            hour: selectedHour,
+            current: weatherData.currentWeather,
+            detail: weatherData.currentDetail
+        )
     }
 
     private func loadHeroImage() async {
         isHeroImageLoading = true
 
-        // Determine conditions for hero image
+        // Determine conditions for hero image. The hero combination is
+        // built from the RAW feels-like (Android's HeroImageRepository
+        // takes the unadjusted frame): the comfort preference must not
+        // move the hero's temperature bracket the way it moves the
+        // outfit's warmth selectors.
         let feelsLike: Double
         let weatherCode: Int
         let hour: Int
 
         if let snapshot = selectedWeatherSnapshot {
-            feelsLike = comfortLevel.adjustTemperature(snapshot.feelsLikeFahrenheit)
+            feelsLike = snapshot.feelsLikeFahrenheit
             weatherCode = snapshot.weatherCode
             hour = snapshot.hour
         } else if let current = weatherData?.currentWeather {
-            feelsLike = comfortLevel.adjustTemperature(current.temperatureFahrenheit)
+            feelsLike = weatherData?.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
+                ?? current.temperatureFahrenheit
             weatherCode = current.weathercode
             hour = Calendar.current.component(.hour, from: Date())
         } else {
@@ -252,13 +266,17 @@ class WeatherViewModel: ObservableObject {
         let weatherCondition = HeroWeatherCondition.from(weatherCode: weatherCode)
         fallbackImageUrl = fallbackProvider.getImageURL(temp: tempBracket, weather: weatherCondition, size: .iOS)
 
-        // Fetch AI hero image
+        // Fetch AI hero image — with the actual outfit, so a
+        // replenishment prompt describes what the engine recommended
+        // (Android passes its outfit the same way); without it the
+        // service falls back to static per-bracket descriptions.
         let result = await heroImageService.getHeroImage(
             gender: genderPreference,
             weatherCode: weatherCode,
             feelsLikeTemp: feelsLike,
             hour: hour,
-            isWatch: false
+            isWatch: false,
+            outfit: recommendation
         )
 
         // Only set hero image if it's from Supabase (not Unsplash fallback)

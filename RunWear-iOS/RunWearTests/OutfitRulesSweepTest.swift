@@ -20,18 +20,24 @@ import XCTest
 ///    exactly as WeatherViewModel / WatchViewModel construct the call.
 ///  - Wind is fed in the Kotlin frame (mph numbers, `> 10` windy gate) so
 ///    the sweep exercises the same decision surface as the Kotlin grid.
-///    (Production callers pass Open-Meteo km/h into the same parameter —
-///    a call-boundary unit contract, outside the engine tables.)
+///    (Production callers request mph from Open-Meteo —
+///    `wind_speed_unit=mph` in WeatherService — so the production
+///    boundary feeds the same frame; aligned in Stage 1, 2026-10-29.
+///    Before that, production passed km/h numbers into this parameter.)
 ///  - Swift's `ClothingItem` is a struct identified by its `name` (its `id`
 ///    is a fresh UUID per construction), so item identity here is a
 ///    name → ItemKind map. ItemKind's case order, categories and display
 ///    names mirror Kotlin's `ClothingItem` verbatim.
 ///  - Precipitation is passed with the Kotlin values (drizzle 0.05, rain
-///    0.5). The Swift service accepts the parameter but its rain branch is
-///    keyed to the condition alone (the Kotlin `precipitation > 0.1` gate
-///    was never part of the hand port). No asserted invariant reads the
-///    difference — drizzle's rain-jacket divergence is exactly the
-///    observational note inv9 records on the Kotlin side.
+///    0.5), and `isRaining` is fed as data — true for the rain and
+///    drizzle scenarios, false for dry and snow — exactly how the
+///    Kotlin harness constructs `WeatherConditions` (its `isRaining`
+///    is measured-rain data, rain > 0). The Swift service applies the
+///    Kotlin `precipitation > 0.1` gate in its rain-jacket branch.
+///    (Both were aligned in Stage 1, 2026-10-29: the hand port
+///    originally derived rain from the condition class and never
+///    applied the precipitation gate — drizzle's rain jacket was the
+///    observational note inv9 recorded.)
 ///  - The Kotlin harness writes per-section report files under
 ///    build/outfit-sweep/ from an @AfterClass hook; the port prints each
 ///    section to the test log instead (an iOS test sandbox has no project
@@ -276,7 +282,7 @@ final class OutfitRulesSweepTest: XCTestCase {
         return engine.getRecommendation(
             for: adjusted,
             rawTemperature: raw,
-            condition: condition(for: s.cond),
+            isRaining: isRaining(for: s.cond),
             windSpeed: s.wind,
             humidity: s.humidity,
             uvIndex: uv,
@@ -294,12 +300,14 @@ final class OutfitRulesSweepTest: XCTestCase {
         }
     }
 
-    static func condition(for cond: Cond) -> WeatherCondition {
+    /// The Kotlin harness's `WeatherConditions.isRaining` for a
+    /// scenario: measured-rain data — true when rain is falling
+    /// (rain and drizzle scenarios), false for dry and for snow
+    /// (snowfall is not rain).
+    static func isRaining(for cond: Cond) -> Bool {
         switch cond {
-        case .dry: return .partlyCloudy
-        case .drizzle: return .drizzle
-        case .rain: return .rain
-        case .snow: return .snow
+        case .dry, .snow: return false
+        case .drizzle, .rain: return true
         }
     }
 
@@ -846,9 +854,9 @@ final class OutfitRulesSweepTest: XCTestCase {
         OBSERVATION — drizzle (isRaining, precip=0.05 ≤ 0.1 threshold): \(drizzleChecks) scenarios,
           rain jacket in \(drizzleWithRainJacket) of them. In the Kotlin engine selectTopOuter()
           requires precip > 0.1, so drizzle gets NO rain-specific outer at any temperature
-          (head still gets a cap). The Swift service's rain branch ignores the precipitation
-          amount (see the header's port notes), so the iOS count above is every drizzle
-          scenario — a documented divergence; no invariant asserts it.
+          (head still gets a cap). The Swift service applies the same gate (Stage 1 parity,
+          2026-10-29 — see the header's port notes), so the iOS count above is zero,
+          matching Kotlin; no invariant asserts it.
         OBSERVATION — snow: \(snowDryPairs) snow scenarios compared with their dry twins;
           outfits differing: \(snowDryDiffs). The engine has no snow-specific branch:
           isSnowing is never read by the selection logic.

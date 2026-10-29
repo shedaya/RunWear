@@ -122,10 +122,17 @@ class WatchViewModel: NSObject, ObservableObject {
             currentWeather = weather
 
             let adjustedTemp = comfortLevel.adjustTemperature(weather.currentWeather.temperatureFahrenheit)
+            // The watch reads the current-conditions block only (no
+            // hourly snapshot), so its rain signal stays the condition
+            // class of the current code — the phone derives isRaining
+            // from measured hourly rain. Wind now arrives in mph from
+            // the shared WeatherService, so the engine's > 10 mph gate
+            // reads correctly here too.
+            let currentCondition = weather.currentWeather.condition
             let recommendation = outfitService.getRecommendation(
                 for: adjustedTemp,
                 rawTemperature: weather.currentWeather.temperatureFahrenheit,
-                condition: weather.currentWeather.condition,
+                isRaining: currentCondition == .rain || currentCondition == .drizzle || currentCondition == .thunderstorm,
                 windSpeed: weather.currentWeather.windspeed,
                 hour: Calendar.current.component(.hour, from: Date())
             )

@@ -274,9 +274,9 @@ struct WeatherOutfitView: View {
         return [
             .condition(viewModel.currentCondition),
             .wind(
-                speed: (snapshot?.windSpeed ?? weather.currentWeather.windspeed) * 0.621371,
+                speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
                 direction: snapshot?.windDirectionCompass ?? "N",
-                gusts: (snapshot?.windGusts ?? weather.currentWeather.windspeed) * 0.621371
+                gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
             ),
             .humidity(percentage: snapshot?.humidity ?? 50),
             .precipitation(percentage: snapshot?.precipitationProbability ?? 0),
@@ -360,9 +360,9 @@ struct WeatherOutfitView: View {
             onWindTapped: {
                 let snapshot = viewModel.selectedWeatherSnapshot
                 selectedWeatherDetail = .wind(
-                    speed: (snapshot?.windSpeed ?? weather.currentWeather.windspeed) * 0.621371,
+                    speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
                     direction: snapshot?.windDirectionCompass ?? "N",
-                    gusts: (snapshot?.windGusts ?? weather.currentWeather.windspeed) * 0.621371
+                    gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
                 )
                 withAnimation { showWeatherDetail = true }
             },
@@ -698,7 +698,7 @@ struct WeatherCard: View {
                     HStack {
                         Image(systemName: "wind")
                             .foregroundColor(AppTheme.textSecondary)
-                        Text("\(Int(weather.windspeed)) km/h")
+                        Text("\(Int(weather.windspeed)) mph")
                             .font(.subheadline)
                             .foregroundColor(AppTheme.textSecondary)
                     }
@@ -928,7 +928,7 @@ struct TipsCard: View {
         recommendation: OutfitRecommendationService.shared.getRecommendation(
             for: 59,
             rawTemperature: 59,
-            condition: .clear
+            isRaining: false
         ),
         isRefreshing: false,
         onRefresh: {}

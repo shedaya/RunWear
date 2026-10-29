@@ -5,11 +5,51 @@ struct WeatherData: Codable {
     let longitude: Double
     let currentWeather: CurrentWeather
     let hourly: HourlyWeather?
+    /// IANA timezone of the LOCATION (timezone=auto resolves it from the
+    /// coordinates). Hourly timestamps are wall times in this zone.
+    let timezone: String? = nil
+    /// Extended current-conditions block (the `current=` variable list,
+    /// mirroring Android's OpenMeteoApi) — carries feels-like, humidity,
+    /// measured precipitation/rain and UV for the current hour.
+    let currentDetail: CurrentDetail? = nil
 
     enum CodingKeys: String, CodingKey {
         case latitude, longitude
         case currentWeather = "current_weather"
         case hourly
+        case timezone
+        case currentDetail = "current"
+    }
+}
+
+/// Extended current conditions from the `current=` variable list.
+/// All fields optional: the block is an enrichment of the legacy
+/// `current_weather` block, never a requirement for decoding.
+struct CurrentDetail: Codable {
+    let temperature2m: Double?
+    let relativeHumidity2m: Int?
+    let apparentTemperature: Double?
+    let precipitation: Double?
+    let precipitationProbability: Int?
+    let rain: Double?
+    let weatherCode: Int?
+    let windSpeed10m: Double?
+    let windDirection10m: Int?
+    let windGusts10m: Double?
+    let uvIndex: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case temperature2m = "temperature_2m"
+        case relativeHumidity2m = "relative_humidity_2m"
+        case apparentTemperature = "apparent_temperature"
+        case precipitation
+        case precipitationProbability = "precipitation_probability"
+        case rain
+        case weatherCode = "weather_code"
+        case windSpeed10m = "wind_speed_10m"
+        case windDirection10m = "wind_direction_10m"
+        case windGusts10m = "wind_gusts_10m"
+        case uvIndex = "uv_index"
     }
 }
 
@@ -24,6 +64,8 @@ extension WeatherData {
         longitude = try container.decode(Double.self, forKey: .longitude)
         currentWeather = try container.decode(CurrentWeather.self, forKey: .currentWeather)
         hourly = try container.decodeIfPresent(HourlyWeather.self, forKey: .hourly)
+        timezone = try container.decodeIfPresent(String.self, forKey: .timezone)
+        currentDetail = try container.decodeIfPresent(CurrentDetail.self, forKey: .currentDetail)
     }
 }
 
@@ -54,6 +96,8 @@ struct HourlyWeather: Codable {
     let apparentTemperature: [Double]?
     let relativeHumidity2m: [Int]?
     let precipitationProbability: [Int]?
+    let precipitation: [Double]?
+    let rain: [Double]?
     let uvIndex: [Double]?
     let windSpeed10m: [Double]?
     let windDirection10m: [Int]?
@@ -66,6 +110,8 @@ struct HourlyWeather: Codable {
         case apparentTemperature = "apparent_temperature"
         case relativeHumidity2m = "relative_humidity_2m"
         case precipitationProbability = "precipitation_probability"
+        case precipitation
+        case rain
         case uvIndex = "uv_index"
         case windSpeed10m = "wind_speed_10m"
         case windDirection10m = "wind_direction_10m"
@@ -81,10 +127,12 @@ struct HourlyWeatherSnapshot {
     let feelsLike: Double // Celsius
     let humidity: Int // Percentage
     let precipitationProbability: Int // Percentage
+    let precipitation: Double // mm, total precipitation for the hour
+    let rain: Double // mm, liquid rain only — the engine's rain signal (Android: rain > 0)
     let uvIndex: Double
-    let windSpeed: Double // km/h
+    let windSpeed: Double // mph (requested unit; the engine gate and labels are mph)
     let windDirection: Int // Degrees
-    let windGusts: Double // km/h
+    let windGusts: Double // mph
     let weatherCode: Int
 
     var temperatureFahrenheit: Double {
@@ -133,12 +181,33 @@ struct HourlyWeatherSnapshot {
             feelsLike: hourly.apparentTemperature?[safe: index] ?? hourly.temperature2m?[safe: index] ?? 20,
             humidity: hourly.relativeHumidity2m?[safe: index] ?? 50,
             precipitationProbability: hourly.precipitationProbability?[safe: index] ?? 0,
+            precipitation: hourly.precipitation?[safe: index] ?? 0,
+            rain: hourly.rain?[safe: index] ?? 0,
             uvIndex: hourly.uvIndex?[safe: index] ?? 0,
             windSpeed: hourly.windSpeed10m?[safe: index] ?? 0,
             windDirection: hourly.windDirection10m?[safe: index] ?? 0,
             windGusts: hourly.windGusts10m?[safe: index] ?? 0,
             weatherCode: hourly.weatherCode?[safe: index] ?? 0
         )
+    }
+
+    /// Snapshot from the current-conditions blocks, used when the
+    /// selected hour lies outside the hourly forecast window. Values
+    /// are the real measured current values (extended `current=` list
+    /// first, legacy block as backstop) — never fabricated defaults.
+    init(hour: Int, current: CurrentWeather, detail: CurrentDetail?) {
+        self.hour = hour
+        self.temperature = detail?.temperature2m ?? current.temperature
+        self.feelsLike = detail?.apparentTemperature ?? detail?.temperature2m ?? current.temperature
+        self.humidity = detail?.relativeHumidity2m ?? 50
+        self.precipitationProbability = detail?.precipitationProbability ?? 0
+        self.precipitation = detail?.precipitation ?? 0
+        self.rain = detail?.rain ?? 0
+        self.uvIndex = detail?.uvIndex ?? 0
+        self.windSpeed = detail?.windSpeed10m ?? current.windspeed
+        self.windDirection = detail?.windDirection10m ?? 0
+        self.windGusts = detail?.windGusts10m ?? current.windspeed
+        self.weatherCode = detail?.weatherCode ?? current.weathercode
     }
 }
 
@@ -196,8 +265,8 @@ enum WeatherCondition: String, Codable {
         case 1, 2: return .partlyCloudy
         case 3: return .cloudy
         case 45, 48: return .foggy
-        case 51, 53, 55: return .drizzle
-        case 61, 63, 65, 80, 81, 82: return .rain
+        case 51, 53, 55, 56, 57: return .drizzle
+        case 61, 63, 65, 66, 67, 80, 81, 82: return .rain
         case 71, 73, 75, 77, 85, 86: return .snow
         case 95, 96, 99: return .thunderstorm
         default: return .unknown

@@ -52,16 +52,22 @@ class OutfitRecommendationService {
     ///     comfort adjustment (the Kotlin engine's `baseTemp`). Read ONLY by
     ///     the visor/cap sun gates (v4.3); required so no caller can silently
     ///     keep the pre-v4.3 single-frame behavior.
-    ///   - condition: Current weather condition
-    ///   - windSpeed: Wind speed in km/h (default 0)
+    ///   - isRaining: Whether rain is actually falling, from MEASURED rain
+    ///     (the Kotlin engine's `WeatherConditions.isRaining` = rain > 0),
+    ///     derived by the caller from the hourly/current rain amount —
+    ///     never from the weather-code class. Required, like rawTemperature,
+    ///     so no caller can silently substitute the code class for the
+    ///     measurement.
+    ///   - windSpeed: Wind speed in mph (default 0) — the Kotlin gate's
+    ///     frame; callers request mph from Open-Meteo.
     ///   - humidity: Humidity percentage (default 50)
     ///   - uvIndex: UV index (default 0)
-    ///   - precipitation: Precipitation amount (default 0)
+    ///   - precipitation: Precipitation amount in mm (default 0)
     ///   - hour: Current hour (default 12)
     func getRecommendation(
         for temperature: Double,
         rawTemperature: Double,
-        condition: WeatherCondition,
+        isRaining: Bool,
         windSpeed: Double = 0,
         humidity: Int = 50,
         uvIndex: Double = 0,
@@ -70,8 +76,7 @@ class OutfitRecommendationService {
     ) -> OutfitRecommendation {
         let temp = temperature
         let bracket = TemperatureBracket.from(temperature: temp)
-        let isWindy = windSpeed > 10 // km/h ~= 6 mph threshold adjusts for metric
-        let isRaining = condition == .rain || condition == .drizzle || condition == .thunderstorm
+        let isWindy = windSpeed > 10 // mph — the Kotlin gate, in the Kotlin frame
 
         let topMid = selectTopMid(temp)
         let topOuter = selectTopOuter(temp, isWindy: isWindy, isRaining: isRaining, precipitation: precipitation)
@@ -136,7 +141,11 @@ class OutfitRecommendationService {
     /// the mid-layer). In the 25–40°F band, getRecommendation drops the mid-layer
     /// when the shell is on — the two are alternatives there, never a stack.
     private func selectTopOuter(_ temp: Double, isWindy: Bool, isRaining: Bool, precipitation: Double) -> ClothingItem? {
-        if isRaining {
+        // The Kotlin gate verbatim: the rain jacket needs measured rain
+        // AND more than a trace of precipitation (> 0.1 mm). Drizzle
+        // (isRaining, ≤ 0.1 mm) falls through to the temperature bands;
+        // the rain cap and rain tip key off isRaining alone.
+        if isRaining && precipitation > 0.1 {
             return ClothingItem(name: "Rain Jacket", description: "Lightweight waterproof running jacket", icon: "cloud.rain.fill", amazonSearchTerm: "waterproof running jacket")
         }
         if temp >= 50 { return nil }

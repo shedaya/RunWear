@@ -9,11 +9,25 @@ class WeatherService {
 
     func fetchWeather(latitude: Double, longitude: Double) async throws -> WeatherData {
         var components = URLComponents(string: baseURL)!
+        // The weather contract mirrors Android's OpenMeteoApi: one fetch
+        // carrying the legacy current block, the extended current block,
+        // and the full hourly list (feels-like, humidity, UV, measured
+        // precipitation/rain) in the LOCATION's timezone (timezone=auto).
+        // Wind is requested in mph: the engine's windy gate (> 10) and
+        // every wind label in the app are mph (Android requests mph
+        // whenever Fahrenheit is the display unit; the iOS model layer
+        // stores Celsius and converts for display, so temperature stays
+        // celsius here — the frames the engine sees are unaffected).
         components.queryItems = [
             URLQueryItem(name: "latitude", value: String(latitude)),
             URLQueryItem(name: "longitude", value: String(longitude)),
             URLQueryItem(name: "current_weather", value: "true"),
-            URLQueryItem(name: "temperature_unit", value: "celsius")
+            URLQueryItem(name: "current", value: "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index"),
+            URLQueryItem(name: "hourly", value: "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index"),
+            URLQueryItem(name: "temperature_unit", value: "celsius"),
+            URLQueryItem(name: "wind_speed_unit", value: "mph"),
+            URLQueryItem(name: "timezone", value: "auto"),
+            URLQueryItem(name: "forecast_days", value: "7")
         ]
 
         guard let url = components.url else {
