@@ -136,7 +136,9 @@ class HeroImageRepository @Inject constructor() {
                 HeroImageResult(
                     imageUrl = searchResult.image.imageUrl,
                     thumbnailUrl = searchResult.image.thumbnailUrl,
-                    combinationId = combination.id
+                    combinationId = combination.id,
+                    imageRowId = searchResult.image.id,
+                    servedCombinationId = searchResult.image.combinationId
                 )
             } else if (searchResult.exactMatchCount < MIN_VARIANTS) {
                 android.util.Log.d("HeroImage", "[Hero] Only ${searchResult.exactMatchCount} variants, queueing more (target: $MIN_VARIANTS)")
@@ -146,19 +148,60 @@ class HeroImageRepository @Inject constructor() {
                 HeroImageResult(
                     imageUrl = searchResult.image.imageUrl,
                     thumbnailUrl = searchResult.image.thumbnailUrl,
-                    combinationId = combination.id
+                    combinationId = combination.id,
+                    imageRowId = searchResult.image.id,
+                    servedCombinationId = searchResult.image.combinationId
                 )
             } else {
                 android.util.Log.d("HeroImage", "[Hero] Have ${searchResult.exactMatchCount} variants, no replenishment needed")
                 HeroImageResult(
                     imageUrl = searchResult.image.imageUrl,
                     thumbnailUrl = searchResult.image.thumbnailUrl,
-                    combinationId = combination.id
+                    combinationId = combination.id,
+                    imageRowId = searchResult.image.id,
+                    servedCombinationId = searchResult.image.combinationId
                 )
             }
         } catch (e: Exception) {
             // On error, return fallback
             getFallbackImage(combination)
+        }
+    }
+
+    /**
+     * Report the hero photo on screen as bad (user tapped the flag).
+     *
+     * Fire-and-forget by contract: builds the [HeroFlagInsert] for the
+     * exact photo shown and hands it to [HeroFlagPayload.submit], which
+     * retries once and swallows all failures. This function never throws
+     * and never returns a result the UI needs to act on.
+     *
+     * @param appVersion the host app's version name (the shared module
+     *   has no BuildConfig of its own); recorded for triage.
+     */
+    suspend fun flagHeroImage(
+        imageUrl: String?,
+        imageRowId: String?,
+        servedCombinationId: String?,
+        requestedCombinationId: String?,
+        reason: com.runwear.shared.domain.model.HeroFlagReason,
+        appVersion: String?
+    ) {
+        val payload = HeroFlagPayload.build(
+            imageUrl = imageUrl,
+            imageRowId = imageRowId,
+            servedCombinationId = servedCombinationId,
+            requestedCombinationId = requestedCombinationId,
+            reason = reason,
+            appVersion = appVersion,
+            createdAtIso = java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString()
+        ) ?: return
+        // Lazy client (1.1.2): unavailable → the flag is dropped silently.
+        val client = supabase ?: return
+        withContext(Dispatchers.IO) {
+            HeroFlagPayload.submit(payload) { row ->
+                client.from("hero_flags").insert(row)
+            }
         }
     }
 
