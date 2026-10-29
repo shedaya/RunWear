@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 
@@ -16,7 +18,8 @@ import kotlinx.coroutines.flow.first
  * write-through all run in the app process and share it.
  */
 private val Context.widgetLastGoodDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "runwear_widget_last_good"
+    name = "runwear_widget_last_good",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() }
 )
 
 class WidgetLastGoodStore(context: Context) {

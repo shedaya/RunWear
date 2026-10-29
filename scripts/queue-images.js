@@ -77,7 +77,11 @@ function buildPrompt(gender, weather, temp, time) {
 
     const outfit = getOutfit(weather, temp);
 
-    return `A ${genderDesc} runner in their 30s running mid-stride along a ${background}. They are wearing ${outfit} appropriate for ${weatherDesc} ${tempDesc} weather. Time of day: ${timeDesc}. Professional running photography, dynamic action shot, high quality, sharp focus. MOOD: ${mood}`;
+    // Prompt hardening (2026-10-27), mirrors HeroPoolPolicy.QUALITY_SUFFIX —
+    // the edge function also appends this server-side if it is missing.
+    const qualitySuffix = ` ANATOMY & QUALITY: anatomically correct human body with natural proportions; arms bent at the elbows and swinging naturally beside the torso, hands relaxed at the runner's sides — never reaching across the back or touching the shoulders; each hand with five correct fingers; legs in a natural mid-stride gait with knees and feet pointing in the direction of travel; if the runner is seen from behind, arms, legs and hands must remain anatomically coherent from the back view. Photorealistic, shot on a full-frame camera. Avoid: distorted or merged limbs, extra fingers, hands or limbs, warped joints, backwards-bending arms.`;
+
+    return `A ${genderDesc} runner in their 30s running mid-stride along a ${background}. They are wearing ${outfit} appropriate for ${weatherDesc} ${tempDesc} weather. Time of day: ${timeDesc}. Professional running photography, dynamic action shot, high quality, sharp focus. MOOD: ${mood}` + qualitySuffix;
 }
 
 async function queueJob(combinationId, prompt) {

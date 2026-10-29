@@ -153,7 +153,7 @@ private fun HeroWearContent(
 // ============================================================================
 
 @Composable
-private fun HeroWeatherPage(
+internal fun HeroWeatherPage(
     weather: WeatherConditions,
     heroImageUrl: String?,
     locationName: String,
@@ -344,7 +344,7 @@ private fun HeroWeatherPage(
 // ============================================================================
 
 @Composable
-private fun OutfitPage(
+internal fun OutfitPage(
     outfit: OutfitRecommendation,
     onRefresh: () -> Unit,
     isVisible: Boolean = false
@@ -453,7 +453,7 @@ private fun WearOutfitChip(item: ClothingItem) {
 // ============================================================================
 
 @Composable
-private fun TipsPage(
+internal fun TipsPage(
     tips: List<String>,
     locationName: String,
     isVisible: Boolean = false

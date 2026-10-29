@@ -33,8 +33,14 @@ android {
         applicationId = "com.runwear.wear"
         minSdk = 30
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        // One applicationId = one versionCode space shared with the phone
+        // app (see ~/workspace/release-prep/wear-os-distribution-playbook.md):
+        // phone bundles use the plain series (1, 2, 3, …); standalone wear
+        // bundles use 10000 + the aligned phone versionCode.
+        // This build: 10015 ↔ phone 1.2.1 / vc15 (live on production
+        // 2026-10-29). The wear versionName tracks the phone versionName.
+        versionCode = 10015
+        versionName = "1.2.1"
     }
 
     buildTypes {
@@ -57,6 +63,11 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
     }
 }
 
@@ -104,4 +115,17 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // ── Local JVM screenshot harness (test-only; ships nothing) ──
+    // Robolectric native-graphics renders of the production wear
+    // composables for the Play Wear OS listing screenshots — see
+    // src/test/java/com/runwear/wear/WearScreenshotTest.kt and the
+    // wear-os-distribution-playbook's no-emulator recipe.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.test.ext:junit-ktx:1.2.1")
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation(libs.androidx.ui.test.manifest)
 }

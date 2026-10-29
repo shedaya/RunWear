@@ -2,6 +2,7 @@ package com.runwear.shared.data.repository
 
 import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.HeroImageResult
+import com.runwear.shared.domain.model.HeroPoolPolicy
 import com.runwear.shared.domain.model.HeroWeatherCondition
 import com.runwear.shared.domain.model.OutfitCombination
 import com.runwear.shared.domain.model.OutfitRecommendation
@@ -117,28 +118,16 @@ class HeroImageRepository @Inject constructor() {
                 if (shouldQueueReplenishment()) {
                     queueImageGeneration(combination, outfit)
                 }
-                HeroImageResult(
-                    imageUrl = searchResult.image.imageUrl,
-                    thumbnailUrl = searchResult.image.thumbnailUrl,
-                    combinationId = combination.id
-                )
+                poolResult(combination, searchResult)
             } else if (searchResult.exactMatchCount < MIN_VARIANTS) {
                 android.util.Log.d("HeroImage", "[Hero] Only ${searchResult.exactMatchCount} variants, queueing more (target: $MIN_VARIANTS)")
                 if (shouldQueueReplenishment()) {
                     queueImageGeneration(combination, outfit)
                 }
-                HeroImageResult(
-                    imageUrl = searchResult.image.imageUrl,
-                    thumbnailUrl = searchResult.image.thumbnailUrl,
-                    combinationId = combination.id
-                )
+                poolResult(combination, searchResult)
             } else {
                 android.util.Log.d("HeroImage", "[Hero] Have ${searchResult.exactMatchCount} variants, no replenishment needed")
-                HeroImageResult(
-                    imageUrl = searchResult.image.imageUrl,
-                    thumbnailUrl = searchResult.image.thumbnailUrl,
-                    combinationId = combination.id
-                )
+                poolResult(combination, searchResult)
             }
         } catch (e: Exception) {
             // On error, return fallback
@@ -147,12 +136,54 @@ class HeroImageRepository @Inject constructor() {
     }
 
     /**
+     * Build the result for a successful pool search. Selection stays a
+     * uniform random pick (now across the whole winning cascade level, not
+     * a single pre-picked row), and for the common floor cells the curated
+     * Unsplash photo for the temp × weather cell joins the rotation
+     * (HeroPoolPolicy) instead of appearing only on the error path.
+     */
+    private fun poolResult(
+        combination: OutfitCombination,
+        searchResult: ImageSearchResult
+    ): HeroImageResult {
+        val image = searchResult.image ?: return getFallbackImage(combination)
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        val poolUrls = searchResult.candidates.map { it.imageUrl }
+        val candidates = if (HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
+            HeroPoolPolicy.mergeFloorCandidate(
+                poolUrls,
+                getWeatherAwareFallback(combination.tempBracket, heroWeather)
+            )
+        } else {
+            poolUrls
+        }
+        if (candidates.size <= 1) {
+            return HeroImageResult(
+                imageUrl = image.imageUrl,
+                thumbnailUrl = image.thumbnailUrl,
+                combinationId = combination.id
+            )
+        }
+        val picked = candidates.random()
+        val pickedImage = searchResult.candidates.firstOrNull { it.imageUrl == picked }
+        return HeroImageResult(
+            imageUrl = picked,
+            thumbnailUrl = pickedImage?.thumbnailUrl ?: picked,
+            combinationId = combination.id
+        )
+    }
+
+    /**
      * Result from getRandomImage including metadata for replenishment decisions.
+     * [candidates] is the SERVABLE (review-approved) pool at the cascade
+     * level that produced [image]; [exactMatchCount] counts servable exact
+     * matches only, so replenishment targets images users can actually see.
      */
     private data class ImageSearchResult(
         val image: GeneratedImage?,
         val exactMatchCount: Int,
-        val foundViaFallback: Boolean
+        val foundViaFallback: Boolean,
+        val candidates: List<GeneratedImage> = emptyList()
     )
 
     /**
@@ -197,14 +228,21 @@ class HeroImageRepository @Inject constructor() {
             try {
                 android.util.Log.d("HeroImage", "[Hero] Trying: $pattern")
 
-                val images = supabase.from("generated_images")
+                val rows = supabase.from("generated_images")
                     .select {
                         filter {
                             like("combination_id", pattern)
                         }
-                        limit(20)
+                        // 50 (was 20): headroom so the review filter below
+                        // cannot starve a level whose top rows are pending.
+                        limit(50)
                     }
                     .decodeList<GeneratedImage>()
+
+                // Review gate: pending/rejected generations are never
+                // served. Pre-migration rows decode reviewStatus = null
+                // and count as approved (HeroPoolPolicy).
+                val images = rows.filter { HeroPoolPolicy.isServable(it.reviewStatus) }
 
                 if (images.isNotEmpty()) {
                     // Check if this is an exact match query
@@ -217,7 +255,7 @@ class HeroImageRepository @Inject constructor() {
 
                     val selected = images.random()
                     android.util.Log.d("HeroImage", "[Hero] ✓ Found via ${pattern.dropLast(1)} → ${selected.combinationId}")
-                    return ImageSearchResult(selected, exactMatchCount, foundViaFallback)
+                    return ImageSearchResult(selected, exactMatchCount, foundViaFallback, images)
                 }
             } catch (e: Exception) {
                 android.util.Log.w("HeroImage", "[Hero] Query failed: $pattern", e)
@@ -354,10 +392,15 @@ class HeroImageRepository @Inject constructor() {
 
         val outfitDesc = outfitParts.joinToString(", ")
 
-        return "A $genderDesc runner in their 30s running mid-stride along a $background. " +
-               "They are wearing $outfitDesc appropriate for $weatherDesc $tempDesc weather. " +
-               "Time of day: $timeDesc. Professional running photography, dynamic action shot, " +
-               "high quality, sharp focus. MOOD: $mood"
+        // Prompt hardening (2026-10-27): every queued prompt carries the
+        // anatomy/composition block; the edge function re-applies it
+        // server-side so jobs queued by older clients are covered too.
+        return HeroPoolPolicy.ensureQualitySuffix(
+            "A $genderDesc runner in their 30s running mid-stride along a $background. " +
+                "They are wearing $outfitDesc appropriate for $weatherDesc $tempDesc weather. " +
+                "Time of day: $timeDesc. Professional running photography, dynamic action shot, " +
+                "high quality, sharp focus. MOOD: $mood"
+        )
     }
 
     /**
@@ -471,7 +514,10 @@ class HeroImageRepository @Inject constructor() {
 
 /**
  * Database model for generated_images table.
- * v3.9: Matches actual Supabase schema - NO status column exists!
+ * review_status arrives with the 2026-10-27 review-gate migration
+ * ('approved' | 'pending' | 'rejected'); until that migration is applied
+ * the column does not exist and the field decodes as null, which
+ * HeroPoolPolicy treats as approved — serving is unchanged either way.
  */
 @Serializable
 data class GeneratedImage(
@@ -479,7 +525,8 @@ data class GeneratedImage(
     @SerialName("combination_id") val combinationId: String,
     @SerialName("image_url") val imageUrl: String,
     @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
-    @SerialName("prompt") val prompt: String? = null
+    @SerialName("prompt") val prompt: String? = null,
+    @SerialName("review_status") val reviewStatus: String? = null
 )
 
 /**
