@@ -149,14 +149,16 @@ jobs:
           lines = open(sys.argv[1], errors='replace').read().splitlines()
           def esc(s):
               return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          errs, fails = [], []
+          errs, fails, lds = [], [], []
           for l in lines:
               ls = l.strip()
               if 'error:' in ls and ls not in errs:
                   errs.append(ls)
               if (("Test Case" in ls and "failed" in ls) or "XCTAssert" in ls) and ls not in fails:
                   fails.append(ls)
-          out = (errs[:6] + fails[:3])[:9] or ['xcodebuild test failed with no error: lines captured']
+              if ('Undefined symbols' in ls or 'symbol(s) not found' in ls or ls.startswith('ld:') or ls.startswith('"_') or 'referenced from:' in ls) and ls not in lds:
+                  lds.append(ls)
+          out = (errs[:4] + lds[:4] + fails[:2])[:9] or ['xcodebuild test failed with no error: lines captured']
           for l in out:
               print(f"::error::{esc(l[:900])}")
           PYEOF
