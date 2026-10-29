@@ -1,0 +1,77 @@
+# RunWear iOS test gate — builds the app + watch and runs the full
+# Swift test suite (the v4.3 outfit-rules sweep and the Stage 1
+# engine-boundary fixtures) on a simulator.
+#
+# This restores the compile/test gate the TestFlight workflow's
+# header refers to as ios.yml, which does not exist in this repo:
+# until now the only iOS workflow archived for upload without
+# running a single test.
+#
+# Manual dispatch ONLY — macOS minutes bill at 10x on private
+# repos. Batch changes, then dispatch once per verification round.
+
+name: iOS Tests (GitHub Actions)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test (app + watch + RunWearTests)
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    env:
+      SCHEME: RunWear
+      PROJECT: RunWear-iOS/RunWear.xcodeproj
+
+    steps:
+      - name: Check out the commit to verify
+        uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          git rev-parse HEAD
+
+      - name: Pick an available iPhone simulator
+        run: |
+          set -euo pipefail
+          UDID="$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      print(d["udid"])
+                      sys.exit(0)
+          sys.exit(1)
+          ')"
+          echo "Using simulator $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Build and run the test suite
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -resultBundlePath "$RUNNER_TEMP/RunWearTests.xcresult" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log"
+
+      - name: Upload the test log and result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runwear-ios-test-results
+          path: |
+            ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/RunWearTests.xcresult
+          if-no-files-found: ignore

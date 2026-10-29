@@ -74,6 +74,14 @@
 		C10002000000000000000005 /* ComfortLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000001 /* ComfortLevel.swift */; };
 		C10002000000000000000006 /* GenderPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000002 /* GenderPreference.swift */; };
 		C10002000000000000000007 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
+		C10002000000000000000008 /* EngineBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000002 /* EngineBoundaryTests.swift */; };
+		C10002000000000000000009 /* WeatherViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014233456780000010 /* WeatherViewModel.swift */; };
+		C10002000000000000000010 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233456780000007 /* WeatherService.swift */; };
+		C10002000000000000000011 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
+		C10002000000000000000012 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
+		C10002000000000000000013 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
+		C10002000000000000000014 /* ClothingThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000005 /* ClothingThumbnailService.swift */; };
+		C10002000000000000000015 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000004 /* TemperatureUnit.swift */; };
 		D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B1000000233456780000000 /* RunWear Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -152,6 +160,7 @@
 		/* Engine sweep test target — added 2026-10-25 */
 		C1000000233456780000000 /* RunWearTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunWearTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10001000000000000000001 /* OutfitRulesSweepTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitRulesSweepTest.swift; sourceTree = "<group>"; };
+		C10001000000000000000002 /* EngineBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBoundaryTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -323,6 +332,7 @@
 			isa = PBXGroup;
 			children = (
 				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
+				C10001000000000000000002 /* EngineBoundaryTests.swift */,
 			);
 			path = RunWearTests;
 			sourceTree = "<group>";
@@ -520,6 +530,14 @@
 				C10002000000000000000005 /* ComfortLevel.swift in Sources */,
 				C10002000000000000000006 /* GenderPreference.swift in Sources */,
 				C10002000000000000000007 /* HeroImageModels.swift in Sources */,
+				C10002000000000000000008 /* EngineBoundaryTests.swift in Sources */,
+				C10002000000000000000009 /* WeatherViewModel.swift in Sources */,
+				C10002000000000000000010 /* WeatherService.swift in Sources */,
+				C10002000000000000000011 /* HeroImageService.swift in Sources */,
+				C10002000000000000000012 /* SupabaseClient.swift in Sources */,
+				C10002000000000000000013 /* FallbackImageProvider.swift in Sources */,
+				C10002000000000000000014 /* ClothingThumbnailService.swift in Sources */,
+				C10002000000000000000015 /* TemperatureUnit.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
