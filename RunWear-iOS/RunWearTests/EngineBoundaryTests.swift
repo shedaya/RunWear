@@ -47,6 +47,7 @@ final class EngineBoundaryTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func makeViewModel(hourly: HourlyWeather?) -> WeatherViewModel {
         let vm = WeatherViewModel()
         vm.weatherData = WeatherData(
