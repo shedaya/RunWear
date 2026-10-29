@@ -114,6 +114,7 @@ struct WeatherOutfitView: View {
                 ShopModal(
                     items: recommendation.allItems,
                     genderPreference: viewModel.genderPreference,
+                    weatherCode: viewModel.selectedWeatherSnapshot?.weatherCode ?? weather.currentWeather.weathercode,
                     isPresented: $showShop
                 )
                 .presentationDetents([.large])
