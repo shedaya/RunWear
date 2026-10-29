@@ -105,6 +105,9 @@ struct GeneratedImage: Codable, Identifiable {
     let imageUrl: String
     let thumbnailUrl: String?
     let prompt: String?
+    /// Review-gate status from the 2026-10-27 migration
+    /// ('approved' | 'pending' | 'rejected'); nil on legacy rows.
+    let reviewStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -112,6 +115,16 @@ struct GeneratedImage: Codable, Identifiable {
         case imageUrl = "image_url"
         case thumbnailUrl = "thumbnail_url"
         case prompt
+        case reviewStatus = "review_status"
+    }
+}
+
+/// Mirrors Android's HeroPoolPolicy: only approved images may be
+/// served; a null status is a pre-migration legacy row and counts
+/// as approved.
+enum HeroPoolPolicy {
+    static func isServable(reviewStatus: String?) -> Bool {
+        reviewStatus == nil || reviewStatus?.lowercased() == "approved"
     }
 }
 

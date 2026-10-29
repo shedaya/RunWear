@@ -5,7 +5,7 @@ actor SupabaseClient {
     static let shared = SupabaseClient()
 
     private let baseURL = "https://ebicqznlcjbqcukjfzcf.supabase.co"
-    private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI3NTIzMDYsImV4cCI6MjA1ODMyODMwNn0.gmEyMkZ27wNqIzAFLPvNH5kPDl3T6_uBfLWmXFSfEqY"
+    private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4"
 
     private init() {}
 
@@ -18,7 +18,7 @@ actor SupabaseClient {
             .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? pattern
 
         let endpoint = "/rest/v1/generated_images"
-        let query = "combination_id=like.\(encodedPattern)&select=id,combination_id,image_url,thumbnail_url,prompt"
+        let query = "combination_id=like.\(encodedPattern)&select=id,combination_id,image_url,thumbnail_url,prompt,review_status"
 
         guard let url = URL(string: "\(baseURL)\(endpoint)?\(query)") else {
             throw SupabaseError.invalidURL
@@ -42,7 +42,9 @@ actor SupabaseClient {
 
         let decoder = JSONDecoder()
         let images = try decoder.decode([GeneratedImage].self, from: data)
-        return images
+        // Review gate (mirrors Android's HeroPoolPolicy, 2026-10-27):
+        // pending/rejected generations are never served.
+        return images.filter { HeroPoolPolicy.isServable(reviewStatus: $0.reviewStatus) }
     }
 
     /// Inserts a generation job for demand-driven replenishment
