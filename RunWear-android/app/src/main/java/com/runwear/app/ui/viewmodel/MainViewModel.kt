@@ -443,27 +443,19 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, showLocationSetup = false) }
 
+            // Fast path: Fused's last-known fix resolves instantly when one
+            // exists. Painting from it beats blocking the first screen on a
+            // fresh GPS fix (seconds on a cold radio, up to the 15 s
+            // timeout); onForegrounded's re-validation refines it later.
+            val lastKnown = runCatching { locationProvider.getLastKnownLocation() }.getOrNull()
+            if (lastKnown != null) {
+                adoptGpsFix(lastKnown.latitude, lastKnown.longitude)
+                return@launch
+            }
+
             when (val result = locationProvider.getCurrentLocationWithTimeout()) {
                 is LocationFetchResult.Success -> {
-                    currentLat = result.location.latitude
-                    currentLon = result.location.longitude
-
-                    // Get friendly location name and save for future use
-                    weatherRepository.reverseGeocode(result.location.latitude, result.location.longitude).fold(
-                        onSuccess = { name ->
-                            _uiState.update { it.copy(locationName = name, locationSource = "gps") }
-                            // Save GPS location for next app launch
-                            preferencesRepository.saveGPSLocation(result.location.latitude, result.location.longitude, name)
-                        },
-                        onFailure = {
-                            _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
-                            preferencesRepository.saveGPSLocation(result.location.latitude, result.location.longitude, "Your Location")
-                        }
-                    )
-
-                    seedFromLastGood(result.location.latitude, result.location.longitude)
-                    resolveLocationZone()
-                    fetchWeather()
+                    adoptGpsFix(result.location.latitude, result.location.longitude)
                 }
                 is LocationFetchResult.Error -> {
                     // GPS failed - try to use last saved location as fallback
@@ -497,6 +489,38 @@ class MainViewModel @Inject constructor(
         }
     }
     
+    /**
+     * Adopt a GPS fix (last-known or fresh) and load weather for it. The
+     * friendly name is cosmetic, so reverse geocoding runs OFF the critical
+     * path: it used to be awaited between the fix and the forecast, putting
+     * a Nominatim round trip (seconds on a cold connection) in front of the
+     * first content on every cold start. The name — and the saved-location
+     * record, which carries it — lands whenever the geocode returns.
+     */
+    private suspend fun adoptGpsFix(lat: Double, lon: Double) {
+        currentLat = lat
+        currentLon = lon
+        _uiState.update { it.copy(locationSource = "gps") }
+
+        viewModelScope.launch {
+            weatherRepository.reverseGeocode(lat, lon).fold(
+                onSuccess = { name ->
+                    _uiState.update { it.copy(locationName = name, locationSource = "gps") }
+                    // Save GPS location for next app launch
+                    preferencesRepository.saveGPSLocation(lat, lon, name)
+                },
+                onFailure = {
+                    _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
+                    preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
+                }
+            )
+        }
+
+        seedFromLastGood(lat, lon)
+        resolveLocationZone()
+        fetchWeather()
+    }
+
     private fun fetchWeather() {
         val lat = currentLat ?: return
         val lon = currentLon ?: return

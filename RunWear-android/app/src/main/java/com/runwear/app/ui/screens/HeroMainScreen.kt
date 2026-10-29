@@ -60,8 +60,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.runwear.app.ui.components.BrandedLoadingScreen
 import com.runwear.app.ui.components.HeroSection
-import com.runwear.app.ui.components.HeroShimmerPlaceholder
+import com.runwear.app.ui.components.loadingStatusText
 import com.runwear.app.ui.components.OutfitCard
 import com.runwear.app.ui.components.OutfitListShimmer
 import com.runwear.app.ui.components.TipsSection
@@ -320,11 +321,17 @@ Get your personalized running outfit at runwear.ai
                     }
                 }
             }
-            // No content yet: skeleton while the first load runs, the error
-            // screen only when a load actually failed with nothing to show.
-            uiState.isLoading -> HeroShimmerPlaceholder()
+            // No content yet: the branded loading state while the first
+            // load runs (the low-contrast shimmer read as a black screen),
+            // the error screen only when a load actually failed with
+            // nothing to show.
+            uiState.isLoading -> BrandedLoadingScreen(
+                statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
+            )
             uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
-            else -> HeroShimmerPlaceholder()
+            else -> BrandedLoadingScreen(
+                statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
+            )
         }
     }
 
