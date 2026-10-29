@@ -51,7 +51,27 @@ jobs:
       - name: Build the XCFramework
         run: |
           xcodebuild -version
-          bash scripts/build-engine-framework.sh
+          set +e
+          set -o pipefail
+          bash scripts/build-engine-framework.sh 2>&1 | tee "$RUNNER_TEMP/engine-build.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            python3 - "$RUNNER_TEMP/engine-build.log" <<'PYEOF'
+          import sys
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          tail = lines[-120:]
+          start = 0
+          for i, l in enumerate(tail):
+              if 'What went wrong' in l or l.startswith('FAILURE'):
+                  start = i
+                  break
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          for l in tail[start:start + 14]:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
+          fi
+          exit "$code"
 
       - name: Upload the XCFramework
         uses: actions/upload-artifact@v4

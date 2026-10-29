@@ -65,6 +65,7 @@ jobs:
       - name: Run unit tests + debug assemble
         working-directory: RunWear-android
         run: |
+          set +e
           set -o pipefail
           # Generation mode: explicit dispatch input, OR the fixture file
           # is absent (bootstrap — the generator creates it and the
@@ -83,6 +84,22 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             tail -120 "$RUNNER_TEMP/gradle.log" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
+            # Also surface the failure as check annotations (readable via
+            # the public API in environments without log access).
+            python3 - "$RUNNER_TEMP/gradle.log" <<'PYEOF'
+          import sys
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          tail = lines[-120:]
+          start = 0
+          for i, l in enumerate(tail):
+              if 'What went wrong' in l or l.startswith('FAILURE'):
+                  start = i
+                  break
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          for l in tail[start:start + 14]:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
           fi
           exit "$code"
 
