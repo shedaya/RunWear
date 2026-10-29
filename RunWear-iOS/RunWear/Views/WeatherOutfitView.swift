@@ -761,7 +761,9 @@ struct GenderOption: View {
                 weathercode: 0,
                 isDay: 1
             ),
-            hourly: nil
+            hourly: nil,
+            timezone: nil,
+            currentDetail: nil
         ),
         recommendation: OutfitRecommendationService.shared.getRecommendation(
             for: 59,

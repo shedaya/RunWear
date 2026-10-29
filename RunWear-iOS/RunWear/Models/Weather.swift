@@ -7,11 +7,13 @@ struct WeatherData: Codable {
     let hourly: HourlyWeather?
     /// IANA timezone of the LOCATION (timezone=auto resolves it from the
     /// coordinates). Hourly timestamps are wall times in this zone.
-    let timezone: String? = nil
+    /// (No default value: a defaulted `let` cannot also be assigned by
+    /// the Decodable initializer below.)
+    let timezone: String?
     /// Extended current-conditions block (the `current=` variable list,
     /// mirroring Android's OpenMeteoApi) — carries feels-like, humidity,
     /// measured precipitation/rain and UV for the current hour.
-    let currentDetail: CurrentDetail? = nil
+    let currentDetail: CurrentDetail?
 
     enum CodingKeys: String, CodingKey {
         case latitude, longitude
