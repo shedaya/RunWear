@@ -1,6 +1,18 @@
 import Foundation
+import RunWearEngine
 
 // MARK: - Hero Image Enums
+//
+// Stage 2 (2026-10-29): the classification mappings below (WMO code →
+// condition, feels-like → bracket, hour → time of day) are DELEGATED to
+// the shared Kotlin module (HeroFrameMapping in `:engine`) — the tables
+// live only there now, shared with Android's OutfitCombination. The
+// Swift enums remain as this platform's presentation types; their case
+// names are the Kotlin enum names, so a mapping result crosses the seam
+// as a name. The fallbacks mirror the Kotlin tables' own fallbacks
+// (UNKNOWN code → CLEAR, out-of-range temp → MILD, unmatched hour →
+// MIDDAY) and exist only so an impossible mismatch degrades the way
+// Android degrades instead of trapping.
 
 /// Weather condition categories for hero image selection
 enum HeroWeatherCondition: String, Codable, CaseIterable {
@@ -9,22 +21,12 @@ enum HeroWeatherCondition: String, Codable, CaseIterable {
     case RAIN
     case SNOW
 
-    /// Maps WMO weather codes to hero weather conditions
+    /// Maps WMO weather codes to hero weather conditions (shared module)
     /// - Parameter code: WMO weather code (0-99)
     /// - Returns: Corresponding HeroWeatherCondition
     static func from(weatherCode code: Int) -> HeroWeatherCondition {
-        switch code {
-        case 0, 1:
-            return .CLEAR
-        case 2, 3, 45, 48:
-            return .CLOUDY
-        case 51...67, 80...82, 95...99:
-            return .RAIN
-        case 71...77, 85, 86:
-            return .SNOW
-        default:
-            return .CLEAR
-        }
+        let name = HeroFrameMapping.shared.weatherConditionName(weatherCode: Int32(code))
+        return HeroWeatherCondition(rawValue: name) ?? .CLEAR
     }
 }
 
@@ -37,24 +39,12 @@ enum HeroTempBracket: String, Codable, CaseIterable {
     case WARM
     case HOT
 
-    /// Maps "feels like" temperature (Fahrenheit) to bracket
+    /// Maps "feels like" temperature (Fahrenheit) to bracket (shared module)
     /// - Parameter feelsLike: Feels like temperature in Fahrenheit
     /// - Returns: Corresponding HeroTempBracket
     static func from(feelsLikeTemperature feelsLike: Double) -> HeroTempBracket {
-        switch feelsLike {
-        case ..<20:
-            return .FREEZING
-        case 20..<35:
-            return .COLD
-        case 35..<50:
-            return .COOL
-        case 50..<65:
-            return .MILD
-        case 65..<80:
-            return .WARM
-        default:
-            return .HOT
-        }
+        let name = HeroFrameMapping.shared.tempBracketName(feelsLikeF: feelsLike)
+        return HeroTempBracket(rawValue: name) ?? .MILD
     }
 }
 
@@ -65,20 +55,12 @@ enum HeroTimeOfDay: String, Codable, CaseIterable {
     case DUSK
     case NIGHT
 
-    /// Maps hour of day to time category
+    /// Maps hour of day to time category (shared module)
     /// - Parameter hour: Hour in 24-hour format (0-23)
     /// - Returns: Corresponding HeroTimeOfDay
     static func from(hour: Int) -> HeroTimeOfDay {
-        switch hour {
-        case 5...9:
-            return .DAWN
-        case 10...16:
-            return .MIDDAY
-        case 17...19:
-            return .DUSK
-        default:
-            return .NIGHT
-        }
+        let name = HeroFrameMapping.shared.timeOfDayName(hour: Int32(hour))
+        return HeroTimeOfDay(rawValue: name) ?? .MIDDAY
     }
 }
 
@@ -105,6 +87,9 @@ struct GeneratedImage: Codable, Identifiable {
     let imageUrl: String
     let thumbnailUrl: String?
     let prompt: String?
+    /// Review-gate status from the 2026-10-27 migration
+    /// ('approved' | 'pending' | 'rejected'); nil on legacy rows.
+    let reviewStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -112,6 +97,16 @@ struct GeneratedImage: Codable, Identifiable {
         case imageUrl = "image_url"
         case thumbnailUrl = "thumbnail_url"
         case prompt
+        case reviewStatus = "review_status"
+    }
+}
+
+/// Delegates to the shared module's HeroPoolPolicy: only approved
+/// images may be served; a null status is a pre-migration legacy row
+/// and counts as approved.
+enum HeroPoolPolicy {
+    static func isServable(reviewStatus: String?) -> Bool {
+        RunWearEngine.HeroPoolPolicy.shared.isServable(reviewStatus: reviewStatus)
     }
 }
 

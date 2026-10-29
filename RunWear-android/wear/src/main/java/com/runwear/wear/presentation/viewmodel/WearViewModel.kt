@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDate
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -118,7 +119,7 @@ class WearViewModel @Inject constructor(
             val result = if (isNow(dt)) {
                 weatherRepository.getCurrentWeather(lat, lon, unit)
             } else {
-                weatherRepository.getWeatherForDateTime(lat, lon, dt, unit)
+                weatherRepository.getWeatherForDateTime(lat, lon, dt.toKotlinLocalDateTime(), unit)
             }
 
             result.fold(

@@ -8,9 +8,11 @@ import com.runwear.shared.domain.model.HourlyForecast
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
-import java.time.LocalDateTime
+import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -93,11 +95,11 @@ class WeatherRepository @Inject constructor(
         // The API's current.time is already location-local (timezone=auto).
         // Using the phone's clock here was one source of the frame mix-up:
         // "current" conditions were stamped with the device's timezone time.
-        val locationNow = runCatching { LocalDateTime.parse(current.time) }
+        val locationNow = runCatching { parseApiLocalDateTime(current.time) }
             .getOrElse {
                 val zone = runCatching { ZoneId.of(response.timezone) }
                     .getOrDefault(ZoneId.systemDefault())
-                LocalDateTime.now(zone)
+                Clock.System.now().toLocalDateTime(TimeZone.of(zone.id))
             }
 
         return WeatherConditions(
@@ -138,7 +140,9 @@ class WeatherRepository @Inject constructor(
         // Find the closest hour in the forecast. A miss used to silently fall
         // back to index 0 (potentially ~24h off); now it fails loudly so the
         // UI shows the error screen with retry instead of wrong data (F2).
-        val targetHour = dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH"))
+        // kotlinx LocalDateTime renders ISO ("2026-06-15T12:00"); its first
+        // 13 chars are the "yyyy-MM-dd'T'HH" prefix the old formatter built.
+        val targetHour = dateTime.toString().substring(0, 13)
         val index = hourly.time.indexOfFirst { it.startsWith(targetHour) }
         if (index < 0) {
             android.util.Log.e(
@@ -184,11 +188,10 @@ class WeatherRepository @Inject constructor(
         unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
     ): List<HourlyForecast> {
         val hourly = response.hourly ?: throw Exception("No hourly weather data")
-        val formatter = DateTimeFormatter.ISO_LOCAL_DATE_TIME
 
         return hourly.time.mapIndexed { index, time ->
             HourlyForecast(
-                dateTime = LocalDateTime.parse(time, formatter),
+                dateTime = parseApiLocalDateTime(time),
                 temperature = hourly.temperature[index],
                 feelsLike = hourly.apparentTemperature[index],
                 humidity = hourly.humidity[index],
@@ -233,6 +236,17 @@ class WeatherRepository @Inject constructor(
         }
     }
     
+    /**
+     * Parse an Open-Meteo local timestamp into the models' kotlinx
+     * LocalDateTime. The API emits "yyyy-MM-dd'T'HH:mm" (no seconds);
+     * java.time's ISO parser accepted that form implicitly, so normalize
+     * by appending ":00" when the seconds field is absent.
+     */
+    private fun parseApiLocalDateTime(value: String): LocalDateTime {
+        val normalized = if (value.length == 16) "$value:00" else value
+        return LocalDateTime.parse(normalized)
+    }
+
     private fun com.runwear.shared.data.model.NominatimSearchResult.toLocationResult() = LocationResult(
         latitude = latitude,
         longitude = longitude,

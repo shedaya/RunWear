@@ -17,6 +17,10 @@ DerivedData/
 *.xcuserstate
 *.xcscmblueprint
 
+# Shared engine framework (Stage 2) — a CI/local build artifact of the
+# :engine KMP module, never committed
+Frameworks/
+
 # CocoaPods
 Pods/
 

@@ -18,6 +18,14 @@ struct OutfitRecommendation {
 
 struct ClothingItem: Identifiable {
     let id = UUID()
+    /// Stable identity: the Kotlin `ClothingItem` enum case name
+    /// (e.g. "SHORT_SHORTS"). Set at every engine construction site —
+    /// required, with no default, so a new item cannot be added
+    /// without one (the compiler is the mapping's owner, as on
+    /// Android). Display names are presentation copy and drifted
+    /// historically ("Short Shorts" vs the legacy "Split Shorts"),
+    /// which is why thumbnails key off this, never off `name`.
+    let key: String
     let name: String
     let description: String
     let icon: String

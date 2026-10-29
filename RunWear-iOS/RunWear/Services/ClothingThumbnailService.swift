@@ -1,4 +1,5 @@
 import Foundation
+import RunWearEngine
 
 /// Service for generating clothing thumbnail URLs.
 ///
@@ -7,73 +8,23 @@ import Foundation
 ///
 /// Style: Dark gray/charcoal clothing on pure black background,
 /// professional product photography aesthetic.
+///
+/// Stage 2 (2026-10-29): the item→file-key map that used to be mirrored
+/// in this file is DELETED. The one map lives in the shared Kotlin module
+/// (ClothingThumbnailService in `:engine`), and this service delegates to
+/// it by item key — so a key change on Android is a key change here, by
+/// construction. The boundary fixtures assert every emittable key
+/// resolves through this path.
+///
+/// History (why keys, never names): this map was once keyed by display
+/// name and carried legacy names the v4.x engine no longer produces
+/// ("Split Shorts", "Running Tights"), so Short Shorts and Light
+/// Tights — two of the most common recommendations — resolved to no
+/// thumbnail and rendered as bare glyphs forever.
 class ClothingThumbnailService {
     static let shared = ClothingThumbnailService()
 
-    private let baseURL = "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/clothing-thumbnails"
-
     private init() {}
-
-    /// Map clothing item names to thumbnail file keys.
-    /// Keys use lowercase with hyphens (e.g., "Tank Top" → "tank-top").
-    private let thumbnailKeys: [String: String] = [
-        // Tops - Base Layer
-        "Tank Top": "tank-top",
-        "Short Sleeve Shirt": "short-sleeve",
-        "Long Sleeve Shirt": "long-sleeve-light",
-        "Light Long Sleeve": "long-sleeve-light",
-        "Thermal Long Sleeve": "thermal-long-sleeve",
-        "Base Layer + Jacket": "thermal-long-sleeve",
-        "Double Layer Top": "insulated-jacket",
-        "Full Thermal System": "insulated-jacket",
-
-        // Tops - Mid Layer (v4.1)
-        "Quarter-Zip Pullover": "quarter-zip",
-        "Fleece Pullover": "fleece-pullover",
-        "Thermal Half-Zip": "half-zip-thermal",
-
-        // Tops - Outer Layer
-        "Light Vest": "light-vest",
-        "Windbreaker": "windbreaker",
-        "Light Jacket": "light-jacket",
-        "Rain Jacket": "rain-jacket",
-        "Insulated Jacket": "insulated-jacket",
-
-        // Bottoms
-        "Split Shorts": "short-shorts",
-        "Running Shorts": "running-shorts",
-        "Running Tights": "light-tights",
-        "Thermal Tights": "thermal-tights",
-        "Insulated Tights": "thermal-tights",
-        "Wind-Proof Pants": "thermal-tights",
-
-        // Head
-        "Visor": "visor",
-        "Running Cap": "running-cap",
-        "Headband": "headband",
-        "Ear Warmer": "headband",
-        "Light Beanie": "light-beanie",
-        "Running Beanie": "light-beanie",
-        "Thermal Beanie": "thermal-beanie",
-        "Balaclava": "balaclava",
-        "Full Balaclava": "balaclava",
-
-        // Hands
-        "Light Gloves": "light-gloves",
-        "Running Gloves": "thermal-gloves",
-        "Thermal Gloves": "thermal-gloves",
-        "Heavy Gloves": "thermal-gloves",
-        "Mittens": "mittens",
-        "Insulated Mittens": "mittens",
-
-        // Accessories
-        "Sunglasses": "sunglasses",
-        "Sunscreen": "sunscreen",
-        "Reflective Gear": "reflective-gear",
-        "Neck Gaiter": "neck-gaiter",
-        "Arm Sleeves": "light-gloves", // Use gloves thumbnail as proxy
-        "Hand Warmers": "thermal-gloves" // Use gloves thumbnail as proxy
-    ]
 
     /// Get the thumbnail URL for a clothing item based on gender preference.
     ///
@@ -82,21 +33,15 @@ class ClothingThumbnailService {
     ///   - gender: The user's gender preference (.unisex defaults to male)
     /// - Returns: The full URL to the thumbnail image, or nil if no thumbnail exists
     func getThumbnailURL(for item: ClothingItem, gender: GenderPreference) -> URL? {
-        guard let thumbnailKey = thumbnailKeys[item.name] else { return nil }
-
-        let genderSuffix: String
-        switch gender {
-        case .female:
-            genderSuffix = "female"
-        case .male, .unisex:
-            genderSuffix = "male"
-        }
-
-        return URL(string: "\(baseURL)/\(thumbnailKey)-\(genderSuffix).webp")
+        let urlString = RunWearEngine.ClothingThumbnailService.shared.getThumbnailUrl(
+            itemName: item.key,
+            genderName: gender.rawValue.uppercased()
+        )
+        return urlString.flatMap { URL(string: $0) }
     }
 
     /// Check if a clothing item has a thumbnail available.
     func hasThumbnail(for item: ClothingItem) -> Bool {
-        return thumbnailKeys[item.name] != nil
+        RunWearEngine.ClothingThumbnailService.shared.hasThumbnail(itemName: item.key)
     }
 }

@@ -21,13 +21,52 @@ struct HeroImageView: View {
     var onTimeTapped: () -> Void = {}
     var onNowTapped: () -> Void = {}
 
+    /// How the hero's height is derived (design record §5.2: no
+    /// UIScreen.main anywhere — the container decides).
+    enum HeightMode {
+        /// Fraction of the container's height (the original
+        /// full-screen layout, where the container is the screen).
+        case containerFraction
+        /// Fill the height the parent proposes (pane layouts size
+        /// the hero from their own geometry).
+        case fill
+    }
+    var heightMode: HeightMode = .containerFraction
+
+    /// The floating glass pills (location / share / settings) are
+    /// chrome, and chrome belongs to the container: when Home sits
+    /// in a NavigationStack the location is the nav title and
+    /// Settings/Share are toolbar items, so the hero hides its
+    /// pills. The date/time pills stay — they are content.
+    var showsTopControls: Bool = true
+
     // State for crossfade
     @State private var showAIImage = false
     @State private var aiImageLoaded = false
 
     var body: some View {
+        Group {
+            if heightMode == .fill {
+                // Pane layouts frame the hero themselves; the
+                // GeometryReader fills what the parent proposes.
+                heroContent
+            } else {
+                // Full-screen layouts: the hero is a fraction of
+                // its container (the scroll view), never of
+                // UIScreen.main.
+                heroContent
+                    .containerRelativeFrame(.vertical) { length, _ in
+                        length * AppTheme.heroHeightRatio
+                    }
+            }
+        }
+    }
+
+    private var heroContent: some View {
         GeometryReader { geometry in
-            let heroHeight = geometry.size.height * AppTheme.heroHeightRatio
+            let heroHeight = heightMode == .fill
+                ? geometry.size.height
+                : geometry.size.height * AppTheme.heroHeightRatio
 
             ZStack {
                 // Background image with crossfade
@@ -44,9 +83,12 @@ struct HeroImageView: View {
 
                 // Content overlay
                 VStack(spacing: 0) {
-                    // Top controls
-                    topControls
-                        .padding(.top, geometry.safeAreaInsets.top + 8)
+                    // Top controls (hidden when the navigation
+                    // container carries the chrome instead)
+                    if showsTopControls {
+                        topControls(width: geometry.size.width)
+                            .padding(.top, geometry.safeAreaInsets.top + 8)
+                    }
 
                     Spacer()
 
@@ -59,7 +101,6 @@ struct HeroImageView: View {
             .frame(width: geometry.size.width, height: heroHeight)
             .clipped()
         }
-        .frame(height: UIScreen.main.bounds.height * AppTheme.heroHeightRatio)
         .ignoresSafeArea(edges: .top)
     }
 
@@ -111,7 +152,7 @@ struct HeroImageView: View {
 
     // MARK: - Top Controls
 
-    private var topControls: some View {
+    private func topControls(width: CGFloat) -> some View {
         HStack(spacing: 8) {
             // Location button - constrained to prevent overflow with long names
             Button(action: onLocationTapped) {
@@ -125,7 +166,7 @@ struct HeroImageView: View {
                 .foregroundColor(.white)
                 .glassPill()
             }
-            .frame(maxWidth: UIScreen.main.bounds.width - 140, alignment: .leading) // Leave room for buttons
+            .frame(maxWidth: max(120, width - 140), alignment: .leading) // Leave room for buttons
 
             Spacer(minLength: 8)
 

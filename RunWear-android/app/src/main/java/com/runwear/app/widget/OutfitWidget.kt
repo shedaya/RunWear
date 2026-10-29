@@ -60,6 +60,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.datetime.toJavaLocalDateTime
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -420,7 +421,7 @@ private fun LargeWidgetContent(state: WidgetState.Success) {
         // The outfit is the hero: the moment it is for, then the main
         // pieces at display size with their garment icons.
         Text(
-            text = "FOR NOW · ${state.weather.dateTime.format(timeFormatter)}",
+            text = "FOR NOW · ${state.weather.dateTime.toJavaLocalDateTime().format(timeFormatter)}",
             style = TextStyle(
                 color = ColorProvider(WidgetTextMuted),
                 fontSize = 10.sp,

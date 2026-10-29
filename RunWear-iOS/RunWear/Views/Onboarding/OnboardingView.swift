@@ -299,7 +299,7 @@ private struct OnboardingComfortSlider: View {
             // Slider track with segments
             GeometryReader { geometry in
                 let segmentWidth = geometry.size.width / CGFloat(levels.count)
-                let selectedIndex = levels.firstIndex(of: comfortLevel) ?? 3
+                let selectedIndex = levels.firstIndex(of: comfortLevel) ?? 2
 
                 ZStack(alignment: .leading) {
                     // Track background
@@ -340,11 +340,11 @@ private struct OnboardingComfortSlider: View {
 
     private var comfortColor: Color {
         switch comfortLevel {
-        case .veryCold, .cold, .slightlyCold:
+        case .veryCold, .cold:
             return .blue
         case .neutral:
             return .green
-        case .slightlyWarm, .warm, .veryWarm:
+        case .warm, .veryWarm:
             return .orange
         }
     }

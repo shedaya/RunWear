@@ -106,4 +106,34 @@ object ClothingThumbnailService {
     fun hasThumbnail(item: ClothingItem): Boolean {
         return THUMBNAIL_KEYS.containsKey(item)
     }
+
+    // -- Name-based seam (Apple platforms) --
+
+    /**
+     * The name-based seam the Apple platforms consume: they hold item
+     * identities as [ClothingItem] enum case names (the `key`), not as
+     * Kotlin enum instances. Unknown names resolve to null / false —
+     * never an exception — so a name the engine doesn't know renders as
+     * "no thumbnail", exactly like an unmapped item on Android.
+     */
+    private fun itemForName(itemName: String): ClothingItem? =
+        ClothingItem.entries.find { it.name == itemName }
+
+    private fun genderForName(genderName: String): GenderPreference =
+        GenderPreference.entries.find { it.name == genderName } ?: GenderPreference.UNISEX
+
+    /** Thumbnail file key for an item name (e.g. "TANK_TOP" → "tank-top"), or null. */
+    fun thumbnailKeyForName(itemName: String): String? =
+        itemForName(itemName)?.let { THUMBNAIL_KEYS[it] }
+
+    /** [getThumbnailUrl] by item name and gender name ("MALE" / "FEMALE" / "UNISEX"). */
+    fun getThumbnailUrl(itemName: String, genderName: String): String? {
+        val item = itemForName(itemName) ?: return null
+        return getThumbnailUrl(item, genderForName(genderName))
+    }
+
+    /** [hasThumbnail] by item name. */
+    fun hasThumbnail(itemName: String): Boolean {
+        return thumbnailKeyForName(itemName) != null
+    }
 }

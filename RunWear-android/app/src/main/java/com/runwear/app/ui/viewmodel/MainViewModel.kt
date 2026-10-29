@@ -33,6 +33,8 @@ import com.runwear.app.widget.WidgetLastGoodStore
 import com.runwear.app.widget.WidgetPublisher
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.datetime.toJavaLocalDateTime
+import kotlinx.datetime.toKotlinLocalDateTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -545,7 +547,7 @@ class MainViewModel @Inject constructor(
                         if (nowSelected) {
                             weatherRepository.parseCurrentWeather(response, unit)
                         } else {
-                            weatherRepository.parseWeatherForDateTime(response, dt, unit)
+                            weatherRepository.parseWeatherForDateTime(response, dt.toKotlinLocalDateTime(), unit)
                         }
                     }.getOrElse { e ->
                         _uiState.update {
@@ -577,8 +579,8 @@ class MainViewModel @Inject constructor(
                             hourlyForecast = forecast,
                             // NOW re-anchors on the API's own location-local
                             // current time from this response.
-                            locationNow = if (nowSelected) weather.dateTime else it.locationNow,
-                            selectedDateTime = if (nowSelected) weather.dateTime else it.selectedDateTime
+                            locationNow = if (nowSelected) weather.dateTime.toJavaLocalDateTime() else it.locationNow,
+                            selectedDateTime = if (nowSelected) weather.dateTime.toJavaLocalDateTime() else it.selectedDateTime
                         )
                     }
 

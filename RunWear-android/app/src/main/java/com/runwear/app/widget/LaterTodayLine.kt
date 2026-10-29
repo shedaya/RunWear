@@ -8,6 +8,8 @@ import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
+import kotlinx.datetime.toJavaLocalDateTime
+import kotlinx.datetime.toKotlinLocalDateTime
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -112,10 +114,13 @@ object LaterTodayLine {
         hourly: List<HourlyForecast>? = null
     ): String? {
         return runCatching {
+            // The models carry kotlinx LocalDateTime (shared :engine module);
+            // this line's arithmetic stays in java.time, converted at the edge.
+            val currentJava = current.dateTime.toJavaLocalDateTime()
             for (hoursAhead in listOf(3L, 6L)) {
-                val target = current.dateTime.plusHours(hoursAhead)
+                val target = currentJava.plusHours(hoursAhead)
                 val laterWeather = weatherRepository
-                    .getWeatherForDateTime(latitude, longitude, target, unit)
+                    .getWeatherForDateTime(latitude, longitude, target.toKotlinLocalDateTime(), unit)
                     .getOrNull() ?: continue
                 val laterOutfit = getOutfit.execute(laterWeather, comfort)
                 deltaLine(target, currentOutfit, laterOutfit, laterWeather)?.let { return@runCatching it }
@@ -124,8 +129,9 @@ object LaterTodayLine {
                 .getHourlyForecast(latitude, longitude, unit)
                 .getOrDefault(emptyList())
             val window = forecast.filter {
-                it.dateTime.isAfter(current.dateTime) &&
-                    !it.dateTime.isAfter(current.dateTime.plusHours(6))
+                val forecastJava = it.dateTime.toJavaLocalDateTime()
+                forecastJava.isAfter(currentJava) &&
+                    !forecastJava.isAfter(currentJava.plusHours(6))
             }
             stableLine(window)
         }.getOrNull()

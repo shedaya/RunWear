@@ -4,60 +4,29 @@ struct TimePickerSheet: View {
     @Binding var selectedHour: Int
     @Binding var isPresented: Bool
 
-    @State private var dragOffset: CGFloat = 0
-    private let dismissThreshold: CGFloat = 100
 
     // Available hours: 5 AM to 9 PM
     private let availableHours = Array(5...21)
 
+    // Presented as a real .sheet (design record §5.2): the system
+    // owns the backdrop, drag handle, and dismissal.
     var body: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
-                }
+        VStack(spacing: 20) {
+            // Title
+            Text("Select Time")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
 
-            // Sheet content
-            VStack(spacing: 0) {
-                Spacer()
+            // Time grid
+            timeGrid
 
-                VStack(spacing: 20) {
-                    // Drag handle
-                    dragHandle
-
-                    // Title
-                    Text("Select Time")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-
-                    // Time grid
-                    timeGrid
-
-                    Spacer().frame(height: 16)
-                }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.modalCornerRadius)
-                        .fill(AppTheme.darkBackground)
-                )
-                .offset(y: dragOffset)
-                .gesture(dragGesture)
-            }
-            .ignoresSafeArea(edges: .bottom)
+            Spacer().frame(height: 16)
         }
-        .transition(.opacity)
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(AppTheme.darkBackground.ignoresSafeArea())
     }
 
-    // MARK: - Drag Handle
-
-    private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.white.opacity(0.3))
-            .frame(width: 40, height: 5)
-            .padding(.top, 8)
-    }
 
     // MARK: - Time Grid
 
@@ -80,25 +49,6 @@ struct TimePickerSheet: View {
         }
     }
 
-    // MARK: - Gestures
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if value.translation.height > 0 {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > dismissThreshold {
-                    dismiss()
-                } else {
-                    withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
 
     private func dismiss() {
         withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {

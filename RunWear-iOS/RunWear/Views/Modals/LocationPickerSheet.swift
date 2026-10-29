@@ -10,71 +10,42 @@ struct LocationPickerSheet: View {
     @State private var searchText = ""
     @State private var searchResults: [LocationSearchResult] = []
     @State private var isSearching = false
-    @State private var dragOffset: CGFloat = 0
 
-    private let dismissThreshold: CGFloat = 100
     private let geocoder = CLGeocoder()
 
+    // Presented as a real .sheet (design record §5.2): the system
+    // owns the backdrop, drag handle, and dismissal.
     var body: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
+        ScrollView {
+            VStack(spacing: 16) {
+                // Title
+                Text("Set Location")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.top, 8)
+
+                // Use Current Location option
+                currentLocationButton
+
+                // Divider
+                dividerWithText
+
+                // Search field
+                searchField
+
+                // Search results
+                if !searchResults.isEmpty {
+                    searchResultsList
                 }
 
-            // Sheet content
-            VStack(spacing: 0) {
-                Spacer()
-
-                VStack(spacing: 16) {
-                    // Drag handle
-                    dragHandle
-
-                    // Title
-                    Text("Set Location")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.top, 8)
-
-                    // Use Current Location option
-                    currentLocationButton
-
-                    // Divider
-                    dividerWithText
-
-                    // Search field
-                    searchField
-
-                    // Search results
-                    if !searchResults.isEmpty {
-                        searchResultsList
-                    }
-
-                    Spacer().frame(height: 16)
-                }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.modalCornerRadius)
-                        .fill(AppTheme.darkBackground)
-                )
-                .offset(y: dragOffset)
-                .gesture(dragGesture)
+                Spacer().frame(height: 16)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .padding(24)
+            .frame(maxWidth: .infinity)
         }
-        .transition(.opacity)
+        .background(AppTheme.darkBackground.ignoresSafeArea())
     }
 
-    // MARK: - Drag Handle
-
-    private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.white.opacity(0.3))
-            .frame(width: 40, height: 5)
-            .padding(.top, 8)
-    }
 
     // MARK: - Use Current Location Button
 
@@ -256,25 +227,6 @@ struct LocationPickerSheet: View {
         }
     }
 
-    // MARK: - Gestures
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if value.translation.height > 0 {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > dismissThreshold {
-                    dismiss()
-                } else {
-                    withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
 
     private func dismiss() {
         withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {

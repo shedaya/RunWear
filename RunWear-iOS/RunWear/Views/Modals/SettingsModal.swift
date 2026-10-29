@@ -6,63 +6,35 @@ struct SettingsModal: View {
     @Binding var genderPreference: GenderPreference
     @Binding var comfortLevel: ComfortLevel
 
-    @State private var dragOffset: CGFloat = 0
-    private let dismissThreshold: CGFloat = 100
 
+    // Presented as a real .sheet (design record §5.2): the system
+    // owns the backdrop, drag handle, and dismissal — this view is
+    // just the content.
     var body: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
-                }
+        ScrollView {
+            VStack(spacing: 24) {
+                // Title
+                Text("Settings")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.white)
 
-            // Modal content
-            VStack(spacing: 0) {
-                Spacer()
+                // Temperature Unit
+                temperatureUnitSection
 
-                VStack(spacing: 24) {
-                    // Drag handle
-                    dragHandle
+                // Gender Preference
+                genderPreferenceSection
 
-                    // Title
-                    Text("Settings")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
+                // Comfort Level
+                comfortLevelSection
 
-                    // Temperature Unit
-                    temperatureUnitSection
-
-                    // Gender Preference
-                    genderPreferenceSection
-
-                    // Comfort Level
-                    comfortLevelSection
-
-                    Spacer().frame(height: 16)
-                }
-                .padding(24)
-                .background(
-                    RoundedRectangle(cornerRadius: AppTheme.modalCornerRadius)
-                        .fill(AppTheme.darkBackground)
-                )
-                .offset(y: dragOffset)
-                .gesture(dragGesture)
+                Spacer().frame(height: 16)
             }
-            .ignoresSafeArea(edges: .bottom)
+            .padding(24)
+            .frame(maxWidth: .infinity)
         }
-        .transition(.opacity)
+        .background(AppTheme.darkBackground.ignoresSafeArea())
     }
 
-    // MARK: - Drag Handle
-
-    private var dragHandle: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(Color.white.opacity(0.3))
-            .frame(width: 40, height: 5)
-            .padding(.top, 8)
-    }
 
     // MARK: - Temperature Unit Section
 
@@ -120,26 +92,6 @@ struct SettingsModal: View {
         }
     }
 
-    // MARK: - Drag Gesture
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if value.translation.height > 0 {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > dismissThreshold {
-                    dismiss()
-                } else {
-                    withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
-
     private func dismiss() {
         withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
             isPresented = false
@@ -185,7 +137,7 @@ private struct ComfortSlider: View {
             // Slider
             GeometryReader { geometry in
                 let segmentWidth = geometry.size.width / CGFloat(levels.count)
-                let selectedIndex = levels.firstIndex(of: comfortLevel) ?? 3
+                let selectedIndex = levels.firstIndex(of: comfortLevel) ?? 2
 
                 ZStack(alignment: .leading) {
                     // Track
@@ -226,11 +178,11 @@ private struct ComfortSlider: View {
 
     private var comfortColor: Color {
         switch comfortLevel {
-        case .veryCold, .cold, .slightlyCold:
+        case .veryCold, .cold:
             return .blue
         case .neutral:
             return .green
-        case .slightlyWarm, .warm, .veryWarm:
+        case .warm, .veryWarm:
             return .orange
         }
     }

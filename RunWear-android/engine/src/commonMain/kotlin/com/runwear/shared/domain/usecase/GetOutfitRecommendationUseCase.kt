@@ -1,8 +1,6 @@
 package com.runwear.shared.domain.usecase
 
 import com.runwear.shared.domain.model.*
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * THE BRAIN: Running-Specific Clothing Recommendation Engine (v4.2)
@@ -35,9 +33,16 @@ import javax.inject.Singleton
  * gates now read the RAW temperature (baseTemp, before the comfort shift); warmth
  * headgear stays on the adjusted frame. Sunglasses/sunscreen were already UV-only.
  * The PWA mirror needs the same sun-gate change.
+ *
+ * Stage 2 (2026-10-29): this class lives in the shared KMP `:engine` module and
+ * is the ONLY implementation of the decision tables on both platforms. Android
+ * calls [execute] with a [WeatherConditions]; the Apple platforms call
+ * [recommendFrames] with the same decision inputs in frame form (the Stage 1
+ * boundary contract: comfort-adjusted + raw feels-like in °F, measured rain,
+ * mph wind gate, real humidity/UV). The selectors below are frame-based so
+ * both entry points run literally the same code.
  */
-@Singleton
-class GetOutfitRecommendationUseCase @Inject constructor() {
+class GetOutfitRecommendationUseCase {
 
     companion object {
         /**
@@ -55,26 +60,77 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         // No separate running offset — the bracket thresholds are already running-specific.
         val adjustedTemp = baseTemp + comfort.tempAdjustment
 
-        val topMid = selectTopMid(adjustedTemp)
-        val topOuter = selectTopOuter(adjustedTemp, weather)
+        val selection = recommendFrames(
+            adjustedFeelsLikeF = adjustedTemp,
+            rawFeelsLikeF = baseTemp,
+            isRaining = weather.isRaining,
+            precipitation = weather.precipitation,
+            isWindy = weather.isWindy,
+            isHumid = weather.isHumid,
+            uvIndex = weather.uvIndex,
+            hourOfDay = weather.dateTime.hour
+        )
+
+        return OutfitRecommendation(
+            weather = weather,
+            topBase = selection.topBase,
+            topMid = selection.topMid,
+            topOuter = selection.topOuter,
+            bottom = selection.bottom,
+            head = selection.head,
+            hands = selection.hands,
+            accessories = selection.accessories,
+            tips = selection.tips
+        )
+    }
+
+    /**
+     * The decision core in frame form — the Apple-platform entry point, and
+     * the single code path [execute] delegates to.
+     *
+     * Frame contract (Stage 1, preserved exactly):
+     * - [adjustedFeelsLikeF]: feels-like °F AFTER the comfort adjustment —
+     *   the frame every warmth selector reads.
+     * - [rawFeelsLikeF]: feels-like °F BEFORE the comfort adjustment — read
+     *   ONLY by the visor/cap sun gates (v4.3).
+     * - [isRaining]: measured rain (rain amount > 0), never a weather-code
+     *   class. [precipitation] is the measured amount in mm; the rain-jacket
+     *   gate additionally requires precipitation > 0.1.
+     * - [isWindy] / [isHumid]: the gate booleans the selectors read. On
+     *   Android they are WeatherConditions' own derivations (windSpeed > 10
+     *   in the stored unit frame, humidity > 65); the Apple bridge derives
+     *   them from mph wind and percent humidity at the same thresholds.
+     * - [hourOfDay]: location-local hour 0–23, for the reflective-gear gate.
+     */
+    fun recommendFrames(
+        adjustedFeelsLikeF: Double,
+        rawFeelsLikeF: Double,
+        isRaining: Boolean,
+        precipitation: Double,
+        isWindy: Boolean,
+        isHumid: Boolean,
+        uvIndex: Double,
+        hourOfDay: Int
+    ): OutfitSelection {
+        val topMid = selectTopMid(adjustedFeelsLikeF)
+        val topOuter = selectTopOuter(adjustedFeelsLikeF, isRaining, precipitation, isWindy)
         // Cool-band rule (25–39.9°F): a wind shell and a mid-layer are alternatives,
         // never a stack. If the wind calls for the shell, the mid-layer comes off.
         // (Feels-like already prices in the wind chill; dressing for both double-counts it.)
         val effectiveTopMid =
             if (topOuter == ClothingItem.WINDBREAKER && topMid != null &&
-                adjustedTemp >= 25 && adjustedTemp < 40
+                adjustedFeelsLikeF >= 25 && adjustedFeelsLikeF < 40
             ) null else topMid
 
-        return OutfitRecommendation(
-            weather = weather,
-            topBase = selectTopBase(adjustedTemp),
+        return OutfitSelection(
+            topBase = selectTopBase(adjustedFeelsLikeF),
             topMid = effectiveTopMid,
             topOuter = topOuter,
-            bottom = selectBottom(adjustedTemp),
-            head = selectHead(adjustedTemp, baseTemp, weather),
-            hands = selectHands(adjustedTemp),
-            accessories = selectAccessories(weather, adjustedTemp),
-            tips = generateTips(weather, adjustedTemp)
+            bottom = selectBottom(adjustedFeelsLikeF),
+            head = selectHead(adjustedFeelsLikeF, rawFeelsLikeF, uvIndex, isRaining),
+            hands = selectHands(adjustedFeelsLikeF),
+            accessories = selectAccessories(uvIndex, adjustedFeelsLikeF, hourOfDay),
+            tips = generateTips(adjustedFeelsLikeF, isWindy, isRaining, isHumid, uvIndex)
         )
     }
 
@@ -103,12 +159,12 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
     // the wind. Below 25°F the shell becomes standard (cold dominates, and it seals
     // the mid-layer). In the 25–40°F band, execute() drops the mid-layer when the
     // shell is on — the two are alternatives there, never a stack.
-    private fun selectTopOuter(temp: Double, weather: WeatherConditions): ClothingItem? {
-        if (weather.isRaining && weather.precipitation > 0.1) return ClothingItem.RAIN_JACKET
+    private fun selectTopOuter(temp: Double, isRaining: Boolean, precipitation: Double, isWindy: Boolean): ClothingItem? {
+        if (isRaining && precipitation > 0.1) return ClothingItem.RAIN_JACKET
 
         return when {
             temp >= 50 -> null
-            temp >= 25 -> if (weather.isWindy) ClothingItem.WINDBREAKER else null
+            temp >= 25 -> if (isWindy) ClothingItem.WINDBREAKER else null
             temp >= 10 -> ClothingItem.WINDBREAKER  // Wind shell for 10–24°F — NOT insulated
             else -> ClothingItem.INSULATED_JACKET    // Insulated ONLY below 10°F
         }
@@ -122,16 +178,16 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         else -> ClothingItem.THERMAL_TIGHTS
     }
 
-    private fun selectHead(temp: Double, rawTemp: Double, weather: WeatherConditions): ClothingItem? {
+    private fun selectHead(temp: Double, rawTemp: Double, uvIndex: Double, isRaining: Boolean): ClothingItem? {
         // Sun protection is NOT layering (v4.3): the visor/cap sun gates key off
         // the RAW temperature (rawTemp = baseTemp, before the comfort
         // adjustment), never the comfort-adjusted frame — "I run hot" must not
         // put a cap on your head, and "I run cold" must not take one off.
-        if (rawTemp >= 65 && weather.uvIndex > 3) return ClothingItem.VISOR
-        if (rawTemp >= 50 && weather.uvIndex > 3) return ClothingItem.BASEBALL_CAP
+        if (rawTemp >= 65 && uvIndex > 3) return ClothingItem.VISOR
+        if (rawTemp >= 50 && uvIndex > 3) return ClothingItem.BASEBALL_CAP
         // Same item, different job: in rain the cap is rain gear, keyed to rain
         // itself — not a temperature decision. Unchanged.
-        if (weather.isRaining) return ClothingItem.BASEBALL_CAP
+        if (isRaining) return ClothingItem.BASEBALL_CAP
 
         // Warmth headgear below stays on the comfort-adjusted frame (temp).
         return when {
@@ -150,20 +206,19 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         else -> ClothingItem.MITTENS
     }
 
-    private fun selectAccessories(weather: WeatherConditions, temp: Double): List<ClothingItem> {
+    private fun selectAccessories(uvIndex: Double, temp: Double, hourOfDay: Int): List<ClothingItem> {
         val accessories = mutableListOf<ClothingItem>()
         // Sun protection, UV-only: never read the temperature in any frame, so
         // the comfort preference cannot move them (classification audited v4.3).
-        if (weather.uvIndex > 3) accessories.add(ClothingItem.SUNGLASSES)
-        if (weather.uvIndex > 5) accessories.add(ClothingItem.SUNSCREEN)
+        if (uvIndex > 3) accessories.add(ClothingItem.SUNGLASSES)
+        if (uvIndex > 5) accessories.add(ClothingItem.SUNSCREEN)
         if (temp < 30) accessories.add(ClothingItem.NECK_GAITER)
         // Reflective gear for dawn/dusk/night
-        val hour = weather.dateTime.hour
-        if (hour < 7 || hour > 18) accessories.add(ClothingItem.REFLECTIVE_GEAR)
+        if (hourOfDay < 7 || hourOfDay > 18) accessories.add(ClothingItem.REFLECTIVE_GEAR)
         return accessories
     }
 
-    private fun generateTips(weather: WeatherConditions, temp: Double): List<String> {
+    private fun generateTips(temp: Double, isWindy: Boolean, isRaining: Boolean, isHumid: Boolean, uvIndex: Double): List<String> {
         val tips = mutableListOf<String>()
 
         // The key running tip — always show below 50°F
@@ -177,7 +232,7 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         }
 
         // Wind tip
-        if (weather.isWindy && temp < 50) {
+        if (isWindy && temp < 50) {
             tips.add("💨 A wind shell beats a heavy jacket for running. It blocks wind chill while letting you vent excess heat.")
         }
 
@@ -196,17 +251,17 @@ class GetOutfitRecommendationUseCase @Inject constructor() {
         }
 
         // Rain
-        if (weather.isRaining) {
+        if (isRaining) {
             tips.add("🌧️ Wear a cap under your hood to keep rain out of your eyes. Avoid cotton — it retains moisture.")
         }
 
         // Humidity
-        if (weather.isHumid && temp > 60) {
+        if (isHumid && temp > 60) {
             tips.add("💦 High humidity — sweat won't evaporate easily. Wear looser, lighter fabrics and hydrate more.")
         }
 
         // UV
-        if (weather.uvIndex > 6) tips.add("☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.")
+        if (uvIndex > 6) tips.add("☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.")
 
         // Shorts in cold encouragement
         if (temp in 40.0..49.0) {

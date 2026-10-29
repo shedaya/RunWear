@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WeatherOutfitView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
     let weather: WeatherData
@@ -22,91 +23,116 @@ struct WeatherOutfitView: View {
     @State private var hasAppeared = false
 
     var body: some View {
-        ZStack {
-            // Dark background
-            AppTheme.darkBackground
-                .ignoresSafeArea()
+        // Home lives in a NavigationStack (design record §5.2):
+        // the location is the navigation title, the date its
+        // subtitle, and Settings / Shop are toolbar items — the
+        // hero's floating glass pills are gone, and the hand-rolled
+        // overlay "modals" are now real sheet presentations.
+        NavigationStack {
+            ZStack {
+                // Dark background
+                AppTheme.darkBackground
+                    .ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Hero Image Section
-                    heroSection
+                layoutContent
 
-                    // Weather Pills
-                    weatherPillsSection
-                        .padding(.top, -30)
-                        .zIndex(1)
-
-                    // Outfit Recommendations
-                    outfitSection
-                        .padding(.top, 24)
-
-                    // Tips
-                    tipsSection
-                        .padding(.top, 16)
-
-                    Spacer(minLength: 40)
+                // Loading overlay
+                if isRefreshing {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .tint(.white)
                 }
             }
-            .refreshable {
-                onRefresh()
+            .navigationTitle(viewModel.locationName)
+            // The design record's date-as-subtitle needs
+            // navigationSubtitle, which the current iOS SDK marks
+            // unavailable on iPhone (it is a newer-platform API
+            // there) — CI 40394130506 is the evidence. The date
+            // stays visible on the hero's date pill, the title
+            // menu, and the weather detail's context until the
+            // build SDK offers the subtitle on iOS.
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarTitleMenu {
+                Button {
+                    showLocationPicker = true
+                } label: {
+                    Label("Set Location", systemImage: "location")
+                }
             }
-
-            // Loading overlay
-            if isRefreshing {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                ProgressView()
-                    .scaleEffect(1.5)
-                    .tint(.white)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button(action: shareOutfit) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                    Button {
+                        showShop = true
+                    } label: {
+                        Label("Shop", systemImage: "cart")
+                    }
+                }
             }
-
-            // Modals
-            if showSettings {
+            .sheet(isPresented: $showSettings) {
                 SettingsModal(
                     isPresented: $showSettings,
                     temperatureUnit: $viewModel.temperatureUnit,
                     genderPreference: $viewModel.genderPreference,
                     comfortLevel: $viewModel.comfortLevel
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
-
-            if showDatePicker {
+            .sheet(isPresented: $showDatePicker) {
                 DatePickerSheet(
                     selectedDate: $viewModel.selectedDate,
                     isPresented: $showDatePicker
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
                 .onChange(of: viewModel.selectedDate) { _, newDate in
                     viewModel.updateSelectedTime(date: newDate, hour: viewModel.selectedHour)
                 }
             }
-
-            if showTimePicker {
+            .sheet(isPresented: $showTimePicker) {
                 TimePickerSheet(
                     selectedHour: $viewModel.selectedHour,
                     isPresented: $showTimePicker
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
                 .onChange(of: viewModel.selectedHour) { _, newHour in
                     viewModel.updateSelectedTime(date: viewModel.selectedDate, hour: newHour)
                 }
             }
-
-            if showShop {
+            .sheet(isPresented: $showShop) {
                 ShopModal(
                     items: recommendation.allItems,
                     genderPreference: viewModel.genderPreference,
+                    weatherCode: viewModel.selectedWeatherSnapshot?.weatherCode ?? weather.currentWeather.weathercode,
                     isPresented: $showShop
                 )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             }
-
-            if showWeatherDetail, let detail = selectedWeatherDetail {
-                WeatherDetailSheet(
-                    detailType: detail,
-                    isPresented: $showWeatherDetail
-                )
+            .sheet(isPresented: $showWeatherDetail) {
+                if let detail = selectedWeatherDetail {
+                    WeatherDetailSheet(
+                        detailType: detail,
+                        allDetails: allWeatherDetails,
+                        contextLines: weatherContextLines,
+                        isPresented: $showWeatherDetail
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
             }
-
-            if showLocationPicker {
+            .sheet(isPresented: $showLocationPicker) {
                 LocationPickerSheet(
                     isPresented: $showLocationPicker,
                     isUsingGPS: viewModel.isUsingGPS,
@@ -117,6 +143,8 @@ struct WeatherOutfitView: View {
                         viewModel.setManualLocation(coordinate: coordinate, name: name)
                     }
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
         }
         .onAppear {
@@ -126,9 +154,159 @@ struct WeatherOutfitView: View {
         }
     }
 
+    // MARK: - Layouts (design record §5.2, frame f5)
+
+    /// Regular landscape splits across the division region: hero
+    /// pane leading, outfit column trailing
+    /// with the full-weather-detail entry pinned at its foot.
+    /// Regular portrait is the banner + two-column outfit grid.
+    /// Anything else is the original single column, width-capped
+    /// at medium widths.
+    @ViewBuilder private var layoutContent: some View {
+        GeometryReader { geo in
+            if horizontalSizeClass == .regular && geo.size.width > geo.size.height {
+                DuoSplitArrangement {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            heroSection(heightMode: .fill)
+                                .frame(height: geo.size.height * 0.62)
+                        }
+                        .padding(.bottom, 24)
+                    }
+                } secondary: {
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                weatherPillsSection
+                                outfitSection
+                                    .padding(.top, 24)
+                            }
+                            .padding(.bottom, 16)
+                        }
+                        .refreshable { onRefresh() }
+                        fullWeatherEntry
+                    }
+                }
+            } else if horizontalSizeClass == .regular {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        heroSection()
+                        weatherPillsSection
+                            .padding(.top, -30)
+                            .zIndex(1)
+                        outfitGridSection
+                            .padding(.top, 24)
+                        Spacer(minLength: 40)
+                    }
+                }
+                .refreshable { onRefresh() }
+            } else {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        heroSection()
+                        weatherPillsSection
+                            .padding(.top, -30)
+                            .zIndex(1)
+                        outfitSection
+                            .padding(.top, 24)
+                        Spacer(minLength: 40)
+                    }
+                    .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .refreshable { onRefresh() }
+            }
+        }
+    }
+
+    /// The outfit column's pinned foot entry (f5): opens the full
+    /// weather detail for the current conditions.
+    private var fullWeatherEntry: some View {
+        Button {
+            selectedWeatherDetail = .condition(viewModel.currentCondition)
+            showWeatherDetail = true
+        } label: {
+            HStack {
+                Text("Full Weather Detail")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(AppTheme.darkBackground)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Portrait-regular outfit: the same cards in a two-column grid.
+    private var outfitGridSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Recommended Outfit")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+
+            TemperatureBracketBadge(bracket: recommendation.temperatureBracket)
+                .padding(.horizontal, 16)
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(Array(recommendation.allItems.enumerated()), id: \.element.id) { index, item in
+                    DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
+                        .staggeredAnimation(index: 1 + index, isVisible: hasAppeared)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    /// The five metric details the detail sheet tabs between —
+    /// the same values the pills below present.
+    private var allWeatherDetails: [WeatherDetailType] {
+        let snapshot = viewModel.selectedWeatherSnapshot
+        return [
+            .condition(viewModel.currentCondition),
+            .wind(
+                speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
+                direction: snapshot?.windDirectionCompass ?? "N",
+                gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
+            ),
+            .humidity(percentage: snapshot?.humidity ?? 50),
+            .precipitation(percentage: snapshot?.precipitationProbability ?? 0),
+            .uvIndex(value: snapshot?.uvIndex ?? 0)
+        ]
+    }
+
+    /// Context lines for the weather detail's sidebar: where and
+    /// when the numbers on show belong to.
+    private var weatherContextLines: [String] {
+        [
+            viewModel.locationName,
+            navDateString,
+            "\(Int(round(viewModel.currentTemperature)))° · Feels like \(Int(round(viewModel.currentFeelsLike)))°",
+            recommendation.temperatureBracket.description
+        ]
+    }
+
+    private var navDateString: String {
+        let calendar = Calendar.current
+        let date = viewModel.selectedDate
+        if calendar.isDateInToday(date) {
+            return "Today"
+        } else if calendar.isDateInTomorrow(date) {
+            return "Tomorrow"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d"
+        return formatter.string(from: date)
+    }
+
     // MARK: - Hero Section
 
-    private var heroSection: some View {
+    private func heroSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
         HeroImageView(
             locationName: viewModel.locationName,
             temperature: viewModel.currentTemperature,
@@ -139,12 +317,17 @@ struct WeatherOutfitView: View {
             tempBracket: viewModel.currentTempBracket,
             fallbackImageUrl: viewModel.fallbackImageUrl ?? defaultFallbackUrl,
             aiImageUrl: viewModel.heroImageUrl,
-            onSettingsTapped: { withAnimation { showSettings = true } },
+            onSettingsTapped: { showSettings = true },
             onShareTapped: shareOutfit,
-            onLocationTapped: { withAnimation { showLocationPicker = true } },
-            onDateTapped: { withAnimation { showDatePicker = true } },
-            onTimeTapped: { withAnimation { showTimePicker = true } },
-            onNowTapped: { viewModel.resetToNow() }
+            onLocationTapped: { showLocationPicker = true },
+            onDateTapped: { showDatePicker = true },
+            onTimeTapped: { showTimePicker = true },
+            onNowTapped: { viewModel.resetToNow() },
+            heightMode: heightMode,
+            // The navigation container carries the chrome now:
+            // location is the title, Settings/Share are toolbar
+            // items — no floating pills on the hero.
+            showsTopControls: false
         )
     }
 
@@ -173,9 +356,9 @@ struct WeatherOutfitView: View {
             onWindTapped: {
                 let snapshot = viewModel.selectedWeatherSnapshot
                 selectedWeatherDetail = .wind(
-                    speed: (snapshot?.windSpeed ?? weather.currentWeather.windspeed) * 0.621371,
+                    speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
                     direction: snapshot?.windDirectionCompass ?? "N",
-                    gusts: (snapshot?.windGusts ?? weather.currentWeather.windspeed) * 0.621371
+                    gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
                 )
                 withAnimation { showWeatherDetail = true }
             },
@@ -206,26 +389,14 @@ struct WeatherOutfitView: View {
 
     private var outfitSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Section header
+            // Section header — Shop lives in the toolbar now
+            // (design record §5.2); the teal pill is gone.
             HStack {
                 Text("Recommended Outfit")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
 
                 Spacer()
-
-                Button(action: { withAnimation { showShop = true } }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "cart.fill")
-                        Text("Shop")
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(AppTheme.primaryColor)
-                    .cornerRadius(20)
-                }
             }
             .padding(.horizontal, 16)
 
@@ -259,20 +430,6 @@ struct WeatherOutfitView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Tips Section
-
-    private var tipsSection: some View {
-        DarkTipsCard(
-            bracket: recommendation.temperatureBracket,
-            condition: viewModel.currentCondition
-        )
-        .padding(.horizontal, 16)
-        .staggeredAnimation(
-            index: 5 + recommendation.allItems.count + recommendation.tips.count,
-            isVisible: hasAppeared
-        )
     }
 
     // MARK: - Actions
@@ -408,77 +565,6 @@ struct DarkClothingItemCard: View {
     }
 }
 
-struct DarkTipsCard: View {
-    let bracket: TemperatureBracket
-    let condition: WeatherCondition
-
-    var tips: [String] {
-        var result: [String] = []
-
-        switch bracket {
-        case .hot:
-            result.append("Stay hydrated - drink water before, during, and after your run")
-            result.append("Consider running early morning or evening to avoid peak heat")
-        case .warm:
-            result.append("Good conditions for running - enjoy your workout!")
-            result.append("Stay hydrated even if you don't feel thirsty")
-        case .mild:
-            result.append("Perfect running weather for many runners")
-            result.append("You may warm up quickly - dress lighter than expected")
-        case .cool:
-            result.append("Warm up thoroughly before picking up the pace")
-            result.append("Consider bringing a light layer to tie around your waist")
-        case .cold:
-            result.append("Extend your warm-up to prevent injury")
-            result.append("Breathe through a gaiter to warm the air")
-        case .veryCold:
-            result.append("Keep your core warm - the body prioritizes vital organs")
-            result.append("Shorten your run or consider indoor alternatives")
-        case .extreme:
-            result.append("Consider running indoors - frostbite risk is real")
-            result.append("If running outside, tell someone your route")
-        }
-
-        if condition == .rain || condition == .drizzle {
-            result.append("Wear a brimmed cap to keep rain off your face")
-        }
-
-        return result
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundColor(.yellow)
-                Text("Running Tips")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-
-            ForEach(tips, id: \.self) { tip in
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .foregroundColor(AppTheme.primaryColor)
-                    Text(tip)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-    }
-}
-
 // MARK: - Legacy Components (kept for compatibility)
 
 struct WeatherCard: View {
@@ -520,7 +606,7 @@ struct WeatherCard: View {
                     HStack {
                         Image(systemName: "wind")
                             .foregroundColor(AppTheme.textSecondary)
-                        Text("\(Int(weather.windspeed)) km/h")
+                        Text("\(Int(weather.windspeed)) mph")
                             .font(.subheadline)
                             .foregroundColor(AppTheme.textSecondary)
                     }
@@ -563,6 +649,7 @@ struct TemperatureBracketBadge: View {
         case .cool: return 45
         case .cold: return 35
         case .veryCold: return 25
+        case .frigid: return 15
         case .extreme: return 10
         }
     }
@@ -658,78 +745,11 @@ struct GenderOption: View {
     }
 }
 
-struct TipsCard: View {
-    let bracket: TemperatureBracket
-    let condition: WeatherCondition
-
-    var tips: [String] {
-        var result: [String] = []
-
-        switch bracket {
-        case .hot:
-            result.append("Stay hydrated - drink water before, during, and after your run")
-            result.append("Consider running early morning or evening to avoid peak heat")
-            result.append("Wear light-colored clothing to reflect sunlight")
-        case .warm:
-            result.append("Good conditions for running - enjoy your workout!")
-            result.append("Stay hydrated even if you don't feel thirsty")
-        case .mild:
-            result.append("Perfect running weather for many runners")
-            result.append("You may warm up quickly - dress lighter than expected")
-        case .cool:
-            result.append("Warm up thoroughly before picking up the pace")
-            result.append("Consider bringing a light layer to tie around your waist")
-        case .cold:
-            result.append("Extend your warm-up to prevent injury")
-            result.append("Breathe through a gaiter to warm the air")
-        case .veryCold:
-            result.append("Keep your core warm - the body prioritizes vital organs")
-            result.append("Shorten your run or consider indoor alternatives")
-        case .extreme:
-            result.append("Consider running indoors - frostbite risk is real")
-            result.append("If running outside, tell someone your route and expected return time")
-        }
-
-        if condition == .rain || condition == .drizzle {
-            result.append("Wear a brimmed cap to keep rain off your face")
-        }
-
-        return result
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundColor(AppTheme.primaryColor)
-                Text("Running Tips")
-                    .font(.headline)
-                    .foregroundColor(AppTheme.textPrimary)
-            }
-
-            ForEach(tips, id: \.self) { tip in
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .foregroundColor(AppTheme.primaryColor)
-                    Text(tip)
-                        .font(.subheadline)
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.primaryColor.opacity(0.05))
-        .cornerRadius(12)
-        .padding(.horizontal)
-    }
-}
-
 #Preview {
     let viewModel = WeatherViewModel()
     let locationService = LocationService()
 
-    return WeatherOutfitView(
+    WeatherOutfitView(
         viewModel: viewModel,
         locationService: locationService,
         weather: WeatherData(
@@ -741,11 +761,14 @@ struct TipsCard: View {
                 weathercode: 0,
                 isDay: 1
             ),
-            hourly: nil
+            hourly: nil,
+            timezone: nil,
+            currentDetail: nil
         ),
         recommendation: OutfitRecommendationService.shared.getRecommendation(
             for: 59,
-            condition: .clear
+            rawTemperature: 59,
+            isRaining: false
         ),
         isRefreshing: false,
         onRefresh: {}

@@ -291,14 +291,17 @@ struct WatchClothingRow: View {
             weathercode: 3,
             isDay: 1
         ),
-        hourly: nil
+        hourly: nil,
+        timezone: nil,
+        currentDetail: nil
     )
     let recommendation = OutfitRecommendationService.shared.getRecommendation(
         for: weather.currentWeather.temperatureFahrenheit,
-        condition: weather.currentWeather.condition
+        rawTemperature: weather.currentWeather.temperatureFahrenheit,
+        isRaining: false
     )
 
-    return WatchOutfitView(
+    WatchOutfitView(
         viewModel: viewModel,
         weather: weather,
         recommendation: recommendation

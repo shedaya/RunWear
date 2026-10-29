@@ -1,0 +1,194 @@
+# RunWear iOS test gate — builds the shared engine framework, then the
+# app + watch, and runs the full Swift test suite (the v4.3 outfit-rules
+# sweep, the Stage 1 engine-boundary fixtures, and the Stage 2
+# cross-platform fixture replay) on a simulator.
+#
+# Stage 2 (2026-10-29): the decision layer is a shared Kotlin module
+# (:engine in RunWear-android) consumed as the RunWearEngine
+# XCFramework. The `engine` job builds it on macos-15 (Xcode 16 — the
+# toolchain Kotlin 2.0.21 supports) and hands it to the test job as an
+# artifact; the framework directory is gitignored and never committed.
+#
+# Triggers: workflow_dispatch works only once this file exists on
+# the default branch (GitHub registers dispatchable workflows
+# there). During Stage 2 verification (2026-10-29) the push trigger
+# below — scoped to the stage-2 branch ONLY — is how the gate runs:
+# pushing the branch runs the suite. Drop the push trigger when the
+# branch lands (the same carried-forward item from Stage 1, whose
+# branch trigger this replaces); afterwards dispatch manually,
+# batched, since macOS minutes bill at 10x on private repos.
+
+name: iOS Tests (GitHub Actions)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ios/stage2-kmp-2026-10-29
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: Build RunWearEngine.xcframework (shared :engine module)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out the commit to verify
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # No setup-android action: v3 fails on current runner images
+      # (verified 2026-10-29). GitHub macOS images ship the Android SDK
+      # with licenses pre-accepted; AGP downloads any missing platform.
+
+      - name: Build the XCFramework
+        run: |
+          xcodebuild -version
+          set +e
+          set -o pipefail
+          bash scripts/build-engine-framework.sh 2>&1 | tee "$RUNNER_TEMP/engine-build.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            python3 - "$RUNNER_TEMP/engine-build.log" <<'PYEOF'
+          import sys, re
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          tail = lines[-250:]
+          start = 0
+          for i, l in enumerate(tail):
+              if 'What went wrong' in l or l.startswith('FAILURE'):
+                  start = i
+                  break
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          out = []
+          for l in tail[start:]:
+              if re.match(r'\s+at ', l):
+                  continue
+              if l.strip():
+                  out.append(l)
+              if len(out) >= 9:
+                  break
+          for l in out:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
+          fi
+          exit "$code"
+
+      - name: Upload the XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          if-no-files-found: error
+
+  test:
+    name: Build and test (app + watch + RunWearTests)
+    needs: engine
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    env:
+      SCHEME: RunWear
+      PROJECT: RunWear-iOS/RunWear.xcodeproj
+
+    steps:
+      - name: Check out the commit to verify
+        uses: actions/checkout@v4
+
+      - name: Download the XCFramework
+        uses: actions/download-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          git rev-parse HEAD
+          ls RunWear-iOS/Frameworks/RunWearEngine.xcframework
+
+      - name: Pick an available iPhone simulator
+        run: |
+          set -euo pipefail
+          UDID="$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and "iPhone" in d.get("name", ""):
+                      print(d["udid"])
+                      sys.exit(0)
+          sys.exit(1)
+          ')"
+          echo "Using simulator $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+
+      - name: Build and run the test suite
+        run: |
+          set +e
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -resultBundlePath "$RUNNER_TEMP/RunWearTests.xcresult" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            python3 - "$RUNNER_TEMP/xcodebuild-test.log" <<'PYEOF'
+          import sys
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          errs, fails, lds = [], [], []
+          for l in lines:
+              ls = l.strip()
+              if 'error:' in ls and ls not in errs:
+                  errs.append(ls)
+              if (("Test Case" in ls and "failed" in ls) or "XCTAssert" in ls) and ls not in fails:
+                  fails.append(ls)
+              if ('Undefined symbols' in ls or 'symbol(s) not found' in ls or ls.startswith('ld:') or ls.startswith('"_') or 'referenced from:' in ls) and ls not in lds:
+                  lds.append(ls)
+          out = (errs[:4] + lds[:4] + fails[:2])[:9] or ['xcodebuild test failed with no error: lines captured']
+          for l in out:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
+          fi
+          exit "$code"
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import os, re
+          log = os.path.join(os.environ['RUNNER_TEMP'], 'xcodebuild-test.log')
+          text = open(log, errors='replace').read() if os.path.exists(log) else ''
+          executed = re.findall(r"Executed (\d+) tests?, with (\d+) failures?", text)
+          lines = [l for l in text.splitlines() if 'Test Suite' in l and ('passed' in l or 'failed' in l)]
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write('## iOS test results\n\n')
+              for l in lines[-8:]:
+                  out.write(f'- {l.strip()}\n')
+              if executed:
+                  out.write(f"\n**Final suite totals: {executed[-1][0]} tests, {executed[-1][1]} failures**\n")
+          print(executed[-1] if executed else 'no test counts found in log')
+          EOF
+
+      - name: Upload the test log and result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runwear-ios-test-results
+          path: |
+            ${{ runner.temp }}/xcodebuild-test.log
+            ${{ runner.temp }}/RunWearTests.xcresult
+          if-no-files-found: ignore
