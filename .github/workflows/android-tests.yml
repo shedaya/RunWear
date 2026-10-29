@@ -1,0 +1,188 @@
+name: Android Tests
+
+# Stage 2 (2026-10-29): the Android side of the parity gate. There was no
+# Android CI before this — the suite ran on a local VM that also hosts
+# other builds. This workflow runs the full unit-test suite for every
+# module (including the 209,600-scenario engine sweep in :shared and the
+# cross-platform fixture test) and keeps the JUnit XML as durable evidence.
+#
+# Pinned to ubuntu-24.04: the first run on ubuntu-latest (migrating to
+# Ubuntu 26 images) failed in ~14s inside SDK setup before any test ran.
+# The SDK step below is diagnostic + continue-on-error — AGP downloads
+# missing SDK components itself once licenses are accepted, so a flaky
+# sdkmanager must never be the gate.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      generate_fixtures:
+        description: 'Regenerate engine_fixtures.json from the Kotlin engine and commit it back'
+        type: boolean
+        default: false
+
+# contents: write exists for exactly one conditional step — the fixture
+# generation dispatch commits the regenerated fixture back to the branch
+# (artifacts are not downloadable from every environment that monitors
+# this gate). Normal push runs never write.
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Android unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # No setup-android action: v3 fails on current runner images
+      # (verified 2026-10-29 on ubuntu-24.04 and macos-15 — the step
+      # dies in ~10s before anything else runs). GitHub images ship the
+      # Android SDK with licenses pre-accepted; AGP downloads any
+      # missing platform itself. The step below is diagnostic only.
+      - name: SDK platforms (diagnostic)
+        continue-on-error: true
+        run: |
+          set -x
+          java -version
+          echo "ANDROID_HOME=$ANDROID_HOME ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_HOME" || true
+          ls "$ANDROID_HOME/platforms" || true
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
+          "$SDKMANAGER" --version || true
+          yes | "$SDKMANAGER" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" || true
+          ls "$ANDROID_HOME/platforms" || true
+
+      - name: Run unit tests + debug assemble
+        working-directory: RunWear-android
+        run: |
+          set +e
+          set -o pipefail
+          # Generation mode: explicit dispatch input, OR the fixture file
+          # is absent (bootstrap — the generator creates it and the
+          # commit-back step below lands it; once committed, this stays
+          # off and the assertion test is the gate).
+          if [ "${{ inputs.generate_fixtures }}" = "true" ] || [ ! -f ../RunWear-iOS/RunWearTests/engine_fixtures.json ]; then
+            export RUNWEAR_FIXTURE_WRITE=1
+            echo "RUNWEAR_FIXTURE_WRITE=1 (generation mode)"
+          fi
+          ./gradlew :engine:testDebugUnitTest :shared:testDebugUnitTest \
+            :app:testDebugUnitTest :wear:testDebugUnitTest :app:assembleDebug \
+            --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            echo '## Gradle failure (tail)' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -120 "$RUNNER_TEMP/gradle.log" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            # Also surface the failure as check annotations (readable via
+            # the public API in environments without log access).
+            python3 - "$RUNNER_TEMP/gradle.log" <<'PYEOF'
+          import sys, re, glob
+          import xml.etree.ElementTree as ET
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          tail = lines[-250:]
+          start = 0
+          for i, l in enumerate(tail):
+              if 'What went wrong' in l or l.startswith('FAILURE'):
+                  start = i
+                  break
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          # GitHub caps annotations per step (~10): dense lines only —
+          # the Gradle failure header, then the failing tests parsed
+          # from the JUnit XML (names + first failure-message line).
+          out = []
+          for l in tail[start:]:
+              if re.match(r'\s+at ', l):
+                  continue
+              if l.strip():
+                  out.append(l)
+              if len(out) >= 4:
+                  break
+          tfails = []
+          import os
+          ws = os.environ.get('GITHUB_WORKSPACE', '.')
+          for f in glob.glob(ws + '/RunWear-android/**/build/test-results/**/TEST-*.xml', recursive=True):
+              try:
+                  root = ET.parse(f).getroot()
+              except Exception:
+                  continue
+              for tc in root.iter('testcase'):
+                  for bad in list(tc):
+                      if bad.tag in ('failure', 'error'):
+                          m = (bad.get('message') or '').strip().splitlines()
+                          tfails.append(f"TESTFAIL {root.get('name')}#{tc.get('name')}: {m[0] if m else bad.tag}")
+                          break
+          for l in (out + tfails[:5])[:9]:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
+          fi
+          exit "$code"
+
+      - name: Publish test summary
+        if: always()
+        run: |
+          python3 - <<'EOF'
+          import glob, os, xml.etree.ElementTree as ET
+          rows, tot_t, tot_f, tot_e, tot_s = [], 0, 0, 0, 0
+          for path in sorted(glob.glob('RunWear-android/**/build/test-results/**/TEST-*.xml', recursive=True)):
+              try:
+                  r = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              t, f, e, s = (int(r.get(k, 0)) for k in ('tests', 'failures', 'errors', 'skipped'))
+              tot_t += t; tot_f += f; tot_e += e; tot_s += s
+              rows.append(f"| {r.get('name')} | {t} | {f} | {e} | {s} |")
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
+              out.write('## Android unit test results\n\n')
+              out.write('| Suite | Tests | Failures | Errors | Skipped |\n|---|---|---|---|---|\n')
+              out.write('\n'.join(rows) + '\n')
+              out.write(f"\n**Total: {tot_t} tests, {tot_f} failures, {tot_e} errors, {tot_s} skipped**\n")
+          print(f"total={tot_t} failures={tot_f} errors={tot_e} skipped={tot_s}")
+          EOF
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-results
+          path: |
+            RunWear-android/**/build/test-results/**/*.xml
+            RunWear-android/**/build/outputs/androidTest-results/**
+          if-no-files-found: warn
+
+      - name: Upload generated engine fixtures
+        if: ${{ inputs.generate_fixtures }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-fixtures
+          path: RunWear-iOS/RunWearTests/engine_fixtures.json
+          if-no-files-found: error
+
+      - name: Commit generated fixtures back to the branch
+        if: always()
+        run: |
+          # Lands the fixture only when generation actually changed it
+          # (bootstrap creation, or a dispatch regeneration). In normal
+          # runs the file is untouched and this step is a no-op; the bot
+          # commit it creates re-triggers the gate with the fixture
+          # present, and that run generates nothing — no loop.
+          if git status --porcelain -- RunWear-iOS/RunWearTests/engine_fixtures.json | grep -q .; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add RunWear-iOS/RunWearTests/engine_fixtures.json
+            git commit -m "[ci] Regenerate engine_fixtures.json from the shared :engine module"
+            git push origin "HEAD:${{ github.ref_name }}"
+          else
+            echo "Fixture unchanged; nothing to commit back."
+          fi
