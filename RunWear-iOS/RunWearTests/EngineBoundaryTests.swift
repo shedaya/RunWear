@@ -81,12 +81,13 @@ final class EngineBoundaryTests: XCTestCase {
 
     @MainActor
     func testFeelsLikeDrivesTheEngine_notActualTemperature() {
-        // 55°F actual / 39°F feels-like: dressed for the ACTUAL
-        // temperature this is shorts + short sleeves; dressed for
-        // feels-like (Android's frame) it is light tights + a light
-        // long sleeve. Before Stage 1 the engine got the actual.
+        // 55°F actual / 41°F feels-like: dressed for the ACTUAL
+        // temperature this is shorts + short sleeves (mild bracket);
+        // dressed for feels-like (Android's frame) it is light
+        // tights + a light long sleeve (cool bracket). Before Stage 1
+        // the engine got the actual.
         let vm = makeViewModel(hourly: makeHourly([
-            HourSpec(time: "2026-10-29T07:00", tempC: 13, feelsC: 4)
+            HourSpec(time: "2026-10-29T07:00", tempC: 13, feelsC: 5)
         ]))
         let rec = recommend(vm, day: date(2026, 10, 29), hour: 7)
         XCTAssertEqual(rec.bottom.key, "LIGHT_TIGHTS")
