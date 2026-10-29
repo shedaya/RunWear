@@ -47,8 +47,8 @@ android {
         applicationId = "com.runwear.wear"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "1.2.3"
+        versionCode = 18
+        versionName = "1.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
