@@ -157,7 +157,7 @@ struct WeatherOutfitView: View {
     // MARK: - Layouts (design record §5.2, frame f5)
 
     /// Regular landscape splits across the division region: hero
-    /// pane leading (tips card beneath), outfit column trailing
+    /// pane leading, outfit column trailing
     /// with the full-weather-detail entry pinned at its foot.
     /// Regular portrait is the banner + two-column outfit grid.
     /// Anything else is the original single column, width-capped
@@ -170,7 +170,6 @@ struct WeatherOutfitView: View {
                         VStack(spacing: 16) {
                             heroSection(heightMode: .fill)
                                 .frame(height: geo.size.height * 0.62)
-                            tipsSection
                         }
                         .padding(.bottom, 24)
                     }
@@ -197,8 +196,6 @@ struct WeatherOutfitView: View {
                             .zIndex(1)
                         outfitGridSection
                             .padding(.top, 24)
-                        tipsSection
-                            .padding(.top, 16)
                         Spacer(minLength: 40)
                     }
                 }
@@ -212,8 +209,6 @@ struct WeatherOutfitView: View {
                             .zIndex(1)
                         outfitSection
                             .padding(.top, 24)
-                        tipsSection
-                            .padding(.top, 16)
                         Spacer(minLength: 40)
                     }
                     .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
@@ -437,20 +432,6 @@ struct WeatherOutfitView: View {
         }
     }
 
-    // MARK: - Tips Section
-
-    private var tipsSection: some View {
-        DarkTipsCard(
-            bracket: recommendation.temperatureBracket,
-            condition: viewModel.currentCondition
-        )
-        .padding(.horizontal, 16)
-        .staggeredAnimation(
-            index: 5 + recommendation.allItems.count + recommendation.tips.count,
-            isVisible: hasAppeared
-        )
-    }
-
     // MARK: - Actions
 
     private func shareOutfit() {
@@ -581,80 +562,6 @@ struct DarkClothingItemCard: View {
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
         .padding(.horizontal, 16)
-    }
-}
-
-struct DarkTipsCard: View {
-    let bracket: TemperatureBracket
-    let condition: WeatherCondition
-
-    var tips: [String] {
-        var result: [String] = []
-
-        switch bracket {
-        case .hot:
-            result.append("Stay hydrated - drink water before, during, and after your run")
-            result.append("Consider running early morning or evening to avoid peak heat")
-        case .warm:
-            result.append("Good conditions for running - enjoy your workout!")
-            result.append("Stay hydrated even if you don't feel thirsty")
-        case .mild:
-            result.append("Perfect running weather for many runners")
-            result.append("You may warm up quickly - dress lighter than expected")
-        case .cool:
-            result.append("Warm up thoroughly before picking up the pace")
-            result.append("Consider bringing a light layer to tie around your waist")
-        case .cold:
-            result.append("Extend your warm-up to prevent injury")
-            result.append("Breathe through a gaiter to warm the air")
-        case .veryCold:
-            result.append("Keep your core warm - the body prioritizes vital organs")
-            result.append("Shorten your run or consider indoor alternatives")
-        case .frigid:
-            result.append("Protect your hands and head - mittens and a warm hat are essential")
-            result.append("Layer up so you can vent heat once you warm up")
-        case .extreme:
-            result.append("Consider running indoors - frostbite risk is real")
-            result.append("If running outside, tell someone your route")
-        }
-
-        if condition == .rain || condition == .drizzle {
-            result.append("Wear a brimmed cap to keep rain off your face")
-        }
-
-        return result
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundColor(.yellow)
-                Text("Running Tips")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-
-            ForEach(tips, id: \.self) { tip in
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .foregroundColor(AppTheme.primaryColor)
-                    Text(tip)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
     }
 }
 
@@ -835,76 +742,6 @@ struct GenderOption: View {
                 .opacity(isSelected ? 1.0 : 0.45)
         }
         .buttonStyle(PlainButtonStyle())
-    }
-}
-
-struct TipsCard: View {
-    let bracket: TemperatureBracket
-    let condition: WeatherCondition
-
-    var tips: [String] {
-        var result: [String] = []
-
-        switch bracket {
-        case .hot:
-            result.append("Stay hydrated - drink water before, during, and after your run")
-            result.append("Consider running early morning or evening to avoid peak heat")
-            result.append("Wear light-colored clothing to reflect sunlight")
-        case .warm:
-            result.append("Good conditions for running - enjoy your workout!")
-            result.append("Stay hydrated even if you don't feel thirsty")
-        case .mild:
-            result.append("Perfect running weather for many runners")
-            result.append("You may warm up quickly - dress lighter than expected")
-        case .cool:
-            result.append("Warm up thoroughly before picking up the pace")
-            result.append("Consider bringing a light layer to tie around your waist")
-        case .cold:
-            result.append("Extend your warm-up to prevent injury")
-            result.append("Breathe through a gaiter to warm the air")
-        case .veryCold:
-            result.append("Keep your core warm - the body prioritizes vital organs")
-            result.append("Shorten your run or consider indoor alternatives")
-        case .frigid:
-            result.append("Protect your hands and head - mittens and a warm hat are essential")
-            result.append("Layer up so you can vent heat once you warm up")
-        case .extreme:
-            result.append("Consider running indoors - frostbite risk is real")
-            result.append("If running outside, tell someone your route and expected return time")
-        }
-
-        if condition == .rain || condition == .drizzle {
-            result.append("Wear a brimmed cap to keep rain off your face")
-        }
-
-        return result
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundColor(AppTheme.primaryColor)
-                Text("Running Tips")
-                    .font(.headline)
-                    .foregroundColor(AppTheme.textPrimary)
-            }
-
-            ForEach(tips, id: \.self) { tip in
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .foregroundColor(AppTheme.primaryColor)
-                    Text(tip)
-                        .font(.subheadline)
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.primaryColor.opacity(0.05))
-        .cornerRadius(12)
-        .padding(.horizontal)
     }
 }
 
