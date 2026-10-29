@@ -20,6 +20,13 @@
             android:name="com.google.android.wearable"
             android:required="true" />
 
+        <!-- Standalone Wear OS app: ships as its own Wear-typed Play
+             release, not as an embedded micro-APK inside the phone bundle
+             (wear-os-distribution-playbook.md). -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+
         <activity
             android:name=".presentation.MainActivity"
             android:exported="true"
