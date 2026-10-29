@@ -134,7 +134,7 @@ jobs:
 
       - name: Build and run the test suite
         run: |
-          set -euo pipefail
+          set +e
           set -o pipefail
           xcodebuild test \
             -project "$PROJECT" \
@@ -142,6 +142,26 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIM_UDID" \
             -resultBundlePath "$RUNNER_TEMP/RunWearTests.xcresult" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log"
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            python3 - "$RUNNER_TEMP/xcodebuild-test.log" <<'PYEOF'
+          import sys
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          errs, fails = [], []
+          for l in lines:
+              ls = l.strip()
+              if 'error:' in ls and ls not in errs:
+                  errs.append(ls)
+              if (("Test Case" in ls and "failed" in ls) or "XCTAssert" in ls) and ls not in fails:
+                  fails.append(ls)
+          out = (errs[:6] + fails[:3])[:9] or ['xcodebuild test failed with no error: lines captured']
+          for l in out:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
+          fi
+          exit "$code"
 
       - name: Publish test summary
         if: always()

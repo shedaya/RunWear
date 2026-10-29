@@ -61,6 +61,22 @@ jobs:
           if ! tail -5 xcodebuild.log | grep -q "BUILD SUCCEEDED"; then
             echo "=================== xcodebuild.log tail (diagnostics) ==================="
             tail -220 xcodebuild.log
+            python3 - xcodebuild.log <<'PYEOF'
+          import sys
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          errs, fails = [], []
+          for l in lines:
+              ls = l.strip()
+              if 'error:' in ls and ls not in errs:
+                  errs.append(ls)
+              if (("Test Case" in ls and "failed" in ls) or "XCTAssert" in ls) and ls not in fails:
+                  fails.append(ls)
+          out = (errs[:6] + fails[:3])[:9] or ['xcodebuild failed with no error: lines captured']
+          for l in out:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
             exit 1
           fi
 
@@ -82,6 +98,22 @@ jobs:
           if ! tail -5 xcodebuild-watch.log | grep -q "BUILD SUCCEEDED"; then
             echo "=================== xcodebuild-watch.log tail (diagnostics) ==================="
             tail -220 xcodebuild-watch.log
+            python3 - xcodebuild-watch.log <<'PYEOF'
+          import sys
+          lines = open(sys.argv[1], errors='replace').read().splitlines()
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          errs, fails = [], []
+          for l in lines:
+              ls = l.strip()
+              if 'error:' in ls and ls not in errs:
+                  errs.append(ls)
+              if (("Test Case" in ls and "failed" in ls) or "XCTAssert" in ls) and ls not in fails:
+                  fails.append(ls)
+          out = (errs[:6] + fails[:3])[:9] or ['xcodebuild failed with no error: lines captured']
+          for l in out:
+              print(f"::error::{esc(l[:900])}")
+          PYEOF
             exit 1
           fi
 
