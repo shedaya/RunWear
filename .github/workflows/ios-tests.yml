@@ -57,9 +57,9 @@ jobs:
           code=${PIPESTATUS[0]}
           if [ "$code" -ne 0 ]; then
             python3 - "$RUNNER_TEMP/engine-build.log" <<'PYEOF'
-          import sys
+          import sys, re
           lines = open(sys.argv[1], errors='replace').read().splitlines()
-          tail = lines[-120:]
+          tail = lines[-250:]
           start = 0
           for i, l in enumerate(tail):
               if 'What went wrong' in l or l.startswith('FAILURE'):
@@ -67,7 +67,15 @@ jobs:
                   break
           def esc(s):
               return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
-          for l in tail[start:start + 14]:
+          out = []
+          for l in tail[start:]:
+              if re.match(r'\s+at ', l):
+                  continue
+              if l.strip():
+                  out.append(l)
+              if len(out) >= 9:
+                  break
+          for l in out:
               print(f"::error::{esc(l[:900])}")
           PYEOF
           fi
