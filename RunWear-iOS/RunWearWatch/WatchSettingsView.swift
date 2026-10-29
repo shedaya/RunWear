@@ -151,11 +151,11 @@ private struct WatchComfortSlider: View {
 
     private func comfortColor(_ level: ComfortLevel) -> Color {
         switch level {
-        case .veryCold, .cold, .slightlyCold:
+        case .veryCold, .cold:
             return .blue
         case .neutral:
             return .green
-        case .slightlyWarm, .warm, .veryWarm:
+        case .warm, .veryWarm:
             return .orange
         }
     }
