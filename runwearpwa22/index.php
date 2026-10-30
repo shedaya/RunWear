@@ -31,15 +31,14 @@
     <link rel="apple-touch-icon" sizes="72x72" href="icon-72.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://images.unsplash.com">
 
-    <!-- Preload default hero images for instant display -->
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop">
-    <link rel="preload" as="image" href="https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop">
+    <!-- Preload default hero images for instant display (bundled pool photos, one per bracket's CLEAR cell) -->
+    <link rel="preload" as="image" href="hero_fallback/hot_clear.webp">
+    <link rel="preload" as="image" href="hero_fallback/warm_clear.webp">
+    <link rel="preload" as="image" href="hero_fallback/mild_clear.webp">
+    <link rel="preload" as="image" href="hero_fallback/cool_clear.webp">
+    <link rel="preload" as="image" href="hero_fallback/cold_clear.webp">
+    <link rel="preload" as="image" href="hero_fallback/freezing_clear.webp">
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3398,45 +3397,48 @@
         // ============ SUPABASE HERO IMAGE SERVICE ============
         const SUPABASE_URL = 'https://ebicqznlcjbqcukjfzcf.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4';
-        const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop';
+        const PLACEHOLDER_IMAGE = 'hero_fallback/mild_clear.webp';
 
-        // Default hero images by temperature bracket AND weather condition (2D matrix)
+        // Default hero images by temperature bracket AND weather condition (2D matrix).
+        // Since 2026-10-30 these are the SAME approved AI pool photos the Android app
+        // bundles (hero_fallback/ static files served with the site) — no more remote
+        // Unsplash stock. Cell-for-cell identical to the Android fallback table.
         const DEFAULT_HERO_IMAGES = {
             hot: {
-                clear: 'https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop',   // Tank top, bright sunny
-                cloudy: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop',  // Summer overcast
-                rain: 'https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop',    // Summer rain run
+                clear: 'hero_fallback/hot_clear.webp',   // MALE_CLEAR_HOT_MIDDAY_v1070
+                cloudy: 'hero_fallback/hot_cloudy.webp',  // MALE_CLOUDY_HOT_DUSK_v2
+                rain: 'hero_fallback/hot_rain.webp',    // FEMALE_RAINY_HOT_DAWN_v6
                 snow: null  // Not possible when hot
             },
             warm: {
-                clear: 'https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop',   // T-shirt sunny
-                cloudy: 'https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop',     // Warm overcast
-                rain: 'https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop',    // Warm rain
+                clear: 'hero_fallback/warm_clear.webp',   // MALE_CLEAR_WARM_MIDDAY_v3
+                cloudy: 'hero_fallback/warm_cloudy.webp',     // MALE_CLOUDY_WARM_DAWN_v5
+                rain: 'hero_fallback/warm_rain.webp',    // MALE_RAINY_WARM_DUSK_v5
                 snow: null  // Not possible when warm
             },
             mild: {
-                clear: 'https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop',      // Light layers sunny
-                cloudy: 'https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop',     // Mild overcast
-                rain: 'https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop',    // Spring/fall rain
-                snow: 'https://images.unsplash.com/photo-1517483000871-1dbf64a6e1c6?w=800&h=1200&fit=crop'     // Light snow
+                clear: 'hero_fallback/mild_clear.webp',      // FEMALE_CLEAR_MILD_DUSK_v6
+                cloudy: 'hero_fallback/mild_cloudy.webp',     // FEMALE_CLOUDY_MILD_MIDDAY_v3
+                rain: 'hero_fallback/mild_rain.webp',    // FEMALE_RAIN_MILD_DUSK_v4
+                snow: 'hero_fallback/mild_snow.webp'     // FEMALE_SNOWY_MILD_MIDDAY_v3
             },
             cool: {
-                clear: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop',   // Long sleeves sunny
-                cloudy: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop',  // Cool overcast
-                rain: 'https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop',    // Cool rainy
-                snow: 'https://images.unsplash.com/photo-1517483000871-1dbf64a6e1c6?w=800&h=1200&fit=crop'     // Cool snow
+                clear: 'hero_fallback/cool_clear.webp',   // MALE_CLEAR_COOL_DUSK_v2
+                cloudy: 'hero_fallback/cool_cloudy.webp',  // FEMALE_CLOUDY_COOL_MIDDAY
+                rain: 'hero_fallback/cool_rain.webp',    // FEMALE_RAIN_COOL_MIDDAY_v3
+                snow: 'hero_fallback/cool_snow.webp'     // FEMALE_SNOW_COOL_MIDDAY_v3
             },
             cold: {
-                clear: 'https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop',   // Jacket sunny winter
-                cloudy: 'https://images.unsplash.com/photo-1485727749690-d091e8284ef3?w=800&h=1200&fit=crop',  // Cold overcast
-                rain: 'https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop',    // Cold rain/sleet
-                snow: 'https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=800&h=1200&fit=crop'     // Snowy run
+                clear: 'hero_fallback/cold_clear.webp',   // UNISEX_CLEAR_COLD_DUSK_v4
+                cloudy: 'hero_fallback/cold_cloudy.webp',  // FEMALE_CLOUDY_COLD_MIDDAY_v3
+                rain: 'hero_fallback/cold_rain.webp',    // MALE_RAIN_COLD_MIDDAY_v2
+                snow: 'hero_fallback/cold_snow.webp'     // FEMALE_SNOW_COLD_DUSK_v5
             },
             freezing: {
-                clear: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop',      // Winter gear sunny
-                cloudy: 'https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop',     // Freezing overcast
-                rain: 'https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop',    // Freezing rain/sleet
-                snow: 'https://images.unsplash.com/photo-1516410529446-2c777cb7366d?w=800&h=1200&fit=crop'     // Heavy snow winter
+                clear: 'hero_fallback/freezing_clear.webp',      // MALE_CLEAR_FREEZING_DUSK_v1160
+                cloudy: 'hero_fallback/freezing_cloudy.webp',     // FEMALE_CLOUDY_FREEZING_MIDDAY_v1177
+                rain: 'hero_fallback/freezing_rain.webp',    // FEMALE_RAINY_FREEZING_MIDDAY_v5
+                snow: 'hero_fallback/freezing_snow.webp'     // MALE_SNOWY_FREEZING_NIGHT_v1
             }
         };
 
