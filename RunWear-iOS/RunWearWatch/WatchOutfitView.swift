@@ -232,21 +232,42 @@ struct WatchWeatherCard: View {
 
 // MARK: - Watch Clothing Row
 
+/// The clothing row's glyph tile: the item's SF Symbol rendered as
+/// an IMAGE — never the symbol's name as text. (The row opened with
+/// `Text(item.icon)`, which printed clipped fragments of the symbol
+/// name — "tshirt.f…" — on every row: the R-05 defect class, which
+/// survived on the watch after the phone fix; RW-6.1.) A dedicated
+/// view so the test target can pin the rendering contract on the
+/// exact view the row composes.
+struct WatchClothingGlyph: View {
+    let item: ClothingItem
+
+    var body: some View {
+        Image(systemName: item.icon)
+            .font(.system(size: 18))
+            .foregroundColor(.white)
+            .frame(width: 32, height: 32)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.white.opacity(0.1))
+            )
+    }
+}
+
 struct WatchClothingRow: View {
     let item: ClothingItem
     var category: String? = nil
     var gender: GenderPreference = .unisex
 
+    /// The row's glyph — the pinned seam for RW-6.1: the body below
+    /// composes exactly this view, and the test target asserts its
+    /// rendered content is the symbol image, not the name string.
+    var glyph: WatchClothingGlyph { WatchClothingGlyph(item: item) }
+
     var body: some View {
         HStack(spacing: 8) {
-            // Icon
-            Text(item.icon)
-                .font(.system(size: 18))
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.1))
-                )
+            // Icon — SF Symbol image (see WatchClothingGlyph)
+            glyph
 
             VStack(alignment: .leading, spacing: 0) {
                 if let category = category {
