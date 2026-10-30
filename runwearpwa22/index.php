@@ -3319,14 +3319,22 @@
         }
 
         // ============ WEATHER API ============
+        // Coarse-location posture (2026-10-30, parity with the native apps'
+        // WeatherService/WeatherRepository coarseCoordinate): the outbound
+        // weather query carries coordinates rounded to 1 decimal place
+        // (~11 km). The lat/lon callers pass in — and everything stored or
+        // displayed — stay full precision; rounding happens only here, at
+        // the request boundary.
+        const coarseCoordinate = (v) => Math.round(v * 10) / 10;
+
         async function fetchWeather(lat, lon, date) {
             const isToday = isSameDay(date, new Date()) && date.getHours() === new Date().getHours();
             const unit = state.useCelsius ? 'celsius' : 'fahrenheit';
             const windUnit = state.useCelsius ? 'kmh' : 'mph';
-            
+
             const params = new URLSearchParams({
-                latitude: lat,
-                longitude: lon,
+                latitude: coarseCoordinate(lat),
+                longitude: coarseCoordinate(lon),
                 current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
                 hourly: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
                 temperature_unit: unit,
