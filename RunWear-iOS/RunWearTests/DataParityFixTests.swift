@@ -1,6 +1,4 @@
 import XCTest
-import CoreLocation
-@testable import RunWear
 
 /// Pins for the 2026-10-30 iOS data-parity audit fixes (the items
 /// the Oct 28 register's Stage 1/2 passes had NOT reached):
