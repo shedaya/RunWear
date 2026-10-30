@@ -15,7 +15,6 @@ struct WeatherOutfitView: View {
     @State private var showDatePicker = false
     @State private var showTimePicker = false
     @State private var showShop = false
-    @State private var showWeatherDetail = false
     @State private var showLocationPicker = false
     @State private var selectedWeatherDetail: WeatherDetailType?
 
@@ -120,17 +119,21 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showWeatherDetail) {
-                if let detail = selectedWeatherDetail {
-                    WeatherDetailSheet(
-                        detailType: detail,
-                        allDetails: allWeatherDetails,
-                        contextLines: weatherContextLines,
-                        isPresented: $showWeatherDetail
-                    )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                }
+            // Item-based, not isPresented + if-let: in the old
+            // two-state form the sheet could evaluate its content
+            // before the selection landed and present an empty
+            // (white) sheet -- the blank UV overlay of 2026-10-29.
+            // With .sheet(item:) the content exists exactly when
+            // a detail does.
+            .sheet(item: $selectedWeatherDetail) { detail in
+                WeatherDetailSheet(
+                    detailType: detail,
+                    allDetails: allWeatherDetails,
+                    contextLines: weatherContextLines,
+                    isPresented: weatherDetailPresented
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showLocationPicker) {
                 LocationPickerSheet(
@@ -224,7 +227,6 @@ struct WeatherOutfitView: View {
     private var fullWeatherEntry: some View {
         Button {
             selectedWeatherDetail = .condition(viewModel.currentCondition)
-            showWeatherDetail = true
         } label: {
             HStack {
                 Text("Full Weather Detail")
@@ -278,6 +280,18 @@ struct WeatherOutfitView: View {
             .precipitation(percentage: snapshot?.precipitationProbability ?? 0),
             .uvIndex(value: snapshot?.uvIndex ?? 0)
         ]
+    }
+
+    /// The detail sheet's isPresented face. Presentation itself is
+    /// driven by the selection (sheet(item:)); the sheet's own
+    /// dismiss writes false here, which clears the selection.
+    private var weatherDetailPresented: Binding<Bool> {
+        Binding(
+            get: { selectedWeatherDetail != nil },
+            set: { presented in
+                if !presented { selectedWeatherDetail = nil }
+            }
+        )
     }
 
     /// Context lines for the weather detail's sidebar: where and
@@ -351,7 +365,6 @@ struct WeatherOutfitView: View {
             uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0,
             onConditionTapped: {
                 selectedWeatherDetail = .condition(viewModel.currentCondition)
-                withAnimation { showWeatherDetail = true }
             },
             onWindTapped: {
                 let snapshot = viewModel.selectedWeatherSnapshot
@@ -360,19 +373,15 @@ struct WeatherOutfitView: View {
                     direction: snapshot?.windDirectionCompass ?? "N",
                     gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
                 )
-                withAnimation { showWeatherDetail = true }
             },
             onHumidityTapped: {
                 selectedWeatherDetail = .humidity(percentage: viewModel.selectedWeatherSnapshot?.humidity ?? 50)
-                withAnimation { showWeatherDetail = true }
             },
             onPrecipitationTapped: {
                 selectedWeatherDetail = .precipitation(percentage: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0)
-                withAnimation { showWeatherDetail = true }
             },
             onUVTapped: {
                 selectedWeatherDetail = .uvIndex(value: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0)
-                withAnimation { showWeatherDetail = true }
             }
         )
         .padding(.vertical, 16)
