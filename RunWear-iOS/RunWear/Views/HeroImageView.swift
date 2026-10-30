@@ -2,8 +2,17 @@ import SwiftUI
 
 struct HeroImageView: View {
     let locationName: String
-    let temperature: Double // Fahrenheit
-    let feelsLike: Double // Fahrenheit
+    /// The hero headline number: the RAW measured feels-like, in the
+    /// user's selected unit — the contract Android and the PWA ship
+    /// (their 96pt number is feelsLike / effectiveTemperature, under
+    /// a "FEELS LIKE" caption). This view previously received the
+    /// ACTUAL temperature here and the sub-line below showed a
+    /// comfort-adjusted "feels like" that existed on neither
+    /// reference surface.
+    let temperature: Double
+    /// The raw ACTUAL temperature for the "Actual:" sub-line (the
+    /// reference surfaces' second line), same unit as `temperature`.
+    let actualTemperature: Double
     let weatherCondition: WeatherCondition
     let date: Date
     let hour: Int
@@ -278,16 +287,24 @@ struct HeroImageView: View {
 
     private var temperatureDisplay: some View {
         VStack(spacing: 4) {
-            // Large temperature
+            // "FEELS LIKE" caption — the headline number's identity,
+            // carried verbatim from the Android/PWA hero.
+            Text("FEELS LIKE")
+                .font(.system(size: 14, weight: .medium))
+                .tracking(0.5)
+                .foregroundColor(.white.opacity(0.7))
+
+            // Large temperature (the raw measured feels-like)
             Text("\(Int(round(temperature)))°")
                 .font(.system(size: 96, weight: .thin))
                 .foregroundColor(.white)
 
-            // Feels like
+            // Actual temperature sub-line ("Actual: X°" on the
+            // reference surfaces)
             HStack(spacing: 4) {
-                Text("Feels like")
+                Text("Actual:")
                     .foregroundColor(.white.opacity(0.7))
-                Text("\(Int(round(feelsLike)))°")
+                Text("\(Int(round(actualTemperature)))°")
                     .foregroundColor(.white)
             }
             .font(.system(size: 17, weight: .medium))
@@ -376,7 +393,7 @@ struct HeroImageView: View {
     HeroImageView(
         locationName: "San Francisco, CA",
         temperature: 58,
-        feelsLike: 55,
+        actualTemperature: 61,
         weatherCondition: .clear,
         date: Date(),
         hour: 14,

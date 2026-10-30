@@ -10,6 +10,7 @@
 		A1000001233456780000001 /* RunWearApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000002233456780000001 /* RunWearApp.swift */; };
 		A1000003233456780000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000004233456780000002 /* ContentView.swift */; };
 		A1000005233456780000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000006233456780000003 /* Assets.xcassets */; };
+		A10000052334567800000010 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A10000062334567800000010 /* PrivacyInfo.xcprivacy */; };
 		F10002000000000000000001 /* hero_fallback in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000001 /* hero_fallback */; };
 		F10002000000000000000002 /* hero_fallback in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000001 /* hero_fallback */; };
 		A1000007233456780000004 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
@@ -28,6 +29,7 @@
 		B1000005233456780000003 /* WatchOutfitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006233456780000003 /* WatchOutfitView.swift */; };
 		B1000007233456780000004 /* WatchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000008233456780000004 /* WatchViewModel.swift */; };
 		B1000009233456780000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B100000A233456780000005 /* Assets.xcassets */; };
+		B10000092334567800000010 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B100000A2334567800000010 /* PrivacyInfo.xcprivacy */; };
 		/* Shared files for Watch */
 		B100000B233456780000006 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
 		B100000C233456780000007 /* Weather.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A233456780000005 /* Weather.swift */; };
@@ -93,6 +95,14 @@
 		C10002000000000000000017 /* HeroFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000024 /* HeroFlagService.swift */; };
 		C10002000000000000000018 /* HeroFlagPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000003 /* HeroFlagPayloadTests.swift */; };
 		C10002000000000000000019 /* WeatherDetailPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000004 /* WeatherDetailPresentationTests.swift */; };
+		C10002000000000000000022 /* DataParityFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000005 /* DataParityFixTests.swift */; };
+		C10002000000000000000023 /* WatchGlyphRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000006 /* WatchGlyphRenderingTests.swift */; };
+		C10002000000000000000024 /* HomePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000007 /* HomePresentationTests.swift */; };
+		C10002000000000000000025 /* ShareTextCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000008 /* ShareTextCompositionTests.swift */; };
+		C10002000000000000000026 /* WatchOutfitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000006233456780000003 /* WatchOutfitView.swift */; };
+		C10002000000000000000027 /* WatchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000008233456780000004 /* WatchViewModel.swift */; };
+		C10002000000000000000028 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001000000000000000002 /* WatchSettingsView.swift */; };
+		C10002000000000000000029 /* WeatherServicePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000009 /* WeatherServicePrivacyTests.swift */; };
 		C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000021 /* WeatherDetailSheet.swift */; };
 		C10002000000000000000021 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
 		/* Shared engine framework (Stage 2, 2026-10-29): RunWearEngine.xcframework, CI-built from RunWear-android :engine */
@@ -173,6 +183,7 @@
 		A1000004233456780000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000006233456780000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F10001000000000000000001 /* hero_fallback */ = {isa = PBXFileReference; lastKnownFileType = folder; path = hero_fallback; sourceTree = "<group>"; };
+		A10000062334567800000010 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A1000008233456780000004 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		A100000A233456780000005 /* Weather.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Weather.swift; sourceTree = "<group>"; };
 		A100000C233456780000006 /* Outfit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outfit.swift; sourceTree = "<group>"; };
@@ -190,6 +201,7 @@
 		B1000006233456780000003 /* WatchOutfitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchOutfitView.swift; sourceTree = "<group>"; };
 		B1000008233456780000004 /* WatchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchViewModel.swift; sourceTree = "<group>"; };
 		B100000A233456780000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B100000A2334567800000010 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		/* File references added 2026-10-25 */
 		A10001000000000000000001 /* ComfortLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComfortLevel.swift; sourceTree = "<group>"; };
 		A10001000000000000000002 /* GenderPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenderPreference.swift; sourceTree = "<group>"; };
@@ -225,6 +237,11 @@
 		C10001000000000000000002 /* EngineBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBoundaryTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000003 /* HeroFlagPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFlagPayloadTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000004 /* WeatherDetailPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherDetailPresentationTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000005 /* DataParityFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataParityFixTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000006 /* WatchGlyphRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchGlyphRenderingTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000007 /* HomePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePresentationTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000008 /* ShareTextCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTextCompositionTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000009 /* WeatherServicePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherServicePrivacyTests.swift; sourceTree = "<group>"; };
 		/* Shared engine framework + Stage 2 bridge/test files — added 2026-10-29 */
 		E10001000000000000000001 /* RunWearEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/RunWearEngine.xcframework; sourceTree = "<group>"; };
 		E10001000000000000000002 /* EngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBridge.swift; sourceTree = "<group>"; };
@@ -271,6 +288,7 @@
 				A1000025233456780000006 /* Theme */,
 				A1000006233456780000003 /* Assets.xcassets */,
 				F10001000000000000000001 /* hero_fallback */,
+				A10000062334567800000010 /* PrivacyInfo.xcprivacy */,
 			);
 			path = RunWear;
 			sourceTree = "<group>";
@@ -368,6 +386,7 @@
 				B1000006233456780000003 /* WatchOutfitView.swift */,
 				B1000008233456780000004 /* WatchViewModel.swift */,
 				B100000A233456780000005 /* Assets.xcassets */,
+				B100000A2334567800000010 /* PrivacyInfo.xcprivacy */,
 				B10001000000000000000001 /* WatchConnectivityManager.swift */,
 				B10001000000000000000002 /* WatchSettingsView.swift */,
 			);
@@ -412,6 +431,11 @@
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
 				C10001000000000000000003 /* HeroFlagPayloadTests.swift */,
 				C10001000000000000000004 /* WeatherDetailPresentationTests.swift */,
+				C10001000000000000000005 /* DataParityFixTests.swift */,
+				C10001000000000000000006 /* WatchGlyphRenderingTests.swift */,
+				C10001000000000000000007 /* HomePresentationTests.swift */,
+				C10001000000000000000008 /* ShareTextCompositionTests.swift */,
+				C10001000000000000000009 /* WeatherServicePrivacyTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -525,6 +549,7 @@
 			files = (
 				A1000005233456780000003 /* Assets.xcassets in Resources */,
 				F10002000000000000000001 /* hero_fallback in Resources */,
+				A10000052334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -534,6 +559,7 @@
 			files = (
 				B1000009233456780000005 /* Assets.xcassets in Resources */,
 				F10002000000000000000002 /* hero_fallback in Resources */,
+				B10000092334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -644,6 +670,14 @@
 				C10002000000000000000017 /* HeroFlagService.swift in Sources */,
 				C10002000000000000000018 /* HeroFlagPayloadTests.swift in Sources */,
 				C10002000000000000000019 /* WeatherDetailPresentationTests.swift in Sources */,
+				C10002000000000000000022 /* DataParityFixTests.swift in Sources */,
+				C10002000000000000000023 /* WatchGlyphRenderingTests.swift in Sources */,
+				C10002000000000000000024 /* HomePresentationTests.swift in Sources */,
+				C10002000000000000000025 /* ShareTextCompositionTests.swift in Sources */,
+				C10002000000000000000026 /* WatchOutfitView.swift in Sources */,
+				C10002000000000000000027 /* WatchViewModel.swift in Sources */,
+				C10002000000000000000028 /* WatchSettingsView.swift in Sources */,
+				C10002000000000000000029 /* WeatherServicePrivacyTests.swift in Sources */,
 				C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */,
 				C10002000000000000000021 /* AppTheme.swift in Sources */,
 			);
