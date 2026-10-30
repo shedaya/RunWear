@@ -55,6 +55,9 @@
 		A10002000000000000000020 /* TimePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000020 /* TimePickerSheet.swift */; };
 		A10002000000000000000021 /* WeatherDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000021 /* WeatherDetailSheet.swift */; };
 		A10002000000000000000022 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000022 /* OnboardingView.swift */; };
+		/* Hero flag — added 2026-10-29 */
+		A10002000000000000000023 /* HeroFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000023 /* HeroFlag.swift */; };
+		A10002000000000000000024 /* HeroFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000024 /* HeroFlagService.swift */; };
 		/* Watch App Build Files — added 2026-10-25 */
 		B10002000000000000000001 /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001000000000000000001 /* WatchConnectivityManager.swift */; };
 		B10002000000000000000002 /* WatchSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001000000000000000002 /* WatchSettingsView.swift */; };
@@ -66,6 +69,7 @@
 		B10002000000000000000105 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
 		B10002000000000000000106 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
 		B10002000000000000000107 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
+		B10002000000000000000108 /* HeroFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000023 /* HeroFlag.swift */; };
 		/* Engine sweep test target — added 2026-10-25 */
 		C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000001 /* OutfitRulesSweepTest.swift */; };
 		C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012233456780000009 /* OutfitRecommendationService.swift */; };
@@ -82,6 +86,13 @@
 		C10002000000000000000013 /* FallbackImageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000006 /* FallbackImageProvider.swift */; };
 		C10002000000000000000014 /* ClothingThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000005 /* ClothingThumbnailService.swift */; };
 		C10002000000000000000015 /* TemperatureUnit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000004 /* TemperatureUnit.swift */; };
+		/* Hero flag — added 2026-10-29 */
+		C10002000000000000000016 /* HeroFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000023 /* HeroFlag.swift */; };
+		C10002000000000000000017 /* HeroFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000024 /* HeroFlagService.swift */; };
+		C10002000000000000000018 /* HeroFlagPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000003 /* HeroFlagPayloadTests.swift */; };
+		C10002000000000000000019 /* WeatherDetailPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000004 /* WeatherDetailPresentationTests.swift */; };
+		C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000021 /* WeatherDetailSheet.swift */; };
+		C10002000000000000000021 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
 		/* Shared engine framework (Stage 2, 2026-10-29): RunWearEngine.xcframework, CI-built from RunWear-android :engine */
 		E10002000000000000000001 /* RunWearEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; };
 		E10002000000000000000002 /* RunWearEngine.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -199,6 +210,9 @@
 		A10001000000000000000020 /* TimePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimePickerSheet.swift; sourceTree = "<group>"; };
 		A10001000000000000000021 /* WeatherDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherDetailSheet.swift; sourceTree = "<group>"; };
 		A10001000000000000000022 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		/* Hero flag — added 2026-10-29 */
+		A10001000000000000000023 /* HeroFlag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFlag.swift; sourceTree = "<group>"; };
+		A10001000000000000000024 /* HeroFlagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFlagService.swift; sourceTree = "<group>"; };
 		/* Watch App File References — added 2026-10-25 */
 		B10001000000000000000001 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
 		B10001000000000000000002 /* WatchSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSettingsView.swift; sourceTree = "<group>"; };
@@ -206,6 +220,8 @@
 		C1000000233456780000000 /* RunWearTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunWearTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10001000000000000000001 /* OutfitRulesSweepTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitRulesSweepTest.swift; sourceTree = "<group>"; };
 		C10001000000000000000002 /* EngineBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBoundaryTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000003 /* HeroFlagPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFlagPayloadTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000004 /* WeatherDetailPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherDetailPresentationTests.swift; sourceTree = "<group>"; };
 		/* Shared engine framework + Stage 2 bridge/test files — added 2026-10-29 */
 		E10001000000000000000001 /* RunWearEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/RunWearEngine.xcframework; sourceTree = "<group>"; };
 		E10001000000000000000002 /* EngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBridge.swift; sourceTree = "<group>"; };
@@ -264,6 +280,7 @@
 				A10001000000000000000002 /* GenderPreference.swift */,
 				A10001000000000000000003 /* HeroImageModels.swift */,
 				A10001000000000000000004 /* TemperatureUnit.swift */,
+				A10001000000000000000023 /* HeroFlag.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -303,6 +320,7 @@
 				A10001000000000000000007 /* HeroImageService.swift */,
 				A10001000000000000000008 /* SupabaseClient.swift */,
 				A10001000000000000000009 /* WatchConnectivityManager.swift */,
+				A10001000000000000000024 /* HeroFlagService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -388,6 +406,8 @@
 			children = (
 				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
+				C10001000000000000000003 /* HeroFlagPayloadTests.swift */,
+				C10001000000000000000004 /* WeatherDetailPresentationTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -561,6 +581,8 @@
 				A10002000000000000000020 /* TimePickerSheet.swift in Sources */,
 				A10002000000000000000021 /* WeatherDetailSheet.swift in Sources */,
 				A10002000000000000000022 /* OnboardingView.swift in Sources */,
+				A10002000000000000000023 /* HeroFlag.swift in Sources */,
+				A10002000000000000000024 /* HeroFlagService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -587,6 +609,7 @@
 				B10002000000000000000105 /* HeroImageService.swift in Sources */,
 				B10002000000000000000106 /* FallbackImageProvider.swift in Sources */,
 				B10002000000000000000107 /* SupabaseClient.swift in Sources */,
+				B10002000000000000000108 /* HeroFlag.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -611,6 +634,12 @@
 				C10002000000000000000013 /* FallbackImageProvider.swift in Sources */,
 				C10002000000000000000014 /* ClothingThumbnailService.swift in Sources */,
 				C10002000000000000000015 /* TemperatureUnit.swift in Sources */,
+				C10002000000000000000016 /* HeroFlag.swift in Sources */,
+				C10002000000000000000017 /* HeroFlagService.swift in Sources */,
+				C10002000000000000000018 /* HeroFlagPayloadTests.swift in Sources */,
+				C10002000000000000000019 /* WeatherDetailPresentationTests.swift in Sources */,
+				C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */,
+				C10002000000000000000021 /* AppTheme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

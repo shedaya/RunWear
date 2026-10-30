@@ -15,12 +15,15 @@ struct WeatherOutfitView: View {
     @State private var showDatePicker = false
     @State private var showTimePicker = false
     @State private var showShop = false
-    @State private var showWeatherDetail = false
     @State private var showLocationPicker = false
     @State private var selectedWeatherDetail: WeatherDetailType?
 
     // Animation state
     @State private var hasAppeared = false
+
+    // Hero-flag confirmation toast (the snackbar equivalent):
+    // shown briefly after the user flags the hero photo.
+    @State private var showFlagThanks = false
 
     var body: some View {
         // Home lives in a NavigationStack (design record §5.2):
@@ -43,6 +46,31 @@ struct WeatherOutfitView: View {
                     ProgressView()
                         .scaleEffect(1.5)
                         .tint(.white)
+                }
+
+                // Hero-flag confirmation toast, bottom-center of
+                // the run screen (Android's snackbar placement).
+                if showFlagThanks {
+                    VStack {
+                        Spacer()
+                        Text("Thanks — we'll review this photo")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Color.black.opacity(0.75)))
+                            .padding(.bottom, 32)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+            }
+            .onChange(of: showFlagThanks) { _, visible in
+                if visible {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showFlagThanks = false }
+                    }
                 }
             }
             .navigationTitle(viewModel.locationName)
@@ -120,17 +148,21 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showWeatherDetail) {
-                if let detail = selectedWeatherDetail {
-                    WeatherDetailSheet(
-                        detailType: detail,
-                        allDetails: allWeatherDetails,
-                        contextLines: weatherContextLines,
-                        isPresented: $showWeatherDetail
-                    )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                }
+            // Item-based, not isPresented + if-let: in the old
+            // two-state form the sheet could evaluate its content
+            // before the selection landed and present an empty
+            // (white) sheet -- the blank UV overlay of 2026-10-29.
+            // With .sheet(item:) the content exists exactly when
+            // a detail does.
+            .sheet(item: $selectedWeatherDetail) { detail in
+                WeatherDetailSheet(
+                    detailType: detail,
+                    allDetails: allWeatherDetails,
+                    contextLines: weatherContextLines,
+                    isPresented: weatherDetailPresented
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showLocationPicker) {
                 LocationPickerSheet(
@@ -224,7 +256,6 @@ struct WeatherOutfitView: View {
     private var fullWeatherEntry: some View {
         Button {
             selectedWeatherDetail = .condition(viewModel.currentCondition)
-            showWeatherDetail = true
         } label: {
             HStack {
                 Text("Full Weather Detail")
@@ -280,6 +311,18 @@ struct WeatherOutfitView: View {
         ]
     }
 
+    /// The detail sheet's isPresented face. Presentation itself is
+    /// driven by the selection (sheet(item:)); the sheet's own
+    /// dismiss writes false here, which clears the selection.
+    private var weatherDetailPresented: Binding<Bool> {
+        Binding(
+            get: { selectedWeatherDetail != nil },
+            set: { presented in
+                if !presented { selectedWeatherDetail = nil }
+            }
+        )
+    }
+
     /// Context lines for the weather detail's sidebar: where and
     /// when the numbers on show belong to.
     private var weatherContextLines: [String] {
@@ -323,6 +366,11 @@ struct WeatherOutfitView: View {
             onDateTapped: { showDatePicker = true },
             onTimeTapped: { showTimePicker = true },
             onNowTapped: { viewModel.resetToNow() },
+            flagTarget: viewModel.currentHeroFlagTarget,
+            onFlagHero: { reason in
+                viewModel.flagCurrentHero(reason: reason)
+                withAnimation { showFlagThanks = true }
+            },
             heightMode: heightMode,
             // The navigation container carries the chrome now:
             // location is the title, Settings/Share are toolbar
@@ -351,7 +399,6 @@ struct WeatherOutfitView: View {
             uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0,
             onConditionTapped: {
                 selectedWeatherDetail = .condition(viewModel.currentCondition)
-                withAnimation { showWeatherDetail = true }
             },
             onWindTapped: {
                 let snapshot = viewModel.selectedWeatherSnapshot
@@ -360,19 +407,15 @@ struct WeatherOutfitView: View {
                     direction: snapshot?.windDirectionCompass ?? "N",
                     gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
                 )
-                withAnimation { showWeatherDetail = true }
             },
             onHumidityTapped: {
                 selectedWeatherDetail = .humidity(percentage: viewModel.selectedWeatherSnapshot?.humidity ?? 50)
-                withAnimation { showWeatherDetail = true }
             },
             onPrecipitationTapped: {
                 selectedWeatherDetail = .precipitation(percentage: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0)
-                withAnimation { showWeatherDetail = true }
             },
             onUVTapped: {
                 selectedWeatherDetail = .uvIndex(value: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0)
-                withAnimation { showWeatherDetail = true }
             }
         )
         .padding(.vertical, 16)
