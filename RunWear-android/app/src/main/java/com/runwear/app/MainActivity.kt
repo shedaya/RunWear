@@ -189,7 +189,8 @@ class MainActivity : ComponentActivity() {
                                         showFeedback = true
                                     },
                                     onItemTapped = viewModel::onAffiliateItemTapped,
-                                    onFlagHero = viewModel::flagCurrentHero
+                                    onFlagHero = viewModel::flagCurrentHero,
+                                    onCycleHero = viewModel::cycleHeroImage
                                 )
                             }
                         }

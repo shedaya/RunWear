@@ -47,8 +47,11 @@ android {
         applicationId = "com.runwear.wear"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.2.4"
+        // vc19 is the Wear polish release's slot (shipped as Wear
+        // 1.2.5/vc10019 — one shared versionCode space), so the phone
+        // line takes vc20 for its half of the 1.2.5 train.
+        versionCode = 20
+        versionName = "1.2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
