@@ -4027,7 +4027,11 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
                 try {
                     const response = await fetch(
-                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%25&limit=20`,
+                        // Review gate (mirrors HeroPoolPolicy on iOS/Android):
+                        // only review_status='approved' rows may be served.
+                        // RLS lets anon read every row, so this filter is the
+                        // only thing keeping rejected photos out of the pool.
+                        `${SUPABASE_URL}/rest/v1/generated_images?combination_id=like.${baseQuery}_%25&review_status=eq.approved&limit=20`,
                         {
                             headers: {
                                 'apikey': SUPABASE_ANON_KEY,
