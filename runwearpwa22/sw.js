@@ -1,4 +1,4 @@
-const CACHE_NAME = 'runwear-v3.12-fluid';
+const CACHE_NAME = 'runwear-v3.12-refresh';
 
 // Install - skip precaching to avoid failures
 self.addEventListener('install', event => {

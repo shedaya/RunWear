@@ -575,6 +575,42 @@
             pointer-events: none;
         }
 
+        /* Refresh/swap affordance paired with the flag disc (same style,
+           immediately to its left): cycles the hero to another approved
+           pool photo for the same cell. Hidden unless the cell delivered
+           2+ photos — no fake cycling on a single-photo cell. */
+        .hero-refresh-btn {
+            position: absolute;
+            right: 56px;
+            bottom: 72px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            cursor: pointer;
+            z-index: 10;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .hero-refresh-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .hero-refresh-btn:active {
+            transform: scale(0.94);
+        }
+
+        .hero-refresh-btn.hidden {
+            display: none;
+        }
+
         .hero-flag-sheet {
             position: fixed;
             bottom: 0;
@@ -2626,7 +2662,7 @@
             .datetime-pill { margin-bottom: 10px; }
             .weather-pills { margin-top: 10px; }
             .hero-content { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
-            .hero-flag-btn { bottom: 60px; }
+            .hero-flag-btn, .hero-refresh-btn { bottom: 60px; }
         }
 
         /* Fluid mid-range: type and dialog widths scale continuously with
@@ -3596,11 +3632,71 @@
         // Identity key of the photo view already flagged (one flag per view)
         let heroFlaggedKey = null;
 
+        // Approved pool photos delivered for the current hero cell — the
+        // winning cascade level's rows, normalized to {id, url,
+        // combinationId} — plus that level's query key. The refresh
+        // control cycles within this list; fewer than 2 entries means
+        // the cell has nothing to cycle to.
+        let currentHeroPool = [];
+        let currentHeroPoolKey = null;
+
+        // The day's chosen pool photo per cell, persisted so a pick
+        // (the initial serve or a refresh cycle) survives reloads and
+        // stays stable for the rest of the day.
+        const HERO_PICK_STORAGE_KEY = 'runwear_hero_pick_v1';
+
+        function heroPickDayString() {
+            const d = new Date();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${d.getFullYear()}-${mm}-${dd}`;
+        }
+
+        // Map of poolKey -> flag-format identity key for today's picks.
+        // Anything stored under a previous day reads as empty.
+        function readHeroPicks() {
+            try {
+                const raw = localStorage.getItem(HERO_PICK_STORAGE_KEY);
+                if (!raw) return {};
+                const data = JSON.parse(raw);
+                if (!data || data.day !== heroPickDayString() || !data.picks) return {};
+                return data.picks;
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveHeroPick() {
+            try {
+                if (!currentHeroPoolKey) return;
+                const key = currentHeroFlagKey();
+                if (!key) return;
+                const picks = readHeroPicks();
+                picks[currentHeroPoolKey] = key;
+                localStorage.setItem(HERO_PICK_STORAGE_KEY, JSON.stringify({
+                    day: heroPickDayString(),
+                    picks: picks
+                }));
+            } catch (e) {
+                // Storage unavailable (private mode): cycling still
+                // works for the session, it just won't persist.
+            }
+        }
+
+        // Identity key of a pool entry, in the same format the flag
+        // flow uses for the displayed photo (currentHeroFlagKey).
+        function heroPoolEntryKey(entry) {
+            return entry.id ? `pool:${entry.id}` : `fallback:${entry.url}`;
+        }
+
         // Show a non-pool (fallback) hero photo: clears the pool identity
         function setFallbackHeroImage(url) {
             currentHeroImageUrl = url;
             currentHeroImageRowId = null;
             currentHeroCombinationId = null;
+            currentHeroPool = [];
+            currentHeroPoolKey = null;
+            syncHeroRefreshBtn();
         }
 
         // Map weather codes to weather categories (v3.7 - simplified to 4 categories)
@@ -3956,13 +4052,42 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                             foundViaFallback = true;
                         }
 
-                        // Select random image
-                        selectedImage = images[Math.floor(Math.random() * images.length)];
-                        console.log('[Hero] ✓ Found via', baseQuery, '→', selectedImage.combination_id);
+                        // The winning level's rows are the cell's approved
+                        // alternatives: keep them all (deduped by URL) so
+                        // the refresh control can cycle within the cell.
+                        const pool = [];
+                        const seenUrls = new Set();
+                        images.forEach(img => {
+                            const url = img.image_url || img.public_url;
+                            if (!url || seenUrls.has(url)) return;
+                            seenUrls.add(url);
+                            pool.push({
+                                id: img.id || null,
+                                url: url,
+                                combinationId: img.combination_id || null
+                            });
+                        });
+                        if (pool.length === 0) continue;  // Rows carried no usable URL
+                        currentHeroPool = pool;
+                        currentHeroPoolKey = baseQuery;
 
-                        currentHeroImageUrl = selectedImage.image_url || selectedImage.public_url;
-                        currentHeroImageRowId = selectedImage.id || null;
-                        currentHeroCombinationId = selectedImage.combination_id || null;
+                        // Restore today's pick for this cell when it is
+                        // still in the pool; otherwise select at random
+                        // (the pick is then saved for the day below).
+                        selectedImage = null;
+                        const savedKey = readHeroPicks()[baseQuery];
+                        if (savedKey) {
+                            selectedImage = pool.find(entry => heroPoolEntryKey(entry) === savedKey) || null;
+                        }
+                        if (!selectedImage) {
+                            selectedImage = pool[Math.floor(Math.random() * pool.length)];
+                        }
+                        console.log('[Hero] ✓ Found via', baseQuery, '→', selectedImage.combinationId);
+
+                        currentHeroImageUrl = selectedImage.url;
+                        currentHeroImageRowId = selectedImage.id;
+                        currentHeroCombinationId = selectedImage.combinationId;
+                        saveHeroPick();
                         updateHeroImage();
                         break;  // Found an image, stop searching
                     }
@@ -3977,6 +4102,11 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             // 2. Found via fallback (missing for requested gender), OR
             // 3. Exact matches < MIN_VARIANTS (want more variety)
             if (!selectedImage) {
+                // No pool for the current cell: the refresh control must
+                // not offer cycling over a previous cell's photos.
+                currentHeroPool = [];
+                currentHeroPoolKey = null;
+                syncHeroRefreshBtn();
                 console.log('[Hero] No AI images found, queueing replenishment');
                 if (shouldQueueReplenishment()) {
                     queueHeroImageGeneration(gender, weather, tempBracket, timeOfDay, state.outfit);
@@ -4136,6 +4266,37 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                 heroImg.src = currentHeroImageUrl;
             }
             syncHeroFlagChip();
+            syncHeroRefreshBtn();
+        }
+
+        // ============ HERO PHOTO REFRESH ============
+        // Paired with the flag control: cycles the hero to the next
+        // approved pool photo for the same cell. The cycled-to photo
+        // becomes the day's pick for the cell (persisted, restored on
+        // reload). With fewer than 2 photos in the cell there is
+        // nothing to cycle to and the control hides — no fake cycling.
+        function heroRefreshAvailable() {
+            return currentHeroPool.length >= 2;
+        }
+
+        function syncHeroRefreshBtn() {
+            const btn = document.querySelector('.hero-refresh-btn');
+            if (btn) btn.classList.toggle('hidden', !heroRefreshAvailable());
+        }
+
+        function cycleHeroImage() {
+            if (!heroRefreshAvailable()) return;
+            const currentKey = currentHeroFlagKey();
+            let index = currentHeroPool.findIndex(entry => heroPoolEntryKey(entry) === currentKey);
+            if (index < 0) {
+                index = currentHeroPool.findIndex(entry => entry.url === currentHeroImageUrl);
+            }
+            const next = currentHeroPool[(index + 1) % currentHeroPool.length];
+            currentHeroImageUrl = next.url;
+            currentHeroImageRowId = next.id;
+            currentHeroCombinationId = next.combinationId;
+            saveHeroPick();
+            updateHeroImage();
         }
 
         // Get current hero image URL (for render)
@@ -5430,6 +5591,7 @@ Get your personalized running outfit at runwear.ai`;
             const lightbulbSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>`;
             const shareSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>`;
             const flagSvg = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>`;
+            const refreshSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>`;
 
             app.innerHTML = `
                 <!-- HERO SECTION -->
@@ -5515,6 +5677,9 @@ Get your personalized running outfit at runwear.ai`;
                             ` : ''}
                         </div>
                     </div>
+
+                    <!-- Refresh this photo (cycles the cell's approved pool) -->
+                    <button class="hero-refresh-btn${heroRefreshAvailable() ? '' : ' hidden'}" onclick="cycleHeroImage()" title="Show another photo" aria-label="Show another photo">${refreshSvg}</button>
 
                     <!-- Flag this photo (quiet, bottom-trailing) -->
                     <button class="hero-flag-btn${isCurrentHeroFlagged() ? ' flagged' : ''}" onclick="openHeroFlagSheet()" title="Flag this photo" aria-label="Flag this photo">${flagSvg}</button>
