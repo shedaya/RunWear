@@ -14,7 +14,7 @@ struct TimePickerSheet: View {
         VStack(spacing: 20) {
             // Title
             Text("Select Time")
-                .font(.system(size: 24, weight: .bold))
+                .font(.appSheetTitle)
                 .foregroundColor(.white)
 
             // Time grid
@@ -25,6 +25,8 @@ struct TimePickerSheet: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .background(AppTheme.darkBackground.ignoresSafeArea())
+        // RW-6.10: one selection tick per change — nothing more.
+        .sensoryFeedback(.selection, trigger: selectedHour)
     }
 
 
@@ -51,9 +53,9 @@ struct TimePickerSheet: View {
 
 
     private func dismiss() {
-        withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-            isPresented = false
-        }
+        // State-driven dismissal (RW-6.12): the system animates the
+        // sheet away; no hand-rolled transition wrapper.
+        isPresented = false
     }
 }
 
@@ -68,23 +70,19 @@ private struct TimeButton: View {
         Button(action: action) {
             VStack(spacing: 2) {
                 Text(formattedHour)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.appItemName)
+                    .monospacedDigit()
                     .foregroundColor(isSelected ? .white : .white.opacity(0.9))
 
                 Text(period)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.appEyebrow)
                     .foregroundColor(isSelected ? .white.opacity(0.8) : .white.opacity(0.5))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.15), lineWidth: 1)
-            )
+            // Interactive Liquid Glass; selection is the teal tint of
+            // the same glass (shared GlassButtonModifier).
+            .glassButton(isSelected: isSelected, cornerRadius: 12)
         }
     }
 

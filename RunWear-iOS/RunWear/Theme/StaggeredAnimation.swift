@@ -1,5 +1,21 @@
 import SwiftUI
 
+// MARK: - Stagger Timing (RW-6.6)
+//
+// One timing source for every cascade in the app. The cascade is capped:
+// past `maxCascadedIndex` items appear at the last delay instead of the
+// tail drifting later and later down a long list (≈5 items of travel max).
+enum StaggerTiming {
+    /// Highest index that still adds delay; later items reuse this delay.
+    static let maxCascadedIndex = 4
+
+    /// Effective delay for an item at `index`, with the cascade capped.
+    static func effectiveDelay(index: Int, baseDelay: Double, staggerDelay: Double) -> Double {
+        let cappedIndex = min(max(index, 0), maxCascadedIndex)
+        return baseDelay + Double(cappedIndex) * staggerDelay
+    }
+}
+
 // MARK: - Staggered Animation Modifier
 
 struct StaggeredAnimationModifier: ViewModifier {
@@ -9,23 +25,37 @@ struct StaggeredAnimationModifier: ViewModifier {
     let staggerDelay: Double
     let duration: Double
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
 
     func body(content: Content) -> some View {
         content
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 20)
+            // Reduce Motion: content is simply present — no travel, no fade.
+            .opacity(reduceMotion || hasAppeared ? 1 : 0)
+            .offset(y: reduceMotion || hasAppeared ? 0 : 20)
             .onAppear {
                 guard !hasAppeared else { return }
-                let delay = baseDelay + (Double(index) * staggerDelay)
+                if reduceMotion {
+                    hasAppeared = true
+                    return
+                }
+                let delay = StaggerTiming.effectiveDelay(
+                    index: index, baseDelay: baseDelay, staggerDelay: staggerDelay
+                )
                 withAnimation(.easeOut(duration: duration).delay(delay)) {
                     hasAppeared = true
                 }
             }
             .onChange(of: isVisible) { _, newValue in
                 if newValue {
+                    if reduceMotion {
+                        hasAppeared = true
+                        return
+                    }
                     hasAppeared = false
-                    let delay = baseDelay + (Double(index) * staggerDelay)
+                    let delay = StaggerTiming.effectiveDelay(
+                        index: index, baseDelay: baseDelay, staggerDelay: staggerDelay
+                    )
                     withAnimation(.easeOut(duration: duration).delay(delay)) {
                         hasAppeared = true
                     }
@@ -43,23 +73,37 @@ struct StaggeredScaleAnimationModifier: ViewModifier {
     let staggerDelay: Double
     let duration: Double
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasAppeared = false
 
     func body(content: Content) -> some View {
         content
-            .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.8)
+            // Reduce Motion: content is simply present — no scale, no fade.
+            .opacity(reduceMotion || hasAppeared ? 1 : 0)
+            .scaleEffect(reduceMotion || hasAppeared ? 1 : 0.8)
             .onAppear {
                 guard !hasAppeared else { return }
-                let delay = baseDelay + (Double(index) * staggerDelay)
+                if reduceMotion {
+                    hasAppeared = true
+                    return
+                }
+                let delay = StaggerTiming.effectiveDelay(
+                    index: index, baseDelay: baseDelay, staggerDelay: staggerDelay
+                )
                 withAnimation(.spring(response: duration, dampingFraction: 0.7).delay(delay)) {
                     hasAppeared = true
                 }
             }
             .onChange(of: isVisible) { _, newValue in
                 if newValue {
+                    if reduceMotion {
+                        hasAppeared = true
+                        return
+                    }
                     hasAppeared = false
-                    let delay = baseDelay + (Double(index) * staggerDelay)
+                    let delay = StaggerTiming.effectiveDelay(
+                        index: index, baseDelay: baseDelay, staggerDelay: staggerDelay
+                    )
                     withAnimation(.spring(response: duration, dampingFraction: 0.7).delay(delay)) {
                         hasAppeared = true
                     }

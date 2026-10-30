@@ -21,6 +21,14 @@ struct WeatherOutfitView: View {
     // Animation state
     @State private var hasAppeared = false
 
+    // R-15 rating moment: this view exists only when a recommendation
+    // is on screen, so appearing here IS the proven-value signal. The
+    // tracker counts distinct view days; the ask comes after the 3rd,
+    // and never twice a season.
+    @State private var showRatingPrompt = false
+    @Environment(\.requestReview) private var requestReview
+    private let ratingTracker = RatingPromptTracker()
+
     var body: some View {
         // Home lives in a NavigationStack (design record §5.2):
         // the location is the navigation title, the date its
@@ -154,6 +162,23 @@ struct WeatherOutfitView: View {
             withAnimation(.easeOut(duration: 0.5).delay(0.2)) {
                 hasAppeared = true
             }
+            ratingTracker.recordRecommendationViewed()
+            if ratingTracker.shouldPrompt() {
+                showRatingPrompt = true
+            }
+        }
+        // Neutral two-door ask: either door closes it for the season;
+        // the positive door hands off to the system review sheet.
+        .alert("Enjoying RunWear?", isPresented: $showRatingPrompt) {
+            Button("Rate RunWear") {
+                ratingTracker.recordPromptShown()
+                requestReview()
+            }
+            Button("Not Now", role: .cancel) {
+                ratingTracker.recordPromptShown()
+            }
+        } message: {
+            Text("A quick rating helps other runners find their outfit.")
         }
     }
 
@@ -230,11 +255,11 @@ struct WeatherOutfitView: View {
         } label: {
             HStack {
                 Text("Full Weather Detail")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.appSecondary.weight(.semibold))
                     .foregroundColor(.white)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.appFootnote.weight(.semibold))
                     .foregroundColor(.white.opacity(0.5))
             }
             .padding(.horizontal, 16)
@@ -248,7 +273,7 @@ struct WeatherOutfitView: View {
     private var outfitGridSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Recommended Outfit")
-                .font(.system(size: 20, weight: .bold))
+                .font(.appSectionTitle)
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
 
@@ -405,7 +430,7 @@ struct WeatherOutfitView: View {
             // (design record §5.2); the teal pill is gone.
             HStack {
                 Text("Recommended Outfit")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.appSectionTitle)
                     .foregroundColor(.white)
 
                 Spacer()
@@ -426,7 +451,7 @@ struct WeatherOutfitView: View {
             // Tips (v4.1)
             if !recommendation.tips.isEmpty {
                 Text("Tips")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.appItemName)
                     .foregroundColor(.white.opacity(0.7))
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -434,7 +459,7 @@ struct WeatherOutfitView: View {
 
                 ForEach(Array(recommendation.tips.enumerated()), id: \.offset) { index, tip in
                     Text(tip)
-                        .font(.system(size: 14))
+                        .font(.appSecondary)
                         .foregroundColor(.white.opacity(0.8))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 4)
@@ -507,7 +532,7 @@ struct DarkClothingItemCard: View {
                 // Emoji icon (shown as fallback)
                 if thumbnailURL == nil {
                     Image(systemName: item.icon)
-                        .font(.system(size: 28))
+                        .font(.title)
                         .foregroundColor(.white)
                 }
 
@@ -518,7 +543,7 @@ struct DarkClothingItemCard: View {
                         case .empty:
                             // Loading state - show icon
                             Image(systemName: item.icon)
-                                .font(.system(size: 28))
+                                .font(.title)
                                 .foregroundColor(.white)
                         case .success(let image):
                             image
@@ -528,11 +553,11 @@ struct DarkClothingItemCard: View {
                         case .failure:
                             // Error state - show icon
                             Image(systemName: item.icon)
-                                .font(.system(size: 28))
+                                .font(.title)
                                 .foregroundColor(.white)
                         @unknown default:
                             Image(systemName: item.icon)
-                                .font(.system(size: 28))
+                                .font(.title)
                                 .foregroundColor(.white)
                         }
                     }
@@ -544,14 +569,14 @@ struct DarkClothingItemCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let category = category {
                     Text(category.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.appEyebrow)
                         .foregroundColor(.white.opacity(0.5))
                 }
                 Text(item.name)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.appItemName)
                     .foregroundColor(.white)
                 Text(item.description)
-                    .font(.system(size: 13))
+                    .font(.appFootnote)
                     .foregroundColor(.white.opacity(0.6))
                     .lineLimit(2)
             }
@@ -560,18 +585,20 @@ struct DarkClothingItemCard: View {
 
             // External link icon (matching PWA v3.12)
             Image(systemName: "arrow.up.right")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.appFootnote.weight(.semibold))
                 .foregroundColor(.white.opacity(0.5))
                 .frame(width: 44, height: 44)
         }
         .padding(12)
+        // Flat content card (AppTheme tokens) — deliberately NOT glass:
+        // dense text stays off glass for legibility.
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.05))
+                .fill(AppTheme.cardFillOnDark)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
         )
         .padding(.horizontal, 16)
     }

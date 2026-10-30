@@ -16,7 +16,7 @@ struct DatePickerSheet: View {
         VStack(spacing: 20) {
             // Title
             Text("Select Date")
-                .font(.system(size: 24, weight: .bold))
+                .font(.appSheetTitle)
                 .foregroundColor(.white)
 
             // Date grid
@@ -27,6 +27,8 @@ struct DatePickerSheet: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .background(AppTheme.darkBackground.ignoresSafeArea())
+        // RW-6.10: one selection tick per change — nothing more.
+        .sensoryFeedback(.selection, trigger: selectedDate)
     }
 
 
@@ -53,9 +55,9 @@ struct DatePickerSheet: View {
 
 
     private func dismiss() {
-        withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-            isPresented = false
-        }
+        // State-driven dismissal (RW-6.12): the system animates the
+        // sheet away; no hand-rolled transition wrapper.
+        isPresented = false
     }
 }
 
@@ -73,29 +75,25 @@ private struct DateButton: View {
             VStack(spacing: 4) {
                 // Day label (Today, Tomorrow, or day name)
                 Text(dayLabel)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.appEyebrow)
                     .foregroundColor(isSelected ? .white : .white.opacity(0.6))
 
                 // Date number
                 Text("\(calendar.component(.day, from: date))")
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.title2.weight(.semibold))
+                    .monospacedDigit()
                     .foregroundColor(isSelected ? .white : .white.opacity(0.9))
 
                 // Month abbreviation
                 Text(monthLabel)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.appEyebrow)
                     .foregroundColor(isSelected ? .white.opacity(0.8) : .white.opacity(0.5))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.15), lineWidth: 1)
-            )
+            // Interactive Liquid Glass; selection is the teal tint of
+            // the same glass (shared GlassButtonModifier).
+            .glassButton(isSelected: isSelected, cornerRadius: 12)
         }
     }
 

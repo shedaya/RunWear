@@ -130,7 +130,7 @@ class WeatherViewModel: ObservableObject {
            let unit = TemperatureUnit(rawValue: saved) {
             self.temperatureUnit = unit
         } else {
-            self.temperatureUnit = .fahrenheit
+            self.temperatureUnit = .defaultForLocale
         }
 
         if let saved = UserDefaults.standard.object(forKey: "comfortLevel") as? Int,

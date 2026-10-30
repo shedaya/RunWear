@@ -86,6 +86,17 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            // RW-6.8: honor the location choice made in onboarding. A
+            // user who picked "Set a City Instead" meets the picker
+            // directly — the choice was already made, so the permission
+            // gate is not a surprise second ask. One-shot: the flag is
+            // consumed here, and a restored manual location (a returning
+            // user) skips it entirely.
+            if UserDefaults.standard.string(forKey: "onboardingLocationChoice") == "manual",
+               viewModel.restoredManualLocation == nil {
+                UserDefaults.standard.removeObject(forKey: "onboardingLocationChoice")
+                showManualLocationPicker = true
+            }
             if let manual = viewModel.restoredManualLocation {
                 // Saved-location-first launch (Android's contract):
                 // fetch the restored manual location's weather; do

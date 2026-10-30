@@ -9,7 +9,7 @@ struct LoadingView: View {
 
             Text("Getting weather data...")
                 .font(.headline)
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(AppTheme.textSecondaryOnDark)
         }
     }
 }
@@ -37,7 +37,7 @@ struct LocationPermissionView: View {
 
             Text("RunWear needs your location to provide accurate weather-based outfit recommendations for your area.")
                 .font(.body)
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(AppTheme.textSecondaryOnDark)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
@@ -86,7 +86,7 @@ struct LocationDeniedView: View {
 
             Text("RunWear needs location access to show weather-based outfit recommendations. Please enable location access in Settings, or set your location manually.")
                 .font(.body)
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(AppTheme.textSecondaryOnDark)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
@@ -141,7 +141,7 @@ struct ErrorView: View {
 
             Text(message)
                 .font(.body)
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(AppTheme.textSecondaryOnDark)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 

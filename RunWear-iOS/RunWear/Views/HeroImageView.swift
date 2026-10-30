@@ -53,6 +53,15 @@ struct HeroImageView: View {
     @State private var showAIImage = false
     @State private var aiImageLoaded = false
 
+    // RW-6.6: Reduce Motion gates the crossfade and the "Now" pill's
+    // scale transition — content swaps instantly instead.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    // RW-6.3 display-numeral exception: the hero number scales with
+    // Dynamic Type relative to .largeTitle, capped so the layout holds
+    // at accessibility sizes.
+    @ScaledMetric(relativeTo: .largeTitle) private var heroNumeralSize: CGFloat = 96
+
     var body: some View {
         Group {
             if heightMode == .fill {
@@ -145,8 +154,15 @@ struct HeroImageView: View {
                             .opacity(showAIImage ? 1 : 0)
                             .onAppear {
                                 aiImageLoaded = true
-                                withAnimation(.easeInOut(duration: AppTheme.crossfadeDuration)) {
+                                // Fallback-first loading is unchanged
+                                // (RW-4 contract); only the fade is
+                                // gated on Reduce Motion.
+                                if reduceMotion {
                                     showAIImage = true
+                                } else {
+                                    withAnimation(.easeInOut(duration: AppTheme.crossfadeDuration)) {
+                                        showAIImage = true
+                                    }
                                 }
                             }
                     case .failure, .empty:
@@ -167,9 +183,9 @@ struct HeroImageView: View {
             Button(action: onLocationTapped) {
                 HStack(spacing: 6) {
                     Image(systemName: "location.fill")
-                        .font(.system(size: 14))
+                        .font(.appPillLabel)
                     Text(locationName)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.appPillLabel)
                         .lineLimit(1)
                 }
                 .foregroundColor(.white)
@@ -183,7 +199,7 @@ struct HeroImageView: View {
                 // Share button
                 Button(action: onShareTapped) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundColor(.white)
                         .frame(width: 44, height: 44)
                         .glassMorphism(cornerRadius: 22)
@@ -192,7 +208,7 @@ struct HeroImageView: View {
                 // Settings button
                 Button(action: onSettingsTapped) {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundColor(.white)
                         .frame(width: 44, height: 44)
                         .glassMorphism(cornerRadius: 22)
@@ -220,14 +236,16 @@ struct HeroImageView: View {
             // "FEELS LIKE" caption — the headline number's identity,
             // carried verbatim from the Android/PWA hero.
             Text("FEELS LIKE")
-                .font(.system(size: 14, weight: .medium))
+                .font(.appEyebrow)
                 .tracking(0.5)
                 .foregroundColor(.white.opacity(0.7))
 
             // Large temperature (the raw measured feels-like)
             Text("\(Int(round(temperature)))°")
-                .font(.system(size: 96, weight: .thin))
+                .font(.system(size: heroNumeralSize, weight: .thin))
+                .monospacedDigit()
                 .foregroundColor(.white)
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             // Actual temperature sub-line ("Actual: X°" on the
             // reference surfaces)
@@ -235,9 +253,10 @@ struct HeroImageView: View {
                 Text("Actual:")
                     .foregroundColor(.white.opacity(0.7))
                 Text("\(Int(round(actualTemperature)))°")
+                    .monospacedDigit()
                     .foregroundColor(.white)
             }
-            .font(.system(size: 17, weight: .medium))
+            .font(.body.weight(.medium))
         }
     }
 
@@ -247,9 +266,9 @@ struct HeroImageView: View {
             Button(action: onDateTapped) {
                 HStack(spacing: 6) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 14))
+                        .font(.appPillLabel)
                     Text(formattedDate)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.appPillLabel)
                 }
                 .foregroundColor(.white)
                 .glassPill()
@@ -259,33 +278,33 @@ struct HeroImageView: View {
             Button(action: onTimeTapped) {
                 HStack(spacing: 6) {
                     Image(systemName: "clock")
-                        .font(.system(size: 14))
+                        .font(.appPillLabel)
                     Text(formattedTime)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.appPillLabel)
+                        .monospacedDigit()
                 }
                 .foregroundColor(.white)
                 .glassPill()
             }
 
-            // "Now" shortcut - only visible when viewing different time
+            // "Now" shortcut - only visible when viewing different time.
+            // The selected (teal-tinted) state of the shared glass pill —
+            // the same chrome as its siblings, tinted for the active state.
             if !isViewingNow {
                 Button(action: onNowTapped) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.appPillLabel)
                         Text("Now")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.appPillLabel)
                     }
-                    .foregroundColor(Color(red: 0.3, green: 0.71, blue: 0.67)) // Teal #4DB6AC
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(Color(red: 0, green: 0.47, blue: 0.42).opacity(0.25)) // Teal bg
-                    .clipShape(Capsule())
+                    .foregroundColor(.white)
+                    .glassPill(isSelected: true)
                 }
-                .transition(.scale.combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: isViewingNow)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isViewingNow)
     }
 
     // Check if viewing current date and hour
