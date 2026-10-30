@@ -87,9 +87,13 @@
             --text: var(--text-primary);
             --border: rgba(255, 255, 255, 0.1);
 
-            /* App column: full-bleed on phones, a composed column on
-               foldables / tablets / desktop (was a hard 480px cap) */
-            --app-max: 720px;
+            /* Fluid layout: no fixed column cap anywhere. Spacing scales
+               with the viewport via clamp(); at >=900px the layout becomes
+               a two-pane rail (see the RESPONSIVE section). The sheet cap
+               below exists only so bottom sheets stay readable on very
+               wide screens — the app layout itself is never capped. */
+            --pad-inline: clamp(20px, 3vw, 44px);
+            --sheet-max: 640px;
         }
 
         body {
@@ -136,6 +140,7 @@
         /* ========== HERO SECTION ========== */
         .hero {
             position: relative;
+            container-type: inline-size;
             height: 75vh;
             height: 75dvh;
             min-height: 500px;
@@ -287,7 +292,7 @@
             position: fixed;
             bottom: 0;
             left: 50%;
-            width: min(100%, var(--app-max));
+            width: min(100%, var(--sheet-max));
             background: var(--bg-card);
             border-radius: 24px 24px 0 0;
             padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
@@ -367,7 +372,7 @@
             position: fixed;
             bottom: 0;
             left: 50%;
-            width: min(100%, var(--app-max));
+            width: min(100%, var(--sheet-max));
             background: var(--bg-card);
             border-radius: 24px 24px 0 0;
             padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
@@ -574,7 +579,7 @@
             position: fixed;
             bottom: 0;
             left: 50%;
-            width: min(100%, var(--app-max));
+            width: min(100%, var(--sheet-max));
             background: var(--bg-card);
             border-radius: 24px 24px 0 0;
             padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
@@ -713,8 +718,8 @@
             right: 0;
             padding: 16px 20px;
             padding-top: max(16px, env(safe-area-inset-top));
-            padding-left: max(20px, env(safe-area-inset-left));
-            padding-right: max(20px, env(safe-area-inset-right));
+            padding-left: max(var(--pad-inline), env(safe-area-inset-left));
+            padding-right: max(var(--pad-inline), env(safe-area-inset-right));
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -759,7 +764,7 @@
         .hero-header > .glass-btn:first-child {
             flex: 1;
             min-width: 0; /* Allow flex item to shrink below content size */
-            max-width: calc(100vw - 160px); /* Leave room for share/settings buttons */
+            max-width: calc(100% - 120px); /* Leave room for share/settings buttons (relative to the hero header, so it holds in the wide rail too) */
         }
 
         /* Location button text overflow handling */
@@ -794,8 +799,8 @@
             left: 0;
             right: 0;
             padding: 0 20px 24px;
-            padding-left: max(20px, env(safe-area-inset-left));
-            padding-right: max(20px, env(safe-area-inset-right));
+            padding-left: max(var(--pad-inline), env(safe-area-inset-left));
+            padding-right: max(var(--pad-inline), env(safe-area-inset-right));
             padding-bottom: calc(24px + env(safe-area-inset-bottom));
             z-index: 5;
         }
@@ -952,8 +957,8 @@
         .outfit-section {
             padding: 24px 20px;
             padding-bottom: 60px;
-            padding-left: max(20px, env(safe-area-inset-left));
-            padding-right: max(20px, env(safe-area-inset-right));
+            padding-left: max(var(--pad-inline), env(safe-area-inset-left));
+            padding-right: max(var(--pad-inline), env(safe-area-inset-right));
         }
 
         .outfit-section-header {
@@ -965,21 +970,21 @@
 
         .outfit-section-title {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
+            font-size: clamp(28px, 1.2vw + 22px, 40px);
             letter-spacing: 0.02em;
         }
 
         .outfit-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr));
+            gap: clamp(10px, 1.2vw, 16px);
         }
 
         .outfit-card {
             display: flex;
             align-items: center;
             gap: 14px;
-            padding: 14px;
+            padding: clamp(14px, 1.4vw, 20px);
             background: var(--bg-card);
             border: none;
             border-radius: 16px;
@@ -1008,8 +1013,8 @@
         }
 
         .outfit-icon {
-            width: 48px;
-            height: 48px;
+            width: clamp(48px, 4vw, 64px);
+            height: clamp(48px, 4vw, 64px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1047,8 +1052,8 @@
         /* Container for thumbnail with icon fallback */
         .outfit-thumb-container {
             position: relative;
-            width: 48px;
-            height: 48px;
+            width: clamp(48px, 4vw, 64px);
+            height: clamp(48px, 4vw, 64px);
             flex-shrink: 0;
         }
 
@@ -1170,8 +1175,7 @@
         }
 
         .container {
-            max-width: var(--app-max);
-            margin: 0 auto;
+            width: 100%;
             background: var(--bg-dark);
         }
         
@@ -2625,9 +2629,62 @@
             .hero-flag-btn { bottom: 60px; }
         }
 
-        /* Wide screens: delineate the centered app column */
-        @media (min-width: 760px) {
-            .container { box-shadow: 0 0 80px rgba(0, 0, 0, 0.55); }
+        /* Fluid mid-range: type and dialog widths scale continuously with
+           the viewport instead of snapping between fixed sizes. */
+        @media (min-width: 641px) {
+            .onboarding-card { max-width: 460px; }
+            .location-setup-screen { max-width: 520px; }
+            .state-desc { max-width: 40ch; }
+        }
+
+        @media (min-width: 641px) and (min-height: 501px) {
+            .temp-main { font-size: clamp(96px, 16vw, 128px); }
+        }
+
+        /* In the multi-column grid a hover lift reads better than the
+           single-column sideways nudge. */
+        @media (min-width: 700px) {
+            .outfit-card:hover { transform: translateY(-2px); }
+        }
+
+        /* Wide screens: two-pane rail — the hero anchors a full-height left
+           pane and the outfit pane scrolls independently, mirroring the
+           native app's EXPANDED composition (Fold/Duo/tablet/desktop). The
+           panes tile the viewport exactly: no centered column, no voids. */
+        @media (min-width: 900px) {
+            .container {
+                display: grid;
+                grid-template-columns: minmax(400px, 42%) 1fr;
+                grid-template-rows: minmax(0, 1fr);
+                height: 100vh;
+                height: 100dvh;
+            }
+            .container > .state-screen,
+            .container > .location-setup-screen { grid-column: 1 / -1; }
+            .hero, .skeleton-hero { height: 100%; min-height: 0; max-height: none; }
+            .outfit-section, .skeleton-section { height: 100%; overflow-y: auto; }
+            .skeleton-section {
+                padding-left: max(var(--pad-inline), env(safe-area-inset-left));
+                padding-right: max(var(--pad-inline), env(safe-area-inset-right));
+            }
+            .location-setup-screen { min-height: 0; height: 100%; overflow-y: auto; }
+            .state-screen { min-height: 0; height: 100%; }
+            .modal-overlay { align-items: center; padding: 24px; }
+            .modal, .shop-modal { max-width: 560px; border-radius: 24px; }
+            .location-modal { max-width: 520px; border-radius: 24px; }
+            .picker-container { max-width: 400px; }
+        }
+
+        /* In rail mode the temperature scales with the hero pane's own
+           width (container-query units), not the whole viewport. */
+        @media (min-width: 900px) and (min-height: 501px) {
+            .temp-main { font-size: clamp(96px, 24cqw, 148px); }
+        }
+
+        /* Wide but short (landscape foldables, short windows): keep the
+           hero content stack compact inside the full-height pane. */
+        @media (min-width: 900px) and (max-height: 500px) {
+            .temp-main { font-size: 84px; }
         }
     </style>
 </head>
