@@ -18,6 +18,7 @@ on:
         options:
           - verify
           - attach
+          - status
         default: verify
         required: true
       version:
@@ -52,3 +53,7 @@ jobs:
         if: inputs.task == 'attach'
         working-directory: scripts/asc
         run: python3 asc_attach_build.py "${{ inputs.version }}" "${{ inputs.build }}"
+      - name: Publishing-status readback (read-only)
+        if: inputs.task == 'status'
+        working-directory: scripts/asc
+        run: python3 asc_status.py
