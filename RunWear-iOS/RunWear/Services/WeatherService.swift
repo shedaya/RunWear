@@ -3,11 +3,24 @@ import CoreLocation
 
 class WeatherService {
     static let shared = WeatherService()
-    private let baseURL = "https://api.open-meteo.com/v1/forecast"
+    private static let baseURL = "https://api.open-meteo.com/v1/forecast"
 
     private init() {}
 
-    func fetchWeather(latitude: Double, longitude: Double) async throws -> WeatherData {
+    /// Coordinates leave the device only at Coarse Location precision:
+    /// 1 decimal place (~11 km), the AccliMate approach, adopted for
+    /// RunWear by Sol's ruling (2026-10-30) so the privacy manifest can
+    /// declare Coarse instead of Precise. The rounding lives here, at
+    /// the request boundary — callers pass full precision, and stored,
+    /// displayed, and persisted locations are never rounded.
+    static func coarseCoordinate(_ value: Double) -> Double {
+        (value * 10).rounded() / 10
+    }
+
+    /// The forecast request URL — the single place coordinates are
+    /// serialized into an outbound query (both the app and watch
+    /// targets fetch through here). Pinned by WeatherServicePrivacyTests.
+    static func forecastURL(latitude: Double, longitude: Double) -> URL? {
         var components = URLComponents(string: baseURL)!
         // The weather contract mirrors Android's OpenMeteoApi: one fetch
         // carrying the legacy current block, the extended current block,
@@ -19,8 +32,8 @@ class WeatherService {
         // stores Celsius and converts for display, so temperature stays
         // celsius here — the frames the engine sees are unaffected).
         components.queryItems = [
-            URLQueryItem(name: "latitude", value: String(latitude)),
-            URLQueryItem(name: "longitude", value: String(longitude)),
+            URLQueryItem(name: "latitude", value: String(coarseCoordinate(latitude))),
+            URLQueryItem(name: "longitude", value: String(coarseCoordinate(longitude))),
             URLQueryItem(name: "current_weather", value: "true"),
             URLQueryItem(name: "current", value: "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index"),
             URLQueryItem(name: "hourly", value: "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index"),
@@ -30,7 +43,11 @@ class WeatherService {
             URLQueryItem(name: "forecast_days", value: "7")
         ]
 
-        guard let url = components.url else {
+        return components.url
+    }
+
+    func fetchWeather(latitude: Double, longitude: Double) async throws -> WeatherData {
+        guard let url = Self.forecastURL(latitude: latitude, longitude: longitude) else {
             throw WeatherError.invalidURL
         }
 
