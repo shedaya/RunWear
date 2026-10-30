@@ -1,5 +1,7 @@
 # Branch-scoped archive verification for the privacy-manifest work
-# (feat/ios-privacy-manifest-2026-10-30). NOT the shipping pipeline:
+# (feat/ios-privacy-manifest-2026-10-30, plus the stacked Coarse
+# Location follow-up feat/ios-coarse-location-2026-10-30). NOT the
+# shipping pipeline:
 # builds the shared :engine XCFramework exactly like ios-testflight.yml,
 # then produces an UNSIGNED device archive of scheme RunWear and uploads
 # the .app bundle as an artifact so the bundle contents (privacy
@@ -13,6 +15,7 @@ on:
   push:
     branches:
       - "feat/ios-privacy-manifest-2026-10-30"
+      - "feat/ios-coarse-location-2026-10-30"
   workflow_dispatch:
 
 concurrency:
