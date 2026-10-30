@@ -153,7 +153,7 @@ data class HeroImageResult(
     val combinationId: String,
     /**
      * Supabase `generated_images` row id, set only when the image was
-     * served from the pool. Null for fallback/curated images (Unsplash),
+     * served from the pool. Null for fallback/curated images (bundled assets),
      * which have no pool row. Hero-flag reports key off this: a non-null
      * value identifies the exact photo a user is looking at.
      */
@@ -178,50 +178,54 @@ object HeroImageSelector {
      * 6 temp brackets × 4 weather conditions = up to 24 unique fallback images.
      *
      * Image selection based on RunWear Hero Image System Specification.
-     * Uses Unsplash photo IDs with w=800&h=1200&fit=crop dimensions.
+     * Since 2026-10-29 every cell is a bundled asset (in the shared module's
+     * assets/hero_fallback/) derived from an approved generated_images pool
+     * row, so the fallback renders fully offline; before that the cells were
+     * remote Unsplash stock URLs. Keep in sync with HeroImageRepository's
+     * copy of this table (a unit test asserts the two agree).
      */
     private val FALLBACK_IMAGES_2D: Map<TempBracket, Map<HeroWeatherCondition, String>> = mapOf(
         // HOT (80°F+) - Snow impossible
         TempBracket.HOT to mapOf(
-            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop", // Tank top, bright sunny
-            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop", // Summer overcast
-            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop" // Summer rain
+            HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/hot_clear.webp", // Tank top, bright sunny
+            HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/hot_cloudy.webp", // Summer overcast
+            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/hot_rain.webp" // Summer rain
             // SNOW: null - Not possible when HOT
         ),
         // WARM (65-79°F) - Snow very unlikely
         TempBracket.WARM to mapOf(
-            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1486218119243-13883505764c?w=800&h=1200&fit=crop", // T-shirt sunny
-            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop", // Warm overcast
-            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=1200&fit=crop" // Warm rain
+            HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/warm_clear.webp", // T-shirt sunny
+            HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/warm_cloudy.webp", // Warm overcast
+            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/warm_rain.webp" // Warm rain
             // SNOW: null - Very unlikely when WARM
         ),
         // MILD (50-64°F) - All conditions possible
         TempBracket.MILD to mapOf(
-            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop", // Light layers sunny
-            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1558017487-06bf9f82613a?w=800&h=1200&fit=crop", // Mild overcast
-            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop", // Spring/fall rain
-            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop" // Light snow
+            HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/mild_clear.webp", // Light layers sunny
+            HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/mild_cloudy.webp", // Mild overcast
+            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/mild_rain.webp", // Spring/fall rain
+            HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/mild_snow.webp" // Light snow
         ),
         // COOL (35-49°F) - All conditions possible
         TempBracket.COOL to mapOf(
-            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=800&h=1200&fit=crop", // Long sleeves sunny
-            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=1200&fit=crop", // Cool overcast
-            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1515191107209-c28698631303?w=800&h=1200&fit=crop", // Cool rainy
-            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1491002052546-bf38f186af56?w=800&h=1200&fit=crop" // Cool snow
+            HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/cool_clear.webp", // Long sleeves sunny
+            HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/cool_cloudy.webp", // Cool overcast
+            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/cool_rain.webp", // Cool rainy
+            HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/cool_snow.webp" // Cool snow
         ),
         // COLD (20-34°F) - All conditions possible
         TempBracket.COLD to mapOf(
-            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop", // Jacket sunny
-            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800&h=1200&fit=crop", // Cold overcast
-            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop", // Cold rain/sleet
-            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?w=800&h=1200&fit=crop" // Snowy run
+            HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/cold_clear.webp", // Jacket sunny
+            HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/cold_cloudy.webp", // Cold overcast
+            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/cold_rain.webp", // Cold rain/sleet
+            HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/cold_snow.webp" // Snowy run
         ),
         // FREEZING (<20°F) - All conditions possible
         TempBracket.FREEZING to mapOf(
-            HeroWeatherCondition.CLEAR to "https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop", // Winter gear sunny
-            HeroWeatherCondition.CLOUDY to "https://images.unsplash.com/photo-1544899489-a083461b088c?w=800&h=1200&fit=crop", // Freezing overcast
-            HeroWeatherCondition.RAIN to "https://images.unsplash.com/photo-1519692933481-e162a57d6721?w=800&h=1200&fit=crop", // Freezing rain/sleet
-            HeroWeatherCondition.SNOW to "https://images.unsplash.com/photo-1418985991508-e47386d96a71?w=800&h=1200&fit=crop" // Heavy snow
+            HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/freezing_clear.webp", // Winter gear sunny
+            HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/freezing_cloudy.webp", // Freezing overcast
+            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/freezing_rain.webp", // Freezing rain/sleet
+            HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/freezing_snow.webp" // Heavy snow
         )
     )
 
@@ -255,9 +259,11 @@ object HeroImageSelector {
     }
 
     /**
-     * Get weather-aware fallback image URL.
+     * Get the weather-aware fallback image reference for a cell.
+     * Public so unit tests can assert every cell resolves to a bundled
+     * pool-derived asset and both copies of the table agree.
      */
-    private fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String {
+    fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String {
         // Try exact temp + weather match
         val bracketImages = FALLBACK_IMAGES_2D[tempBracket]
         val weatherImages = bracketImages?.get(weatherCondition)
@@ -273,7 +279,7 @@ object HeroImageSelector {
 
         // Ultimate fallback - mild + clear
         return FALLBACK_IMAGES_2D[TempBracket.MILD]?.get(HeroWeatherCondition.CLEAR)
-            ?: "https://images.unsplash.com/photo-1571008887538-b36bb32f4571?w=800&h=1200&fit=crop"
+            ?: "file:///android_asset/hero_fallback/mild_clear.webp"
     }
 
     /**

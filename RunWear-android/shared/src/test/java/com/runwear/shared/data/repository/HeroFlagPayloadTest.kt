@@ -23,7 +23,7 @@ class HeroFlagPayloadTest {
     private val poolUrl =
         "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/public/hero-images/MALE_CLEAR_MILD_DUSK_v5/11c5bac0-b83a-4ee1-b018-799dd6ec9fc2"
     private val fallbackUrl =
-        "https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&h=1200&fit=crop"
+        "file:///android_asset/hero_fallback/mild_clear.webp"
     private val rowId = "7367eebd-47ff-4338-a7a0-0a5a64e3d9b2"
     private val ts = "2026-10-29T22:30:00Z"
 
