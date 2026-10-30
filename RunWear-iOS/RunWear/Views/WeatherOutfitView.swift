@@ -6,7 +6,6 @@ struct WeatherOutfitView: View {
     @ObservedObject var locationService: LocationService
     let weather: WeatherData
     let recommendation: OutfitRecommendation
-    let isRefreshing: Bool
     let onRefresh: () -> Void
     var onUseCurrentLocation: () -> Void = {}
 
@@ -20,6 +19,13 @@ struct WeatherOutfitView: View {
 
     // Animation state
     @State private var hasAppeared = false
+
+    // The hero photo the share payload carries (RW-6.5): the AI
+    // photo when there is one, else the fallback — the image the
+    // hero itself shows. Loaded as an Image because ShareLink
+    // vends an Image, not a URL; nil until it arrives (the share
+    // button falls back to text-only meanwhile, never blocked).
+    @State private var heroShareImage: Image?
 
     var body: some View {
         // Home lives in a NavigationStack (design record §5.2):
@@ -35,13 +41,25 @@ struct WeatherOutfitView: View {
 
                 layoutContent
 
-                // Loading overlay
-                if isRefreshing {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(.white)
+                // RW-6.2: a failed refresh with content on screen is
+                // a banner, not a takeover — the outfit stays readable
+                // underneath, and .refreshable's own spinner is the
+                // only progress affordance (the black scrim that used
+                // to accompany every refresh is gone). This view only
+                // exists when content does, so an errorMessage here is
+                // by construction the with-content case.
+                if let refreshError = viewModel.errorMessage {
+                    VStack {
+                        RefreshErrorBanner(
+                            message: refreshError,
+                            onRetry: onRefresh,
+                            onDismiss: { viewModel.errorMessage = nil }
+                        )
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .navigationTitle(viewModel.locationName)
@@ -62,9 +80,7 @@ struct WeatherOutfitView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button(action: shareOutfit) {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                    }
+                    shareButton
                     Button {
                         showSettings = true
                     } label: {
@@ -155,6 +171,53 @@ struct WeatherOutfitView: View {
                 hasAppeared = true
             }
         }
+        .task(id: heroSharePhotoURL) {
+            heroShareImage = await Self.loadShareImage(from: heroSharePhotoURL)
+        }
+    }
+
+    // MARK: - Share (RW-6.5)
+
+    /// Native ShareLink — it anchors its own popover on iPad and
+    /// stacks over presented sheets, the two failure modes of the
+    /// hand-rolled UIActivityViewController it replaces (which
+    /// presented from the root view controller with no anchor — a
+    /// documented iPad crash risk on this iPad-shipping target).
+    /// Payload: the hero photo (once loaded) + the aligned share
+    /// text; text-only until the photo arrives.
+    @ViewBuilder private var shareButton: some View {
+        if let text = viewModel.shareText {
+            if let heroShareImage {
+                ShareLink(
+                    item: heroShareImage,
+                    subject: Text("RunWear Outfit"),
+                    message: Text(text),
+                    preview: SharePreview("RunWear Outfit", image: heroShareImage)
+                ) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            } else {
+                ShareLink(item: text) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                }
+            }
+        }
+    }
+
+    /// The hero photo's URL in the hero's own priority: the AI
+    /// photo, else the bundled fallback — the image on screen.
+    private var heroSharePhotoURL: URL? {
+        let string = viewModel.heroImageUrl ?? viewModel.fallbackImageUrl ?? defaultFallbackUrl
+        return URL(string: string)
+    }
+
+    private static func loadShareImage(from url: URL?) async -> Image? {
+        guard let url,
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let uiImage = UIImage(data: data) else {
+            return nil
+        }
+        return Image(uiImage: uiImage)
     }
 
     // MARK: - Layouts (design record §5.2, frame f5)
@@ -335,7 +398,9 @@ struct WeatherOutfitView: View {
             fallbackImageUrl: viewModel.fallbackImageUrl ?? defaultFallbackUrl,
             aiImageUrl: viewModel.heroImageUrl,
             onSettingsTapped: { showSettings = true },
-            onShareTapped: shareOutfit,
+            // No onShareTapped: the hero's top controls are off
+            // (showsTopControls below) — sharing lives in the
+            // toolbar as a ShareLink (RW-6.5).
             onLocationTapped: { showLocationPicker = true },
             onDateTapped: { showDatePicker = true },
             onTimeTapped: { showTimePicker = true },
@@ -444,32 +509,50 @@ struct WeatherOutfitView: View {
         }
     }
 
-    // MARK: - Actions
+}
 
-    private func shareOutfit() {
-        // Build share content
-        let items: [Any] = [
-            "🏃 RunWear Outfit for \(viewModel.locationName)",
-            "Temperature: \(Int(viewModel.currentTemperature))°\(viewModel.temperatureUnit == .fahrenheit ? "F" : "C")",
-            "Condition: \(viewModel.currentCondition.rawValue)",
-            "",
-            "Outfit: \(recommendation.allItems.map { $0.name }.joined(separator: ", "))",
-            "",
-            "Get your personalized running outfit at runwear.app"
-        ].filter { !($0 as? String ?? "").isEmpty }
+// MARK: - Refresh Error Banner (RW-6.2)
 
-        let text = (items as? [String])?.joined(separator: "\n") ?? ""
+/// The non-destructive error surface for a failed refresh: a dark
+/// glass banner in the app's card idiom, floating over the outfit
+/// that stays on screen. Retry re-runs the refresh; the X clears
+/// the error without one.
+private struct RefreshErrorBanner: View {
+    let message: String
+    let onRetry: () -> Void
+    let onDismiss: () -> Void
 
-        let activityVC = UIActivityViewController(
-            activityItems: [text],
-            applicationActivities: nil
-        )
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
 
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let window = windowScene.windows.first,
-           let rootVC = window.rootViewController {
-            rootVC.present(activityVC, animated: true)
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("Retry", action: onRetry)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.primaryColor)
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            .accessibilityLabel("Dismiss")
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.black.opacity(0.85))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(radius: 8)
     }
 }
 
@@ -676,7 +759,6 @@ struct GenderOption: View {
             rawTemperature: 59,
             isRaining: false
         ),
-        isRefreshing: false,
         onRefresh: {}
     )
 }

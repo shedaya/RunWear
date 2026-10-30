@@ -46,6 +46,29 @@ enum ManualLocationStore {
     }
 }
 
+/// What the authorized home screen shows, resolved in one place so
+/// the precedence is pinnable (RW-6.2): CONTENT outranks the error —
+/// a failed pull-to-refresh must never replace a good outfit with a
+/// full-screen error. The error owns the screen only when there is
+/// nothing to show; an error arriving WITH content is demoted to a
+/// non-destructive banner over the outfit (WeatherOutfitView reads
+/// the same flag). Loading is what remains: no content, no error.
+enum HomePresentation: Equatable {
+    case loading
+    case content(showRefreshError: Bool)
+    case error(String)
+
+    static func resolve(hasContent: Bool, errorMessage: String?) -> HomePresentation {
+        if hasContent {
+            return .content(showRefreshError: errorMessage != nil)
+        }
+        if let errorMessage {
+            return .error(errorMessage)
+        }
+        return .loading
+    }
+}
+
 @MainActor
 class WeatherViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -429,6 +452,52 @@ class WeatherViewModel: ObservableObject {
 
     var currentCondition: WeatherCondition {
         selectedWeatherSnapshot?.condition ?? weatherData?.currentWeather.condition ?? .unknown
+    }
+
+    /// The RAW measured feels-like in °F, regardless of the display
+    /// unit — the frame the share text's bracket is taken from
+    /// (Android composes its share bracket from the raw feels-like,
+    /// not from the comfort-adjusted engine frame).
+    private var rawFeelsLikeFahrenheit: Double {
+        if let snapshot = selectedWeatherSnapshot {
+            return snapshot.feelsLikeFahrenheit
+        }
+        if let current = weatherData?.currentWeather {
+            let feelsC = weatherData?.currentDetail?.apparentTemperature ?? current.temperature
+            return feelsC * 9 / 5 + 32
+        }
+        return 0
+    }
+
+    /// The share payload's text (RW-6.5) — the aligned composition
+    /// Android and the PWA share verbatim in layout: a feels-like
+    /// headline (the RAW measured feels-like the hero shows — never
+    /// the actual temperature, never comfort-adjusted), the
+    /// condition, the outfit itemized, the first tip, and the
+    /// runwear.ai link. (The hand-rolled share it replaces quoted
+    /// the ACTUAL temperature and linked runwear.app.) A view-model
+    /// computation so the test target pins the composition without
+    /// a view host. Nil until a recommendation exists.
+    var shareText: String? {
+        guard let recommendation else { return nil }
+        let unit = temperatureUnit == .fahrenheit ? "F" : "C"
+        var lines: [String] = [
+            "🏃 RunWear Recommendation",
+            "",
+            "📍 \(locationName)",
+            "🌡️ Feels like \(Int(currentFeelsLike))°\(unit) (\(TemperatureBracket.from(temperature: rawFeelsLikeFahrenheit).description))",
+            currentCondition.shortDescription,
+            "",
+            "What to wear:"
+        ]
+        lines += recommendation.allItems.map { "• \($0.name)" }
+        lines.append("")
+        if let tip = recommendation.tips.first {
+            lines.append("💡 Tip: \(tip)")
+            lines.append("")
+        }
+        lines.append("Get your personalized running outfit at runwear.ai")
+        return lines.joined(separator: "\n")
     }
 
     var currentTempBracket: HeroTempBracket {

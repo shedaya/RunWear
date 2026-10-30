@@ -36,16 +36,25 @@ struct ContentView: View {
                         })
                     }
                 case .authorizedWhenInUse, .authorizedAlways:
-                    if viewModel.isLoading && viewModel.weatherData == nil {
+                    // RW-6.2 precedence (resolved by HomePresentation,
+                    // pinned by HomePresentationTests): content
+                    // outranks the error. A failed refresh keeps the
+                    // outfit on screen — the error becomes a banner
+                    // over it inside WeatherOutfitView — and the
+                    // full-screen error is reserved for having
+                    // nothing to show.
+                    switch HomePresentation.resolve(
+                        hasContent: viewModel.weatherData != nil && viewModel.recommendation != nil,
+                        errorMessage: viewModel.errorMessage
+                    ) {
+                    case .loading:
                         LoadingView()
-                    } else if let error = viewModel.errorMessage {
-                        ErrorView(message: error) {
+                    case .error(let message):
+                        ErrorView(message: message) {
                             refreshAppropriate()
                         }
-                    } else if viewModel.weatherData != nil && viewModel.recommendation != nil {
+                    case .content:
                         outfitView
-                    } else {
-                        LoadingView()
                     }
                 @unknown default:
                     LoadingView()
@@ -128,7 +137,6 @@ struct ContentView: View {
                 locationService: locationService,
                 weather: weather,
                 recommendation: recommendation,
-                isRefreshing: viewModel.isLoading,
                 onRefresh: {
                     refreshAppropriate()
                 },
