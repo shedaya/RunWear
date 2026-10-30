@@ -13,6 +13,7 @@ import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.time.ZoneId
+import kotlin.math.roundToInt
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,6 +25,18 @@ data class LocationResult(
     val detail: String = "",
     val isUSA: Boolean = false
 )
+
+/**
+ * The coarse-location rounding applied at the weather request boundary:
+ * coordinates are rounded to 1 decimal place (~11 km) before they are
+ * serialized into an outbound Open-Meteo query — the same posture the iOS
+ * app ships (WeatherService.coarseCoordinate) and the Play/App Store
+ * privacy declarations state. Stored, displayed and manually entered
+ * coordinates are NEVER rounded; this is applied only where
+ * [WeatherRepository] hands coordinates to the weather API.
+ */
+internal fun coarseCoordinate(value: Double): Double =
+    (value * 10).roundToInt() / 10.0
 
 @Singleton
 class WeatherRepository @Inject constructor(
@@ -45,7 +58,9 @@ class WeatherRepository @Inject constructor(
     suspend fun getLocationTimeZone(latitude: Double, longitude: Double): Result<ZoneId> = runCatching {
         val key = "%.2f,%.2f".format(latitude, longitude)
         timeZoneCache[key]?.let { return@runCatching it }
-        val zone = ZoneId.of(weatherApi.getTimeZone(latitude, longitude).timezone)
+        val zone = ZoneId.of(
+            weatherApi.getTimeZone(coarseCoordinate(latitude), coarseCoordinate(longitude)).timezone
+        )
         timeZoneCache[key] = zone
         zone
     }
@@ -64,8 +79,8 @@ class WeatherRepository @Inject constructor(
         val tempUnit = if (unit == TemperatureUnit.CELSIUS) "celsius" else "fahrenheit"
         val windUnit = if (unit == TemperatureUnit.CELSIUS) "kmh" else "mph"
         weatherApi.getWeather(
-            latitude = latitude,
-            longitude = longitude,
+            latitude = coarseCoordinate(latitude),
+            longitude = coarseCoordinate(longitude),
             temperatureUnit = tempUnit,
             windSpeedUnit = windUnit
         )
