@@ -279,7 +279,8 @@ Get your personalized running outfit at runwear.ai
                                 state = gridState,
                                 modifier = Modifier.fillMaxSize(),
                                 contentPadding = PaddingValues(
-                                    horizontal = spec.pagePadding,
+                                    start = spec.pagePadding,
+                                    end = spec.pagePadding,
                                     bottom = 60.dp
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
@@ -357,7 +358,8 @@ Get your personalized running outfit at runwear.ai
                                         .weight(1f)
                                         .fillMaxHeight(),
                                     contentPadding = PaddingValues(
-                                        horizontal = spec.pagePadding,
+                                        start = spec.pagePadding,
+                                        end = spec.pagePadding,
                                         bottom = 60.dp
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
