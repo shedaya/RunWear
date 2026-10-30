@@ -1,0 +1,54 @@
+name: ASC Verify (RunWear build readback)
+
+# Read-only App Store Connect readback for RunWear, mirroring the
+# JetLagKiller asc-tools pattern: this workspace's VM cannot call the
+# ASC API directly (egress stalls Authorization-header requests to
+# non-registered hosts), so the readback executes on a GitHub runner.
+# task=verify: list the app's recent TestFlight builds and, for the
+# given version+build, report processing state + beta-group attachment.
+# task=attach: add the given version+build to the app's internal beta
+# group (only if verify shows it unattached).
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Which ASC tool to run"
+        type: choice
+        options:
+          - verify
+          - attach
+        default: verify
+        required: true
+      version:
+        description: "Marketing version (e.g. 1.0)"
+        required: true
+        default: "1.0"
+      build:
+        description: "Build number (e.g. 5)"
+        required: true
+        default: "5"
+
+jobs:
+  asc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct the ASC API key
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "ASC_KEY_ID=${{ secrets.ASC_API_KEY_ID }}" >> "$GITHUB_ENV"
+          echo "ASC_ISSUER_ID=${{ secrets.ASC_API_ISSUER_ID }}" >> "$GITHUB_ENV"
+      - name: Verify build state in App Store Connect
+        if: inputs.task == 'verify'
+        working-directory: scripts/asc
+        run: python3 asc_verify_build.py "${{ inputs.version }}" "${{ inputs.build }}"
+      - name: Attach build to the internal beta group
+        if: inputs.task == 'attach'
+        working-directory: scripts/asc
+        run: python3 asc_attach_build.py "${{ inputs.version }}" "${{ inputs.build }}"
