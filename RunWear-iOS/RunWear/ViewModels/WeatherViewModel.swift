@@ -2,6 +2,50 @@ import Foundation
 import CoreLocation
 import SwiftUI
 
+/// Persistence for the user's manually chosen location — the iOS
+/// counterpart of Android's PreferencesRepository.SavedLocation,
+/// which the Android app (and its widget) read first on launch.
+/// iOS kept the choice only in memory: a relaunch silently returned
+/// to GPS, and the next GPS fix overwrote the manual location's
+/// weather (parity register R-19).
+enum ManualLocationStore {
+    struct Saved: Equatable {
+        let latitude: Double
+        let longitude: Double
+        let name: String
+    }
+
+    private static let latitudeKey = "manualLocation.latitude"
+    private static let longitudeKey = "manualLocation.longitude"
+    private static let nameKey = "manualLocation.name"
+
+    static func save(_ saved: Saved, to defaults: UserDefaults = .standard) {
+        defaults.set(saved.latitude, forKey: latitudeKey)
+        defaults.set(saved.longitude, forKey: longitudeKey)
+        defaults.set(saved.name, forKey: nameKey)
+    }
+
+    static func load(from defaults: UserDefaults = .standard) -> Saved? {
+        // object(forKey:) distinguishes "never saved" from a saved
+        // coordinate on the equator / prime meridian (0.0).
+        guard defaults.object(forKey: latitudeKey) != nil,
+              defaults.object(forKey: longitudeKey) != nil else {
+            return nil
+        }
+        return Saved(
+            latitude: defaults.double(forKey: latitudeKey),
+            longitude: defaults.double(forKey: longitudeKey),
+            name: defaults.string(forKey: nameKey) ?? ""
+        )
+    }
+
+    static func clear(from defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: latitudeKey)
+        defaults.removeObject(forKey: longitudeKey)
+        defaults.removeObject(forKey: nameKey)
+    }
+}
+
 @MainActor
 class WeatherViewModel: ObservableObject {
     // MARK: - Published Properties
@@ -65,6 +109,12 @@ class WeatherViewModel: ObservableObject {
 
     private var currentLocation: CLLocation?
 
+    /// The manual location restored from persistence at launch, if
+    /// any. ContentView fetches weather for it on appear instead of
+    /// requesting a GPS fix (Android's saved-location-first launch).
+    /// Cleared when the user switches back to GPS.
+    private(set) var restoredManualLocation: CLLocation?
+
     // MARK: - Initialization
 
     init() {
@@ -88,6 +138,17 @@ class WeatherViewModel: ObservableObject {
             self.comfortLevel = level
         } else {
             self.comfortLevel = .neutral
+        }
+
+        // Restore a saved manual location (R-19): the app launches
+        // on the user's chosen place, not on GPS, until they switch
+        // back — the Android saved-location contract.
+        if let saved = ManualLocationStore.load() {
+            self.isUsingGPS = false
+            self.locationName = saved.name
+            let location = CLLocation(latitude: saved.latitude, longitude: saved.longitude)
+            self.currentLocation = location
+            self.restoredManualLocation = location
         }
     }
 
@@ -134,6 +195,16 @@ class WeatherViewModel: ObservableObject {
         isUsingGPS = false
         locationName = name
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        // Persist the choice (R-19): it survives relaunch and is
+        // what the next launch restores.
+        ManualLocationStore.save(
+            ManualLocationStore.Saved(
+                latitude: coordinate.latitude,
+                longitude: coordinate.longitude,
+                name: name
+            )
+        )
+        restoredManualLocation = location
         Task {
             await fetchWeather(for: location)
         }
@@ -141,6 +212,21 @@ class WeatherViewModel: ObservableObject {
 
     func switchToGPS() {
         isUsingGPS = true
+        // Back to GPS: the saved manual location no longer governs
+        // launch or refresh.
+        ManualLocationStore.clear()
+        restoredManualLocation = nil
+    }
+
+    /// Re-fetch weather for the location currently in use (the
+    /// manual location in manual mode). Refresh and error-retry in
+    /// manual mode must not silently substitute a GPS fix.
+    func refreshCurrent() async {
+        guard let currentLocation else {
+            errorMessage = "Location not available"
+            return
+        }
+        await fetchWeather(for: currentLocation)
     }
 
     func updateSelectedTime(date: Date, hour: Int) {
@@ -320,13 +406,23 @@ class WeatherViewModel: ObservableObject {
         return 0
     }
 
+    /// The measured feels-like for display — RAW, in the selected
+    /// unit. The hero headline on Android and the PWA is the raw
+    /// feels-like (Kotlin: effectiveTemperature == feelsLike), and
+    /// their "Actual:" line is the raw actual temperature. This
+    /// property previously added the comfort adjustment on top of
+    /// the measured value, so the iOS "Feels like" line showed a
+    /// number that existed on neither reference surface (and the
+    /// hero headline showed the actual temperature instead — see
+    /// WeatherOutfitView's HeroImageView call). The comfort
+    /// adjustment belongs to the engine's warmth frame
+    /// (makeRecommendation), never to a displayed measurement.
     var currentFeelsLike: Double {
         if let snapshot = selectedWeatherSnapshot {
-            let base = temperatureUnit == .fahrenheit ? snapshot.feelsLikeFahrenheit : snapshot.feelsLike
-            return base + (temperatureUnit == .fahrenheit ? comfortLevel.temperatureAdjustment : comfortLevel.temperatureAdjustment * 5 / 9)
+            return temperatureUnit == .fahrenheit ? snapshot.feelsLikeFahrenheit : snapshot.feelsLike
         } else if let current = weatherData?.currentWeather {
-            let base = temperatureUnit == .fahrenheit ? current.temperatureFahrenheit : current.temperature
-            return base + (temperatureUnit == .fahrenheit ? comfortLevel.temperatureAdjustment : comfortLevel.temperatureAdjustment * 5 / 9)
+            let feelsC = weatherData?.currentDetail?.apparentTemperature ?? current.temperature
+            return temperatureUnit == .fahrenheit ? feelsC * 9 / 5 + 32 : feelsC
         }
         return 0
     }

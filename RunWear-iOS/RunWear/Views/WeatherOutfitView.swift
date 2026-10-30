@@ -323,8 +323,11 @@ struct WeatherOutfitView: View {
     private func heroSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
         HeroImageView(
             locationName: viewModel.locationName,
-            temperature: viewModel.currentTemperature,
-            feelsLike: viewModel.currentFeelsLike,
+            // Hero contract (Android/PWA): headline = raw feels-like,
+            // sub-line = raw actual. (Was: headline = actual,
+            // sub-line = comfort-adjusted feels-like.)
+            temperature: viewModel.currentFeelsLike,
+            actualTemperature: viewModel.currentTemperature,
             weatherCondition: viewModel.currentCondition,
             date: viewModel.selectedDate,
             hour: viewModel.selectedHour,
@@ -576,60 +579,6 @@ struct DarkClothingItemCard: View {
 
 // MARK: - Legacy Components (kept for compatibility)
 
-struct WeatherCard: View {
-    let weather: CurrentWeather
-    let locationName: String
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "location.fill")
-                    .foregroundColor(AppTheme.primaryColor)
-                Text(locationName)
-                    .font(.subheadline)
-                    .foregroundColor(AppTheme.textSecondary)
-            }
-
-            HStack(alignment: .top, spacing: 20) {
-                VStack {
-                    Image(systemName: weather.condition.icon)
-                        .font(.system(size: 50))
-                        .foregroundColor(AppTheme.primaryColor)
-                    Text(weather.condition.rawValue)
-                        .font(.caption)
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("\(Int(weather.temperatureFahrenheit))°F")
-                        .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(AppTheme.textPrimary)
-                    Text("\(Int(weather.temperature))°C")
-                        .font(.title3)
-                        .foregroundColor(AppTheme.textSecondary)
-                }
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack {
-                        Image(systemName: "wind")
-                            .foregroundColor(AppTheme.textSecondary)
-                        Text("\(Int(weather.windspeed)) mph")
-                            .font(.subheadline)
-                            .foregroundColor(AppTheme.textSecondary)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
-        .padding(.horizontal)
-    }
-}
-
 struct TemperatureBracketBadge: View {
     let bracket: TemperatureBracket
 
@@ -661,58 +610,6 @@ struct TemperatureBracketBadge: View {
         case .frigid: return 15
         case .extreme: return 10
         }
-    }
-}
-
-struct ClothingItemCard: View {
-    let item: ClothingItem
-    var category: String? = nil
-    var gender: GenderPreference = .unisex
-
-    var body: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.primaryColor.opacity(0.1))
-                    .frame(width: 50, height: 50)
-                Text(item.icon)
-                    .font(.title2)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                if let category = category {
-                    Text(category)
-                        .font(.caption)
-                        .foregroundColor(AppTheme.textSecondary)
-                        .textCase(.uppercase)
-                }
-                Text(item.name)
-                    .font(.headline)
-                    .foregroundColor(AppTheme.textPrimary)
-                Text(item.description)
-                    .font(.subheadline)
-                    .foregroundColor(AppTheme.textSecondary)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            if let url = item.affiliateURL(for: gender) {
-                Link(destination: url) {
-                    Image(systemName: "cart.fill")
-                        .font(.title3)
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(AppTheme.primaryColor)
-                        .cornerRadius(10)
-                }
-            }
-        }
-        .padding()
-        .background(AppTheme.cardBackground)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
-        .padding(.horizontal)
     }
 }
 
