@@ -1,0 +1,39 @@
+name: Bundle Release (dispatch only)
+
+# Manual, dispatch-only: builds the phone release AAB on a hosted
+# runner and uploads it UNSIGNED as an artifact. Signing happens
+# locally with the upload keystore (jarsigner), the same pattern the
+# Wear AAB used — CI never sees the keystore. Added 2026-10-30 when
+# this VM's Gradle daemon was repeatedly OOM-killed at
+# :app:minifyReleaseWithR8 under multi-agent memory contention.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Build phone release AAB (unsigned)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build release bundle
+        working-directory: RunWear-android
+        run: ./gradlew :app:bundleRelease --stacktrace
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-release-aab
+          path: RunWear-android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
