@@ -1,93 +1,99 @@
 import Foundation
 
-/// Provides Unsplash fallback images when Supabase images are unavailable
+/// Provides fallback hero images when Supabase pool images are unavailable.
+///
+/// Since 2026-10-30 the fallbacks are the SAME 22 approved AI pool photos
+/// the Android app bundles, shipped inside the app bundle under
+/// `hero_fallback/` — no more remote Unsplash stock. Cell-for-cell
+/// identical to Android's WebP fallback table (and the PWA's).
 struct FallbackImageProvider {
     static let shared = FallbackImageProvider()
 
     private init() {}
 
-    /// Base Unsplash URL format
-    private let baseURL = "https://images.unsplash.com"
-
-    /// Image size parameters
+    /// Kept for call-site compatibility. The bundled photos are a single
+    /// 800x1200 size serving both iOS and watchOS (the watch downscales),
+    /// so the size no longer changes the returned URL.
     enum ImageSize {
         case iOS      // 800x1200
         case watchOS  // 400x600
-
-        var parameters: String {
-            switch self {
-            case .iOS: return "w=800&h=1200&fit=crop"
-            case .watchOS: return "w=400&h=600&fit=crop"
-            }
-        }
     }
 
-    /// Unsplash photo IDs organized by temperature and weather —
-    /// an exact mirror of Android's FALLBACK_IMAGES_2D
-    /// (HeroImageRepository): 22 populated cells. HOT and WARM have
-    /// no SNOW cell on either platform; the lookup below falls back
-    /// to the bracket's CLEAR image, as Android's does.
+    /// Bundled asset file names organized by temperature and weather —
+    /// an exact mirror of Android's FALLBACK_IMAGES (22 populated cells).
+    /// HOT and WARM have no SNOW cell on any platform; the lookup below
+    /// falls back to the bracket's CLEAR image, as Android's does.
     ///
-    /// The previous iOS table was a different, uncurated set: its
-    /// HOT/CLOUDY cell was a desk with code on monitors (the photo
-    /// Sol was served as a "Miami hero") and MILD/CLEAR was a lake at
-    /// sunset. Both are gone.
-    private let photoIds: [HeroTempBracket: [HeroWeatherCondition: String]] = [
+    /// The previous iOS table pointed at Unsplash stock photos and had
+    /// drifted from the pool (its HOT/CLOUDY cell was once a desk with
+    /// code on monitors, served to Sol as a "Miami hero"). Gone.
+    private let assetNames: [HeroTempBracket: [HeroWeatherCondition: String]] = [
         .FREEZING: [
-            .CLEAR: "photo-1544899489-a083461b088c",   // Winter gear sunny
-            .CLOUDY: "photo-1544899489-a083461b088c",  // Freezing overcast
-            .RAIN: "photo-1519692933481-e162a57d6721", // Freezing rain/sleet
-            .SNOW: "photo-1418985991508-e47386d96a71"  // Heavy snow
+            .CLEAR: "freezing_clear",   // MALE_CLEAR_FREEZING_DUSK_v1160
+            .CLOUDY: "freezing_cloudy",  // FEMALE_CLOUDY_FREEZING_MIDDAY_v1177
+            .RAIN: "freezing_rain", // FEMALE_RAINY_FREEZING_MIDDAY_v5
+            .SNOW: "freezing_snow"  // MALE_SNOWY_FREEZING_NIGHT_v1
         ],
         .COLD: [
-            .CLEAR: "photo-1517649763962-0c623066013b",   // Jacket sunny
-            .CLOUDY: "photo-1517649763962-0c623066013b",  // Cold overcast
-            .RAIN: "photo-1519692933481-e162a57d6721",    // Cold rain/sleet
-            .SNOW: "photo-1483921020237-2ff51e8e4b22"     // Snowy run
+            .CLEAR: "cold_clear",   // UNISEX_CLEAR_COLD_DUSK_v4
+            .CLOUDY: "cold_cloudy",  // FEMALE_CLOUDY_COLD_MIDDAY_v3
+            .RAIN: "cold_rain",    // MALE_RAIN_COLD_MIDDAY_v2
+            .SNOW: "cold_snow"     // FEMALE_SNOW_COLD_DUSK_v5
         ],
         .COOL: [
-            .CLEAR: "photo-1476480862126-209bfaa8edc8",   // Long sleeves sunny
-            .CLOUDY: "photo-1571019613454-1cb2f99b2d8b",  // Cool overcast
-            .RAIN: "photo-1515191107209-c28698631303",    // Cool rainy
-            .SNOW: "photo-1491002052546-bf38f186af56"     // Cool snow
+            .CLEAR: "cool_clear",   // MALE_CLEAR_COOL_DUSK_v2
+            .CLOUDY: "cool_cloudy",  // FEMALE_CLOUDY_COOL_MIDDAY
+            .RAIN: "cool_rain",    // FEMALE_RAIN_COOL_MIDDAY_v3
+            .SNOW: "cool_snow"     // FEMALE_SNOW_COOL_MIDDAY_v3
         ],
         .MILD: [
-            .CLEAR: "photo-1552674605-db6ffd4facb5",   // Light layers sunny
-            .CLOUDY: "photo-1558017487-06bf9f82613a",  // Mild overcast
-            .RAIN: "photo-1515191107209-c28698631303", // Spring/fall rain
-            .SNOW: "photo-1491002052546-bf38f186af56"  // Light snow
+            .CLEAR: "mild_clear",   // FEMALE_CLEAR_MILD_DUSK_v6
+            .CLOUDY: "mild_cloudy",  // FEMALE_CLOUDY_MILD_MIDDAY_v3
+            .RAIN: "mild_rain", // FEMALE_RAIN_MILD_DUSK_v4
+            .SNOW: "mild_snow"  // FEMALE_SNOWY_MILD_MIDDAY_v3
         ],
         .WARM: [
-            .CLEAR: "photo-1486218119243-13883505764c",   // T-shirt sunny
-            .CLOUDY: "photo-1558017487-06bf9f82613a",    // Warm overcast
-            .RAIN: "photo-1534258936925-c58bed479fcb"     // Warm rain
+            .CLEAR: "warm_clear",   // MALE_CLEAR_WARM_MIDDAY_v3
+            .CLOUDY: "warm_cloudy",    // MALE_CLOUDY_WARM_DAWN_v5
+            .RAIN: "warm_rain"     // MALE_RAINY_WARM_DUSK_v5
         ],
         .HOT: [
-            .CLEAR: "photo-1571008887538-b36bb32f4571",   // Tank top, bright sunny
-            .CLOUDY: "photo-1571019613454-1cb2f99b2d8b",  // Summer overcast
-            .RAIN: "photo-1534258936925-c58bed479fcb"     // Summer rain
+            .CLEAR: "hot_clear",   // MALE_CLEAR_HOT_MIDDAY_v1070
+            .CLOUDY: "hot_cloudy",  // MALE_CLOUDY_HOT_DUSK_v2
+            .RAIN: "hot_rain"     // FEMALE_RAINY_HOT_DAWN_v6
         ]
     ]
 
-    /// Returns a fallback Unsplash URL for the given conditions.
+    /// Resolves a bundled fallback asset to a file URL string.
+    private func bundledURLString(assetName: String) -> String? {
+        Bundle.main.url(
+            forResource: assetName,
+            withExtension: "webp",
+            subdirectory: "hero_fallback"
+        )?.absoluteString
+    }
+
+    /// Returns a fallback image URL for the given conditions.
     /// Lookup mirrors Android's getWeatherAwareFallback: exact cell,
     /// then the bracket's CLEAR cell (e.g. HOT + SNOW), then
     /// MILD/CLEAR as the ultimate default.
     /// - Parameters:
     ///   - temp: Temperature bracket
     ///   - weather: Weather condition
-    ///   - size: Image size (iOS or watchOS)
-    /// - Returns: Unsplash image URL
+    ///   - size: Image size (kept for compatibility; one bundled size)
+    /// - Returns: file URL string of the bundled pool photo
     func getImageURL(
         temp: HeroTempBracket,
         weather: HeroWeatherCondition,
         size: ImageSize = .iOS
     ) -> String {
-        let photoId = photoIds[temp]?[weather]
-            ?? photoIds[temp]?[.CLEAR]
-            ?? photoIds[.MILD]?[.CLEAR]
-            ?? "photo-1571008887538-b36bb32f4571"
-        return "\(baseURL)/\(photoId)?\(size.parameters)"
+        let name = assetNames[temp]?[weather]
+            ?? assetNames[temp]?[.CLEAR]
+            ?? assetNames[.MILD]?[.CLEAR]
+            ?? "mild_clear"
+        return bundledURLString(assetName: name)
+            ?? bundledURLString(assetName: "mild_clear")
+            ?? ""
     }
 
     /// Returns a HeroImageResult for fallback
@@ -95,7 +101,7 @@ struct FallbackImageProvider {
     ///   - temp: Temperature bracket
     ///   - weather: Weather condition
     ///   - isWatch: Whether this is for watchOS
-    /// - Returns: HeroImageResult with Unsplash URL
+    /// - Returns: HeroImageResult with the bundled fallback URL
     func getFallbackResult(
         temp: HeroTempBracket,
         weather: HeroWeatherCondition,
