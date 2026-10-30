@@ -16,10 +16,17 @@ import org.junit.Test
  */
 class FluidLayoutSpecTest {
 
-    /** Content width available to the outfit grid at window [width]. */
+    /**
+     * Content width available to the outfit grid at window [width].
+     * Stacked layouts: the grid spans the window. Rail layouts: the
+     * grid lives in the OUTFIT pane — the window minus the hero pane —
+     * not in the hero pane itself (the first CI run of this test used
+     * the hero pane's width and under-counted the 1280 rail by one
+     * column; the app code was right, this model was wrong).
+     */
     private fun gridContentWidth(width: Int): Float {
         val spec = fluidLayoutSpec(width.dp)
-        val pane = spec.heroPaneWidth?.value ?: width.toFloat()
+        val pane = spec.heroPaneWidth?.let { width - it.value } ?: width.toFloat()
         return pane - 2 * spec.pagePadding.value
     }
 
