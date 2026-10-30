@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit // for the \.requestReview environment action (R-15)
 
 struct WeatherOutfitView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
