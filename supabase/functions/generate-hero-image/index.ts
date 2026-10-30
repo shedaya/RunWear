@@ -133,9 +133,15 @@ async function countTodaysGenerations(): Promise<number> {
   return count ?? 0
 }
 
-// Legacy single-job mode: process ONE queued job (the oldest). Response
-// shapes are unchanged from the original implementation — the manual
-// scripts branch on { success } / { message: 'No queued jobs' } / 500.
+// Legacy single-job mode: process ONE queued job (the oldest claimable
+// one). Response shapes are unchanged from the original implementation —
+// the manual scripts branch on { success } / { message: 'No queued jobs' }
+// / 500. The claim is guarded exactly as in drain mode (the job row moves
+// QUEUED -> PROCESSING for exactly one claimant): client sessions invoke
+// this mode concurrently during normal replenishment, and the unguarded
+// claim let several invocations generate the SAME job (2026-10-30: 3
+// queued jobs produced 8 pool rows). A job whose claim is lost to a
+// concurrent invocation is skipped and the next queued job is tried.
 async function processQueuedJobs() {
   console.log('[generate-hero-image] Processing queued jobs...')
 
@@ -144,7 +150,7 @@ async function processQueuedJobs() {
     .select('*')
     .eq('status', 'QUEUED')
     .order('requested_at', { ascending: true })
-    .limit(1)
+    .limit(MAX_DRAIN_LIMIT)
 
   if (error) {
     console.error('[generate-hero-image] Error fetching jobs:', error)
@@ -155,21 +161,32 @@ async function processQueuedJobs() {
     return jsonResponse({ message: 'No queued jobs' })
   }
 
-  const job = jobs[0]
-  const result = await processJob(job, { guardedClaim: false })
+  for (const job of jobs) {
+    const result = await processJob(job, { guardedClaim: true })
 
-  if (result.ok) {
+    if (!result.ok && result.skipped) {
+      // Another invocation claimed this job first; try the next one
+      // instead of generating a duplicate.
+      continue
+    }
+
+    if (result.ok) {
+      return jsonResponse({
+        success: true,
+        combination_id: result.combination_id,
+        image_url: result.image_url
+      })
+    }
+
     return jsonResponse({
-      success: true,
-      combination_id: result.combination_id,
-      image_url: result.image_url
-    })
+      error: result.error,
+      job_id: job.id
+    }, 500)
   }
 
-  return jsonResponse({
-    error: result.error,
-    job_id: job.id
-  }, 500)
+  // Every queued job in the fetch window was claimed by a concurrent
+  // invocation between the fetch and the claim.
+  return jsonResponse({ message: 'No queued jobs' })
 }
 
 // Batch drain mode: process up to `limit` queued jobs, oldest first. The
@@ -313,8 +330,10 @@ async function processJob(job: Record<string, unknown> & { id: unknown, combinat
         }
       }
     } else {
-      // Legacy path: the original implementation updated unconditionally
-      // and ignored the result. Kept exactly that way.
+      // Unguarded claim: the original implementation updated
+      // unconditionally and ignored the result. No current caller uses
+      // this — both legacy and drain modes claim guarded, because
+      // concurrent invocations double-generated the same job.
       await claim
     }
 
