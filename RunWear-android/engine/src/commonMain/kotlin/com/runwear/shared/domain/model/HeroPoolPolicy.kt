@@ -19,7 +19,7 @@ package com.runwear.shared.domain.model
  * so a run of repeats, including of one bad image, is normal behavior for
  * the old design. The floor guarantees the most common cells (every temp
  * bracket × CLEAR/CLOUDY × DAWN/MIDDAY/DUSK) always rotate in the curated
- * Unsplash photo for that temp × weather cell alongside whatever approved
+ * bundled fallback photo for that temp × weather cell alongside whatever approved
  * AI images exist, instead of the photo appearing only as an error path.
  */
 object HeroPoolPolicy {

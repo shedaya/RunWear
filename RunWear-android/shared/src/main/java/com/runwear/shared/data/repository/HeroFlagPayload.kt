@@ -27,7 +27,7 @@ data class HeroFlagInsert(
  * - Pool photo → the `generated_images` row id is carried through, and
  *   the combination recorded is the served row's own cell (which can
  *   differ from the requested combination when the cascade fell back).
- * - Fallback/curated photo (Unsplash) → no row id exists; the URL is
+ * - Fallback/curated photo (bundled asset) → no row id exists; the reference is
  *   the identifier and [SOURCE_FALLBACK] marks it as non-pool.
  *
  * Pure and synchronous so the mapping is unit-testable without a

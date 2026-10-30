@@ -11,7 +11,7 @@ This document defines the hero image fetching, caching, and fallback logic for a
 ### Image Sources (Priority Order)
 
 1. **Supabase AI Images** - Best match, generated for specific conditions
-2. **Weather-Aware Fallbacks** - Unsplash images matching temp + weather (24 options)
+2. **Weather-Aware Fallbacks** - Bundled images matching temp + weather (22 defined cells). Since 2026-10-29 these are pool-derived assets bundled in the app (`shared/src/main/assets/hero_fallback/`), replacing the original Unsplash stock URLs — the fallback now works fully offline.
 3. **Generic Fallback** - Single placeholder image (last resort)
 
 ### Combination ID Format
@@ -109,7 +109,7 @@ func getWeatherCondition(_ code: Int) -> String {
 
 ## Weather-Aware Fallback Images (2D Matrix)
 
-When no Supabase image exists, use these Unsplash fallbacks:
+When no Supabase image exists, use these fallbacks. (Historical: the photo IDs below are the original Unsplash stock picks. As of 2026-10-29 the shipped Android tables map the same cells to bundled pool-derived assets — see `HeroImageRepository` / `HeroImageSelector`.)
 
 ```javascript
 const FALLBACK_IMAGES = {
@@ -306,7 +306,7 @@ fun setComfort(comfort: Int) {
 ## Caching Rules
 
 ### DO Cache (Long-lived)
-- Unsplash fallback images (they never change)
+- Bundled fallback images (they ship with the app and never change)
 - Supabase image URLs once loaded (the image itself)
 
 ### DO NOT Cache (Always Fresh)
