@@ -92,6 +92,10 @@ struct WeatherDetailSheet: View {
     @State private var selectedKind: WeatherMetricKind
     @State private var showMetricInspector = false
 
+    // RW-6.3 display-numeral exception: the big values (was fixed
+    // 48pt) scale with Dynamic Type relative to .largeTitle.
+    @ScaledMetric(relativeTo: .largeTitle) private var bigValueSize: CGFloat = 48
+
     init(
         detailType: WeatherDetailType,
         allDetails: [WeatherDetailType],
@@ -173,7 +177,8 @@ struct WeatherDetailSheet: View {
                 Section {
                     ForEach(contextLines, id: \.self) { line in
                         Text(line)
-                            .font(.system(size: 14))
+                            .font(.appSecondary)
+                            .monospacedDigit()
                             .foregroundColor(.white.opacity(0.8))
                     }
                 } header: {
@@ -185,11 +190,12 @@ struct WeatherDetailSheet: View {
                             Image(systemName: detail.icon)
                                 .foregroundColor(.white.opacity(0.7))
                             Text(detail.title)
-                                .font(.system(size: 15))
+                                .font(.appSecondary)
                                 .foregroundColor(.white)
                             Spacer()
                             Text(detail.summaryValue)
-                                .font(.system(size: 14))
+                                .font(.appSecondary)
+                                .monospacedDigit()
                                 .foregroundColor(.white.opacity(0.6))
                         }
                         .tag(detail.kind)
@@ -257,11 +263,11 @@ struct WeatherDetailSheet: View {
     private var headerSection: some View {
         VStack(spacing: 12) {
             Image(systemName: detailType.icon)
-                .font(.system(size: 48))
+                .font(.system(size: bigValueSize))
                 .foregroundColor(iconColor)
 
             Text(detailType.title)
-                .font(.system(size: 24, weight: .bold))
+                .font(.appSheetTitle)
                 .foregroundColor(.white)
         }
     }
@@ -287,11 +293,11 @@ struct WeatherDetailSheet: View {
     private func conditionContent(_ condition: WeatherCondition) -> some View {
         VStack(spacing: 8) {
             Text(condition.rawValue)
-                .font(.system(size: 36, weight: .semibold))
+                .font(.largeTitle.weight(.semibold))
                 .foregroundColor(.white)
 
             Text(conditionDescription(condition))
-                .font(.system(size: 15))
+                .font(.appSecondary)
                 .foregroundColor(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
@@ -302,36 +308,38 @@ struct WeatherDetailSheet: View {
             HStack(spacing: 24) {
                 VStack(spacing: 4) {
                     Text("\(Int(round(speed)))")
-                        .font(.system(size: 36, weight: .semibold))
+                        .font(.largeTitle.weight(.semibold))
+                        .monospacedDigit()
                         .foregroundColor(.white)
                     Text("mph")
-                        .font(.system(size: 14))
+                        .font(.appFootnote)
                         .foregroundColor(.white.opacity(0.7))
                 }
 
                 VStack(spacing: 4) {
                     Text(direction)
-                        .font(.system(size: 36, weight: .semibold))
+                        .font(.largeTitle.weight(.semibold))
                         .foregroundColor(.white)
                     Text("direction")
-                        .font(.system(size: 14))
+                        .font(.appFootnote)
                         .foregroundColor(.white.opacity(0.7))
                 }
 
                 if gusts > speed {
                     VStack(spacing: 4) {
                         Text("\(Int(round(gusts)))")
-                            .font(.system(size: 36, weight: .semibold))
+                            .font(.largeTitle.weight(.semibold))
+                            .monospacedDigit()
                             .foregroundColor(.white)
                         Text("gusts")
-                            .font(.system(size: 14))
+                            .font(.appFootnote)
                             .foregroundColor(.white.opacity(0.7))
                     }
                 }
             }
 
             Text(windDescription(speed: speed))
-                .font(.system(size: 15))
+                .font(.appSecondary)
                 .foregroundColor(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
@@ -340,11 +348,12 @@ struct WeatherDetailSheet: View {
     private func humidityContent(_ percentage: Int) -> some View {
         VStack(spacing: 8) {
             Text("\(percentage)%")
-                .font(.system(size: 48, weight: .semibold))
+                .font(.system(size: bigValueSize, weight: .semibold))
+                .monospacedDigit()
                 .foregroundColor(.white)
 
             Text(humidityDescription(percentage))
-                .font(.system(size: 15))
+                .font(.appSecondary)
                 .foregroundColor(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
@@ -353,11 +362,12 @@ struct WeatherDetailSheet: View {
     private func precipitationContent(_ percentage: Int) -> some View {
         VStack(spacing: 8) {
             Text("\(percentage)%")
-                .font(.system(size: 48, weight: .semibold))
+                .font(.system(size: bigValueSize, weight: .semibold))
+                .monospacedDigit()
                 .foregroundColor(.white)
 
             Text("Chance of precipitation")
-                .font(.system(size: 15))
+                .font(.appSecondary)
                 .foregroundColor(.white.opacity(0.7))
         }
     }
@@ -365,11 +375,12 @@ struct WeatherDetailSheet: View {
     private func uvIndexContent(_ value: Double) -> some View {
         VStack(spacing: 8) {
             Text(String(format: "%.1f", value))
-                .font(.system(size: 48, weight: .semibold))
+                .font(.system(size: bigValueSize, weight: .semibold))
+                .monospacedDigit()
                 .foregroundColor(.white)
 
             Text(uvDescription(value))
-                .font(.system(size: 17, weight: .medium))
+                .font(.body.weight(.medium))
                 .foregroundColor(uvColor(value))
         }
     }
@@ -379,18 +390,24 @@ struct WeatherDetailSheet: View {
     private var tipsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Running Tip")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.appEyebrow)
                 .foregroundColor(.white.opacity(0.5))
 
             Text(runningTip)
-                .font(.system(size: 15))
+                .font(.appSecondary)
                 .foregroundColor(.white.opacity(0.9))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
+        // Flat content card (AppTheme tokens) — not glass: running
+        // advice is dense text and stays on the flat fill.
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.1))
+                .fill(AppTheme.cardFillOnDark)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
         )
     }
 
@@ -510,13 +527,6 @@ struct WeatherDetailSheet: View {
             } else {
                 return "Low UV exposure - enjoy your run!"
             }
-        }
-    }
-
-
-    private func dismiss() {
-        withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-            isPresented = false
         }
     }
 }

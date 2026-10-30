@@ -1,189 +1,152 @@
 import SwiftUI
 
+// MARK: - Settings (RW-6.7)
+//
+// A native Form inside a NavigationStack — the one sheet grammar for
+// task sheets (title in the toolbar, Done to dismiss). The Form buys
+// Dynamic Type, VoiceOver structure, and system dismissal chrome that
+// the hand-rolled ScrollView version had to fake. All three preference
+// controls are the shared PreferenceControls — the same views Onboarding
+// uses, so the surfaces cannot drift.
 struct SettingsModal: View {
     @Binding var isPresented: Bool
     @Binding var temperatureUnit: TemperatureUnit
     @Binding var genderPreference: GenderPreference
     @Binding var comfortLevel: ComfortLevel
 
+    @State private var showFeedback = false
 
-    // Presented as a real .sheet (design record §5.2): the system
-    // owns the backdrop, drag handle, and dismissal — this view is
-    // just the content.
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Title
-                Text("Settings")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+    /// App Store product id (App Store Connect) for the review door.
+    static let reviewURL = URL(string: "https://apps.apple.com/app/id6827973343?action=write-review")!
 
-                // Temperature Unit
-                temperatureUnitSection
-
-                // Gender Preference
-                genderPreferenceSection
-
-                // Comfort Level
-                comfortLevelSection
-
-                Spacer().frame(height: 16)
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity)
-        }
-        .background(AppTheme.darkBackground.ignoresSafeArea())
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "\(short) (\(build))"
     }
-
-
-    // MARK: - Temperature Unit Section
-
-    private var temperatureUnitSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Temperature Unit")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-
-            HStack(spacing: 12) {
-                SettingsToggleButton(
-                    label: "°F",
-                    isSelected: temperatureUnit == .fahrenheit,
-                    action: { temperatureUnit = .fahrenheit }
-                )
-
-                SettingsToggleButton(
-                    label: "°C",
-                    isSelected: temperatureUnit == .celsius,
-                    action: { temperatureUnit = .celsius }
-                )
-            }
-        }
-    }
-
-    // MARK: - Gender Preference Section
-
-    private var genderPreferenceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Fit Preference")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-
-            Text("Tap to select, tap again to deselect")
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
-
-            ToggleableGenderSelector(selection: $genderPreference)
-        }
-    }
-
-    // MARK: - Comfort Level Section
-
-    private var comfortLevelSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Body Temperature")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
-
-            Text(comfortLevel.shortLabel)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundColor(.white)
-
-            ComfortSlider(comfortLevel: $comfortLevel)
-        }
-    }
-
-    private func dismiss() {
-        withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-            isPresented = false
-        }
-    }
-}
-
-// MARK: - Settings Toggle Button
-
-private struct SettingsToggleButton: View {
-    let label: String
-    let isSelected: Bool
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(label)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.5))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isSelected ? Color.white.opacity(0.25) : Color.white.opacity(0.1))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(isSelected ? Color.white.opacity(0.4) : Color.white.opacity(0.15), lineWidth: 1)
-                )
-        }
-    }
-}
-
-// MARK: - Comfort Slider
-
-private struct ComfortSlider: View {
-    @Binding var comfortLevel: ComfortLevel
-
-    private let levels = ComfortLevel.sortedCases
-
-    var body: some View {
-        VStack(spacing: 8) {
-            // Slider
-            GeometryReader { geometry in
-                let segmentWidth = geometry.size.width / CGFloat(levels.count)
-                let selectedIndex = levels.firstIndex(of: comfortLevel) ?? 2
-
-                ZStack(alignment: .leading) {
-                    // Track
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.white.opacity(0.1))
-                        .frame(height: 8)
-
-                    // Selected segment indicator
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(comfortColor)
-                        .frame(width: segmentWidth, height: 8)
-                        .offset(x: CGFloat(selectedIndex) * segmentWidth)
-                        .animation(.easeInOut(duration: 0.2), value: selectedIndex)
+        NavigationStack {
+            Form {
+                Section("Temperature Unit") {
+                    TemperatureUnitPicker(unit: $temperatureUnit)
                 }
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let index = Int(value.location.x / segmentWidth)
-                            let clampedIndex = max(0, min(levels.count - 1, index))
-                            comfortLevel = levels[clampedIndex]
-                        }
-                )
-            }
-            .frame(height: 32)
 
-            // Labels
-            HStack {
-                Text("Runs Cold")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.5))
-                Spacer()
-                Text("Runs Warm")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.5))
+                Section("Fit Preference") {
+                    FitPreferencePicker(preference: $genderPreference)
+                }
+
+                Section("Body Temperature") {
+                    ComfortLevelControl(comfortLevel: $comfortLevel)
+                }
+
+                // R-15: the always-available feedback + rating doors.
+                Section("Support") {
+                    Button {
+                        showFeedback = true
+                    } label: {
+                        Label("Send Feedback", systemImage: "envelope")
+                    }
+
+                    Link(destination: Self.reviewURL) {
+                        Label("Rate RunWear", systemImage: "star")
+                    }
+                }
+
+                Section("About") {
+                    LabeledContent("Version", value: appVersion)
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { isPresented = false }
+                }
+            }
+            .sheet(isPresented: $showFeedback) {
+                FeedbackSheet()
             }
         }
     }
+}
 
-    private var comfortColor: Color {
-        switch comfortLevel {
-        case .veryCold, .cold:
-            return .blue
-        case .neutral:
-            return .green
-        case .warm, .veryWarm:
-            return .orange
+// MARK: - Feedback Sheet (R-15)
+//
+// Category + message + optional reply address, composed into a
+// pre-addressed email to the studio support inbox (FeedbackComposer).
+// Presented from Settings; dismisses itself after handing off to Mail.
+struct FeedbackSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    @State private var category: FeedbackCategory = .bugReport
+    @State private var message = ""
+    @State private var replyEmail = ""
+
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+
+    private var composedURL: URL? {
+        FeedbackComposer.mailtoURL(
+            category: category,
+            message: message,
+            replyEmail: replyEmail,
+            appVersion: appVersion
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Category") {
+                    Picker("Category", selection: $category) {
+                        ForEach(FeedbackCategory.allCases) { category in
+                            Text(category.rawValue).tag(category)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
+                Section("Your Feedback") {
+                    TextEditor(text: $message)
+                        .frame(minHeight: 120)
+                        .accessibilityLabel("Your feedback")
+                }
+
+                Section {
+                    TextField("Email (optional)", text: $replyEmail)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Reply To")
+                } footer: {
+                    Text("Only used to reply to your feedback.")
+                }
+            }
+            .navigationTitle("Send Feedback")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") {
+                        if let url = composedURL {
+                            openURL(url)
+                            dismiss()
+                        }
+                    }
+                    .disabled(composedURL == nil)
+                }
+            }
         }
     }
 }

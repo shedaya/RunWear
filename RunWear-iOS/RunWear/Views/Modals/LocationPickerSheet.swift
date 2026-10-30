@@ -13,37 +13,41 @@ struct LocationPickerSheet: View {
 
     private let geocoder = CLGeocoder()
 
-    // Presented as a real .sheet (design record §5.2): the system
-    // owns the backdrop, drag handle, and dismissal.
+    // Task-sheet grammar (RW-6.12): NavigationStack + toolbar title +
+    // Done, like Settings. The system owns the backdrop, drag handle,
+    // and dismissal (design record §5.2).
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Title
-                Text("Set Location")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.top, 8)
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Use Current Location option
+                    currentLocationButton
 
-                // Use Current Location option
-                currentLocationButton
+                    // Divider
+                    dividerWithText
 
-                // Divider
-                dividerWithText
+                    // Search field
+                    searchField
 
-                // Search field
-                searchField
+                    // Search results
+                    if !searchResults.isEmpty {
+                        searchResultsList
+                    }
 
-                // Search results
-                if !searchResults.isEmpty {
-                    searchResultsList
+                    Spacer().frame(height: 16)
                 }
-
-                Spacer().frame(height: 16)
+                .padding(24)
+                .frame(maxWidth: .infinity)
             }
-            .padding(24)
-            .frame(maxWidth: .infinity)
+            .background(AppTheme.darkBackground.ignoresSafeArea())
+            .navigationTitle("Set Location")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { close() }
+                }
+            }
         }
-        .background(AppTheme.darkBackground.ignoresSafeArea())
     }
 
 
@@ -52,7 +56,7 @@ struct LocationPickerSheet: View {
     private var currentLocationButton: some View {
         Button(action: {
             onUseCurrentLocation()
-            dismiss()
+            close()
         }) {
             HStack(spacing: 14) {
                 // GPS Icon
@@ -61,19 +65,19 @@ struct LocationPickerSheet: View {
                     .frame(width: 44, height: 44)
                     .overlay(
                         Image(systemName: "location.fill")
-                            .font(.system(size: 20))
+                            .font(.title3)
                             .foregroundColor(.white)
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text("Use Current Location")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.appSecondary.weight(.semibold))
                             .foregroundColor(.white)
 
                         if isUsingGPS {
-                            Text("✓ Active")
-                                .font(.system(size: 11, weight: .semibold))
+                            Label("Active", systemImage: "checkmark")
+                                .font(.appEyebrow)
                                 .foregroundColor(AppTheme.primaryColor)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 2)
@@ -85,7 +89,7 @@ struct LocationPickerSheet: View {
                     }
 
                     Text(isUsingGPS ? "GPS location enabled" : "Requires location permission")
-                        .font(.system(size: 13))
+                        .font(.appFootnote)
                         .foregroundColor(.white.opacity(0.6))
                 }
 
@@ -112,7 +116,7 @@ struct LocationPickerSheet: View {
                 .frame(height: 1)
 
             Text("or enter manually")
-                .font(.system(size: 13))
+                .font(.appFootnote)
                 .foregroundColor(.white.opacity(0.5))
                 .padding(.horizontal, 12)
 
@@ -166,22 +170,22 @@ struct LocationPickerSheet: View {
                 ForEach(searchResults) { result in
                     Button(action: {
                         onSelectLocation(result.coordinate, result.displayName)
-                        dismiss()
+                        close()
                     }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(result.name)
-                                    .font(.system(size: 15, weight: .medium))
+                                    .font(.appSecondary.weight(.medium))
                                     .foregroundColor(.white)
                                 Text(result.subtitle)
-                                    .font(.system(size: 13))
+                                    .font(.appFootnote)
                                     .foregroundColor(.white.opacity(0.6))
                             }
 
                             Spacer()
 
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 14))
+                                .font(.appFootnote)
                                 .foregroundColor(.white.opacity(0.4))
                         }
                         .padding(.vertical, 12)
@@ -228,10 +232,10 @@ struct LocationPickerSheet: View {
     }
 
 
-    private func dismiss() {
-        withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-            isPresented = false
-        }
+    /// State-driven dismissal (RW-6.12): the sheet's presentation
+    /// animation belongs to the system — no hand-rolled wrapper.
+    private func close() {
+        isPresented = false
     }
 }
 

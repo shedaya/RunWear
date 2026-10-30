@@ -62,27 +62,17 @@ struct WeatherPill: View {
         Button(action: onTap) {
             HStack(spacing: 6) {
                 Image(systemName: type.icon)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.appPillLabel)
                     .foregroundColor(iconColor)
 
                 Text(type.label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.appPillLabel)
+                    .monospacedDigit()
                     .foregroundColor(.white)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(Color.white.opacity(0.1))
-                    .background(
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                    )
-            )
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
-            )
+            // The one shared glass pill chrome (native Liquid Glass) —
+            // no per-view material recipes.
+            .glassPill()
         }
         .accessibilityLabel(type.accessibilityLabel)
     }
