@@ -75,7 +75,12 @@ function buildPrompt(gender, weather, temp, time) {
     else if (temp === 'FREEZING') mood = 'tough, braving the cold';
     else mood = 'focused, confident stride';
 
-    const outfit = getOutfit(weather, temp);
+    // Slot-aware (2026-10-30, Sol's ruling): reflective gear is a monetized
+    // engine item whose photos stay. The static tables carry no vest line;
+    // append it for NIGHT slots only so rebuilds can replenish vest images.
+    // DAWN/DUSK/MIDDAY stay vest-free (dawn exception: no hi-vis at dawn).
+    const baseOutfit = getOutfit(weather, temp);
+    const outfit = time === "NIGHT" ? `${baseOutfit}, reflective vest / reflective gear` : baseOutfit;
 
     // Prompt hardening (2026-10-27), mirrors HeroPoolPolicy.QUALITY_SUFFIX —
     // the edge function also appends this server-side if it is missing.

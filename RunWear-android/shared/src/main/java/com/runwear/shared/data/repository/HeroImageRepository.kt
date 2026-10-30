@@ -448,7 +448,15 @@ class HeroImageRepository @Inject constructor() {
         outfitParts.add(outfit.bottom.displayName.lowercase())
         outfit.head?.let { outfitParts.add(it.displayName.lowercase()) }
         outfit.hands?.let { outfitParts.add(it.displayName.lowercase()) }
-        outfit.accessories.filter { it.name != "SUNSCREEN" && it.name != "REFLECTIVE_GEAR" }
+        // Slot-aware (2026-10-30, Sol's ruling): reflective gear is a monetized
+        // engine item whose photos stay — include it in NIGHT prompts so the
+        // pool can replenish vest images. It stays filtered for DAWN/DUSK/
+        // MIDDAY (dawn exception: no hi-vis at dawn in any weather). Sunscreen
+        // is never visible and stays filtered for every slot.
+        outfit.accessories.filter {
+            it.name != "SUNSCREEN" &&
+                (it.name != "REFLECTIVE_GEAR" || combination.timeOfDay == TimeOfDay.NIGHT)
+        }
             .forEach { outfitParts.add(it.displayName.lowercase()) }
 
         val outfitDesc = outfitParts.joinToString(", ")

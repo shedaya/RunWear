@@ -4237,9 +4237,14 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             // v3.14: Build outfit description from actual recommendation items
             let outfitDesc;
             if (outfit && outfit.items && outfit.items.length > 0) {
-                // Filter out non-visible items (sunscreen, reflective gear)
+                // Filter out non-visible items (sunscreen). Reflective gear is
+                // slot-aware (2026-10-30, Sol's ruling): it is a monetized
+                // engine item whose photos stay, so keep it in NIGHT prompts
+                // (the pool can replenish vest images); it stays filtered for
+                // DAWN/DUSK/MIDDAY (dawn exception: no hi-vis at dawn).
                 const visibleItems = outfit.items.filter(item =>
-                    item.name !== 'Sunscreen (SPF 30+)' && item.name !== 'Reflective Gear'
+                    item.name !== 'Sunscreen (SPF 30+)' &&
+                    (item.name !== 'Reflective Gear' || time === 'NIGHT')
                 );
                 outfitDesc = visibleItems.map(item => item.name.toLowerCase()).join(', ');
             } else {

@@ -251,9 +251,14 @@ actor HeroImageService {
         // v3.14: Build outfit description from actual recommendation items if available
         let outfitDesc: String
         if let outfit = outfit {
-            // Filter out non-visible items (sunscreen, reflective gear)
+            // Filter out non-visible items (sunscreen). Reflective gear is
+            // slot-aware (2026-10-30, Sol's ruling): a monetized engine item
+            // whose photos stay — keep it in NIGHT prompts so the pool can
+            // replenish vest images; filtered for DAWN/DUSK/MIDDAY (dawn
+            // exception: no hi-vis at dawn in any weather).
             let visibleItems = outfit.allItems.filter { item in
-                !item.name.contains("Sunscreen") && !item.name.contains("Reflective")
+                !item.name.contains("Sunscreen") &&
+                    (!item.name.contains("Reflective") || combination.time == .NIGHT)
             }
             outfitDesc = visibleItems.map { $0.name.lowercased() }.joined(separator: ", ")
         } else {
