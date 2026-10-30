@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#00796B">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -86,6 +86,10 @@
             --surface-dim: var(--bg-card-light);
             --text: var(--text-primary);
             --border: rgba(255, 255, 255, 0.1);
+
+            /* App column: full-bleed on phones, a composed column on
+               foldables / tablets / desktop (was a hard 480px cap) */
+            --app-max: 720px;
         }
 
         body {
@@ -133,6 +137,7 @@
         .hero {
             position: relative;
             height: 75vh;
+            height: 75dvh;
             min-height: 500px;
             max-height: 700px;
             overflow: hidden;
@@ -169,6 +174,7 @@
 
         .skeleton-hero {
             height: 75vh;
+            height: 75dvh;
             min-height: 500px;
             max-height: 700px;
             background: var(--bg-card);
@@ -280,20 +286,21 @@
         .weather-detail-popup {
             position: fixed;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 50%;
+            width: min(100%, var(--app-max));
             background: var(--bg-card);
             border-radius: 24px 24px 0 0;
-            padding: 24px 20px;
-            transform: translateY(100%);
+            padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+            transform: translate(-50%, 100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1001;
             max-height: 50vh;
+            max-height: 50dvh;
             overflow-y: auto;
         }
 
         .weather-detail-popup.active {
-            transform: translateY(0);
+            transform: translate(-50%, 0);
         }
 
         .weather-detail-header {
@@ -359,20 +366,21 @@
         .outfit-detail-sheet {
             position: fixed;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 50%;
+            width: min(100%, var(--app-max));
             background: var(--bg-card);
             border-radius: 24px 24px 0 0;
-            padding: 24px 20px;
-            transform: translateY(100%);
+            padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+            transform: translate(-50%, 100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1001;
             max-height: 70vh;
+            max-height: 70dvh;
             overflow-y: auto;
         }
 
         .outfit-detail-sheet.active {
-            transform: translateY(0);
+            transform: translate(-50%, 0);
         }
 
         .outfit-detail-handle {
@@ -505,6 +513,8 @@
             position: fixed;
             bottom: 100px;
             left: 50%;
+            max-width: calc(100vw - 32px);
+            text-align: center;
             transform: translateX(-50%) translateY(20px);
             background: var(--bg-card);
             color: var(--text-primary);
@@ -563,18 +573,18 @@
         .hero-flag-sheet {
             position: fixed;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 50%;
+            width: min(100%, var(--app-max));
             background: var(--bg-card);
             border-radius: 24px 24px 0 0;
             padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
-            transform: translateY(100%);
+            transform: translate(-50%, 100%);
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             z-index: 1001;
         }
 
         .hero-flag-sheet.active {
-            transform: translateY(0);
+            transform: translate(-50%, 0);
         }
 
         .hero-flag-title {
@@ -703,6 +713,8 @@
             right: 0;
             padding: 16px 20px;
             padding-top: max(16px, env(safe-area-inset-top));
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -782,6 +794,9 @@
             left: 0;
             right: 0;
             padding: 0 20px 24px;
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
             z-index: 5;
         }
 
@@ -880,7 +895,7 @@
 
         .temp-main {
             font-family: 'Bebas Neue', sans-serif;
-            font-size: 96px;
+            font-size: clamp(80px, 25vw, 96px);
             line-height: 0.85;
             letter-spacing: -0.02em;
             text-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
@@ -937,6 +952,8 @@
         .outfit-section {
             padding: 24px 20px;
             padding-bottom: 60px;
+            padding-left: max(20px, env(safe-area-inset-left));
+            padding-right: max(20px, env(safe-area-inset-right));
         }
 
         .outfit-section-header {
@@ -1153,7 +1170,7 @@
         }
 
         .container {
-            max-width: 480px;
+            max-width: var(--app-max);
             margin: 0 auto;
             background: var(--bg-dark);
         }
@@ -1692,6 +1709,7 @@
             border: 1px solid var(--border);
             border-radius: 24px 24px 0 0;
             padding: 24px;
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
             width: 100%;
             max-width: 500px;
             max-height: 85vh;
@@ -1945,6 +1963,7 @@
             border: 1px solid var(--border);
             border-radius: 24px 24px 0 0;
             padding: 24px;
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
             width: 100%;
             max-width: 500px;
             max-height: 85vh;
@@ -2384,6 +2403,7 @@
             border: 1px solid var(--border);
             border-radius: 24px 24px 0 0;
             padding: 24px;
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
             width: 100%;
             max-width: 480px;
             max-height: 85vh;
@@ -2580,9 +2600,34 @@
         }
 
         /* ========== RESPONSIVE ========== */
-        @media (max-width: 360px) {
-            .gender-toggle { display: none; }
+        /* Small phones: give the hero pill row and the outfit header room.
+           (The old <=360px rule hid .gender-toggle entirely, which removed
+           the fit-preference control from Settings and Onboarding on small
+           phones — the toggles are full-width flex rows and fit fine.) */
+        @media (max-width: 380px) {
+            .datetime-pill-section { padding: 8px 10px; }
+            .now-shortcut { padding: 8px 10px; margin-left: 2px; }
+            .outfit-section-header { flex-wrap: wrap; row-gap: 8px; }
+            .outfit-section-title { font-size: 24px; }
             .weather-temp { font-size: 60px; }
+        }
+
+        /* Short viewports (landscape phones, short windows): the hero's
+           500px floor is taller than the whole screen there. Let the hero
+           fill the viewport and compact the hero content stack instead. */
+        @media (max-height: 500px) {
+            .hero, .skeleton-hero { height: 100vh; height: 100dvh; min-height: 0; }
+            .hero-image { object-position: center 20%; }
+            .temp-main { font-size: 64px; }
+            .datetime-pill { margin-bottom: 10px; }
+            .weather-pills { margin-top: 10px; }
+            .hero-content { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+            .hero-flag-btn { bottom: 60px; }
+        }
+
+        /* Wide screens: delineate the centered app column */
+        @media (min-width: 760px) {
+            .container { box-shadow: 0 0 80px rgba(0, 0, 0, 0.55); }
         }
     </style>
 </head>
