@@ -90,6 +90,9 @@
 		C10002000000000000000016 /* HeroFlag.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000023 /* HeroFlag.swift */; };
 		C10002000000000000000017 /* HeroFlagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000024 /* HeroFlagService.swift */; };
 		C10002000000000000000018 /* HeroFlagPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000003 /* HeroFlagPayloadTests.swift */; };
+		C10002000000000000000019 /* WeatherDetailPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000004 /* WeatherDetailPresentationTests.swift */; };
+		C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000021 /* WeatherDetailSheet.swift */; };
+		C10002000000000000000021 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
 		/* Shared engine framework (Stage 2, 2026-10-29): RunWearEngine.xcframework, CI-built from RunWear-android :engine */
 		E10002000000000000000001 /* RunWearEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; };
 		E10002000000000000000002 /* RunWearEngine.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E10001000000000000000001 /* RunWearEngine.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -218,6 +221,7 @@
 		C10001000000000000000001 /* OutfitRulesSweepTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutfitRulesSweepTest.swift; sourceTree = "<group>"; };
 		C10001000000000000000002 /* EngineBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBoundaryTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000003 /* HeroFlagPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFlagPayloadTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000004 /* WeatherDetailPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherDetailPresentationTests.swift; sourceTree = "<group>"; };
 		/* Shared engine framework + Stage 2 bridge/test files — added 2026-10-29 */
 		E10001000000000000000001 /* RunWearEngine.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/RunWearEngine.xcframework; sourceTree = "<group>"; };
 		E10001000000000000000002 /* EngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBridge.swift; sourceTree = "<group>"; };
@@ -403,6 +407,7 @@
 				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
 				C10001000000000000000003 /* HeroFlagPayloadTests.swift */,
+				C10001000000000000000004 /* WeatherDetailPresentationTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -632,6 +637,9 @@
 				C10002000000000000000016 /* HeroFlag.swift in Sources */,
 				C10002000000000000000017 /* HeroFlagService.swift in Sources */,
 				C10002000000000000000018 /* HeroFlagPayloadTests.swift in Sources */,
+				C10002000000000000000019 /* WeatherDetailPresentationTests.swift in Sources */,
+				C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */,
+				C10002000000000000000021 /* AppTheme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

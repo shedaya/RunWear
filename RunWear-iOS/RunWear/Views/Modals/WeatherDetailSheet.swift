@@ -67,6 +67,16 @@ extension WeatherDetailType {
     }
 }
 
+extension WeatherDetailType: Identifiable {
+    /// One detail per metric kind, so the kind is a stable identity.
+    /// The detail sheet is presented with `.sheet(item:)` keyed on
+    /// this id — the sheet exists exactly when a detail is selected,
+    /// so its content can never evaluate empty (the blank white
+    /// sheet of 2026-10-29 came from the old isPresented + if-let
+    /// form racing its two state writes).
+    var id: WeatherMetricKind { kind }
+}
+
 struct WeatherDetailSheet: View {
     /// The metric the sheet was opened on; the live selection is
     /// state the picker and the sidebar share.
