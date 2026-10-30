@@ -45,7 +45,11 @@
 		A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		A10002000000000000000011 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
 		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
-		A10002000000000000000013 /* ToggleableGenderSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000013 /* ToggleableGenderSelector.swift */; };
+		A10002000000000000000013 /* PreferenceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000013 /* PreferenceControls.swift */; };
+		A10002000000000000000023 /* UserEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000023 /* UserEngagement.swift */; };
+		C10002000000000000000023 /* PremiumPassTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000023 /* PremiumPassTests.swift */; };
+		C10002000000000000000024 /* UserEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000023 /* UserEngagement.swift */; };
+		C10002000000000000000025 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
 		A10002000000000000000014 /* WeatherPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000014 /* WeatherPill.swift */; };
 		A10002000000000000000015 /* WeatherPillsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000015 /* WeatherPillsRow.swift */; };
 		A10002000000000000000016 /* DatePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000016 /* DatePickerSheet.swift */; };
@@ -194,7 +198,9 @@
 		A10001000000000000000010 /* GlassMorphismModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMorphismModifiers.swift; sourceTree = "<group>"; };
 		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
 		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
-		A10001000000000000000013 /* ToggleableGenderSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToggleableGenderSelector.swift; sourceTree = "<group>"; };
+		A10001000000000000000013 /* PreferenceControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceControls.swift; sourceTree = "<group>"; };
+		A10001000000000000000023 /* UserEngagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserEngagement.swift; sourceTree = "<group>"; };
+		C10001000000000000000023 /* PremiumPassTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPassTests.swift; sourceTree = "<group>"; };
 		A10001000000000000000014 /* WeatherPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherPill.swift; sourceTree = "<group>"; };
 		A10001000000000000000015 /* WeatherPillsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherPillsRow.swift; sourceTree = "<group>"; };
 		A10001000000000000000016 /* DatePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePickerSheet.swift; sourceTree = "<group>"; };
@@ -310,6 +316,7 @@
 				A10001000000000000000007 /* HeroImageService.swift */,
 				A10001000000000000000008 /* SupabaseClient.swift */,
 				A10001000000000000000009 /* WatchConnectivityManager.swift */,
+				A10001000000000000000023 /* UserEngagement.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -362,7 +369,7 @@
 		A10003000000000000000001 /* Components */ = {
 			isa = PBXGroup;
 			children = (
-				A10001000000000000000013 /* ToggleableGenderSelector.swift */,
+				A10001000000000000000013 /* PreferenceControls.swift */,
 				A10001000000000000000014 /* WeatherPill.swift */,
 				A10001000000000000000015 /* WeatherPillsRow.swift */,
 			);
@@ -397,6 +404,7 @@
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
 				C10001000000000000000004 /* WeatherDetailPresentationTests.swift */,
 				C10001000000000000000005 /* DataParityFixTests.swift */,
+				C10001000000000000000023 /* PremiumPassTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -560,12 +568,13 @@
 				A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */,
 				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
 				A10002000000000000000012 /* HeroImageView.swift in Sources */,
-				A10002000000000000000013 /* ToggleableGenderSelector.swift in Sources */,
+				A10002000000000000000013 /* PreferenceControls.swift in Sources */,
 				A10002000000000000000014 /* WeatherPill.swift in Sources */,
 				A10002000000000000000015 /* WeatherPillsRow.swift in Sources */,
 				A10002000000000000000016 /* DatePickerSheet.swift in Sources */,
 				A10002000000000000000017 /* LocationPickerSheet.swift in Sources */,
 				A10002000000000000000018 /* SettingsModal.swift in Sources */,
+				A10002000000000000000023 /* UserEngagement.swift in Sources */,
 				A10002000000000000000019 /* ShopModal.swift in Sources */,
 				A10002000000000000000020 /* TimePickerSheet.swift in Sources */,
 				A10002000000000000000021 /* WeatherDetailSheet.swift in Sources */,
@@ -624,6 +633,9 @@
 				C10002000000000000000022 /* DataParityFixTests.swift in Sources */,
 				C10002000000000000000020 /* WeatherDetailSheet.swift in Sources */,
 				C10002000000000000000021 /* AppTheme.swift in Sources */,
+				C10002000000000000000023 /* PremiumPassTests.swift in Sources */,
+				C10002000000000000000024 /* UserEngagement.swift in Sources */,
+				C10002000000000000000025 /* StaggeredAnimation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -690,7 +702,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -746,7 +758,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -858,7 +870,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
 		};
@@ -891,7 +903,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
-				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+				WATCHOS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -902,7 +914,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -926,7 +938,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
