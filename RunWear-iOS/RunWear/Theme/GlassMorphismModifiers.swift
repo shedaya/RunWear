@@ -59,8 +59,8 @@ struct GlassPillModifier: ViewModifier {
             .padding(.vertical, 10)
             .glassEffect(
                 isSelected
-                    ? GlassEffect.regular.tint(AppTheme.primaryColor.opacity(0.45)).interactive()
-                    : GlassEffect.regular.interactive(),
+                    ? Glass.regular.tint(AppTheme.primaryColor.opacity(0.45)).interactive()
+                    : Glass.regular.interactive(),
                 in: Capsule()
             )
     }
@@ -79,8 +79,8 @@ struct GlassButtonModifier: ViewModifier {
         content
             .glassEffect(
                 isSelected
-                    ? GlassEffect.regular.tint(AppTheme.primaryColor.opacity(0.4)).interactive()
-                    : GlassEffect.regular.interactive(),
+                    ? Glass.regular.tint(AppTheme.primaryColor.opacity(0.4)).interactive()
+                    : Glass.regular.interactive(),
                 in: RoundedRectangle(cornerRadius: cornerRadius)
             )
     }
