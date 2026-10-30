@@ -37,10 +37,11 @@ android {
         // app (see ~/workspace/release-prep/wear-os-distribution-playbook.md):
         // phone bundles use the plain series (1, 2, 3, …); standalone wear
         // bundles use 10000 + the aligned phone versionCode.
-        // This build: 10018 ↔ phone 1.2.4 / vc18 (internal track
-        // 2026-10-29). The wear versionName tracks the phone versionName.
-        versionCode = 10018
-        versionName = "1.2.4"
+        // This build: 10019, wear-only polish release on the 1.2.4 phone
+        // lineage (internal track 2026-10-30) — versionName advances to
+        // 1.2.5 for the watch-only changes; the phone app stays 1.2.4.
+        versionCode = 10019
+        versionName = "1.2.5"
     }
 
     buildTypes {
@@ -121,6 +122,10 @@ dependencies {
     // Wear OS Complications
     implementation(libs.androidx.wear.watchface.complications.data.source)
     implementation(libs.androidx.wear.watchface.complications.data.source.ktx)
+
+    // Wear OS Remote Interactions — the tips page's "Open on phone"
+    // button (RemoteActivityHelper)
+    implementation("androidx.wear:wear-remote-interactions:1.1.0")
 
     // Coroutines (for tiles)
     implementation(libs.kotlinx.coroutines.core)

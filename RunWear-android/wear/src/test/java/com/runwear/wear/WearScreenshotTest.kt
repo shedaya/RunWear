@@ -98,7 +98,13 @@ abstract class WearShotHarness {
     protected val coldWeather = weather(30.0, 24.0, WeatherCode.OVERCAST, 55, 14.0, 0.5, 90)
     protected val hotWeather = weather(91.0, 96.0, WeatherCode.CLEAR_SKY, 62, 5.0, 9.0, 5)
 
-    protected fun shoot(name: String, settleSteps: Int = 60, content: @Composable () -> Unit) {
+    protected fun shoot(
+        name: String,
+        settleSteps: Int = 60,
+        sizePx: Int = 456,
+        requireOpaqueShare: Float = 0.25f,
+        content: @Composable () -> Unit
+    ) {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java)
         // visible() attaches the window — without it the ComposeView never
         // attaches and has no windowRecomposer to compose into
@@ -138,7 +144,7 @@ abstract class WearShotHarness {
         shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS)
         shadowOf(Looper.getMainLooper()).idle()
 
-        val size = 456
+        val size = sizePx
         fun capture(): Pair<Bitmap, Int> {
             val spec = View.MeasureSpec.makeMeasureSpec(size, View.MeasureSpec.EXACTLY)
             composeView.measure(spec, spec)
@@ -154,7 +160,7 @@ abstract class WearShotHarness {
 
         var (bitmap, opaque) = capture()
         val firstPassOpaque = opaque
-        if (opaque <= size * size / 4) {
+        if (opaque <= size * size * requireOpaqueShare) {
             // Slow hosts can lag ScalingLazyColumn's first layout behind
             // even the long settle above. One more settle + capture round
             // before concluding nothing rendered.
@@ -180,7 +186,7 @@ abstract class WearShotHarness {
         // single corner pixel, require a solid share of opaque pixels.
         assertTrue(
             "only $opaque/${size * size} opaque pixels (first pass $firstPassOpaque) — nothing rendered?",
-            opaque > size * size / 4
+            opaque > size * size * requireOpaqueShare
         )
 
         outDir.mkdirs()
@@ -285,6 +291,47 @@ class Shot06HeroHotTest : WearShotHarness() {
         shoot("06-hero-hot") {
             HeroWeatherPage(
                 weather = hotWeather,
+                heroImageUrl = null,
+                locationName = "New York",
+                outfitItemCount = outfit.allItems.size,
+                onToggleUnit = {}
+            )
+        }
+    }
+}
+
+// ============================================================================
+// Field-verification renders (Oct 30, 2026 polish pass) — NOT listing shots.
+// Rendered at 454 × 454 (Pixel Watch-class round frame) from the same
+// production composables, to prove two on-watch field defects fixed:
+// the empty-tips sentence clipped at the round face's edges, and the hero
+// page's new subtle digital clock. The tips page paints glyphs only (no
+// full-frame background), so its opaque-share floor is 1% — still above
+// the 465 px "title alone" failure this harness caught in Oct 2026.
+// ============================================================================
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w227dp-h227dp-xhdpi")
+class VerifyTipsEmptyRoundTest : WearShotHarness() {
+    @Test
+    fun verify_tipsEmptyRound() {
+        shoot("verify-tips-empty-454", sizePx = 454, requireOpaqueShare = 0.01f) {
+            TipsPage(tips = emptyList(), locationName = "New York, New York", isVisible = false)
+        }
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(application = ShotApplication::class, sdk = [35], qualifiers = "w227dp-h227dp-xhdpi")
+class VerifyHeroClockRoundTest : WearShotHarness() {
+    @Test
+    fun verify_heroClockRound() {
+        val outfit = engine.execute(mildWeather, ComfortPreference.NEUTRAL)
+        shoot("verify-hero-clock-454", sizePx = 454) {
+            HeroWeatherPage(
+                weather = mildWeather,
                 heroImageUrl = null,
                 locationName = "New York",
                 outfitItemCount = outfit.allItems.size,

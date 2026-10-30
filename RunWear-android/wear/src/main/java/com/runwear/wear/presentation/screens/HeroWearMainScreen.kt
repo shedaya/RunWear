@@ -1,5 +1,9 @@
 package com.runwear.wear.presentation.screens
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
@@ -24,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -32,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,6 +51,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusable
 // rememberActiveFocusRequester removed - using manual FocusRequester for pager pages
 import androidx.compose.ui.res.painterResource
+import androidx.core.content.ContextCompat
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.CardDefaults
@@ -52,6 +59,7 @@ import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import androidx.wear.remote.interactions.RemoteActivityHelper
 import coil.compose.AsyncImage
 import com.runwear.shared.domain.model.ClothingCategory
 import com.runwear.shared.domain.model.ClothingItem
@@ -61,8 +69,11 @@ import com.runwear.wear.presentation.theme.RunWearColors
 import com.runwear.wear.presentation.theme.WeatherColors
 import com.runwear.wear.presentation.viewmodel.WearUiState
 import kotlinx.datetime.toJavaLocalDateTime
+import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 /**
@@ -180,6 +191,21 @@ internal fun HeroWeatherPage(
         targetTemp = actualTemp
     }
 
+    // Current local time for the subtle digital clock at the top of the
+    // page (Sol, Oct 30, 2026). Refreshed on the minute boundary so the
+    // displayed time is never stale while the page is up.
+    var currentTime by remember { mutableStateOf(LocalTime.now()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = LocalTime.now()
+            currentTime = now
+            val nextMinute = now.plusMinutes(1).withSecond(0).withNano(0)
+            kotlinx.coroutines.delay(
+                Duration.between(now, nextMinute).toMillis().coerceIn(1_000L, 60_000L)
+            )
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -232,12 +258,20 @@ internal fun HeroWeatherPage(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top: Condition label and location (the phone app's condition
-            // treatment is a text label, not an emoji glyph)
+            // Top: subtle digital clock, then condition label and location
+            // (the phone app's condition treatment is a text label, not an
+            // emoji glyph). The clock is deliberately quiet — small and
+            // low-contrast — so it never competes with the temperature.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 16.dp)
             ) {
+                Text(
+                    text = currentTime.format(DateTimeFormatter.ofPattern("h:mm a")),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White.copy(alpha = 0.55f)
+                )
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = weather.weatherCode.description,
                     style = MaterialTheme.typography.labelMedium,
@@ -459,6 +493,7 @@ internal fun TipsPage(
     locationName: String,
     isVisible: Boolean = false
 ) {
+    val context = LocalContext.current
     val listState = rememberScalingLazyListState(initialCenterItemIndex = 0)
     val focusRequester = remember { FocusRequester() }
 
@@ -481,7 +516,13 @@ internal fun TipsPage(
             .focusable(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 24.dp),
+        // Round-safe horizontal inset: at 10.dp the item width nearly
+        // matched the screen width, so centered text wider than the
+        // circle's chord at its height clipped at both edges ("‹o
+        // specific tips for today. Enjoy you‹ run!" on Sol's watch,
+        // Oct 30, 2026). 24.dp each side keeps the text, the location
+        // line and the tip cards inside the safe circle.
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 24.dp),
         autoCentering = null
     ) {
         // Title
@@ -519,6 +560,53 @@ internal fun TipsPage(
                 textAlign = TextAlign.Center
             )
         }
+
+        // Open on phone (Sol's suggestion, Oct 30, 2026) — same pill
+        // treatment as the outfit page's Refresh button, wider for the
+        // longer label.
+        item {
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { openRunWearOnPhone(context) },
+                modifier = Modifier.size(width = 124.dp, height = 32.dp)
+            ) {
+                Text("Open on phone", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    }
+}
+
+/**
+ * Opens the RunWear phone app from the watch. Phone and watch share the
+ * applicationId `com.runwear.wear`; the phone's launcher activity is
+ * `com.runwear.app.MainActivity` (app module's manifest). The
+ * [RemoteActivityHelper] is created per tap so nothing binds during
+ * composition; if the phone isn't reachable the future fails and the
+ * user gets a brief toast — never a crash.
+ */
+private fun openRunWearOnPhone(context: Context) {
+    val appContext = context.applicationContext
+    val executor = Executors.newSingleThreadExecutor()
+    try {
+        val helper = RemoteActivityHelper(appContext, executor)
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            component = ComponentName("com.runwear.wear", "com.runwear.app.MainActivity")
+        }
+        val future = helper.startRemoteActivity(intent)
+        future.addListener({
+            try {
+                future.get()
+            } catch (e: Exception) {
+                Toast.makeText(appContext, "Couldn't open on phone", Toast.LENGTH_SHORT).show()
+            }
+            // wear-remote-interactions 1.1.0's helper has no close();
+            // shutting down the per-tap executor releases this tap.
+            executor.shutdown()
+        }, ContextCompat.getMainExecutor(appContext))
+    } catch (e: Exception) {
+        executor.shutdown()
+        Toast.makeText(appContext, "Couldn't open on phone", Toast.LENGTH_SHORT).show()
     }
 }
 

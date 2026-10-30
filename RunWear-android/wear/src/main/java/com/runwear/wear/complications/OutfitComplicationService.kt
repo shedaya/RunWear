@@ -15,6 +15,7 @@ import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
+import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import com.runwear.shared.util.LocationProvider
@@ -26,6 +27,34 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * One-word condition labels for small complication slots (the ranged-value
+ * title). The full [WeatherCode.description] phrases run to three words
+ * ("Thunderstorm with slight hail"); watch faces truncate them mid-word.
+ * Sol (Oct 30, 2026): short truncated forms are fine — "CLEA RAIN SNOW
+ * etc" — so the provider hands the face a deliberate short label instead
+ * of a long phrase to cut. Pure function: unit-tested in
+ * ComplicationLabelTest.
+ */
+internal fun shortConditionLabel(code: WeatherCode): String = when (code) {
+    WeatherCode.CLEAR_SKY, WeatherCode.MAINLY_CLEAR -> "Clear"
+    WeatherCode.PARTLY_CLOUDY -> "Cloudy"
+    WeatherCode.OVERCAST -> "Overcast"
+    WeatherCode.FOG, WeatherCode.DEPOSITING_RIME_FOG -> "Fog"
+    WeatherCode.DRIZZLE_LIGHT, WeatherCode.DRIZZLE_MODERATE, WeatherCode.DRIZZLE_DENSE,
+    WeatherCode.FREEZING_DRIZZLE_LIGHT, WeatherCode.FREEZING_DRIZZLE_DENSE -> "Drizzle"
+    WeatherCode.RAIN_SLIGHT, WeatherCode.RAIN_MODERATE, WeatherCode.RAIN_HEAVY,
+    WeatherCode.RAIN_SHOWERS_SLIGHT, WeatherCode.RAIN_SHOWERS_MODERATE,
+    WeatherCode.RAIN_SHOWERS_VIOLENT -> "Rain"
+    WeatherCode.FREEZING_RAIN_LIGHT, WeatherCode.FREEZING_RAIN_HEAVY -> "Ice rain"
+    WeatherCode.SNOW_SLIGHT, WeatherCode.SNOW_MODERATE, WeatherCode.SNOW_HEAVY,
+    WeatherCode.SNOW_GRAINS, WeatherCode.SNOW_SHOWERS_SLIGHT,
+    WeatherCode.SNOW_SHOWERS_HEAVY -> "Snow"
+    WeatherCode.THUNDERSTORM, WeatherCode.THUNDERSTORM_HAIL_SLIGHT,
+    WeatherCode.THUNDERSTORM_HAIL_HEAVY -> "Storm"
+    WeatherCode.UNKNOWN -> "Unknown"
+}
 
 class OutfitComplicationService : SuspendingComplicationDataSourceService() {
 
@@ -210,10 +239,22 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             value = clampedTemp,
             min = minTemp,
             max = maxTemp,
-            contentDescription = PlainComplicationText.Builder("Temperature: $tempText").build()
+            contentDescription = PlainComplicationText.Builder(
+                "${weather.weatherCode.description}: $tempText"
+            ).build()
         )
             .setText(PlainComplicationText.Builder(tempText).build())
-            .setTitle(PlainComplicationText.Builder(weather.weatherCode.description).build())
+            // Title = a purpose-built short label, not the full condition
+            // phrase. Sol's field report (Oct 30, 2026, corrected 05:27):
+            // the 4-letter truncation itself is fine — the defect is the
+            // two lines crowding in the arc slot. Line spacing there is
+            // rendered by the watch face; the complications data API
+            // exposes no spacing/padding control to the provider, so the
+            // app-side lever is what the lines contain: a short label
+            // stops the face's mid-word truncation of long phrases
+            // ("Thunderstorm with slight hail" → "Thun…") from compounding
+            // the crowding, and keeps both lines the face renders.
+            .setTitle(PlainComplicationText.Builder(shortConditionLabel(weather.weatherCode)).build())
             .setTapAction(createTapAction())
             .build()
     }
@@ -269,14 +310,16 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
     }
 
     private fun createPreviewRangedValue(): RangedValueComplicationData {
+        // Mirrors the production ranged-value shape: short-label title
+        // over the temperature (see createRangedValueComplication).
         return RangedValueComplicationData.Builder(
             value = 72f,
             min = 10f,
             max = 100f,
-            contentDescription = PlainComplicationText.Builder("Temperature preview").build()
+            contentDescription = PlainComplicationText.Builder("Clear sky: 72°F").build()
         )
             .setText(PlainComplicationText.Builder("72°F").build())
-            .setTitle(PlainComplicationText.Builder("Clear sky").build())
+            .setTitle(PlainComplicationText.Builder(shortConditionLabel(WeatherCode.CLEAR_SKY)).build())
             .build()
     }
 }
