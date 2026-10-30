@@ -84,6 +84,41 @@ enum AppTheme {
     static let cardCornerRadius: CGFloat = 12
     static let modalCornerRadius: CGFloat = 24
     static let minTouchTarget: CGFloat = 44
+
+    // MARK: - Content Card Tokens (RW-6.11)
+    //
+    // The single source of truth for flat content-card fills on the dark
+    // design. Content cards are deliberately NOT Liquid Glass — glass is
+    // reserved for floating/navigation surfaces (see GlassMorphismModifiers);
+    // dense text stays on these flat fills for legibility.
+    static let cardFillOnDark = Color.white.opacity(0.05)
+    static let cardStrokeOnDark = Color.white.opacity(0.1)
+}
+
+// MARK: - Typography Tokens (RW-6.3)
+//
+// Dynamic Type throughout: every text surface uses a semantic style from
+// this scale so the whole app tracks the user's text-size setting. SF Pro
+// is the system face — no custom font is bundled (the audit's typography
+// verdict: do NOT import Bebas Neue). Numeric values use tabular digits
+// via `.monospacedDigit()` at the call site.
+extension Font {
+    /// Sheet headers (was fixed 24pt bold).
+    static var appSheetTitle: Font { .title2.weight(.bold) }
+    /// Section headers on the home screen (was fixed 20pt bold).
+    static var appSectionTitle: Font { .title3.weight(.bold) }
+    /// Item names in cards and rows (was fixed 16pt semibold).
+    static var appItemName: Font { .headline }
+    /// Primary button labels (was fixed 17–18pt semibold).
+    static var appButtonLabel: Font { .body.weight(.semibold) }
+    /// Secondary body copy (was fixed 13–15pt regular).
+    static var appSecondary: Font { .subheadline }
+    /// Small descriptive copy under item names (was fixed 13pt).
+    static var appFootnote: Font { .footnote }
+    /// Category eyebrows / micro-labels (was fixed 11pt semibold).
+    static var appEyebrow: Font { .caption.weight(.semibold) }
+    /// Floating pill labels (was fixed 14–15pt medium).
+    static var appPillLabel: Font { .subheadline.weight(.medium) }
 }
 
 extension Color {

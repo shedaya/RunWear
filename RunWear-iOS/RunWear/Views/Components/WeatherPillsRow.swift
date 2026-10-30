@@ -16,6 +16,9 @@ struct WeatherPillsRow: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
+            // A row of glass pills is one glass group: the container
+            // lets the pills blend and morph as one surface (iOS 26).
+            GlassEffectContainer(spacing: 8) {
             HStack(spacing: 8) {
                 // Condition pill (always shown)
                 WeatherPill(
@@ -50,6 +53,7 @@ struct WeatherPillsRow: View {
                         onTap: onUVTapped
                     )
                 }
+            }
             }
             .padding(.horizontal, 16)
         }

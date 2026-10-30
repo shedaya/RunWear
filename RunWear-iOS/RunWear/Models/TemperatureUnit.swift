@@ -73,4 +73,18 @@ enum TemperatureUnit: String, Codable, CaseIterable {
     func formatFromCelsius(_ celsius: Double) -> String {
         format(convert(fromCelsius: celsius))
     }
+
+    // MARK: - Locale Default (RW-6.8)
+
+    /// The unit a user in the given measurement system expects: metric
+    /// locales default to Celsius, everyone else to Fahrenheit. Onboarding
+    /// and first-launch defaults come from here — never a hard-coded unit.
+    static func defaultUnit(for measurementSystem: Locale.MeasurementSystem) -> TemperatureUnit {
+        measurementSystem == .metric ? .celsius : .fahrenheit
+    }
+
+    /// The locale default for the current device locale.
+    static var defaultForLocale: TemperatureUnit {
+        defaultUnit(for: Locale.current.measurementSystem)
+    }
 }

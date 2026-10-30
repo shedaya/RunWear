@@ -57,23 +57,23 @@ struct ShopModal: View {
                 // sheet carries both; the iOS sheet had neither).
                 VStack(spacing: 12) {
                     Text("Affiliate Disclosure: ")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.white.opacity(0.6))
                     + Text("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
-                        .font(.system(size: 11))
+                        .font(.caption)
                         .foregroundColor(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.05))
+                        .fill(AppTheme.cardFillOnDark)
                 )
                 .padding(.horizontal, 24)
 
                 Button(action: dismiss) {
                     Text("Close")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.appSecondary.weight(.semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -124,29 +124,29 @@ struct ShopModal: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                             default:
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 36))
+                                    .font(.largeTitle)
                                     .foregroundColor(.white)
                             }
                         }
                     } else {
                         Image(systemName: item.icon)
-                            .font(.system(size: 36))
+                            .font(.largeTitle)
                             .foregroundColor(.white)
                     }
                 }
                 .frame(width: 72, height: 72)
                 Text(item.name)
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.appSectionTitle)
                     .foregroundColor(.white)
                 Text(item.description)
-                    .font(.system(size: 14))
+                    .font(.appSecondary)
                     .foregroundColor(.white.opacity(0.7))
                 Button(action: { openAmazon(for: item) }) {
                     HStack(spacing: 6) {
                         Image(systemName: "cart.fill")
                         Text("Shop")
                     }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.appSecondary.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -180,11 +180,12 @@ struct ShopModal: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Shop Gear")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.appSheetTitle)
                     .foregroundColor(.white)
 
                 Text("\(items.count) items recommended")
-                    .font(.system(size: 14))
+                    .font(.appSecondary)
+                    .monospacedDigit()
                     .foregroundColor(.white.opacity(0.6))
             }
 
@@ -194,9 +195,9 @@ struct ShopModal: View {
             Button(action: openShopAll) {
                 HStack(spacing: 4) {
                     Text("Shop All")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.appSecondary.weight(.semibold))
                     Image(systemName: "arrow.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.appFootnote.weight(.semibold))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
@@ -244,9 +245,9 @@ struct ShopModal: View {
 
 
     private func dismiss() {
-        withAnimation(.easeOut(duration: AppTheme.modalTransitionDuration)) {
-            isPresented = false
-        }
+        // State-driven dismissal (RW-6.12): the system animates the
+        // sheet away; no hand-rolled transition wrapper.
+        isPresented = false
     }
 }
 
@@ -283,13 +284,13 @@ private struct ShopItemRow: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                             default:
                                 Image(systemName: item.icon)
-                                    .font(.system(size: 28))
+                                    .font(.title)
                                     .foregroundColor(.white)
                             }
                         }
                     } else {
                         Image(systemName: item.icon)
-                            .font(.system(size: 28))
+                            .font(.title)
                             .foregroundColor(.white)
                     }
                 }
@@ -298,11 +299,11 @@ private struct ShopItemRow: View {
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.appItemName)
                         .foregroundColor(.white)
 
                     Text(item.description)
-                        .font(.system(size: 13))
+                        .font(.appFootnote)
                         .foregroundColor(.white.opacity(0.6))
                         .lineLimit(2)
                 }
@@ -311,17 +312,18 @@ private struct ShopItemRow: View {
 
                 // Shop arrow
                 Image(systemName: "cart.fill")
-                    .font(.system(size: 18))
+                    .font(.body)
                     .foregroundColor(AppTheme.primaryColor)
             }
             .padding(12)
+            // Flat content card (AppTheme tokens) — not glass.
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(AppTheme.cardFillOnDark)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
             )
         }
     }
