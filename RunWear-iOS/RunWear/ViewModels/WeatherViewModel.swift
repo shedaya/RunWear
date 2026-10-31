@@ -133,6 +133,23 @@ class WeatherViewModel: ObservableObject {
     private let weatherService = WeatherService.shared
     private let outfitService = OutfitRecommendationService.shared
     private let heroImageService = HeroImageService.shared
+
+    // MARK: - RW-14 personal hero layer
+
+    /// The "Make it me" store, wired by the hosting view (ContentView
+    /// owns both objects). Weak: the store lives in the view layer and
+    /// outlives this view model by construction; nil simply means the
+    /// personal layer is off (stock behavior).
+    weak var personalStore: PersonalHeroStore?
+
+    /// The personal cell the current screen is keyed on, when the
+    /// user has opted in — Settings reads it for the photo-replace
+    /// regeneration, and the upsell/progress surfaces key on it.
+    @Published private(set) var currentPersonalCombination: PersonalCombination?
+
+    /// The in-flight wait for a personalized hero to land for the
+    /// current cell; cancelled whenever the cell changes.
+    private var personalAwaitTask: Task<Void, Never>?
     private let fallbackProvider = FallbackImageProvider.shared
     private let geocoder = CLGeocoder()
 
@@ -448,7 +465,69 @@ class WeatherViewModel: ObservableObject {
             heroServedCombinationId = nil
         }
 
+        // RW-14: the personal layer runs after the pool paints, on
+        // the same keying frame (prepareHeroFrame), so the
+        // personalized photo is keyed to the outfit on screen.
+        await applyPersonalHero(frame: frame)
+
         isHeroImageLoading = false
+    }
+
+    /// RW-14: consults the personal serving path for the current
+    /// cell. A verified personalized hero replaces the pool photo —
+    /// immediately when one exists, or by swap-in when it lands
+    /// (the pool photo stays up meanwhile; for cells the generation
+    /// gate never delivers, the pool photo simply stays, with no
+    /// error state). Not opted in (or no store wired): no-op beyond
+    /// clearing the cell marker.
+    private func applyPersonalHero(frame: (feelsLikeF: Double, weatherCode: Int, hour: Int)) async {
+        guard let store = personalStore, store.isOptedIn,
+              let recommendation else {
+            currentPersonalCombination = nil
+            personalAwaitTask?.cancel()
+            personalAwaitTask = nil
+            return
+        }
+        let combo = PersonalCombination.make(
+            genderPreference: genderPreference,
+            weatherCode: frame.weatherCode,
+            feelsLikeFahrenheit: frame.feelsLikeF,
+            hour: frame.hour,
+            outfit: recommendation
+        )
+        currentPersonalCombination = combo
+        personalAwaitTask?.cancel()
+        if let personalURL = await store.resolveHero(for: combo) {
+            heroImageUrl = personalURL
+            heroImageRowId = nil
+            heroServedCombinationId = combo.combinationId
+        } else {
+            personalAwaitTask = Task { [weak self] in
+                guard let landedURL = await store.awaitHero(for: combo) else { return }
+                guard let self,
+                      self.currentPersonalCombination?.combinationId == combo.combinationId
+                else { return }
+                self.heroImageUrl = landedURL
+                self.heroImageRowId = nil
+                self.heroServedCombinationId = combo.combinationId
+            }
+        }
+    }
+
+    /// Re-runs the hero resolution for the current conditions —
+    /// called when the personal layer's state changes underneath a
+    /// screen that is already showing (opt-in completed, photos
+    /// replaced, entitlement changed, photos deleted).
+    func refreshHero() {
+        Task { await loadHeroImage() }
+    }
+
+    /// Awaits a hero reload and returns the personal cell it keyed
+    /// on — the onboarding fork uses it to kick the user's first
+    /// generation for exactly the cell they just saw.
+    func reloadHeroForPersonal() async -> PersonalCombination? {
+        await loadHeroImage()
+        return currentPersonalCombination
     }
 
     /// The photo a flag would report right now: the pool photo while

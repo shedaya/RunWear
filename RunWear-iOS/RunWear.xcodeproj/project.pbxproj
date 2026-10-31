@@ -125,6 +125,19 @@
 		E10002000000000000000014 /* EngineFixtureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000003 /* EngineFixtureTests.swift */; };
 		E10002000000000000000015 /* engine_fixtures.json in Resources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000004 /* engine_fixtures.json */; };
 		D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B1000000233456780000000 /* RunWear Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+
+		/* RW-14 "Make it me" — added 2026-10-31 */
+		F10002000000000000000101 /* PersonalHeroModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000101 /* PersonalHeroModels.swift */; };
+		F10002000000000000000102 /* SupabaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000102 /* SupabaseAuthService.swift */; };
+		F10002000000000000000103 /* PersonalHeroAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000103 /* PersonalHeroAPI.swift */; };
+		F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000104 /* PhotoQualityChecker.swift */; };
+		F10002000000000000000105 /* MakeItMeBilling.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000105 /* MakeItMeBilling.swift */; };
+		F10002000000000000000106 /* PersonalHeroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000106 /* PersonalHeroStore.swift */; };
+		F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
+		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
+		F10002000000000000000121 /* PersonalHeroModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000101 /* PersonalHeroModels.swift */; };
+		F10002000000000000000122 /* PersonalHeroTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000024 /* PersonalHeroTests.swift */; };
+		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; fileRef = F10003000000000000000102 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -258,6 +271,17 @@
 		E10001000000000000000002 /* EngineBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineBridge.swift; sourceTree = "<group>"; };
 		E10001000000000000000003 /* EngineFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineFixtureTests.swift; sourceTree = "<group>"; };
 		E10001000000000000000004 /* engine_fixtures.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = engine_fixtures.json; sourceTree = "<group>"; };
+
+		/* RW-14 "Make it me" — added 2026-10-31 */
+		F10001000000000000000101 /* PersonalHeroModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroModels.swift; sourceTree = "<group>"; };
+		F10001000000000000000102 /* SupabaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthService.swift; sourceTree = "<group>"; };
+		F10001000000000000000103 /* PersonalHeroAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroAPI.swift; sourceTree = "<group>"; };
+		F10001000000000000000104 /* PhotoQualityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoQualityChecker.swift; sourceTree = "<group>"; };
+		F10001000000000000000105 /* MakeItMeBilling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeBilling.swift; sourceTree = "<group>"; };
+		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
+		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
+		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
+		C10001000000000000000024 /* PersonalHeroTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -266,6 +290,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E10002000000000000000001 /* RunWearEngine.xcframework in Frameworks */,
+				F10002000000000000000130 /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -314,8 +339,10 @@
 				A10001000000000000000003 /* HeroImageModels.swift */,
 				A10001000000000000000004 /* TemperatureUnit.swift */,
 				A10001000000000000000023 /* HeroFlag.swift */,
+				F10001000000000000000101 /* PersonalHeroModels.swift */,
 			);
 			path = Models;
+
 			sourceTree = "<group>";
 		};
 		A1000022233456780000003 /* Views */ = {
@@ -330,8 +357,11 @@
 				A10003000000000000000001 /* Components */,
 				A10003000000000000000002 /* Modals */,
 				A10003000000000000000003 /* Onboarding */,
+				F10001000000000000000107 /* MakeItMeFlowViews.swift */,
+				F10001000000000000000108 /* MakeItMeSettingsViews.swift */,
 			);
 			path = Views;
+
 			sourceTree = "<group>";
 		};
 		A1000023233456780000004 /* ViewModels */ = {
@@ -356,8 +386,14 @@
 				A10001000000000000000009 /* WatchConnectivityManager.swift */,
 				A10001000000000000000024 /* HeroFlagService.swift */,
 				A10001000000000000000025 /* UserEngagement.swift */,
+				F10001000000000000000102 /* SupabaseAuthService.swift */,
+				F10001000000000000000103 /* PersonalHeroAPI.swift */,
+				F10001000000000000000104 /* PhotoQualityChecker.swift */,
+				F10001000000000000000105 /* MakeItMeBilling.swift */,
+				F10001000000000000000106 /* PersonalHeroStore.swift */,
 			);
 			path = Services;
+
 			sourceTree = "<group>";
 		};
 		A1000025233456780000006 /* Theme */ = {
@@ -451,6 +487,7 @@
 				C10001000000000000000009 /* WeatherServicePrivacyTests.swift */,
 				C10001000000000000000010 /* FieldFindingsFixTests.swift */,
 				C10001000000000000000023 /* PremiumPassTests.swift */,
+				C10001000000000000000024 /* PersonalHeroTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -476,6 +513,9 @@
 				D1000100233456780000001 /* PBXTargetDependency */,
 			);
 			name = RunWear;
+			packageProductDependencies = (
+				F10003000000000000000102 /* RevenueCat */,
+			);
 			productName = RunWear;
 			productReference = A1000000233456780000000 /* RunWear.app */;
 			productType = "com.apple.product-type.application";
@@ -546,6 +586,9 @@
 				Base,
 			);
 			mainGroup = A10000F7233456780000000;
+			packageReferences = (
+				F10003000000000000000101 /* XCRemoteSwiftPackageReference "purchases-ios" */,
+			);
 			productRefGroup = A10000FF233456780000000 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -556,6 +599,25 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F10003000000000000000101 /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
+			requirement = {
+				kind = exactVersion;
+				version = 5.100.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F10003000000000000000102 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F10003000000000000000101 /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A10000FE233456790000000 /* Resources */ = {
@@ -632,6 +694,14 @@
 				A10002000000000000000022 /* OnboardingView.swift in Sources */,
 				A10002000000000000000023 /* HeroFlag.swift in Sources */,
 				A10002000000000000000024 /* HeroFlagService.swift in Sources */,
+				F10002000000000000000101 /* PersonalHeroModels.swift in Sources */,
+				F10002000000000000000102 /* SupabaseAuthService.swift in Sources */,
+				F10002000000000000000103 /* PersonalHeroAPI.swift in Sources */,
+				F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */,
+				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
+				F10002000000000000000106 /* PersonalHeroStore.swift in Sources */,
+				F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */,
+				F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -702,6 +772,8 @@
 				C10002000000000000000032 /* StaggeredAnimation.swift in Sources */,
 				C10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				C10002000000000000000033 /* FieldFindingsFixTests.swift in Sources */,
+				F10002000000000000000121 /* PersonalHeroModels.swift in Sources */,
+				F10002000000000000000122 /* PersonalHeroTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

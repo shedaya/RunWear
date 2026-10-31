@@ -13,6 +13,11 @@ struct SettingsModal: View {
     @Binding var temperatureUnit: TemperatureUnit
     @Binding var genderPreference: GenderPreference
     @Binding var comfortLevel: ComfortLevel
+    /// RW-14: the personal cell currently on the main screen, read
+    /// lazily so the section can regenerate it after a photo
+    /// replacement. Defaults to none (previews, other call sites).
+    var currentCombination: () -> PersonalCombination? = { nil }
+    @EnvironmentObject private var personalStore: PersonalHeroStore
 
     @State private var showFeedback = false
 
@@ -40,6 +45,12 @@ struct SettingsModal: View {
                 Section("Body Temperature") {
                     ComfortLevelControl(comfortLevel: $comfortLevel)
                 }
+
+                // RW-14 "Make it me" (spec §3, states S1–S14).
+                MakeItMeSettingsSection(
+                    genderPreference: genderPreference,
+                    currentCombination: currentCombination
+                )
 
                 // R-15: the always-available feedback + rating doors.
                 Section("Support") {
@@ -160,4 +171,5 @@ struct FeedbackSheet: View {
         genderPreference: .constant(.male),
         comfortLevel: .constant(.neutral)
     )
+    .environmentObject(PersonalHeroStore())
 }

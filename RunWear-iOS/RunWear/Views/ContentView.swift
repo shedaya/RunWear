@@ -4,6 +4,7 @@ import CoreLocation
 struct ContentView: View {
     @StateObject private var locationService = LocationService()
     @StateObject private var viewModel = WeatherViewModel()
+    @EnvironmentObject var personalStore: PersonalHeroStore
     @State private var showManualLocationPicker = false
 
     var body: some View {
@@ -84,6 +85,12 @@ struct ContentView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .onChange(of: personalStore.mode) { _, _ in
+            // RW-14: opt-in completed, photos deleted, or entitlement
+            // changed underneath a live screen — re-resolve the hero
+            // so the personal layer (or its absence) takes effect.
+            viewModel.refreshHero()
+        }
         .onChange(of: locationService.location) { _, newLocation in
             // A GPS fix governs only in GPS mode. In manual mode a
             // stray fix (e.g. one requested before the user picked a
@@ -95,6 +102,9 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            // RW-14: wire the personal-hero store into the view model
+            // (it consults the store on every hero resolution).
+            viewModel.personalStore = personalStore
             // RW-6.8: honor the location choice made in onboarding. A
             // user who picked "Set a City Instead" meets the picker
             // directly — the choice was already made, so the permission

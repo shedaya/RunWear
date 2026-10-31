@@ -3,6 +3,7 @@ import StoreKit // for the \.requestReview environment action (R-15)
 
 struct WeatherOutfitView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @EnvironmentObject var personalStore: PersonalHeroStore
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
     let weather: WeatherData
@@ -154,7 +155,8 @@ struct WeatherOutfitView: View {
                     isPresented: $showSettings,
                     temperatureUnit: $viewModel.temperatureUnit,
                     genderPreference: $viewModel.genderPreference,
-                    comfortLevel: $viewModel.comfortLevel
+                    comfortLevel: $viewModel.comfortLevel,
+                    currentCombination: { viewModel.currentPersonalCombination }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -319,6 +321,8 @@ struct WeatherOutfitView: View {
                                 weatherPillsSection
                                 outfitSection
                                     .padding(.top, 24)
+                                personalSection
+                                    .padding(.top, 24)
                             }
                             .padding(.bottom, 16)
                         }
@@ -335,6 +339,8 @@ struct WeatherOutfitView: View {
                             .zIndex(1)
                         outfitGridSection
                             .padding(.top, 24)
+                        personalSection
+                            .padding(.top, 24)
                         Spacer(minLength: 40)
                     }
                 }
@@ -347,6 +353,8 @@ struct WeatherOutfitView: View {
                             .padding(.top, -30)
                             .zIndex(1)
                         outfitSection
+                            .padding(.top, 24)
+                        personalSection
                             .padding(.top, 24)
                         Spacer(minLength: 40)
                     }
@@ -539,6 +547,45 @@ struct WeatherOutfitView: View {
                 endPoint: .bottom
             )
         )
+    }
+
+    // MARK: - RW-14 Personal Section
+
+    /// The "Make it me" surfaces on the run screen, in spec order:
+    /// the first-look generation progress line while a
+    /// user-initiated generation for THIS cell is in flight (spec
+    /// §5 G1/G2 — quiet text under the hero, never a spinner over
+    /// the photo), and the free-tier upsell card when this cell is
+    /// the one that exhausted the allowance (spec §6 U1). Nothing
+    /// renders in any other state — notably not for gate-rejected
+    /// cells, which sit on the pool photo indefinitely in silence.
+    @ViewBuilder private var personalSection: some View {
+        if let cell = viewModel.currentPersonalCombination {
+            if personalStore.userInitiatedPending.contains(cell.combinationId) {
+                VStack(spacing: 4) {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .tint(.white.opacity(0.7))
+                        // Spec §7 G1, verbatim.
+                        Text("Making this outfit yours…")
+                            .font(.appSecondary.weight(.semibold))
+                            .foregroundColor(.white)
+                    }
+                    // Spec §7 G2, verbatim.
+                    Text("About 10 seconds. Your recommendation is ready either way — the standard photo stays up until yours is done.")
+                        .font(.appFootnote)
+                        .foregroundColor(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 16)
+            }
+
+            if personalStore.shouldShowUpsell(currentCell: cell.combinationId) {
+                // The card carries its own horizontal padding.
+                MakeItMeUpsellCard(currentCell: cell.combinationId)
+            }
+        }
     }
 
     // MARK: - Outfit Section

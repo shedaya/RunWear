@@ -47,48 +47,6 @@ actor SupabaseClient {
         return images.filter { HeroPoolPolicy.isServable(reviewStatus: $0.reviewStatus) }
     }
 
-    /// Inserts a generation job for demand-driven replenishment
-    /// - Parameters:
-    ///   - combinationId: The combination ID for the image to generate
-    ///   - prompt: The generation prompt
-    ///   - status: Initial status (default: "QUEUED")
-    func insertGenerationJob(
-        combinationId: String,
-        prompt: String,
-        status: String = "QUEUED"
-    ) async throws {
-        let endpoint = "/rest/v1/generation_jobs"
-
-        guard let url = URL(string: "\(baseURL)\(endpoint)") else {
-            throw SupabaseError.invalidURL
-        }
-
-        let job = GenerationJob(
-            combinationId: combinationId,
-            prompt: prompt,
-            status: status
-        )
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(anonKey)", forHTTPHeaderField: "Authorization")
-        request.addValue(anonKey, forHTTPHeaderField: "apikey")
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("return=minimal", forHTTPHeaderField: "Prefer")
-
-        let encoder = JSONEncoder()
-        request.httpBody = try encoder.encode(job)
-
-        let (_, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SupabaseError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 201 || httpResponse.statusCode == 200 else {
-            throw SupabaseError.httpError(httpResponse.statusCode)
-        }
-    }
 
     /// Inserts a user flag against a hero photo into `hero_flags`.
     /// The table's RLS grants the anon role INSERT only — flags are
@@ -123,14 +81,6 @@ actor SupabaseClient {
         }
     }
 
-    /// Counts existing variants for a combination prefix
-    /// - Parameter prefix: Combination ID prefix (without variant number)
-    /// - Returns: Count of existing variants
-    func countExistingVariants(prefix: String) async throws -> Int {
-        let pattern = "\(prefix)%"
-        let images = try await fetchGeneratedImages(pattern: pattern)
-        return images.count
-    }
 }
 
 /// Errors that can occur when interacting with Supabase
