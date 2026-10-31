@@ -8,7 +8,6 @@ import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
-import com.revenuecat.purchases.PurchasesErrorCode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -121,7 +120,7 @@ class BillingManager @Inject constructor(
                 com.revenuecat.purchases.PurchaseParams.Builder(activity, packageToPurchase).build(),
                 onError = { error, userCancelled ->
                     cont.resume(
-                        if (userCancelled || error.code == PurchasesErrorCode.UserCancelledError) {
+                        if (userCancelled) {
                             PurchaseOutcome.Cancelled
                         } else {
                             PurchaseOutcome.Failed(error.message)
