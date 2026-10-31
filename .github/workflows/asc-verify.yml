@@ -25,6 +25,8 @@ on:
           - medical
           - medicalprobe
           - ipad13probe
+          - testers
+          - testers-add
         default: verify
         required: true
       version:
@@ -89,3 +91,11 @@ jobs:
         if: inputs.task == 'ipad13probe'
         working-directory: scripts/asc
         run: python3 asc_ipad13_probe.py
+      - name: Probe TestFlight tester state (Alexandra, all apps)
+        if: inputs.task == 'testers'
+        working-directory: scripts/asc
+        run: python3 asc_testers.py probe
+      - name: Invite + add Alexandra as internal tester (all apps)
+        if: inputs.task == 'testers-add'
+        working-directory: scripts/asc
+        run: python3 asc_testers.py add
