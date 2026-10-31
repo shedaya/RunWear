@@ -409,4 +409,92 @@ final class ReferenceTileLoaderTests: XCTestCase {
         XCTAssertEqual(tag, "loaded", "tapping retry on a failed tile must start a fresh load for that tile")
         XCTAssertEqual(fake.callCount, 2)
     }
+
+    // MARK: - Session cache (RW-16.9 fix: no restart from zero)
+
+    /// A tile whose photo already downloaded in this session
+    /// renders from the cache with NO new download — even under
+    /// a freshly re-minted signed URL (the backend re-signs on
+    /// every Photos load, changing the token; the path is the
+    /// photo's stable identity). This is what lets a
+    /// re-presented sheet (RW-16.7 churn) show completed tiles
+    /// instantly instead of restarting their transfers.
+    @MainActor
+    func testSecondLoaderForSamePathServesFromCacheWithoutDownloading() async {
+        let cache = ReferencePhotoImageCache()
+        let fake = FakeDownloader { _ in Self.smallJPEG }
+        let first = ReferenceTileLoader(
+            url: URL(string: "https://example.test/storage/v1/object/sign/personal-heroes/u/refs/ref-1.jpg?token=AAA")!,
+            downloader: fake, cache: cache,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        first.loadIfNeeded()
+        var tag = await awaitTerminalTag(first, deadlineSeconds: 3)
+        XCTAssertEqual(tag, "loaded")
+        XCTAssertEqual(fake.callCount, 1)
+
+        // A new loader (new view, re-presented sheet) for the
+        // same photo under a DIFFERENT signed URL.
+        let second = ReferenceTileLoader(
+            url: URL(string: "https://example.test/storage/v1/object/sign/personal-heroes/u/refs/ref-1.jpg?token=BBB")!,
+            downloader: fake, cache: cache,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        second.loadIfNeeded()
+        tag = await awaitTerminalTag(second, deadlineSeconds: 3)
+        XCTAssertEqual(tag, "loaded")
+        XCTAssertEqual(fake.callCount, 1,
+                       "the second presentation must come from the session cache, not a fresh download")
+    }
+
+    /// The cache's invalidation contract: after removeAll (what
+    /// the reference-mutation commits call), the same path
+    /// downloads again — a replaced photo never serves stale.
+    @MainActor
+    func testCacheClearForcesAFreshDownload() async {
+        let cache = ReferencePhotoImageCache()
+        let fake = FakeDownloader { _ in Self.smallJPEG }
+        let url = URL(string: "https://example.test/storage/v1/object/sign/personal-heroes/u/refs/ref-1.jpg?token=AAA")!
+        let first = ReferenceTileLoader(
+            url: url, downloader: fake, cache: cache,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        first.loadIfNeeded()
+        var tag = await awaitTerminalTag(first, deadlineSeconds: 3)
+        XCTAssertEqual(tag, "loaded")
+
+        cache.removeAll()
+        let second = ReferenceTileLoader(
+            url: url, downloader: fake, cache: cache,
+            timeoutNanoseconds: 1_000_000_000
+        )
+        second.loadIfNeeded()
+        tag = await awaitTerminalTag(second, deadlineSeconds: 3)
+        XCTAssertEqual(tag, "loaded")
+        XCTAssertEqual(fake.callCount, 2,
+                       "after the cache is cleared the tile must download again")
+    }
+
+    /// An in-flight load is joined, never duplicated or
+    /// restarted, when loadIfNeeded is called again mid-flight
+    /// (view re-renders call it on every appear).
+    @MainActor
+    func testLoadIfNeededDuringFlightStartsNoSecondDownload() async {
+        let fake = FakeDownloader { _ in
+            try await Task.sleep(nanoseconds: 600_000_000)
+            return Self.smallJPEG
+        }
+        let loader = ReferenceTileLoader(
+            url: URL(string: "https://example.test/d.jpg")!,
+            downloader: fake, cache: ReferencePhotoImageCache(),
+            timeoutNanoseconds: 5_000_000_000
+        )
+        loader.loadIfNeeded()
+        loader.loadIfNeeded()
+        loader.loadIfNeeded()
+        let tag = await awaitTerminalTag(loader, deadlineSeconds: 3)
+        XCTAssertEqual(tag, "loaded")
+        XCTAssertEqual(fake.callCount, 1,
+                       "re-renders during a load must not restart or duplicate it")
+    }
 }

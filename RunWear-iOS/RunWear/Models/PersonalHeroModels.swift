@@ -409,6 +409,16 @@ final class OptInCommitDriver: ObservableObject {
     @Published private(set) var isCommitting = false
     @Published private(set) var failure: CommitFailurePresentation?
 
+    /// Clear a recorded failure without starting a commit
+    /// (RW-16.7): the presentation host calls this when a fresh
+    /// flow opens, so the new flow never wears a previous
+    /// attempt's error line. A no-op while a commit is in
+    /// flight — that attempt owns its failure slot.
+    func clearFailure() {
+        guard !isCommitting else { return }
+        failure = nil
+    }
+
     /// Run the commit: onCommit first; on success the committing
     /// flag clears and THEN onFinish is invoked — synchronously,
     /// in that order, on the main actor. On failure the flag

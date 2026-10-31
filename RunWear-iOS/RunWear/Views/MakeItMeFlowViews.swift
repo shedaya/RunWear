@@ -135,7 +135,16 @@ struct MakeItMeOptInFlow: View {
     /// driver's note in PersonalHeroModels.swift for the finish
     /// hand-off defect this replaces. The view only renders the
     /// driver's state.
-    @StateObject private var commitDriver = OptInCommitDriver()
+    /// RW-16.7: the driver is OWNED BY THE PRESENTER (the
+    /// Settings presentation host, or onboarding's FirstLookView)
+    /// and passed in — never a @StateObject of this view. When
+    /// the flow view was recreated by sheet re-presentation, its
+    /// @StateObject driver died with it: the in-flight commit
+    /// was cancelled into a dead driver and its failure had
+    /// nowhere to surface (RW-16.9 §4). Owned by the presenter,
+    /// the driver — and any commit it is running — survives the
+    /// flow view entirely.
+    @ObservedObject var commitDriver: OptInCommitDriver
 
     private enum Step { case consent, capture }
 

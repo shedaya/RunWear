@@ -20,6 +20,14 @@ struct SettingsModal: View {
     @EnvironmentObject private var personalStore: PersonalHeroStore
 
     @State private var showFeedback = false
+    /// RW-16.7: the single owner of every "Make it me"
+    /// presentation on this surface — sheets, alerts, and the
+    /// opt-in commit driver. Owned HERE, at the level whose own
+    /// structure never branches on store state, so no profile
+    /// refresh can rebuild it mid-presentation (the build-(12)
+    /// section owned four sheets + three alerts on a store.mode-
+    /// keyed branch; see MakeItMePresentation.swift).
+    @StateObject private var makeItMePresentation = MakeItMePresentationHost()
 
     /// App Store product id (App Store Connect) for the review door.
     static let reviewURL = URL(string: "https://apps.apple.com/app/id6827973343?action=write-review")!
@@ -48,6 +56,7 @@ struct SettingsModal: View {
 
                 // RW-14 "Make it me" (spec §3, states S1–S14).
                 MakeItMeSettingsSection(
+                    presentation: makeItMePresentation,
                     genderPreference: genderPreference,
                     currentCombination: currentCombination
                 )
@@ -79,6 +88,126 @@ struct SettingsModal: View {
             .sheet(isPresented: $showFeedback) {
                 FeedbackSheet()
             }
+            // RW-16.7: the ONE sheet slot + ONE alert slot for
+            // the whole "Make it me" surface, keyed by the
+            // host's enums. Photos → Replace is a content swap
+            // inside this single presentation, never a
+            // dismiss-and-represent chain.
+            .sheet(item: $makeItMePresentation.sheet) { sheet in
+                makeItMeSheetContent(sheet)
+            }
+            .alert(
+                makeItMeAlertTitle,
+                isPresented: makeItMeAlertPresented,
+                presenting: makeItMePresentation.alert
+            ) { alert in
+                makeItMeAlertButtons(alert)
+            } message: { alert in
+                Text(makeItMeAlertMessage(alert))
+            }
+        }
+    }
+
+    // MARK: - "Make it me" presentation content (RW-16.7)
+
+    @ViewBuilder
+    private func makeItMeSheetContent(_ sheet: MakeItMeSheet) -> some View {
+        switch sheet {
+        case .optIn:
+            MakeItMeOptInFlow(
+                mode: .optIn,
+                onCommit: { photos in
+                    try await personalStore.completeOptIn(
+                        jpegPhotos: photos,
+                        genderPreference: genderPreference
+                    )
+                    // The stored objects changed under the tile
+                    // cache's paths — drop decoded tiles so Your
+                    // Photos can never serve a previous set
+                    // (RW-16.9 cache contract).
+                    ReferencePhotoImageCache.shared.removeAll()
+                },
+                onFinish: { makeItMePresentation.dismissSheet() },
+                onCancel: { makeItMePresentation.dismissSheet() },
+                commitDriver: makeItMePresentation.commitDriver
+            )
+        case .replace:
+            MakeItMeOptInFlow(
+                mode: .replace,
+                onCommit: { photos in
+                    try await personalStore.replaceReferences(
+                        jpegPhotos: photos,
+                        currentCombination: currentCombination()
+                    )
+                    ReferencePhotoImageCache.shared.removeAll()
+                },
+                onFinish: { makeItMePresentation.dismissSheet() },
+                onCancel: { makeItMePresentation.dismissSheet() },
+                commitDriver: makeItMePresentation.commitDriver
+            )
+        case .photos:
+            MakeItMePhotosView(onReplace: {
+                makeItMePresentation.present(.replace)
+            })
+        case .subscription:
+            MakeItMeSubscriptionSheet()
+        }
+    }
+
+    private var makeItMeAlertPresented: Binding<Bool> {
+        Binding(
+            get: { makeItMePresentation.alert != nil },
+            set: { if !$0 { makeItMePresentation.alert = nil } }
+        )
+    }
+
+    private var makeItMeAlertTitle: LocalizedStringKey {
+        switch makeItMePresentation.alert {
+        case .confirmDelete: return "Delete your photos?"
+        case .deletedConfirmation: return "Your photos and pictures are deleted."
+        case .deleteFailed: return "Your photos could not be deleted. Please try again."
+        case .commitFailed(let failure): return LocalizedStringKey(failure.line)
+        case nil: return ""
+        }
+    }
+
+    private func makeItMeAlertMessage(_ alert: MakeItMeAlert) -> String {
+        switch alert {
+        case .confirmDelete:
+            return "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make it me turns off. This can't be undone."
+        case .commitFailed(let failure):
+            // The orphaned-commit failure (RW-16.9): the line is
+            // the alert's title; the server's detail, when it
+            // sent one, is the message.
+            return failure.detail ?? "Please try again."
+        case .deletedConfirmation, .deleteFailed:
+            return ""
+        }
+    }
+
+    @ViewBuilder
+    private func makeItMeAlertButtons(_ alert: MakeItMeAlert) -> some View {
+        switch alert {
+        case .confirmDelete:
+            Button("Delete my photos", role: .destructive) {
+                Task { await performDeleteMyPhotos() }
+            }
+            Button("Keep my photos", role: .cancel) {}
+        case .deletedConfirmation, .deleteFailed, .commitFailed:
+            Button("OK", role: .cancel) {}
+        }
+    }
+
+    /// The §3 delete: the end-state copy may only claim what the
+    /// system confirmed — on failure nothing was deleted and the
+    /// section stays as it was.
+    private func performDeleteMyPhotos() async {
+        do {
+            try await personalStore.deleteEverything()
+            ReferencePhotoImageCache.shared.removeAll()
+            makeItMePresentation.alert = .deletedConfirmation
+        } catch {
+            makeItMePresentation.alert = .deleteFailed
         }
     }
 }
