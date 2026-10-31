@@ -183,12 +183,67 @@ def existing_price_territories(sid):
     return terrs
 
 
+EU27_ALPHA3 = {"AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST",
+               "FIN", "FRA", "DEU", "GRC", "HUN", "IRL", "ITA", "LVA",
+               "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK",
+               "SVN", "ESP", "SWE"}
+
+
+def all_territory_ids():
+    ids, path = [], "/v1/territories" + q(limit=200)
+    while path:
+        _, d = call_tolerant("GET", path)
+        ids += [t["id"] for t in items(d)]
+        path = d.get("links", {}).get("next") if isinstance(d, dict) else None
+    return ids
+
+
+def subscription_availability_territories():
+    """Territories the subscription should sell in: the app's own
+    availability if readable, else every ASC territory minus the EU-27
+    (RunWear iOS excludes the EU until trader status clears — D2)."""
+    status, d = call_tolerant(
+        "GET", "/v2/appAvailabilities" + q(**{"filter[app]": APP_ID},
+                                           include="availableTerritories", limit=50))
+    if status == 200:
+        terrs = [t["id"] for t in d.get("included", [])
+                 if t.get("type") == "territories"]
+        if terrs:
+            print(f"  availability source: app availability ({len(terrs)} territories)")
+            return terrs
+    terrs = [t for t in all_territory_ids() if t not in EU27_ALPHA3]
+    print(f"  availability source: all territories minus EU-27 ({len(terrs)} territories)")
+    return terrs
+
+
+def ensure_availability(sid, product_id):
+    status, d = call_tolerant("GET", f"/v1/subscriptions/{sid}/availabilities" + q(limit=50))
+    if status == 200 and items(d):
+        print(f"  availability ({product_id}): exists id={items(d)[0]['id']}")
+        return items(d)[0]["id"]
+    terrs = subscription_availability_territories()
+    body = {"data": {"type": "subscriptionAvailabilities",
+                     "attributes": {"availableInNewTerritories": True},
+                     "relationships": {
+                         "subscription": {"data": {"type": "subscriptions", "id": sid}},
+                         "availableTerritories": {"data": [
+                             {"type": "territories", "id": t} for t in terrs]}}}}
+    status, d = call_tolerant("POST", "/v1/subscriptionAvailabilities", body)
+    if status in (200, 201):
+        print(f"  availability ({product_id}): CREATED id={d['data']['id']} territories={len(terrs)}")
+        return d["data"]["id"]
+    print(f"!! availability create ({product_id}) -> {status}", file=sys.stderr)
+    print(json.dumps(d, indent=1)[:2000], file=sys.stderr)
+    raise SystemExit(f"availability create failed for {product_id}: {status}")
+
+
 def ensure_us_price(sid, spec):
     terrs = existing_price_territories(sid)
     if terrs and BASE_TERRITORY in terrs:
         print(f"  price ({spec['productId']}): USA price already set")
         return
     ppid, cp = find_price_point(sid, spec["price"])
+    print(f"  price point ({spec['productId']}): id={ppid} customerPrice={cp}")
     body = {"data": {"type": "subscriptionPrices",
                      "relationships": {
                          "subscription": {"data": {"type": "subscriptions", "id": sid}},
@@ -215,6 +270,7 @@ def main():
     for spec in PRODUCTS:
         sid = find_or_create_subscription(gid, spec)
         ensure_subscription_localization(sid, spec["productId"])
+        ensure_availability(sid, spec["productId"])
         ensure_us_price(sid, spec)
         results[spec["key"]] = (sid, spec)
 
