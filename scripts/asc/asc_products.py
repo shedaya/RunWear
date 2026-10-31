@@ -198,7 +198,8 @@ def ensure_us_price(sid, spec):
     if status in (200, 201):
         print(f"  price ({spec['productId']}): CREATED USA ${cp} pricepoint={ppid} price_id={d['data']['id']}")
     elif status == 409:
-        print(f"  price ({spec['productId']}): already exists (409 on create)")
+        print(f"  price ({spec['productId']}): 409 on create; body:")
+        print(json.dumps(d, indent=1)[:2000])
     else:
         print(f"!! price create ({spec['productId']}) -> {status}", file=sys.stderr)
         print(json.dumps(d, indent=1)[:2000], file=sys.stderr)
@@ -229,6 +230,10 @@ def main():
               f"name={a.get('name')} period={a.get('subscriptionPeriod')} "
               f"groupLevel={a.get('groupLevel')} state={a.get('state')} "
               f"priceTerritories={terrs}")
+        st2, d2 = call_tolerant("GET", f"/v1/subscriptions/{sid}/prices"
+                                + q(limit=200, include="territory,subscriptionPricePoint"))
+        print(f"  prices GET (include) -> {st2} count={len(items(d2))}")
+        print("  prices raw:", json.dumps(d2, indent=1)[:1500])
     print("== done ==")
 
 
