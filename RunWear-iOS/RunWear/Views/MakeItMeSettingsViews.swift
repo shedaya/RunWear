@@ -167,6 +167,10 @@ struct MakeItMeSettingsSection: View {
 struct MakeItMePhotosView: View {
     let onReplace: () -> Void
     @StateObject private var loader = ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)
+    /// Bumped to force every AsyncImage to retry after a tile's
+    /// load failure (RW-16: a failed photo must look failed and be
+    /// retryable, not sit as a silent blank box).
+    @State private var imageReloadToken = 0
 
     var body: some View {
         ZStack {
@@ -185,10 +189,26 @@ struct MakeItMePhotosView: View {
                                     switch phase {
                                     case .success(let image):
                                         image.resizable().aspectRatio(contentMode: .fill)
+                                    case .failure:
+                                        Button {
+                                            imageReloadToken += 1
+                                        } label: {
+                                            ZStack {
+                                                Color.white.opacity(0.08)
+                                                VStack(spacing: 4) {
+                                                    Image(systemName: "exclamationmark.triangle")
+                                                        .foregroundColor(.white.opacity(0.7))
+                                                    Text("Tap to retry")
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(.white.opacity(0.7))
+                                                }
+                                            }
+                                        }
                                     default:
                                         Color.white.opacity(0.08)
                                     }
                                 }
+                                .id(imageReloadToken)
                                 .frame(width: 96, height: 96)
                                 .clipped()
                                 .cornerRadius(12)
@@ -198,6 +218,22 @@ struct MakeItMePhotosView: View {
                         Text("No photos on the server.")
                             .font(.system(size: 15))
                             .foregroundColor(.white.opacity(0.6))
+                    case .failed(let message):
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(message)
+                                .font(.system(size: 15))
+                                .foregroundColor(.white.opacity(0.8))
+                            Button {
+                                Task { await loader.load() }
+                            } label: {
+                                Text("Try again")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.1)))
+                            }
+                        }
                     case .idle, .loading:
                         Text("Loading…")
                             .font(.system(size: 15))

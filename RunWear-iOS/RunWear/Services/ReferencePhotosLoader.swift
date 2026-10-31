@@ -32,14 +32,13 @@ final class ReferencePhotosLoader: ObservableObject {
         case loading
         case loaded([URL])
         case empty
+        case failed(String)
     }
 
     @Published private(set) var state: State = .idle
 
     private let fetcher: ReferencePhotoFetching
     /// The bound a single load must reach a terminal state within.
-    /// Accepted by the initializer; the extraction (v1) preserves
-    /// the shipping behavior, which had NO bound — see load().
     private let timeoutNanoseconds: UInt64
 
     init(fetcher: ReferencePhotoFetching, timeoutNanoseconds: UInt64 = 20_000_000_000) {
@@ -47,20 +46,67 @@ final class ReferencePhotosLoader: ObservableObject {
         self.timeoutNanoseconds = timeoutNanoseconds
     }
 
-    /// v1 — the shipping semantics, verbatim from the view's .task:
-    /// a thrown fetch is swallowed (and then reported as .empty,
-    /// i.e. "No photos on the server"), a failed sign silently
-    /// drops that photo, and nothing bounds the wait.
+    private struct LoadTimeout: Error {}
+    private struct AllSignsFailed: Error {}
+
+    /// RW-16 fix: the load is bounded by `timeoutNanoseconds`,
+    /// a thrown fetch is reported as a failure (never as an empty
+    /// server), paths whose signing fails are dropped only when at
+    /// least one other photo signs (all failing is a failure), and
+    /// the caller can retry by calling load() again.
     func load() async {
         state = .loading
-        var urls: [URL] = []
-        if let paths = try? await fetcher.fetchReferencePaths() {
-            for path in paths {
-                if let url = try? await fetcher.signedReferenceURL(path: path) {
-                    urls.append(url)
+        do {
+            let urls = try await runWithTimeout { try await self.collectURLs() }
+            state = urls.isEmpty ? .empty : .loaded(urls)
+        } catch is LoadTimeout {
+            state = .failed("Loading your photos took too long. Check your connection and try again.")
+        } catch {
+            state = .failed("Couldn't load your photos. Please try again.")
+        }
+    }
+
+    /// Fetch the path list, then sign every path in parallel,
+    /// preserving path order. A sign that throws or returns nil
+    /// drops that one photo; if paths exist but none sign, the
+    /// whole load fails — the server demonstrably has photos, so
+    /// reporting "no photos" would be a lie.
+    nonisolated private func collectURLs() async throws -> [URL] {
+        let paths = try await fetcher.fetchReferencePaths()
+        if paths.isEmpty { return [] }
+        let fetcher = self.fetcher
+        let signed: [URL?] = await withTaskGroup(of: (Int, URL?).self) { group in
+            for (index, path) in paths.enumerated() {
+                group.addTask {
+                    (index, (try? await fetcher.signedReferenceURL(path: path)) ?? nil)
                 }
             }
+            var out = [URL?](repeating: nil, count: paths.count)
+            for await (index, url) in group {
+                out[index] = url
+            }
+            return out
         }
-        state = urls.isEmpty ? .empty : .loaded(urls)
+        let urls = signed.compactMap { $0 }
+        if urls.isEmpty { throw AllSignsFailed() }
+        return urls
+    }
+
+    /// Race the work against the loader's bound; whichever finishes
+    /// first decides, and the loser is cancelled.
+    nonisolated private func runWithTimeout<T>(
+        _ work: @escaping () async throws -> T
+    ) async throws -> T {
+        let timeout = self.timeoutNanoseconds
+        return try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await work() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeout)
+                throw LoadTimeout()
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
 }
