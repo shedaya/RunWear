@@ -1,0 +1,51 @@
+name: ASC Launch (RunWear App Store submission)
+
+# App Store Connect packet work for RunWear's first App Store submission,
+# mirroring the asc-verify pattern: this workspace's VM cannot call the
+# ASC API directly (egress stalls Authorization-header requests to
+# non-registered hosts), so the work executes on a GitHub runner.
+# task=audit: read-only full-packet audit of the 1.0 version.
+# task=fill:  fill the audited gaps, each write read back.
+# task=submit: attach build 1.0 (8), read back, submit for review,
+#              read back the resulting version state.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Which ASC launch tool to run"
+        type: choice
+        options:
+          - audit
+          - fill
+          - submit
+        default: audit
+        required: true
+
+jobs:
+  asc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct the ASC API key
+        env:
+          ASC_API_KEY_P8_BASE64: ${{ secrets.ASC_API_KEY_P8_BASE64 }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$ASC_API_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "ASC_KEY_ID=${{ secrets.ASC_API_KEY_ID }}" >> "$GITHUB_ENV"
+          echo "ASC_ISSUER_ID=${{ secrets.ASC_ISSUER_ID }}" >> "$GITHUB_ENV"
+      - name: Audit the 1.0 packet
+        if: inputs.task == 'audit'
+        working-directory: scripts/asc
+        run: python3 asc_audit.py
+      - name: Fill packet gaps
+        if: inputs.task == 'fill'
+        working-directory: scripts/asc
+        run: python3 asc_fill.py
+      - name: Attach + submit for review
+        if: inputs.task == 'submit'
+        working-directory: scripts/asc
+        run: python3 asc_submit.py
