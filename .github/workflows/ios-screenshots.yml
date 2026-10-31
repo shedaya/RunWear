@@ -387,28 +387,27 @@ jobs:
               rs.sort(key=lambda r: r.get("version", ""))
               return rs[-1]["identifier"]
 
+          import re
+          UUID = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}"
+                            r"-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
           devtypes = simctl("list", "devicetypes").stdout
-          # Preference order: an exact Series 3 (42mm) = 312x390 if the
-          # toolchain still offers it, then the current 42mm class,
-          # then any Apple Watch at all. The chosen type is printed so
-          # the log records exactly what produced the frames.
+          # Creation is attempted in preference order and the first
+          # type that actually instantiates wins: the catalog lists
+          # legacy types (e.g. Series 3) that the installed watchOS 26
+          # runtime refuses to create. Preference = exact 312x390
+          # (Series 3 42mm) first, then the long-standing 396x484
+          # listing size (Series 9 45mm), then the current 46mm class.
           prefs = ["Apple Watch Series 3 (42mm)",
+                   "Apple Watch Series 9 (45mm)",
+                   "Apple Watch Series 10 (46mm)",
+                   "Apple Watch Series 11 (46mm)",
                    "Apple Watch Series 10 (42mm)",
-                   "Apple Watch Series 11 (42mm)",
-                   "Apple Watch SE 3 (40mm)",
-                   "Apple Watch Series 9 (41mm)"]
-          watch_type = None
-          for p in prefs:
-              if p in devtypes:
-                  watch_type = p
-                  break
-          if watch_type is None:
-              for line in devtypes.splitlines():
-                  if "Apple Watch" in line:
-                      watch_type = line.split("(")[0].strip()
-                      break
-          print("WATCH_DEVICE_TYPE:", watch_type)
-          assert watch_type, "no Apple Watch device type available"
+                   "Apple Watch SE 3 (44mm)"]
+          for line in devtypes.splitlines():
+              if "Apple Watch" in line:
+                  name = line.split("(")[0].strip()
+                  if name not in prefs:
+                      prefs.append(name)
 
           ios_rt = latest_runtime("iOS")
           watch_rt = latest_runtime("watchOS")
@@ -416,12 +415,22 @@ jobs:
 
           phone = simctl("create", "iPhone 16 Pro Max", "iPhone 16 Pro Max", ios_rt)
           phone_udid = phone.stdout.strip()
-          watch = simctl("create", watch_type, watch_type, watch_rt)
-          watch_udid = watch.stdout.strip()
+          assert UUID.match(phone_udid), (phone.stdout, phone.stderr)
+
+          watch_type, watch_udid = None, None
+          for p in prefs:
+              if p not in devtypes:
+                  continue
+              attempt = simctl("create", p, p, watch_rt)
+              out = attempt.stdout.strip()
+              if UUID.match(out):
+                  watch_type, watch_udid = p, out
+                  break
+              print(f"create {p} refused: {out[:200]} {attempt.stderr[:200]}")
+          print("WATCH_DEVICE_TYPE:", watch_type)
           print("PHONE_UDID:", phone_udid)
           print("WATCH_UDID:", watch_udid)
-          assert phone_udid and watch_udid, (phone.stdout, phone.stderr,
-                                             watch.stdout, watch.stderr)
+          assert watch_udid, "no Apple Watch device type could be created"
           with open("/tmp/sim.env", "w") as fh:
               fh.write(f"PHONE_UDID={phone_udid}\nWATCH_UDID={watch_udid}\n"
                        f"WATCH_DEVICE_TYPE={watch_type}\n")
