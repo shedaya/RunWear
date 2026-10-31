@@ -67,10 +67,22 @@ actor PersonalHeroAPI {
     func registerReferences(positions: [Int]) async throws {
         let session = try await requireSession()
         let paths = positions.map { "\(session.userId)/refs/ref-\($0).jpg" }
-        let body: [String: Any] = [
-            "action": "register_references",
-            "storage_paths": paths
-        ]
+        // The deployed function reads `paths` — build (9) sent
+        // `storage_paths` (a name taken from a backend report, not
+        // the function) and every registration was refused with
+        // 400 (RW-15). The body comes from the pinned builder in
+        // PersonalHeroRequests; do not inline a variant of it.
+        let body = PersonalHeroRequests.registerReferencesBody(paths: paths)
+        _ = try await functionPost("request-personal-generation", body: body)
+    }
+
+    /// Flag one of the caller's own personalized heroes
+    /// ("This doesn't look like me", RW-14 acceptance (19);
+    /// backend (c) contract: rw14-backend-bc-2026-10-31.md §4).
+    /// On success the hero stops serving immediately server-side
+    /// and a regeneration is queued.
+    func flagPersonalHero(heroId: String, reason: String) async throws {
+        let body = PersonalHeroRequests.flagHeroBody(heroId: heroId, reason: reason)
         _ = try await functionPost("request-personal-generation", body: body)
     }
 
@@ -196,30 +208,10 @@ actor PersonalHeroAPI {
     }
 
     /// Map the backend's {"error": "<name>", ...} bodies onto the
-    /// typed error enum (backend §2.2/§2.3).
+    /// typed error enum (backend §2.2/§2.3). The implementation
+    /// lives in the model layer (PersonalHeroAPIError.mapped) so
+    /// it is unit-tested; this is the delegation seam.
     private static func mapError(data: Data, status: Int) -> PersonalHeroAPIError {
-        struct ErrorBody: Decodable {
-            let error: String?
-            let freeGenerationsUsed: Int?
-            enum CodingKeys: String, CodingKey {
-                case error
-                case freeGenerationsUsed = "free_generations_used"
-            }
-        }
-        if let body = try? JSONDecoder().decode(ErrorBody.self, from: data),
-           let name = body.error {
-            switch name {
-            case "allowance_exhausted":
-                return .allowanceExhausted(freeGenerationsUsed: body.freeGenerationsUsed ?? 5)
-            case "consent_required": return .consentRequired
-            case "references_required": return .referencesRequired
-            case "attestations_required": return .attestationsRequired
-            case "outfit_signature_mismatch": return .outfitSignatureMismatch
-            case "not_entitled": return .notEntitled
-            case "Unauthorized": return .unauthorized
-            default: return .server(message: name)
-            }
-        }
-        return .http(status)
+        PersonalHeroAPIError.mapped(data: data, status: status)
     }
 }

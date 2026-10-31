@@ -236,7 +236,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         for (index, data) in jpegPhotos.enumerated() {
             try await api.uploadReference(jpegData: data, position: index + 1)
         }
-        try await api.registerReferences(positions: Array(1...jpegPhotos.count))
+        try await api.registerReferences(positions: ReferenceCommitSet.positions(photoCount: jpegPhotos.count))
         referenceCount = jpegPhotos.count
         mode = billing.isSubscribed ? .subscribed : .free
         requestedCells.removeAll()
@@ -246,22 +246,53 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     /// §3 photo replacement: same attestation + quality check in the
     /// view; consent persists server-side. Today's look is asked to
-    /// regenerate right away at no allowance cost (J4) — note the
-    /// shipped backend answers already_available for a cell that
-    /// already holds a hero (no force-regenerate path exists in the
-    /// contract), so an existing hero keeps serving until a new
-    /// generation path produces a replacement; new cells generate
-    /// from the new references immediately.
+    /// regenerate right away at no allowance cost (J4): since the
+    /// backend (b) addition, register_references detects the changed
+    /// set, retires the verified heroes made from the old references
+    /// (their cells' versions bump, so cached images stop serving),
+    /// and the re-request below enqueues a regeneration job.
     func replaceReferences(jpegPhotos: [Data], currentCombination: PersonalCombination?) async throws {
         for (index, data) in jpegPhotos.enumerated() {
             try await api.uploadReference(jpegData: data, position: index + 1)
         }
-        try await api.registerReferences(positions: Array(1...jpegPhotos.count))
+        try await api.registerReferences(positions: ReferenceCommitSet.positions(photoCount: jpegPhotos.count))
         referenceCount = jpegPhotos.count
         if let currentCombination {
             requestedCells.remove(currentCombination.combinationId)
             startUserInitiatedGeneration(for: currentCombination)
         }
+    }
+
+    // MARK: - Personal-hero flag (RW-14 acceptance (19))
+
+    /// The backend id of the verified hero this cell currently
+    /// serves from cache, if one is held.
+    func personalHeroId(for combination: PersonalCombination) -> String? {
+        cache.heroId(for: combination.combinationId)
+    }
+
+    /// "This doesn't look like me" (spec §4): flag the cell's
+    /// personalized hero with the backend. On success the server
+    /// has already retired the hero (its cell version bumped) and
+    /// queued a regeneration; locally the cell's cache entry is
+    /// evicted and its once-per-session request marker cleared,
+    /// so the very next resolution re-looks-up, finds nothing,
+    /// and the pool photo serves while the regeneration is
+    /// pending (the re-request answers already_queued and the
+    /// poll picks the new hero up when it lands). Returns whether
+    /// the flag landed; a failed flag changes nothing, silently —
+    /// the flag must never disturb the screen it was sent from.
+    func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool {
+        let cell = combination.combinationId
+        guard let heroId = cache.heroId(for: cell) else { return false }
+        do {
+            try await api.flagPersonalHero(heroId: heroId, reason: reason.code)
+        } catch {
+            return false
+        }
+        cache.evict(combinationId: cell)
+        requestedCells.remove(cell)
+        return true
     }
 
     /// Delete my photos (spec §3): server-verified erasure first,

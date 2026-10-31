@@ -132,6 +132,7 @@ struct MakeItMeOptInFlow: View {
     @State private var attested = false
     @State private var committing = false
     @State private var errorLine: String?
+    @State private var errorDetail: String?
 
     private enum Step { case consent, capture }
 
@@ -147,6 +148,7 @@ struct MakeItMeOptInFlow: View {
                     attested: $attested,
                     committing: committing,
                     errorLine: errorLine,
+                    errorDetail: errorDetail,
                     onConfirm: { photos in commit(photos) },
                     onCancel: onCancel
                 )
@@ -221,21 +223,24 @@ struct MakeItMeOptInFlow: View {
     private func commit(_ photos: [Data]) {
         committing = true
         errorLine = nil
+        errorDetail = nil
         Task {
             do {
                 try await onCommit(photos)
                 committing = false
                 onFinish()
-            } catch PersonalHeroAPIError.authUnavailable {
-                committing = false
-                // DEVIATION-COPY (no deck entry exists for a server
-                // that cannot take uploads yet): honest, specific,
-                // and claims nothing was sent — because nothing was.
-                errorLine = "We can't reach RunWear's server right now, so your photos can't be uploaded yet. Nothing was sent. You can try again later — your recommendations are unchanged."
             } catch {
                 committing = false
-                // DEVIATION-COPY (generic upload failure).
-                errorLine = "Something went wrong uploading your photos. No look was used. Please try again."
+                // The presentation (which line, plus the server's
+                // own message as the detail when it sent one) is
+                // CommitFailurePresentation in the model layer —
+                // the two lines are DEVIATION-COPY, named there.
+                // RW-15: build (9) discarded the server's message
+                // here, so a deterministic server refusal read as
+                // an unexplained "something went wrong".
+                let presentation = CommitFailurePresentation.forError(error)
+                errorLine = presentation.line
+                errorDetail = presentation.detail
             }
         }
     }
@@ -261,6 +266,7 @@ struct MakeItMeCaptureView: View {
     @Binding var attested: Bool
     let committing: Bool
     let errorLine: String?
+    let errorDetail: String?
     let onConfirm: ([Data]) -> Void
     let onCancel: () -> Void
 
@@ -268,8 +274,15 @@ struct MakeItMeCaptureView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showPicker = false
 
+    /// The photos a commit sends, derived from the picked set via
+    /// the shared seam (ReferenceCommitSet). The picked set itself
+    /// is never mutated by a failed commit — nothing in the commit
+    /// or failure path touches `photos` — so a retry derives and
+    /// sends the same full set (RW-15 (4)).
     private var acceptedJPEGs: [Data] {
-        photos.compactMap { $0.state == .accepted ? $0.jpegData : nil }
+        ReferenceCommitSet.jpegPhotos(from: photos.map {
+            PickedReferencePhoto(isAccepted: $0.state == .accepted, jpegData: $0.jpegData)
+        })
     }
 
     private var canConfirm: Bool {
@@ -365,9 +378,20 @@ struct MakeItMeCaptureView: View {
                 }
 
                 if let errorLine {
-                    Text(errorLine)
-                        .font(.system(size: 14))
-                        .foregroundColor(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(errorLine)
+                            .font(.system(size: 14))
+                            .foregroundColor(.orange)
+                        // RW-15: the server's actual message, when
+                        // it sent one — smaller and secondary under
+                        // the deck line, so a refusal can be quoted
+                        // back to us instead of paraphrased.
+                        if let errorDetail {
+                            Text(errorDetail)
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.6))
+                        }
+                    }
                 }
 
                 Button {

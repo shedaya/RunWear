@@ -149,6 +149,12 @@ class WeatherViewModel: ObservableObject {
     /// regeneration, and the upsell/progress surfaces key on it.
     @Published private(set) var currentPersonalCombination: PersonalCombination?
 
+    /// The backend id of the personalized hero currently ON SCREEN,
+    /// when the hero slot is showing one — nil whenever the pool or
+    /// fallback photo is up. Drives the personal flag surface
+    /// ("This doesn't look like me", RW-14 acceptance (19)).
+    @Published private(set) var currentPersonalHeroId: String?
+
     /// The in-flight wait for a personalized hero to land for the
     /// current cell; cancelled whenever the cell changes.
     private var personalAwaitTask: Task<Void, Never>?
@@ -486,6 +492,7 @@ class WeatherViewModel: ObservableObject {
         guard let store = personalStore, store.isOptedIn,
               let recommendation else {
             currentPersonalCombination = nil
+            currentPersonalHeroId = nil
             personalAwaitTask?.cancel()
             personalAwaitTask = nil
             return
@@ -498,11 +505,15 @@ class WeatherViewModel: ObservableObject {
             outfit: recommendation
         )
         currentPersonalCombination = combo
+        // The pool photo painted by the caller is what's on screen
+        // until a personal hero actually applies below.
+        currentPersonalHeroId = nil
         personalAwaitTask?.cancel()
         if let personalURL = await store.resolveHero(for: combo) {
             heroImageUrl = personalURL
             heroImageRowId = nil
             heroServedCombinationId = combo.combinationId
+            currentPersonalHeroId = store.personalHeroId(for: combo)
         } else {
             personalAwaitTask = Task { [weak self] in
                 guard let landedURL = await store.awaitHero(for: combo) else { return }
@@ -512,6 +523,7 @@ class WeatherViewModel: ObservableObject {
                 self.heroImageUrl = landedURL
                 self.heroImageRowId = nil
                 self.heroServedCombinationId = combo.combinationId
+                self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
             }
         }
     }
@@ -563,6 +575,36 @@ class WeatherViewModel: ObservableObject {
     func flagCurrentHero(reason: HeroFlagReason) {
         guard let target = currentHeroFlagTarget else { return }
         HeroFlagService.flag(target: target, reason: reason)
+    }
+
+    /// The PERSONAL flag target: non-nil only while a personalized
+    /// hero is the photo on screen. A personal photo is never
+    /// reported through the pool flag path — that insert would
+    /// misidentify it as a fallback photo and retire nothing.
+    var currentPersonalFlagTarget: PersonalHeroFlagTarget? {
+        guard let heroId = currentPersonalHeroId,
+              let combo = currentPersonalCombination,
+              let url = heroImageUrl else { return nil }
+        return PersonalHeroFlagTarget(
+            heroId: heroId,
+            combinationId: combo.combinationId,
+            imageUrl: url
+        )
+    }
+
+    /// "This doesn't look like me" (spec §4): flag the personalized
+    /// hero on screen with the backend. When the flag lands, the
+    /// hero is refreshed — the pool photo serves in its place while
+    /// the server-side regeneration the flag queued is pending.
+    /// When it doesn't land, nothing on screen changes.
+    func flagCurrentPersonalHero(reason: PersonalHeroFlagReason) {
+        guard let store = personalStore,
+              let combo = currentPersonalCombination else { return }
+        Task {
+            if await store.flagPersonalHero(combination: combo, reason: reason) {
+                refreshHero()
+            }
+        }
     }
 
     private func reloadHeroImage() async {

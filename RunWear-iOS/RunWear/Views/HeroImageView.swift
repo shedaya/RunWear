@@ -44,6 +44,17 @@ struct HeroImageView: View {
     var flagTarget: HeroFlagTarget? = nil
     var onFlagHero: (HeroFlagReason) -> Void = { _ in }
 
+    // Personal-hero flag (RW-14 acceptance (19), spec §4): when
+    // the photo on screen is a PERSONALIZED hero, the same chip
+    // offers the personal menu — headed by "This doesn't look
+    // like me" — and a pick routes to the backend's flag_hero
+    // action instead of the pool insert. A non-nil personal
+    // target takes precedence over flagTarget: both describe the
+    // URL on screen then, but only the personal target names the
+    // photo that's actually up.
+    var personalFlagTarget: PersonalHeroFlagTarget? = nil
+    var onFlagPersonalHero: (PersonalHeroFlagReason) -> Void = { _ in }
+
     /// How the hero's height is derived (design record §5.2: no
     /// UIScreen.main anywhere — the container decides).
     enum HeightMode {
@@ -107,7 +118,11 @@ struct HeroImageView: View {
         // weather-pills row the parent overlaps onto the hero's
         // lower edge in the single-column layouts.
         .overlay(alignment: .bottomTrailing) {
-            if let flagTarget {
+            if let personalFlagTarget {
+                personalFlagChip(for: personalFlagTarget)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 64)
+            } else if let flagTarget {
                 flagChip(for: flagTarget)
                     .padding(.trailing, 14)
                     .padding(.bottom, 64)
@@ -226,16 +241,7 @@ struct HeroImageView: View {
         return Button {
             showFlagSheet = true
         } label: {
-            Image(systemName: "flag")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.white.opacity(alreadyFlagged ? 0.45 : 1.0))
-                .frame(width: 32, height: 32)
-                .background(
-                    Circle().fill(Color.black.opacity(alreadyFlagged ? 0.22 : 0.35))
-                )
-                .overlay(
-                    Circle().stroke(Color.white.opacity(0.18), lineWidth: 1)
-                )
+            flagChipDisc(alreadyFlagged: alreadyFlagged)
         }
         .buttonStyle(.plain)
         .disabled(alreadyFlagged)
@@ -253,6 +259,54 @@ struct HeroImageView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    /// The personal-photo variant of the flag chip: same disc,
+    /// same placement, same one-flag-per-photo-view inert rule —
+    /// but the menu is the personal one (spec §4: the existing
+    /// control gains "This doesn't look like me"), and every pick
+    /// routes to the backend flag_hero action, which retires THIS
+    /// hero and queues its regeneration. The pool reasons are here
+    /// in their personal form for the same reason: flagging a
+    /// personal photo through the pool insert would record it as a
+    /// fallback photo and retire nothing.
+    private func personalFlagChip(for target: PersonalHeroFlagTarget) -> some View {
+        let alreadyFlagged = flaggedImageUrl == target.imageUrl
+        return Button {
+            showFlagSheet = true
+        } label: {
+            flagChipDisc(alreadyFlagged: alreadyFlagged)
+        }
+        .buttonStyle(.plain)
+        .disabled(alreadyFlagged)
+        .accessibilityLabel("Flag this photo")
+        .confirmationDialog(
+            "Flag this photo",
+            isPresented: $showFlagSheet,
+            titleVisibility: .visible
+        ) {
+            ForEach(PersonalHeroFlagReason.allCases, id: \.self) { reason in
+                Button(reason.label) {
+                    flaggedImageUrl = target.imageUrl
+                    onFlagPersonalHero(reason)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// The chip's disc, shared by both flag variants.
+    private func flagChipDisc(alreadyFlagged: Bool) -> some View {
+        Image(systemName: "flag")
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(.white.opacity(alreadyFlagged ? 0.45 : 1.0))
+            .frame(width: 32, height: 32)
+            .background(
+                Circle().fill(Color.black.opacity(alreadyFlagged ? 0.22 : 0.35))
+            )
+            .overlay(
+                Circle().stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
     }
 
     // MARK: - Top Controls

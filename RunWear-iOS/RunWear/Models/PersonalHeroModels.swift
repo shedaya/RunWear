@@ -107,6 +107,23 @@ protocol PersonalHeroResolving: AnyObject {
     /// Polls for this cell's hero to land; nil on timeout — the
     /// caller simply keeps the pool photo (no error state).
     func awaitHero(for combination: PersonalCombination) async -> String?
+    /// The id of the verified personalized hero currently held for
+    /// this cell, if any — what a "This doesn't look like me" flag
+    /// would report (RW-14 acceptance (19)).
+    func personalHeroId(for combination: PersonalCombination) -> String?
+    /// Flag the cell's personalized hero with the backend
+    /// (flag_hero): on success the hero stops serving and a
+    /// regeneration is queued server-side; returns whether the
+    /// flag landed. Failure is silent — the screen is never
+    /// disturbed by a flag that didn't land.
+    func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool
+}
+
+extension PersonalHeroResolving {
+    /// Defaults so lightweight conformers (test doubles) carry no
+    /// flag surface; PersonalHeroStore provides the real ones.
+    func personalHeroId(for combination: PersonalCombination) -> String? { nil }
+    func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool { false }
 }
 
 // MARK: - Backend DTOs
@@ -178,6 +195,78 @@ struct PersonalProfileRow: Decodable {
     }
 }
 
+// MARK: - Request bodies (the wire contract, pinned by test)
+//
+// These builders are the single source of the request-personal-
+// generation payloads the client sends. They live in this
+// test-compiled layer because RW-15 happened here: the build-(9)
+// client sent register_references' paths under `storage_paths`
+// (a field name taken from a backend REPORT, not the deployed
+// function), the server read `paths`, and every registration —
+// every user's, every time — was refused with 400. The deployed
+// function's field names are the contract; these builders and
+// their tests are the tripwire against a second drift.
+enum PersonalHeroRequests {
+    /// register_references: the field is `paths` — the deployed
+    /// function validates exactly this name (RW-15 root cause).
+    static func registerReferencesBody(paths: [String]) -> [String: Any] {
+        [
+            "action": "register_references",
+            "paths": paths
+        ]
+    }
+
+    /// flag_hero (backend (c), rw14-backend-bc-2026-10-31.md §4):
+    /// flags one of the caller's own personalized heroes; it stops
+    /// serving immediately and a regeneration is queued.
+    static func flagHeroBody(heroId: String, reason: String) -> [String: Any] {
+        [
+            "action": "flag_hero",
+            "hero_id": heroId,
+            "reason": reason
+        ]
+    }
+}
+
+// MARK: - Personal-hero flag (RW-14 acceptance (19), spec §4)
+
+/// Why a user flagged one of their OWN personalized heroes. `code`
+/// is the value the backend's flag_hero action validates (the pool
+/// flag vocabulary plus the personal one); `label` is the menu
+/// text. The first case is the spec §4 control, verbatim; the
+/// other three mirror the pool menu's labels (HeroFlagReason) —
+/// for a personal photo they route to flag_hero too, because the
+/// pool insert would misidentify the photo and retire nothing.
+enum PersonalHeroFlagReason: String, CaseIterable {
+    case doesntLookLikeMe = "doesnt_look_like_me"
+    case looksBroken = "looks_broken"
+    case inappropriate = "inappropriate"
+    case outfitMismatch = "outfit_mismatch"
+
+    /// The stored/validated `reason` value.
+    var code: String { rawValue }
+
+    /// The label shown in the flag menu.
+    var label: String {
+        switch self {
+        case .doesntLookLikeMe: return "This doesn't look like me"
+        case .looksBroken: return "Looks broken"
+        case .inappropriate: return "Inappropriate"
+        case .outfitMismatch: return "Doesn't match the outfit"
+        }
+    }
+}
+
+/// The personalized photo on screen, as a personal flag must
+/// identify it: the backend hero id (what flag_hero addresses),
+/// the cell it serves, and the URL displayed (the flag chip's
+/// already-flagged tracking keys on it, as the pool chip does).
+struct PersonalHeroFlagTarget: Equatable {
+    let heroId: String
+    let combinationId: String
+    let imageUrl: String
+}
+
 /// Errors the backend returns as {"error": "<name>", ...}.
 enum PersonalHeroAPIError: Error, Equatable {
     case allowanceExhausted(freeGenerationsUsed: Int)
@@ -200,6 +289,114 @@ enum PersonalConsent {
     static let version = "rw14-v1"
 }
 
+extension PersonalHeroAPIError {
+    /// Map the backend's {"error": "<name>", ...} bodies onto the
+    /// typed error enum (backend §2.2/§2.3). Lives in this layer so
+    /// the mapping — in particular that an unrecognized error name
+    /// survives verbatim as `.server(message:)` — is unit-tested;
+    /// PersonalHeroAPI delegates here.
+    static func mapped(data: Data, status: Int) -> PersonalHeroAPIError {
+        struct ErrorBody: Decodable {
+            let error: String?
+            let freeGenerationsUsed: Int?
+            enum CodingKeys: String, CodingKey {
+                case error
+                case freeGenerationsUsed = "free_generations_used"
+            }
+        }
+        if let body = try? JSONDecoder().decode(ErrorBody.self, from: data),
+           let name = body.error {
+            switch name {
+            case "allowance_exhausted":
+                return .allowanceExhausted(freeGenerationsUsed: body.freeGenerationsUsed ?? 5)
+            case "consent_required": return .consentRequired
+            case "references_required": return .referencesRequired
+            case "attestations_required": return .attestationsRequired
+            case "outfit_signature_mismatch": return .outfitSignatureMismatch
+            case "not_entitled": return .notEntitled
+            case "Unauthorized": return .unauthorized
+            default: return .server(message: name)
+            }
+        }
+        return .http(status)
+    }
+
+    /// The server's own words for this failure, when it sent any:
+    /// the message carried by `.server`. Everything else the
+    /// backend can refuse with is a named condition the UI already
+    /// understands, and carries no prose worth surfacing.
+    var serverMessage: String? {
+        if case .server(let message) = self { return message }
+        return nil
+    }
+}
+
+// MARK: - Opt-in commit failure presentation (RW-15 (3))
+//
+// What the opt-in flow shows when a commit throws. The two lines
+// are the shipped DEVIATION-COPY strings (no §7 deck entry exists
+// for either; they are named as deviations in the RW-14 build
+// report). RW-15 adds the DETAIL: when the server returned an
+// error body, its actual message renders beneath the generic
+// line — build (9) computed that message inside the error
+// mapping and then threw it away, leaving Sol a failure he
+// could not describe and we could not diagnose from his report.
+struct CommitFailurePresentation: Equatable {
+    /// The primary line (the deck line for this failure class).
+    let line: String
+    /// The server's actual message, shown beneath the line in
+    /// smaller secondary styling; nil when the server sent none.
+    let detail: String?
+
+    /// DEVIATION-COPY: honest, specific, and claims nothing was
+    /// sent — because nothing was (anonymous sign-in unavailable
+    /// server-side, so no session can be minted).
+    static let serverUnavailableLine = "We can't reach RunWear's server right now, so your photos can't be uploaded yet. Nothing was sent. You can try again later — your recommendations are unchanged."
+
+    /// DEVIATION-COPY: the generic upload-failure line.
+    static let uploadFailureLine = "Something went wrong uploading your photos. No look was used. Please try again."
+
+    static func forError(_ error: Error) -> CommitFailurePresentation {
+        if let apiError = error as? PersonalHeroAPIError {
+            if apiError == .authUnavailable {
+                return CommitFailurePresentation(line: serverUnavailableLine, detail: nil)
+            }
+            return CommitFailurePresentation(line: uploadFailureLine, detail: apiError.serverMessage)
+        }
+        return CommitFailurePresentation(line: uploadFailureLine, detail: nil)
+    }
+}
+
+// MARK: - Reference commit set (RW-15 (4))
+//
+// What a photo commit sends, derived from the picked set. The
+// derivation is pure and stateless on purpose: the capture view
+// holds the picked photos across a failed commit (nothing in the
+// failure path mutates them), and a retry re-derives the commit
+// set from that same picked set — so a retry sends the same full
+// set the first attempt did. These functions are the seam the
+// view and the store both use, pinned by test.
+struct PickedReferencePhoto: Equatable {
+    /// Whether the on-device quality check accepted this photo.
+    var isAccepted: Bool
+    /// The normalized JPEG for upload, when accepted and encoded.
+    var jpegData: Data?
+}
+
+enum ReferenceCommitSet {
+    /// Every accepted photo's JPEG, in picked order — and nothing
+    /// else (checking/rejected photos never upload).
+    static func jpegPhotos(from picked: [PickedReferencePhoto]) -> [Data] {
+        picked.compactMap { $0.isAccepted ? $0.jpegData : nil }
+    }
+
+    /// The 1-based storage positions for a commit of this many
+    /// photos (ref-1 … ref-N); empty for an empty commit.
+    static func positions(photoCount: Int) -> [Int] {
+        photoCount > 0 ? Array(1...photoCount) : []
+    }
+}
+
 // MARK: - Versioned cell cache (acceptance RW-14 (16): the named trap)
 //
 // The server bumps a per-cell `version` whenever the cell's verified
@@ -212,6 +409,9 @@ enum PersonalConsent {
 struct PersonalCellCache {
     struct Entry: Equatable {
         let version: Int
+        /// The backend id of the hero this entry serves — what a
+        /// personal flag addresses (RW-14 acceptance (19)).
+        let heroId: String?
         let imageURL: String
         let fetchedAt: Date
     }
@@ -233,6 +433,18 @@ struct PersonalCellCache {
     mutating func resolve(lookup: PersonalHeroLookup, now: Date) -> Resolution {
         let cell = lookup.combinationId
         guard lookup.found, let url = lookup.imageUrl, let version = lookup.version else {
+            // Not found. If the lookup's version has MOVED past the
+            // cached entry's, the cell's hero set changed under us
+            // (a flag retired the hero, a regeneration is pending):
+            // drop the stale entry, or freshURL would keep serving
+            // the retired photo until its URL aged out (RW-15 (2)).
+            // A not-found at the SAME version changes nothing — the
+            // cell simply has no verified hero yet.
+            if let version = lookup.version,
+               let existing = entries[cell],
+               existing.version != version {
+                entries[cell] = nil
+            }
             return .none
         }
         if let existing = entries[cell],
@@ -240,7 +452,7 @@ struct PersonalCellCache {
            now.timeIntervalSince(existing.fetchedAt) < Self.urlLifetime {
             return .show(existing.imageURL)
         }
-        entries[cell] = Entry(version: version, imageURL: url, fetchedAt: now)
+        entries[cell] = Entry(version: version, heroId: lookup.heroId, imageURL: url, fetchedAt: now)
         return .show(url)
     }
 
@@ -250,6 +462,18 @@ struct PersonalCellCache {
         guard let entry = entries[combinationId],
               now.timeIntervalSince(entry.fetchedAt) < Self.urlLifetime else { return nil }
         return entry.imageURL
+    }
+
+    /// The backend hero id the cell's cached entry serves, if any.
+    func heroId(for combinationId: String) -> String? {
+        entries[combinationId]?.heroId
+    }
+
+    /// Drop a cell's entry outright — the explicit refresh after a
+    /// successful personal flag: the flagged hero must stop being
+    /// served from cache on the very next resolution.
+    mutating func evict(combinationId: String) {
+        entries[combinationId] = nil
     }
 
     mutating func removeAll() {

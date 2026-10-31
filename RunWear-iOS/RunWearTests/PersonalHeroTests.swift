@@ -267,4 +267,184 @@ final class PersonalHeroTests: XCTestCase {
         XCTAssertEqual(PhotoRejection.tooDark.specString, "This one is too dark to use. Try a photo in brighter light.")
         XCTAssertEqual(PhotoRejection.tooClose.specString, "This one is cropped too close. A head-and-shoulders or half-body photo works best.")
     }
+
+    // MARK: - RW-15 (1): request payload contract
+    //
+    // Build (9) sent register_references' paths under
+    // `storage_paths`; the deployed function reads `paths` and
+    // refused every registration with 400. These pins hold the
+    // client to the DEPLOYED function's field names.
+
+    private func jsonObject(_ body: [String: Any]) -> [String: Any] {
+        let data = try! JSONSerialization.data(withJSONObject: body)
+        return try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+    }
+
+    func testRegisterReferencesBodyUsesPathsField() {
+        let json = jsonObject(PersonalHeroRequests.registerReferencesBody(
+            paths: ["u1/refs/ref-1.jpg", "u1/refs/ref-2.jpg", "u1/refs/ref-3.jpg"]
+        ))
+        XCTAssertEqual(json["action"] as? String, "register_references")
+        XCTAssertEqual(json["paths"] as? [String],
+                       ["u1/refs/ref-1.jpg", "u1/refs/ref-2.jpg", "u1/refs/ref-3.jpg"])
+        // The RW-15 field name must never come back.
+        XCTAssertNil(json["storage_paths"])
+    }
+
+    func testFlagHeroBodyShape() {
+        let json = jsonObject(PersonalHeroRequests.flagHeroBody(
+            heroId: "9fbeee01-6582-4616-8c79-b4088a443e5b",
+            reason: PersonalHeroFlagReason.doesntLookLikeMe.code
+        ))
+        XCTAssertEqual(json["action"] as? String, "flag_hero")
+        XCTAssertEqual(json["hero_id"] as? String, "9fbeee01-6582-4616-8c79-b4088a443e5b")
+        XCTAssertEqual(json["reason"] as? String, "doesnt_look_like_me")
+    }
+
+    // MARK: - RW-15 (2): personal flag vocabulary + cache retirement
+
+    func testPersonalFlagReasonCodesAndLabels() {
+        // The headline control is spec §4 verbatim; the codes are
+        // the backend flag_hero vocabulary (backend (c) §4).
+        XCTAssertEqual(PersonalHeroFlagReason.doesntLookLikeMe.code, "doesnt_look_like_me")
+        XCTAssertEqual(PersonalHeroFlagReason.doesntLookLikeMe.label, "This doesn't look like me")
+        // The shared reasons mirror the pool menu's labels and the
+        // pool vocabulary's codes (HeroFlagReason).
+        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.code, HeroFlagReason.looksBroken.code)
+        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.label, HeroFlagReason.looksBroken.label)
+        XCTAssertEqual(PersonalHeroFlagReason.inappropriate.code, HeroFlagReason.inappropriate.code)
+        XCTAssertEqual(PersonalHeroFlagReason.inappropriate.label, HeroFlagReason.inappropriate.label)
+        XCTAssertEqual(PersonalHeroFlagReason.outfitMismatch.code, HeroFlagReason.outfitMismatch.code)
+        XCTAssertEqual(PersonalHeroFlagReason.outfitMismatch.label, HeroFlagReason.outfitMismatch.label)
+        // The personal reason heads the menu.
+        XCTAssertEqual(PersonalHeroFlagReason.allCases.first, .doesntLookLikeMe)
+    }
+
+    func testCacheTracksServedHeroId() {
+        var cache = PersonalCellCache()
+        let now = Date()
+        _ = cache.resolve(lookup: lookup(cell: "CELL_A"), now: now)
+        XCTAssertEqual(cache.heroId(for: "CELL_A"), "hero-1")
+        XCTAssertNil(cache.heroId(for: "CELL_B"))
+    }
+
+    func testCacheEvictsWhenNotFoundVersionMoved() {
+        // A flag retires the hero server-side and bumps the cell
+        // version; the next lookup answers found:false AT THE NEW
+        // version. The cached entry must go, or freshURL would
+        // keep serving the flagged photo until its URL aged out.
+        var cache = PersonalCellCache()
+        let t0 = Date()
+        _ = cache.resolve(lookup: lookup(cell: "CELL_A", url: "https://signed.example/flagged", version: 1), now: t0)
+        let resolution = cache.resolve(
+            lookup: lookup(cell: "CELL_A", found: false, url: nil, version: 2),
+            now: t0.addingTimeInterval(60)
+        )
+        XCTAssertEqual(resolution, .none)
+        XCTAssertNil(cache.freshURL(for: "CELL_A", now: t0.addingTimeInterval(61)))
+        XCTAssertNil(cache.heroId(for: "CELL_A"))
+    }
+
+    func testCacheKeepsEntryWhenNotFoundVersionUnchanged() {
+        // A not-found at the SAME version is not a retirement —
+        // the entry survives (no spurious eviction mid-generation).
+        var cache = PersonalCellCache()
+        let t0 = Date()
+        _ = cache.resolve(lookup: lookup(cell: "CELL_A", url: "https://signed.example/hero", version: 1), now: t0)
+        let resolution = cache.resolve(
+            lookup: lookup(cell: "CELL_A", found: false, url: nil, version: 1),
+            now: t0.addingTimeInterval(60)
+        )
+        XCTAssertEqual(resolution, .none)
+        XCTAssertEqual(cache.freshURL(for: "CELL_A", now: t0.addingTimeInterval(61)), "https://signed.example/hero")
+    }
+
+    func testCacheExplicitEvict() {
+        // The store's post-flag refresh: eviction is unconditional.
+        var cache = PersonalCellCache()
+        let now = Date()
+        _ = cache.resolve(lookup: lookup(cell: "CELL_A"), now: now)
+        cache.evict(combinationId: "CELL_A")
+        XCTAssertNil(cache.freshURL(for: "CELL_A", now: now))
+        XCTAssertNil(cache.heroId(for: "CELL_A"))
+    }
+
+    // MARK: - RW-15 (3): commit failure surfacing
+
+    func testErrorMappingKeepsServerMessageFrom400Body() {
+        // The exact RW-15 refusal body: an unrecognized error name
+        // survives verbatim as .server(message:).
+        let body = Data(#"{"error":"paths must be an array of 1 to 3 storage paths"}"#.utf8)
+        let mapped = PersonalHeroAPIError.mapped(data: body, status: 400)
+        XCTAssertEqual(mapped, .server(message: "paths must be an array of 1 to 3 storage paths"))
+    }
+
+    func testCommitFailureShowsServerMessageBeneathGenericLine() {
+        // A 400 with an error body renders that body text in the
+        // failure state: the generic deck line stays primary, the
+        // server's own words ride beneath it.
+        let body = Data(#"{"error":"paths must be an array of 1 to 3 storage paths"}"#.utf8)
+        let error = PersonalHeroAPIError.mapped(data: body, status: 400)
+        let presentation = CommitFailurePresentation.forError(error)
+        XCTAssertEqual(presentation.line, "Something went wrong uploading your photos. No look was used. Please try again.")
+        XCTAssertEqual(presentation.detail, "paths must be an array of 1 to 3 storage paths")
+    }
+
+    func testCommitFailureAuthUnavailableKeepsItsOwnLine() {
+        let presentation = CommitFailurePresentation.forError(PersonalHeroAPIError.authUnavailable)
+        XCTAssertEqual(presentation.line, "We can't reach RunWear's server right now, so your photos can't be uploaded yet. Nothing was sent. You can try again later — your recommendations are unchanged.")
+        XCTAssertNil(presentation.detail)
+    }
+
+    func testCommitFailureNamedErrorsAndTransportHaveNoDetail() {
+        // Named backend conditions and non-API errors carry no
+        // server prose: line only, exactly as build (9) behaved.
+        XCTAssertNil(CommitFailurePresentation.forError(
+            PersonalHeroAPIError.allowanceExhausted(freeGenerationsUsed: 5)).detail)
+        XCTAssertNil(CommitFailurePresentation.forError(
+            PersonalHeroAPIError.http(500)).detail)
+        XCTAssertNil(CommitFailurePresentation.forError(
+            URLError(.notConnectedToInternet)).detail)
+        XCTAssertEqual(CommitFailurePresentation.forError(
+            PersonalHeroAPIError.http(500)).line,
+            "Something went wrong uploading your photos. No look was used. Please try again.")
+    }
+
+    // MARK: - RW-15 (4): retry commits the full picked set
+
+    private func picked(_ states: [(Bool, String?)]) -> [PickedReferencePhoto] {
+        states.map { PickedReferencePhoto(isAccepted: $0.0, jpegData: $0.1?.data(using: .utf8)) }
+    }
+
+    func testCommitSetSendsEveryAcceptedPhotoInOrder() {
+        let set = picked([(true, "one"), (true, "two"), (true, "three")])
+        let jpegs = ReferenceCommitSet.jpegPhotos(from: set)
+        XCTAssertEqual(jpegs.map { String(data: $0, encoding: .utf8) }, ["one", "two", "three"])
+    }
+
+    func testCommitSetExcludesCheckingAndRejectedPhotos() {
+        // A photo still checking, or rejected by the quality gate,
+        // never uploads — only accepted photos with JPEG data go.
+        let set = picked([(true, "one"), (false, nil), (false, "rejected-bytes"), (true, nil)])
+        let jpegs = ReferenceCommitSet.jpegPhotos(from: set)
+        XCTAssertEqual(jpegs.map { String(data: $0, encoding: .utf8) }, ["one"])
+    }
+
+    func testCommitSetRetryFromSamePickedSetIsIdentical() {
+        // The retry guarantee: the derivation is a pure function of
+        // the picked set, which a failed commit never mutates — a
+        // second derivation (the retry) sends exactly what the
+        // first attempt sent.
+        let set = picked([(true, "one"), (true, "two"), (true, "three")])
+        let first = ReferenceCommitSet.jpegPhotos(from: set)
+        let retry = ReferenceCommitSet.jpegPhotos(from: set)
+        XCTAssertEqual(first, retry)
+        XCTAssertEqual(retry.count, 3)
+    }
+
+    func testCommitPositions() {
+        XCTAssertEqual(ReferenceCommitSet.positions(photoCount: 3), [1, 2, 3])
+        XCTAssertEqual(ReferenceCommitSet.positions(photoCount: 1), [1])
+        XCTAssertEqual(ReferenceCommitSet.positions(photoCount: 0), [])
+    }
 }

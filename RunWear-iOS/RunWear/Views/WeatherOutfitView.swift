@@ -492,6 +492,11 @@ struct WeatherOutfitView: View {
                 viewModel.flagCurrentHero(reason: reason)
                 withAnimation { showFlagThanks = true }
             },
+            personalFlagTarget: viewModel.currentPersonalFlagTarget,
+            onFlagPersonalHero: { reason in
+                viewModel.flagCurrentPersonalHero(reason: reason)
+                withAnimation { showFlagThanks = true }
+            },
             heightMode: heightMode,
             // The navigation container carries the chrome now:
             // location is the title, Settings/Share are toolbar
