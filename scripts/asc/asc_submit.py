@@ -13,8 +13,10 @@ Steps, each read back:
      version is present as a reviewSubmissionItem (listed first —
      an already-present item is skipped, not re-POSTed), then
      PATCH submitted=true.
-  4. Read back: reviewSubmission submitted/state and the version's
-     appStoreState; abort unless the submission reads submitted.
+  4. Read back: reviewSubmission state/submittedDate and the version's
+     appStoreState; abort unless they show the submission landed (the
+     read-back `submitted` boolean is null even on success — see the
+     note at the guard).
 
 Usage: python3 asc_submit.py
 """
@@ -94,7 +96,13 @@ def main():
     sub_id = None
     for rs in d.get("data", []):
         ra = rs.get("attributes", {})
-        if ra.get("platform") == "IOS" and not ra.get("submitted"):
+        # "Open" = not yet submitted. Key on state/submittedDate, not
+        # the `submitted` boolean — Apple returns it null even after a
+        # successful submit (see the note at the final guard), so a
+        # completed submission would otherwise be mistaken for open.
+        if ra.get("platform") == "IOS" \
+                and ra.get("state") not in ("WAITING_FOR_REVIEW", "IN_REVIEW") \
+                and not ra.get("submittedDate"):
             sub_id = rs["id"]
             print("  reusing open reviewSubmission:", sub_id)
     if not sub_id:
@@ -144,8 +152,19 @@ def main():
     s, d = do("READBACK version", "GET", f"/v1/appStoreVersions/{VERSION_ID}")
     va = (d.get("data") or {}).get("attributes", {})
     print("  version state now:", va.get("appStoreState"))
-    if not ra.get("submitted"):
-        print("ABORT: readback does not show the submission as submitted")
+    # Do NOT key success on the `submitted` boolean: Apple returns it
+    # as null even on a fully successful submission. Evidence: the
+    # 2026-10-31 RunWear submit (asc-verify run 41217290133) landed —
+    # the version and the reviewSubmission both read WAITING_FOR_REVIEW
+    # with a non-null submittedDate, independently confirmed by audit
+    # run 41217360276 — yet `submitted` read null, and a guard keyed on
+    # it aborted a run whose submit had already succeeded. The
+    # truth-carrying fields are the submission state and submittedDate.
+    if ra.get("state") not in ("WAITING_FOR_REVIEW", "IN_REVIEW") \
+            and not ra.get("submittedDate"):
+        print("ABORT: readback does not show the submission as submitted "
+              f"(state: {ra.get('state')}, "
+              f"submittedDate: {ra.get('submittedDate')})")
         sys.exit(1)
     print("SUBMIT_DONE")
 
