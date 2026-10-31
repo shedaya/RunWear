@@ -24,6 +24,7 @@ on:
           - screenshots
           - medical
           - medicalprobe
+          - ipad13probe
         default: verify
         required: true
       version:
@@ -84,3 +85,7 @@ jobs:
         if: inputs.task == 'medicalprobe'
         working-directory: scripts/asc
         run: python3 asc_medical_probe.py
+      - name: Probe the IPAD_13_PROFILE screenshot-set route
+        if: inputs.task == 'ipad13probe'
+        working-directory: scripts/asc
+        run: python3 asc_ipad13_probe.py
