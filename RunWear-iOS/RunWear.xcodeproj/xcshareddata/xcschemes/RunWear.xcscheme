@@ -35,6 +35,20 @@
                ReferencedContainer = "container:RunWear.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D50000FE233456780000000"
+               BuildableName = "RunWearUITests.xctest"
+               BlueprintName = "RunWearUITests"
+               ReferencedContainer = "container:RunWear.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -52,6 +66,17 @@
                BlueprintIdentifier = "C10000FE233456780000000"
                BuildableName = "RunWearTests.xctest"
                BlueprintName = "RunWearTests"
+               ReferencedContainer = "container:RunWear.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D50000FE233456780000000"
+               BuildableName = "RunWearUITests.xctest"
+               BlueprintName = "RunWearUITests"
                ReferencedContainer = "container:RunWear.xcodeproj">
             </BuildableReference>
          </TestableReference>

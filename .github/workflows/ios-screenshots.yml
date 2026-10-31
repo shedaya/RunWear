@@ -1,0 +1,176 @@
+# App Store screenshot capture for RunWear iOS on a macOS runner.
+#
+# Builds the shared engine XCFramework (macos-15, same as the test
+# gate), then runs ONLY RunWearUITests/ScreenshotTests on an
+# iPhone 16 Pro Max simulator (6.9", 1320x2868 — the size class ASC
+# requires) under macos-26 / iOS 26. The test drives the real app
+# through onboarding's manual-city path with live weather, and keeps
+# a PNG attachment per listing frame. Attachments are exported from
+# the .xcresult and uploaded as artifacts for human review — this
+# workflow never touches App Store Connect.
+name: iOS Screenshots (App Store capture)
+
+on:
+  workflow_dispatch:
+  # A brand-new workflow file is not dispatchable until it exists on
+  # the default branch, so this branch also fires it on push.
+  # Remove this trigger when the harness lands on main.
+  push:
+    branches:
+      - "feat/ios-screenshots-2026-10-31"
+
+concurrency:
+  group: ios-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    name: Build RunWearEngine.xcframework (shared :engine module)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out the commit to capture
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build the XCFramework
+        run: |
+          xcodebuild -version
+          set -o pipefail
+          bash scripts/build-engine-framework.sh 2>&1 | tee "$RUNNER_TEMP/engine-build.log"
+
+      - name: Upload the XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+          if-no-files-found: error
+
+  capture:
+    name: Capture listing screenshots (iPhone 16 Pro Max)
+    needs: engine
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      SCHEME: RunWear
+      PROJECT: RunWear-iOS/RunWear.xcodeproj
+
+    steps:
+      - name: Check out the commit to capture
+        uses: actions/checkout@v4
+
+      - name: Download the XCFramework
+        uses: actions/download-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          git rev-parse HEAD
+
+      - name: Find or create the iPhone 16 Pro Max simulator
+        run: |
+          set -euo pipefail
+          UDID="$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and d.get("name") == "iPhone 16 Pro Max":
+                      print(d["udid"])
+                      sys.exit(0)
+          sys.exit(1)
+          ' || true)"
+          if [ -z "${UDID:-}" ]; then
+            RT="$(xcrun simctl list runtimes available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          ios = [r for r in data.get("runtimes", []) if r.get("platform") == "iOS" and r.get("isAvailable")]
+          ios.sort(key=lambda r: r.get("version", ""))
+          print(ios[-1]["identifier"])
+          ')"
+            echo "Creating iPhone 16 Pro Max on runtime $RT"
+            UDID="$(xcrun simctl create "iPhone 16 Pro Max" "iPhone 16 Pro Max" "$RT")"
+          fi
+          echo "Using simulator $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          # Deterministic, listing-clean status bar.
+          xcrun simctl status_bar "$UDID" override \
+            --time "9:41" \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 \
+            --batteryState charged --batteryLevel 100 || true
+
+      - name: Run the screenshot capture test
+        run: |
+          set +e
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -only-testing:RunWearUITests/ScreenshotTests \
+            -resultBundlePath "$RUNNER_TEMP/Shots.xcresult" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-shots.log"
+          code=${PIPESTATUS[0]}
+          grep -E "UITEST-SHOT|UITEST-MISSING" "$RUNNER_TEMP/xcodebuild-shots.log" || true
+          exit "$code"
+
+      - name: Export screenshot attachments
+        if: always()
+        run: |
+          mkdir -p shots
+          if [ -d "$RUNNER_TEMP/Shots.xcresult" ]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/Shots.xcresult" \
+              --output-path shots || true
+          fi
+          python3 - <<'EOF'
+          import os, re
+          known = ["01-main-recommendation", "02-tomorrow-forecast",
+                   "03-outfit-items", "04-shop-gear", "05-settings"]
+          for fn in sorted(os.listdir("shots")):
+              if not fn.lower().endswith(".png"):
+                  continue
+              for k in known:
+                  if fn.startswith(k) and fn != k + ".png":
+                      os.rename(os.path.join("shots", fn),
+                                os.path.join("shots", k + ".png"))
+                      print("renamed", fn, "->", k + ".png")
+                      break
+          EOF
+          ls -la shots || true
+          for f in shots/*.png; do
+            [ -f "$f" ] && echo "$f: $(sips -g pixelWidth -g pixelHeight "$f" | tr '\n' ' ')"
+          done
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asc-screenshots
+          path: shots
+          if-no-files-found: warn
+
+      - name: Upload capture log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-log
+          path: ${{ runner.temp }}/xcodebuild-shots.log
+          if-no-files-found: ignore
