@@ -214,6 +214,7 @@ final class ReferenceTileLoaderTests: XCTestCase {
         return phaseTag(loader)
     }
 
+    @MainActor
     private func makeLoader(url: URL, session: URLSession) -> ReferenceTileLoader {
         ReferenceTileLoader(
             url: url,
