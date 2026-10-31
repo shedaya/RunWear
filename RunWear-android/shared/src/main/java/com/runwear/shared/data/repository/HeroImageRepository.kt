@@ -75,27 +75,15 @@ class HeroImageRepository @Inject constructor() {
         }
     }
 
-    // Rate limiting: track last replenishment time
-    private var lastReplenishTime: Long = 0
-    private val RATE_LIMIT_MS = 5 * 60 * 1000L  // 5 minutes
-    private val MIN_VARIANTS = 5  // Target number of variants per combination
-
-    /**
-     * Check if we should queue replenishment (rate limited to 1 per 5 min).
-     */
-    private fun shouldQueueReplenishment(): Boolean {
-        val now = System.currentTimeMillis()
-        if (now - lastReplenishTime < RATE_LIMIT_MS) {
-            android.util.Log.d("HeroImage", "[Replenish] Rate limited, skipping")
-            return false
-        }
-        lastReplenishTime = now
-        return true
-    }
-
     /**
      * Get a hero image for the given conditions.
-     * v3.11: Demand-driven replenishment - queues new variants when < 5 exist.
+     *
+     * RW-14 (acceptance 11, Sol's pool-freeze ruling 2026-10-31): the
+     * demand-driven queue-on-low path is REMOVED. The generic pool is
+     * frozen as the permanent library and fallback — this client never
+     * inserts into the generic generation queue. A cell with no servable
+     * pool image serves the bundled fallback, exactly as the frozen
+     * library serves it today.
      */
     suspend fun getHeroImage(
         weather: WeatherConditions?,
@@ -115,34 +103,10 @@ class HeroImageRepository @Inject constructor() {
         val combination = OutfitCombination.fromConditions(weather, outfit, heroGender)
 
         try {
-            // Try to get a cached image for this combination
             val searchResult = getRandomImage(combination)
-
-            // v3.11: Demand-driven replenishment
-            // Queue new variant if:
-            // 1. No images found at all, OR
-            // 2. Found via fallback (missing for requested gender), OR
-            // 3. Exact matches < MIN_VARIANTS (want more variety)
             if (searchResult.image == null) {
-                android.util.Log.d("HeroImage", "[Hero] No AI images found, queueing replenishment")
-                if (shouldQueueReplenishment()) {
-                    queueImageGeneration(combination, outfit)
-                }
                 getFallbackImage(combination)
-            } else if (searchResult.foundViaFallback) {
-                android.util.Log.d("HeroImage", "[Hero] Found via fallback, queueing for requested gender")
-                if (shouldQueueReplenishment()) {
-                    queueImageGeneration(combination, outfit)
-                }
-                poolResult(combination, searchResult)
-            } else if (searchResult.exactMatchCount < MIN_VARIANTS) {
-                android.util.Log.d("HeroImage", "[Hero] Only ${searchResult.exactMatchCount} variants, queueing more (target: $MIN_VARIANTS)")
-                if (shouldQueueReplenishment()) {
-                    queueImageGeneration(combination, outfit)
-                }
-                poolResult(combination, searchResult)
             } else {
-                android.util.Log.d("HeroImage", "[Hero] Have ${searchResult.exactMatchCount} variants, no replenishment needed")
                 poolResult(combination, searchResult)
             }
         } catch (e: Exception) {
@@ -345,145 +309,6 @@ class HeroImageRepository @Inject constructor() {
     }
 
     /**
-     * Queue an image generation job with auto-incrementing variant number.
-     * v3.11: Finds next available variant number to support demand-driven growth.
-     */
-    private suspend fun queueImageGeneration(
-        combination: OutfitCombination,
-        outfit: OutfitRecommendation
-    ) {
-        // Lazy client (1.1.2): unavailable → nothing to queue into.
-        val client = supabase ?: return
-        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        val baseCombo = "${combination.genderPreference.name}_${heroWeather.name}_${combination.tempBracket.name}_${combination.timeOfDay.name}"
-
-        try {
-            // Find highest existing variant number in generation_jobs
-            var maxVariant = 0
-            val existingJobs = client.from("generation_jobs")
-                .select {
-                    filter {
-                        like("combination_id", "${baseCombo}_%")
-                    }
-                }
-                .decodeList<GenerationJobCheck>()
-
-            existingJobs.forEach { job ->
-                val match = Regex("_v(\\d+)$").find(job.combinationId)
-                match?.groupValues?.get(1)?.toIntOrNull()?.let { num ->
-                    maxVariant = maxOf(maxVariant, num)
-                }
-            }
-
-            // Also check generated_images for existing variants
-            val existingImages = client.from("generated_images")
-                .select {
-                    filter {
-                        like("combination_id", "${baseCombo}_%")
-                    }
-                }
-                .decodeList<GeneratedImage>()
-
-            existingImages.forEach { img ->
-                val match = Regex("_v?(\\d+)$").find(img.combinationId)
-                match?.groupValues?.get(1)?.toIntOrNull()?.let { num ->
-                    maxVariant = maxOf(maxVariant, num)
-                }
-            }
-
-            val nextVariant = maxVariant + 1
-            val combinationId = "${baseCombo}_v${nextVariant}"
-
-            android.util.Log.d("HeroImage", "[Replenish] Queueing variant: $combinationId")
-
-            // Queue new generation (only send fields that exist in table)
-            val prompt = buildPrompt(combination, outfit)
-            client.from("generation_jobs")
-                .insert(
-                    GenerationJobInsert(
-                        combinationId = combinationId,
-                        prompt = prompt,
-                        status = "QUEUED"
-                    )
-                )
-
-            android.util.Log.d("HeroImage", "[Replenish] ✓ Queued: $combinationId")
-        } catch (e: Exception) {
-            android.util.Log.w("HeroImage", "[Replenish] Error: ${e.message}", e)
-        }
-    }
-
-    /**
-     * Build a prompt for AI image generation.
-     * v3.14: Uses actual outfit recommendation items instead of static descriptions.
-     * Includes random backgrounds for variety per HERO_IMAGE_SPEC.md
-     */
-    private fun buildPrompt(
-        combination: OutfitCombination,
-        outfit: OutfitRecommendation
-    ): String {
-        val genderDesc = when (combination.genderPreference) {
-            GenderPreference.MALE -> "male"
-            GenderPreference.FEMALE -> "female"
-            GenderPreference.UNISEX -> "person"
-        }
-
-        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        val weatherDesc = heroWeather.name.lowercase()
-        val tempDesc = combination.tempBracket.name.lowercase().replace("_", " ")
-        val timeDesc = when (combination.timeOfDay) {
-            TimeOfDay.DAWN -> "early morning golden hour"
-            TimeOfDay.MIDDAY -> "bright midday"
-            TimeOfDay.DUSK -> "evening golden hour"
-            TimeOfDay.NIGHT -> "night with street lights"
-        }
-
-        // Random backgrounds for variety
-        val backgrounds = listOf(
-            "city street with buildings in background",
-            "urban park with trees",
-            "waterfront boardwalk",
-            "scenic trail with nature",
-            "downtown area with shops",
-            "bridge with city skyline",
-            "tree-lined avenue"
-        )
-        val background = backgrounds.random()
-
-        // Mood based on conditions
-        val mood = when {
-            heroWeather == HeroWeatherCondition.RAIN -> "determined, pushing through the rain"
-            heroWeather == HeroWeatherCondition.SNOW -> "resilient, winter warrior"
-            combination.tempBracket == TempBracket.HOT -> "energetic, summer vibes"
-            combination.tempBracket == TempBracket.FREEZING -> "tough, braving the cold"
-            else -> "focused, confident stride"
-        }
-
-        // v3.14/v4.1: Build outfit description from actual recommendation items
-        val outfitParts = mutableListOf<String>()
-        outfitParts.add(outfit.topBase.displayName.lowercase())
-        outfit.topMid?.let { outfitParts.add(it.displayName.lowercase()) }
-        outfit.topOuter?.let { outfitParts.add(it.displayName.lowercase()) }
-        outfitParts.add(outfit.bottom.displayName.lowercase())
-        outfit.head?.let { outfitParts.add(it.displayName.lowercase()) }
-        outfit.hands?.let { outfitParts.add(it.displayName.lowercase()) }
-        outfit.accessories.filter { it.name != "SUNSCREEN" && it.name != "REFLECTIVE_GEAR" }
-            .forEach { outfitParts.add(it.displayName.lowercase()) }
-
-        val outfitDesc = outfitParts.joinToString(", ")
-
-        // Prompt hardening (2026-10-27): every queued prompt carries the
-        // anatomy/composition block; the edge function re-applies it
-        // server-side so jobs queued by older clients are covered too.
-        return HeroPoolPolicy.ensureQualitySuffix(
-            "A $genderDesc runner in their 30s running mid-stride along a $background. " +
-                "They are wearing $outfitDesc appropriate for $weatherDesc $tempDesc weather. " +
-                "Time of day: $timeDesc. Professional running photography, dynamic action shot, " +
-                "high quality, sharp focus. MOOD: $mood"
-        )
-    }
-
-    /**
      * Get a fallback image when no cached image is available.
      * Uses bundled pool-derived images categorized by temperature bracket AND weather condition.
      * This is a 2D matrix: 6 temp brackets × 4 weather conditions = 24 image categories.
@@ -635,21 +460,4 @@ data class GeneratedImage(
     @SerialName("review_status") val reviewStatus: String? = null
 )
 
-/**
- * Insert model for generation_jobs table.
- * v3.11: Only includes fields that exist in the table (combination_id encodes gender/weather/temp/time)
- */
-@Serializable
-data class GenerationJobInsert(
-    @SerialName("combination_id") val combinationId: String,
-    @SerialName("prompt") val prompt: String,
-    @SerialName("status") val status: String
-)
 
-/**
- * Minimal model for checking if a generation job exists.
- */
-@Serializable
-data class GenerationJobCheck(
-    @SerialName("combination_id") val combinationId: String
-)

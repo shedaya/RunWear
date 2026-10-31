@@ -118,7 +118,16 @@ fun HeroMainScreen(
     onFlagHero: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit = {},
     /** Hero refresh: cycle to the cell's next approved image (no flag). */
     onCycleHero: () -> Unit = {},
-    onItemTapped: (ClothingItem) -> Unit = {}
+    onItemTapped: (ClothingItem) -> Unit = {},
+    // ── RW-14 "Make it me" ─────────────────────────────────────────────
+    makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
+    makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
+        com.runwear.app.makeitme.MakeItMeUiState(),
+    /** The current recommendation's personal combination (id + item keys). */
+    onPersonalCombinationRequest: () -> Pair<String, List<String>>? = { null },
+    /** Re-run hero resolution after a personal-layer change. */
+    onPersonalLayerChanged: () -> Unit = {},
+    onDismissMakeItMeUpsell: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -136,6 +145,13 @@ fun HeroMainScreen(
     var showLocationPicker by remember { mutableStateOf(false) }
     var showShopAll by remember { mutableStateOf(false) }
     var weatherDetailType by remember { mutableStateOf<String?>(null) }
+
+    // RW-14 surfaces hosted at this level (opened from Settings, the
+    // upsell card, or the photos view).
+    var showMakeItMeFlow by remember { mutableStateOf(false) }
+    var makeItMeFlowReplace by remember { mutableStateOf(false) }
+    var showMakeItMePhotos by remember { mutableStateOf(false) }
+    var showMakeItMePaywall by remember { mutableStateOf(false) }
 
     // Hero-flag flow: the sheet, plus the URL already flagged in this
     // view (one flag per photo view — the chip goes inert for it).
@@ -238,23 +254,28 @@ Get your personalized running outfit at runwear.ai
                                 contentPadding = PaddingValues(bottom = 60.dp)
                             ) {
                                 item {
-                                    HeroSectionContent(
-                                        uiState = uiState,
-                                        contentVisible = contentVisible,
-                                        scrollOffset = scrollOffset.value,
-                                        onDateClick = { showDatePicker = true },
-                                        onTimeClick = { showTimePicker = true },
-                                        onNowClick = onResetToNow,
-                                        onLocationClick = { showLocationPicker = true },
-                                        onSettingsClick = { showSettings = true },
-                                        onShareClick = { shareOutfit() },
-                                        onTempClick = onToggleUnit,
-                                        onWeatherPillClick = { type -> weatherDetailType = type },
-                                        onFlagClick = { showHeroFlagSheet = true },
-                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
-                                        onCycleHero = onCycleHero,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
+                                    Column {
+                                        HeroSectionContent(
+                                            uiState = uiState,
+                                            contentVisible = contentVisible,
+                                            scrollOffset = scrollOffset.value,
+                                            onDateClick = { showDatePicker = true },
+                                            onTimeClick = { showTimePicker = true },
+                                            onNowClick = onResetToNow,
+                                            onLocationClick = { showLocationPicker = true },
+                                            onSettingsClick = { showSettings = true },
+                                            onShareClick = { shareOutfit() },
+                                            onTempClick = onToggleUnit,
+                                            onWeatherPillClick = { type -> weatherDetailType = type },
+                                            onFlagClick = { showHeroFlagSheet = true },
+                                            heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
+                                            onCycleHero = onCycleHero,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        if (uiState.personalGenerationPending) {
+                                            com.runwear.app.makeitme.MakeItMeProgressLine()
+                                        }
+                                    }
                                 }
                                 outfitListItems(
                                     uiState = uiState,
@@ -267,6 +288,17 @@ Get your personalized running outfit at runwear.ai
                                     },
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
                                 )
+                                // RW-14: the 6th-cell upsell card, below
+                                // the outfit in the normal scroll (§5.1).
+                                if (uiState.showMakeItMeUpsell) {
+                                    item {
+                                        com.runwear.app.makeitme.MakeItMeUpsellCard(
+                                            onSubscribeClick = { showMakeItMePaywall = true },
+                                            onDismiss = onDismissMakeItMeUpsell,
+                                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                         AdaptiveLayout.MEDIUM -> {
@@ -287,23 +319,28 @@ Get your personalized running outfit at runwear.ai
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    HeroSectionContent(
-                                        uiState = uiState,
-                                        contentVisible = contentVisible,
-                                        scrollOffset = gridScrollOffset.value,
-                                        onDateClick = { showDatePicker = true },
-                                        onTimeClick = { showTimePicker = true },
-                                        onNowClick = onResetToNow,
-                                        onLocationClick = { showLocationPicker = true },
-                                        onSettingsClick = { showSettings = true },
-                                        onShareClick = { shareOutfit() },
-                                        onTempClick = onToggleUnit,
-                                        onWeatherPillClick = { type -> weatherDetailType = type },
-                                        onFlagClick = { showHeroFlagSheet = true },
-                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
-                                        onCycleHero = onCycleHero,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
+                                    Column {
+                                        HeroSectionContent(
+                                            uiState = uiState,
+                                            contentVisible = contentVisible,
+                                            scrollOffset = gridScrollOffset.value,
+                                            onDateClick = { showDatePicker = true },
+                                            onTimeClick = { showTimePicker = true },
+                                            onNowClick = onResetToNow,
+                                            onLocationClick = { showLocationPicker = true },
+                                            onSettingsClick = { showSettings = true },
+                                            onShareClick = { shareOutfit() },
+                                            onTempClick = onToggleUnit,
+                                            onWeatherPillClick = { type -> weatherDetailType = type },
+                                            onFlagClick = { showHeroFlagSheet = true },
+                                            heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
+                                            onCycleHero = onCycleHero,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        if (uiState.personalGenerationPending) {
+                                            com.runwear.app.makeitme.MakeItMeProgressLine()
+                                        }
+                                    }
                                 }
                                 outfitGridItems(
                                     uiState = uiState,
@@ -316,6 +353,15 @@ Get your personalized running outfit at runwear.ai
                                     },
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
                                 )
+                                if (uiState.showMakeItMeUpsell) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        com.runwear.app.makeitme.MakeItMeUpsellCard(
+                                            onSubscribeClick = { showMakeItMePaywall = true },
+                                            onDismiss = onDismissMakeItMeUpsell,
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                         AdaptiveLayout.EXPANDED -> {
@@ -349,6 +395,11 @@ Get your personalized running outfit at runwear.ai
                                         onCycleHero = onCycleHero,
                                         modifier = Modifier.fillMaxSize()
                                     )
+                                    if (uiState.personalGenerationPending) {
+                                        com.runwear.app.makeitme.MakeItMeProgressLine(
+                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                        )
+                                    }
                                 }
                                 // Right pane: outfit grid (independently scrollable)
                                 LazyVerticalGrid(
@@ -376,6 +427,15 @@ Get your personalized running outfit at runwear.ai
                                         },
                                         onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
                                     )
+                                    if (uiState.showMakeItMeUpsell) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            com.runwear.app.makeitme.MakeItMeUpsellCard(
+                                                onSubscribeClick = { showMakeItMePaywall = true },
+                                                onDismiss = onDismissMakeItMeUpsell,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -444,7 +504,72 @@ Get your personalized running outfit at runwear.ai
                 showSettings = false
                 onOpenFeedback(null)
             },
+            makeItMeViewModel = makeItMeViewModel,
+            makeItMeState = makeItMeState,
+            onMakeItMeOptInClick = {
+                showSettings = false
+                makeItMeFlowReplace = false
+                showMakeItMeFlow = true
+            },
+            onMakeItMePhotosClick = {
+                showSettings = false
+                showMakeItMePhotos = true
+            },
+            onMakeItMeSubscribeClick = {
+                showSettings = false
+                showMakeItMePaywall = true
+            },
+            onMakeItMeManageSubscriptionClick = {
+                showSettings = false
+                context.startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse(com.runwear.app.makeitme.BillingManager.MANAGE_SUBSCRIPTIONS_URL)
+                    )
+                )
+            },
+            onMakeItMeDeleted = { onPersonalLayerChanged() },
             onDismiss = { showSettings = false }
+        )
+    }
+
+    // ── RW-14 overlays ──────────────────────────────────────────────────
+    if (showMakeItMeFlow && makeItMeViewModel != null) {
+        com.runwear.app.makeitme.MakeItMeUploadFlow(
+            viewModel = makeItMeViewModel,
+            gender = uiState.genderPreference.name,
+            replace = makeItMeFlowReplace,
+            todaysCell = onPersonalCombinationRequest(),
+            onFinished = {
+                showMakeItMeFlow = false
+                onPersonalLayerChanged()
+            },
+            // From Settings, closing without finishing changes nothing —
+            // personalization stays off (State A remains the truth).
+            onExitAsStock = { showMakeItMeFlow = false }
+        )
+    }
+
+    if (showMakeItMePhotos && makeItMeViewModel != null) {
+        com.runwear.app.makeitme.MakeItMePhotosScreen(
+            viewModel = makeItMeViewModel,
+            onBack = { showMakeItMePhotos = false },
+            onReplaceClick = {
+                showMakeItMePhotos = false
+                makeItMeFlowReplace = true
+                showMakeItMeFlow = true
+            }
+        )
+    }
+
+    if (showMakeItMePaywall && makeItMeViewModel != null) {
+        com.runwear.app.makeitme.MakeItMePaywallSheet(
+            viewModel = makeItMeViewModel,
+            onDismiss = { showMakeItMePaywall = false },
+            onPurchased = {
+                showMakeItMePaywall = false
+                onPersonalLayerChanged()
+            }
         )
     }
 
@@ -610,7 +735,7 @@ private fun HeroSectionContent(
             onShareClick = onShareClick,
             onTempClick = onTempClick,
             onWeatherPillClick = onWeatherPillClick,
-            showFlagButton = uiState.heroImageUrl != null,
+            showFlagButton = uiState.heroImageUrl != null && !uiState.heroIsPersonal,
             flagEnabled = heroFlagEnabled,
             onFlagClick = onFlagClick,
             showRefreshButton = uiState.heroCandidates.size > 1,

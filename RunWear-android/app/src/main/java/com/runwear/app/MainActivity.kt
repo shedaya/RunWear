@@ -40,6 +40,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private val makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel by viewModels()
 
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -81,9 +82,17 @@ class MainActivity : ComponentActivity() {
             }
             RunWearTheme {
                 val uiState by viewModel.uiState.collectAsState()
+                val makeItMeState by makeItMeViewModel.uiState.collectAsState()
                 val locationSearchState by viewModel.locationSearch.collectAsState()
                 val analyticsOptIn by viewModel.analyticsOptIn.collectAsState()
                 var showManualLocationPicker by remember { mutableStateOf(false) }
+
+                // RW-14 onboarding fork (spec §2.1): shown once, in the
+                // session where onboarding completes, after the first
+                // real recommendation exists. forkDecided persists the
+                // answer (spec §2.5), so this never re-asks.
+                var onboardingJustCompleted by remember { mutableStateOf(false) }
+                var showForkUpload by remember { mutableStateOf(false) }
 
                 // Feedback system (spec §1): the screen opens from Settings
                 // (no pre-selected category) or from the outfit list
@@ -139,6 +148,7 @@ class MainActivity : ComponentActivity() {
                             !uiState.hasCompletedOnboarding -> {
                                 OnboardingScreen(
                                     onComplete = { tempUnit, gender, comfort ->
+                                        onboardingJustCompleted = true
                                         viewModel.completeOnboarding(
                                             tempUnit = tempUnit,
                                             gender = gender,
@@ -190,7 +200,15 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onItemTapped = viewModel::onAffiliateItemTapped,
                                     onFlagHero = viewModel::flagCurrentHero,
-                                    onCycleHero = viewModel::cycleHeroImage
+                                    onCycleHero = viewModel::cycleHeroImage,
+                                    makeItMeViewModel = makeItMeViewModel,
+                                    makeItMeState = makeItMeState,
+                                    onPersonalCombinationRequest =
+                                        viewModel::currentPersonalCombination,
+                                    onPersonalLayerChanged =
+                                        viewModel::refreshHeroAfterPersonalChange,
+                                    onDismissMakeItMeUpsell =
+                                        viewModel::dismissMakeItMeUpsell
                                 )
                             }
                         }
@@ -233,6 +251,40 @@ class MainActivity : ComponentActivity() {
                                 launchInAppReview()
                             },
                             onDismiss = { showRatingMoment = false }
+                        )
+                    }
+
+                    // RW-14 onboarding fork: the final onboarding step,
+                    // after the first real recommendation (spec §2.1).
+                    val forkDue = onboardingJustCompleted &&
+                        uiState.outfit != null &&
+                        !makeItMeState.forkDecided
+                    if (forkDue && !showForkUpload) {
+                        com.runwear.app.makeitme.MakeItMeForkScreen(
+                            heroImageUrl = uiState.heroImageUrl,
+                            onUseMyPhotos = { showForkUpload = true },
+                            onUseStandardPhotos = {
+                                makeItMeViewModel.decideForkAsStock()
+                                onboardingJustCompleted = false
+                            }
+                        )
+                    }
+                    if (forkDue && showForkUpload) {
+                        com.runwear.app.makeitme.MakeItMeUploadFlow(
+                            viewModel = makeItMeViewModel,
+                            gender = uiState.genderPreference.name,
+                            replace = false,
+                            todaysCell = viewModel.currentPersonalCombination(),
+                            onFinished = {
+                                showForkUpload = false
+                                onboardingJustCompleted = false
+                                viewModel.refreshHeroAfterPersonalChange()
+                            },
+                            onExitAsStock = {
+                                showForkUpload = false
+                                onboardingJustCompleted = false
+                                makeItMeViewModel.decideForkAsStock()
+                            }
                         )
                     }
 

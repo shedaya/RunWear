@@ -27,6 +27,9 @@ import com.runwear.app.feedback.FeedbackCategory
 import com.runwear.app.feedback.FeedbackStore
 import com.runwear.app.feedback.RunWearEvents
 import com.runwear.app.feedback.TelemetryClient
+import com.runwear.app.makeitme.MakeItMeUpsellRules
+import com.runwear.app.makeitme.PersonalHeroRepository
+import com.runwear.app.makeitme.PersonalHeroService
 import com.runwear.app.widget.LaterTodayLine
 import com.runwear.app.widget.WidgetLastGood
 import com.runwear.app.widget.WidgetLastGoodStore
@@ -107,7 +110,14 @@ data class MainUiState(
      * The REQUESTED combination the current hero resolution belongs
      * to — the cell key under which the day's refresh choice persists.
      */
-    val heroRequestedCombinationId: String? = null
+    val heroRequestedCombinationId: String? = null,
+    // ── RW-14 "Make it me" ─────────────────────────────────────────────
+    /** True when the hero on screen is the user's verified personal hero. */
+    val heroIsPersonal: Boolean = false,
+    /** A personal generation for the current cell is in flight (spec §2.4 progress line). */
+    val personalGenerationPending: Boolean = false,
+    /** The 6th-new-cell subscription card should show (spec §5). */
+    val showMakeItMeUpsell: Boolean = false
 )
 
 data class LocationSearchState(
@@ -122,6 +132,7 @@ class MainViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val affiliateRepository: AffiliateRepository,
     private val heroImageRepository: HeroImageRepository,
+    private val personalHeroRepository: PersonalHeroRepository,
     private val locationProvider: LocationProvider,
     private val getOutfitRecommendation: GetOutfitRecommendationUseCase,
     private val feedbackStore: FeedbackStore,
@@ -462,6 +473,9 @@ class MainViewModel @Inject constructor(
         private const val SEED_COORD_TOLERANCE_DEG = 0.05
         /** Time box for the AI hero lookup; past it the session keeps the default hero. */
         private const val HERO_RESOLVE_TIMEOUT_MS = 2_000L
+        /** RW-14: personal-generation poll cadence + bound (~4.5 min total, matching the backend's 2–4 min job time). */
+        private const val PERSONAL_POLL_INTERVAL_MS = 15_000L
+        private const val PERSONAL_POLL_MAX_ATTEMPTS = 18
     }
     
     fun fetchCurrentLocation() {
@@ -725,10 +739,185 @@ class MainViewModel @Inject constructor(
                     heroImageRowId = chosen.imageRowId,
                     heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
                     heroCandidates = chosen.candidates,
-                    heroRequestedCombinationId = chosen.combinationId
+                    heroRequestedCombinationId = chosen.combinationId,
+                    heroIsPersonal = false,
+                    personalGenerationPending = false,
+                    showMakeItMeUpsell = false
                 )
             }
+            // RW-14: the personal layer overlays the pool hero — the
+            // user's own verified image for this cell wins when one
+            // exists (spec §2.4/§4); a missing one may trigger an
+            // on-demand generation (free allowance / entitled) and the
+            // 6th-cell upsell evaluation.
+            applyPersonalHeroOverlay(weather, outfit)
         }
+    }
+
+    /** The personal cell currently in view (poll guard for the overlay). */
+    @Volatile
+    private var personalCellInView: String? = null
+
+    /**
+     * The current recommendation's PERSONAL combination: built with the
+     * user's own gender preference (never the pool's randomized hero
+     * gender) so its id matches the backend's per-user keying, plus the
+     * outfit item keys the generation request must hash-match.
+     */
+    fun currentPersonalCombination(): Pair<String, List<String>>? {
+        val weather = _uiState.value.weather ?: return null
+        val outfit = _uiState.value.outfit ?: return null
+        return personalCombinationFor(weather, outfit)
+    }
+
+    private fun personalCombinationFor(
+        weather: WeatherConditions,
+        outfit: OutfitRecommendation
+    ): Pair<String, List<String>> {
+        val combination = com.runwear.shared.domain.model.OutfitCombination.fromConditions(
+            weather, outfit, _uiState.value.genderPreference
+        )
+        return combination.id to outfit.allItems.map { it.name }
+    }
+
+    /**
+     * RW-14 overlay, run after the pool hero for a load is on screen:
+     *
+     * - Personal hero exists for the cell → swap it in (versioned cache
+     *   inside the repository decides whether the URL is new).
+     * - None exists, user opted in, cell never requested, and either
+     *   entitled or free allowance remains → request generation, show
+     *   the progress line, and poll until the verified image lands
+     *   (then swap + refresh the allowance mirror) or the wait expires
+     *   (the pool hero simply stays — spec G4 silence; layered/rain
+     *   outfits may never deliver).
+     * - None exists and the allowance is spent → evaluate the 6th-cell
+     *   upsell card (spec §5.2 rules).
+     */
+    private suspend fun applyPersonalHeroOverlay(
+        weather: WeatherConditions,
+        outfit: OutfitRecommendation
+    ) {
+        val personal = personalHeroRepository.state.value
+        if (!personal.personalizationOn) {
+            personalCellInView = null
+            return
+        }
+        val (cell, items) = personalCombinationFor(weather, outfit)
+        personalCellInView = cell
+
+        val hit = runCatching { personalHeroRepository.personalHeroFor(cell) }.getOrNull()
+        if (hit != null) {
+            if (personalCellInView != cell) return
+            _uiState.update {
+                it.copy(
+                    heroImageUrl = hit.imageUrl,
+                    heroImageRowId = null,
+                    heroCandidates = emptyList(),
+                    heroIsPersonal = true,
+                    personalGenerationPending = false,
+                    showMakeItMeUpsell = false
+                )
+            }
+            return
+        }
+
+        val entitled = personal.entitled
+        val allowanceLeft = personal.freeGenerationsUsed < MakeItMeUpsellRules.FREE_ALLOWANCE
+        val alreadyRequested = personalHeroRepository.wasCellRequested(cell)
+        if (!alreadyRequested && (entitled || allowanceLeft)) {
+            _uiState.update { it.copy(personalGenerationPending = true) }
+            val outcome = runCatching {
+                personalHeroRepository.requestGeneration(cell, items)
+            }.getOrNull()
+            val accepted = outcome is PersonalHeroService.RequestOutcome.Queued ||
+                outcome is PersonalHeroService.RequestOutcome.AlreadyQueued ||
+                outcome is PersonalHeroService.RequestOutcome.AlreadyAvailable
+            if (accepted) {
+                pollForPersonalHero(cell)
+            } else {
+                if (personalCellInView == cell) {
+                    _uiState.update { it.copy(personalGenerationPending = false) }
+                }
+                // Allowance may have been exhausted server-side between
+                // the state read and the request: fall through to the
+                // upsell evaluation with a fresh mirror.
+                personalHeroRepository.refreshFromServer()
+                updateUpsellVisibility(cell, cellHasPersonalHero = false)
+            }
+            return
+        }
+
+        updateUpsellVisibility(cell, cellHasPersonalHero = false)
+    }
+
+    /** Poll get-personal-hero until the verified image lands or the wait expires (~4.5 min). */
+    private suspend fun pollForPersonalHero(cell: String) {
+        var attempts = 0
+        while (attempts < PERSONAL_POLL_MAX_ATTEMPTS) {
+            delay(PERSONAL_POLL_INTERVAL_MS)
+            attempts++
+            if (personalCellInView != cell) return
+            val hit = runCatching { personalHeroRepository.personalHeroFor(cell) }.getOrNull()
+            if (hit != null) {
+                _uiState.update {
+                    it.copy(
+                        heroImageUrl = hit.imageUrl,
+                        heroImageRowId = null,
+                        heroCandidates = emptyList(),
+                        heroIsPersonal = true,
+                        personalGenerationPending = false,
+                        showMakeItMeUpsell = false
+                    )
+                }
+                // A verified delivery moves the free counter server-side.
+                personalHeroRepository.refreshFromServer()
+                return
+            }
+        }
+        // Timed out: the pool hero stays, silently (spec G4). The cell
+        // stays in the requested set, so this never loops.
+        if (personalCellInView == cell) {
+            _uiState.update { it.copy(personalGenerationPending = false) }
+        }
+    }
+
+    private suspend fun updateUpsellVisibility(cell: String, cellHasPersonalHero: Boolean) {
+        val personal = personalHeroRepository.state.value
+        val dismissal = personalHeroRepository.upsellDismissal()
+        val show = MakeItMeUpsellRules.shouldShow(
+            personalizationOn = personal.personalizationOn,
+            entitled = personal.entitled,
+            freeGenerationsUsed = personal.freeGenerationsUsed,
+            cellHasPersonalHero = cellHasPersonalHero,
+            cellGenerationPending = _uiState.value.personalGenerationPending,
+            combinationId = cell,
+            lastDismissedAtMs = dismissal.atMs,
+            lastDismissedCell = dismissal.cell,
+            nowMs = System.currentTimeMillis()
+        )
+        if (personalCellInView == cell) {
+            _uiState.update { it.copy(showMakeItMeUpsell = show) }
+        }
+    }
+
+    /** Upsell "Not now" (spec §5.2): record the dismissal, hide the card. */
+    fun dismissMakeItMeUpsell() {
+        val cell = personalCellInView ?: return
+        _uiState.update { it.copy(showMakeItMeUpsell = false) }
+        viewModelScope.launch { personalHeroRepository.recordUpsellDismissal(cell) }
+    }
+
+    /**
+     * Re-run hero resolution after a personal-layer change made outside
+     * this ViewModel (opt-in first look requested, photos replaced,
+     * photos deleted, subscription activated): the overlay re-evaluates
+     * against the current recommendation.
+     */
+    fun refreshHeroAfterPersonalChange() {
+        val weather = _uiState.value.weather ?: return
+        val outfit = _uiState.value.outfit ?: return
+        resolveHeroImage(weather, outfit)
     }
 
     /** DataStore key for one cell's persisted hero choice ("date|url"). */
@@ -798,6 +987,11 @@ class MainViewModel @Inject constructor(
      */
     fun flagCurrentHero(reason: com.runwear.shared.domain.model.HeroFlagReason) {
         val state = _uiState.value
+        // Personal heroes are not pool rows: the pool flag payload cannot
+        // identify them, and the personal regeneration-on-flag path has
+        // no backend action yet (documented gap) — never file a pool
+        // flag against a personal image.
+        if (state.heroIsPersonal) return
         val url = state.heroImageUrl ?: return
         viewModelScope.launch {
             heroImageRepository.flagHeroImage(

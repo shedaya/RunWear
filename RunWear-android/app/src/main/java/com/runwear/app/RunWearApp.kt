@@ -26,6 +26,9 @@ class RunWearApp : Application(), Configuration.Provider {
     @Inject
     lateinit var telemetryClient: TelemetryClient
 
+    @Inject
+    lateinit var billingManager: com.runwear.app.makeitme.BillingManager
+
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /**
@@ -57,6 +60,11 @@ class RunWearApp : Application(), Configuration.Provider {
         // is only stored here; sending happens below, and only while
         // the user's improvement toggle is on.
         CrashReporter.install(this)
+
+        // RW-14 billing: configure RevenueCat at startup so entitlement
+        // state is current before any surface reads it. Idempotent and
+        // crash-safe; the Make it me ViewModel also configures it.
+        runCatching { billingManager.configure() }
 
         // Widget recovery backstop (spec §B.3.3): periodic refresh with
         // backoff so a failed widget load heals itself. KEEP = idempotent.
