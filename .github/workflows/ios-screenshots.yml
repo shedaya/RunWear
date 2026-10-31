@@ -56,6 +56,10 @@ jobs:
 
   capture:
     name: Capture listing screenshots (iPhone 16 Pro Max)
+    # The phone set is already captured + reviewed + uploaded; do not
+    # burn macos-26 minutes re-capturing it on every push. Re-run it by
+    # putting [capture-iphone] in the push commit message.
+    if: ${{ github.event_name != 'push' || contains(github.event.head_commit.message, '[capture-iphone]') }}
     needs: engine
     runs-on: macos-26
     timeout-minutes: 60
@@ -197,4 +201,290 @@ jobs:
         with:
           name: screenshots-log
           path: ${{ runner.temp }}/xcodebuild-shots.log
+          if-no-files-found: ignore
+
+  capture-ipad:
+    name: Capture listing screenshots (iPad Pro 13-inch)
+    needs: engine
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      SCHEME: RunWear
+      PROJECT: RunWear-iOS/RunWear.xcodeproj
+
+    steps:
+      - name: Check out the commit to capture
+        uses: actions/checkout@v4
+
+      - name: Download the XCFramework
+        uses: actions/download-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+
+      - name: Tool versions
+        run: |
+          xcodebuild -version
+          git rev-parse HEAD
+
+      - name: Find or create the iPad Pro 13-inch simulator
+        run: |
+          set -euo pipefail
+          UDID="$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for d in devices:
+                  if d.get("isAvailable") and d.get("name") == "iPad Pro 13-inch (M4)":
+                      print(d["udid"])
+                      sys.exit(0)
+          sys.exit(1)
+          ' || true)"
+          if [ -z "${UDID:-}" ]; then
+            RT="$(xcrun simctl list runtimes available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          ios = [r for r in data.get("runtimes", []) if r.get("platform") == "iOS" and r.get("isAvailable")]
+          ios.sort(key=lambda r: r.get("version", ""))
+          print(ios[-1]["identifier"])
+          ')"
+            echo "Creating iPad Pro 13-inch (M4) on runtime $RT"
+            UDID="$(xcrun simctl create "iPad Pro 13-inch (M4)" "iPad Pro 13-inch (M4)" "$RT")"
+          fi
+          echo "Using simulator $UDID"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override \
+            --time "9:41" \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 \
+            --batteryState charged --batteryLevel 100 || true
+
+      - name: Run the screenshot capture test (iPad)
+        run: |
+          set +e
+          set -o pipefail
+          xcodebuild test \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -destination "platform=iOS Simulator,id=$SIM_UDID" \
+            -only-testing:RunWearUITests/ScreenshotTests \
+            -resultBundlePath "$RUNNER_TEMP/ShotsIpad.xcresult" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-shots-ipad.log"
+          code=${PIPESTATUS[0]}
+          grep -E "UITEST-SHOT|UITEST-MISSING" "$RUNNER_TEMP/xcodebuild-shots-ipad.log" || true
+          exit "$code"
+
+      - name: Export screenshot attachments (iPad)
+        if: always()
+        run: |
+          mkdir -p shots-ipad
+          if [ -d "$RUNNER_TEMP/ShotsIpad.xcresult" ]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/ShotsIpad.xcresult" \
+              --output-path shots-ipad || true
+          fi
+          python3 - <<'EOF'
+          import json, os, re, shutil
+          known = ["01-main-recommendation", "02-tomorrow-forecast",
+                   "03-outfit-items", "04-shop-gear", "05-settings"]
+          manifest = os.path.join("shots-ipad", "manifest.json")
+          if os.path.exists(manifest):
+              entries = []
+              for group in json.load(open(manifest)):
+                  entries.extend(group.get("attachments", []))
+              for a in entries:
+                  src_name = a.get("exportedFileName") or ""
+                  human = a.get("suggestedHumanReadableName") or ""
+                  src = os.path.join("shots-ipad", src_name)
+                  if not src_name or not os.path.exists(src):
+                      continue
+                  with open(src, "rb") as fh:
+                      if fh.read(8) != b"\x89PNG\r\n\x1a\n":
+                          continue
+                  base = None
+                  for k in known:
+                      if human.startswith(k):
+                          base = k
+                          break
+                  if base is None and human.startswith("stage-"):
+                      base = human.split("_0_")[0].split(" ")[0]
+                  if base:
+                      dst = os.path.join("shots-ipad", base + ".png")
+                      if os.path.abspath(src) != os.path.abspath(dst):
+                          shutil.copyfile(src, dst)
+                          print("mapped", src_name, "->", base + ".png")
+          EOF
+          ls -la shots-ipad || true
+          for f in shots-ipad/*.png; do
+            [ -f "$f" ] && echo "$f: $(sips -g pixelWidth -g pixelHeight "$f" | tr '\n' ' ')"
+          done
+
+      - name: Upload screenshots (iPad)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asc-screenshots-ipad
+          path: shots-ipad
+          if-no-files-found: warn
+
+      - name: Upload capture log (iPad)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-ipad-log
+          path: ${{ runner.temp }}/xcodebuild-shots-ipad.log
+          if-no-files-found: ignore
+
+  capture-watch:
+    name: Capture watch screenshots (paired simulators, simctl)
+    needs: engine
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      PROJECT: RunWear-iOS/RunWear.xcodeproj
+      WATCH_BUNDLE: com.uptimeventures.runwear.watchkitapp
+
+    steps:
+      - name: Check out the commit to capture
+        uses: actions/checkout@v4
+
+      - name: Download the XCFramework
+        uses: actions/download-artifact@v4
+        with:
+          name: RunWearEngine-xcframework
+          path: RunWear-iOS/Frameworks/RunWearEngine.xcframework
+
+      - name: Tool versions + available watch device types
+        run: |
+          xcodebuild -version
+          git rev-parse HEAD
+          echo "=== watch device types ==="
+          xcrun simctl list devicetypes | grep -i "apple watch" || true
+          echo "=== watch runtimes ==="
+          xcrun simctl list runtimes available | grep -i watch || true
+
+      - name: Create + pair the phone and watch simulators
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import json, subprocess, sys
+
+          def simctl(*args):
+              out = subprocess.run(["xcrun", "simctl"] + list(args),
+                                   capture_output=True, text=True)
+              return out
+
+          runtimes = json.loads(simctl("list", "runtimes", "available", "--json").stdout)
+          def latest_runtime(platform):
+              rs = [r for r in runtimes.get("runtimes", [])
+                    if r.get("platform") == platform and r.get("isAvailable")]
+              rs.sort(key=lambda r: r.get("version", ""))
+              return rs[-1]["identifier"]
+
+          devtypes = simctl("list", "devicetypes").stdout
+          # Preference order: an exact Series 3 (42mm) = 312x390 if the
+          # toolchain still offers it, then the current 42mm class,
+          # then any Apple Watch at all. The chosen type is printed so
+          # the log records exactly what produced the frames.
+          prefs = ["Apple Watch Series 3 (42mm)",
+                   "Apple Watch Series 10 (42mm)",
+                   "Apple Watch Series 11 (42mm)",
+                   "Apple Watch SE 3 (40mm)",
+                   "Apple Watch Series 9 (41mm)"]
+          watch_type = None
+          for p in prefs:
+              if p in devtypes:
+                  watch_type = p
+                  break
+          if watch_type is None:
+              for line in devtypes.splitlines():
+                  if "Apple Watch" in line:
+                      watch_type = line.split("(")[0].strip()
+                      break
+          print("WATCH_DEVICE_TYPE:", watch_type)
+          assert watch_type, "no Apple Watch device type available"
+
+          ios_rt = latest_runtime("iOS")
+          watch_rt = latest_runtime("watchOS")
+          print("RUNTIMES:", ios_rt, watch_rt)
+
+          phone = simctl("create", "iPhone 16 Pro Max", "iPhone 16 Pro Max", ios_rt)
+          phone_udid = phone.stdout.strip()
+          watch = simctl("create", watch_type, watch_type, watch_rt)
+          watch_udid = watch.stdout.strip()
+          print("PHONE_UDID:", phone_udid)
+          print("WATCH_UDID:", watch_udid)
+          assert phone_udid and watch_udid, (phone.stdout, phone.stderr,
+                                             watch.stdout, watch.stderr)
+          with open("/tmp/sim.env", "w") as fh:
+              fh.write(f"PHONE_UDID={phone_udid}\nWATCH_UDID={watch_udid}\n"
+                       f"WATCH_DEVICE_TYPE={watch_type}\n")
+          EOF
+          cat /tmp/sim.env >> "$GITHUB_ENV"
+          xcrun simctl boot "$PHONE_UDID" || true
+          xcrun simctl bootstatus "$PHONE_UDID" -b
+          echo "=== pairing ==="
+          xcrun simctl pair "$WATCH_UDID" "$PHONE_UDID"
+          xcrun simctl boot "$WATCH_UDID" || true
+          xcrun simctl bootstatus "$WATCH_UDID" -b
+          xcrun simctl list pairs || true
+
+      - name: Build the watch app
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme RunWearWatch \
+            -destination "platform=watchOS Simulator,id=$WATCH_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/dd-watch" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-watch.log"
+          APP="$(find "$RUNNER_TEMP/dd-watch/Build/Products" -name "RunWear Watch.app" -maxdepth 3 | head -1)"
+          echo "Built watch app: $APP"
+          test -n "$APP"
+          echo "WATCH_APP=$APP" >> "$GITHUB_ENV"
+
+      - name: Install, grant location, launch, capture
+        run: |
+          set -euo pipefail
+          mkdir -p watch-shots
+          echo "=== install on watch ==="
+          xcrun simctl install "$WATCH_UDID" "$WATCH_APP"
+          echo "=== privacy: grant location ==="
+          xcrun simctl privacy "$WATCH_UDID" grant location "$WATCH_BUNDLE" \
+            || echo "PRIVACY_GRANT_LOCATION_FAILED"
+          echo "=== simulated location: New York ==="
+          xcrun simctl location "$WATCH_UDID" set 40.7128,-74.0060 || true
+          xcrun simctl location "$PHONE_UDID" set 40.7128,-74.0060 || true
+          echo "=== launch ==="
+          xcrun simctl launch "$WATCH_UDID" "$WATCH_BUNDLE"
+          for t in 20 35 45; do
+            sleep "$t"
+            OUT="watch-shots/watch-capture-$t.png"
+            # cumulative waits: 20s, 55s, 100s after launch
+            xcrun simctl io "$WATCH_UDID" screenshot "$OUT" || true
+            [ -f "$OUT" ] && echo "$OUT: $(sips -g pixelWidth -g pixelHeight "$OUT" | tr '\n' ' ')"
+          done
+          xcrun simctl io "$WATCH_UDID" screenshot watch-shots/watch-capture-final.png || true
+          ls -la watch-shots
+
+      - name: Upload watch captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asc-screenshots-watch
+          path: watch-shots
+          if-no-files-found: warn
+
+      - name: Upload watch build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-watch-log
+          path: ${{ runner.temp }}/xcodebuild-watch.log
           if-no-files-found: ignore
