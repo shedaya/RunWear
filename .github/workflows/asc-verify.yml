@@ -21,6 +21,7 @@ on:
           - audit
           - fill
           - submit
+          - screenshots
         default: verify
         required: true
       version:
@@ -68,3 +69,8 @@ jobs:
         if: inputs.task == 'submit'
         working-directory: scripts/asc
         run: python3 asc_submit.py
+
+      - name: Upload reviewed screenshots to the 1.0 set
+        if: inputs.task == 'screenshots'
+        working-directory: scripts/asc
+        run: python3 asc_screenshots.py
