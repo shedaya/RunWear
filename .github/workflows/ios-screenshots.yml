@@ -436,6 +436,11 @@ jobs:
                        f"WATCH_DEVICE_TYPE={watch_type}\n")
           EOF
           cat /tmp/sim.env >> "$GITHUB_ENV"
+          # $GITHUB_ENV only applies to LATER steps; this step uses the
+          # UDIDs itself, so export them into the current shell too.
+          set -a
+          . /tmp/sim.env
+          set +a
           xcrun simctl boot "$PHONE_UDID" || true
           xcrun simctl bootstatus "$PHONE_UDID" -b
           echo "=== pairing ==="
