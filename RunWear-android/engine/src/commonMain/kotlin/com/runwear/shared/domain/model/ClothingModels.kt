@@ -62,6 +62,18 @@ enum class ClothingItem(
      * Shorts" vs "Short Shorts" — which silently broke thumbnails).
      */
     val key: String get() = name
+
+    /**
+     * The item's human description under a bridge-safe name.
+     * Kotlin/Native cannot export a member named `description` past
+     * NSObject's: on Apple platforms `item.description` resolves to
+     * NSObject.description, which for an enum entry is its case name
+     * — so the human description never crossed the seam and iOS
+     * rendered raw identifiers ("LONG_SLEEVE_LIGHT") as UI copy
+     * (field finding, 2026-10-31). The Apple bridge reads this
+     * alias; Android and the engine itself keep using [description].
+     */
+    val descriptionText: String get() = description
 }
 
 data class OutfitRecommendation(

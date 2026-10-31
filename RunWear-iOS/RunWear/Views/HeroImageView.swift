@@ -13,6 +13,13 @@ struct HeroImageView: View {
     /// The raw ACTUAL temperature for the "Actual:" sub-line (the
     /// reference surfaces' second line), same unit as `temperature`.
     let actualTemperature: Double
+    /// The unit `temperature`/`actualTemperature` are expressed in —
+    /// rendered WITH the numbers. The hero previously printed a bare
+    /// "12°" with no unit anywhere while the outfit band below
+    /// carried a hard-coded "°F" range: read in the user's Celsius,
+    /// the two told different stories on one screen (field finding
+    /// 2026-10-31). Android's hero carries the symbol on both lines.
+    var temperatureUnit: TemperatureUnit = .fahrenheit
     let weatherCondition: WeatherCondition
     let date: Date
     let hour: Int
@@ -110,13 +117,20 @@ struct HeroImageView: View {
 
     private var heroContent: some View {
         GeometryReader { geometry in
-            let heroHeight = heightMode == .fill
-                ? geometry.size.height
-                : geometry.size.height * AppTheme.heroHeightRatio
+            // In containerFraction mode the containerRelativeFrame in
+            // `body` has ALREADY applied heroHeightRatio to this
+            // view's height — geometry.size.height IS the hero
+            // height. Multiplying by the ratio again (as this did)
+            // shrank the hero to 0.75 × 0.75 of the container — a
+            // near-square frame the full-frame photo then had to be
+            // cropped into (field finding 2026-10-31: "the image on
+            // iOS is a square"). Android applies its 0.75 once
+            // (HeroSection: screenHeightDp * 0.75).
+            let heroHeight = geometry.size.height
 
             ZStack {
                 // Background image with crossfade
-                heroImageLayer
+                heroImageLayer(width: geometry.size.width, height: heroHeight)
                     .frame(width: geometry.size.width, height: heroHeight)
 
                 // Temperature tint overlay (12% opacity)
@@ -153,15 +167,13 @@ struct HeroImageView: View {
     // MARK: - Hero Image Layer
 
     @ViewBuilder
-    private var heroImageLayer: some View {
+    private func heroImageLayer(width: CGFloat, height: CGFloat) -> some View {
         ZStack {
             // Always show fallback first (instant load)
             AsyncImage(url: URL(string: fallbackImageUrl)) { phase in
                 switch phase {
                 case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    HeroPhoto(image: image, width: width, height: height)
                 case .failure:
                     Color.black
                 case .empty:
@@ -176,9 +188,7 @@ struct HeroImageView: View {
                 AsyncImage(url: URL(string: aiUrl)) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
+                        HeroPhoto(image: image, width: width, height: height)
                             .opacity(showAIImage ? 1 : 0)
                             .onAppear {
                                 aiImageLoaded = true
@@ -310,19 +320,23 @@ struct HeroImageView: View {
                 .tracking(0.5)
                 .foregroundColor(.white.opacity(0.7))
 
-            // Large temperature (the raw measured feels-like)
-            Text("\(Int(round(temperature)))°")
+            // Large temperature (the raw measured feels-like), unit
+            // attached — the reference surfaces carry the symbol
+            // (Android: "Actual: X°F"; the headline is the same
+            // story), and an unlabeled number next to a labeled
+            // band was the 2026-10-31 incoherence.
+            Text(temperatureUnit.format(temperature))
                 .font(.system(size: heroNumeralSize, weight: .thin))
                 .monospacedDigit()
                 .foregroundColor(.white)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
-            // Actual temperature sub-line ("Actual: X°" on the
+            // Actual temperature sub-line ("Actual: X°F" on the
             // reference surfaces)
             HStack(spacing: 4) {
                 Text("Actual:")
                     .foregroundColor(.white.opacity(0.7))
-                Text("\(Int(round(actualTemperature)))°")
+                Text(temperatureUnit.format(actualTemperature))
                     .monospacedDigit()
                     .foregroundColor(.white)
             }

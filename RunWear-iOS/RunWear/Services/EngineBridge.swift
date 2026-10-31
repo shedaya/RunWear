@@ -70,7 +70,12 @@ enum EngineBridge {
         ClothingItem(
             key: engineItem.key,
             name: engineItem.displayName,
-            description: engineItem.description,
+            // NOT engineItem.description: that name is NSObject's on
+            // this side of the seam and yields the enum case name
+            // ("LONG_SLEEVE_LIGHT") — the raw-identifier subtitles of
+            // the 2026-10-31 field finding. The engine exposes the
+            // human string as descriptionText for this bridge.
+            description: engineItem.descriptionText,
             icon: iconByKey[engineItem.key] ?? "tshirt.fill",
             amazonSearchTerm: engineItem.amazonSearchTerm
         )

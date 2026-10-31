@@ -115,6 +115,18 @@ struct WeatherOutfitView: View {
             // menu, and the weather detail's context until the
             // build SDK offers the subtitle on iOS.
             .navigationBarTitleDisplayMode(.inline)
+            // The chrome band is OPAQUE. With no toolbar background
+            // the iOS 26 bar is translucent glass over a hero that
+            // ignores the top safe area, so scrolled content — the
+            // weather pills row above all — slid underneath the
+            // location title and the glass action capsule, ghosting
+            // through both and clipping pill values behind the
+            // capsule (field finding 2026-10-31, both scroll states
+            // photographed). The title row and the action group now
+            // own their band exclusively; content scrolls beneath a
+            // solid bar, as it does under Android's app bar.
+            .toolbarBackground(AppTheme.darkBackground, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
             .toolbarTitleMenu {
                 Button {
                     showLocationPicker = true
@@ -376,7 +388,7 @@ struct WeatherOutfitView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 16)
 
-            TemperatureBracketBadge(bracket: recommendation.temperatureBracket)
+            TemperatureBracketBadge(bracket: recommendation.temperatureBracket, unit: viewModel.temperatureUnit)
                 .padding(.horizontal, 16)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -424,7 +436,7 @@ struct WeatherOutfitView: View {
         [
             viewModel.locationName,
             navDateString,
-            "\(Int(round(viewModel.currentTemperature)))° · Feels like \(Int(round(viewModel.currentFeelsLike)))°",
+            "\(viewModel.temperatureUnit.format(viewModel.currentTemperature)) · Feels like \(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))",
             recommendation.temperatureBracket.description
         ]
     }
@@ -452,6 +464,7 @@ struct WeatherOutfitView: View {
             // sub-line = comfort-adjusted feels-like.)
             temperature: viewModel.currentFeelsLike,
             actualTemperature: viewModel.currentTemperature,
+            temperatureUnit: viewModel.temperatureUnit,
             weatherCondition: viewModel.currentCondition,
             date: viewModel.selectedDate,
             hour: viewModel.selectedHour,
@@ -544,7 +557,7 @@ struct WeatherOutfitView: View {
             .padding(.horizontal, 16)
 
             // Temperature bracket badge
-            TemperatureBracketBadge(bracket: recommendation.temperatureBracket)
+            TemperatureBracketBadge(bracket: recommendation.temperatureBracket, unit: viewModel.temperatureUnit)
                 .padding(.horizontal, 16)
                 .staggeredAnimation(index: 0, isVisible: hasAppeared)
 
@@ -732,13 +745,17 @@ struct DarkClothingItemCard: View {
 
 struct TemperatureBracketBadge: View {
     let bracket: TemperatureBracket
+    /// The display unit the range renders in — the same unit the
+    /// hero numbers above it carry, so the screen tells one unit
+    /// story (the rawValue it replaces is hard-coded °F).
+    var unit: TemperatureUnit = .fahrenheit
 
     var body: some View {
         HStack(spacing: 8) {
             Text(bracket.description)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
-            Text(bracket.rawValue)
+            Text(bracket.rangeText(for: unit))
                 .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.8))
         }

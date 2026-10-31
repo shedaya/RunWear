@@ -105,4 +105,46 @@ enum TemperatureBracket: String, CaseIterable {
         default: return .extreme
         }
     }
+
+    /// The bracket's Fahrenheit bounds — the single source the
+    /// badge's range label renders from. (The range previously lived
+    /// ONLY in the rawValue string, hard-coded "°F": a Celsius user's
+    /// home screen showed an unlabeled Celsius hero over a
+    /// Fahrenheit band — two unit stories on one screen, field
+    /// finding 2026-10-31.) `upper` for .extreme is the exclusive
+    /// threshold (extreme is BELOW 10°F); all other bounds are the
+    /// displayed inclusive integers, matching the historical strings.
+    var fahrenheitBounds: (lower: Int?, upper: Int?) {
+        switch self {
+        case .hot: return (80, nil)
+        case .warm: return (65, 79)
+        case .mild: return (50, 64)
+        case .cool: return (40, 49)
+        case .cold: return (30, 39)
+        case .veryCold: return (20, 29)
+        case .frigid: return (10, 19)
+        case .extreme: return (nil, 10)
+        }
+    }
+
+    /// The badge's range label in the user's display unit.
+    /// Fahrenheit returns the historical rawValue byte-for-byte;
+    /// Celsius converts the same bounds, so the band and the hero
+    /// numbers always speak one unit.
+    func rangeText(for unit: TemperatureUnit) -> String {
+        guard unit == .celsius else { return rawValue }
+        func celsius(_ fahrenheit: Int) -> Int {
+            Int(round(Double(fahrenheit - 32) * 5 / 9))
+        }
+        switch fahrenheitBounds {
+        case let (lower?, nil):
+            return "\(celsius(lower))°C+"
+        case let (nil, upper?):
+            return "<\(celsius(upper))°C"
+        case let (lower?, upper?):
+            return "\(celsius(lower))-\(celsius(upper))°C"
+        case (nil, nil):
+            return rawValue
+        }
+    }
 }
