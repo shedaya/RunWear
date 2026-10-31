@@ -65,18 +65,13 @@ def find_invitation():
 
 
 def group_builds(gid):
-    s, d = call("GET", f"/v1/betaGroups/{gid}/builds" +
-                q(limit=200, include="preReleaseVersion"))
-    versions = {v["id"]: v["attributes"].get("version")
-                for v in d.get("included", [])
-                if v["type"] == "preReleaseVersions"}
-    out = []
-    for b in d.get("data", []):
-        ver = versions.get(
-            b["relationships"]["preReleaseVersion"]["data"]["id"])
-        out.append((ver, b["attributes"].get("version"),
-                    b["attributes"].get("processingState")))
-    return out
+    # NOTE: this endpoint rejects `include` (400 PARAMETER_ERROR.ILLEGAL);
+    # the build number is attributes.version on the build itself, which
+    # is all the target matching needs.
+    s, d = call("GET", f"/v1/betaGroups/{gid}/builds" + q(limit=200))
+    return [(b["attributes"].get("version"),
+             b["attributes"].get("processingState"))
+            for b in d.get("data", [])]
 
 
 def group_tester_ids(gid):
@@ -128,7 +123,7 @@ def target_groups(app_id, want_build):
         if app_id == "6827973343" and g["id"] != RUNWEAR_INTERNAL_GROUP:
             continue
         builds = group_builds(g["id"])
-        if any(bn == want_build for (_v, bn, _s) in builds):
+        if any(bn == want_build for (bn, _s) in builds):
             out.append(g)
     return out
 
