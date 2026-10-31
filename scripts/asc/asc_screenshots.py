@@ -23,7 +23,7 @@ from asc_common import call
 
 APP_ID = "6827973343"
 VERSION_ID = "505f7bab-da80-49c0-9d29-a8d51987a26a"
-DISPLAY_TYPE = "APP_IPHONE_69"
+DISPLAY_CANDIDATES = ["APP_IPHONE_69", "APP_IPHONE_67", "APP_IPHONE_65"]
 TOLERANT = (200, 201, 204, 400, 403, 404, 409, 422)
 SHOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "screenshots")
 
@@ -76,27 +76,46 @@ def main():
     loc_id = loc["id"]
     print("  localization:", loc_id, loc.get("attributes", {}).get("locale"))
 
-    # 2. The 6.9" screenshot set (find or create).
+    # 2. The flagship iPhone screenshot set (find or create). The
+    # create enum on this API does NOT include APP_IPHONE_69 (409
+    # ENTITY_ERROR.ATTRIBUTE.TYPE, run 41203361717), so fall back
+    # through the largest accepted iPhone display types. Print every
+    # existing set first so the choice is visible in the run log.
     s, d = do("SETS", "GET",
               f"/v1/appStoreVersionLocalizations/{loc_id}/appScreenshotSets"
               + q(limit=50))
-    sset = next((x for x in d.get("data", [])
-                 if x.get("attributes", {}).get("screenshotDisplayType")
-                 == DISPLAY_TYPE), None)
+    all_sets = d.get("data", [])
+    for x in all_sets:
+        print("  existing set:", x.get("id"),
+              x.get("attributes", {}).get("screenshotDisplayType"))
+    sset = None
+    display_type = None
+    for cand in DISPLAY_CANDIDATES:
+        sset = next((x for x in all_sets
+                     if x.get("attributes", {}).get("screenshotDisplayType")
+                     == cand), None)
+        if sset is not None:
+            display_type = cand
+            break
     if sset is None:
-        body = {"data": {"type": "appScreenshotSets",
-                         "attributes": {"screenshotDisplayType": DISPLAY_TYPE},
-                         "relationships": {
-                             "appStoreVersionLocalization": {
-                                 "data": {"type": "appStoreVersionLocalizations",
-                                          "id": loc_id}}}}}
-        s, d = do("CREATE SET", "POST", "/v1/appScreenshotSets", body)
-        sset = d.get("data") or {}
-    set_id = sset.get("id")
+        for cand in DISPLAY_CANDIDATES:
+            body = {"data": {"type": "appScreenshotSets",
+                             "attributes": {"screenshotDisplayType": cand},
+                             "relationships": {
+                                 "appStoreVersionLocalization": {
+                                     "data": {"type": "appStoreVersionLocalizations",
+                                              "id": loc_id}}}}}
+            s, d = do(f"CREATE SET {cand}", "POST", "/v1/appScreenshotSets", body)
+            if d.get("data", {}).get("id"):
+                sset = d["data"]
+                display_type = cand
+                break
+            print(f"  create {cand} refused; trying next candidate")
+    set_id = (sset or {}).get("id")
     if not set_id:
         print("ABORT: screenshot set id unavailable")
         sys.exit(1)
-    print("  set:", set_id, DISPLAY_TYPE)
+    print("  set:", set_id, display_type)
 
     # 3. Existing screenshots (for idempotency + final readback).
     def list_shots():
