@@ -137,7 +137,7 @@
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
 		F10002000000000000000121 /* PersonalHeroModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000101 /* PersonalHeroModels.swift */; };
 		F10002000000000000000122 /* PersonalHeroTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000024 /* PersonalHeroTests.swift */; };
-		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; fileRef = F10003000000000000000102 /* RevenueCat */; };
+		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F10003000000000000000102 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
