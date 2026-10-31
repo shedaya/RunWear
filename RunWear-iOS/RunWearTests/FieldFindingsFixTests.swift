@@ -282,9 +282,15 @@ final class FieldFindingsFixTests: XCTestCase {
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )!
-        // Normalize to top-down rows (UIKit orientation).
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
+        // NO orientation flip: drawing a CGImage into a bitmap
+        // context already lands its top row at buffer row 0. This
+        // sampler originally flipped the context "to UIKit
+        // orientation" and thereby double-flipped — two gate runs
+        // (41189635132, 41190830909) rendered the head band
+        // correctly while this helper read the image upside down
+        // (top sampled blue, bottom sampled red, identically for
+        // two different crop implementations; the xcresult failure
+        // text is the evidence).
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         let index = (y * width + x) * 4
         return (Int(data[index]), Int(data[index + 1]), Int(data[index + 2]))
