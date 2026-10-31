@@ -167,10 +167,6 @@ struct MakeItMeSettingsSection: View {
 struct MakeItMePhotosView: View {
     let onReplace: () -> Void
     @StateObject private var loader = ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)
-    /// Bumped to force every AsyncImage to retry after a tile's
-    /// load failure (RW-16: a failed photo must look failed and be
-    /// retryable, not sit as a silent blank box).
-    @State private var imageReloadToken = 0
 
     var body: some View {
         ZStack {
@@ -184,34 +180,11 @@ struct MakeItMePhotosView: View {
                     switch loader.state {
                     case .loaded(let imageURLs):
                         HStack(spacing: 12) {
-                            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
-                                AsyncImage(url: url) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    case .failure:
-                                        Button {
-                                            imageReloadToken += 1
-                                        } label: {
-                                            ZStack {
-                                                Color.white.opacity(0.08)
-                                                VStack(spacing: 4) {
-                                                    Image(systemName: "exclamationmark.triangle")
-                                                        .foregroundColor(.white.opacity(0.7))
-                                                    Text("Tap to retry")
-                                                        .font(.system(size: 10))
-                                                        .foregroundColor(.white.opacity(0.7))
-                                                }
-                                            }
-                                        }
-                                    default:
-                                        Color.white.opacity(0.08)
-                                    }
-                                }
-                                .id(imageReloadToken)
-                                .frame(width: 96, height: 96)
-                                .clipped()
-                                .cornerRadius(12)
+                            ForEach(imageURLs, id: \.absoluteString) { url in
+                                ReferencePhotoTileView(url: url)
+                                    .frame(width: 96, height: 96)
+                                    .clipped()
+                                    .cornerRadius(12)
                             }
                         }
                     case .empty:
@@ -255,6 +228,50 @@ struct MakeItMePhotosView: View {
         .task {
             await loader.load()
         }
+    }
+}
+
+/// One photo tile, driven by its own ReferenceTileLoader
+/// (RW-16.9). REPRODUCTION STATE: the in-flight phase renders
+/// the same silent faint box the bare AsyncImage rendered in
+/// build (12) — the extraction preserves the shipped
+/// presentation exactly while making the mechanism testable;
+/// the fix commit gives the loading phase its label + progress
+/// and the loader its bound.
+private struct ReferencePhotoTileView: View {
+    @StateObject private var tileLoader: ReferenceTileLoader
+
+    init(url: URL) {
+        _tileLoader = StateObject(wrappedValue: ReferenceTileLoader(url: url))
+    }
+
+    var body: some View {
+        Group {
+            switch tileLoader.phase {
+            case .loaded(let image):
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            case .failed:
+                Button {
+                    tileLoader.retry()
+                } label: {
+                    ZStack {
+                        Color.white.opacity(0.08)
+                        VStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundColor(.white.opacity(0.7))
+                            Text("Tap to retry")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    }
+                }
+            case .idle, .loading:
+                Color.white.opacity(0.08)
+            }
+        }
+        .onAppear { tileLoader.loadIfNeeded() }
     }
 }
 
