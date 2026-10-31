@@ -221,7 +221,12 @@ serve(async (req) => {
 
     // ---------------- register_references ----------------
     if (action === 'register_references') {
-      const paths = body.paths
+      // Canonical field is `paths`. `storage_paths` is accepted as a
+      // legacy alias because the shipped iOS build (9) sends it — the
+      // name came from an error in the backend build report and caused
+      // RW-15 (every registration 400'd). If both are present, the
+      // canonical `paths` wins.
+      const paths = body.paths ?? body.storage_paths
       if (!Array.isArray(paths) || paths.length < 1 || paths.length > 3 ||
           !paths.every(p => typeof p === 'string')) {
         return jsonResponse({ error: 'paths must be an array of 1 to 3 storage paths' }, 400)
