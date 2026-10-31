@@ -15,3 +15,18 @@ port = 54323
 [functions]
 [functions.generate-hero-image]
 enabled = true
+
+[functions.request-personal-generation]
+enabled = true
+
+[functions.personal-hero-worker]
+enabled = true
+
+[functions.get-personal-hero]
+enabled = true
+
+[functions.delete-my-photos]
+enabled = true
+
+[functions.start-personal-fill]
+enabled = true
