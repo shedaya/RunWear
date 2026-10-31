@@ -140,24 +140,32 @@ def process_family(loc_id, existing_sets, fam, files):
     existing = {}
     for sh in list_shots():
         a = sh.get("attributes", {})
+        asset = a.get("imageAsset") or {}
         existing[a.get("fileName")] = (
             sh.get("id"),
-            (a.get("assetDeliveryState") or {}).get("state"))
+            (a.get("assetDeliveryState") or {}).get("state"),
+            asset.get("width") or 0)
 
     for path in files:
         fname = os.path.basename(path)
         if fname in existing:
-            shot_id, state = existing[fname]
-            if state == "FAILED":
-                # A FAILED delivery state is terminal: Apple rejected the
-                # processed asset (e.g. pixel size the set type does not
-                # accept). Delete it so the replacement upload below is
-                # not blocked by the filename. COMPLETE/processing shots
-                # are never touched.
-                s, d = do(f"DELETE FAILED {fname}", "DELETE",
+            shot_id, state, asset_w = existing[fname]
+            # Replace shots that can never complete on their own:
+            # FAILED (terminal rejection, e.g. a pixel size the set type
+            # does not accept) and UPLOAD_COMPLETE with no image asset
+            # at all - at the START of a run such a shot was uploaded by
+            # a previous run and its processing is wedged (observed:
+            # 02-tomorrow-forecast sat at 0x0 UPLOAD_COMPLETE across
+            # three readbacks over ~10 minutes while its siblings all
+            # completed). The replacement file is the local master, so
+            # nothing is lost. COMPLETE shots are never touched.
+            stuck = state == "FAILED" or (
+                state == "UPLOAD_COMPLETE" and asset_w == 0)
+            if stuck:
+                s, d = do(f"DELETE STUCK {fname} (state={state})", "DELETE",
                           f"/v1/appScreenshots/{shot_id}")
                 if s >= 400:
-                    print(f"ABORT: could not delete FAILED shot {fname}")
+                    print(f"ABORT: could not delete stuck shot {fname}")
                     sys.exit(1)
             else:
                 print(f"  skip {fname}: already in set (state={state})")
