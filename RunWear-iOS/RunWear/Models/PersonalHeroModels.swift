@@ -90,6 +90,25 @@ struct PersonalCombination: Equatable, Hashable {
     }
 }
 
+// MARK: - Serving contract (view-model facing)
+
+/// The personal-hero surface the view model consults. A protocol,
+/// declared here in the Foundation-only layer, so WeatherViewModel
+/// — which the test target compiles WITHOUT the store's
+/// RevenueCat/SwiftUI stack — depends on the contract, never the
+/// concrete store. `PersonalHeroStore` is the production
+/// conformance.
+protocol PersonalHeroResolving: AnyObject {
+    var isOptedIn: Bool { get }
+    /// The verified personalized hero URL for this cell, if one
+    /// exists (or lands within the call's own short wait) — nil
+    /// means "keep the pool photo".
+    func resolveHero(for combination: PersonalCombination) async -> String?
+    /// Polls for this cell's hero to land; nil on timeout — the
+    /// caller simply keeps the pool photo (no error state).
+    func awaitHero(for combination: PersonalCombination) async -> String?
+}
+
 // MARK: - Backend DTOs
 
 /// get-personal-hero response (backend §2.1).

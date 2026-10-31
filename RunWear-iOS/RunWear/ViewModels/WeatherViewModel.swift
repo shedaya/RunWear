@@ -137,10 +137,12 @@ class WeatherViewModel: ObservableObject {
     // MARK: - RW-14 personal hero layer
 
     /// The "Make it me" store, wired by the hosting view (ContentView
-    /// owns both objects). Weak: the store lives in the view layer and
-    /// outlives this view model by construction; nil simply means the
-    /// personal layer is off (stock behavior).
-    weak var personalStore: PersonalHeroStore?
+    /// owns both objects), typed as the PersonalHeroResolving
+    /// contract so this file compiles in the test target without the
+    /// store's dependency stack. Weak: the store lives in the view
+    /// layer and outlives this view model by construction; nil
+    /// simply means the personal layer is off (stock behavior).
+    weak var personalStore: (any PersonalHeroResolving)?
 
     /// The personal cell the current screen is keyed on, when the
     /// user has opted in — Settings reads it for the photo-replace

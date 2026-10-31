@@ -14,7 +14,7 @@ import Combine
 // serves, no error state exists, and (server-side) the free
 // allowance is not charged.
 @MainActor
-final class PersonalHeroStore: ObservableObject {
+final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     enum Mode: Equatable {
         case stock       // never opted in, or deleted
         case free        // opted in, allowance rules
