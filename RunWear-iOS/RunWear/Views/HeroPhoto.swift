@@ -16,10 +16,24 @@ struct HeroPhoto: View {
     let height: CGFloat
 
     var body: some View {
-        image
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: width, height: height, alignment: .top)
+        // The anchor has to act on the OVERSIZED scaled image, not
+        // on a same-size frame: a resizable fill image given an
+        // exact frame accepts that size and center-crops INTERNALLY
+        // (a .frame alignment never sees any overflow to move).
+        // Here the fixed container proposes its size through an
+        // overlay; scaledToFill answers with the covering size
+        // (taller than the frame for a portrait), and the overlay's
+        // .top alignment pins that overflow to the bottom edge,
+        // where the clip takes it. (The first cut of this view used
+        // frame alignment and center-cropped exactly like the code
+        // it replaced — the render fixture caught it.)
+        Color.clear
+            .frame(width: width, height: height)
+            .overlay(alignment: .top) {
+                image
+                    .resizable()
+                    .scaledToFill()
+            }
             .clipped()
     }
 
