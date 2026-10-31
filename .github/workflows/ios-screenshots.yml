@@ -141,18 +141,42 @@ jobs:
               --output-path shots || true
           fi
           python3 - <<'EOF'
-          import os, re
+          import json, os, re, shutil
+          # xcresulttool exports attachments under UUID file names; the
+          # manifest maps each export to the attachment's human-readable
+          # name, which carries the harness's frame name (e.g.
+          # "01-main-recommendation_0_<uuid>.png" or a stage name).
           known = ["01-main-recommendation", "02-tomorrow-forecast",
                    "03-outfit-items", "04-shop-gear", "05-settings"]
-          for fn in sorted(os.listdir("shots")):
-              if not fn.lower().endswith(".png"):
-                  continue
-              for k in known:
-                  if fn.startswith(k) and fn != k + ".png":
-                      os.rename(os.path.join("shots", fn),
-                                os.path.join("shots", k + ".png"))
-                      print("renamed", fn, "->", k + ".png")
-                      break
+          manifest = os.path.join("shots", "manifest.json")
+          if os.path.exists(manifest):
+              entries = []
+              for group in json.load(open(manifest)):
+                  entries.extend(group.get("attachments", []))
+              for a in entries:
+                  src_name = a.get("exportedFileName") or ""
+                  human = a.get("suggestedHumanReadableName") or ""
+                  src = os.path.join("shots", src_name)
+                  if not src_name or not os.path.exists(src):
+                      continue
+                  with open(src, "rb") as fh:
+                      if fh.read(8) != b"\x89PNG\r\n\x1a\n":
+                          continue  # screenshots only; text dumps stay as-is
+                  base = None
+                  for k in known:
+                      if human.startswith(k):
+                          base = k
+                          break
+                  if base is None and human.startswith("stage-"):
+                      base = re.split(r"[^A-Za-z0-9-]+", human)[0]
+                      # stage names contain dashes only up to the name;
+                      # keep the full first token sequence before "_0_"
+                      base = human.split("_0_")[0].split(" ")[0]
+                  if base:
+                      dst = os.path.join("shots", base + ".png")
+                      if os.path.abspath(src) != os.path.abspath(dst):
+                          shutil.copyfile(src, dst)
+                          print("mapped", src_name, "->", base + ".png")
           EOF
           ls -la shots || true
           for f in shots/*.png; do

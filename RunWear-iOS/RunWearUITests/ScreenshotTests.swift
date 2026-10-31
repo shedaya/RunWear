@@ -1,179 +1,201 @@
 import XCTest
 
-// App Store screenshot capture — drives the REAL app on the
-// simulator through the network-free-of-GPS manual-city path
-// (onboarding "Set a City Instead" -> CLGeocoder -> live Open-Meteo
-// weather -> live hero pool), and keeps a PNG attachment at each
-// listing frame. The drive mirrors what a first-run user does; no
-// debug hooks, no seeded fake data — the weather, hero photo, and
-// outfit on screen are the app's real output for the chosen city.
-//
-// Attachments are exported from the .xcresult by the
-// ios-screenshots workflow. Nothing here uploads anywhere; the
-// parent reviews the frames before they go to App Store Connect.
+/// App Store screenshot capture for RunWear iOS (build 1.0 (8)).
+///
+/// Drives the real app the way a first-run user goes: onboarding with
+/// the manual-city path (no location-permission prompt), pick
+/// "New York" from the geocoder results, let live Open-Meteo weather
+/// load, then walk the main recommendation, the tomorrow forecast,
+/// the outfit detail, the shop sheet, and settings.
+///
+/// Frame 1 is a hard gate: if the recommendation never renders, the
+/// test fails so no bad set can ship. Later frames are best-effort
+/// (JetGuide harness pattern) but every checkpoint leaves a stage
+/// screenshot AND a hierarchy text attachment either way — prints do
+/// not reach the CI log on this toolchain, attachments do.
 final class ScreenshotTests: XCTestCase {
-
-    private var app: XCUIApplication!
 
     override func setUpWithError() throws {
         continueAfterFailure = true
-        app = XCUIApplication()
-        app.launch()
     }
 
-    override func tearDownWithError() throws {
-        app = nil
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────
-
-    private func dump(_ stage: String) {
-        print("UITEST-DUMP \(stage)")
-        for line in app.debugDescription.split(separator: "\n") {
-            print("UITEST | \(line)")
-        }
-    }
-
-    @discardableResult
-    private func waitFor(_ element: XCUIElement, _ what: String, timeout: TimeInterval = 20) -> Bool {
-        if !element.waitForExistence(timeout: timeout) {
-            dump("missing: \(what)")
-            print("UITEST-MISSING \(what)")
-            return false
-        }
-        return true
-    }
-
-    private func tapIfExists(_ element: XCUIElement, timeout: TimeInterval = 4) -> Bool {
-        guard element.waitForExistence(timeout: timeout), element.isHittable else {
-            return false
-        }
-        element.tap()
-        return true
-    }
-
-    private func scrollTo(_ element: XCUIElement, _ what: String, maxSwipes: Int = 6) -> Bool {
-        for _ in 0..<maxSwipes {
-            if element.exists && element.isHittable { return true }
-            app.swipeUp()
-            Thread.sleep(forTimeInterval: 0.6)
-        }
-        if element.exists && element.isHittable { return true }
-        dump("cannot scroll to: \(what)")
-        return false
-    }
-
-    private func shot(_ name: String) {
-        // Let the screen settle (hero image, sheet dismissal,
-        // staggered card animations).
-        Thread.sleep(forTimeInterval: 1.2)
-        let shot = XCUIScreen.main.screenshot()
-        let attachment = XCTAttachment(screenshot: shot)
+    private func shot(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
         print("UITEST-SHOT \(name)")
     }
 
-    // ── The capture run ──────────────────────────────────────────
+    /// Stage evidence that survives export: a PNG named `stage-*` plus
+    /// the full accessibility hierarchy as a text attachment.
+    private func stage(_ app: XCUIApplication, _ name: String) {
+        shot(app, name)
+        let text = XCTAttachment(string: app.debugDescription)
+        text.name = name + "-hierarchy"
+        text.lifetime = .keepAlways
+        add(text)
+    }
+
+    @discardableResult
+    private func waitFor(_ element: XCUIElement, _ timeout: TimeInterval, _ label: String) -> Bool {
+        let ok = element.waitForExistence(timeout: timeout)
+        print("UITEST-WAIT \(label): \(ok ? "found" : "MISSING")")
+        return ok
+    }
+
+    /// Type the city, wait for the geocoder results, and tap the first
+    /// "New York" result. CLGeocoder cancels the in-flight request on
+    /// every keystroke, so a typed burst can come back empty on a slow
+    /// network — in that case do what a user would: clear the field
+    /// and type it again. Returns true once a result was tapped.
+    private func pickNewYork(_ app: XCUIApplication, attempt: Int) -> Bool {
+        let field = app.textFields["Enter city or ZIP code"]
+        guard waitFor(field, 30, "city field (attempt \(attempt))") else { return false }
+        field.tap()
+        if let value = field.value as? String, !value.isEmpty, value != "Enter city or ZIP code" {
+            // Clear any partial text from a previous attempt.
+            field.doubleTap()
+            app.keys["Select All"].tap()
+            app.menuItems["Cut"].tap()
+        }
+        field.typeText("New York")
+        let result = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "New York")
+        ).firstMatch
+        if waitFor(result, 60, "geocode result (attempt \(attempt))") {
+            result.tap()
+            return true
+        }
+        stage(app, "stage-picker-no-results-\(attempt)")
+        return false
+    }
 
     func testCaptureListingSet() throws {
-        // Onboarding: single scroll screen. Choose the manual-city
-        // path so no location-permission alert is involved.
-        waitFor(app.staticTexts["Welcome to RunWear"], "onboarding welcome")
+        let app = XCUIApplication()
+        app.launch()
+
+        // --- Onboarding: single scroll screen. The manual-city button
+        // sits in the Location section near the bottom.
         let setCity = app.buttons["Set a City Instead"]
-        XCTAssertTrue(scrollTo(setCity, "Set a City Instead"),
-                      "onboarding location choice not reachable")
+        var hops = 0
+        while !setCity.exists || !setCity.isHittable {
+            app.swipeUp()
+            hops += 1
+            if hops > 8 { break }
+        }
+        stage(app, "stage-01-onboarding")
+        XCTAssertTrue(setCity.waitForExistence(timeout: 10), "Set a City Instead never appeared")
         setCity.tap()
 
         let getStarted = app.buttons["Get Started"]
-        waitFor(getStarted, "Get Started")
+        XCTAssertTrue(getStarted.waitForExistence(timeout: 10), "Get Started never appeared")
         getStarted.tap()
 
-        // ContentView opens the city picker directly (the onboarding
-        // choice is honored on first launch).
-        let field = app.textFields["Enter city or ZIP code"]
-        waitFor(field, "city search field", timeout: 30)
-        field.tap()
-        field.typeText("New York")
+        // --- Location picker auto-opens. Pick New York (one retry).
+        var picked = pickNewYork(app, attempt: 1)
+        if !picked { picked = pickNewYork(app, attempt: 2) }
+        XCTAssertTrue(picked, "Could not pick a geocoded city")
+        stage(app, "stage-02-after-pick")
 
-        // CLGeocoder results are buttons labelled with the place
-        // name + region. Tap the first New York result.
-        let result = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS %@", "New York")).firstMatch
-        waitFor(result, "geocode result for New York", timeout: 45)
-        result.tap()
-
-        // Live weather + recommendation. Generous timeout: the
-        // fetch chain is Open-Meteo + hero pool over the network.
-        let outfitHeader = app.staticTexts["Recommended Outfit"]
-        let loaded = waitFor(outfitHeader, "recommended outfit", timeout: 90)
-        XCTAssertTrue(loaded, "recommendation never loaded")
-        // Hero photo + thumbnails settle.
-        Thread.sleep(forTimeInterval: 5)
-
-        // 01 — Main recommendation: hero + outfit for a run, now.
-        shot("01-main-recommendation")
-
-        // 02 — A different day: the hero date pill ("Today") opens
-        // the 7-day picker; choosing Tomorrow re-plans the outfit
-        // against tomorrow's forecast.
-        let datePill = app.buttons["Today"]
-        if tapIfExists(datePill, timeout: 6) {
-            if waitFor(app.staticTexts["Select Date"], "date picker sheet", timeout: 10) {
-                let tomorrow = app.buttons.matching(
-                    NSPredicate(format: "label CONTAINS %@", "Tomorrow")).firstMatch
-                if tapIfExists(tomorrow, timeout: 10) {
-                    // The pill relabels to "Tomorrow" once the new
-                    // day's plan is on screen.
-                    _ = app.buttons["Tomorrow"].waitForExistence(timeout: 30)
-                    Thread.sleep(forTimeInterval: 4)
-                    shot("02-tomorrow-forecast")
-                } else {
-                    dump("no Tomorrow cell")
+        // --- The recommendation itself. ContentView shows it once
+        // weather + recommendation exist; in the notDetermined state
+        // with nothing loaded it shows the permission view instead, so
+        // wait in slices and capture the mid-state for diagnosis.
+        let outfit = app.staticTexts["Recommended Outfit"]
+        var loaded = outfit.waitForExistence(timeout: 60)
+        if !loaded {
+            stage(app, "stage-03-mid-load")
+            loaded = outfit.waitForExistence(timeout: 60)
+        }
+        if !loaded {
+            // One recovery pass exactly as a user would do it: the
+            // permission view offers "Set Location Manually".
+            let manual = app.buttons["Set Location Manually"]
+            if manual.exists {
+                manual.tap()
+                if pickNewYork(app, attempt: 3) {
+                    loaded = outfit.waitForExistence(timeout: 90)
                 }
             }
-        } else {
-            dump("no date pill")
         }
-
-        // 03 — The outfit itself: scroll the recommendation list so
-        // the item cards (and tips, when present) fill the frame.
-        app.swipeUp()
-        Thread.sleep(forTimeInterval: 0.8)
-        app.swipeUp()
+        stage(app, "stage-04-main-state")
+        XCTAssertTrue(loaded, "Recommended Outfit never loaded")
+        // Let the hero image finish so frame 1 is not a loading state.
+        _ = app.staticTexts["Feels Like"].waitForExistence(timeout: 20)
         Thread.sleep(forTimeInterval: 2)
-        shot("03-outfit-items")
-        app.swipeDown()
-        Thread.sleep(forTimeInterval: 0.8)
-        app.swipeDown()
-        // A pull-to-refresh may have fired; let it settle.
-        Thread.sleep(forTimeInterval: 3)
+        shot(app, "01-main-recommendation")
 
-        // 04 — Shop sheet: the outfit as a shopping list.
-        let shopButton = app.buttons["Shop"]
-        if tapIfExists(shopButton, timeout: 6) {
-            if waitFor(app.staticTexts["Shop Gear"], "shop sheet", timeout: 15) {
+        // --- Frame 2: tomorrow's forecast. The hero date pill reads
+        // "Today" and opens the 7-day picker.
+        let pill = app.buttons["Today"]
+        if waitFor(pill, 10, "date pill") {
+            pill.tap()
+            let tomorrow = app.buttons.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", "Tomorrow")
+            ).firstMatch
+            if waitFor(tomorrow, 10, "tomorrow cell") {
+                tomorrow.tap()
+                _ = app.buttons.matching(
+                    NSPredicate(format: "label CONTAINS[c] %@", "Tomorrow")
+                ).firstMatch.waitForExistence(timeout: 25)
                 Thread.sleep(forTimeInterval: 2)
-                shot("04-shop-gear")
-                _ = tapIfExists(app.buttons["Close"], timeout: 4)
-                Thread.sleep(forTimeInterval: 1)
+                shot(app, "02-tomorrow-forecast")
+            } else {
+                stage(app, "stage-05-date-picker")
             }
-        } else {
-            dump("no Shop toolbar button")
         }
 
-        // 05 — Settings: the preference surface (units, fit,
-        // comfort) that personalizes the recommendation.
-        let settingsButton = app.buttons["Settings"]
-        if tapIfExists(settingsButton, timeout: 6) {
-            if app.staticTexts["Temperature Unit"].waitForExistence(timeout: 10) {
-                Thread.sleep(forTimeInterval: 1.5)
-                shot("05-settings")
-                _ = tapIfExists(app.buttons["Done"], timeout: 4)
+        // --- Back to Today for the detail frame (the picker selection
+        // sticks; reopen and choose the Today cell if present).
+        let tomorrowPill = app.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", "Tomorrow")
+        ).firstMatch
+        if tomorrowPill.exists {
+            tomorrowPill.tap()
+            let todayCell = app.buttons.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", "Today")
+            ).firstMatch
+            if waitFor(todayCell, 10, "today cell") {
+                todayCell.tap()
+                _ = app.buttons["Today"].waitForExistence(timeout: 20)
             }
+        }
+
+        // --- Frame 3: outfit items. Scroll the recommendation list
+        // until the top item rows are on screen.
+        app.swipeUp()
+        Thread.sleep(forTimeInterval: 1)
+        app.swipeUp()
+        Thread.sleep(forTimeInterval: 1)
+        shot(app, "03-outfit-items")
+
+        // --- Frame 4: shop sheet.
+        app.swipeDown()
+        app.swipeDown()
+        let shop = app.buttons["Shop"]
+        if waitFor(shop, 10, "shop button") {
+            shop.tap()
+            _ = app.staticTexts["Shop Gear"].waitForExistence(timeout: 20)
+            Thread.sleep(forTimeInterval: 2)
+            shot(app, "04-shop-gear")
+            let close = app.buttons["Close"]
+            if close.exists { close.tap() }
         } else {
-            dump("no Settings toolbar button")
+            stage(app, "stage-06-no-shop")
+        }
+
+        // --- Frame 5: settings.
+        let settings = app.buttons["Settings"]
+        if waitFor(settings, 10, "settings button") {
+            settings.tap()
+            _ = app.staticTexts["Temperature Unit"].waitForExistence(timeout: 15)
+            Thread.sleep(forTimeInterval: 1)
+            shot(app, "05-settings")
+            let done = app.buttons["Done"]
+            if done.exists { done.tap() }
+        } else {
+            stage(app, "stage-07-no-settings")
         }
     }
 }
