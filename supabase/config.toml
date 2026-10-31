@@ -30,3 +30,9 @@ enabled = true
 
 [functions.start-personal-fill]
 enabled = true
+
+[functions.revenuecat-webhook]
+enabled = true
+# RevenueCat sends no Supabase JWT; the function authenticates the
+# caller via RevenueCat's webhook authorization header instead.
+verify_jwt = false
