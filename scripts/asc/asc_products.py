@@ -36,9 +36,8 @@ GROUP_REFERENCE_NAME = "Make It Me"
 GROUP_DISPLAY_NAME = "Make It Me"
 SUB_LOCALE = "en-US"
 SUB_DISPLAY_NAME = "Make It Me"
-SUB_DESCRIPTION = ("See yourself in the outfit. Make It Me turns your RunWear "
-                   "hero into you: personal outfit images for your weather, "
-                   "ready instantly in every condition.")
+# ASC caps the subscription localization description at 55 characters.
+SUB_DESCRIPTION = "See yourself in the outfit. Your heroes, instantly."
 BASE_TERRITORY = "USA"
 
 PRODUCTS = [
