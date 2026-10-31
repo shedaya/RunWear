@@ -5,7 +5,7 @@
 //   * all reference photos (DB rows + storage objects)
 //   * all generated personalized heroes (DB rows + storage objects)
 //   * all cell version markers, queued/processing personal jobs,
-//     consent records, and entitlement events
+//     consent records, entitlement events, and personal hero flags
 //   * the profile row itself (personalization fully off)
 // Idempotent: calling it with nothing to delete returns ok with zero
 // counts. Storage objects are removed first (collected from DB rows),
@@ -84,7 +84,8 @@ serve(async (req) => {
     const tables = [
       'personal_generation_jobs', 'personal_heroes', 'personal_cells',
       'personal_reference_photos', 'personal_consents',
-      'personal_entitlement_events', 'personal_profiles'
+      'personal_entitlement_events', 'personal_hero_flags',
+      'personal_profiles'
     ]
     for (const table of tables) {
       const { count, error } = await sb

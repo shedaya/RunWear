@@ -511,8 +511,26 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
           .single()
         if (heroError) throw new Error(`Hero insert failed: ${heroError.message}`)
 
-        // Free-tier accounting: count only verified heroes delivered.
-        if (job.kind === 'free_on_demand') {
+        // Delivery bookkeeping + free-tier accounting. The hero INSERT
+        // above fired the version trigger, so the personal_cells row
+        // for this cell exists. Mark the cell delivered, and charge
+        // the free counter ONLY for a free_on_demand delivery to a
+        // cell that has never been counted: the plan's allowance
+        // counts genuinely new cells ("today's cell plus the next
+        // four genuinely new cells encountered"), and spec J4 rules
+        // replacement regenerations consume no allowance — so
+        // kind='regeneration' deliveries (photo replacement (b),
+        // flagged hero (c)) never charge, and neither do subscriber
+        // fill or replenishment deliveries (as before).
+        const { data: cellRow } = await supabase
+          .from('personal_cells')
+          .select('free_counted')
+          .eq('user_id', job.user_id)
+          .eq('combination_id', job.combination_id)
+          .maybeSingle()
+        const alreadyCounted = cellRow?.free_counted === true
+        const chargeFree = job.kind === 'free_on_demand' && !alreadyCounted
+        if (chargeFree) {
           const { data: profile } = await supabase
             .from('personal_profiles')
             .select('free_generations_used')
@@ -526,6 +544,15 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
             })
             .eq('user_id', job.user_id)
         }
+        await supabase
+          .from('personal_cells')
+          .update({
+            ever_delivered: true,
+            free_counted: alreadyCounted || chargeFree,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', job.user_id)
+          .eq('combination_id', job.combination_id)
 
         await markJob(job.id, {
           status: 'COMPLETED', gate_result: gateRaw,
