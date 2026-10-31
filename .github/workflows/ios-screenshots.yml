@@ -438,9 +438,12 @@ jobs:
           cat /tmp/sim.env >> "$GITHUB_ENV"
           # $GITHUB_ENV only applies to LATER steps; this step uses the
           # UDIDs itself, so export them into the current shell too.
-          set -a
-          . /tmp/sim.env
-          set +a
+          # Parse line by line instead of sourcing: WATCH_DEVICE_TYPE
+          # contains spaces and parentheses, which are not valid in an
+          # unquoted sourced assignment.
+          while IFS='=' read -r k v; do
+            [ -n "$k" ] && export "$k=$v"
+          done < /tmp/sim.env
           xcrun simctl boot "$PHONE_UDID" || true
           xcrun simctl bootstatus "$PHONE_UDID" -b
           echo "=== pairing ==="
