@@ -22,6 +22,7 @@ on:
           - fill
           - submit
           - screenshots
+          - medical
         default: verify
         required: true
       version:
@@ -74,3 +75,7 @@ jobs:
         if: inputs.task == 'screenshots'
         working-directory: scripts/asc
         run: python3 asc_screenshots.py
+      - name: Set the Regulated Medical Device declaration to NO
+        if: inputs.task == 'medical'
+        working-directory: scripts/asc
+        run: python3 asc_medical.py

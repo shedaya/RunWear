@@ -1,16 +1,20 @@
 """Attach build 1.0 (8) to RunWear's 1.0 version and submit for review.
 
-STAGED — do not dispatch until the screenshot sets exist and App
-Privacy is confirmed complete in the portal. This script refuses to
-submit if the en-US localization still has zero screenshot sets.
+Strict by design: EVERY call in this path must return 2xx. Any
+non-2xx prints the error body and exits non-zero immediately, so a
+failed submit can never masquerade as a green run (the 2026-10-31
+first attempt returned 409s on the item-add and submit calls yet
+exited 0 — this rewrite closes that hole).
 
 Steps, each read back:
-  1. Preconditions: target build VALID; version state is
-     PREPARE_FOR_SUBMISSION; >= 1 screenshot set with >= 1 screenshot.
+  1. Preconditions: target build VALID; >= 1 screenshot across sets.
   2. Attach build fa972eeb (1.0 (8)) via PATCH on the version.
-  3. Create a reviewSubmission (platform IOS), add the version as a
-     reviewSubmissionItem, PATCH submitted=true.
-  4. Read back: version state + attached build, reviewSubmission state.
+  3. Reuse the open reviewSubmission (or create one), ensure the
+     version is present as a reviewSubmissionItem (listed first —
+     an already-present item is skipped, not re-POSTed), then
+     PATCH submitted=true.
+  4. Read back: reviewSubmission submitted/state and the version's
+     appStoreState; abort unless the submission reads submitted.
 
 Usage: python3 asc_submit.py
 """
@@ -23,6 +27,8 @@ from asc_common import call
 APP_ID = "6827973343"
 VERSION_ID = "505f7bab-da80-49c0-9d29-a8d51987a26a"
 BUILD_ID = "fa972eeb-fa7f-4544-939f-adbabccbff50"
+# Errors are still RETURNED by call() (so the body can be printed in
+# full), but do() below treats any of them as fatal.
 TOLERANT = (200, 201, 204, 400, 403, 404, 409, 422)
 
 
@@ -34,7 +40,10 @@ def do(label, method, path, body=None):
     s, d = call(method, path, body, expect=TOLERANT)
     print(f"--- {label}: {method} -> HTTP {s}")
     if s >= 400:
-        print("    error body:", json.dumps(d)[:2000])
+        print("    error body:", json.dumps(d)[:3000])
+        print(f"ABORT: {label} failed with HTTP {s} — submit path is "
+              "strict-2xx; exiting non-zero so this cannot read as success")
+        sys.exit(1)
     return s, d
 
 
@@ -100,15 +109,27 @@ def main():
         print("ABORT: no reviewSubmission available")
         sys.exit(1)
 
-    body = {"data": {"type": "reviewSubmissionItems",
-                     "relationships": {
-                         "reviewSubmission": {
-                             "data": {"type": "reviewSubmissions",
-                                      "id": sub_id}},
-                         "appStoreVersion": {
-                             "data": {"type": "appStoreVersions",
-                                      "id": VERSION_ID}}}}}
-    do("ADD version item", "POST", "/v1/reviewSubmissionItems", body)
+    # Ensure the version item is present (list first; POST only if absent).
+    s, d = do("LIST submission items", "GET",
+              f"/v1/reviewSubmissions/{sub_id}/items"
+              + q(include="appStoreVersion", limit=50))
+    have_item = False
+    for item in d.get("data", []):
+        rel = ((item.get("relationships") or {}).get("appStoreVersion")
+               or {}).get("data") or {}
+        if rel.get("id") == VERSION_ID:
+            have_item = True
+            print("  version item already present:", item["id"])
+    if not have_item:
+        body = {"data": {"type": "reviewSubmissionItems",
+                         "relationships": {
+                             "reviewSubmission": {
+                                 "data": {"type": "reviewSubmissions",
+                                          "id": sub_id}},
+                             "appStoreVersion": {
+                                 "data": {"type": "appStoreVersions",
+                                          "id": VERSION_ID}}}}}
+        do("ADD version item", "POST", "/v1/reviewSubmissionItems", body)
 
     body = {"data": {"type": "reviewSubmissions", "id": sub_id,
                      "attributes": {"submitted": True}}}
@@ -123,6 +144,9 @@ def main():
     s, d = do("READBACK version", "GET", f"/v1/appStoreVersions/{VERSION_ID}")
     va = (d.get("data") or {}).get("attributes", {})
     print("  version state now:", va.get("appStoreState"))
+    if not ra.get("submitted"):
+        print("ABORT: readback does not show the submission as submitted")
+        sys.exit(1)
     print("SUBMIT_DONE")
 
 
