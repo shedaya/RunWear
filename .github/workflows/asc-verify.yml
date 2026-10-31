@@ -18,6 +18,9 @@ on:
         options:
           - verify
           - attach
+          - audit
+          - fill
+          - submit
         default: verify
         required: true
       version:
@@ -52,3 +55,16 @@ jobs:
         if: inputs.task == 'attach'
         working-directory: scripts/asc
         run: python3 asc_attach_build.py "${{ inputs.version }}" "${{ inputs.build }}"
+
+      - name: Audit the 1.0 submission packet
+        if: inputs.task == 'audit'
+        working-directory: scripts/asc
+        run: python3 asc_audit.py
+      - name: Fill packet gaps
+        if: inputs.task == 'fill'
+        working-directory: scripts/asc
+        run: python3 asc_fill.py
+      - name: Attach build + submit for review
+        if: inputs.task == 'submit'
+        working-directory: scripts/asc
+        run: python3 asc_submit.py
