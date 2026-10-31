@@ -166,8 +166,7 @@ struct MakeItMeSettingsSection: View {
 
 struct MakeItMePhotosView: View {
     let onReplace: () -> Void
-    @State private var imageURLs: [URL] = []
-    @State private var loaded = false
+    @StateObject private var loader = ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)
 
     var body: some View {
         ZStack {
@@ -178,11 +177,8 @@ struct MakeItMePhotosView: View {
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.white)
 
-                    if imageURLs.isEmpty {
-                        Text(loaded ? "No photos on the server." : "Loading…")
-                            .font(.system(size: 15))
-                            .foregroundColor(.white.opacity(0.6))
-                    } else {
+                    switch loader.state {
+                    case .loaded(let imageURLs):
                         HStack(spacing: 12) {
                             ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
                                 AsyncImage(url: url) { phase in
@@ -198,6 +194,14 @@ struct MakeItMePhotosView: View {
                                 .cornerRadius(12)
                             }
                         }
+                    case .empty:
+                        Text("No photos on the server.")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.6))
+                    case .idle, .loading:
+                        Text("Loading…")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.6))
                     }
 
                     Button(action: onReplace) {
@@ -213,17 +217,7 @@ struct MakeItMePhotosView: View {
             }
         }
         .task {
-            let api = PersonalHeroAPI.shared
-            if let paths = try? await api.fetchReferencePaths() {
-                var urls: [URL] = []
-                for path in paths {
-                    if let url = try? await api.signedReferenceURL(path: path) {
-                        urls.append(url)
-                    }
-                }
-                imageURLs = urls
-            }
-            loaded = true
+            await loader.load()
         }
     }
 }

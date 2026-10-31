@@ -137,6 +137,9 @@
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
 		F10002000000000000000121 /* PersonalHeroModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000101 /* PersonalHeroModels.swift */; };
 		F10002000000000000000122 /* PersonalHeroTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000024 /* PersonalHeroTests.swift */; };
+		F10002000000000000000109 /* ReferencePhotosLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000109 /* ReferencePhotosLoader.swift */; };
+		F10002000000000000000131 /* ReferencePhotosLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000109 /* ReferencePhotosLoader.swift */; };
+		C10002000000000000000034 /* ReferencePhotosLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000025 /* ReferencePhotosLoaderTests.swift */; };
 		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F10003000000000000000102 /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -276,12 +279,14 @@
 		F10001000000000000000101 /* PersonalHeroModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroModels.swift; sourceTree = "<group>"; };
 		F10001000000000000000102 /* SupabaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthService.swift; sourceTree = "<group>"; };
 		F10001000000000000000103 /* PersonalHeroAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroAPI.swift; sourceTree = "<group>"; };
+		F10001000000000000000109 /* ReferencePhotosLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferencePhotosLoader.swift; sourceTree = "<group>"; };
 		F10001000000000000000104 /* PhotoQualityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoQualityChecker.swift; sourceTree = "<group>"; };
 		F10001000000000000000105 /* MakeItMeBilling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeBilling.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
 		C10001000000000000000024 /* PersonalHeroTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000025 /* ReferencePhotosLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferencePhotosLoaderTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -388,6 +393,7 @@
 				A10001000000000000000025 /* UserEngagement.swift */,
 				F10001000000000000000102 /* SupabaseAuthService.swift */,
 				F10001000000000000000103 /* PersonalHeroAPI.swift */,
+				F10001000000000000000109 /* ReferencePhotosLoader.swift */,
 				F10001000000000000000104 /* PhotoQualityChecker.swift */,
 				F10001000000000000000105 /* MakeItMeBilling.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
@@ -488,6 +494,7 @@
 				C10001000000000000000010 /* FieldFindingsFixTests.swift */,
 				C10001000000000000000023 /* PremiumPassTests.swift */,
 				C10001000000000000000024 /* PersonalHeroTests.swift */,
+				C10001000000000000000025 /* ReferencePhotosLoaderTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -697,6 +704,7 @@
 				F10002000000000000000101 /* PersonalHeroModels.swift in Sources */,
 				F10002000000000000000102 /* SupabaseAuthService.swift in Sources */,
 				F10002000000000000000103 /* PersonalHeroAPI.swift in Sources */,
+				F10002000000000000000109 /* ReferencePhotosLoader.swift in Sources */,
 				F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */,
 				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
 				F10002000000000000000106 /* PersonalHeroStore.swift in Sources */,
@@ -773,7 +781,9 @@
 				C10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				C10002000000000000000033 /* FieldFindingsFixTests.swift in Sources */,
 				F10002000000000000000121 /* PersonalHeroModels.swift in Sources */,
+				F10002000000000000000131 /* ReferencePhotosLoader.swift in Sources */,
 				F10002000000000000000122 /* PersonalHeroTests.swift in Sources */,
+				C10002000000000000000034 /* ReferencePhotosLoaderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

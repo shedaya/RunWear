@@ -215,3 +215,7 @@ actor PersonalHeroAPI {
         PersonalHeroAPIError.mapped(data: data, status: status)
     }
 }
+
+// RW-16: the "Your photos" loader's seam is exactly this client's
+// path list + per-path signing.
+extension PersonalHeroAPI: ReferencePhotoFetching {}
