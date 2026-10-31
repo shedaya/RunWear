@@ -26,6 +26,20 @@
 // concurrent invocations cannot double-process; a soft time budget
 // stops claiming new jobs before the function wall clock.
 //
+// Stale-claim recovery (RW-15 remedy, 2026-10-31): every in-code
+// failure path marks a claimed job FAILED, so a job still PROCESSING
+// long after its claim means the invocation itself was terminated by
+// the platform mid-processing (observed live: a job claimed, its
+// generation completed, the invocation killed during the gate — the
+// job then wedged forever, because the drain only claimed QUEUED
+// jobs and the request action answered already_queued against it).
+// Each invocation therefore first scans for PROCESSING jobs whose
+// claim is older than STALE_PROCESSING_MS and either requeues them
+// (spending one reclaim from the job's reclaim_count budget) or, at
+// the budget cap, fails them with the named stale_processing_timeout
+// reason. A reclaimed job that carries a replicate_id resumes by
+// gating the already-generated image before paying for a new one.
+//
 // Spend: Kontext Pro is $0.04/image (published). Worst case per job is
 // 2 generations + up to 4 vision calls.
 
@@ -49,6 +63,26 @@ const IDENTITY_MIN_CONFIDENCE = 0.6
 const DEFAULT_DRAIN_LIMIT = 1
 const MAX_DRAIN_LIMIT = 3
 const SOFT_TIME_BUDGET_MS = 100_000
+// Stale-claim threshold: 15 minutes. Justification from this file's
+// own timing bounds — one generation attempt is capped by the
+// Kontext poll timeout (120 s) plus the gate (two vision calls in
+// parallel, each poll-capped at 180 s), so two attempts plus the
+// reference signing/download overhead cannot exceed ~11 minutes of
+// legitimate work, and a typical job finishes in ~1–4 minutes
+// (generation 5–9 s, gate ~40 s). The 100 s soft budget above only
+// governs claiming NEW jobs, never an in-flight one. 15 minutes
+// therefore sits strictly beyond any live invocation's possible
+// duration — a reclaim can never race a worker that is still
+// legitimately processing (no double generation, no double spend) —
+// while the 5-minute drain cadence still recovers a wedged job
+// within ~15–20 minutes of its claim.
+const STALE_PROCESSING_MS = 900_000
+// Reclaim budget per job: a job may be reclaimed at most this many
+// times; the next stale scan after the budget is spent fails it with
+// STALE_FAILURE_REASON. Bounds the worst case at 1 + 3 invocations
+// per job against repeated platform terminations.
+const STALE_MAX_RECLAIMS = 3
+const STALE_FAILURE_REASON = 'stale_processing_timeout'
 
 // The pool's anatomy hardening, reused verbatim (server-side, so every
 // prompt carries it regardless of who queued the job).
@@ -149,7 +183,8 @@ type JobRow = {
   id: string, user_id: string, combination_id: string, gender: string,
   weather: string, temp_bracket: string, time_of_day: string,
   outfit_signature: string, outfit_items: unknown, kind: string,
-  attempts: number
+  attempts: number, replicate_id: string | null, prompt: string | null,
+  reclaim_count: number
 }
 
 async function replicatePredict(modelPath: string, input: Record<string, unknown>): Promise<string> {
@@ -202,6 +237,26 @@ async function generateImage(prompt: string, refUrls: string[]): Promise<{ url: 
   const url = Array.isArray(result.output) ? result.output[0] : result.output
   if (!url) throw new Error('Generation returned no output')
   return { url: url as string, predictionId: id }
+}
+
+// Resume support: fetch a completed prediction's output URL. The
+// prediction record outlives the invocation that created it, but its
+// output file URL expires (Replicate retains prediction file outputs
+// for ~1 hour), so callers must treat a null here — or a failed
+// download of the returned URL — as "restart the generation".
+async function fetchPredictionOutputUrl(predictionId: string): Promise<string | null> {
+  try {
+    const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      headers: { 'Authorization': `Token ${REPLICATE_API_TOKEN}` }
+    })
+    if (!response.ok) return null
+    const prediction = await response.json()
+    if (prediction.status !== 'succeeded') return null
+    const url = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output
+    return typeof url === 'string' ? url : null
+  } catch {
+    return null
+  }
 }
 
 async function callVision(image: string, prompt: string): Promise<string> {
@@ -417,6 +472,93 @@ async function markJob(id: string, patch: Record<string, unknown>) {
   if (error) console.error('[personal-hero-worker] markJob failed:', error)
 }
 
+// Gate one generated image and, iff it passes, store it as a
+// verified hero and run the delivery accounting (free-tier charge on
+// first verified delivery of a genuinely new cell only — see the
+// accounting comment inside). Shared by the fresh generation loop
+// and the stale-claim resume path so both honour the identical gate
+// and the identical accounting. Throws on infrastructure errors
+// (callers mark the job FAILED); returns the gate outcome otherwise.
+async function gateAndDeliver(
+  job: JobRow, attempt: number, imageUrl: string, imageBytes: Uint8Array,
+  refBytes: Uint8Array, variant: number, prompt: string
+): Promise<{ delivered: boolean, heroId?: string, failures: string[], gateRaw: Record<string, unknown> }> {
+  const gate = await runGate(job, imageUrl, imageBytes, refBytes)
+  const gateRaw = { attempt, ...gate.raw }
+  if (!gate.pass) return { delivered: false, failures: gate.failures, gateRaw }
+
+  const storagePath = `${job.user_id}/heroes/${job.combination_id}/v${variant}.png`
+  const { error: uploadError } = await supabase.storage
+    .from('personal-heroes')
+    .upload(storagePath, imageBytes, { contentType: 'image/png', upsert: false })
+  if (uploadError) throw new Error(`Hero upload failed: ${uploadError.message}`)
+
+  const { data: hero, error: heroError } = await supabase
+    .from('personal_heroes')
+    .insert({
+      user_id: job.user_id,
+      combination_id: job.combination_id,
+      gender: job.gender, weather: job.weather,
+      temp_bracket: job.temp_bracket, time_of_day: job.time_of_day,
+      outfit_signature: job.outfit_signature,
+      outfit_items: job.outfit_items,
+      storage_path: storagePath, variant,
+      prompt, gate_result: gateRaw
+    })
+    .select('id')
+    .single()
+  if (heroError) throw new Error(`Hero insert failed: ${heroError.message}`)
+
+  // Delivery bookkeeping + free-tier accounting. The hero INSERT
+  // above fired the version trigger, so the personal_cells row
+  // for this cell exists. Mark the cell delivered, and charge
+  // the free counter ONLY for a free_on_demand delivery to a
+  // cell that has never been counted: the plan's allowance
+  // counts genuinely new cells ("today's cell plus the next
+  // four genuinely new cells encountered"), and spec J4 rules
+  // replacement regenerations consume no allowance — so
+  // kind='regeneration' deliveries (photo replacement (b),
+  // flagged hero (c)) never charge, and neither do subscriber
+  // fill or replenishment deliveries (as before).
+  const { data: cellRow } = await supabase
+    .from('personal_cells')
+    .select('free_counted')
+    .eq('user_id', job.user_id)
+    .eq('combination_id', job.combination_id)
+    .maybeSingle()
+  const alreadyCounted = cellRow?.free_counted === true
+  const chargeFree = job.kind === 'free_on_demand' && !alreadyCounted
+  if (chargeFree) {
+    const { data: profile } = await supabase
+      .from('personal_profiles')
+      .select('free_generations_used')
+      .eq('user_id', job.user_id)
+      .single()
+    await supabase
+      .from('personal_profiles')
+      .update({
+        free_generations_used: (profile?.free_generations_used ?? 0) + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', job.user_id)
+  }
+  await supabase
+    .from('personal_cells')
+    .update({
+      ever_delivered: true,
+      free_counted: alreadyCounted || chargeFree,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', job.user_id)
+    .eq('combination_id', job.combination_id)
+
+  await markJob(job.id, {
+    status: 'COMPLETED', gate_result: gateRaw,
+    result_hero_id: hero.id, completed_at: new Date().toISOString()
+  })
+  return { delivered: true, heroId: hero.id, failures: [], gateRaw }
+}
+
 async function processJob(job: JobRow): Promise<Record<string, unknown>> {
   // Guarded claim.
   const { data: claimed, error: claimError } = await supabase
@@ -474,8 +616,48 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     let failures: string[] = []
     let gateRaw: Record<string, unknown> = {}
     let lastPrompt = ''
+    let startAttempt = 1
 
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    // --- Resume path (stale-claim recovery) ---
+    // A reclaimed job carries the replicate_id of the generation its
+    // terminated invocation had already completed and paid for (the
+    // invocation died during that attempt's gate). Gate THAT image
+    // before paying for a fresh generation. If the prediction's
+    // output can no longer be retrieved (Replicate expires output
+    // files ~1h after creation), fall through to a fresh restart.
+    // The resumed gate counts as the attempt that produced the
+    // image: if it fails and that was attempt 1, the loop below
+    // still gets its attempt 2 with the failure classes fed back.
+    if (job.replicate_id) {
+      const resumeAttempt = Math.min(Math.max(job.attempts || 1, 1), 2)
+      const resumedUrl = await fetchPredictionOutputUrl(job.replicate_id)
+      let resumedBytes: Uint8Array | null = null
+      if (resumedUrl) {
+        try {
+          const r = await fetch(resumedUrl)
+          if (r.ok) resumedBytes = new Uint8Array(await r.arrayBuffer())
+        } catch { /* output expired/unreachable -> fresh restart */ }
+      }
+      if (resumedUrl && resumedBytes) {
+        console.log(`[personal-hero-worker] job ${job.id}: resuming gate on interrupted attempt ${resumeAttempt} (prediction ${job.replicate_id})`)
+        const outcome = await gateAndDeliver(
+          job, resumeAttempt, resumedUrl, resumedBytes, refBytes, variant, job.prompt ?? '')
+        gateRaw = outcome.gateRaw
+        if (outcome.delivered) {
+          return {
+            job_id: job.id, status: 'COMPLETED', hero_id: outcome.heroId,
+            combination_id: job.combination_id, attempts: resumeAttempt, resumed: true
+          }
+        }
+        failures = outcome.failures
+        console.log(`[personal-hero-worker] job ${job.id} resumed attempt ${resumeAttempt} gate FAILED: ${failures.join('; ')}`)
+        startAttempt = resumeAttempt + 1
+      } else {
+        console.log(`[personal-hero-worker] job ${job.id}: interrupted prediction ${job.replicate_id} no longer retrievable; restarting generation`)
+      }
+    }
+
+    for (let attempt = startAttempt; attempt <= 2; attempt++) {
       lastPrompt = buildPrompt(job, failures)
       const { url, predictionId } = await generateImage(lastPrompt, refUrls)
       await markJob(job.id, { replicate_id: predictionId, attempts: attempt, prompt: lastPrompt })
@@ -484,86 +666,15 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       if (!imageResponse.ok) throw new Error(`Generated image download failed: ${imageResponse.status}`)
       const imageBytes = new Uint8Array(await imageResponse.arrayBuffer())
 
-      const gate = await runGate(job, url, imageBytes, refBytes)
-      gateRaw = { attempt, ...gate.raw }
-      failures = gate.failures
-
-      if (gate.pass) {
-        const storagePath = `${job.user_id}/heroes/${job.combination_id}/v${variant}.png`
-        const { error: uploadError } = await supabase.storage
-          .from('personal-heroes')
-          .upload(storagePath, imageBytes, { contentType: 'image/png', upsert: false })
-        if (uploadError) throw new Error(`Hero upload failed: ${uploadError.message}`)
-
-        const { data: hero, error: heroError } = await supabase
-          .from('personal_heroes')
-          .insert({
-            user_id: job.user_id,
-            combination_id: job.combination_id,
-            gender: job.gender, weather: job.weather,
-            temp_bracket: job.temp_bracket, time_of_day: job.time_of_day,
-            outfit_signature: job.outfit_signature,
-            outfit_items: job.outfit_items,
-            storage_path: storagePath, variant,
-            prompt: lastPrompt, gate_result: gateRaw
-          })
-          .select('id')
-          .single()
-        if (heroError) throw new Error(`Hero insert failed: ${heroError.message}`)
-
-        // Delivery bookkeeping + free-tier accounting. The hero INSERT
-        // above fired the version trigger, so the personal_cells row
-        // for this cell exists. Mark the cell delivered, and charge
-        // the free counter ONLY for a free_on_demand delivery to a
-        // cell that has never been counted: the plan's allowance
-        // counts genuinely new cells ("today's cell plus the next
-        // four genuinely new cells encountered"), and spec J4 rules
-        // replacement regenerations consume no allowance — so
-        // kind='regeneration' deliveries (photo replacement (b),
-        // flagged hero (c)) never charge, and neither do subscriber
-        // fill or replenishment deliveries (as before).
-        const { data: cellRow } = await supabase
-          .from('personal_cells')
-          .select('free_counted')
-          .eq('user_id', job.user_id)
-          .eq('combination_id', job.combination_id)
-          .maybeSingle()
-        const alreadyCounted = cellRow?.free_counted === true
-        const chargeFree = job.kind === 'free_on_demand' && !alreadyCounted
-        if (chargeFree) {
-          const { data: profile } = await supabase
-            .from('personal_profiles')
-            .select('free_generations_used')
-            .eq('user_id', job.user_id)
-            .single()
-          await supabase
-            .from('personal_profiles')
-            .update({
-              free_generations_used: (profile?.free_generations_used ?? 0) + 1,
-              updated_at: new Date().toISOString()
-            })
-            .eq('user_id', job.user_id)
-        }
-        await supabase
-          .from('personal_cells')
-          .update({
-            ever_delivered: true,
-            free_counted: alreadyCounted || chargeFree,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', job.user_id)
-          .eq('combination_id', job.combination_id)
-
-        await markJob(job.id, {
-          status: 'COMPLETED', gate_result: gateRaw,
-          result_hero_id: hero.id, completed_at: new Date().toISOString()
-        })
+      const outcome = await gateAndDeliver(job, attempt, url, imageBytes, refBytes, variant, lastPrompt)
+      gateRaw = outcome.gateRaw
+      if (outcome.delivered) {
         return {
-          job_id: job.id, status: 'COMPLETED', hero_id: hero.id,
+          job_id: job.id, status: 'COMPLETED', hero_id: outcome.heroId,
           combination_id: job.combination_id, attempts: attempt
         }
       }
-
+      failures = outcome.failures
       console.log(`[personal-hero-worker] job ${job.id} attempt ${attempt} gate FAILED: ${failures.join('; ')}`)
     }
 
@@ -581,6 +692,76 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     })
     return { job_id: job.id, status: 'FAILED', error: (e as Error).message }
   }
+}
+
+// Stale-claim recovery: find jobs whose PROCESSING claim is older
+// than STALE_PROCESSING_MS. Every in-code failure path marks a
+// claimed job FAILED, so a job still PROCESSING past the threshold
+// means its invocation was terminated by the platform mid-processing
+// — without this scan it would wedge its cell forever (the request
+// action answers already_queued against a PROCESSING job).
+//
+// Each stale job spends one reclaim from its reclaim_count budget
+// and returns to QUEUED (it keeps its replicate_id/attempts so the
+// resume path in processJob can gate the already-generated image
+// first). At the budget cap the job is marked FAILED with the named
+// stale_processing_timeout reason instead of requeuing forever.
+// reclaim_count is the budget counter — NOT the attempts column,
+// whose established meaning is the generation attempt (1..2) within
+// the current processing, written on every generation and used by
+// the resume path to identify which completed generation
+// replicate_id belongs to; spending from it would corrupt that
+// bookkeeping (a job killed during attempt 1 would resume as though
+// on attempt 2). All transitions are guarded on the exact state
+// read (status + claim age + budget) so concurrent invocations
+// cannot double-reclaim the same job.
+async function reclaimStaleJobs(): Promise<Array<Record<string, unknown>>> {
+  const cutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString()
+  const { data: stale, error } = await supabase
+    .from('personal_generation_jobs')
+    .select('id, reclaim_count')
+    .eq('status', 'PROCESSING')
+    .lt('started_at', cutoff)
+  if (error) {
+    console.error('[personal-hero-worker] stale scan failed:', error)
+    return []
+  }
+  const outcomes: Array<Record<string, unknown>> = []
+  for (const row of (stale ?? []) as Array<{ id: string, reclaim_count: number | null }>) {
+    const reclaims = row.reclaim_count ?? 0
+    if (reclaims >= STALE_MAX_RECLAIMS) {
+      const { data: marked } = await supabase
+        .from('personal_generation_jobs')
+        .update({
+          status: 'FAILED',
+          error_message: `${STALE_FAILURE_REASON}: worker invocation terminated mid-processing; job reclaimed ${reclaims} time(s) without completing`,
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', row.id)
+        .eq('status', 'PROCESSING')
+        .eq('reclaim_count', reclaims)
+        .lt('started_at', cutoff)
+        .select('id')
+      if (marked && marked.length > 0) {
+        outcomes.push({ job_id: row.id, status: 'FAILED', error: STALE_FAILURE_REASON, reclaims })
+        console.log(`[personal-hero-worker] stale job ${row.id} FAILED: ${STALE_FAILURE_REASON} after ${reclaims} reclaim(s)`)
+      }
+    } else {
+      const { data: reset } = await supabase
+        .from('personal_generation_jobs')
+        .update({ status: 'QUEUED', reclaim_count: reclaims + 1 })
+        .eq('id', row.id)
+        .eq('status', 'PROCESSING')
+        .eq('reclaim_count', reclaims)
+        .lt('started_at', cutoff)
+        .select('id')
+      if (reset && reset.length > 0) {
+        outcomes.push({ job_id: row.id, status: 'RECLAIMED', reclaims: reclaims + 1 })
+        console.log(`[personal-hero-worker] reclaimed stale job ${row.id} (reclaim ${reclaims + 1}/${STALE_MAX_RECLAIMS})`)
+      }
+    }
+  }
+  return outcomes
 }
 
 serve(async (req) => {
@@ -618,9 +799,13 @@ serve(async (req) => {
       }
     } catch { /* no body -> default drain */ }
 
+    // Stale-claim recovery first: reclaimed jobs re-enter through
+    // the normal QUEUED selection below, in the same invocation.
+    const reclaimed = await reclaimStaleJobs()
+
     const { data: jobs, error } = await supabase
       .from('personal_generation_jobs')
-      .select('id, user_id, combination_id, gender, weather, temp_bracket, time_of_day, outfit_signature, outfit_items, kind, attempts')
+      .select('id, user_id, combination_id, gender, weather, temp_bracket, time_of_day, outfit_signature, outfit_items, kind, attempts, replicate_id, prompt, reclaim_count')
       .eq('status', 'QUEUED')
       .order('priority', { ascending: true })
       .order('requested_at', { ascending: true })
@@ -635,7 +820,7 @@ serve(async (req) => {
       results.push(await processJob(job))
     }
 
-    return jsonResponse({ drained: true, attempted: results.length, results })
+    return jsonResponse({ drained: true, attempted: results.length, reclaimed, results })
   } catch (error) {
     console.error('[personal-hero-worker] error:', error)
     return jsonResponse({ error: (error as Error).message }, 500)
