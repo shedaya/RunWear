@@ -56,7 +56,7 @@ final class MakeItMeBilling: ObservableObject {
 
     func refresh() async {
         guard configured else { return }
-        if let info = try? await Purchases.shared.getCustomerInfo() {
+        if let info = try? await Purchases.shared.customerInfo() {
             apply(customerInfo: info)
         }
         await loadOfferings()
@@ -71,7 +71,7 @@ final class MakeItMeBilling: ObservableObject {
     }
 
     private func loadOfferings() async {
-        guard let offerings = try? await Purchases.shared.getOfferings(),
+        guard let offerings = try? await Purchases.shared.offerings(),
               let current = offerings.current else { return }
         monthlyPackage = current.monthly
         annualPackage = current.annual
