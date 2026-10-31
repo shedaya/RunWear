@@ -137,13 +137,31 @@ def process_family(loc_id, existing_sets, fam, files):
                     f"/v1/appScreenshotSets/{set_id}/appScreenshots" + q(limit=50))
         return d_.get("data", [])
 
-    existing = {sh.get("attributes", {}).get("fileName") for sh in list_shots()}
+    existing = {}
+    for sh in list_shots():
+        a = sh.get("attributes", {})
+        existing[a.get("fileName")] = (
+            sh.get("id"),
+            (a.get("assetDeliveryState") or {}).get("state"))
 
     for path in files:
         fname = os.path.basename(path)
         if fname in existing:
-            print(f"  skip {fname}: already in set")
-            continue
+            shot_id, state = existing[fname]
+            if state == "FAILED":
+                # A FAILED delivery state is terminal: Apple rejected the
+                # processed asset (e.g. pixel size the set type does not
+                # accept). Delete it so the replacement upload below is
+                # not blocked by the filename. COMPLETE/processing shots
+                # are never touched.
+                s, d = do(f"DELETE FAILED {fname}", "DELETE",
+                          f"/v1/appScreenshots/{shot_id}")
+                if s >= 400:
+                    print(f"ABORT: could not delete FAILED shot {fname}")
+                    sys.exit(1)
+            else:
+                print(f"  skip {fname}: already in set (state={state})")
+                continue
         blob = open(path, "rb").read()
         checksum = hashlib.md5(blob).hexdigest()
         body = {"data": {"type": "appScreenshots",
