@@ -130,9 +130,12 @@ struct MakeItMeOptInFlow: View {
 
     @State private var step: Step = .consent
     @State private var attested = false
-    @State private var committing = false
-    @State private var errorLine: String?
-    @State private var errorDetail: String?
+    /// RW-15 follow-up: the commit sequencing lives in
+    /// OptInCommitDriver (main-actor end to end) — see the
+    /// driver's note in PersonalHeroModels.swift for the finish
+    /// hand-off defect this replaces. The view only renders the
+    /// driver's state.
+    @StateObject private var commitDriver = OptInCommitDriver()
 
     private enum Step { case consent, capture }
 
@@ -146,10 +149,12 @@ struct MakeItMeOptInFlow: View {
                 MakeItMeCaptureView(
                     isReplace: mode == .replace,
                     attested: $attested,
-                    committing: committing,
-                    errorLine: errorLine,
-                    errorDetail: errorDetail,
-                    onConfirm: { photos in commit(photos) },
+                    committing: commitDriver.isCommitting,
+                    errorLine: commitDriver.failure?.line,
+                    errorDetail: commitDriver.failure?.detail,
+                    onConfirm: { photos in
+                        commitDriver.commit(photos: photos, onCommit: onCommit, onFinish: onFinish)
+                    },
                     onCancel: onCancel
                 )
             }
@@ -220,30 +225,6 @@ struct MakeItMeOptInFlow: View {
         }
     }
 
-    private func commit(_ photos: [Data]) {
-        committing = true
-        errorLine = nil
-        errorDetail = nil
-        Task {
-            do {
-                try await onCommit(photos)
-                committing = false
-                onFinish()
-            } catch {
-                committing = false
-                // The presentation (which line, plus the server's
-                // own message as the detail when it sent one) is
-                // CommitFailurePresentation in the model layer —
-                // the two lines are DEVIATION-COPY, named there.
-                // RW-15: build (9) discarded the server's message
-                // here, so a deterministic server refusal read as
-                // an unexplained "something went wrong".
-                let presentation = CommitFailurePresentation.forError(error)
-                errorLine = presentation.line
-                errorDetail = presentation.detail
-            }
-        }
-    }
 }
 
 // MARK: - Capture step (strings C2, C3, S7)

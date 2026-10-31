@@ -448,3 +448,136 @@ final class PersonalHeroTests: XCTestCase {
         XCTAssertEqual(ReferenceCommitSet.positions(photoCount: 0), [])
     }
 }
+
+// MARK: - RW-15 follow-up: the finish hand-off
+
+/// Thread-safe event recorder for the hand-off pins.
+private final class HandoffEvents: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var events: [String] = []
+    func add(_ event: String) {
+        lock.lock()
+        events.append(event)
+        lock.unlock()
+    }
+}
+
+/// Pins for the finish hand-off (rw15-retry-trace-2026-10-31.md):
+/// in build (9) a fully successful commit never dismissed the
+/// opt-in sheet and never completed onboarding. The commit's
+/// post-await statements ran off the main actor in a bare Task,
+/// and the host parked completion behind a hero reload. These
+/// tests pin the fixed contract at the seam where production
+/// failed: onCommit success ⇒ onFinish invoked, in order, on
+/// the main actor; failure ⇒ onFinish never invoked and the
+/// failure presentation set; the host's finish sequence
+/// dismisses and completes synchronously, kick deferred.
+final class OptInHandoffTests: XCTestCase {
+
+    @MainActor
+    func testCommitSuccess_finishFiresAfterCommit_onMainActor() async {
+        let driver = OptInCommitDriver()
+        let events = HandoffEvents()
+        var finishOnMainThread: Bool?
+        var dismissalEffect = false
+        var completionEffect = false
+
+        let task = driver.commit(
+            photos: [Data([0x01])],
+            onCommit: { _ in
+                try? await Task.sleep(nanoseconds: 20_000_000)
+                events.add("commit")
+            },
+            onFinish: {
+                events.add("finish")
+                finishOnMainThread = Thread.isMainThread
+                // The host handler's effects stand or fall with
+                // this invocation — dismissal and completion are
+                // performed by the handler itself (OptInFinish).
+                dismissalEffect = true
+                completionEffect = true
+            }
+        )
+
+        XCTAssertNotNil(task)
+        await task?.value
+        XCTAssertEqual(events.events, ["commit", "finish"])
+        XCTAssertEqual(finishOnMainThread, true)
+        XCTAssertTrue(dismissalEffect)
+        XCTAssertTrue(completionEffect)
+        XCTAssertFalse(driver.isCommitting)
+        XCTAssertNil(driver.failure)
+    }
+
+    @MainActor
+    func testCommitFailure_neverFinishes_andSurfacesServerMessage() async {
+        let driver = OptInCommitDriver()
+        var finishCalled = false
+
+        let task = driver.commit(
+            photos: [Data([0x01])],
+            onCommit: { _ in
+                throw PersonalHeroAPIError.server(
+                    message: "paths must be an array of 1 to 3 storage paths"
+                )
+            },
+            onFinish: { finishCalled = true }
+        )
+
+        await task?.value
+        XCTAssertFalse(finishCalled)
+        XCTAssertFalse(driver.isCommitting)
+        XCTAssertEqual(driver.failure?.line, "Something went wrong uploading your photos. No look was used. Please try again.")
+        XCTAssertEqual(driver.failure?.detail, "paths must be an array of 1 to 3 storage paths")
+    }
+
+    @MainActor
+    func testCommitWhileInFlight_secondCallIsNoOp() async {
+        let driver = OptInCommitDriver()
+        let events = HandoffEvents()
+
+        let first = driver.commit(
+            photos: [Data([0x01])],
+            onCommit: { _ in
+                events.add("commit")
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            },
+            onFinish: { events.add("finish") }
+        )
+        let second = driver.commit(
+            photos: [Data([0x02])],
+            onCommit: { _ in events.add("commit") },
+            onFinish: { events.add("finish") }
+        )
+
+        XCTAssertNotNil(first)
+        XCTAssertNil(second)
+        await first?.value
+        XCTAssertEqual(events.events, ["commit", "finish"])
+    }
+
+    func testOptInFinish_dismissAndCompleteSynchronously_kickDeferred() async {
+        let events = HandoffEvents()
+
+        OptInFinish.perform(
+            dismiss: { events.add("dismiss") },
+            complete: { events.add("complete") },
+            kick: {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                events.add("kick")
+            }
+        )
+
+        // Both effects have ALREADY happened when perform
+        // returns — completion is not gated on the kick's
+        // async work (build (9) parked it behind a hero reload).
+        XCTAssertEqual(events.events, ["dismiss", "complete"])
+
+        // The kick still runs, afterwards.
+        let deadline = Date().addingTimeInterval(2)
+        while !events.events.contains("kick"), Date() < deadline {
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(events.events, ["dismiss", "complete", "kick"])
+    }
+}

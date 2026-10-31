@@ -299,18 +299,29 @@ private struct FirstLookView: View {
                     )
                 },
                 onFinish: {
-                    showOptIn = false
-                    Task {
-                        // Kick the first generation for the exact
-                        // cell the user just saw, then finish
-                        // onboarding — the home screen's progress
-                        // line (G1/G2) carries it from here.
-                        previewVM.personalStore = store
-                        if let combo = await previewVM.reloadHeroForPersonal() {
-                            store.startUserInitiatedGeneration(for: combo)
+                    // RW-15 follow-up: dismissal and onboarding
+                    // completion happen synchronously here (the
+                    // commit driver invokes this on the main
+                    // actor); ONLY the first-generation kick is
+                    // deferred. Build (9) parked onComplete()
+                    // behind the kick's hero reload inside a
+                    // nested Task, so completion depended on a
+                    // full network reload finishing — part of
+                    // why the flow never finished on device.
+                    OptInFinish.perform(
+                        dismiss: { showOptIn = false },
+                        complete: onComplete,
+                        kick: {
+                            // Kick the first generation for the
+                            // exact cell the user just saw — the
+                            // home screen's progress line (G1/G2)
+                            // carries it from here.
+                            previewVM.personalStore = store
+                            if let combo = await previewVM.reloadHeroForPersonal() {
+                                store.startUserInitiatedGeneration(for: combo)
+                            }
                         }
-                        onComplete()
-                    }
+                    )
                 },
                 onCancel: { showOptIn = false }
             )

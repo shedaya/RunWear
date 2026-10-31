@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 // MARK: - RW-14 "Make it me" — pure model layer
 //
@@ -364,6 +365,94 @@ struct CommitFailurePresentation: Equatable {
             return CommitFailurePresentation(line: uploadFailureLine, detail: apiError.serverMessage)
         }
         return CommitFailurePresentation(line: uploadFailureLine, detail: nil)
+    }
+}
+
+// MARK: - Opt-in commit driver + finish sequence (RW-15 follow-up)
+//
+// The finish hand-off defect (rw15-retry-trace-2026-10-31.md):
+// with registration fixed server-side, Sol's commits succeeded
+// end to end — consent, uploads, register all 200, a generation
+// job queued — yet the opt-in sheet never dismissed and
+// onboarding never completed, across four taps. The exclusion
+// chain in the trace report localizes it to commit(_:)'s success
+// exit, and the concurrency shape is the defect:
+//
+// - The shipped commit ran its post-await statements in a bare,
+//   non-isolated Task. After `try await onCommit` the continuation
+//   resumes OFF the main actor (reproduced in a standalone
+//   harness: every post-await statement, including the onFinish()
+//   invocation, executes with Thread.isMainThread == false).
+//   The dismissal and completion writes live in ANCESTOR views
+//   (the host's @State, the app's @AppStorage) and are performed
+//   through view structs captured in closures — SwiftUI state
+//   mutation off the main actor is undefined, and those are the
+//   writes that vanished. The flow's OWN state (committing)
+//   happened to land, which is why the button cycled.
+// - The host's finish handler compounded it: onboarding
+//   completion was parked behind `await reloadHeroForPersonal()`
+//   — a full weather/hero network reload — inside a nested
+//   unstructured Task, so a degraded connection could stall
+//   completion indefinitely even had the handler run cleanly.
+//
+// The fix removes both shapes. The commit runs end to end on the
+// main actor (this driver), so the hand-off statements execute
+// synchronously, in order, on the main actor. And the host's
+// finish sequence (OptInFinish) performs dismissal and
+// completion synchronously, deferring only the generation kick.
+
+/// Drives one opt-in/replace commit for MakeItMeOptInFlow: owns
+/// the committing flag and the failure presentation so the view
+/// only renders state. All state mutates on the main actor.
+@MainActor
+final class OptInCommitDriver: ObservableObject {
+    @Published private(set) var isCommitting = false
+    @Published private(set) var failure: CommitFailurePresentation?
+
+    /// Run the commit: onCommit first; on success the committing
+    /// flag clears and THEN onFinish is invoked — synchronously,
+    /// in that order, on the main actor. On failure the flag
+    /// clears and the failure presentation is set; onFinish is
+    /// never invoked. A call while a commit is already in flight
+    /// is a no-op (returns nil).
+    @discardableResult
+    func commit(
+        photos: [Data],
+        onCommit: @escaping ([Data]) async throws -> Void,
+        onFinish: @escaping () -> Void
+    ) -> Task<Void, Never>? {
+        guard !isCommitting else { return nil }
+        isCommitting = true
+        failure = nil
+        return Task { @MainActor in
+            do {
+                try await onCommit(photos)
+            } catch {
+                isCommitting = false
+                failure = CommitFailurePresentation.forError(error)
+                return
+            }
+            isCommitting = false
+            onFinish()
+        }
+    }
+}
+
+/// The onboarding host's post-opt-in finish sequence. Dismissal
+/// and onboarding completion happen synchronously, in that
+/// order, on the caller's (main) actor; the first-generation
+/// kick — which needs a hero reload to key its cell — is the
+/// only deferred effect, and it must never gate completion
+/// (build (9) parked completion behind exactly that reload).
+enum OptInFinish {
+    static func perform(
+        dismiss: () -> Void,
+        complete: () -> Void,
+        kick: @escaping () async -> Void
+    ) {
+        dismiss()
+        complete()
+        Task { await kick() }
     }
 }
 
