@@ -110,8 +110,8 @@ def main():
     s, d = probe("REVIEW DETAIL",
                  f"/v1/appStoreVersions/{vid}/appStoreReviewDetail",
                  expect=TOLERANT)
-    if s == 200:
-        rd = d.get("data", {}).get("attributes", {})
+    if s == 200 and d.get("data"):
+        rd = d["data"].get("attributes", {})
         print("  review detail:", json.dumps(rd)[:1200])
     else:
         print("  review detail: NONE")
