@@ -204,7 +204,7 @@ jobs:
           if-no-files-found: ignore
 
   capture-ipad:
-    name: Capture listing screenshots (iPad Pro 13-inch)
+    name: Capture listing screenshots (iPad Pro 12.9-inch preferred)
     needs: engine
     runs-on: macos-26
     timeout-minutes: 60
@@ -228,22 +228,36 @@ jobs:
           xcodebuild -version
           git rev-parse HEAD
 
-      - name: Find or create the iPad Pro 13-inch simulator
+      - name: Find or create the iPad simulator (12.9-inch preferred)
         run: |
           set -euo pipefail
-          UDID="$(xcrun simctl list devices available --json | python3 -c '
-          import json, sys
+          # The ASC set type APP_IPAD_PRO_129 only completes assets at
+          # 2048x2732: the 13-inch (M4) frames at 2064x2752 uploaded fine
+          # but every one settled to delivery state FAILED (asc-verify
+          # runs 41211549291 + 41211905235). Capture on the 12.9-inch
+          # (6th generation) simulator instead - a genuine native capture
+          # at exactly 2048x2732. The M4 stays as fallback so a missing
+          # or refused device type degrades loudly rather than silently.
+          UDID=""
+          for DEV in "iPad Pro (12.9-inch) (6th generation)" "iPad Pro 13-inch (M4)"; do
+            FOUND="$(xcrun simctl list devices available --json | DEV="$DEV" python3 -c '
+          import json, os, sys
+          want = os.environ["DEV"]
           data = json.load(sys.stdin)
           for runtime, devices in data.get("devices", {}).items():
               if "iOS" not in runtime:
                   continue
               for d in devices:
-                  if d.get("isAvailable") and d.get("name") == "iPad Pro 13-inch (M4)":
+                  if d.get("isAvailable") and d.get("name") == want:
                       print(d["udid"])
                       sys.exit(0)
           sys.exit(1)
           ' || true)"
-          if [ -z "${UDID:-}" ]; then
+            if [ -n "${FOUND:-}" ]; then
+              UDID="$FOUND"
+              echo "Found existing simulator: $DEV ($UDID)"
+              break
+            fi
             RT="$(xcrun simctl list runtimes available --json | python3 -c '
           import json, sys
           data = json.load(sys.stdin)
@@ -251,8 +265,18 @@ jobs:
           ios.sort(key=lambda r: r.get("version", ""))
           print(ios[-1]["identifier"])
           ')"
-            echo "Creating iPad Pro 13-inch (M4) on runtime $RT"
-            UDID="$(xcrun simctl create "iPad Pro 13-inch (M4)" "iPad Pro 13-inch (M4)" "$RT")"
+            echo "Trying to create $DEV on runtime $RT"
+            CREATED="$(xcrun simctl create "$DEV" "$DEV" "$RT" 2>/dev/null || true)"
+            if echo "$CREATED" | grep -Eq '^[0-9A-Fa-f-]{36}$'; then
+              UDID="$CREATED"
+              echo "Created simulator: $DEV ($UDID)"
+              break
+            fi
+            echo "Create refused for $DEV: $CREATED"
+          done
+          if [ -z "${UDID:-}" ]; then
+            echo "ABORT: no iPad simulator could be found or created"
+            exit 1
           fi
           echo "Using simulator $UDID"
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
