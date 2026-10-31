@@ -4,7 +4,10 @@ Three families, each with its own committed PNG directory and its own
 screenshot set on the en-US localization of version 1.0:
   iphone  scripts/asc/screenshots/        APP_IPHONE_69/67/65 (largest
                                           the create enum accepts)
-  ipad    scripts/asc/screenshots-ipad/   APP_IPAD_13 (2064x2752)
+  ipad    scripts/asc/screenshots-ipad/   APP_IPAD_PRO_129 (2064x2752;
+          the create-set enum has no APP_IPAD_13 - the 13-inch frames
+          live under the 12.9-inch Pro display type, proven by run
+          41211488282's 409 error body enumerating the valid values)
   watch   scripts/asc/screenshots-watch/  display type chosen from the
                                           PNG's real pixel size
 
@@ -51,7 +54,8 @@ FAMILIES = [
     {"name": "iphone", "dir": "screenshots",
      "candidates": ["APP_IPHONE_69", "APP_IPHONE_67", "APP_IPHONE_65"]},
     {"name": "ipad", "dir": "screenshots-ipad",
-     "candidates": ["APP_IPAD_13"]},
+     "candidates": ["APP_IPAD_PRO_129", "APP_IPAD_PRO_3GEN_129",
+                    "APP_IPAD_13"]},
     {"name": "watch", "dir": "screenshots-watch",
      "candidates": None},  # resolved from PNG size at runtime
 ]
