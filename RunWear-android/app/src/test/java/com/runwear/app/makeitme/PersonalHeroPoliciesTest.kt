@@ -16,15 +16,17 @@ import org.junit.Test
  */
 class PersonalHeroPoliciesTest {
 
-    // ── Versioned cache (acceptance 16) ─────────────────────────────
-
     private val now = 1_700_000_000_000L
+
+    // ── Versioned cache (acceptance 16) ─────────────────────────────
 
     @Test
     fun `server not-found serves the pool hero`() {
         val decision = PersonalHeroCachePolicy.decide(
             cached = PersonalHeroCachePolicy.CachedEntry(3, "https://signed/old", now - 1_000),
-            lookup = HeroLookup(found = false, imageUrl = null, version = 0, heroId = null),
+            found = false,
+            serverVersion = 3,
+            serverUrl = null,
             nowMs = now
         )
         assertEquals(PersonalHeroCachePolicy.Decision.NoPersonalHero, decision)
@@ -37,18 +39,23 @@ class PersonalHeroPoliciesTest {
         // inside its freshness window — the stale image must NOT win.
         val decision = PersonalHeroCachePolicy.decide(
             cached = PersonalHeroCachePolicy.CachedEntry(1, "https://signed/v1", now - 60_000),
-            lookup = HeroLookup(found = true, imageUrl = "https://signed/v2", version = 2, heroId = "h2"),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/v2",
             nowMs = now
         )
         assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
         assertEquals("https://signed/v2", (decision as PersonalHeroCachePolicy.Decision.Serve).imageUrl)
+        assertEquals(2, decision.version)
     }
 
     @Test
     fun `same version and fresh serves the cached URL`() {
         val decision = PersonalHeroCachePolicy.decide(
             cached = PersonalHeroCachePolicy.CachedEntry(2, "https://signed/cached", now - 60_000),
-            lookup = HeroLookup(found = true, imageUrl = "https://signed/new-signed", version = 2, heroId = "h2"),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/new-signed",
             nowMs = now
         )
         assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
@@ -62,7 +69,9 @@ class PersonalHeroPoliciesTest {
                 2, "https://signed/expired",
                 now - PersonalHeroCachePolicy.URL_FRESH_MS - 1_000
             ),
-            lookup = HeroLookup(found = true, imageUrl = "https://signed/fresh", version = 2, heroId = "h2"),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/fresh",
             nowMs = now
         )
         assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
@@ -73,7 +82,9 @@ class PersonalHeroPoliciesTest {
     fun `no cache serves the server URL`() {
         val decision = PersonalHeroCachePolicy.decide(
             cached = null,
-            lookup = HeroLookup(found = true, imageUrl = "https://signed/first", version = 1, heroId = "h1"),
+            found = true,
+            serverVersion = 1,
+            serverUrl = "https://signed/first",
             nowMs = now
         )
         assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
@@ -89,7 +100,7 @@ class PersonalHeroPoliciesTest {
         cellHasPersonalHero: Boolean = false,
         cellGenerationPending: Boolean = false,
         combinationId: String = "MALE_CLEAR_WARM_DAWN_aaaaaaaa",
-        lastDismissedAtMs: Long? = null,
+        lastDismissedAtMs: Long = 0L,
         lastDismissedCell: String? = null,
         nowMs: Long = now
     ) = MakeItMeUpsellRules.shouldShow(
@@ -163,9 +174,7 @@ class PersonalHeroPoliciesTest {
     fun `dark photo rejected before face checks`() {
         assertEquals(
             PhotoRejection.TOO_DARK,
-            PhotoQualityPolicy.verdict(
-                PhotoQualityChecker.PhotoFacts(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.05f)
-            )
+            PhotoQualityPolicy.decide(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
         )
     }
 
@@ -173,9 +182,7 @@ class PersonalHeroPoliciesTest {
     fun `no detectable face rejected as unclear`() {
         assertEquals(
             PhotoRejection.FACE_UNCLEAR,
-            PhotoQualityPolicy.verdict(
-                PhotoQualityChecker.PhotoFacts(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.5f)
-            )
+            PhotoQualityPolicy.decide(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.5)
         )
     }
 
@@ -183,9 +190,7 @@ class PersonalHeroPoliciesTest {
     fun `more than one person rejected`() {
         assertEquals(
             PhotoRejection.MULTIPLE_PEOPLE,
-            PhotoQualityPolicy.verdict(
-                PhotoQualityChecker.PhotoFacts(faceCount = 2, largestFaceWidthFraction = 0.4f, meanLuminance = 0.5f)
-            )
+            PhotoQualityPolicy.decide(faceCount = 2, largestFaceWidthFraction = 0.4f, meanLuminance = 0.5)
         )
     }
 
@@ -193,18 +198,14 @@ class PersonalHeroPoliciesTest {
     fun `face filling the frame rejected as too close`() {
         assertEquals(
             PhotoRejection.TOO_CLOSE,
-            PhotoQualityPolicy.verdict(
-                PhotoQualityChecker.PhotoFacts(faceCount = 1, largestFaceWidthFraction = 0.9f, meanLuminance = 0.5f)
-            )
+            PhotoQualityPolicy.decide(faceCount = 1, largestFaceWidthFraction = 0.9f, meanLuminance = 0.5)
         )
     }
 
     @Test
     fun `a good photo passes`() {
         assertNull(
-            PhotoQualityPolicy.verdict(
-                PhotoQualityChecker.PhotoFacts(faceCount = 1, largestFaceWidthFraction = 0.35f, meanLuminance = 0.5f)
-            )
+            PhotoQualityPolicy.decide(faceCount = 1, largestFaceWidthFraction = 0.35f, meanLuminance = 0.5)
         )
     }
 }
