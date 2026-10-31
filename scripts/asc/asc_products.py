@@ -11,8 +11,8 @@ found by reference name / product id and reused):
   1. Subscription group, reference name "Make It Me"
   2. Group localization (en-US): name "Make It Me"
   3. Two auto-renewable subscriptions in the group, level 1:
-       rw_makeitme_monthly  P1M  $0.99
-       rw_makeitme_annual   P1Y  $9.99
+       rw_makeitme_monthly  ONE_MONTH  $0.99
+       rw_makeitme_annual   ONE_YEAR   $9.99
   4. Subscription localization (en-US) for each
   5. US (USA) price for each, from the subscription's own price points
 
@@ -43,9 +43,9 @@ BASE_TERRITORY = "USA"
 
 PRODUCTS = [
     {"key": "monthly", "name": "Make It Me Monthly",
-     "productId": "rw_makeitme_monthly", "period": "P1M", "price": 0.99},
+     "productId": "rw_makeitme_monthly", "period": "ONE_MONTH", "price": 0.99},
     {"key": "annual", "name": "Make It Me Annual",
-     "productId": "rw_makeitme_annual", "period": "P1Y", "price": 9.99},
+     "productId": "rw_makeitme_annual", "period": "ONE_YEAR", "price": 9.99},
 ]
 
 
@@ -130,7 +130,7 @@ def find_or_create_subscription(gid, spec):
                                     "productId": spec["productId"],
                                     "subscriptionPeriod": spec["period"],
                                     "groupLevel": 1},
-                     "relationships": {"subscriptionGroup": {"data": {"type": "subscriptionGroups", "id": gid}}}}}
+                     "relationships": {"group": {"data": {"type": "subscriptionGroups", "id": gid}}}}}
     d = must("POST", "/v1/subscriptions", body)
     sid = d["data"]["id"]
     print(f"subscription {spec['productId']}: CREATED id={sid} "
