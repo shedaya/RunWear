@@ -352,34 +352,60 @@ class WeatherViewModel: ObservableObject {
         )
     }
 
-    private func loadHeroImage() async {
-        isHeroImageLoading = true
-
-        // Determine conditions for hero image. The hero combination is
-        // built from the RAW feels-like (Android's HeroImageRepository
-        // takes the unadjusted frame): the comfort preference must not
-        // move the hero's temperature bracket the way it moves the
-        // outfit's warmth selectors.
-        let feelsLike: Double
+    /// The hero's keying frame, resolved synchronously: the
+    /// feels-like (Fahrenheit) the photo is chosen by, the weather
+    /// code, and the hour. The feels-like is the SAME
+    /// comfort-adjusted frame the recommendation was built in
+    /// (makeRecommendation's engine input) — the contract
+    /// WatchViewModel already implements (its hero takes
+    /// adjustedTemp). The phone previously keyed the photo on the
+    /// RAW feels-like while the outfit and its band were keyed on
+    /// the adjusted frame, so a comfort offset crossing a bracket
+    /// boundary served a photo of a different outfit than the one
+    /// recommended (field 2026-10-31: raw 53.6°F is a MILD cell —
+    /// t-shirt and shorts — over a COOL outfit at adjusted 43.6°F).
+    /// Internal (not private) so the field-findings fixtures drive
+    /// this exact production construction.
+    func prepareHeroFrame() -> (feelsLikeF: Double, weatherCode: Int, hour: Int)? {
+        let rawFeelsLike: Double
         let weatherCode: Int
         let hour: Int
 
         if let snapshot = selectedWeatherSnapshot {
-            feelsLike = snapshot.feelsLikeFahrenheit
+            rawFeelsLike = snapshot.feelsLikeFahrenheit
             weatherCode = snapshot.weatherCode
             hour = snapshot.hour
         } else if let current = weatherData?.currentWeather {
-            feelsLike = weatherData?.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
+            rawFeelsLike = weatherData?.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
                 ?? current.temperatureFahrenheit
             weatherCode = current.weathercode
             hour = Calendar.current.component(.hour, from: Date())
         } else {
+            return nil
+        }
+
+        return (
+            feelsLikeF: comfortLevel.adjustTemperature(rawFeelsLike),
+            weatherCode: weatherCode,
+            hour: hour
+        )
+    }
+
+    private func loadHeroImage() async {
+        isHeroImageLoading = true
+
+        // Determine conditions for hero image — the recommendation
+        // frame, via prepareHeroFrame (see its note).
+        guard let frame = prepareHeroFrame() else {
             isHeroImageLoading = false
             return
         }
+        let feelsLike = frame.feelsLikeF
+        let weatherCode = frame.weatherCode
+        let hour = frame.hour
 
         // The combination this screen asks the pool for, built from
-        // the same raw inputs the service call below uses (the
+        // the same frame inputs the service call below uses (the
         // service rebuilds it internally from identical inputs).
         // Recorded so a hero-photo flag carries the requested cell
         // as context when the served photo has no cell of its own

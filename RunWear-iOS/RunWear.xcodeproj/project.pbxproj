@@ -49,6 +49,9 @@
 		A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		A10002000000000000000011 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
 		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		A10002000000000000000090 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
+		C10002000000000000000090 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
+		C10002000000000000000033 /* FieldFindingsFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000010 /* FieldFindingsFixTests.swift */; };
 		A10002000000000000000013 /* PreferenceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000013 /* PreferenceControls.swift */; };
 		A10002000000000000000025 /* UserEngagement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000025 /* UserEngagement.swift */; };
 		C10002000000000000000030 /* PremiumPassTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000023 /* PremiumPassTests.swift */; };
@@ -219,6 +222,8 @@
 		A10001000000000000000010 /* GlassMorphismModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMorphismModifiers.swift; sourceTree = "<group>"; };
 		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
 		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
+		A10001000000000000000090 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
+		C10001000000000000000010 /* FieldFindingsFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldFindingsFixTests.swift; sourceTree = "<group>"; };
 		A10001000000000000000013 /* PreferenceControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceControls.swift; sourceTree = "<group>"; };
 		A10001000000000000000025 /* UserEngagement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserEngagement.swift; sourceTree = "<group>"; };
 		C10001000000000000000023 /* PremiumPassTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PremiumPassTests.swift; sourceTree = "<group>"; };
@@ -321,6 +326,7 @@
 				A10004000000000000000002 /* DuoArrangement.swift */,
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
+				A10001000000000000000090 /* HeroPhoto.swift */,
 				A10003000000000000000001 /* Components */,
 				A10003000000000000000002 /* Modals */,
 				A10003000000000000000003 /* Onboarding */,
@@ -443,6 +449,7 @@
 				C10001000000000000000007 /* HomePresentationTests.swift */,
 				C10001000000000000000008 /* ShareTextCompositionTests.swift */,
 				C10001000000000000000009 /* WeatherServicePrivacyTests.swift */,
+				C10001000000000000000010 /* FieldFindingsFixTests.swift */,
 				C10001000000000000000023 /* PremiumPassTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
@@ -611,6 +618,7 @@
 				A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */,
 				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
 				A10002000000000000000012 /* HeroImageView.swift in Sources */,
+				A10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				A10002000000000000000013 /* PreferenceControls.swift in Sources */,
 				A10002000000000000000014 /* WeatherPill.swift in Sources */,
 				A10002000000000000000015 /* WeatherPillsRow.swift in Sources */,
@@ -692,6 +700,8 @@
 				C10002000000000000000030 /* PremiumPassTests.swift in Sources */,
 				C10002000000000000000031 /* UserEngagement.swift in Sources */,
 				C10002000000000000000032 /* StaggeredAnimation.swift in Sources */,
+				C10002000000000000000090 /* HeroPhoto.swift in Sources */,
+				C10002000000000000000033 /* FieldFindingsFixTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
