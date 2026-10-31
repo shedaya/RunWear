@@ -23,6 +23,7 @@ on:
           - submit
           - screenshots
           - medical
+          - medicalprobe
         default: verify
         required: true
       version:
@@ -79,3 +80,7 @@ jobs:
         if: inputs.task == 'medical'
         working-directory: scripts/asc
         run: python3 asc_medical.py
+      - name: Probe remaining API surfaces for the declaration
+        if: inputs.task == 'medicalprobe'
+        working-directory: scripts/asc
+        run: python3 asc_medical_probe.py
