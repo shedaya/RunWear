@@ -22,9 +22,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.feedback.StartupTrace
@@ -111,6 +116,8 @@ fun HeroMainScreen(
     onAnalyticsOptInChange: (Boolean) -> Unit = {},
     onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
     onFlagHero: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit = {},
+    /** Hero refresh: cycle to the cell's next approved image (no flag). */
+    onCycleHero: () -> Unit = {},
     onItemTapped: (ClothingItem) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -138,6 +145,9 @@ fun HeroMainScreen(
     val screenScope = rememberCoroutineScope()
 
     val listState = rememberLazyListState()
+    // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
+    // listState so a fold/unfold posture change doesn't reset scroll).
+    val gridState = rememberLazyGridState()
 
     // Track content visibility for animations
     var contentVisible by remember { mutableStateOf(false) }
@@ -178,20 +188,19 @@ Get your personalized running outfit at runwear.ai
         context.startActivity(Intent.createChooser(sendIntent, "Share your outfit"))
     }
 
-    // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned)
-    // COMPACT: phone portrait (< 600dp) — single column
-    // MEDIUM: foldable unfolded / tablet portrait (600-840dp) — centered max-width column
-    // EXPANDED: tablet landscape / desktop (> 840dp) — two-pane
+    // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned),
+    // fluid at every width per the PWA's fully-responsive standard:
+    // COMPACT: phone portrait (< 600dp) — single column, unchanged
+    // MEDIUM: foldable unfolded / tablet portrait (600-840dp) — full-bleed
+    //   stacked layout, outfit cards flowing into a grid as width allows
+    // EXPANDED: tablet landscape / desktop (> 840dp) — two-pane rail
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
-        val layout = when {
-            maxWidth < 600.dp -> AdaptiveLayout.COMPACT
-            maxWidth < 840.dp -> AdaptiveLayout.MEDIUM
-            else -> AdaptiveLayout.EXPANDED
-        }
+        val spec = fluidLayoutSpec(maxWidth)
+        val layout = spec.layout
 
         when {
             // Content wins over the loading flag: once anything is on screen
@@ -206,6 +215,12 @@ Get your personalized running outfit at runwear.ai
                 val scrollOffset = remember {
                     derivedStateOf {
                         listState.firstVisibleItemScrollOffset.toFloat()
+                    }
+                }
+
+                val gridScrollOffset = remember {
+                    derivedStateOf {
+                        gridState.firstVisibleItemScrollOffset.toFloat()
                     }
                 }
 
@@ -237,6 +252,7 @@ Get your personalized running outfit at runwear.ai
                                         onWeatherPillClick = { type -> weatherDetailType = type },
                                         onFlagClick = { showHeroFlagSheet = true },
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
+                                        onCycleHero = onCycleHero,
                                         modifier = Modifier.fillMaxWidth()
                                     )
                                 }
@@ -254,57 +270,66 @@ Get your personalized running outfit at runwear.ai
                             }
                         }
                         AdaptiveLayout.MEDIUM -> {
-                            // Centered column, max 600dp wide (foldable unfolded, tablet portrait)
-                            Box(
+                            // Full-bleed stacked layout (foldable unfolded,
+                            // tablet portrait): hero on top, outfit cards in
+                            // an auto-fit grid below — the PWA's fluid
+                            // stacked range. No width cap anywhere.
+                            LazyVerticalGrid(
+                                columns = GridCells.Adaptive(minSize = OUTFIT_GRID_MIN_CELL),
+                                state = gridState,
                                 modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.TopCenter
+                                contentPadding = PaddingValues(
+                                    start = spec.pagePadding,
+                                    end = spec.pagePadding,
+                                    bottom = 60.dp
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier
-                                        .widthIn(max = 600.dp)
-                                        .fillMaxSize(),
-                                    contentPadding = PaddingValues(bottom = 60.dp)
-                                ) {
-                                    item {
-                                        HeroSectionContent(
-                                            uiState = uiState,
-                                            contentVisible = contentVisible,
-                                            scrollOffset = scrollOffset.value,
-                                            onDateClick = { showDatePicker = true },
-                                            onTimeClick = { showTimePicker = true },
-                                            onNowClick = onResetToNow,
-                                            onLocationClick = { showLocationPicker = true },
-                                            onSettingsClick = { showSettings = true },
-                                            onShareClick = { shareOutfit() },
-                                            onTempClick = onToggleUnit,
-                                            onWeatherPillClick = { type -> weatherDetailType = type },
-                                            onFlagClick = { showHeroFlagSheet = true },
-                                            heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                    outfitListItems(
+                                item(span = { GridItemSpan(maxLineSpan) }) {
+                                    HeroSectionContent(
                                         uiState = uiState,
                                         contentVisible = contentVisible,
-                                        onShopAllClick = { showShopAll = true },
-                                        onItemClick = { item ->
-                                            onItemTapped(item)
-                                            val url = buildAmazonSearchUrl(item, uiState.genderPreference)
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                                        },
-                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                        scrollOffset = gridScrollOffset.value,
+                                        onDateClick = { showDatePicker = true },
+                                        onTimeClick = { showTimePicker = true },
+                                        onNowClick = onResetToNow,
+                                        onLocationClick = { showLocationPicker = true },
+                                        onSettingsClick = { showSettings = true },
+                                        onShareClick = { shareOutfit() },
+                                        onTempClick = onToggleUnit,
+                                        onWeatherPillClick = { type -> weatherDetailType = type },
+                                        onFlagClick = { showHeroFlagSheet = true },
+                                        heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
+                                        onCycleHero = onCycleHero,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
+                                outfitGridItems(
+                                    uiState = uiState,
+                                    contentVisible = contentVisible,
+                                    onShopAllClick = { showShopAll = true },
+                                    onItemClick = { item ->
+                                        onItemTapped(item)
+                                        val url = buildAmazonSearchUrl(item, uiState.genderPreference)
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                    },
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                )
                             }
                         }
                         AdaptiveLayout.EXPANDED -> {
-                            // Two-pane: weather/overview left, outfit list right (tablet landscape, desktop)
+                            // Two-pane rail (the PWA's ≥900px composition):
+                            // hero fills a full-height left pane of
+                            // max(400dp, 42% of width); the outfit pane
+                            // scrolls independently with cards in an
+                            // auto-fit grid (tablet landscape, desktop,
+                            // Duo spanned).
                             Row(modifier = Modifier.fillMaxSize()) {
-                                // Left pane: Hero section (fixed, 40%)
+                                // Left pane: Hero section (full height)
                                 Box(
                                     modifier = Modifier
-                                        .weight(0.4f)
+                                        .width(spec.heroPaneWidth ?: 400.dp)
                                         .fillMaxHeight()
                                 ) {
                                     HeroSectionContent(
@@ -321,17 +346,26 @@ Get your personalized running outfit at runwear.ai
                                         onWeatherPillClick = { type -> weatherDetailType = type },
                                         onFlagClick = { showHeroFlagSheet = true },
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
+                                        onCycleHero = onCycleHero,
                                         modifier = Modifier.fillMaxSize()
                                     )
                                 }
-                                // Right pane: outfit list (scrollable, 60%)
-                                LazyColumn(
+                                // Right pane: outfit grid (independently scrollable)
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(minSize = OUTFIT_GRID_MIN_CELL),
+                                    state = gridState,
                                     modifier = Modifier
-                                        .weight(0.6f)
+                                        .weight(1f)
                                         .fillMaxHeight(),
-                                    contentPadding = PaddingValues(bottom = 60.dp)
+                                    contentPadding = PaddingValues(
+                                        start = spec.pagePadding,
+                                        end = spec.pagePadding,
+                                        bottom = 60.dp
+                                    ),
+                                    horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    outfitListItems(
+                                    outfitGridItems(
                                         uiState = uiState,
                                         contentVisible = contentVisible,
                                         onShopAllClick = { showShopAll = true },
@@ -483,7 +517,56 @@ Get your personalized running outfit at runwear.ai
  * BoxWithConstraints is used (no new dependencies) to handle foldables,
  * tablets, and desktop windows — recomposes automatically on posture changes.
  */
-private enum class AdaptiveLayout { COMPACT, MEDIUM, EXPANDED }
+internal enum class AdaptiveLayout { COMPACT, MEDIUM, EXPANDED }
+
+/** Minimum outfit-card cell width — the PWA grid's minmax(290px, 1fr). */
+internal val OUTFIT_GRID_MIN_CELL: Dp = 290.dp
+
+/**
+ * The fluid layout resolved for one window width — the native mirror
+ * of the PWA's fully-responsive standard (runwearpwa22 @ 4a26106):
+ * no width cap at any size; gutters and grid gaps scale continuously
+ * (the PWA's clamp(20px, 3vw, 44px) padding and clamp(10px, 1.2vw,
+ * 16px) gap, with the 20dp floor keeping COMPACT exactly as it was);
+ * the EXPANDED hero pane is the PWA rail's minmax(400px, 42%).
+ */
+internal data class FluidLayoutSpec(
+    val layout: AdaptiveLayout,
+    val pagePadding: Dp,
+    val gridGap: Dp,
+    /** EXPANDED only: the hero pane's fixed width. Null otherwise. */
+    val heroPaneWidth: Dp?
+)
+
+internal fun fluidLayoutSpec(maxWidth: Dp): FluidLayoutSpec {
+    val layout = when {
+        maxWidth < 600.dp -> AdaptiveLayout.COMPACT
+        maxWidth < 840.dp -> AdaptiveLayout.MEDIUM
+        else -> AdaptiveLayout.EXPANDED
+    }
+    return FluidLayoutSpec(
+        layout = layout,
+        pagePadding = (maxWidth * 0.03f).coerceIn(20.dp, 44.dp),
+        gridGap = (maxWidth * 0.012f).coerceIn(10.dp, 16.dp),
+        heroPaneWidth = if (layout == AdaptiveLayout.EXPANDED) {
+            maxOf(400.dp, maxWidth * 0.42f)
+        } else {
+            null
+        }
+    )
+}
+
+/**
+ * Column count [GridCells.Adaptive] resolves for [contentWidth] — the
+ * same auto-fit arithmetic as the PWA grid (minmax(290px, 1fr) plus
+ * gap): a column appears only when a full extra cell + gap fits.
+ * Exposed for the continuum unit tests; the grids themselves let
+ * GridCells.Adaptive do this at layout time.
+ */
+internal fun outfitGridColumns(contentWidth: Dp, gap: Dp): Int {
+    val cell = OUTFIT_GRID_MIN_CELL + gap
+    return maxOf(1, ((contentWidth + gap) / cell).toInt())
+}
 
 /**
  * Hero section with entrance animation (shared across all adaptive layouts).
@@ -503,6 +586,7 @@ private fun HeroSectionContent(
     onWeatherPillClick: (String) -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
+    onCycleHero: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -529,41 +613,41 @@ private fun HeroSectionContent(
             showFlagButton = uiState.heroImageUrl != null,
             flagEnabled = heroFlagEnabled,
             onFlagClick = onFlagClick,
+            showRefreshButton = uiState.heroCandidates.size > 1,
+            onRefreshHeroClick = onCycleHero,
             modifier = modifier
         )
     }
 }
 
 /**
- * Outfit list items for a LazyColumn: section header, cards, tips, footer.
- * Shared across COMPACT/MEDIUM (full list) and EXPANDED (right pane) layouts.
+ * "X Items for Your Run" + Shop button — one header for the list and
+ * grid outfit presentations. [horizontalPadding] is the caller's own
+ * gutter: the COMPACT list passes its fixed 20.dp; the grids pass 0
+ * because their content padding already provides the gutter.
  */
-private fun LazyListScope.outfitListItems(
-    uiState: MainUiState,
+@Composable
+private fun OutfitSectionHeader(
+    itemCount: Int,
     contentVisible: Boolean,
-    onShopAllClick: () -> Unit,
-    onItemClick: (ClothingItem) -> Unit,
-    onFeedbackClick: () -> Unit
+    horizontalPadding: Dp,
+    onShopAllClick: () -> Unit
 ) {
-    val outfit = uiState.outfit ?: return
-
-    // Outfit Section Header
-    item {
-        AnimatedVisibility(
-            visible = contentVisible,
-            enter = fadeIn(tween(300, delayMillis = 200))
+    AnimatedVisibility(
+        visible = contentVisible,
+        enter = fadeIn(tween(300, delayMillis = 200))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = horizontalPadding)
+                .padding(top = 24.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .padding(top = 24.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
                 // "X Items for Your Run"
                 Text(
-                    text = "${outfit.allItems.size} Items for Your Run",
+                    text = "$itemCount Items for Your Run",
                     fontFamily = BebasNeueFontFamily,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Normal,
@@ -614,6 +698,30 @@ private fun LazyListScope.outfitListItems(
                 }
             }
         }
+}
+
+/**
+ * Outfit list items for a LazyColumn: section header, cards, tips, footer.
+ * COMPACT's presentation, unchanged by the fluid pass (MEDIUM and
+ * EXPANDED use [outfitGridItems]).
+ */
+private fun LazyListScope.outfitListItems(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    onShopAllClick: () -> Unit,
+    onItemClick: (ClothingItem) -> Unit,
+    onFeedbackClick: () -> Unit
+) {
+    val outfit = uiState.outfit ?: return
+
+    // Outfit Section Header
+    item {
+        OutfitSectionHeader(
+            itemCount = outfit.allItems.size,
+            contentVisible = contentVisible,
+            horizontalPadding = 20.dp,
+            onShopAllClick = onShopAllClick
+        )
     }
 
     // Outfit Cards with AI-generated thumbnails
@@ -665,6 +773,88 @@ private fun LazyListScope.outfitListItems(
 
     // Version footer
     item {
+        Text(
+            text = "v3.12",
+            style = MaterialTheme.typography.bodySmall,
+            color = RunWearColors.TextMuted.copy(alpha = 0.5f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+/**
+ * Outfit grid items for a LazyVerticalGrid: the same content as
+ * [outfitListItems], composed for the fluid wide layouts — header,
+ * tips, feedback and footer span all columns; the cards are grid
+ * cells in the PWA's card presentation (centered name + description).
+ * The grid's own content padding provides the horizontal gutter, so
+ * nothing here pads horizontally.
+ */
+private fun LazyGridScope.outfitGridItems(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    onShopAllClick: () -> Unit,
+    onItemClick: (ClothingItem) -> Unit,
+    onFeedbackClick: () -> Unit
+) {
+    val outfit = uiState.outfit ?: return
+
+    // Outfit Section Header (spans the pane)
+    item(span = { GridItemSpan(maxLineSpan) }) {
+        OutfitSectionHeader(
+            itemCount = outfit.allItems.size,
+            contentVisible = contentVisible,
+            horizontalPadding = 0.dp,
+            onShopAllClick = onShopAllClick
+        )
+    }
+
+    // Outfit Cards — grid cells, PWA presentation
+    // Tap opens Amazon directly (matches web PWA - no intermediate sheet)
+    val items = outfit.allItems
+    items(items.size) { index ->
+        val item = items[index]
+        OutfitCard(
+            item = item,
+            onClick = { onItemClick(item) },
+            animationDelay = index * 50,
+            gender = uiState.genderPreference,
+            centeredText = true
+        )
+    }
+
+    // Pro Tip Section (spans the pane, as in the PWA rail)
+    if (outfit.tips.isNotEmpty()) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            TipsSection(
+                tips = outfit.tips,
+                modifier = Modifier.padding(top = 20.dp)
+            )
+        }
+    }
+
+    item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(16.dp)) }
+
+    // Contextual feedback entry (same moment as the list presentation)
+    item(span = { GridItemSpan(maxLineSpan) }) {
+        Text(
+            text = "Not what you'd wear? Tell us",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = RunWearColors.Primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onFeedbackClick() }
+                .padding(vertical = 10.dp)
+        )
+    }
+
+    // Version footer
+    item(span = { GridItemSpan(maxLineSpan) }) {
         Text(
             text = "v3.12",
             style = MaterialTheme.typography.bodySmall,

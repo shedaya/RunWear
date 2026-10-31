@@ -164,14 +164,32 @@ class HeroImageRepository @Inject constructor() {
     ): HeroImageResult {
         val image = searchResult.image ?: return getFallbackImage(combination)
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        val poolUrls = searchResult.candidates.map { it.imageUrl }
-        val candidates = if (HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
-            HeroPoolPolicy.mergeFloorCandidate(
-                poolUrls,
-                getWeatherAwareFallback(combination.tempBracket, heroWeather)
+        // Full candidate list for the refresh control: every servable
+        // pool row at the winning cascade level, in pool order. For the
+        // common floor cells the curated bundled fallback photo joins
+        // the rotation (HeroPoolPolicy), as a candidate with no pool row.
+        val poolCandidates = searchResult.candidates.map { row ->
+            com.runwear.shared.domain.model.HeroCandidate(
+                imageUrl = row.imageUrl,
+                thumbnailUrl = row.thumbnailUrl,
+                imageRowId = row.id,
+                servedCombinationId = row.combinationId
             )
+        }
+        val candidates = if (HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
+            val floorUrl = getWeatherAwareFallback(combination.tempBracket, heroWeather)
+            if (poolCandidates.any { it.imageUrl == floorUrl }) {
+                poolCandidates
+            } else {
+                poolCandidates + com.runwear.shared.domain.model.HeroCandidate(
+                    imageUrl = floorUrl,
+                    thumbnailUrl = floorUrl,
+                    imageRowId = null,
+                    servedCombinationId = combination.id
+                )
+            }
         } else {
-            poolUrls
+            poolCandidates
         }
         if (candidates.size <= 1) {
             return HeroImageResult(
@@ -179,17 +197,18 @@ class HeroImageRepository @Inject constructor() {
                 thumbnailUrl = image.thumbnailUrl,
                 combinationId = combination.id,
                 imageRowId = image.id,
-                servedCombinationId = image.combinationId
+                servedCombinationId = image.combinationId,
+                candidates = candidates
             )
         }
         val picked = candidates.random()
-        val pickedImage = searchResult.candidates.firstOrNull { it.imageUrl == picked }
         return HeroImageResult(
-            imageUrl = picked,
-            thumbnailUrl = pickedImage?.thumbnailUrl ?: picked,
+            imageUrl = picked.imageUrl,
+            thumbnailUrl = picked.thumbnailUrl ?: picked.imageUrl,
             combinationId = combination.id,
-            imageRowId = pickedImage?.id,
-            servedCombinationId = pickedImage?.combinationId
+            imageRowId = picked.imageRowId,
+            servedCombinationId = picked.servedCombinationId,
+            candidates = candidates
         )
     }
 
@@ -301,7 +320,7 @@ class HeroImageRepository @Inject constructor() {
                 // Review gate: pending/rejected generations are never
                 // served. Pre-migration rows decode reviewStatus = null
                 // and count as approved (HeroPoolPolicy).
-                val images = rows.filter { HeroPoolPolicy.isServable(it.reviewStatus) }
+                val images = servableImages(rows)
 
                 if (images.isNotEmpty()) {
                     // Check if this is an exact match query
@@ -580,6 +599,24 @@ class HeroImageRepository @Inject constructor() {
         )
     }
 }
+
+/**
+ * THE hero serving gate: the rows from a generated_images query that
+ * may be served, in pool order. Every serving path (the random pick
+ * and the refresh control's candidate list alike) draws from this
+ * filtered list and nothing else — a row whose review_status is
+ * 'rejected' or 'pending' can never reach the screen, and a cascade
+ * level whose rows are all unservable yields an empty list here, so
+ * the caller cascades onward or falls back to the bundled image.
+ *
+ * This gate's absence is what shipped the Oct 30 vest incident: the
+ * 1.2.1–1.2.3 phone lineages branched before the 2026-10-27 review
+ * gate landed, fetched without it, and served an already-rejected
+ * DAWN row whose slot held no approved rows at all. Pinned by
+ * HeroServingGateTest.
+ */
+internal fun servableImages(rows: List<GeneratedImage>): List<GeneratedImage> =
+    rows.filter { HeroPoolPolicy.isServable(it.reviewStatus) }
 
 /**
  * Database model for generated_images table.

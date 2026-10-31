@@ -96,7 +96,18 @@ data class MainUiState(
      * otherwise the requested combination).
      */
     val heroImageRowId: String? = null,
-    val heroCombinationId: String? = null
+    val heroCombinationId: String? = null,
+    /**
+     * Every approved image for the current hero cell, for the refresh
+     * control (cycle without flagging). Empty when the hero did not
+     * come from a pool resolution.
+     */
+    val heroCandidates: List<com.runwear.shared.domain.model.HeroCandidate> = emptyList(),
+    /**
+     * The REQUESTED combination the current hero resolution belongs
+     * to — the cell key under which the day's refresh choice persists.
+     */
+    val heroRequestedCombinationId: String? = null
 )
 
 data class LocationSearchState(
@@ -705,11 +716,76 @@ class MainViewModel @Inject constructor(
                 ?: com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
                     weather, outfit, gender
                 )
+            // If the user already used the refresh control today for
+            // this cell, restore their pick over the random one.
+            val chosen = applyPersistedHeroChoice(hero)
             _uiState.update {
                 it.copy(
-                    heroImageUrl = hero.imageUrl,
-                    heroImageRowId = hero.imageRowId,
-                    heroCombinationId = hero.servedCombinationId ?: hero.combinationId
+                    heroImageUrl = chosen.imageUrl,
+                    heroImageRowId = chosen.imageRowId,
+                    heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
+                    heroCandidates = chosen.candidates,
+                    heroRequestedCombinationId = chosen.combinationId
+                )
+            }
+        }
+    }
+
+    /** DataStore key for one cell's persisted hero choice ("date|url"). */
+    private fun heroChoiceKey(combinationId: String) =
+        androidx.datastore.preferences.core.stringPreferencesKey("hero_choice_$combinationId")
+
+    /**
+     * Restore today's refresh pick for this cell, if one was persisted
+     * and the image is still in the cell's approved candidate list.
+     * Any miss (no pick, stale date, image rotated out) keeps the
+     * freshly resolved hero.
+     */
+    private suspend fun applyPersistedHeroChoice(
+        hero: com.runwear.shared.domain.model.HeroImageResult
+    ): com.runwear.shared.domain.model.HeroImageResult {
+        if (hero.candidates.size <= 1) return hero
+        val stored = runCatching {
+            preferencesRepository.getString(heroChoiceKey(hero.combinationId))
+        }.getOrNull() ?: return hero
+        val parts = stored.split("|", limit = 2)
+        if (parts.size != 2 || parts[0] != locationNow().toLocalDate().toString()) return hero
+        val candidate = hero.candidates.firstOrNull { it.imageUrl == parts[1] } ?: return hero
+        if (candidate.imageUrl == hero.imageUrl) return hero
+        return hero.copy(
+            imageUrl = candidate.imageUrl,
+            thumbnailUrl = candidate.thumbnailUrl,
+            imageRowId = candidate.imageRowId,
+            servedCombinationId = candidate.servedCombinationId
+        )
+    }
+
+    /**
+     * Hero refresh control: cycle to the next approved image for the
+     * current cell, WITHOUT flagging the one on screen. The pick is
+     * persisted for the rest of the (location-local) day so it survives
+     * recomposition, reloads and restarts; tomorrow the cell goes back
+     * to the pool's own rotation.
+     */
+    fun cycleHeroImage() {
+        val state = _uiState.value
+        val candidates = state.heroCandidates
+        if (candidates.size <= 1) return
+        val currentIdx = candidates.indexOfFirst { it.imageUrl == state.heroImageUrl }
+        val next = candidates[(currentIdx + 1) % candidates.size]
+        _uiState.update {
+            it.copy(
+                heroImageUrl = next.imageUrl,
+                heroImageRowId = next.imageRowId,
+                heroCombinationId = next.servedCombinationId ?: it.heroCombinationId
+            )
+        }
+        val combinationId = state.heroRequestedCombinationId ?: return
+        viewModelScope.launch {
+            runCatching {
+                preferencesRepository.setString(
+                    heroChoiceKey(combinationId),
+                    "${locationNow().toLocalDate()}|${next.imageUrl}"
                 )
             }
         }
