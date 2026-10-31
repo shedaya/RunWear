@@ -24,6 +24,7 @@ on:
           - screenshots
           - medical
           - medicalprobe
+          - products
         default: verify
         required: true
       version:
@@ -84,3 +85,7 @@ jobs:
         if: inputs.task == 'medicalprobe'
         working-directory: scripts/asc
         run: python3 asc_medical_probe.py
+      - name: Create/verify the Make It Me subscription products (never submits)
+        if: inputs.task == 'products'
+        working-directory: scripts/asc
+        run: python3 asc_products.py
