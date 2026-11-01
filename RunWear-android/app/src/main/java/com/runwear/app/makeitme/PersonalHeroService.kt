@@ -188,9 +188,12 @@ class PersonalHeroService @Inject constructor(
 
     /**
      * Refresh, classified for [SessionGuardPolicy]: REJECTED only when
-     * the server answered and refused the token (4xx); a transport
-     * error, a 5xx, or an unparseable success is UNKNOWN — the stored
-     * identity must survive all three (RW-16.15(iv)).
+     * the token endpoint definitively refused the token (HTTP
+     * 400/401/403, via [SessionGuardPolicy.classifyHttpFailure]); a
+     * transport error, a 5xx, a 408/409/425/429 (GoTrue rate-limits
+     * this endpoint — a throttled refresh proves nothing about the
+     * token), or an unparseable success is UNKNOWN — the stored
+     * identity must survive all of them (RW-16.15(iv)).
      */
     private suspend fun refreshSession(
         refreshToken: String
@@ -212,11 +215,7 @@ class PersonalHeroService @Inject constructor(
                 SessionGuardPolicy.RefreshOutcome.UNKNOWN to null
             }
         }
-        return if (response.status.value in 400..499) {
-            SessionGuardPolicy.RefreshOutcome.REJECTED to null
-        } else {
-            SessionGuardPolicy.RefreshOutcome.UNKNOWN to null
-        }
+        return SessionGuardPolicy.classifyHttpFailure(response.status.value) to null
     }
 
     // ── Edge functions ─────────────────────────────────────────────────

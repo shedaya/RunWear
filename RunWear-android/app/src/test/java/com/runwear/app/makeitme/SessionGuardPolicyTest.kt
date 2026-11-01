@@ -90,6 +90,64 @@ class SessionGuardPolicyTest {
     }
 
     @Test
+    fun `only 400, 401, and 403 are definitive rejections of the refresh token`() {
+        for (status in listOf(400, 401, 403)) {
+            assertEquals(
+                "HTTP $status",
+                SessionGuardPolicy.RefreshOutcome.REJECTED,
+                SessionGuardPolicy.classifyHttpFailure(status)
+            )
+        }
+    }
+
+    @Test
+    fun `a rate-limited refresh (429) proves nothing about the token and classifies UNKNOWN`() {
+        // GoTrue rate-limits the token endpoint: a 429 means "slow
+        // down", not "this token is dead". Classifying it REJECTED
+        // would orphan a live identity through the same door as the
+        // original fold, only narrower (uid-churn audit, Nov 1).
+        assertEquals(
+            SessionGuardPolicy.RefreshOutcome.UNKNOWN,
+            SessionGuardPolicy.classifyHttpFailure(429)
+        )
+        assertEquals(
+            SessionGuardPolicy.Action.KEEP_STORED_AND_FAIL,
+            SessionGuardPolicy.decide(
+                hasStoredSession = true,
+                storedTokenValid = false,
+                refreshOutcome = SessionGuardPolicy.classifyHttpFailure(429)
+            )
+        )
+    }
+
+    @Test
+    fun `a timed-out refresh (408) proves nothing about the token and classifies UNKNOWN`() {
+        assertEquals(
+            SessionGuardPolicy.RefreshOutcome.UNKNOWN,
+            SessionGuardPolicy.classifyHttpFailure(408)
+        )
+        assertEquals(
+            SessionGuardPolicy.Action.KEEP_STORED_AND_FAIL,
+            SessionGuardPolicy.decide(
+                hasStoredSession = true,
+                storedTokenValid = false,
+                refreshOutcome = SessionGuardPolicy.classifyHttpFailure(408)
+            )
+        )
+    }
+
+    @Test
+    fun `other transient and server statuses also classify UNKNOWN`() {
+        for (status in listOf(409, 425, 500, 502, 503)) {
+            assertEquals(
+                "HTTP $status",
+                SessionGuardPolicy.RefreshOutcome.UNKNOWN,
+                SessionGuardPolicy.classifyHttpFailure(status)
+            )
+        }
+    }
+
+    @Test
     fun `an expired stored session with no refresh attempted yet also keeps and fails`() {
         assertEquals(
             SessionGuardPolicy.Action.KEEP_STORED_AND_FAIL,

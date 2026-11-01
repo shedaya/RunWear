@@ -50,6 +50,7 @@ class SessionGuardReproductionTest {
         SUCCESS,
         HTTP_REJECTED_4XX,
         HTTP_SERVER_ERROR_5XX,
+        HTTP_RATE_LIMITED_429,
         TRANSPORT_ERROR,
         UNPARSEABLE_SUCCESS_BODY
     }
@@ -91,13 +92,19 @@ class SessionGuardReproductionTest {
 
     /**
      * The new refreshSession()'s classification: REJECTED only on a
-     * 4xx answer; SUCCEEDED only on a parseable success; transport
-     * errors, 5xx, and unparseable successes are UNKNOWN.
+     * definitive token refusal (400/401/403, via
+     * [SessionGuardPolicy.classifyHttpFailure]); SUCCEEDED only on a
+     * parseable success; transport errors, 5xx, 429 (the token
+     * endpoint is rate-limited — throttling proves nothing about
+     * the token), and unparseable successes are UNKNOWN.
      */
     private fun classify(outcome: RawRefreshOutcome): SessionGuardPolicy.RefreshOutcome =
         when (outcome) {
             RawRefreshOutcome.SUCCESS -> SessionGuardPolicy.RefreshOutcome.SUCCEEDED
-            RawRefreshOutcome.HTTP_REJECTED_4XX -> SessionGuardPolicy.RefreshOutcome.REJECTED
+            RawRefreshOutcome.HTTP_REJECTED_4XX ->
+                SessionGuardPolicy.classifyHttpFailure(400)
+            RawRefreshOutcome.HTTP_RATE_LIMITED_429 ->
+                SessionGuardPolicy.classifyHttpFailure(429)
             RawRefreshOutcome.HTTP_SERVER_ERROR_5XX,
             RawRefreshOutcome.TRANSPORT_ERROR,
             RawRefreshOutcome.UNPARSEABLE_SUCCESS_BODY ->
@@ -127,6 +134,7 @@ class SessionGuardReproductionTest {
     private val unprovenFailures = listOf(
         RawRefreshOutcome.TRANSPORT_ERROR,
         RawRefreshOutcome.HTTP_SERVER_ERROR_5XX,
+        RawRefreshOutcome.HTTP_RATE_LIMITED_429,
         RawRefreshOutcome.UNPARSEABLE_SUCCESS_BODY
     )
 
