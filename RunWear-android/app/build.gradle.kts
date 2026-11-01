@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
@@ -47,8 +48,11 @@ android {
         applicationId = "com.runwear.wear"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.2.4"
+        // vc19 is the Wear polish release's slot (shipped as Wear
+        // 1.2.5/vc10019 — one shared versionCode space), so the phone
+        // line takes vc20 for its half of the 1.2.5 train.
+        versionCode = 21
+        versionName = "1.2.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -61,7 +65,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Bind the release signing config ONLY when the local
+            // keystore.properties exists. In CI it never does, and an
+            // empty-but-bound config makes :app:signReleaseBundle die
+            // with an NPE on the null storeFile — bundle-release.yml
+            // exists precisely to produce the UNSIGNED bundle there
+            // and sign it locally with the pinned upload keystore.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -131,6 +143,18 @@ dependencies {
 
     // Play In-App Review (rating moment — no-ops on non-Play installs)
     implementation(libs.play.review)
+
+    // RW-14 "Make it me": RevenueCat billing (adds the BILLING permission
+    // via manifest merge — the unlock Play needs before subscriptions can
+    // be created for this app), ML Kit face detection for the in-flow
+    // reference-photo quality check, and Ktor for the personal-hero
+    // backend's REST contract (auth + edge functions + storage).
+    implementation(libs.revenuecat.purchases)
+    implementation(libs.mlkit.face.detection)
+    implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.kotlinx.serialization.json)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.core)

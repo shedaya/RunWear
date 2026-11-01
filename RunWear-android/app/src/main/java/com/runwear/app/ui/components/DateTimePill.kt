@@ -123,7 +123,11 @@ fun DateTimePill(
                         text = dateText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        color = Color.White,
+                        // Overlay audit (Oct 30): hero overlay labels
+                        // never wrap/stack in narrow panes.
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -159,7 +163,9 @@ fun DateTimePill(
                         text = timeText,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (isNowSelected) tealText else Color.White.copy(alpha = 0.7f)
+                        color = if (isNowSelected) tealText else Color.White.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
