@@ -291,3 +291,77 @@ object SignedUrlPolicy {
         else -> "$baseUrl/storage/v1/$signedURL"
     }
 }
+
+/**
+ * RW-16.15(iv): the session-replacement guard.
+ *
+ * The anonymous Supabase identity IS the user's account: photos,
+ * profile, entitlement, and the free-generation counter all key off
+ * it, and nothing anywhere can re-merge a replacement into it. The
+ * pre-guard session flow treated ANY refresh failure as a dead
+ * session: it cleared the stored session and minted a fresh
+ * anonymous uid, silently orphaning everything under the old one.
+ * That fold was unsafe because the refresh helper could not tell a
+ * definitive server rejection (refresh token unknown/revoked — the
+ * identity really is gone) from a transient transport failure (the
+ * refresh may even have SUCCEEDED server-side: Supabase refresh
+ * tokens rotate on use, so a response lost in transit leaves the
+ * client's stored token dead while the account is perfectly alive).
+ *
+ * The rule this policy owns:
+ *  - no stored session → mint (fresh install, post-erasure);
+ *  - stored session with a live token → reuse;
+ *  - refresh succeeds → store and use the refreshed session;
+ *  - refresh DEFINITIVELY REJECTED by the server (the token
+ *    endpoint refused the token itself: HTTP 400/401/403) → the
+ *    identity is gone; clear and mint is the legitimate recovery;
+ *  - refresh outcome UNKNOWN (transport error, 5xx, unparseable —
+ *    and 408/409/425/429: a rate-limited or otherwise transiently
+ *    refused refresh says nothing about the token's validity, and
+ *    GoTrue rate-limits this endpoint) → KEEP the stored session
+ *    untouched and let this call fail; the next call retries the
+ *    refresh. A stored uid is never replaced on an unproven failure.
+ */
+object SessionGuardPolicy {
+
+    /** What the refresh attempt established — nothing in between. */
+    enum class RefreshOutcome { SUCCEEDED, REJECTED, UNKNOWN }
+
+    enum class Action {
+        MINT_FRESH,
+        REUSE_STORED,
+        USE_REFRESHED,
+        CLEAR_AND_MINT,
+        KEEP_STORED_AND_FAIL
+    }
+
+    /**
+     * The HTTP-status half of the refresh classification (the
+     * success half also needs the body: parseable → SUCCEEDED,
+     * unparseable → UNKNOWN; the service decides that part).
+     * REJECTED is restricted to 400/401/403 — the statuses with
+     * which the token endpoint definitively refuses a refresh
+     * token. Every other non-success status is UNKNOWN: 408, 409,
+     * 425, and 429 (rate limiting) are transient server states, and
+     * a 5xx is a server failure — none of them proves the stored
+     * token invalid, so none of them may cost the user their uid.
+     */
+    fun classifyHttpFailure(statusCode: Int): RefreshOutcome = when (statusCode) {
+        400, 401, 403 -> RefreshOutcome.REJECTED
+        else -> RefreshOutcome.UNKNOWN
+    }
+
+    fun decide(
+        hasStoredSession: Boolean,
+        storedTokenValid: Boolean,
+        refreshOutcome: RefreshOutcome?
+    ): Action = when {
+        !hasStoredSession -> Action.MINT_FRESH
+        storedTokenValid -> Action.REUSE_STORED
+        else -> when (refreshOutcome) {
+            RefreshOutcome.SUCCEEDED -> Action.USE_REFRESHED
+            RefreshOutcome.REJECTED -> Action.CLEAR_AND_MINT
+            RefreshOutcome.UNKNOWN, null -> Action.KEEP_STORED_AND_FAIL
+        }
+    }
+}
