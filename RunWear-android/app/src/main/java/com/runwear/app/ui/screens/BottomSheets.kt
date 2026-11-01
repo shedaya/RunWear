@@ -309,6 +309,14 @@ fun SettingsSheet(
     analyticsOptIn: Boolean,
     onAnalyticsOptInChange: (Boolean) -> Unit,
     onSendFeedback: () -> Unit,
+    makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
+    makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
+        com.runwear.app.makeitme.MakeItMeUiState(),
+    onMakeItMeOptInClick: () -> Unit = {},
+    onMakeItMePhotosClick: () -> Unit = {},
+    onMakeItMeSubscribeClick: () -> Unit = {},
+    onMakeItMeManageSubscriptionClick: () -> Unit = {},
+    onMakeItMeDeleted: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
@@ -390,6 +398,22 @@ fun SettingsSheet(
             }
 
             HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+
+            // RW-14 "Make it me" section (spec §3) — between Fit
+            // Preference and Send feedback.
+            if (makeItMeViewModel != null) {
+                com.runwear.app.makeitme.MakeItMeSettingsSection(
+                    viewModel = makeItMeViewModel,
+                    state = makeItMeState,
+                    onOptInClick = onMakeItMeOptInClick,
+                    onPhotosClick = onMakeItMePhotosClick,
+                    onSubscribeClick = onMakeItMeSubscribeClick,
+                    onManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
+                    onDeleted = onMakeItMeDeleted
+                )
+
+                HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+            }
 
             // Send feedback — the durable route into the feedback system.
             Row(

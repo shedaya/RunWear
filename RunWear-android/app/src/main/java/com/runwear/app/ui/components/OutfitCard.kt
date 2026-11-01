@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -80,7 +81,16 @@ fun OutfitCard(
     onClick: () -> Unit,
     animationDelay: Int = 0, // Stagger delay in ms (index * 50)
     gender: GenderPreference = GenderPreference.UNISEX,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * Wide-layout presentation (the PWA's grid-cell card): the text
+     * block centers and the subtitle is the item's description, exactly
+     * as the PWA card renders (its text centers via the button UA
+     * style; its subtitle is `desc || category`). The default list
+     * presentation — left-aligned, category subtitle — is unchanged
+     * and remains what COMPACT shows.
+     */
+    centeredText: Boolean = false
 ) {
     val categoryColor = getCategoryColor(item.category)
     val context = LocalContext.current
@@ -180,22 +190,27 @@ fun OutfitCard(
             }
 
             // Text content
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = if (centeredText) Alignment.CenterHorizontally else Alignment.Start
+            ) {
                 Text(
                     text = item.displayName,
                     style = TextStyle(
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = RunWearColors.TextPrimary
-                    )
+                    ),
+                    textAlign = if (centeredText) TextAlign.Center else TextAlign.Start
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = item.category.displayName,
+                    text = if (centeredText) item.description else item.category.displayName,
                     style = TextStyle(
                         fontSize = 13.sp,
                         color = RunWearColors.TextSecondary
-                    )
+                    ),
+                    textAlign = if (centeredText) TextAlign.Center else TextAlign.Start
                 )
             }
 

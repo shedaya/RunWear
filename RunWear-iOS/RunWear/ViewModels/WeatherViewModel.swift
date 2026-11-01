@@ -484,10 +484,12 @@ class WeatherViewModel: ObservableObject {
     /// RW-14: consults the personal serving path for the current
     /// cell. A verified personalized hero replaces the pool photo —
     /// immediately when one exists, or by swap-in when it lands
-    /// (the pool photo stays up meanwhile; for cells the generation
-    /// gate never delivers, the pool photo simply stays, with no
-    /// error state). Not opted in (or no store wired): no-op beyond
-    /// clearing the cell marker.
+    /// (the pool photo stays up meanwhile). Since RW-16.16 the
+    /// store folds the server's per-cell look state on every
+    /// lookup, and the view renders it at the hero — making,
+    /// failed (with retry) — so a cell the gate never delivers
+    /// keeps the pool photo AND says so. Not opted in (or no store
+    /// wired): no-op beyond clearing the cell marker.
     private func applyPersonalHero(frame: (feelsLikeF: Double, weatherCode: Int, hour: Int)) async {
         guard let store = personalStore, store.isOptedIn,
               let recommendation else {

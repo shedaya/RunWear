@@ -27,6 +27,9 @@ import com.runwear.app.feedback.FeedbackCategory
 import com.runwear.app.feedback.FeedbackStore
 import com.runwear.app.feedback.RunWearEvents
 import com.runwear.app.feedback.TelemetryClient
+import com.runwear.app.makeitme.MakeItMeUpsellRules
+import com.runwear.app.makeitme.PersonalHeroRepository
+import com.runwear.app.makeitme.PersonalHeroService
 import com.runwear.app.widget.LaterTodayLine
 import com.runwear.app.widget.WidgetLastGood
 import com.runwear.app.widget.WidgetLastGoodStore
@@ -96,7 +99,32 @@ data class MainUiState(
      * otherwise the requested combination).
      */
     val heroImageRowId: String? = null,
-    val heroCombinationId: String? = null
+    val heroCombinationId: String? = null,
+    /**
+     * Every approved image for the current hero cell, for the refresh
+     * control (cycle without flagging). Empty when the hero did not
+     * come from a pool resolution.
+     */
+    val heroCandidates: List<com.runwear.shared.domain.model.HeroCandidate> = emptyList(),
+    /**
+     * The REQUESTED combination the current hero resolution belongs
+     * to — the cell key under which the day's refresh choice persists.
+     */
+    val heroRequestedCombinationId: String? = null,
+    // ── RW-14 "Make it me" ─────────────────────────────────────────────
+    /** True when the hero on screen is the user's verified personal hero. */
+    val heroIsPersonal: Boolean = false,
+    /**
+     * RW-16.16: the current cell's personal-look status, as the
+     * SERVER reports it (spec §7 G1/G2 progress line while MAKING;
+     * G5/G6 failed line + retry while FAILED). Server-driven, so it
+     * survives navigation and process death — the pre-RW-16.16
+     * session flag (with G4 silence on failure) is gone.
+     */
+    val personalLookStatus: com.runwear.app.makeitme.PersonalLookStatus =
+        com.runwear.app.makeitme.PersonalLookStatus.None,
+    /** The 6th-new-cell subscription card should show (spec §5). */
+    val showMakeItMeUpsell: Boolean = false
 )
 
 data class LocationSearchState(
@@ -111,6 +139,7 @@ class MainViewModel @Inject constructor(
     private val preferencesRepository: PreferencesRepository,
     private val affiliateRepository: AffiliateRepository,
     private val heroImageRepository: HeroImageRepository,
+    private val personalHeroRepository: PersonalHeroRepository,
     private val locationProvider: LocationProvider,
     private val getOutfitRecommendation: GetOutfitRecommendationUseCase,
     private val feedbackStore: FeedbackStore,
@@ -451,6 +480,9 @@ class MainViewModel @Inject constructor(
         private const val SEED_COORD_TOLERANCE_DEG = 0.05
         /** Time box for the AI hero lookup; past it the session keeps the default hero. */
         private const val HERO_RESOLVE_TIMEOUT_MS = 2_000L
+        /** RW-14: personal-generation poll cadence + bound (~4.5 min total, matching the backend's 2–4 min job time). */
+        private const val PERSONAL_POLL_INTERVAL_MS = 15_000L
+        private const val PERSONAL_POLL_MAX_ATTEMPTS = 18
     }
     
     fun fetchCurrentLocation() {
@@ -705,11 +737,386 @@ class MainViewModel @Inject constructor(
                 ?: com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
                     weather, outfit, gender
                 )
+            // If the user already used the refresh control today for
+            // this cell, restore their pick over the random one.
+            val chosen = applyPersistedHeroChoice(hero)
             _uiState.update {
                 it.copy(
-                    heroImageUrl = hero.imageUrl,
-                    heroImageRowId = hero.imageRowId,
-                    heroCombinationId = hero.servedCombinationId ?: hero.combinationId
+                    heroImageUrl = chosen.imageUrl,
+                    heroImageRowId = chosen.imageRowId,
+                    heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
+                    heroCandidates = chosen.candidates,
+                    heroRequestedCombinationId = chosen.combinationId,
+                    heroIsPersonal = false,
+                    personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.None,
+                    showMakeItMeUpsell = false
+                )
+            }
+            // RW-14: the personal layer overlays the pool hero — the
+            // user's own verified image for this cell wins when one
+            // exists (spec §2.4/§4); a missing one may trigger an
+            // on-demand generation (free allowance / entitled) and the
+            // 6th-cell upsell evaluation.
+            applyPersonalHeroOverlay(weather, outfit)
+        }
+    }
+
+    /** The personal cell currently in view (poll guard for the overlay). */
+    @Volatile
+    private var personalCellInView: String? = null
+
+    /**
+     * The current recommendation's PERSONAL combination: built with the
+     * user's own gender preference (never the pool's randomized hero
+     * gender) so its id matches the backend's per-user keying, plus the
+     * outfit item keys the generation request must hash-match.
+     */
+    fun currentPersonalCombination(): Pair<String, List<String>>? {
+        val weather = _uiState.value.weather ?: return null
+        val outfit = _uiState.value.outfit ?: return null
+        return personalCombinationFor(weather, outfit)
+    }
+
+    private fun personalCombinationFor(
+        weather: WeatherConditions,
+        outfit: OutfitRecommendation
+    ): Pair<String, List<String>> {
+        val combination = com.runwear.shared.domain.model.OutfitCombination.fromConditions(
+            weather, outfit, _uiState.value.genderPreference
+        )
+        return combination.id to outfit.allItems.map { it.name }
+    }
+
+    /**
+     * RW-14 overlay, run after the pool hero for a load is on screen.
+     * RW-16.16: the overlay is driven by the SERVER's per-cell look
+     * state (get-personal-hero's look_state), read on every run:
+     *
+     * - A verified hero exists → swap it in (the versioned cache
+     *   inside the repository decides whether the URL is new). If a
+     *   regeneration is in flight over it (state MAKING) the poll
+     *   below watches for the replacement; if its cycle FAILED, the
+     *   failed line + retry render under the still-serving hero.
+     * - State MAKING (a job is in flight, whoever requested it — the
+     *   save flow included) → show the progress line and poll until
+     *   the state resolves. The persisted requested-cell set no
+     *   longer suppresses this: it gates only the AUTOMATIC request.
+     * - State FAILED → the failed line + retry render, durably. No
+     *   automatic re-request, ever (the anti-loop rule stands; the
+     *   retry is the user's tap, spec §7 G6).
+     * - State NONE, user opted in, cell never automatically
+     *   requested, and either entitled or free allowance remains →
+     *   request generation and poll.
+     * - Otherwise → evaluate the 6th-cell upsell card (spec §5.2).
+     */
+    private suspend fun applyPersonalHeroOverlay(
+        weather: WeatherConditions,
+        outfit: OutfitRecommendation
+    ) {
+        val personal = personalHeroRepository.state.value
+        if (!personal.personalizationOn) {
+            personalCellInView = null
+            return
+        }
+        val (cell, items) = personalCombinationFor(weather, outfit)
+        personalCellInView = cell
+
+        val look = runCatching { personalHeroRepository.cellLookFor(cell) }.getOrNull()
+        val hit = look?.hit
+        if (hit != null) {
+            if (personalCellInView != cell) return
+            val status = when (look.status) {
+                // A serving hero with no reported state is READY by
+                // definition; the server's explicit FAILED / MAKING
+                // pass through untouched.
+                com.runwear.app.makeitme.PersonalLookStatus.None ->
+                    com.runwear.app.makeitme.PersonalLookStatus.Ready
+                else -> look.status
+            }
+            _uiState.update {
+                it.copy(
+                    heroImageUrl = hit.imageUrl,
+                    heroImageRowId = null,
+                    heroCandidates = emptyList(),
+                    heroIsPersonal = true,
+                    personalLookStatus = status,
+                    showMakeItMeUpsell = false
+                )
+            }
+            if (status == com.runwear.app.makeitme.PersonalLookStatus.Making) {
+                pollForPersonalHero(cell)
+            }
+            return
+        }
+
+        when (look?.status) {
+            com.runwear.app.makeitme.PersonalLookStatus.Making -> {
+                _uiState.update {
+                    it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
+                }
+                pollForPersonalHero(cell)
+                return
+            }
+            is com.runwear.app.makeitme.PersonalLookStatus.Failed -> {
+                _uiState.update { it.copy(personalLookStatus = look.status) }
+                updateUpsellVisibility(cell, cellHasPersonalHero = false)
+                return
+            }
+            else -> Unit // NONE (or lookup unreachable): fall through.
+        }
+
+        val entitled = personal.entitled
+        val allowanceLeft = personal.freeGenerationsUsed < MakeItMeUpsellRules.FREE_ALLOWANCE
+        val alreadyRequested = personalHeroRepository.wasCellRequested(cell)
+        if (!alreadyRequested && (entitled || allowanceLeft)) {
+            _uiState.update {
+                it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
+            }
+            val outcome = runCatching {
+                personalHeroRepository.requestGeneration(cell, items)
+            }.getOrNull()
+            val accepted = outcome is PersonalHeroService.RequestOutcome.Queued ||
+                outcome is PersonalHeroService.RequestOutcome.AlreadyQueued ||
+                outcome is PersonalHeroService.RequestOutcome.AlreadyAvailable
+            if (accepted) {
+                pollForPersonalHero(cell)
+            } else {
+                // The request itself was refused (the allowance may
+                // have been exhausted server-side between the state
+                // read and the request): re-read the server state so
+                // the screen tells the truth, refresh the mirror, and
+                // fall through to the upsell evaluation.
+                val truth = runCatching { personalHeroRepository.cellLookFor(cell) }.getOrNull()
+                if (personalCellInView == cell && truth != null) {
+                    _uiState.update { it.copy(personalLookStatus = truth.status) }
+                } else if (personalCellInView == cell) {
+                    _uiState.update {
+                        it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.None)
+                    }
+                }
+                personalHeroRepository.refreshFromServer()
+                updateUpsellVisibility(cell, cellHasPersonalHero = false)
+            }
+            return
+        }
+
+        // No automatic request (already made once, or no allowance):
+        // whatever the server last reported stands — including a
+        // FAILED the user hasn't retried yet.
+        if (look != null && personalCellInView == cell) {
+            _uiState.update { it.copy(personalLookStatus = look.status) }
+        }
+        updateUpsellVisibility(cell, cellHasPersonalHero = false)
+    }
+
+    /**
+     * Poll get-personal-hero while the cell's look is MAKING, until
+     * the state resolves (a delivery swaps the hero in; a terminal
+     * failure lands the failed line) or the wait expires (~4.5 min).
+     * On expiry the last server-reported status STAYS on screen —
+     * it is durable state, not a spinner to dismiss (RW-16.16).
+     */
+    private suspend fun pollForPersonalHero(cell: String) {
+        var attempts = 0
+        while (attempts < PERSONAL_POLL_MAX_ATTEMPTS) {
+            delay(PERSONAL_POLL_INTERVAL_MS)
+            attempts++
+            if (personalCellInView != cell) return
+            val look = runCatching { personalHeroRepository.cellLookFor(cell) }.getOrNull()
+                ?: continue
+            val hit = look.hit
+            if (hit != null && _uiState.value.heroImageUrl != hit.imageUrl) {
+                _uiState.update {
+                    it.copy(
+                        heroImageUrl = hit.imageUrl,
+                        heroImageRowId = null,
+                        heroCandidates = emptyList(),
+                        heroIsPersonal = true,
+                        showMakeItMeUpsell = false
+                    )
+                }
+                // A verified delivery moves the free counter server-side.
+                personalHeroRepository.refreshFromServer()
+            }
+            when (look.status) {
+                com.runwear.app.makeitme.PersonalLookStatus.Making -> {
+                    _uiState.update {
+                        it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
+                    }
+                }
+                is com.runwear.app.makeitme.PersonalLookStatus.Failed -> {
+                    _uiState.update { it.copy(personalLookStatus = look.status) }
+                    return
+                }
+                else -> {
+                    // READY (the delivery above, or a hero that was
+                    // already serving) or NONE (state cleared): the
+                    // look is resolved; settle the status and stop.
+                    _uiState.update {
+                        it.copy(
+                            personalLookStatus =
+                                if (hit != null) com.runwear.app.makeitme.PersonalLookStatus.Ready
+                                else look.status
+                        )
+                    }
+                    return
+                }
+            }
+        }
+        // Wait expired with the look still in flight server-side:
+        // the MAKING status remains rendered (it is the server's
+        // truth, re-read on the next overlay run) instead of the old
+        // G4 behavior of clearing the line into silence.
+    }
+
+    /**
+     * RW-16.16 (spec §7 G6): the failed line's "Try again" — a
+     * USER-initiated retry of the current cell's look through the
+     * existing request path. Deliberately bypasses the persisted
+     * requested-cell guard (that guard gates AUTOMATIC requests
+     * only): the server dedupes against active jobs, a failed look
+     * never charged the free counter, and a retry that delivers
+     * charges exactly as a first delivery does. The outcome hands
+     * into the same status path as everything else: accepted →
+     * MAKING + poll; refused → re-read the server's truth.
+     */
+    fun retryPersonalLook() {
+        val cell = personalCellInView ?: return
+        val (combinationId, items) = currentPersonalCombination() ?: return
+        if (combinationId != cell) return
+        viewModelScope.launch {
+            val outcome = runCatching {
+                personalHeroRepository.requestGeneration(cell, items)
+            }.getOrNull()
+            if (personalCellInView != cell) return@launch
+            when (outcome) {
+                is PersonalHeroService.RequestOutcome.Queued,
+                is PersonalHeroService.RequestOutcome.AlreadyQueued -> {
+                    _uiState.update {
+                        it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
+                    }
+                    pollForPersonalHero(cell)
+                }
+                is PersonalHeroService.RequestOutcome.AlreadyAvailable -> {
+                    val look = runCatching {
+                        personalHeroRepository.cellLookFor(cell)
+                    }.getOrNull() ?: return@launch
+                    if (personalCellInView != cell) return@launch
+                    _uiState.update {
+                        it.copy(
+                            heroImageUrl = look.hit?.imageUrl ?: it.heroImageUrl,
+                            heroIsPersonal = look.hit != null || it.heroIsPersonal,
+                            personalLookStatus = look.status
+                        )
+                    }
+                }
+                else -> {
+                    val look = runCatching {
+                        personalHeroRepository.cellLookFor(cell)
+                    }.getOrNull()
+                    if (personalCellInView == cell && look != null) {
+                        _uiState.update { it.copy(personalLookStatus = look.status) }
+                    }
+                    personalHeroRepository.refreshFromServer()
+                }
+            }
+        }
+    }
+
+    private suspend fun updateUpsellVisibility(cell: String, cellHasPersonalHero: Boolean) {
+        val personal = personalHeroRepository.state.value
+        val dismissal = personalHeroRepository.upsellDismissal()
+        val show = MakeItMeUpsellRules.shouldShow(
+            personalizationOn = personal.personalizationOn,
+            entitled = personal.entitled,
+            freeGenerationsUsed = personal.freeGenerationsUsed,
+            cellHasPersonalHero = cellHasPersonalHero,
+            cellGenerationPending =
+                _uiState.value.personalLookStatus == com.runwear.app.makeitme.PersonalLookStatus.Making,
+            combinationId = cell,
+            lastDismissedAtMs = dismissal.atMs,
+            lastDismissedCell = dismissal.cell,
+            nowMs = System.currentTimeMillis()
+        )
+        if (personalCellInView == cell) {
+            _uiState.update { it.copy(showMakeItMeUpsell = show) }
+        }
+    }
+
+    /** Upsell "Not now" (spec §5.2): record the dismissal, hide the card. */
+    fun dismissMakeItMeUpsell() {
+        val cell = personalCellInView ?: return
+        _uiState.update { it.copy(showMakeItMeUpsell = false) }
+        viewModelScope.launch { personalHeroRepository.recordUpsellDismissal(cell) }
+    }
+
+    /**
+     * Re-run hero resolution after a personal-layer change made outside
+     * this ViewModel (opt-in first look requested, photos replaced,
+     * photos deleted, subscription activated): the overlay re-evaluates
+     * against the current recommendation.
+     */
+    fun refreshHeroAfterPersonalChange() {
+        val weather = _uiState.value.weather ?: return
+        val outfit = _uiState.value.outfit ?: return
+        resolveHeroImage(weather, outfit)
+    }
+
+    /** DataStore key for one cell's persisted hero choice ("date|url"). */
+    private fun heroChoiceKey(combinationId: String) =
+        androidx.datastore.preferences.core.stringPreferencesKey("hero_choice_$combinationId")
+
+    /**
+     * Restore today's refresh pick for this cell, if one was persisted
+     * and the image is still in the cell's approved candidate list.
+     * Any miss (no pick, stale date, image rotated out) keeps the
+     * freshly resolved hero.
+     */
+    private suspend fun applyPersistedHeroChoice(
+        hero: com.runwear.shared.domain.model.HeroImageResult
+    ): com.runwear.shared.domain.model.HeroImageResult {
+        if (hero.candidates.size <= 1) return hero
+        val stored = runCatching {
+            preferencesRepository.getString(heroChoiceKey(hero.combinationId))
+        }.getOrNull() ?: return hero
+        val parts = stored.split("|", limit = 2)
+        if (parts.size != 2 || parts[0] != locationNow().toLocalDate().toString()) return hero
+        val candidate = hero.candidates.firstOrNull { it.imageUrl == parts[1] } ?: return hero
+        if (candidate.imageUrl == hero.imageUrl) return hero
+        return hero.copy(
+            imageUrl = candidate.imageUrl,
+            thumbnailUrl = candidate.thumbnailUrl,
+            imageRowId = candidate.imageRowId,
+            servedCombinationId = candidate.servedCombinationId
+        )
+    }
+
+    /**
+     * Hero refresh control: cycle to the next approved image for the
+     * current cell, WITHOUT flagging the one on screen. The pick is
+     * persisted for the rest of the (location-local) day so it survives
+     * recomposition, reloads and restarts; tomorrow the cell goes back
+     * to the pool's own rotation.
+     */
+    fun cycleHeroImage() {
+        val state = _uiState.value
+        val candidates = state.heroCandidates
+        if (candidates.size <= 1) return
+        val currentIdx = candidates.indexOfFirst { it.imageUrl == state.heroImageUrl }
+        val next = candidates[(currentIdx + 1) % candidates.size]
+        _uiState.update {
+            it.copy(
+                heroImageUrl = next.imageUrl,
+                heroImageRowId = next.imageRowId,
+                heroCombinationId = next.servedCombinationId ?: it.heroCombinationId
+            )
+        }
+        val combinationId = state.heroRequestedCombinationId ?: return
+        viewModelScope.launch {
+            runCatching {
+                preferencesRepository.setString(
+                    heroChoiceKey(combinationId),
+                    "${locationNow().toLocalDate()}|${next.imageUrl}"
                 )
             }
         }
@@ -722,6 +1129,11 @@ class MainViewModel @Inject constructor(
      */
     fun flagCurrentHero(reason: com.runwear.shared.domain.model.HeroFlagReason) {
         val state = _uiState.value
+        // Personal heroes are not pool rows: the pool flag payload cannot
+        // identify them, and the personal regeneration-on-flag path has
+        // no backend action yet (documented gap) — never file a pool
+        // flag against a personal image.
+        if (state.heroIsPersonal) return
         val url = state.heroImageUrl ?: return
         viewModelScope.launch {
             heroImageRepository.flagHeroImage(

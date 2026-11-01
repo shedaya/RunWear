@@ -557,33 +557,60 @@ struct WeatherOutfitView: View {
     // MARK: - RW-14 Personal Section
 
     /// The "Make it me" surfaces on the run screen, in spec order:
-    /// the first-look generation progress line while a
-    /// user-initiated generation for THIS cell is in flight (spec
-    /// §5 G1/G2 — quiet text under the hero, never a spinner over
-    /// the photo), and the free-tier upsell card when this cell is
-    /// the one that exhausted the allowance (spec §6 U1). Nothing
-    /// renders in any other state — notably not for gate-rejected
-    /// cells, which sit on the pool photo indefinitely in silence.
+    /// the generation progress line while the SERVER reports this
+    /// cell's look as making (spec §5 G1/G2 — quiet text under the
+    /// hero, never a spinner over the photo), the failed line with
+    /// its retry when the server reports the look as failed (spec
+    /// §7 G5/G6, RW-16.16), and the free-tier upsell card when this
+    /// cell is the one that exhausted the allowance (spec §6 U1).
+    /// Both status lines are driven by the server's per-cell look
+    /// state (PersonalHeroStore.lookStates), so they render whoever
+    /// requested the generation — the save flow included — and they
+    /// survive navigation away and back. Ready renders nothing: the
+    /// personalized photo on screen is itself the state.
     @ViewBuilder private var personalSection: some View {
         if let cell = viewModel.currentPersonalCombination {
-            if personalStore.userInitiatedPending.contains(cell.combinationId) {
+            switch personalStore.lookStates[cell.combinationId] ?? .none {
+            case .making:
                 VStack(spacing: 4) {
                     HStack(spacing: 8) {
                         ProgressView()
                             .tint(.white.opacity(0.7))
                         // Spec §7 G1, verbatim.
-                        Text("Making this outfit yours…")
+                        Text(MakeItMeCopy.progressTitle)
                             .font(.appSecondary.weight(.semibold))
                             .foregroundColor(.white)
                     }
-                    // Spec §7 G2, verbatim.
-                    Text("About 10 seconds. Your recommendation is ready either way — the standard photo stays up until yours is done.")
+                    // Spec §7 G2, verbatim (as amended Nov 1, 2026).
+                    Text(MakeItMeCopy.progressSubline)
                         .font(.appFootnote)
                         .foregroundColor(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 16)
+            case .failed:
+                // Spec §7 G5/G6 (RW-16.16): the durable failed line
+                // and its user-initiated retry. The retry goes
+                // through the store's request path; the hero reload
+                // re-attaches the view model's awaiter so a landed
+                // replacement swaps in.
+                VStack(spacing: 4) {
+                    Text(MakeItMeCopy.lookFailed)
+                        .font(.appSecondary.weight(.semibold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                    Button(MakeItMeCopy.lookRetry) {
+                        personalStore.retryLook(for: cell)
+                        viewModel.refreshHero()
+                    }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 16)
+            case .ready, .none:
+                EmptyView()
             }
 
             if personalStore.shouldShowUpsell(currentCell: cell.combinationId) {

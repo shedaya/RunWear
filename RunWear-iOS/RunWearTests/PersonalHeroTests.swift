@@ -100,7 +100,9 @@ final class PersonalHeroTests: XCTestCase {
             variant: 1,
             imageUrl: url,
             version: version,
-            replenishmentQueued: 0
+            replenishmentQueued: 0,
+            lookState: nil,
+            lookReason: nil
         )
     }
 
@@ -579,5 +581,125 @@ final class OptInHandoffTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
         XCTAssertEqual(events.events, ["dismiss", "complete", "kick"])
+    }
+}
+
+// MARK: - RW-16.16: the look-status contracts
+
+/// The client half of the state machine the Nov 1 trace demanded:
+/// a save registers, generation runs, and whatever the terminal
+/// outcome is, the hero must be able to say it. Before this lane
+/// the client's only inputs were found/not-found and a
+/// once-per-session requested set whose side effect was to
+/// suppress exactly these surfaces (spec G4 silence). These pins
+/// mirror Android's LookStatusPolicyTest matrix exactly — the two
+/// platforms map the same wire payload to the same rendered
+/// status.
+final class LookStatusTests: XCTestCase {
+
+    // MARK: Wire decoding (get-personal-hero v5 payloads)
+
+    private func decodeLookup(_ json: String) throws -> PersonalHeroLookup {
+        try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(json.utf8))
+    }
+
+    func testLookupDecodesLookStateAndReason() throws {
+        let lookup = try decodeLookup("""
+        {"found": false, "combination_id": "CELL_A", "version": 2,
+         "look_state": "failed", "look_reason": "quality_refused"}
+        """)
+        XCTAssertEqual(lookup.lookState, "failed")
+        XCTAssertEqual(lookup.lookReason, "quality_refused")
+        XCTAssertEqual(PersonalLookState.from(lookup: lookup), .failed(reason: .qualityRefused))
+    }
+
+    func testLookupWithoutLookFieldsDecodesAsPreV5() throws {
+        // A pre-v5 payload carries no state fields at all: the DTO
+        // decodes with nils and the mapping falls back to found.
+        let miss = try decodeLookup("""
+        {"found": false, "combination_id": "CELL_A", "version": null}
+        """)
+        XCTAssertNil(miss.lookState)
+        XCTAssertNil(miss.lookReason)
+        XCTAssertEqual(PersonalLookState.from(lookup: miss), .none)
+
+        let hit = try decodeLookup("""
+        {"found": true, "combination_id": "CELL_A", "hero_id": "h1",
+         "variant": 1, "image_url": "https://signed.example/x.jpg", "version": 3}
+        """)
+        XCTAssertEqual(PersonalLookState.from(lookup: hit), .ready)
+    }
+
+    // MARK: Server state → rendered status (the Android matrix)
+
+    func testMakingMapsRegardlessOfFound() {
+        XCTAssertEqual(PersonalLookState.fromServer(found: false, lookState: "making", lookReason: nil), .making)
+        XCTAssertEqual(PersonalLookState.fromServer(found: true, lookState: "making", lookReason: nil), .making)
+    }
+
+    func testReadyMapsToReady() {
+        XCTAssertEqual(PersonalLookState.fromServer(found: true, lookState: "ready", lookReason: nil), .ready)
+    }
+
+    func testNoneMapsToNone() {
+        XCTAssertEqual(PersonalLookState.fromServer(found: false, lookState: "none", lookReason: nil), .none)
+    }
+
+    func testFailedMapsEachReasonClass() {
+        XCTAssertEqual(
+            PersonalLookState.fromServer(found: false, lookState: "failed", lookReason: "quality_refused"),
+            .failed(reason: .qualityRefused))
+        XCTAssertEqual(
+            PersonalLookState.fromServer(found: false, lookState: "failed", lookReason: "service_refused"),
+            .failed(reason: .serviceRefused))
+        XCTAssertEqual(
+            PersonalLookState.fromServer(found: false, lookState: "failed", lookReason: "error"),
+            .failed(reason: .error))
+    }
+
+    func testFailedWithServingPriorHeroStaysFailed() {
+        // Keep-serving: the prior hero still serves (found) while
+        // its replacement's regen failed — the state is the
+        // REPLACEMENT's failure, not ready.
+        XCTAssertEqual(
+            PersonalLookState.fromServer(found: true, lookState: "failed", lookReason: "quality_refused"),
+            .failed(reason: .qualityRefused))
+    }
+
+    func testFailedWithUnknownOrMissingReasonDegradesToErrorNeverSilence() {
+        // Even a raw gate string (which the server contract says
+        // never crosses the wire) maps to the error class — the
+        // failure stays visible; it never degrades to silence.
+        XCTAssertEqual(
+            PersonalLookState.fromServer(found: false, lookState: "failed",
+                                         lookReason: "gate_failed: missing_required: bottom (expected tights, saw shorts)"),
+            .failed(reason: .error))
+        XCTAssertEqual(
+            PersonalLookState.fromServer(found: false, lookState: "failed", lookReason: nil),
+            .failed(reason: .error))
+    }
+
+    func testUnrecognizedStateFallsBackToFoundInference() {
+        XCTAssertEqual(PersonalLookState.fromServer(found: true, lookState: "surprise", lookReason: nil), .ready)
+        XCTAssertEqual(PersonalLookState.fromServer(found: false, lookState: "surprise", lookReason: nil), .none)
+        XCTAssertEqual(PersonalLookState.fromServer(found: true, lookState: nil, lookReason: nil), .ready)
+        XCTAssertEqual(PersonalLookState.fromServer(found: false, lookState: nil, lookReason: nil), .none)
+    }
+
+    // MARK: Copy deck (spec §7, both platforms verbatim)
+
+    func testProgressCopyIsTheAmendedDeck() {
+        XCTAssertEqual(MakeItMeCopy.progressTitle, "Making this outfit yours…")
+        XCTAssertEqual(
+            MakeItMeCopy.progressSubline,
+            "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done.")
+        // The retired G2 figure must never come back: it promised
+        // a number the system misses by an order of magnitude.
+        XCTAssertFalse(MakeItMeCopy.progressSubline.contains("10 seconds"))
+    }
+
+    func testFailedLineAndRetryAreTheDeck() {
+        XCTAssertEqual(MakeItMeCopy.lookFailed, "We couldn't make this look yet — tap to try again.")
+        XCTAssertEqual(MakeItMeCopy.lookRetry, "Try again")
     }
 }

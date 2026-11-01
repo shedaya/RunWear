@@ -129,7 +129,9 @@ extension PersonalHeroResolving {
 
 // MARK: - Backend DTOs
 
-/// get-personal-hero response (backend §2.1).
+/// get-personal-hero response (backend §2.1; RW-16.16 added the
+/// look-state fields in get-personal-hero v5 — additive, absent
+/// from pre-v5 payloads).
 struct PersonalHeroLookup: Decodable {
     let found: Bool
     let combinationId: String
@@ -138,6 +140,18 @@ struct PersonalHeroLookup: Decodable {
     let imageUrl: String?
     let version: Int?
     let replenishmentQueued: Int?
+    /// RW-16.16: the server's per-cell look state for this caller —
+    /// "none" | "making" | "ready" | "failed"; nil on a pre-v5
+    /// payload. NO default value here on purpose: a `let` with an
+    /// initial value is excluded from Decodable synthesis entirely
+    /// (the compiler warns "will not be decoded"), which would
+    /// silently nil these on every payload — the exact failure
+    /// LookStatusTests.testLookupDecodesLookStateAndReason caught.
+    let lookState: String?
+    /// RW-16.16: for a failed look, the coarse reason CLASS —
+    /// "quality_refused" | "service_refused" | "error". The raw
+    /// gate/moderation strings never cross the wire.
+    let lookReason: String?
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -147,6 +161,74 @@ struct PersonalHeroLookup: Decodable {
         case imageUrl = "image_url"
         case version
         case replenishmentQueued = "replenishment_queued"
+        case lookState = "look_state"
+        case lookReason = "look_reason"
+    }
+}
+
+// MARK: - Personal-look state (RW-16.16)
+//
+// The status the hero renders for one cell, as the SERVER reports
+// it in get-personal-hero's look_state / look_reason (v5+). This —
+// not any local bookkeeping — decides what the user sees: the
+// once-per-session requested set once suppressed both re-requests
+// AND the progress surface for a cell, so a generation the save
+// flow had requested arrived (or failed) in total silence (the G4
+// defect; spec §7 G4 superseded, G5/G6 added Nov 1, 2026).
+//
+// The server owns the truth: a look job in flight is MAKING; a
+// verified hero serving with nothing in flight is READY (the hero
+// itself is the state — no label); a terminal failure is FAILED
+// with a coarse reason class; anything else is NONE. Mirrors
+// Android's PersonalLookStatusPolicy exactly.
+
+/// Why a look failed, at the coarse class the server exposes.
+enum PersonalLookFailureReason: Equatable {
+    /// The verification gate refused the generated photo.
+    case qualityRefused
+    /// The generation service refused (moderation class).
+    case serviceRefused
+    /// Anything else — provider errors, timeouts, the unknown.
+    case error
+
+    /// Map the wire class; an unknown or missing class degrades to
+    /// `.error`, never to silence.
+    static func fromServer(_ lookReason: String?) -> PersonalLookFailureReason {
+        switch lookReason {
+        case "quality_refused": return .qualityRefused
+        case "service_refused": return .serviceRefused
+        default: return .error
+        }
+    }
+}
+
+enum PersonalLookState: Equatable {
+    case none
+    case making
+    case ready
+    case failed(reason: PersonalLookFailureReason)
+
+    var isMaking: Bool { self == .making }
+    var isFailed: Bool { if case .failed = self { return true }; return false }
+
+    /// Map one get-personal-hero payload onto the state. A payload
+    /// with no state field at all (a pre-v5 server) falls back to
+    /// the one inference that was always safe: found means READY, a
+    /// miss means NONE. An unrecognized state string falls back the
+    /// same way.
+    static func fromServer(found: Bool, lookState: String?, lookReason: String?) -> PersonalLookState {
+        switch lookState {
+        case "making": return .making
+        case "ready": return .ready
+        case "failed": return .failed(reason: PersonalLookFailureReason.fromServer(lookReason))
+        case "none": return .none
+        default: return found ? .ready : .none
+        }
+    }
+
+    /// The same mapping, from a decoded lookup.
+    static func from(lookup: PersonalHeroLookup) -> PersonalLookState {
+        fromServer(found: lookup.found, lookState: lookup.lookState, lookReason: lookup.lookReason)
     }
 }
 
@@ -408,9 +490,33 @@ struct CommitFailurePresentation: Equatable {
 final class OptInCommitDriver: ObservableObject {
     @Published private(set) var isCommitting = false
     @Published private(set) var failure: CommitFailurePresentation?
+    /// RW-16.15: the save confirmation. Set on a successful commit,
+    /// BEFORE onFinish dismisses the flow — the capture view renders
+    /// "Your photos are saved." from it during the confirmation
+    /// beat. Neither platform confirmed a save before this (the
+    /// flow just vanished), which read to the user as "my photos
+    /// didn't save"; Android's flow carries the identical contract.
+    @Published private(set) var didSave = false
 
-    /// Run the commit: onCommit first; on success the committing
-    /// flag clears and THEN onFinish is invoked — synchronously,
+    /// How long the save confirmation stays on screen before the
+    /// finish hand-off dismisses the flow.
+    static let saveConfirmationBeat: UInt64 = 1_500_000_000
+
+    /// Clear a recorded failure without starting a commit
+    /// (RW-16.7): the presentation host calls this when a fresh
+    /// flow opens, so the new flow never wears a previous
+    /// attempt's error line. A no-op while a commit is in
+    /// flight — that attempt owns its failure slot.
+    func clearFailure() {
+        guard !isCommitting else { return }
+        failure = nil
+        didSave = false
+    }
+
+    /// Run the commit: onCommit first; on success didSave is set
+    /// (the flow renders the save confirmation), the confirmation
+    /// beat elapses with the committing flag still up, and THEN
+    /// the flag clears and onFinish is invoked — synchronously,
     /// in that order, on the main actor. On failure the flag
     /// clears and the failure presentation is set; onFinish is
     /// never invoked. A call while a commit is already in flight
@@ -424,6 +530,7 @@ final class OptInCommitDriver: ObservableObject {
         guard !isCommitting else { return nil }
         isCommitting = true
         failure = nil
+        didSave = false
         return Task { @MainActor in
             do {
                 try await onCommit(photos)
@@ -432,6 +539,8 @@ final class OptInCommitDriver: ObservableObject {
                 failure = CommitFailurePresentation.forError(error)
                 return
             }
+            didSave = true
+            try? await Task.sleep(nanoseconds: Self.saveConfirmationBeat)
             isCommitting = false
             onFinish()
         }
@@ -647,5 +756,100 @@ enum PhotoQualityVerdict {
         if meanLuminance < darkThreshold { return .tooDark }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
         return nil
+    }
+}
+
+// MARK: - Intake copy (RW-16.14)
+//
+// The full-body guidance Sol ruled on Oct 31, 2026 (RW-16.13's
+// structural lever): the generator preserves what the reference
+// photos show, and Sol's own upper-body portraits produced heroes
+// with no legs for the tights outfits to land on. Guidance only —
+// it recommends; it never validates, and no photo is rejected for
+// lacking a full body (RW-16.10 strictness is a separate, still
+// open question). The lead line and the solo-frame note are Sol's
+// copy direction verbatim in substance: race photos with other
+// runners in frame fail the existing multiple-people check (C3b),
+// so the guidance must not steer anyone into that rejection.
+enum MakeItMeCopy {
+    static let fullBodyGuidance = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
+    /// RW-16.15 (spec C2j, both platforms verbatim): the save
+    /// confirmation the flow shows after a successful commit,
+    /// before it dismisses — the explicit "it saved" the field
+    /// report found missing on both platforms.
+    static let saveConfirmed = "Your photos are saved."
+    /// Spec §7 G1, verbatim: the progress line's title while the
+    /// server reports the current cell's look as making.
+    static let progressTitle = "Making this outfit yours…"
+    /// Spec §7 G2, verbatim as AMENDED Nov 1, 2026 (RW-16.16): the
+    /// original "About 10 seconds" figure was false against a
+    /// measured 72-second job and a 2–4 minute backend norm; the
+    /// amended line promises no number the system misses.
+    static let progressSubline = "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    /// Spec §7 G5 (added Nov 1, 2026 — RW-16.16): the durable
+    /// failed-look line at the hero, shown with the G6 action
+    /// whenever the server reports the current cell's look as
+    /// failed, held until the state changes. One string for every
+    /// failure class in this build. PLACEHOLDER pending Sol's pick
+    /// from the options put to him Nov 1, 2026 — a one-string swap.
+    static let lookFailed = "We couldn't make this look yet — tap to try again."
+    /// Spec §7 G6 (added Nov 1, 2026 — RW-16.16): the failed
+    /// line's retry action. User-initiated only; automatic
+    /// re-request stays off.
+    static let lookRetry = "Try again"
+}
+
+// MARK: - Photo intake source routing (RW-16.14)
+//
+// The intake offers two sources for the same picked-photo seam:
+// the library (PhotosUI) and the camera (Sol, Oct 31: "Both apps
+// should allow camera not just photo roll"). This routing is the
+// pure decision the capture view renders: given what the user
+// asked for and what the camera can do right now, where do we go?
+// The camera outcomes are mirrored from AVFoundation's states
+// without importing it here, so the matrix is unit-tested.
+enum PhotoIntakeSource: Equatable {
+    case camera
+    case library
+}
+
+enum CameraAccess: Equatable {
+    /// No usable camera on this device (or the picker source is
+    /// unavailable, e.g. the Simulator).
+    case unavailable
+    case notDetermined
+    case authorized
+    case denied
+    case restricted
+}
+
+enum PhotoIntakeRoute: Equatable {
+    case camera
+    case library
+    /// The camera was asked for but can't be used: open the
+    /// library anyway and show this line — never a dead end.
+    case libraryWithNote(String)
+}
+
+enum PhotoIntakeRouting {
+    static let cameraUnavailableNote = "No camera is available here — choose from your library instead."
+    static let cameraDeniedNote = "Camera access is off for RunWear. You can turn it on in Settings, or choose from your library."
+
+    static func route(requested: PhotoIntakeSource, cameraAccess: CameraAccess) -> PhotoIntakeRoute {
+        switch requested {
+        case .library:
+            return .library
+        case .camera:
+            switch cameraAccess {
+            case .authorized, .notDetermined:
+                // Not-yet-asked still routes to the camera: the
+                // system asks for permission in context.
+                return .camera
+            case .unavailable:
+                return .libraryWithNote(cameraUnavailableNote)
+            case .denied, .restricted:
+                return .libraryWithNote(cameraDeniedNote)
+            }
+        }
     }
 }

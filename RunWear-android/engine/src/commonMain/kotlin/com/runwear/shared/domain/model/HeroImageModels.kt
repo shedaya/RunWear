@@ -164,6 +164,28 @@ data class HeroImageResult(
      * cascade fell back to a neighbouring cell (different time of day or
      * the opposite gender). Null for fallback/curated images.
      */
+    val servedCombinationId: String? = null,
+    /**
+     * Every servable (review-approved) image for the cell this result
+     * was drawn from, in pool order. Powers the hero refresh control:
+     * tapping it cycles to the next candidate for the SAME cell without
+     * flagging the current one. Empty when the result did not come from
+     * a pool lookup (pure fallback paths fill it with the single
+     * fallback candidate or leave it empty).
+     */
+    val candidates: List<HeroCandidate> = emptyList()
+)
+
+/**
+ * One servable hero image for a cell — the unit the refresh control
+ * cycles through. [imageRowId] / [servedCombinationId] carry the same
+ * flag-report identity as the parent [HeroImageResult] fields, so a
+ * flag raised after a refresh targets the photo actually on screen.
+ */
+data class HeroCandidate(
+    val imageUrl: String,
+    val thumbnailUrl: String? = null,
+    val imageRowId: String? = null,
     val servedCombinationId: String? = null
 )
 

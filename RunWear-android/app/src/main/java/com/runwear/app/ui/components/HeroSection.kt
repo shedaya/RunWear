@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -100,10 +102,24 @@ fun HeroSection(
     showFlagButton: Boolean = false,
     flagEnabled: Boolean = true,
     onFlagClick: () -> Unit = {},
+    /**
+     * Hero-refresh affordance: shown beside the flag chip when the
+     * current cell has more than one approved image. Tapping cycles to
+     * the next image for the same cell WITHOUT flagging this one.
+     */
+    showRefreshButton: Boolean = false,
+    onRefreshHeroClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
     val heroHeight = (configuration.screenHeightDp * 0.75).dp
+
+    // Measured height of the weather-pills row (one or two flow lines
+    // depending on hero width). Initialized to the typical one-line
+    // height so the corner chips' first frame matches the legacy fixed
+    // 64.dp inset (20 + 36 + 8); the measurement corrects it from the
+    // first layout pass onward.
+    var pillsHeightDp by remember { mutableStateOf(36.dp) }
     // Decode the hero at display size, not at the source's full 800×1200.
     val density = LocalDensity.current
     val heroWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
@@ -311,27 +327,46 @@ fun HeroSection(
 
             Spacer(Modifier.height(16.dp))
 
-            // Weather Pills (tappable for detail popups)
+            // Weather Pills (tappable for detail popups). Measured so
+            // the corner chips below can float exactly above this row
+            // at every width — the pills flow to two lines in narrow
+            // panes, and a fixed chip inset overlapped them (Oct 30).
             WeatherPillsRow(
                 weather = weather,
-                onPillClick = onWeatherPillClick
+                onPillClick = onWeatherPillClick,
+                modifier = Modifier.onSizeChanged { size ->
+                    pillsHeightDp = with(density) { size.height.toDp() }
+                }
             )
         }
 
-        // 6. Hero-flag chip — bottom-trailing corner of the photo.
-        // Deliberately quiet: a small dark translucent disc, no label.
-        // It floats above the weather-pills row (bottom inset 64.dp
-        // clears that row, which shares the hero's bottom edge) and
-        // clear of the top controls and the date/time pill (bottom-
-        // leading). Rendered only while a photo is actually on screen.
-        if (showFlagButton && heroImageUrl != null) {
-            HeroFlagChip(
-                enabled = flagEnabled,
-                onClick = onFlagClick,
+        // 6. Hero corner chips — bottom-trailing corner of the photo:
+        // refresh (cycle to the cell's next approved image) beside the
+        // flag. Deliberately quiet: small dark translucent discs, no
+        // labels. They float above the weather-pills row — the bottom
+        // inset is DERIVED from the pills row's measured height
+        // (20.dp hero bottom padding + pills height + 8.dp gap), so
+        // the chips can never overlap the pills at any width, whether
+        // the pills take one line or two. Rendered only while a photo
+        // is actually on screen.
+        if (heroImageUrl != null && (showFlagButton || showRefreshButton)) {
+            Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = 64.dp)
-            )
+                    .padding(end = 14.dp, bottom = 20.dp + pillsHeightDp + 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (showRefreshButton) {
+                    HeroRefreshChip(onClick = onRefreshHeroClick)
+                }
+                if (showFlagButton) {
+                    HeroFlagChip(
+                        enabled = flagEnabled,
+                        onClick = onFlagClick
+                    )
+                }
+            }
         }
     }
 }
@@ -359,6 +394,35 @@ private fun HeroFlagChip(
             imageVector = Icons.Outlined.Flag,
             contentDescription = "Flag this photo",
             tint = Color.White.copy(alpha = if (enabled) 0.9f else 0.45f),
+            modifier = Modifier
+                .padding(8.dp)
+                .size(16.dp)
+        )
+    }
+}
+
+/**
+ * The refresh affordance overlaid on the hero photo, beside the flag
+ * chip: same quiet 32dp dark translucent disc. Tapping cycles the hero
+ * to the next approved image for the current cell — the current photo
+ * is NOT flagged or removed, just rotated past for today.
+ */
+@Composable
+private fun HeroRefreshChip(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(32.dp),
+        shape = CircleShape,
+        color = Color.Black.copy(alpha = 0.35f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Refresh,
+            contentDescription = "Show another photo",
+            tint = Color.White.copy(alpha = 0.9f),
             modifier = Modifier
                 .padding(8.dp)
                 .size(16.dp)

@@ -245,6 +245,11 @@ private struct FirstLookView: View {
 
     @EnvironmentObject private var store: PersonalHeroStore
     @StateObject private var previewVM = WeatherViewModel()
+    /// RW-16.7: the opt-in commit driver is owned HERE — the
+    /// stable host of the flow — not by the flow view, so the
+    /// flow's re-creation can never orphan a commit mid-flight
+    /// (the Settings-side instance of this defect is RW-16.9 §4).
+    @StateObject private var commitDriver = OptInCommitDriver()
     @State private var showLocationPicker = false
     @State private var showOptIn = false
     @State private var started = false
@@ -323,7 +328,8 @@ private struct FirstLookView: View {
                         }
                     )
                 },
-                onCancel: { showOptIn = false }
+                onCancel: { showOptIn = false },
+                commitDriver: commitDriver
             )
         }
     }

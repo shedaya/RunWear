@@ -4,6 +4,8 @@
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RunWear needs your location to provide weather-based outfit recommendations for your area.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>RunWear uses the camera so you can take your own photo for Make it me outfit pictures.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>
