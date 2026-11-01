@@ -383,7 +383,10 @@ class PersonalHeroService @Inject constructor(
             if (!response.status.isSuccess()) return@runCatching null
             val signed = json.parseToJsonElement(response.bodyAsText()).jsonObject["signedURL"]
                 ?.jsonPrimitive?.contentOrNull ?: return@runCatching null
-            if (signed.startsWith("http")) signed else "$BASE_URL$signed"
+            // RW-16.15: the API's signedURL is relative to
+            // /storage/v1 — SignedUrlPolicy owns the join (the
+            // bare-host join 404'd every tile on vc21).
+            SignedUrlPolicy.resolve(BASE_URL, signed)
         }.getOrNull()
     }
 

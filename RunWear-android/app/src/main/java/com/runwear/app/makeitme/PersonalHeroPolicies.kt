@@ -12,6 +12,8 @@ package com.runwear.app.makeitme
  *   Supabase user id (acceptance 17).
  * - [PhotoIntakePolicy]: which source a photo add comes from —
  *   camera beside library (RW-16.14).
+ * - [SignedUrlPolicy]: how a Storage signedURL becomes a display
+ *   URL (RW-16.15).
  */
 
 /**
@@ -215,5 +217,26 @@ object PhotoIntakePolicy {
         Source.CAMERA ->
             if (cameraAvailable) Route.Camera
             else Route.LibraryWithNote(CAMERA_UNAVAILABLE_NOTE)
+    }
+}
+
+/**
+ * RW-16.15: the Storage API's `signedURL` is relative to the
+ * STORAGE endpoint root (`/storage/v1`), NOT the host root. vc21
+ * joined it to the bare host, so every Your Photos tile URL 404'd
+ * and Coil painted nothing over the bare tile box — the photos had
+ * saved fine; they could simply never display (proven live in the
+ * RW-16.15 trace: host-root join → HTTP 404, `/storage/v1` join →
+ * 206 image/jpeg, against the user's real reference photo).
+ *
+ * The rule: absolute URLs pass through untouched; a relative
+ * signedURL resolves under `/storage/v1`.
+ */
+object SignedUrlPolicy {
+
+    fun resolve(baseUrl: String, signedURL: String): String = when {
+        signedURL.startsWith("http") -> signedURL
+        signedURL.startsWith("/") -> "$baseUrl/storage/v1$signedURL"
+        else -> "$baseUrl/storage/v1/$signedURL"
     }
 }

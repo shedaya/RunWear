@@ -57,6 +57,13 @@ object MakeItMeStrings {
     const val S5_STATE_C_SUB = "Subscribed — your photo is ready for every outfit, instantly."
     const val S6_PHOTOS_ROW = "Your photos"
     const val S6_PHOTOS_SUB = "View or replace"
+    // S15–S17 added Oct 31, 2026 (RW-16.15 — spec §7 amended by dated
+    // note): the Your Photos tile states. A tile that cannot load is
+    // a labeled, tappable retry — never a silent blank box (the
+    // contract iOS build (13) established with ReferenceTileLoader).
+    const val S15_PHOTO_LOADING = "Loading"
+    const val S16_PHOTO_LOAD_FAILED = "Couldn't load this photo"
+    const val S17_PHOTO_RETRY = "Tap to retry"
     const val S7_REPLACE_NOTE = "Replacing your photos remakes today's look right away. Your other looks update as they're made again."
     const val S8_STATE_B_SUBSCRIBE_ROW = "Every outfit, instantly"
     const val S8_STATE_B_SUBSCRIBE_SUB = "Subscribe, and your photo is ready before you open the app. $0.99/month."

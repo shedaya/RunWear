@@ -27,6 +27,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -592,6 +594,87 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
 }
 
 // ============================================================================
+// One Your Photos tile (RW-16.15). The contract mirrors iOS build
+// (13)'s ReferenceTileLoader: a tile is always in a LABELED phase —
+// loading says so, success shows the photo, and failure is a
+// terminal, tappable retry tile. A failed load can never again
+// present as the silent blank box vc21 shipped (every tile 404'd
+// under a wrong URL join and Coil painted nothing).
+// ============================================================================
+
+private enum class ReferenceTilePhase { LOADING, LOADED, FAILED }
+
+@Composable
+private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
+    var phase by remember(url) { mutableStateOf(ReferenceTilePhase.LOADING) }
+    Box(
+        modifier = Modifier
+            .size(96.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+    ) {
+        if (phase != ReferenceTilePhase.FAILED) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onSuccess = { phase = ReferenceTilePhase.LOADED },
+                onError = { phase = ReferenceTilePhase.FAILED },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        when (phase) {
+            ReferenceTilePhase.LOADING -> Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator(
+                    color = RunWearColors.Primary,
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = MakeItMeStrings.S15_PHOTO_LOADING,
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.65f)
+                )
+            }
+            ReferenceTilePhase.FAILED -> Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(onClick = onRetry)
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Refresh,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.8f),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = MakeItMeStrings.S16_PHOTO_LOAD_FAILED,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+                Text(
+                    text = MakeItMeStrings.S17_PHOTO_RETRY,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = RunWearColors.TextPrimary
+                )
+            }
+            ReferenceTilePhase.LOADED -> Unit
+        }
+    }
+}
+
+// ============================================================================
 // Settings "Your photos" view (spec §3): current references + replace.
 // ============================================================================
 
@@ -604,7 +687,11 @@ fun MakeItMePhotosScreen(
 ) {
     var urls by remember { mutableStateOf<List<String>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
+    // RW-16.15: bumping the token re-runs the load — the tile retry
+    // path. Fresh signed URLs (not just a Coil re-request), so an
+    // expired or bad URL is itself the thing that gets replaced.
+    var loadToken by remember { mutableStateOf(0) }
+    LaunchedEffect(loadToken) {
         viewModel.loadReferenceUrls { result ->
             urls = result
             loaded = true
@@ -643,14 +730,13 @@ fun MakeItMePhotosScreen(
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 urls.forEach { url ->
-                    AsyncImage(
-                        model = url,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(96.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color.White.copy(alpha = 0.06f))
+                    ReferencePhotoTile(
+                        url = url,
+                        onRetry = {
+                            loaded = false
+                            urls = emptyList()
+                            loadToken++
+                        }
                     )
                 }
             }
