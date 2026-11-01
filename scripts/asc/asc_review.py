@@ -99,5 +99,27 @@ def main():
         section("appStoreVersionLocalizations",
                 f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations?limit=50")
 
+    # 7. Submission with items inlined (last door for message text in-API).
+    section("reviewSubmission with include=items",
+            f"/v1/reviewSubmissions/{SUBMISSION_ID}?include=items")
+
+    # 8. App-level info (name/subtitle/privacy) for the metadata picture.
+    infos = section("appInfos for app", f"/v1/apps/{APP_ID}/appInfos?limit=10")
+    for info in infos.get("data", []):
+        section(f"appInfoLocalizations for {info.get('id')}",
+                f"/v1/appInfos/{info.get('id')}/appInfoLocalizations?limit=50")
+
+    # 9. What each subscription is missing (fix-path prep): localizations,
+    #    prices, review screenshot, availability.
+    for sid in ("6829225446", "6829225711"):
+        section(f"subscription {sid} localizations",
+                f"/v1/subscriptions/{sid}/subscriptionLocalizations?limit=50")
+        section(f"subscription {sid} prices",
+                f"/v1/subscriptions/{sid}/prices?limit=50")
+        section(f"subscription {sid} appStoreReviewScreenshot",
+                f"/v1/subscriptions/{sid}/appStoreReviewScreenshot")
+        section(f"subscription {sid} availability",
+                f"/v1/subscriptions/{sid}/subscriptionAvailability")
+
 if __name__ == "__main__":
     main()
