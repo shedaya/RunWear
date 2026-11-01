@@ -4,11 +4,47 @@
 //   { "combination_id": "MALE_CLEAR_MILD_DAWN_<8-hex outfit signature>" }
 // Response:
 //   found:  { "found": true, "combination_id", "hero_id", "variant",
-//             "image_url": <signed URL, 1h>, "version": <cell version> }
-//   miss:   { "found": false, "combination_id", "version": <n|null> }
+//             "image_url": <signed URL, 1h>, "version": <cell version>,
+//             "look_state", "look_reason" }
+//   miss:   { "found": false, "combination_id", "version": <n|null>,
+//             "look_state", "look_reason" }
 // A miss means: serve the generic pool hero (the client fallback). The
 // version marker changes whenever the cell's verified hero set changes
 // (variant added or removed), so clients can invalidate cached heroes.
+//
+// RW-16.16 — LOOK STATE. Both payloads additionally carry the cell's
+// personal-look state for the CALLER (free users included — the state
+// derives from the caller's jobs/cell/heroes, none of which requires
+// entitlement):
+//   look_state: "none"    — no look exists and none is in flight or
+//                           terminally failed for this cell.
+//               "making"  — a look job for this cell is QUEUED or
+//                           PROCESSING (replenishment top-ups do not
+//                           count: the served hero is the state then).
+//               "ready"   — a verified hero serves (found: true) and
+//                           no look job is in flight and the cell is
+//                           not in a failed regeneration cycle.
+//               "failed"  — the latest look attempt for this cell
+//                           ended FAILED and no replacement is in
+//                           flight — including a keep-serving cell
+//                           whose regeneration cycle died (found may
+//                           still be true: the prior hero keeps
+//                           serving, and the failure is the
+//                           REPLACEMENT's, surfaced so the user can
+//                           retry it explicitly).
+//   look_reason: for "failed", a coarse CLASS only — never the raw
+//               gate/moderation string:
+//               "quality_refused" (the verification gate refused the
+//               generated outfit), "service_refused" (the generation
+//               service refused the input/output, E005-class), or
+//               "error" (anything else). Null in every other state.
+// The state exists so a terminal outcome is never again invisible to
+// the user (the G4-silence defect, RW-16.16 trace §4): the clients
+// render it durably at the hero, driven by this field, not by
+// session memory. Derivation is read-time, from rows that already
+// exist — no schema change, and the keep-serving partition above is
+// untouched: state is computed AFTER the partition and any swap
+// materialization, from the final regen_status / serving set.
 //
 // Side effect (replenishment hook, entitled users only): when a hero is
 // served and the cell holds fewer than VARIANT_CAP verified variants,
@@ -56,6 +92,22 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { 'Content-Type': 'application/json' }
   })
 }
+
+// RW-16.16: map a job/cell terminal error string onto the coarse
+// reason CLASS the client may see. The raw strings name garments,
+// enumerator listings, and provider error bodies — diagnostics, not
+// user copy — so they never cross this boundary.
+type LookReasonClass = 'quality_refused' | 'service_refused' | 'error'
+function lookReasonClass(errorMessage: string | null | undefined): LookReasonClass {
+  const msg = (errorMessage ?? '').toLowerCase()
+  if (msg.startsWith('gate_failed')) return 'quality_refused'
+  if (msg.includes('e005') || msg.includes('flagged as sensitive')) {
+    return 'service_refused'
+  }
+  return 'error'
+}
+
+type LookState = 'none' | 'making' | 'ready' | 'failed'
 
 function kickWorker() {
   // Fire-and-forget worker kick (same pattern as the replenishment
@@ -138,12 +190,13 @@ serve(async (req) => {
 
     const { data: cell } = await sb
       .from('personal_cells')
-      .select('version, regen_status, regen_pending_since')
+      .select('version, regen_status, regen_pending_since, regen_error')
       .eq('user_id', userId)
       .eq('combination_id', combinationId)
       .maybeSingle()
     let version = cell?.version ?? null
     let regenStatus = (cell?.regen_status as string | undefined) ?? 'current'
+    let regenError = (cell?.regen_error as string | null | undefined) ?? null
     const pendingSince = typeof cell?.regen_pending_since === 'string'
       ? cell.regen_pending_since : null
     const regenPending = (regenStatus === 'pending' || regenStatus === 'failed') &&
@@ -158,6 +211,19 @@ serve(async (req) => {
       .order('variant', { ascending: true })
     if (heroError) throw heroError
     const allHeroes = heroes ?? []
+
+    // RW-16.16: the cell's recent jobs, fetched once — the
+    // keep-serving branch below reasons over the regeneration
+    // cycle's jobs, and the look-state derivation at the end reads
+    // the same rows (active jobs, latest terminal outcome).
+    const { data: recentJobs } = await sb
+      .from('personal_generation_jobs')
+      .select('status, error_message, requested_at, outfit_items, kind')
+      .eq('user_id', userId)
+      .eq('combination_id', combinationId)
+      .order('requested_at', { ascending: false })
+      .limit(10)
+    const cellJobs = recentJobs ?? []
 
     // --- RW-16.12 Lane C: keep-serving partition ---
     // `serving` is the hero set this response may draw from. For a
@@ -176,6 +242,7 @@ serve(async (req) => {
         serving = fresh
         if (await retirePriorHeroes(sb, userId, combinationId, prior)) {
           regenStatus = 'current'
+          regenError = null
           const { data: cellAfter } = await sb
             .from('personal_cells')
             .select('version')
@@ -198,14 +265,7 @@ serve(async (req) => {
         //    regeneration now, so the replacement actually gets made
         //    even though the client found a serving hero and never
         //    calls the request action for this cell.
-        const { data: recentJobs } = await sb
-          .from('personal_generation_jobs')
-          .select('status, error_message, requested_at, outfit_items')
-          .eq('user_id', userId)
-          .eq('combination_id', combinationId)
-          .order('requested_at', { ascending: false })
-          .limit(10)
-        const jobs = recentJobs ?? []
+        const jobs = cellJobs
         const hasActiveJob = jobs.some(
           j => j.status === 'QUEUED' || j.status === 'PROCESSING')
         const cycleJobs = jobs.filter(
@@ -223,7 +283,11 @@ serve(async (req) => {
               })
               .eq('user_id', userId)
               .eq('combination_id', combinationId)
-            if (!failMarkError) regenStatus = 'failed'
+            if (!failMarkError) {
+              regenStatus = 'failed'
+              regenError = (latestCycleJob.error_message as string | null) ??
+                'generation_failed'
+            }
             else console.error('[get-personal-hero] regen failure marking failed:', failMarkError)
           }
         } else if (!hasActiveJob && regenStatus === 'pending' && !latestCycleJob) {
@@ -256,10 +320,44 @@ serve(async (req) => {
       }
     }
 
+    // --- RW-16.16: look-state derivation ---
+    // Computed after the keep-serving partition (and any swap
+    // materialization above), from the final regen_status, the
+    // serving set, and the cell's jobs. Precedence:
+    //   1. a look job in flight (any kind except replenishment —
+    //      a rotation top-up never masks the served hero's state)
+    //      -> making;
+    //   2. a failed regeneration cycle on the cell record (prior
+    //      hero may still serve) -> failed, classed from regen_error;
+    //   3. a hero serves -> ready;
+    //   4. nothing serves and the latest job FAILED -> failed,
+    //      classed from its error (the free on-demand case: no cell
+    //      row exists until a delivery, so the job IS the record);
+    //   5. otherwise -> none.
+    const hasActiveLookJob = regenerationQueued > 0 || cellJobs.some(j =>
+      (j.status === 'QUEUED' || j.status === 'PROCESSING') &&
+      j.kind !== 'replenishment')
+    let lookState: LookState
+    let lookReason: LookReasonClass | null = null
+    if (hasActiveLookJob) {
+      lookState = 'making'
+    } else if (regenStatus === 'failed') {
+      lookState = 'failed'
+      lookReason = lookReasonClass(regenError)
+    } else if (serving.length > 0) {
+      lookState = 'ready'
+    } else if (cellJobs[0]?.status === 'FAILED') {
+      lookState = 'failed'
+      lookReason = lookReasonClass(cellJobs[0].error_message as string | null)
+    } else {
+      lookState = 'none'
+    }
+
     if (serving.length === 0) {
       return jsonResponse({
         found: false, combination_id: combinationId, version,
-        regen_status: regenStatus, regeneration_queued: regenerationQueued
+        regen_status: regenStatus, regeneration_queued: regenerationQueued,
+        look_state: lookState, look_reason: lookReason
       })
     }
 
@@ -327,7 +425,8 @@ serve(async (req) => {
       version,
       regen_status: regenStatus,
       regeneration_queued: regenerationQueued,
-      replenishment_queued: replenishmentQueued
+      replenishment_queued: replenishmentQueued,
+      look_state: lookState, look_reason: lookReason
     })
   } catch (error) {
     console.error('[get-personal-hero] error:', error)
