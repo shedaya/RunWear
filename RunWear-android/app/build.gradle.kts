@@ -51,8 +51,8 @@ android {
         // vc19 is the Wear polish release's slot (shipped as Wear
         // 1.2.5/vc10019 — one shared versionCode space), so the phone
         // line takes vc20 for its half of the 1.2.5 train.
-        versionCode = 21
-        versionName = "1.2.6"
+        versionCode = 22
+        versionName = "1.2.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

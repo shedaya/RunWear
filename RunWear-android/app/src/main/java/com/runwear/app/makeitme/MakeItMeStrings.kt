@@ -29,6 +29,14 @@ object MakeItMeStrings {
     const val C1E_NOT_NOW = "Not now"
     const val C2A_CAPTURE_TITLE = "Add 1 to 3 photos of you"
     const val C2B_CAPTURE_GUIDANCE = "Front-facing works best: head and shoulders or half body, good light, no sunglasses. The outfit needs a body to land on."
+    // C2D–C2G added Oct 31, 2026 (RW-16.14, Sol's directives — spec §7
+    // amended by dated note): the full-body guidance (guidance only,
+    // never a validation rule) and the camera/library source choice.
+    // C2D is verbatim-identical to the iOS deck (MakeItMeCopy).
+    const val C2D_FULL_BODY_GUIDANCE = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
+    const val C2E_SOURCE_DIALOG_TITLE = "Add a photo"
+    const val C2F_TAKE_PHOTO = "Take photo"
+    const val C2G_CHOOSE_FROM_LIBRARY = "Choose from library"
     const val C2C_CONFIRM_FIRST_LOOK = "Make my first look"
     const val C2C_CONFIRM_SAVE = "Save photos"
     const val C3A_REJECT_FACE_UNCLEAR = "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow."

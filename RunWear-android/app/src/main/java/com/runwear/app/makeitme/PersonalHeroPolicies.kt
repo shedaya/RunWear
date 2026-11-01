@@ -10,6 +10,8 @@ package com.runwear.app.makeitme
  *   (acceptance 2, spec §7 C3).
  * - [BillingIdentityPolicy]: when RevenueCat must be (re)linked to the
  *   Supabase user id (acceptance 17).
+ * - [PhotoIntakePolicy]: which source a photo add comes from —
+ *   camera beside library (RW-16.14).
  */
 
 /**
@@ -173,5 +175,45 @@ object BillingIdentityPolicy {
     fun shouldLogIn(currentRcAppUserId: String?, supabaseUserId: String?): Boolean {
         val uid = supabaseUserId?.takeIf { it.isNotBlank() } ?: return false
         return currentRcAppUserId != uid
+    }
+}
+
+/**
+ * RW-16.14: the photo intake offers the camera beside the library
+ * (Sol, Oct 31: "Both apps should allow camera not just photo
+ * roll"). The capture runs through the platform camera intent
+ * (ActivityResultContracts.TakePicture into a FileProvider file),
+ * which needs NO camera permission in the manifest and returns a
+ * full-resolution photo — the same Uri shape the library picker
+ * produces, so a capture enters the identical PhotoQualityChecker
+ * path with no second pipeline.
+ *
+ * The rule mirrors the iOS PhotoIntakeRouting: a library request is
+ * never diverted; a camera request goes to the camera when one can
+ * be launched, and otherwise falls back to the library WITH the
+ * honest note — never a dead end. (The intent route has no
+ * permission-denied state; the only can't is "no camera to launch",
+ * which the screens layer also covers if the launch itself throws.)
+ */
+object PhotoIntakePolicy {
+
+    enum class Source { CAMERA, LIBRARY }
+
+    sealed interface Route {
+        data object Camera : Route
+        data object Library : Route
+
+        /** Camera asked for but unusable: library, with the reason shown. */
+        data class LibraryWithNote(val note: String) : Route
+    }
+
+    /** Verbatim-identical to the iOS routing's unavailable note. */
+    const val CAMERA_UNAVAILABLE_NOTE = "No camera is available here — choose from your library instead."
+
+    fun route(requested: Source, cameraAvailable: Boolean): Route = when (requested) {
+        Source.LIBRARY -> Route.Library
+        Source.CAMERA ->
+            if (cameraAvailable) Route.Camera
+            else Route.LibraryWithNote(CAMERA_UNAVAILABLE_NOTE)
     }
 }

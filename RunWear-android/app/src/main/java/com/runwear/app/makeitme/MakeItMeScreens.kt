@@ -1,8 +1,11 @@
 package com.runwear.app.makeitme
 
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -231,6 +234,66 @@ fun MakeItMeUploadFlow(
         }
     }
 
+    // RW-16.14: the camera source. TakePicture drives the platform
+    // camera app into a FileProvider file in our cache — full
+    // resolution, NO manifest camera permission — and the result is
+    // a content Uri of exactly the shape the picker produces, so
+    // the quality-check effect below treats a capture identically
+    // to a library pick. There is one intake path, not two.
+    var showSourceChoice by remember { mutableStateOf(false) }
+    var sourceNote by remember { mutableStateOf<String?>(null) }
+    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        val uri = pendingCaptureUri
+        pendingCaptureUri = null
+        if (success && uri != null && photos.none { it.uri == uri }) {
+            photos.add(PickedPhoto(uri))
+        }
+    }
+    val cameraPresent = remember {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+    }
+
+    fun launchPicker() {
+        picker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
+
+    fun launchCamera() {
+        val file = File(context.cacheDir, "makeitme/capture-${System.currentTimeMillis()}.jpg")
+        file.parentFile?.mkdirs()
+        val uri = FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file
+        )
+        pendingCaptureUri = uri
+        try {
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            // No activity answers the capture intent after all:
+            // the policy's fallback — library, with the note.
+            pendingCaptureUri = null
+            sourceNote = PhotoIntakePolicy.CAMERA_UNAVAILABLE_NOTE
+            launchPicker()
+        }
+    }
+
+    fun chooseSource(source: PhotoIntakePolicy.Source) {
+        when (val route = PhotoIntakePolicy.route(source, cameraPresent)) {
+            PhotoIntakePolicy.Route.Camera -> launchCamera()
+            PhotoIntakePolicy.Route.Library -> {
+                sourceNote = null
+                launchPicker()
+            }
+            is PhotoIntakePolicy.Route.LibraryWithNote -> {
+                sourceNote = route.note
+                launchPicker()
+            }
+        }
+    }
+
     // Quality-check each newly picked photo in the flow.
     photos.forEach { picked ->
         LaunchedEffect(picked.uri) {
@@ -358,6 +421,16 @@ fun MakeItMeUploadFlow(
                     lineHeight = 19.sp,
                     color = Color.White.copy(alpha = 0.6f)
                 )
+                Spacer(Modifier.height(8.dp))
+                // RW-16.14 guidance (Sol's ruling, Oct 31): a
+                // recommendation, shown where photos are chosen —
+                // never a requirement, never validated.
+                Text(
+                    text = MakeItMeStrings.C2D_FULL_BODY_GUIDANCE,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
                 if (replace) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -379,11 +452,7 @@ fun MakeItMeUploadFlow(
 
                 if (photos.size < 3) {
                     Button(
-                        onClick = {
-                            picker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                            )
-                        },
+                        onClick = { showSourceChoice = true },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -395,6 +464,35 @@ fun MakeItMeUploadFlow(
                     ) {
                         Text("Add photos", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                     }
+                }
+
+                sourceNote?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f))
+                }
+                if (showSourceChoice) {
+                    AlertDialog(
+                        onDismissRequest = { showSourceChoice = false },
+                        title = { Text(MakeItMeStrings.C2E_SOURCE_DIALOG_TITLE) },
+                        text = {
+                            Column {
+                                TextButton(onClick = {
+                                    showSourceChoice = false
+                                    chooseSource(PhotoIntakePolicy.Source.CAMERA)
+                                }) { Text(MakeItMeStrings.C2F_TAKE_PHOTO) }
+                                TextButton(onClick = {
+                                    showSourceChoice = false
+                                    chooseSource(PhotoIntakePolicy.Source.LIBRARY)
+                                }) { Text(MakeItMeStrings.C2G_CHOOSE_FROM_LIBRARY) }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { showSourceChoice = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
                 }
 
                 val accepted = photos.filter { it.jpegBytes != null }
