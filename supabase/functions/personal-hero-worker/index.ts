@@ -103,7 +103,13 @@ const SOFT_TIME_BUDGET_MS = 100_000
 // processing. The previous 15-minute threshold left the RW-16.12
 // COOL DUSK cell blocked for a quarter hour per wedge cycle; at
 // 5 minutes plus the 5-minute drain cadence, worst-case recovery
-// from a wedge is ~5–10 minutes from the claim.
+// from a wedge is ~5–10 minutes from the claim. RW-16.25: the
+// per-attempt markJob in the generation loop also refreshes
+// started_at (a heartbeat), because a layered bracket's
+// five-attempt job can now legitimately run past 300 s; a live job
+// crosses an attempt boundary — and re-stamps its claim — at field
+// timings of ~90 s or less per attempt, so the threshold still
+// separates live processing from platform termination.
 const STALE_PROCESSING_MS = 300_000
 // Reclaim budget per job: a job may be reclaimed at most this many
 // times; the next stale scan after the budget is spent fails it with
@@ -111,6 +117,30 @@ const STALE_PROCESSING_MS = 300_000
 // per job against repeated platform terminations.
 const STALE_MAX_RECLAIMS = 3
 const STALE_FAILURE_REASON = 'stale_processing_timeout'
+
+// Per-job generation-attempt budget (RW-16.25). Attempts within a
+// job are NOT blind retries: attempt N+1 is prompted from the union
+// of every prior gate verdict (the in-job loop below, plus cross-job
+// seeding from the cell's latest FAILED record), so a larger budget
+// compounds evidence instead of repeating samples. The layered
+// brackets — FREEZING, COLD, COOL — prescribe multi-atom outfits
+// whose joint event is rare per sample (RW-16.22/23: the two-atom
+// COOL outfit landed once in ~28 cell attempts under the previous
+// cap), so they get MAX_ATTEMPTS_LAYERED attempts per job; every
+// other bracket keeps the established MAX_ATTEMPTS_DEFAULT. The
+// budget lives only here, in the worker: neither enqueue path
+// (request-personal-generation, start-personal-fill) carries an
+// attempt policy, so on-demand and fill jobs share this rule by
+// construction.
+const MAX_ATTEMPTS_DEFAULT = 2
+const MAX_ATTEMPTS_LAYERED = 5
+const LAYERED_BRACKETS: ReadonlySet<string> = new Set(['FREEZING', 'COLD', 'COOL'])
+
+function maxAttemptsFor(job: JobRow): number {
+  return LAYERED_BRACKETS.has(job.temp_bracket)
+    ? MAX_ATTEMPTS_LAYERED
+    : MAX_ATTEMPTS_DEFAULT
+}
 
 // The pool's anatomy hardening, reused verbatim (server-side, so every
 // prompt carries it regardless of who queued the job).
@@ -970,6 +1000,8 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
   }
 
   try {
+    const maxAttempts = maxAttemptsFor(job)
+
     // Variant slot: cap enforced at write time.
     const { data: existing } = await supabase
       .from('personal_heroes')
@@ -1040,10 +1072,11 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     // output can no longer be retrieved (Replicate expires output
     // files ~1h after creation), fall through to a fresh restart.
     // The resumed gate counts as the attempt that produced the
-    // image: if it fails and that was attempt 1, the loop below
-    // still gets its attempt 2 with the failure classes fed back.
+    // image: if it fails, the loop below still gets the attempts
+    // remaining under this job's budget with the failure classes
+    // fed back.
     if (job.replicate_id) {
-      const resumeAttempt = Math.min(Math.max(job.attempts || 1, 1), 2)
+      const resumeAttempt = Math.min(Math.max(job.attempts || 1, 1), maxAttempts)
       const resumedUrl = await fetchPredictionOutputUrl(job.replicate_id)
       let resumedBytes: Uint8Array | null = null
       if (resumedUrl) {
@@ -1082,8 +1115,7 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     // most recent gate verdict recorded for the same user +
     // combination, so attempt N+1 of the CELL — not just of the job —
     // is prompted from attempt N's gate record. Prompt-side only:
-    // the gate, its thresholds, and the two-attempt budget per job
-    // are unchanged.
+    // the gate and its thresholds are unchanged.
     if (failures.length === 0) {
       const { data: prior } = await supabase
         .from('personal_generation_jobs')
@@ -1143,10 +1175,17 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       if (poolRefUrl) genRefUrls = [refUrls[0], poolRefUrl]
     }
 
-    for (let attempt = startAttempt; attempt <= 2; attempt++) {
+    for (let attempt = startAttempt; attempt <= maxAttempts; attempt++) {
       lastPrompt = buildPrompt(job, promptFailures, poolRefUrl !== null)
       const { url, predictionId } = await generateImage(lastPrompt, genRefUrls)
-      await markJob(job.id, { replicate_id: predictionId, attempts: attempt, prompt: lastPrompt })
+      // The started_at refresh is the claim heartbeat (RW-16.25,
+      // see STALE_PROCESSING_MS): a five-attempt layered job can
+      // legitimately outlive the stale threshold, and this stamp
+      // is what proves the claim is still being worked.
+      await markJob(job.id, {
+        replicate_id: predictionId, attempts: attempt, prompt: lastPrompt,
+        started_at: new Date().toISOString()
+      })
 
       const imageResponse = await fetch(url)
       if (!imageResponse.ok) throw new Error(`Generated image download failed: ${imageResponse.status}`)
@@ -1165,7 +1204,7 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       console.log(`[personal-hero-worker] job ${job.id} attempt ${attempt} gate FAILED: ${failures.join('; ')}`)
     }
 
-    // Both attempts failed the gate: store nothing, pool keeps serving.
+    // All attempts failed the gate: store nothing, pool keeps serving.
     await markJob(job.id, {
       status: 'FAILED', gate_result: gateRaw,
       error_message: `gate_failed: ${failures.join('; ')}`,
@@ -1194,7 +1233,8 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
 // first). At the budget cap the job is marked FAILED with the named
 // stale_processing_timeout reason instead of requeuing forever.
 // reclaim_count is the budget counter — NOT the attempts column,
-// whose established meaning is the generation attempt (1..2) within
+// whose established meaning is the generation attempt (1..5 on the
+// layered brackets, else 1..2 — RW-16.25) within
 // the current processing, written on every generation and used by
 // the resume path to identify which completed generation
 // replicate_id belongs to; spending from it would corrupt that
