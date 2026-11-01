@@ -18,13 +18,22 @@
 //                       different paths, different count, or a stored
 //                       object whose stamp (etag / updated_at) differs
 //                       from what was recorded, i.e. the photo was
-//                       overwritten in place — every verified hero made
-//                       from the old references is retired (storage
-//                       objects removed, rows deleted -> the cell
-//                       version trigger bumps every affected cell), so
-//                       the next serve/request regenerates from the
-//                       new references. The response reports
-//                       references_changed + heroes_invalidated.
+//                       overwritten in place — every cell holding a
+//                       look is marked regen_status='pending' and its
+//                       verified heroes KEEP SERVING until a
+//                       replacement generated from the new references
+//                       has been delivered; the swap then materializes
+//                       in get-personal-hero / the request action and
+//                       the prior heroes are retired at that point,
+//                       never before (RW-16.12 Lane C — Sol's ruling
+//                       2026-10-31: "Keep my current looks serving
+//                       until the replacements are ready"). Immediate
+//                       wipe remains exclusive to the delete-my-photos
+//                       function. The response reports
+//                       references_changed + heroes_invalidated (kept
+//                       for response compatibility, now always 0) +
+//                       heroes_kept_serving +
+//                       cells_pending_regeneration.
 //   request (default)   { combination_id, outfit_items: ["SHORTS", ...] }
 //                       Validates consent + >=1 reference + allowance
 //                       (entitled OR free_generations_used < 5), then
@@ -156,6 +165,44 @@ async function ensureProfile(sb: ReturnType<typeof serviceClient>, userId: strin
     .single()
   if (error) throw error
   return created
+}
+
+// RW-16.12 Lane C: retire a cell's prior-generation heroes once a
+// replacement is serving. Rows are deleted first (serving reads
+// rows, so the prior hero stops being served in the same instant
+// the fresh one takes over — never a window with neither); storage
+// objects are removed right after, best-effort (an orphaned object
+// is unreachable: serving signs URLs from rows, never from
+// listings, and the delete-my-photos prefix sweep collects
+// orphans). The cell is then marked current. Mirrored in
+// get-personal-hero's serve path.
+async function retirePriorHeroes(
+  sb: ReturnType<typeof serviceClient>, userId: string, combinationId: string,
+  priorHeroes: Array<{ id: string, storage_path: string }>
+) {
+  if (priorHeroes.length > 0) {
+    const { error: deleteError } = await sb
+      .from('personal_heroes')
+      .delete()
+      .in('id', priorHeroes.map(h => h.id))
+      .eq('user_id', userId)
+    if (deleteError) throw deleteError
+    const { error: removeError } = await sb.storage
+      .from('personal-heroes')
+      .remove(priorHeroes.map(h => h.storage_path))
+    if (removeError) {
+      console.error('[request-personal-generation] prior hero object removal failed:', removeError)
+    }
+  }
+  const { error: cellError } = await sb
+    .from('personal_cells')
+    .update({
+      regen_status: 'current', regen_pending_since: null, regen_error: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .eq('combination_id', combinationId)
+  if (cellError) throw cellError
 }
 
 function kickWorker() {
@@ -293,35 +340,57 @@ serve(async (req) => {
         }
       }
 
-      // (b) Invalidation: retire every verified hero made from the old
-      // references. Storage objects are removed FIRST (the
-      // delete-my-photos discipline: a storage failure aborts before
-      // any row is touched, so the call is retry-safe); deleting the
-      // hero rows then bumps every affected cell's version via the
-      // existing trigger, which is what tells clients their cached
-      // hero is stale. Regeneration is lazy: the clients re-request
-      // the current cell right after replacing photos (and other
-      // cells on next view), and the request path treats those as
-      // regenerations (see the request action).
-      let heroesInvalidated = 0
+      // RW-16.12 Lane C — KEEP-SERVING on reference change (Sol's
+      // ruling, 2026-10-31). The pre-ruling behavior retired every
+      // verified hero the instant a changed set registered, which
+      // left the user with zero servable looks until regenerations
+      // landed (field case: two delivered MILD looks gone in the
+      // same second as the photo replace, RW-16.12 trace §3). Now
+      // NOTHING is deleted here: every cell that holds a look — a
+      // hero row, or ever_delivered from an earlier delivery — is
+      // marked regen_status='pending' with regen_pending_since
+      // stamped at this change. get-personal-hero keeps serving
+      // heroes created before that instant until a hero created
+      // at/after it (one generated from the NEW references) exists;
+      // the swap then materializes there / in the request action
+      // and the prior heroes are retired at that point, never
+      // before. A cell whose regeneration fails terminally records
+      // regen_status='failed' + regen_error and keeps its prior
+      // hero (see the request action). Delete-my-photos is
+      // untouched by this ruling and remains an immediate, total
+      // wipe, invoked explicitly through its own function.
+      let heroesKeptServing = 0
+      let cellsPendingRegeneration = 0
       if (referencesChanged) {
-        const { data: heroes } = await sb
+        const pendingSince = new Date().toISOString()
+        const { data: heroRows } = await sb
           .from('personal_heroes')
-          .select('storage_path')
+          .select('combination_id')
           .eq('user_id', user.id)
-        const heroPaths = (heroes ?? []).map(h => h.storage_path as string)
-        if (heroPaths.length > 0) {
-          const { error: removeError } = await sb.storage
-            .from('personal-heroes')
-            .remove(heroPaths)
-          if (removeError) throw removeError
+        heroesKeptServing = heroRows?.length ?? 0
+        const { data: deliveredCells } = await sb
+          .from('personal_cells')
+          .select('combination_id')
+          .eq('user_id', user.id)
+          .eq('ever_delivered', true)
+        const cellIds = new Set<string>()
+        for (const c of deliveredCells ?? []) cellIds.add(c.combination_id as string)
+        for (const h of heroRows ?? []) cellIds.add(h.combination_id as string)
+        if (cellIds.size > 0) {
+          const { data: marked, error: markError } = await sb
+            .from('personal_cells')
+            .update({
+              regen_status: 'pending',
+              regen_pending_since: pendingSince,
+              regen_error: null,
+              updated_at: pendingSince
+            })
+            .eq('user_id', user.id)
+            .in('combination_id', [...cellIds])
+            .select('combination_id')
+          if (markError) throw markError
+          cellsPendingRegeneration = marked?.length ?? 0
         }
-        const { count, error: heroDeleteError } = await sb
-          .from('personal_heroes')
-          .delete({ count: 'exact' })
-          .eq('user_id', user.id)
-        if (heroDeleteError) throw heroDeleteError
-        heroesInvalidated = count ?? 0
       }
 
       // Replace the reference set wholesale (positions 1..3),
@@ -336,7 +405,12 @@ serve(async (req) => {
       return jsonResponse({
         ok: true, references: rows.length,
         references_changed: referencesChanged,
-        heroes_invalidated: heroesInvalidated
+        // Kept for response compatibility with shipped clients; the
+        // keep-serving ruling means a reference change now retires
+        // nothing at registration time.
+        heroes_invalidated: 0,
+        heroes_kept_serving: heroesKeptServing,
+        cells_pending_regeneration: cellsPendingRegeneration
       })
     }
 
@@ -378,14 +452,55 @@ serve(async (req) => {
         return jsonResponse({ error: 'references_required', message: 'Upload and register at least one reference photo first.' }, 403)
       }
 
-      // Already have a verified hero for this cell? Nothing to do.
-      const { data: hero } = await sb
-        .from('personal_heroes')
-        .select('id, variant')
+      // --- RW-16.12 Lane C: keep-serving state for this cell ---
+      // Load the cell's regeneration state and its heroes. A cell in
+      // 'pending'/'failed' (references changed after its heroes were
+      // generated) can hold a PRIOR hero — created before
+      // regen_pending_since, made from the previous references —
+      // which keeps serving under the ruling, and/or a FRESH hero —
+      // created at/after regen_pending_since, generated from the
+      // current references — which completes the swap.
+      const { data: cellRow } = await sb
+        .from('personal_cells')
+        .select('ever_delivered, regen_status, regen_pending_since, regen_error')
         .eq('user_id', user.id)
         .eq('combination_id', cell.combinationId)
-        .limit(1)
-      if (hero && hero.length > 0) {
+        .maybeSingle()
+      const regenState = (cellRow?.regen_status as string | undefined) ?? 'current'
+      const pendingSince = typeof cellRow?.regen_pending_since === 'string'
+        ? cellRow.regen_pending_since : null
+      const regenPending = (regenState === 'pending' || regenState === 'failed') &&
+        pendingSince !== null
+      const pendingSinceMs = pendingSince ? Date.parse(pendingSince) : NaN
+
+      const { data: heroRows } = await sb
+        .from('personal_heroes')
+        .select('id, variant, storage_path, created_at')
+        .eq('user_id', user.id)
+        .eq('combination_id', cell.combinationId)
+      const allHeroes = heroRows ?? []
+      const freshHeroes = regenPending
+        ? allHeroes.filter(h => Date.parse(h.created_at as string) >= pendingSinceMs)
+        : allHeroes
+      const priorHeroes = regenPending
+        ? allHeroes.filter(h => Date.parse(h.created_at as string) < pendingSinceMs)
+        : []
+
+      // A replacement has been delivered since the reference change:
+      // materialize the swap — retire the prior heroes now (never
+      // before this moment) and mark the cell current — then the
+      // cell is simply available.
+      if (regenPending && freshHeroes.length > 0) {
+        await retirePriorHeroes(sb, user.id, cell.combinationId, priorHeroes)
+        return jsonResponse({ status: 'already_available', combination_id: cell.combinationId })
+      }
+
+      // Already have a verified hero for this cell and no reference
+      // change outstanding? Nothing to do. (A pending cell holding
+      // only a prior hero falls through: this request is what
+      // (re)enqueues its regeneration, while the prior hero keeps
+      // serving in the meantime.)
+      if (!regenPending && allHeroes.length > 0) {
         return jsonResponse({ status: 'already_available', combination_id: cell.combinationId })
       }
 
@@ -404,19 +519,45 @@ serve(async (req) => {
       // (b) Was this cell already delivered once? Then this request is
       // a REGENERATION of a look the user already has — their heroes
       // for it were retired by a reference change (register_references)
-      // or a flag (flag_hero). It is not a genuinely new cell, so the
-      // allowance gate does not apply and the job kind is
-      // 'regeneration', which the worker never charges against
-      // free_generations_used (plan §2.2: the allowance counts
-      // genuinely new cells; spec J4: replacement regenerations cost
-      // no allowance).
-      const { data: cellRow } = await sb
-        .from('personal_cells')
-        .select('ever_delivered')
-        .eq('user_id', user.id)
-        .eq('combination_id', cell.combinationId)
-        .maybeSingle()
-      const isRegeneration = cellRow?.ever_delivered === true
+      // or a flag (flag_hero), or (RW-16.12 Lane C) are still serving
+      // as prior heroes while the replacement is outstanding. It is
+      // not a genuinely new cell, so the allowance gate does not
+      // apply and the job kind is 'regeneration', which the worker
+      // never charges against free_generations_used (plan §2.2: the
+      // allowance counts genuinely new cells; spec J4: replacement
+      // regenerations cost no allowance).
+      const isRegeneration = cellRow?.ever_delivered === true || regenPending
+
+      // RW-16.12 Lane C: if this cell's outstanding regeneration
+      // cycle already died — the latest job since the change is
+      // FAILED, nothing is in flight, and no replacement has been
+      // delivered — record the failure on the cell before this
+      // request retries the cycle below. The prior hero keeps
+      // serving throughout, and regen_error stays on the record
+      // until a replacement actually lands, so the staleness is
+      // never silent or permanent: this request (or the next
+      // reference change) is the retry.
+      if (regenPending && regenState === 'pending') {
+        const { data: lastJob } = await sb
+          .from('personal_generation_jobs')
+          .select('status, error_message')
+          .eq('user_id', user.id)
+          .eq('combination_id', cell.combinationId)
+          .gte('requested_at', pendingSince)
+          .order('requested_at', { ascending: false })
+          .limit(1)
+        if (lastJob && lastJob.length > 0 && lastJob[0].status === 'FAILED') {
+          await sb
+            .from('personal_cells')
+            .update({
+              regen_status: 'failed',
+              regen_error: (lastJob[0].error_message as string | null) ?? 'generation_failed',
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id)
+            .eq('combination_id', cell.combinationId)
+        }
+      }
 
       // Allowance: entitled users always; free users under the
       // lifetime cap — for genuinely new cells only.
@@ -450,11 +591,24 @@ serve(async (req) => {
         .single()
       if (jobError) throw jobError
 
+      // RW-16.12 Lane C: a request that retries a 'failed' cell puts
+      // its cycle back in flight ('pending'); regen_error is kept
+      // until a replacement lands and clears it at the swap.
+      if (regenPending && regenState === 'failed') {
+        await sb
+          .from('personal_cells')
+          .update({ regen_status: 'pending', updated_at: new Date().toISOString() })
+          .eq('user_id', user.id)
+          .eq('combination_id', cell.combinationId)
+      }
+
       kickWorker()
       return jsonResponse({
         status: 'queued', job_id: job.id, combination_id: cell.combinationId,
         entitled, free_generations_used: profile.free_generations_used,
-        regeneration: isRegeneration
+        regeneration: isRegeneration,
+        regen_status: regenPending ? 'pending' : 'current',
+        kept_serving: regenPending && priorHeroes.length > 0
       })
     }
 

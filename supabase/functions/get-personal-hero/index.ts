@@ -15,6 +15,28 @@
 // enqueue up to 2 replenishment candidate jobs for the cell — deduped
 // against active jobs — so the cell keeps a fresh rotation. Free users
 // never trigger replenishment.
+//
+// RW-16.12 Lane C — KEEP-SERVING (Sol's ruling, 2026-10-31: "Keep my
+// current looks serving until the replacements are ready"). A cell
+// whose references changed after its heroes were generated carries
+// regen_status 'pending' (or 'failed' once its regeneration cycle
+// died terminally) with regen_pending_since stamping the change.
+// This function then serves ONLY the prior heroes (created before
+// the change) until a replacement hero exists (created at/after the
+// change); the first serve that sees a replacement materializes the
+// swap — prior rows retired, cell marked current — so the client
+// never observes a window with neither hero. While a cycle is
+// 'pending' with nothing in flight, the serve path also guarantees a
+// regeneration job exists (lazy enqueue, the same serve-path idiom
+// as the replenishment hook): a client that finds a serving prior
+// hero may never call the request action for this cell. A 'failed'
+// cell keeps serving its prior hero and records the failure in
+// regen_error; it is NOT auto-reenqueued here (its retry is an
+// explicit request or the next reference change), so a gate-rejected
+// reference set cannot loop paid generations on every serve. The
+// replenishment hook is suppressed while a cell is pending/failed —
+// the regeneration takes precedence and replenishment resumes once
+// the cell is current again.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -33,6 +55,65 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' }
   })
+}
+
+function kickWorker() {
+  // Fire-and-forget worker kick (same pattern as the replenishment
+  // hook below and request-personal-generation): process queued
+  // personal jobs promptly instead of waiting for the drain cron.
+  const kick = fetch(`${SUPABASE_URL}/functions/v1/personal-hero-worker`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ drain: 1 })
+  }).catch(e => console.error('[get-personal-hero] worker kick failed:', e))
+  // @ts-ignore EdgeRuntime is a Supabase runtime global
+  if (typeof EdgeRuntime !== 'undefined') { EdgeRuntime.waitUntil(kick) }
+}
+
+// RW-16.12 Lane C: retire a cell's prior-generation heroes once a
+// replacement is serving, and mark the cell current. Best-effort by
+// design: the caller's created_at partition already guarantees only
+// fresh heroes serve even if this cleanup fails, and it retries on
+// the next serve while the cell remains pending. Rows are deleted
+// before storage objects (serving reads rows; an orphaned object is
+// unreachable and is collected by the delete-my-photos sweep).
+// Mirrors retirePriorHeroes in request-personal-generation.
+async function retirePriorHeroes(
+  sb: ReturnType<typeof createClient>, userId: string, combinationId: string,
+  priorHeroes: Array<{ id: string, storage_path: string }>
+): Promise<boolean> {
+  try {
+    if (priorHeroes.length > 0) {
+      const { error: deleteError } = await sb
+        .from('personal_heroes')
+        .delete()
+        .in('id', priorHeroes.map(h => h.id))
+        .eq('user_id', userId)
+      if (deleteError) throw deleteError
+      const { error: removeError } = await sb.storage
+        .from('personal-heroes')
+        .remove(priorHeroes.map(h => h.storage_path))
+      if (removeError) {
+        console.error('[get-personal-hero] prior hero object removal failed:', removeError)
+      }
+    }
+    const { error: cellError } = await sb
+      .from('personal_cells')
+      .update({
+        regen_status: 'current', regen_pending_since: null, regen_error: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('combination_id', combinationId)
+    if (cellError) throw cellError
+    return true
+  } catch (e) {
+    console.error('[get-personal-hero] swap materialization failed:', e)
+    return false
+  }
 }
 
 serve(async (req) => {
@@ -57,28 +138,135 @@ serve(async (req) => {
 
     const { data: cell } = await sb
       .from('personal_cells')
-      .select('version')
+      .select('version, regen_status, regen_pending_since')
       .eq('user_id', userId)
       .eq('combination_id', combinationId)
       .maybeSingle()
-    const version = cell?.version ?? null
+    let version = cell?.version ?? null
+    let regenStatus = (cell?.regen_status as string | undefined) ?? 'current'
+    const pendingSince = typeof cell?.regen_pending_since === 'string'
+      ? cell.regen_pending_since : null
+    const regenPending = (regenStatus === 'pending' || regenStatus === 'failed') &&
+      pendingSince !== null
+    const pendingSinceMs = pendingSince ? Date.parse(pendingSince) : NaN
 
     const { data: heroes, error: heroError } = await sb
       .from('personal_heroes')
-      .select('id, storage_path, variant, outfit_items')
+      .select('id, storage_path, variant, outfit_items, created_at')
       .eq('user_id', userId)
       .eq('combination_id', combinationId)
       .order('variant', { ascending: true })
     if (heroError) throw heroError
+    const allHeroes = heroes ?? []
 
-    if (!heroes || heroes.length === 0) {
-      return jsonResponse({ found: false, combination_id: combinationId, version })
+    // --- RW-16.12 Lane C: keep-serving partition ---
+    // `serving` is the hero set this response may draw from. For a
+    // current cell it is every verified hero, as before. For a
+    // pending/failed cell it is the fresh set once a replacement
+    // exists (prior heroes are retired at that moment), and the
+    // prior set until then.
+    let serving = allHeroes
+    let regenerationQueued = 0
+    if (regenPending) {
+      const fresh = allHeroes.filter(
+        h => Date.parse(h.created_at as string) >= pendingSinceMs)
+      const prior = allHeroes.filter(
+        h => Date.parse(h.created_at as string) < pendingSinceMs)
+      if (fresh.length > 0) {
+        serving = fresh
+        if (await retirePriorHeroes(sb, userId, combinationId, prior)) {
+          regenStatus = 'current'
+          const { data: cellAfter } = await sb
+            .from('personal_cells')
+            .select('version')
+            .eq('user_id', userId)
+            .eq('combination_id', combinationId)
+            .maybeSingle()
+          version = cellAfter?.version ?? version
+        }
+      } else {
+        serving = prior
+        // No replacement yet. Look at this cycle's jobs: if one is
+        // in flight, it owns the outcome. If none is in flight:
+        //  * the cycle's latest job FAILED -> record the failure on
+        //    the cell (regen_status='failed' + regen_error) and keep
+        //    serving the prior hero; retry is an explicit request or
+        //    the next reference change, never a serve-path loop.
+        //  * no job exists for this cycle at all (photos replaced
+        //    while the app was closed, or the cell was backfilled)
+        //    and the cycle is still 'pending' -> lazily enqueue the
+        //    regeneration now, so the replacement actually gets made
+        //    even though the client found a serving hero and never
+        //    calls the request action for this cell.
+        const { data: recentJobs } = await sb
+          .from('personal_generation_jobs')
+          .select('status, error_message, requested_at, outfit_items')
+          .eq('user_id', userId)
+          .eq('combination_id', combinationId)
+          .order('requested_at', { ascending: false })
+          .limit(10)
+        const jobs = recentJobs ?? []
+        const hasActiveJob = jobs.some(
+          j => j.status === 'QUEUED' || j.status === 'PROCESSING')
+        const cycleJobs = jobs.filter(
+          j => Date.parse(j.requested_at as string) >= pendingSinceMs)
+        const latestCycleJob = cycleJobs[0]
+        if (!hasActiveJob && latestCycleJob?.status === 'FAILED') {
+          if (regenStatus === 'pending') {
+            const { error: failMarkError } = await sb
+              .from('personal_cells')
+              .update({
+                regen_status: 'failed',
+                regen_error: (latestCycleJob.error_message as string | null) ??
+                  'generation_failed',
+                updated_at: new Date().toISOString()
+              })
+              .eq('user_id', userId)
+              .eq('combination_id', combinationId)
+            if (!failMarkError) regenStatus = 'failed'
+            else console.error('[get-personal-hero] regen failure marking failed:', failMarkError)
+          }
+        } else if (!hasActiveJob && regenStatus === 'pending' && !latestCycleJob) {
+          const outfitItems =
+            (prior[0]?.outfit_items as string[] | undefined) ??
+            (jobs[0]?.outfit_items as string[] | undefined)
+          if (outfitItems && outfitItems.length > 0) {
+            const parts = combinationId.split('_')
+            const { error: enqueueError } = await sb
+              .from('personal_generation_jobs')
+              .insert({
+                user_id: userId,
+                combination_id: combinationId,
+                gender: parts[0], weather: parts[1],
+                temp_bracket: parts[2], time_of_day: parts[3],
+                outfit_signature: parts[4],
+                outfit_items: outfitItems,
+                kind: 'regeneration',
+                priority: 20,
+                status: 'QUEUED'
+              })
+            if (!enqueueError) {
+              regenerationQueued = 1
+              kickWorker()
+            } else {
+              console.error('[get-personal-hero] regeneration enqueue failed:', enqueueError)
+            }
+          }
+        }
+      }
+    }
+
+    if (serving.length === 0) {
+      return jsonResponse({
+        found: false, combination_id: combinationId, version,
+        regen_status: regenStatus, regeneration_queued: regenerationQueued
+      })
     }
 
     // Rotate variants deterministically by day so a cell with several
     // verified variants does not show the same photo every day.
     const dayIndex = Math.floor(Date.now() / 86_400_000)
-    const hero = heroes[dayIndex % heroes.length]
+    const hero = serving[dayIndex % serving.length]
 
     const { data: signed, error: signError } = await sb.storage
       .from('personal-heroes')
@@ -86,13 +274,17 @@ serve(async (req) => {
     if (signError || !signed) throw signError ?? new Error('Could not sign hero URL')
 
     // --- replenishment hook (entitled only) ---
+    // Counts the SERVING set (post-partition). Suppressed while a
+    // regeneration is outstanding (RW-16.12 Lane C): the pending
+    // regeneration takes precedence, and replenishment resumes once
+    // the cell is current again.
     let replenishmentQueued = 0
     const { data: profile } = await sb
       .from('personal_profiles')
       .select('entitled')
       .eq('user_id', userId)
       .maybeSingle()
-    if (profile?.entitled === true && heroes.length < VARIANT_CAP) {
+    if (profile?.entitled === true && regenStatus === 'current' && serving.length < VARIANT_CAP) {
       const { data: active } = await sb
         .from('personal_generation_jobs')
         .select('id')
@@ -102,7 +294,7 @@ serve(async (req) => {
       const activeCount = active?.length ?? 0
       const wanted = Math.min(
         REPLENISH_CANDIDATES,
-        VARIANT_CAP - heroes.length - activeCount
+        VARIANT_CAP - serving.length - activeCount
       )
       if (wanted > 0) {
         const parts = combinationId.split('_')
@@ -121,16 +313,7 @@ serve(async (req) => {
         if (!enqueueError) {
           replenishmentQueued = wanted
           // Prompt fulfillment instead of waiting for the drain cron.
-          const kick = fetch(`${SUPABASE_URL}/functions/v1/personal-hero-worker`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ drain: 1 })
-          }).catch(e => console.error('[get-personal-hero] worker kick failed:', e))
-          // @ts-ignore EdgeRuntime is a Supabase runtime global
-          if (typeof EdgeRuntime !== 'undefined') { EdgeRuntime.waitUntil(kick) }
+          kickWorker()
         }
       }
     }
@@ -142,6 +325,8 @@ serve(async (req) => {
       variant: hero.variant,
       image_url: signed.signedUrl,
       version,
+      regen_status: regenStatus,
+      regeneration_queued: regenerationQueued,
       replenishment_queued: replenishmentQueued
     })
   } catch (error) {
