@@ -21,30 +21,49 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const PRIORITY_SUBSCRIBER_FILL = 10
-const TEMP_BRACKETS = ['FREEZING', 'COLD', 'COOL', 'MILD', 'WARM', 'HOT']
 
-// Canonical outfits per bracket x weather (engine ClothingItem keys),
-// mirroring the canonical recommendations the generic pool's prompts
-// were built from (scripts/queue-images.js OUTFITS / RAIN_OUTFITS,
-// mapped to item keys).
-const CANONICAL_OUTFITS: Record<string, Record<string, string[]>> = {
-  CLEAR: {
-    FREEZING: ['LONG_SLEEVE_THERMAL', 'INSULATED_JACKET', 'THERMAL_TIGHTS', 'THERMAL_BEANIE', 'MITTENS', 'NECK_GAITER'],
-    COLD: ['LONG_SLEEVE_THERMAL', 'INSULATED_JACKET', 'THERMAL_TIGHTS', 'LIGHT_BEANIE', 'THERMAL_GLOVES', 'NECK_GAITER'],
-    COOL: ['LONG_SLEEVE_LIGHT', 'LIGHT_JACKET', 'LIGHT_TIGHTS', 'HEADBAND'],
-    MILD: ['LONG_SLEEVE_LIGHT', 'SHORTS'],
-    WARM: ['SHORT_SLEEVE', 'SHORTS', 'BASEBALL_CAP'],
-    HOT: ['TANK_TOP', 'SHORT_SHORTS', 'SUNGLASSES']
-  },
-  RAIN: {
-    FREEZING: ['LONG_SLEEVE_THERMAL', 'RAIN_JACKET', 'THERMAL_TIGHTS', 'THERMAL_BEANIE', 'THERMAL_GLOVES', 'NECK_GAITER'],
-    COLD: ['LONG_SLEEVE_THERMAL', 'RAIN_JACKET', 'THERMAL_TIGHTS', 'LIGHT_BEANIE', 'THERMAL_GLOVES'],
-    COOL: ['LONG_SLEEVE_LIGHT', 'RAIN_JACKET', 'LIGHT_TIGHTS', 'BASEBALL_CAP', 'LIGHT_GLOVES'],
-    MILD: ['LONG_SLEEVE_LIGHT', 'RAIN_JACKET', 'SHORTS', 'BASEBALL_CAP'],
-    WARM: ['SHORT_SLEEVE', 'RAIN_JACKET', 'SHORTS', 'BASEBALL_CAP'],
-    HOT: ['SHORT_SLEEVE', 'RAIN_JACKET', 'SHORT_SHORTS', 'BASEBALL_CAP']
-  }
-}
+// Canonical fill cells — DERIVED FROM ENGINE v4.3 (RW-16.23), never
+// hand-mirrored. Each cell's items are the exact allItems output of
+// GetOutfitRecommendationUseCase.recommendFrames at the cell's
+// representative frame:
+//   comfort NEUTRAL (adjusted == raw); CLEAR calm (no wind shell);
+//   RAIN measured rain, precipitation 1.0mm; UV 2 at DAWN/DUSK,
+//   4 at MIDDAY, 1 in RAIN; hour 8 DAWN / 18 DUSK / 13 MIDDAY;
+//   adjusted temps FREEZING 12F, COLD 27F, COOL 42F, MILD 57F,
+//   WARM 72F, HOT 85F.
+// The pre-RW-16.23 table mirrored the legacy pool prompts instead and
+// 10 of its 12 outfits were outfits the engine cannot produce at any
+// frame (e.g. CLEAR COOL demanded LIGHT_JACKET, which selectTopOuter
+// never returns), so fill heroes were unservable on client cells even
+// when they passed the gate. Drift guard: the JVM test
+// FillCanonicalOutfitsTest (RunWear-android/shared) replays every
+// representative frame through the engine and parses the block below
+// out of this file — if the engine tables or this block change
+// without each other, that test fails. Update both together.
+// BEGIN GENERATED CANONICAL CELLS
+const CANONICAL_CELLS: Array<{ weather: string, bracket: string, time: string, items: string[] }> = [
+  { weather: 'CLEAR', bracket: 'FREEZING', time: 'DAWN', items: ['THERMAL_BEANIE', 'LONG_SLEEVE_THERMAL', 'FLEECE_PULLOVER', 'WINDBREAKER', 'THERMAL_TIGHTS', 'MITTENS', 'NECK_GAITER'] },
+  { weather: 'CLEAR', bracket: 'FREEZING', time: 'DUSK', items: ['THERMAL_BEANIE', 'LONG_SLEEVE_THERMAL', 'FLEECE_PULLOVER', 'WINDBREAKER', 'THERMAL_TIGHTS', 'MITTENS', 'NECK_GAITER'] },
+  { weather: 'RAIN', bracket: 'FREEZING', time: 'DAWN', items: ['BASEBALL_CAP', 'LONG_SLEEVE_THERMAL', 'FLEECE_PULLOVER', 'RAIN_JACKET', 'THERMAL_TIGHTS', 'MITTENS', 'NECK_GAITER'] },
+  { weather: 'CLEAR', bracket: 'COLD', time: 'DAWN', items: ['LIGHT_BEANIE', 'LONG_SLEEVE_LIGHT', 'QUARTER_ZIP', 'THERMAL_TIGHTS', 'LIGHT_GLOVES', 'NECK_GAITER'] },
+  { weather: 'CLEAR', bracket: 'COLD', time: 'DUSK', items: ['LIGHT_BEANIE', 'LONG_SLEEVE_LIGHT', 'QUARTER_ZIP', 'THERMAL_TIGHTS', 'LIGHT_GLOVES', 'NECK_GAITER'] },
+  { weather: 'RAIN', bracket: 'COLD', time: 'DAWN', items: ['BASEBALL_CAP', 'LONG_SLEEVE_LIGHT', 'QUARTER_ZIP', 'RAIN_JACKET', 'THERMAL_TIGHTS', 'LIGHT_GLOVES', 'NECK_GAITER'] },
+  { weather: 'CLEAR', bracket: 'COOL', time: 'DAWN', items: ['LONG_SLEEVE_LIGHT', 'LIGHT_TIGHTS'] },
+  { weather: 'CLEAR', bracket: 'COOL', time: 'DUSK', items: ['LONG_SLEEVE_LIGHT', 'LIGHT_TIGHTS'] },
+  { weather: 'RAIN', bracket: 'COOL', time: 'DAWN', items: ['BASEBALL_CAP', 'LONG_SLEEVE_LIGHT', 'RAIN_JACKET', 'LIGHT_TIGHTS'] },
+  { weather: 'CLEAR', bracket: 'MILD', time: 'DAWN', items: ['SHORT_SLEEVE', 'SHORTS'] },
+  { weather: 'CLEAR', bracket: 'MILD', time: 'DUSK', items: ['SHORT_SLEEVE', 'SHORTS'] },
+  { weather: 'RAIN', bracket: 'MILD', time: 'DAWN', items: ['BASEBALL_CAP', 'SHORT_SLEEVE', 'RAIN_JACKET', 'SHORTS'] },
+  { weather: 'CLEAR', bracket: 'WARM', time: 'DAWN', items: ['SHORT_SLEEVE', 'SHORTS'] },
+  { weather: 'CLEAR', bracket: 'WARM', time: 'DUSK', items: ['SHORT_SLEEVE', 'SHORTS'] },
+  { weather: 'RAIN', bracket: 'WARM', time: 'DAWN', items: ['BASEBALL_CAP', 'SHORT_SLEEVE', 'RAIN_JACKET', 'SHORTS'] },
+  { weather: 'CLEAR', bracket: 'HOT', time: 'DAWN', items: ['TANK_TOP', 'SHORT_SHORTS'] },
+  { weather: 'CLEAR', bracket: 'HOT', time: 'DUSK', items: ['TANK_TOP', 'SHORT_SHORTS'] },
+  { weather: 'RAIN', bracket: 'HOT', time: 'DAWN', items: ['BASEBALL_CAP', 'TANK_TOP', 'RAIN_JACKET', 'SHORT_SHORTS'] },
+  { weather: 'CLEAR', bracket: 'WARM', time: 'MIDDAY', items: ['VISOR', 'SHORT_SLEEVE', 'SHORTS', 'SUNGLASSES'] },
+  { weather: 'CLEAR', bracket: 'HOT', time: 'MIDDAY', items: ['VISOR', 'TANK_TOP', 'SHORT_SHORTS', 'SUNGLASSES'] },
+]
+// END GENERATED CANONICAL CELLS
 
 function outfitHash(itemKeys: string[]): string {
   const joined = [...itemKeys].sort().join('-')
@@ -56,24 +75,14 @@ function outfitHash(itemKeys: string[]): string {
 }
 
 function matrixCells(gender: string): Array<Record<string, unknown>> {
-  const cells: Array<Record<string, unknown>> = []
-  const push = (weather: string, bracket: string, time: string) => {
-    const items = CANONICAL_OUTFITS[weather][bracket]
-    const signature = outfitHash(items)
-    cells.push({
-      combination_id: `${gender}_${weather}_${bracket}_${time}_${signature}`,
-      gender, weather, temp_bracket: bracket, time_of_day: time,
-      outfit_signature: signature, outfit_items: items
-    })
-  }
-  for (const bracket of TEMP_BRACKETS) {
-    push('CLEAR', bracket, 'DAWN')
-    push('CLEAR', bracket, 'DUSK')
-    push('RAIN', bracket, 'DAWN')
-  }
-  push('CLEAR', 'WARM', 'MIDDAY')
-  push('CLEAR', 'HOT', 'MIDDAY')
-  return cells
+  return CANONICAL_CELLS.map(c => {
+    const signature = outfitHash(c.items)
+    return {
+      combination_id: `${gender}_${c.weather}_${c.bracket}_${c.time}_${signature}`,
+      gender, weather: c.weather, temp_bracket: c.bracket, time_of_day: c.time,
+      outfit_signature: signature, outfit_items: c.items
+    }
+  })
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
