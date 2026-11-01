@@ -257,7 +257,7 @@ fun MakeItMeUploadFlow(
         ) {
             IconButton(onClick = onExitAsStock) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
                     tint = Color.White.copy(alpha = 0.7f)
                 )
@@ -484,7 +484,7 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
             }
             IconButton(onClick = onRemove) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Outlined.Close,
                     contentDescription = "Remove photo",
                     tint = Color.White.copy(alpha = 0.6f)
                 )
@@ -526,7 +526,7 @@ fun MakeItMePhotosScreen(
         ) {
             IconButton(onClick = onDismiss) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
                     tint = Color.White.copy(alpha = 0.7f)
                 )

@@ -553,7 +553,7 @@ Get your personalized running outfit at runwear.ai
     if (showMakeItMePhotos && makeItMeViewModel != null) {
         com.runwear.app.makeitme.MakeItMePhotosScreen(
             viewModel = makeItMeViewModel,
-            onBack = { showMakeItMePhotos = false },
+            onDismiss = { showMakeItMePhotos = false },
             onReplaceClick = {
                 showMakeItMePhotos = false
                 makeItMeFlowReplace = true

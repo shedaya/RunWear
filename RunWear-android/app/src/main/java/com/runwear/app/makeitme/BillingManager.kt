@@ -8,6 +8,11 @@ import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
+import com.revenuecat.purchases.getCustomerInfoWith
+import com.revenuecat.purchases.getOfferingsWith
+import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
+import com.revenuecat.purchases.logInWith
+import com.revenuecat.purchases.purchaseWith
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,9 +68,12 @@ class BillingManager @Inject constructor(
             Purchases.configure(
                 PurchasesConfiguration.Builder(context, PUBLIC_SDK_KEY).build()
             )
-            Purchases.sharedInstance.updatedCustomerInfoListener = { info ->
-                applyCustomerInfo(info)
-            }
+            Purchases.sharedInstance.updatedCustomerInfoListener =
+                object : UpdatedCustomerInfoListener {
+                    override fun onReceived(customerInfo: CustomerInfo) {
+                        applyCustomerInfo(customerInfo)
+                    }
+                }
             configured = true
             refreshCustomerInfoAsync()
         }.onFailure { Log.w(TAG, "RevenueCat configure failed", it) }
