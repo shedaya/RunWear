@@ -180,8 +180,9 @@ function outfitAnchors(keys: string[]): string {
     parts.push('a zipped jacket is worn over the top as the outermost layer')
   }
   if (has('LIGHT_TIGHTS') || has('THERMAL_TIGHTS')) {
-    parts.push('full-length tights cover the legs completely, from the waist down to the ' +
-      'ankles — the runner is not wearing shorts and no part of the legs is bare')
+    parts.push('skin-tight athletic running tights (leggings) hug the legs completely, ' +
+      'from the waist down to the ankles — the runner is not wearing shorts or loose ' +
+      'trousers, and no part of the legs is bare')
   } else if (has('CAPRIS')) parts.push('three-quarter tights end just below the knee')
   else if (has('SHORTS') || has('SHORT_SHORTS')) parts.push('the shorts end above the knee')
   // Head and hands items were dropped wholesale in the RW-16.13
@@ -192,8 +193,10 @@ function outfitAnchors(keys: string[]): string {
   else if (has('HEADBAND')) parts.push('an ear-warmer headband covers the ears')
   else if (has('VISOR')) parts.push('a visor shades the eyes')
   else if (has('BASEBALL_CAP')) parts.push('a running cap is worn on the head')
-  if (has('MITTENS')) parts.push('mittens cover both hands')
-  else if (has('LIGHT_GLOVES') || has('THERMAL_GLOVES')) parts.push('gloves cover both hands')
+  if (has('MITTENS')) parts.push('mittens cover both hands completely — no bare hands or fingers are visible')
+  else if (has('LIGHT_GLOVES') || has('THERMAL_GLOVES')) {
+    parts.push('gloves cover both hands completely — no bare hands or fingers are visible')
+  }
   if (has('NECK_GAITER')) parts.push('a neck gaiter covers the neck and lower face')
   if (has('SUNGLASSES')) parts.push('sunglasses cover the eyes')
   return parts.length ? ` In the photo: ${parts.join('; ')}.` : ''
@@ -208,11 +211,20 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   const order = ['TOP_OUTER', 'TOP_MID', 'TOP_BASE', 'BOTTOM', 'HEAD', 'HANDS', 'ACCESSORIES']
   const ordered = [...keys].sort(
     (a, b) => order.indexOf(ITEM_CATEGORY[a] ?? '') - order.indexOf(ITEM_CATEGORY[b] ?? ''))
-  const items = ordered.map(k => ITEM_DISPLAY[k] ?? k)
+  // Prompt-side display overrides (RW-16.13): the shared display
+  // names are UI labels; two of them mislead the generator. "Light
+  // Long Sleeve" was repeatedly rendered as a short-sleeve tee
+  // (4 of 5 generations on the COOL DUSK cell), so the long-sleeve
+  // tops are named in the prompt by their construction instead.
+  const PROMPT_DISPLAY: Record<string, string> = {
+    LONG_SLEEVE_LIGHT: 'Long-Sleeve Running Shirt (thin, full-length sleeves)',
+    LONG_SLEEVE_THERMAL: 'Thermal Long-Sleeve Running Shirt (full-length sleeves)'
+  }
+  const items = ordered.map(k => PROMPT_DISPLAY[k] ?? ITEM_DISPLAY[k] ?? k)
   const outerKey = keys.find(k => ITEM_CATEGORY[k] === 'TOP_OUTER')
   const baseKey = keys.find(k => ITEM_CATEGORY[k] === 'TOP_BASE')
   const layering = outerKey && baseKey
-    ? ` The ${ITEM_DISPLAY[outerKey]} is the outermost layer, worn over the ${ITEM_DISPLAY[baseKey]}.`
+    ? ` The ${ITEM_DISPLAY[outerKey]} is the outermost layer, worn over the ${PROMPT_DISPLAY[baseKey] ?? ITEM_DISPLAY[baseKey]}.`
     : ''
   const weatherPhrase: Record<string, string> = {
     CLEAR: 'clear skies', CLOUDY: 'overcast skies',
