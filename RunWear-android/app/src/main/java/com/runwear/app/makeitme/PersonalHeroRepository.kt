@@ -25,12 +25,13 @@ import javax.inject.Singleton
 @Singleton
 class PersonalHeroRepository @Inject constructor(
     private val service: PersonalHeroService,
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val billing: BillingManager
 ) {
     data class PersonalState(
         val personalizationOn: Boolean = false,
         val freeGenerationsUsed: Int = 0,
-        /** The server-side entitlement flag (RevenueCat-webhook driven). */
+        /** The server-side entitlement flag (webhook + reconciliation driven). */
         val entitled: Boolean = false,
         val gender: String = "UNISEX",
         val referenceCount: Int = 0,
@@ -47,6 +48,30 @@ class PersonalHeroRepository @Inject constructor(
         val forkDecided = preferencesRepository.getString(KEY_FORK_DECIDED) == "1"
         _state.value = _state.value.copy(forkDecided = forkDecided)
         refreshFromServer()
+        syncBillingIdentity()
+    }
+
+    /**
+     * The identity + entitlement sync (acceptance 17 + the RW-16.12
+     * backstop), run at bootstrap, on entitlement change, and after a
+     * purchase:
+     *  1. link RevenueCat to the Supabase uid ([BillingManager.logIn]) —
+     *     until this happens, this device's purchases sit under the
+     *     SDK's anonymous id and the backend cannot find them;
+     *  2. invoke reconcile-personal-entitlement — the server verifies
+     *     the caller's state against RevenueCat and flips the
+     *     `entitled` flag (kicking the matrix fill on a grant) without
+     *     trusting anything the client claims;
+     *  3. if the reconcile call completed, re-read the profile so the
+     *     local mirror reflects any transition.
+     * Silent and idempotent: no session, a failed link, or a failed
+     * reconcile leaves local state exactly as it was.
+     */
+    suspend fun syncBillingIdentity() {
+        if (!service.ensureSession()) return
+        val uid = service.currentUserId() ?: return
+        runCatching { billing.logIn(uid) }
+        if (service.reconcileEntitlement()) refreshFromServer()
     }
 
     /** Re-read the profile + reference count from the server. */

@@ -13,6 +13,8 @@ import org.junit.Test
  *   (acceptance 16) — a replaced image MUST replace on screen.
  * - [MakeItMeUpsellRules]: the 6th-cell upsell show rules (spec §5.2).
  * - [PhotoQualityPolicy]: the on-device photo check order (spec §2.3).
+ * - [BillingIdentityPolicy]: the RevenueCat ↔ Supabase identity link
+ *   (acceptance 17).
  */
 class PersonalHeroPoliciesTest {
 
@@ -206,6 +208,68 @@ class PersonalHeroPoliciesTest {
     fun `a good photo passes`() {
         assertNull(
             PhotoQualityPolicy.decide(faceCount = 1, largestFaceWidthFraction = 0.35f, meanLuminance = 0.5)
+        )
+    }
+
+    // ── Billing identity link (acceptance 17) ───────────────────────
+
+    private val supabaseUid = "381d4f7d-0000-4000-8000-000000000000"
+
+    @Test
+    fun `anonymous RevenueCat id must be linked to the Supabase uid`() {
+        // The pre-link state: the SDK runs under its generated id, and
+        // purchases under it are invisible to the backend (RW-16.12).
+        assertTrue(
+            BillingIdentityPolicy.shouldLogIn(
+                currentRcAppUserId = "\$RCAnonymousID:0123456789abcdef0123456789abcdef",
+                supabaseUserId = supabaseUid
+            )
+        )
+    }
+
+    @Test
+    fun `already linked to the Supabase uid is a no-op`() {
+        assertFalse(
+            BillingIdentityPolicy.shouldLogIn(
+                currentRcAppUserId = supabaseUid,
+                supabaseUserId = supabaseUid
+            )
+        )
+    }
+
+    @Test
+    fun `a different stale uid is re-linked`() {
+        assertTrue(
+            BillingIdentityPolicy.shouldLogIn(
+                currentRcAppUserId = "381d4f7d-1111-4000-8000-000000000000",
+                supabaseUserId = supabaseUid
+            )
+        )
+    }
+
+    @Test
+    fun `unknown RevenueCat id links when a uid exists`() {
+        assertTrue(
+            BillingIdentityPolicy.shouldLogIn(
+                currentRcAppUserId = null,
+                supabaseUserId = supabaseUid
+            )
+        )
+    }
+
+    @Test
+    fun `no Supabase uid never links`() {
+        assertFalse(
+            BillingIdentityPolicy.shouldLogIn(
+                currentRcAppUserId = "\$RCAnonymousID:0123456789abcdef0123456789abcdef",
+                supabaseUserId = null
+            )
+        )
+        assertFalse(
+            BillingIdentityPolicy.shouldLogIn(
+                currentRcAppUserId = null,
+                supabaseUserId = "  "
+            )
         )
     }
 }

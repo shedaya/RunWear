@@ -26,19 +26,22 @@ import kotlin.coroutines.resume
  * plan suffix: rw_makeitme_monthly:monthly / rw_makeitme_annual:annual —
  * the SDK's offering packages abstract that away).
  *
- * ENTITLEMENT → BACKEND GAP (documented, not faked): the personal
- * backend's `entitled` flag is writable ONLY by the service role
- * (set_personal_entitlement), and the documented wiring is a RevenueCat
- * webhook → service-role call → start-personal-fill. No webhook
- * consumer exists yet, so a purchase here activates the entitlement in
- * RevenueCat (and this manager reports it, driving the subscribed UI
- * state) while the backend flag stays false until the webhook lands:
- * matrix pre-generation and serve-triggered replenishment (both
- * server-gated on the flag) begin only then. The client still calls
- * start-personal-fill on activation — the function itself refuses
- * non-entitled users, so the call is a harmless no-op until the flag
- * flips, and the correct trigger once it does. Nothing in the client
- * ever writes `entitled`.
+ * ENTITLEMENT → BACKEND WIRING: the personal backend's `entitled` flag
+ * is writable ONLY by the service role (set_personal_entitlement). Two
+ * server paths flip it, and the client never writes it directly:
+ *  1. the revenuecat-webhook consumer (primary), and
+ *  2. the reconcile-personal-entitlement backstop, which the client
+ *     invokes on bootstrap, on entitlement change, and after a
+ *     purchase (see PersonalHeroRepository.syncBillingIdentity) — the
+ *     server re-verifies the caller's state against RevenueCat and
+ *     grants + kicks start-personal-fill itself when warranted.
+ * Both paths key the user by the SUPABASE uid, which is why the
+ * identity link (acceptance 17, [logIn]) matters: until RevenueCat
+ * runs under the Supabase uid, an Android purchase sits under the
+ * SDK's anonymous id and neither path can find it. This manager
+ * reports the RevenueCat-side entitlement for the subscribed UI state;
+ * server-gated benefits (matrix pre-generation, replenishment) follow
+ * the backend flag once either path lands it.
  */
 @Singleton
 class BillingManager @Inject constructor(
@@ -71,6 +74,43 @@ class BillingManager @Inject constructor(
     private fun applyCustomerInfo(info: CustomerInfo) {
         _customerInfo.value = info
         _makeItMeActive.value = info.entitlements[ENTITLEMENT_ID]?.isActive == true
+    }
+
+    /** The app_user_id RevenueCat currently runs under, if configured. */
+    fun currentAppUserId(): String? {
+        if (!configured) return null
+        return runCatching { Purchases.sharedInstance.appUserID }.getOrNull()
+    }
+
+    /**
+     * Acceptance 17: link RevenueCat to the Supabase user id, so this
+     * device's purchases are recorded under the uid the backend keys
+     * on. Idempotent per [BillingIdentityPolicy]: a no-op (returns
+     * true) when the SDK already runs under [appUserId]. Failures are
+     * logged and reported as false — callers treat them as "retry at
+     * the next sync point", never as a user-facing error.
+     */
+    suspend fun logIn(appUserId: String): Boolean {
+        if (!configured) return false
+        if (!BillingIdentityPolicy.shouldLogIn(currentAppUserId(), appUserId)) return true
+        return suspendCancellableCoroutine { cont ->
+            runCatching {
+                Purchases.sharedInstance.logInWith(
+                    appUserId,
+                    onError = { error ->
+                        Log.w(TAG, "RevenueCat logIn failed: ${error.message}")
+                        if (cont.isActive) cont.resume(false)
+                    },
+                    onSuccess = { info, _ ->
+                        applyCustomerInfo(info)
+                        if (cont.isActive) cont.resume(true)
+                    }
+                )
+            }.onFailure {
+                Log.w(TAG, "RevenueCat logIn threw", it)
+                if (cont.isActive) cont.resume(false)
+            }
+        }
     }
 
     private fun refreshCustomerInfoAsync() {

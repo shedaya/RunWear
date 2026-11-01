@@ -41,12 +41,11 @@ import javax.inject.Singleton
  * Auth session and persists it in the app's DataStore. The anonymous
  * user is a real auth.users row: RLS owner policies apply unchanged.
  *
- * KNOWN SERVER GAP (verified live 2026-10-31): anonymous sign-ins are
- * DISABLED on the project (`anonymous_provider_disabled`), so no
- * session can be established until that one Auth setting is enabled
- * server-side. Every caller degrades to the pool hero / stock state in
- * that case — the feature is inert, never broken, while the setting is
- * off. See the build report.
+ * Anonymous sign-ins are ENABLED on the project (verified 2026-10-31:
+ * Sol's device runs a live anonymous session on this path). If a
+ * session still can't be established (offline, provider regression),
+ * every caller degrades to the pool hero / stock state — the personal
+ * layer goes inert, never broken.
  *
  * This client talks REST directly (Ktor) rather than through the
  * supabase-kt client in the shared module: that client is built
@@ -280,6 +279,20 @@ class PersonalHeroService @Inject constructor(
     /** Enqueue the 20-cell matrix for the (entitled) caller. */
     suspend fun startPersonalFill(): Boolean =
         callFunction("start-personal-fill", "{}") is FunctionResult.Ok
+
+    /**
+     * Entitlement reconciliation (the RW-16.12 backstop): ask the
+     * server to bring the caller's `entitled` flag in line with
+     * RevenueCat's record. The client asserts nothing — the function
+     * derives the user from this session's JWT and verifies the
+     * subscriber state against RevenueCat itself before acting; on a
+     * grant it also kicks start-personal-fill server-side. Silent and
+     * idempotent by design (the function writes only on a real
+     * transition). True when the call completed; the caller re-reads
+     * the profile afterwards to mirror any change.
+     */
+    suspend fun reconcileEntitlement(): Boolean =
+        callFunction("reconcile-personal-entitlement", "{}") is FunctionResult.Ok
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 

@@ -8,6 +8,8 @@ package com.runwear.app.makeitme
  * - [MakeItMeUpsellRules]: the 6th-cell offer's frequency rules (spec §5.2).
  * - [PhotoQualityPolicy]: the in-flow reference-photo quality check
  *   (acceptance 2, spec §7 C3).
+ * - [BillingIdentityPolicy]: when RevenueCat must be (re)linked to the
+ *   Supabase user id (acceptance 17).
  */
 
 /**
@@ -146,5 +148,30 @@ object PhotoQualityPolicy {
         PhotoRejection.MULTIPLE_PEOPLE -> MakeItMeStrings.C3B_REJECT_MULTIPLE
         PhotoRejection.TOO_DARK -> MakeItMeStrings.C3C_REJECT_TOO_DARK
         PhotoRejection.TOO_CLOSE -> MakeItMeStrings.C3D_REJECT_TOO_CLOSE
+    }
+}
+
+/**
+ * Acceptance 17: RevenueCat's app_user_id must BE the Supabase user id,
+ * so a Play purchase is findable by the backend (the webhook consumer
+ * and the reconcile-personal-entitlement backstop both key on the
+ * Supabase uid). Until the client links the two, the SDK runs under a
+ * generated "$RCAnonymousID:…" id and Android purchases are invisible
+ * to the server — the exact failure RW-16.12 proved on iOS's billing
+ * hop. (iOS configures Purchases with the Supabase uid from the start;
+ * Android configures at process start, before any session exists, so
+ * the link happens via logIn as soon as the anonymous session lands.)
+ *
+ * The rule: link exactly when there is a Supabase uid to link TO and
+ * RevenueCat is not already running under it. Re-linking the same id
+ * is skipped — logIn is not free (it can merge identities), so the
+ * sync points (bootstrap, entitlement change, purchase) stay cheap
+ * and idempotent.
+ */
+object BillingIdentityPolicy {
+
+    fun shouldLogIn(currentRcAppUserId: String?, supabaseUserId: String?): Boolean {
+        val uid = supabaseUserId?.takeIf { it.isNotBlank() } ?: return false
+        return currentRcAppUserId != uid
     }
 }

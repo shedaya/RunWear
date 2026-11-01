@@ -24,7 +24,7 @@ data class MakeItMeUiState(
     val forkDecided: Boolean = false,
     /** RevenueCat-side entitlement (drives the subscribed UI state). */
     val rcEntitled: Boolean = false,
-    /** Server-side entitlement flag (webhook-driven; gates fill/replenishment). */
+    /** Server-side entitlement flag (webhook + reconciliation driven; gates fill/replenishment). */
     val serverEntitled: Boolean = false,
     val gender: String = "UNISEX"
 )
@@ -72,6 +72,20 @@ class MakeItMeViewModel @Inject constructor(
             repository.initialize()
             billing.refreshCustomerInfo()
             repository.refreshFromServer()
+        }
+        // Entitlement changes (purchase in another flow, renewal,
+        // lapse detected on refresh) re-run the identity + reconcile
+        // sync, so the server flag follows RevenueCat even when the
+        // change didn't happen on this screen. Bootstrap is covered by
+        // initialize(); this collector only fires on actual changes.
+        viewModelScope.launch {
+            var previous = billing.makeItMeActive.value
+            billing.makeItMeActive.collect { active ->
+                if (active != previous) {
+                    previous = active
+                    repository.syncBillingIdentity()
+                }
+            }
         }
     }
 
@@ -155,13 +169,17 @@ class MakeItMeViewModel @Inject constructor(
     }
 
     /**
-     * After a successful purchase: attempt the matrix fill. The backend
-     * function refuses until the RevenueCat webhook flips the server
-     * entitlement flag (see BillingManager's gap note) — the attempt is
-     * the correct trigger once it does, and a no-op until then.
+     * After a successful purchase: sync identity + entitlement first —
+     * the reconcile backstop verifies the purchase against RevenueCat
+     * server-side, flips the flag, and kicks the matrix fill itself on
+     * a grant. The direct fill call stays as the second trigger (it is
+     * also the correct one when the webhook landed the flag first);
+     * the function refuses non-entitled users, so it is a harmless
+     * no-op in every other state.
      */
     private fun onSubscriptionActivated() {
         viewModelScope.launch {
+            repository.syncBillingIdentity()
             runCatching { repository.startPersonalFill() }
             repository.refreshFromServer()
         }
