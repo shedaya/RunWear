@@ -160,6 +160,32 @@ const BACKGROUNDS = [
   'a bridge with a city skyline', 'a tree-lined avenue'
 ]
 
+// Body-anchored visual restatements of the outfit's discriminating
+// garments (RW-16.13). The verification gate judges garment CLASSES
+// (sleeve length, bottom coverage, outer layer), and the field
+// evidence showed the model (a) preserving the reference photos'
+// indoor clothing instead of redressing the runner and (b) returning
+// torso-weighted frames in which below-waist garments never appear.
+// The prompt therefore restates those classes in on-body visual
+// terms. Generation-side only: nothing in the gate reads this.
+function outfitAnchors(keys: string[]): string {
+  const has = (k: string) => keys.includes(k)
+  const parts: string[] = []
+  if (has('TANK_TOP')) parts.push('the top is sleeveless, with bare shoulders and arms')
+  else if (has('SHORT_SLEEVE')) parts.push("the top's short sleeves end above the elbow")
+  else if (has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')) {
+    parts.push("the top's long sleeves reach all the way to the wrists")
+  }
+  if (keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')) {
+    parts.push('a zipped jacket is worn over the top as the outermost layer')
+  }
+  if (has('LIGHT_TIGHTS') || has('THERMAL_TIGHTS')) {
+    parts.push('full-length tights cover the legs completely, down to the ankles')
+  } else if (has('CAPRIS')) parts.push('three-quarter tights end just below the knee')
+  else if (has('SHORTS') || has('SHORT_SHORTS')) parts.push('the shorts end above the knee')
+  return parts.length ? ` In the photo: ${parts.join('; ')}.` : ''
+}
+
 function buildPrompt(job: JobRow, failureClasses: string[]): string {
   // Layering order matters: Kontext drops outer layers when they are
   // listed flatly after the base layer (observed live: RAIN_JACKET
@@ -187,11 +213,16 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   for (let i = 0; i < job.combination_id.length; i++) seed += job.combination_id.charCodeAt(i)
   const background = BACKGROUNDS[seed % BACKGROUNDS.length]
   let prompt =
-    `Photorealistic photo of the same person shown in the reference photos, ` +
+    `Photorealistic full-body photo of the same person shown in the reference photos, ` +
     `now running mid-stride along ${background}, ${weatherPhrase[job.weather] ?? 'clear skies'}, ` +
-    `${timePhrase[job.time_of_day] ?? 'daylight'}. They are wearing exactly this outfit and nothing extra: ` +
-    `${items.join(', ')}.${layering} The runner is looking ahead, not at the camera. ` +
-    `No visible brand logos, text, or trademarks anywhere in the image.` +
+    `${timePhrase[job.time_of_day] ?? 'daylight'}. The runner's whole body is in the frame, ` +
+    `from the top of the head to the shoes, legs and feet included. ` +
+    `The reference photos show this person in indoor clothes: replace that clothing completely — ` +
+    `do not keep any garment from the reference photos. They are wearing exactly this running ` +
+    `outfit and nothing extra: ` +
+    `${items.join(', ')}.${layering}${outfitAnchors(keys)} The runner is looking ahead, not at the camera. ` +
+    `No visible brand logos, text, or trademarks anywhere in the image: every garment is plain, ` +
+    `solid and unbranded — no swooshes, emblems, printed words or brand marks.` +
     QUALITY_SUFFIX
   if (failureClasses.length > 0) {
     prompt += ` IMPORTANT: a previous attempt at this photo failed verification because of: ` +
