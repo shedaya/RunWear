@@ -223,6 +223,142 @@ function outfitAnchors(keys: string[]): string {
   return parts.length ? ` In the photo: ${parts.join('; ')}.` : ''
 }
 
+// Imperative corrections derived from gate failure classes (RW-16.22).
+// The v16 feedback appended the gate's raw class strings ("missing_
+// required: bottom (expected tights, saw none)") and the model kept
+// failing on the same classes — the classes are written for the gate's
+// log, not as garment instructions. Translate each recurring class
+// into a mandatory/forbidden clause naming the exact garment. This
+// only ever fires on a retry (in-job attempt 2, or a re-queued job
+// seeded with the cell's prior verdict), so first attempts — the ones
+// the delivering families pass on — are untouched.
+function correctionClauses(failures: string[], keys: string[]): string[] {
+  const has = (k: string) => keys.includes(k)
+  const outerDesc = has('RAIN_JACKET') ? 'a hooded waterproof rain jacket'
+    : has('INSULATED_JACKET') ? 'a puffy insulated winter jacket'
+    : has('LIGHT_JACKET') ? 'a lightweight zip-up running jacket'
+    : has('WINDBREAKER') ? 'a lightweight windbreaker jacket'
+    : has('LIGHT_VEST') ? 'a light running vest' : 'the jacket'
+  const clauses: string[] = []
+  for (const f of failures) {
+    if (f.startsWith('missing_required: bottom')) {
+      if (f.includes('expected tights')) {
+        clauses.push('LEGS: the runner MUST wear skin-tight full-length running tights ' +
+          '(leggings) covering both legs completely from the waist to the ankles — ' +
+          'shorts are FORBIDDEN, capris are FORBIDDEN, and no bare skin may show on the legs')
+      } else if (f.includes('expected capris')) {
+        clauses.push('LEGS: the runner MUST wear three-quarter tights ending just below ' +
+          'the knee — shorts and full-length trousers are FORBIDDEN')
+      } else if (f.includes('expected shorts') || f.includes('expected short_shorts')) {
+        clauses.push('LEGS: the runner MUST wear running shorts ending above the knee — ' +
+          'full-length tights are FORBIDDEN')
+      }
+    } else if (f.startsWith('missing_required: outer layer') &&
+               keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')) {
+      clauses.push(`OUTER LAYER: the runner MUST wear ${outerDesc}, zipped up, as the ` +
+        'outermost layer over the shirt — the previous attempt left the jacket out; ' +
+        'it is mandatory, not optional')
+    } else if (f.startsWith('missing_required: top')) {
+      if (f.includes('expected long sleeve')) {
+        clauses.push('SLEEVES: the shirt MUST have full-length sleeves reaching all the ' +
+          'way to the wrists — a short-sleeve shirt is FORBIDDEN and a sleeveless top is FORBIDDEN')
+      } else if (f.includes('expected short sleeve')) {
+        clauses.push('SLEEVES: the shirt MUST have short sleeves ending above the elbow — ' +
+          'long sleeves are FORBIDDEN')
+      } else if (f.includes('expected sleeveless')) {
+        clauses.push('TOP: the runner MUST wear a sleeveless tank top with bare shoulders ' +
+          'and arms — sleeves of any length are FORBIDDEN')
+      }
+    } else if (f.startsWith('missing_required: head')) {
+      if (f.includes('expected beanie')) {
+        clauses.push('HEAD: the runner MUST wear a knit winter beanie covering the head ' +
+          'and ears — a baseball cap is FORBIDDEN')
+      } else if (f.includes('expected headband')) {
+        clauses.push('HEAD: the runner MUST wear a wide ear-warmer headband covering the ears')
+      } else if (f.includes('expected cap')) {
+        clauses.push('HEAD: the runner MUST wear a running cap')
+      } else if (f.includes('expected visor')) {
+        clauses.push('HEAD: the runner MUST wear a visor')
+      } else if (f.includes('expected balaclava')) {
+        clauses.push('HEAD: the runner MUST wear a balaclava covering the whole head and ' +
+          'face except the eyes')
+      }
+    } else if (f.startsWith('missing_required: hands')) {
+      clauses.push('HANDS: gloves or mittens MUST cover both hands completely — bare ' +
+        'hands and visible fingers are FORBIDDEN')
+    } else if (f.startsWith('missing_required: sunglasses')) {
+      clauses.push('EYES: the runner MUST wear sunglasses')
+    } else if (f.startsWith('extra_items: jacket')) {
+      clauses.push('OUTER LAYER: the runner must NOT wear any jacket, coat or vest in this photo')
+    } else if (f === 'brand_logos_or_text') {
+      clauses.push('LOGOS: every garment MUST be completely plain and unbranded — no ' +
+        'swoosh, no stripe logo, no emblem, no printed word anywhere on the clothing')
+    }
+  }
+  return clauses
+}
+
+// Itemized mandatory outfit block for the COOL bracket (RW-16.22).
+// The COOL family is the generator's wall: 22 of 22 COOL jobs on the
+// reference account failed the gate, always on the same classes —
+// tights read as shorts/none, the light jacket dropped. The v16 flat
+// item list plus anchor paragraph did not move it. For COOL jobs the
+// outfit is therefore restated as one mandatory clause per garment in
+// wearing order (outermost first, the visible state the gate judges),
+// preceded by the cold-weather frame the model's shorts prior lacks,
+// and closed with the outfit's explicit negatives. Non-COOL jobs keep
+// the v16 segment byte-for-byte.
+function coolOutfitBlock(keys: string[]): string {
+  const has = (k: string) => keys.includes(k)
+  const hasOuter = keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')
+  const lines: string[] = []
+  if (has('RAIN_JACKET')) lines.push('a hooded waterproof rain jacket, zipped all the way up, worn as the outermost layer')
+  else if (has('INSULATED_JACKET')) lines.push('a puffy insulated winter jacket, zipped all the way up, worn as the outermost layer')
+  else if (has('LIGHT_JACKET')) lines.push('a lightweight zip-up running jacket with long sleeves and a stand-up collar, zipped all the way up, worn as the outermost layer over the shirt')
+  else if (has('WINDBREAKER')) lines.push('a lightweight windbreaker jacket, zipped all the way up, worn as the outermost layer over the shirt')
+  else if (has('LIGHT_VEST')) lines.push('a light running vest worn as the outermost layer over the shirt')
+  if (has('QUARTER_ZIP')) lines.push('a quarter-zip pullover worn under the jacket')
+  else if (has('FLEECE_PULLOVER')) lines.push('a fleece pullover worn under the jacket')
+  else if (has('HALF_ZIP_THERMAL')) lines.push('a thermal half-zip worn under the jacket')
+  if (has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')) {
+    lines.push(hasOuter
+      ? 'a long-sleeve running shirt under the jacket, its full-length sleeves reaching the wrists'
+      : "a long-sleeve running shirt whose sleeves reach all the way to the wrists")
+  } else if (has('SHORT_SLEEVE')) lines.push('a short-sleeve running shirt, its sleeves ending above the elbow')
+  else if (has('TANK_TOP')) lines.push('a sleeveless tank top with bare shoulders and arms')
+  if (has('LIGHT_TIGHTS') || has('THERMAL_TIGHTS')) {
+    lines.push('skin-tight full-length running tights (leggings) covering both legs completely from the waist down to the ankles')
+  } else if (has('CAPRIS')) lines.push('three-quarter tights ending just below the knee')
+  else if (has('SHORTS')) lines.push('running shorts ending above the knee')
+  else if (has('SHORT_SHORTS')) lines.push('short running shorts ending high on the thigh')
+  if (has('BALACLAVA')) lines.push('a balaclava covering the whole head and face except the eyes')
+  else if (has('LIGHT_BEANIE') || has('THERMAL_BEANIE')) lines.push('a knit winter beanie hat covering the head and ears (a beanie, not a baseball cap)')
+  else if (has('HEADBAND')) lines.push('a wide ear-warmer headband covering the ears')
+  else if (has('VISOR')) lines.push('a visor shading the eyes')
+  else if (has('BASEBALL_CAP')) lines.push('a running cap on the head')
+  if (has('MITTENS')) lines.push('mittens covering both hands completely, no bare fingers visible')
+  else if (has('LIGHT_GLOVES') || has('THERMAL_GLOVES')) lines.push('gloves covering both hands completely, no bare fingers visible')
+  if (has('NECK_GAITER')) lines.push('a neck gaiter covering the neck and lower face')
+  if (has('SUNGLASSES')) lines.push('sunglasses covering the eyes')
+  if (has('REFLECTIVE_GEAR')) {
+    lines.push((has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL'))
+      ? 'a thin reflective sash worn over the top, the full-length sleeves staying visible down to the wrists'
+      : 'reflective strips on the clothing catching the light')
+  }
+  const negatives: string[] = []
+  if (has('LIGHT_TIGHTS') || has('THERMAL_TIGHTS')) negatives.push('shorts of any kind')
+  if ((has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')) && !hasOuter) {
+    negatives.push('a short-sleeve shirt', 'a sleeveless top')
+  }
+  let block =
+    ` It is a chilly morning and the runner is dressed warmly for cold weather. ` +
+    `The outfit — every item in this list is mandatory and must be clearly visible: ` +
+    `${lines.join('; ')}. `
+  if (negatives.length) block += `The runner is NOT wearing ${negatives.join(' or ')}. `
+  block += `Every item in that outfit list is visibly worn in the photo — nothing from the list is missing or substituted. `
+  return block
+}
+
 function buildPrompt(job: JobRow, failureClasses: string[]): string {
   // Layering order matters: Kontext drops outer layers when they are
   // listed flatly after the base layer (observed live: RAIN_JACKET
@@ -258,6 +394,14 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   let seed = 0
   for (let i = 0; i < job.combination_id.length; i++) seed += job.combination_id.charCodeAt(i)
   const background = BACKGROUNDS[seed % BACKGROUNDS.length]
+  // RW-16.22: COOL-bracket jobs use the itemized mandatory outfit
+  // block (coolOutfitBlock); every other bracket keeps the v16
+  // segment below byte-for-byte.
+  const outfitSegment = job.temp_bracket === 'COOL'
+    ? coolOutfitBlock(keys)
+    : ` They are wearing exactly this running outfit and nothing extra: ` +
+      `${items.join(', ')}.${layering}${outfitAnchors(keys)} Every item in that outfit list is ` +
+      `visibly worn in the photo — nothing from the list is missing or substituted. `
   let prompt =
     `Photorealistic full-body photo of the same person shown in the reference photos, ` +
     `now running mid-stride along ${background}, ${weatherPhrase[job.weather] ?? 'clear skies'}, ` +
@@ -265,10 +409,8 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
     `from the top of the head to the shoes, legs and feet included, seen from the front ` +
     `and large in the frame. ` +
     `The reference photos show this person in indoor clothes: replace that clothing completely — ` +
-    `do not keep any garment from the reference photos. They are wearing exactly this running ` +
-    `outfit and nothing extra: ` +
-    `${items.join(', ')}.${layering}${outfitAnchors(keys)} Every item in that outfit list is ` +
-    `visibly worn in the photo — nothing from the list is missing or substituted. ` +
+    `do not keep any garment from the reference photos.` +
+    outfitSegment +
     `The runner is looking ahead, not at the camera. ` +
     `No visible brand logos, text, or trademarks anywhere in the image: every garment is plain, ` +
     `solid and unbranded — no swooshes, emblems, printed words or brand marks.` +
@@ -276,6 +418,11 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   if (failureClasses.length > 0) {
     prompt += ` IMPORTANT: a previous attempt at this photo failed verification because of: ` +
       `${failureClasses.join('; ')}. Fix exactly these problems.`
+    // RW-16.22: the same verdicts restated as garment imperatives —
+    // the raw class strings alone did not move the model (22 of 22
+    // COOL jobs failed on the classes they name).
+    const clauses = correctionClauses(failureClasses, keys)
+    if (clauses.length) prompt += ` ${clauses.join('. ')}.`
   }
   return prompt
 }
@@ -891,6 +1038,41 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
         startAttempt = resumeAttempt + 1
       } else {
         console.log(`[personal-hero-worker] job ${job.id}: interrupted prediction ${job.replicate_id} no longer retrievable; restarting generation`)
+      }
+    }
+
+    // --- Cross-job closed loop (RW-16.22) ---
+    // A re-queued cell previously started every job blind: the only
+    // failure feedback lived inside a single job's attempt 2, so the
+    // subscriber fill re-ran this account's COOL DAWN cell four times
+    // with four identical blind first attempts. When this job has no
+    // fresher verdict of its own (the resume path above supplies one
+    // when it gates an interrupted image), seed the loop with the
+    // most recent gate verdict recorded for the same user +
+    // combination, so attempt N+1 of the CELL — not just of the job —
+    // is prompted from attempt N's gate record. Prompt-side only:
+    // the gate, its thresholds, and the two-attempt budget per job
+    // are unchanged.
+    if (failures.length === 0) {
+      const { data: prior } = await supabase
+        .from('personal_generation_jobs')
+        .select('error_message')
+        .eq('user_id', job.user_id)
+        .eq('combination_id', job.combination_id)
+        .eq('status', 'FAILED')
+        .like('error_message', 'gate_failed:%')
+        .neq('id', job.id)
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const priorMsg = prior?.error_message as string | undefined
+      if (priorMsg) {
+        const seeded = priorMsg.replace(/^gate_failed:\s*/, '')
+          .split('; ').map(s => s.trim()).filter(Boolean)
+        if (seeded.length > 0) {
+          failures = seeded
+          console.log(`[personal-hero-worker] job ${job.id}: seeded attempt ${startAttempt} with the prior gate verdict for ${job.combination_id}: ${failures.join('; ')}`)
+        }
       }
     }
 
