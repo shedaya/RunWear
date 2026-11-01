@@ -56,6 +56,32 @@
 // the full-size signed reference URLs; only the composite input
 // changed, so gate semantics are untouched.
 //
+// Two-stage redress (RW-16.28, 2026-11-01): the RW-16.28 diagnosis
+// established that Kontext's minimal-edit prior preserves whatever
+// the reference photos wear — every delivered hero prescribing a
+// sleeved top wore the reference's dress shirt (8 of 8), because
+// stage-2 generation starts from the street-clothes portrait.
+// Stage 1 therefore runs ONE Kontext edit of the first reference
+// that redresses the subject into plain athletic kit, full-body,
+// and caches the result as a derived reference (in the refs folder,
+// so delete-my-photos' prefix sweep removes it with the rest of
+// the user's photos). Stage 2 then leads its input images with
+// that derived reference, so preservation works for the outfit
+// instead of against it. The derived reference is gated BEFORE
+// caching by the same identity composite that gates heroes
+// (derived vs the ORIGINAL first reference, same threshold): a
+// derived reference that fails identity is never cached and never
+// used, and any stage-1 failure falls back to the pre-RW-16.28
+// single-stage inputs for that job — stage 1 can never block
+// generation. The stage-2 identity gate is unchanged and stays
+// pinned to the original first reference, never to the synthetic
+// one, so the identity standard cannot drift. Cache freshness
+// mirrors the reference-derivative rule: the derived object is
+// fresh iff it was written no earlier than EVERY current reference
+// source object (register_references replaces sources in place,
+// bumping updated_at; an added reference carries a fresh
+// updated_at of its own), so any photo change rebuilds it.
+//
 // Regeneration swap retirement (RW-16.12 Lane C spec, implemented by
 // Lane A): under keep-serving, a kind='regeneration' job whose cell
 // already holds VARIANT_CAP heroes retires the cell's
@@ -338,7 +364,7 @@ function correctionClauses(failures: string[], keys: string[]): string[] {
 // preceded by the cold-weather frame the model's shorts prior lacks,
 // and closed with the outfit's explicit negatives. Non-COOL jobs keep
 // the v16 segment byte-for-byte.
-function coolOutfitBlock(keys: string[], poolComposition = false): string {
+function coolOutfitBlock(keys: string[], poolComposition = false, derivedLead = false): string {
   const has = (k: string) => keys.includes(k)
   const hasOuter = keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')
   const lines: string[] = []
@@ -385,7 +411,17 @@ function coolOutfitBlock(keys: string[], poolComposition = false): string {
   // a pool hero of this cell as the second input image, name the two
   // images' roles — the stock frame carries the outfit and the
   // full-body composition the model's edit prior otherwise drops.
-  if (poolComposition) {
+  if (poolComposition && derivedLead) {
+    // RW-16.28: with the derived athletic reference leading, the
+    // pool hero is the THIRD input; the role sentence names all
+    // three so the model is never told a person photo is stock.
+    block += ` Three input images are given: the FIRST and SECOND both show the real ` +
+      `person to depict — the first already wears plain athletic running kit — and ` +
+      `the THIRD is a stock running photo: copy its outfit and its full-body ` +
+      `composition exactly: the same garments, the same full-length framing with ` +
+      `the whole body visible from head to shoes. The runner in the photo is the ` +
+      `person from the FIRST image, not the stock runner.`
+  } else if (poolComposition) {
     block += ` Two input images are given: the FIRST is the real person to depict; ` +
       `the SECOND is a stock running photo — copy its outfit and its full-body ` +
       `composition exactly: the same garments, the same full-length framing with ` +
@@ -408,7 +444,7 @@ function coolOutfitBlock(keys: string[], poolComposition = false): string {
   return block
 }
 
-function buildPrompt(job: JobRow, failureClasses: string[], poolComposition = false): string {
+function buildPrompt(job: JobRow, failureClasses: string[], poolComposition = false, derivedLead = false): string {
   // Layering order matters: Kontext drops outer layers when they are
   // listed flatly after the base layer (observed live: RAIN_JACKET
   // omitted twice when listed after LONG_SLEEVE). Name the outer layer
@@ -447,7 +483,7 @@ function buildPrompt(job: JobRow, failureClasses: string[], poolComposition = fa
   // block (coolOutfitBlock); every other bracket keeps the v16
   // segment below byte-for-byte.
   const outfitSegment = job.temp_bracket === 'COOL'
-    ? coolOutfitBlock(keys, poolComposition)
+    ? coolOutfitBlock(keys, poolComposition, derivedLead)
     : ` They are wearing exactly this running outfit and nothing extra: ` +
       `${items.join(', ')}.${layering}${outfitAnchors(keys)} Every item in that outfit list is ` +
       `visibly worn in the photo — nothing from the list is missing or substituted. `
@@ -688,6 +724,35 @@ function compareGarments(expected: GarmentClasses, seen: GarmentClasses): string
   return failures
 }
 
+// --- identity composite (shared by the gate and RW-16.28 stage 1) ---
+// LEFT: the reference derivative; RIGHT: the candidate image, both at
+// 768 px tall, JPEG 80. The stage-1 redress gate runs this exact
+// composite — same instrument, same prompt, same threshold
+// (IDENTITY_MIN_CONFIDENCE) — against the stage-1 output before the
+// derived reference may be cached.
+const IDENTITY_PROMPT =
+  `The LEFT half of this image is a reference photo of a real person. ` +
+  `The RIGHT half is an AI-generated photo that should depict the SAME person. ` +
+  `Compare facial structure, hair, eyebrows, eyes, nose and mouth. ` +
+  `Answer with ONLY a JSON object: {"same_person": true or false, "confidence": a number from 0.0 to 1.0}`
+
+async function buildIdentityCompositeUri(refBytes: Uint8Array, imageBytes: Uint8Array): Promise<string> {
+  const refImg = await Image.decode(refBytes)
+  const genImg = await Image.decode(imageBytes)
+  const H = 768
+  const refBit = refImg.resize(Image.RESIZE_AUTO, H)
+  const genBit = genImg.resize(Image.RESIZE_AUTO, H)
+  const composite = new Image(refBit.width + genBit.width, H)
+  composite.composite(refBit, 0, 0)
+  composite.composite(genBit, refBit.width, 0)
+  const jpeg = await composite.encodeJPEG(80)
+  let binary = ''
+  for (let i = 0; i < jpeg.length; i += 8192) {
+    binary += String.fromCharCode(...jpeg.subarray(i, i + 8192))
+  }
+  return `data:image/jpeg;base64,${btoa(binary)}`
+}
+
 async function runGate(job: JobRow, imageUrl: string, imageBytes: Uint8Array,
                        refBytes: Uint8Array): Promise<GateOutcome> {
   const items = job.outfit_items as string[]
@@ -708,32 +773,14 @@ async function runGate(job: JobRow, imageUrl: string, imageBytes: Uint8Array,
   let compositeUri: string | null = null
   let compositeError: string | null = null
   try {
-    const refImg = await Image.decode(refBytes)
-    const genImg = await Image.decode(imageBytes)
-    const H = 768
-    const refBit = refImg.resize(Image.RESIZE_AUTO, H)
-    const genBit = genImg.resize(Image.RESIZE_AUTO, H)
-    const composite = new Image(refBit.width + genBit.width, H)
-    composite.composite(refBit, 0, 0)
-    composite.composite(genBit, refBit.width, 0)
-    const jpeg = await composite.encodeJPEG(80)
-    let binary = ''
-    for (let i = 0; i < jpeg.length; i += 8192) {
-      binary += String.fromCharCode(...jpeg.subarray(i, i + 8192))
-    }
-    compositeUri = `data:image/jpeg;base64,${btoa(binary)}`
+    compositeUri = await buildIdentityCompositeUri(refBytes, imageBytes)
   } catch (e) {
     compositeError = (e as Error).message
   }
-  const identityPrompt =
-    `The LEFT half of this image is a reference photo of a real person. ` +
-    `The RIGHT half is an AI-generated photo that should depict the SAME person. ` +
-    `Compare facial structure, hair, eyebrows, eyes, nose and mouth. ` +
-    `Answer with ONLY a JSON object: {"same_person": true or false, "confidence": a number from 0.0 to 1.0}`
 
   const [garmentText, identityText] = await Promise.all([
     callVision(imageUrl, garmentPrompt),
-    compositeUri ? callVision(compositeUri, identityPrompt)
+    compositeUri ? callVision(compositeUri, IDENTITY_PROMPT)
                  : Promise.resolve(null)
   ])
   const seen = classesFromText(garmentText)
@@ -844,6 +891,124 @@ async function loadCompositeRefBytes(sourcePath: string): Promise<Uint8Array> {
     throw new Error(`reference_prep_failed: derivative download failed: ${error?.message}`)
   }
   return new Uint8Array(await data.arrayBuffer())
+}
+
+// --- Two-stage redress: stage 1 (RW-16.28) ---------------------------
+// One Kontext edit of the first reference: the same person, full-body,
+// redressed into plain athletic kit. The output is identity-gated
+// against the ORIGINAL first reference (the composite above) before
+// it is cached; on any failure — gate, generation, storage — this
+// returns null and the job proceeds with the pre-RW-16.28 inputs.
+// The stage-1 prompt is deliberately a portrait instruction, not a
+// running scene: the derived image is a REFERENCE (the stage-2
+// canvas), so it must read like the full-body athletic photo the
+// RW-16.14 intake guidance asks for — head to shoes, legs and head
+// visible, face fully visible, no headwear/sunglasses/gloves the
+// stage-2 gate could read as extra items.
+const STAGE1_PROMPT =
+  `Edit this photo into a full-body reference portrait of the same person. ` +
+  `Show the person's entire body in the frame, from the top of the head to the shoes, ` +
+  `standing upright and facing the camera, arms relaxed at their sides, against a ` +
+  `plain neutral background. Replace the person's clothing completely with a plain ` +
+  `athletic running kit: a plain solid-color short-sleeve athletic t-shirt, plain ` +
+  `solid-color running shorts ending above the knee, bare legs below the shorts, and ` +
+  `plain running shoes. The person's face is fully visible: no sunglasses, no hat, ` +
+  `no headwear of any kind. Keep the same face, the same hair and the same body — ` +
+  `this must remain recognizably the same person, with natural anatomy and ` +
+  `proportions. Photorealistic, sharp focus. No visible brand logos, text or ` +
+  `trademarks anywhere in the image: every garment is plain, solid and unbranded.`
+const DERIVED_REF_FILENAME = 'derived-athletic.png'
+
+function derivedRefPathFor(firstRefPath: string): string {
+  const dir = firstRefPath.slice(0, firstRefPath.lastIndexOf('/'))
+  return `${dir}/${DERIVED_REF_FILENAME}`
+}
+
+// Fresh iff the derived object exists and was written no earlier
+// than EVERY current reference source object — the same rule the
+// composite derivatives use (derivativeIsFresh), widened from the
+// first source to the whole set, since the derived reference stands
+// for the set. All sources share the derived object's folder
+// (<uid>/refs), so one listing answers it.
+async function derivedRefIsFresh(refPaths: string[], derivedPath: string): Promise<boolean> {
+  try {
+    const dir = derivedPath.slice(0, derivedPath.lastIndexOf('/'))
+    const { data: listing } = await supabase.storage
+      .from('personal-heroes')
+      .list(dir, { limit: 100 })
+    if (!listing) return false
+    const byName = new Map((listing as Array<{ name: string, updated_at?: string }>)
+      .map(e => [e.name, e]))
+    const derName = derivedPath.slice(derivedPath.lastIndexOf('/') + 1)
+    const der = byName.get(derName)
+    if (!der || !der.updated_at) return false
+    const derTime = new Date(der.updated_at).getTime()
+    for (const p of refPaths) {
+      const src = byName.get(p.slice(p.lastIndexOf('/') + 1))
+      if (!src || !src.updated_at) return false
+      if (derTime < new Date(src.updated_at).getTime()) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function signStoragePath(path: string): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from('personal-heroes')
+    .createSignedUrl(path, 3600)
+  if (error || !data) return null
+  return data.signedUrl
+}
+
+// Returns a signed URL for the user's cached derived reference,
+// building (and identity-gating) it first when the cache is missing
+// or stale. Returns null when stage 1 is unavailable for this job
+// for ANY reason; the caller then uses the pre-RW-16.28 inputs.
+async function ensureDerivedReference(
+  job: JobRow, refPaths: string[], refUrls: string[], refBytes: Uint8Array
+): Promise<string | null> {
+  const derivedPath = derivedRefPathFor(refPaths[0])
+  try {
+    if (await derivedRefIsFresh(refPaths, derivedPath)) {
+      const url = await signStoragePath(derivedPath)
+      if (url) {
+        console.log(`[personal-hero-worker] job ${job.id}: RW-16.28 stage 1 cache hit (${derivedPath})`)
+        return url
+      }
+    }
+    console.log(`[personal-hero-worker] job ${job.id}: RW-16.28 stage 1 building derived reference from ${refPaths[0]}`)
+    const { url } = await generateImage(STAGE1_PROMPT, [refUrls[0]])
+    const resp = await fetch(url)
+    if (!resp.ok) throw new Error(`stage-1 output download failed: ${resp.status}`)
+    const derivedBytes = new Uint8Array(await resp.arrayBuffer())
+    // Stage-1 gate: the identity composite against the ORIGINAL
+    // first reference's derivative (refBytes), same instrument and
+    // threshold as the stage-2 identity gate. Fail-closed for the
+    // cache (an unverified synthetic is never stored or used),
+    // fail-open for the job (single-stage fallback below).
+    const compositeUri = await buildIdentityCompositeUri(refBytes, derivedBytes)
+    const identityText = await callVision(compositeUri, IDENTITY_PROMPT)
+    const identity = parseJsonObject(identityText)
+    const conf = identity && typeof identity.confidence === 'number'
+      ? identity.confidence as number : null
+    const pass = identity !== null && identity.same_person === true &&
+      conf !== null && conf >= IDENTITY_MIN_CONFIDENCE
+    if (!pass) {
+      console.log(`[personal-hero-worker] job ${job.id}: RW-16.28 stage 1 identity gate FAILED (same_person=${identity?.same_person}, confidence=${conf}); falling back to single-stage inputs`)
+      return null
+    }
+    const { error: uploadError } = await supabase.storage
+      .from('personal-heroes')
+      .upload(derivedPath, derivedBytes, { contentType: 'image/png', upsert: true })
+    if (uploadError) throw new Error(`derived reference upload failed: ${uploadError.message}`)
+    console.log(`[personal-hero-worker] job ${job.id}: RW-16.28 stage 1 derived reference cached at ${derivedPath} (identity confidence ${conf})`)
+    return await signStoragePath(derivedPath)
+  } catch (e) {
+    console.log(`[personal-hero-worker] job ${job.id}: RW-16.28 stage 1 unavailable (${(e as Error).message}); falling back to single-stage inputs`)
+    return null
+  }
 }
 
 // Gate one generated image and, iff it passes, store it as a
@@ -1155,6 +1320,17 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     // stock runner's face fails closed). The identity gate's own
     // composite is unaffected — it uses the first reference either
     // way, and its field confidence runs 0.9+ against a 0.6 floor.
+    // Two-stage redress (RW-16.28): build or reuse the derived
+    // athletic reference and LEAD the generation inputs with it, so
+    // the model's preservation prior starts from athletic kit. The
+    // original references stay in the input set behind it (the
+    // identity anchor in pixel form); the identity GATE is
+    // unaffected — it composites against the original first
+    // reference's derivative (refBytes), never the synthetic. When
+    // stage 1 is unavailable (ensureDerivedReference returns null)
+    // the input sets below are exactly the pre-RW-16.28 ones.
+    const derivedUrl = await ensureDerivedReference(job, refPaths, refUrls, refBytes)
+
     let genRefUrls = refUrls
     let poolRefUrl: string | null = null
     if (job.temp_bracket === 'COOL') {
@@ -1173,10 +1349,21 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
         }
       }
       if (poolRefUrl) genRefUrls = [refUrls[0], poolRefUrl]
+      if (derivedUrl) {
+        genRefUrls = poolRefUrl
+          ? [derivedUrl, refUrls[0], poolRefUrl]
+          : [derivedUrl, refUrls[0]]
+      }
+    } else if (derivedUrl) {
+      // Kontext takes three input images; the derived reference
+      // leads and the first two original references follow (a
+      // three-reference set's third portrait — a second street-
+      // clothes anchor — yields its slot to the derived image).
+      genRefUrls = [derivedUrl, ...refUrls].slice(0, 3)
     }
 
     for (let attempt = startAttempt; attempt <= maxAttempts; attempt++) {
-      lastPrompt = buildPrompt(job, promptFailures, poolRefUrl !== null)
+      lastPrompt = buildPrompt(job, promptFailures, poolRefUrl !== null, derivedUrl !== null)
       const { url, predictionId } = await generateImage(lastPrompt, genRefUrls)
       // The started_at refresh is the claim heartbeat (RW-16.25,
       // see STALE_PROCESSING_MS): a five-attempt layered job can
