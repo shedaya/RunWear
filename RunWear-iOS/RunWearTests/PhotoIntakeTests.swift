@@ -1,6 +1,5 @@
 import XCTest
 import UIKit
-@testable import RunWear
 
 /// RW-16.14 — the reference-photo intake grows a second source
 /// (the camera, beside the library) and a guidance line (one
