@@ -27,6 +27,7 @@ on:
           - ipad13probe
           - testers
           - testers-add
+          - testers-revoke
           - review
         default: verify
         required: true
@@ -100,6 +101,10 @@ jobs:
         if: inputs.task == 'testers-add'
         working-directory: scripts/asc
         run: python3 asc_testers.py add
+      - name: Cancel Alexandra's pending team invitation
+        if: inputs.task == 'testers-revoke'
+        working-directory: scripts/asc
+        run: python3 asc_testers.py revoke
       - name: Read App Review state + submission (read-only)
         if: inputs.task == 'review'
         working-directory: scripts/asc

@@ -13,8 +13,15 @@ Modes:
          each app's internal group that serves the current build
          (JetGuide 36 — never a diagnostics-only 37 group; RunWear 13
          in "RunWear Internal"; AccliMate 15) and read membership back.
+  revoke cancel her pending Users and Access invitation (Sol's call,
+         Nov 1, 2026: he pairs his own Apple Watch for testing;
+         Alexandra is not involved after all). Hard-guarded: refuses
+         to act unless the pending invitation for her email carries
+         exactly EXPECTED_INVITATION_ID, and aborts if she has
+         meanwhile become a team user. Deletes nothing else; reads
+         the state back afterwards.
 
-Usage: python3 asc_testers.py [probe|add]"""
+Usage: python3 asc_testers.py [probe|add|revoke]"""
 import sys, urllib.parse
 from asc_common import call
 
@@ -25,6 +32,10 @@ APPS = [("JetGuide", "6826923693", "36"),
         ("RunWear", "6827973343", "13"),
         ("AccliMate", "6828337210", "15")]
 RUNWEAR_INTERNAL_GROUP = "c384f9db-61ac-4644-bbc8-da89ad471617"
+# The invitation sent Oct 31, 2026. revoke() touches this record and
+# no other; if the pending invitation for her email has any other id,
+# it stops instead of deleting an unreviewed record.
+EXPECTED_INVITATION_ID = "c908efa8-d8c6-4e1c-8fea-69a9900ab7c2"
 
 
 def q(**kw):
@@ -184,6 +195,38 @@ def add():
                   f"in group {g['id']}")
 
 
+def revoke():
+    u = find_user()
+    if u:
+        raise SystemExit(
+            "ABORT: Alexandra is already a team user (" + u["id"] +
+            ") — the invitation was accepted, so there is no pending "
+            "invitation to cancel. No changes made.")
+    inv = find_invitation()
+    if not inv:
+        print("NO_PENDING_INVITATION: nothing to revoke.")
+        return
+    print("revoke target:", inv["id"], inv["attributes"].get("email"),
+          "expires", inv["attributes"].get("expirationDate"),
+          "roles", inv["attributes"].get("roles"))
+    if inv["id"] != EXPECTED_INVITATION_ID:
+        raise SystemExit(
+            "ABORT: pending invitation id " + inv["id"] +
+            " != expected " + EXPECTED_INVITATION_ID +
+            " — refusing to delete an unreviewed record. "
+            "No changes made.")
+    s, d = call("DELETE", f"/v1/userInvitations/{inv['id']}",
+                expect=(204,))
+    print("INVITATION_DELETE status", s)
+    inv2 = find_invitation()
+    print("readback pending invitation:", None if not inv2 else
+          (inv2["id"], inv2["attributes"].get("email")))
+    u2 = find_user()
+    print("readback team user:", None if not u2 else u2["id"])
+    t2 = find_tester()
+    print("readback betaTester:", None if not t2 else t2["id"])
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "probe"
-    (add if mode == "add" else probe)()
+    {"add": add, "revoke": revoke}.get(mode, probe)()
