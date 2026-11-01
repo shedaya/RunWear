@@ -27,6 +27,7 @@ on:
           - ipad13probe
           - testers
           - testers-add
+          - review
         default: verify
         required: true
       version:
@@ -99,3 +100,7 @@ jobs:
         if: inputs.task == 'testers-add'
         working-directory: scripts/asc
         run: python3 asc_testers.py add
+      - name: Read App Review state + submission (read-only)
+        if: inputs.task == 'review'
+        working-directory: scripts/asc
+        run: python3 asc_review.py "${{ inputs.version }}"
