@@ -451,7 +451,7 @@ const adjustedTemp = weather.feelsLike - comfort;
 ### Amazon Associates
 
 ```javascript
-const AFFILIATE_TAG = 'runwear-20';
+const AFFILIATE_TAG = 'runwearapp-20';
 const PLATFORM_SUBTAG = 'pwa';  // or 'ios', 'android', 'wearos'
 
 const amazonUrl = `https://www.amazon.com/s?k=${searchTerm}&tag=${AFFILIATE_TAG}&ascsubtag=${PLATFORM_SUBTAG}`;
