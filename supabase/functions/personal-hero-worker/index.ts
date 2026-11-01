@@ -308,7 +308,7 @@ function correctionClauses(failures: string[], keys: string[]): string[] {
 // preceded by the cold-weather frame the model's shorts prior lacks,
 // and closed with the outfit's explicit negatives. Non-COOL jobs keep
 // the v16 segment byte-for-byte.
-function coolOutfitBlock(keys: string[]): string {
+function coolOutfitBlock(keys: string[], poolComposition = false): string {
   const has = (k: string) => keys.includes(k)
   const hasOuter = keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')
   const lines: string[] = []
@@ -350,7 +350,19 @@ function coolOutfitBlock(keys: string[]): string {
   if ((has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')) && !hasOuter) {
     negatives.push('a short-sleeve shirt', 'a sleeveless top')
   }
-  let block =
+  let block = ''
+  // Composition reference (RW-16.22 round 3): when the worker passes
+  // a pool hero of this cell as the second input image, name the two
+  // images' roles — the stock frame carries the outfit and the
+  // full-body composition the model's edit prior otherwise drops.
+  if (poolComposition) {
+    block += ` Two input images are given: the FIRST is the real person to depict; ` +
+      `the SECOND is a stock running photo — copy its outfit and its full-body ` +
+      `composition exactly: the same garments, the same full-length framing with ` +
+      `the whole body visible from head to shoes. The runner in the photo is the ` +
+      `person from the FIRST image, not the stock runner.`
+  }
+  block +=
     ` It is a chilly morning and the runner is dressed warmly for cold weather. ` +
     `The outfit — every item in this list is mandatory and must be clearly visible: ` +
     `${lines.join('; ')}. `
@@ -366,7 +378,7 @@ function coolOutfitBlock(keys: string[]): string {
   return block
 }
 
-function buildPrompt(job: JobRow, failureClasses: string[]): string {
+function buildPrompt(job: JobRow, failureClasses: string[], poolComposition = false): string {
   // Layering order matters: Kontext drops outer layers when they are
   // listed flatly after the base layer (observed live: RAIN_JACKET
   // omitted twice when listed after LONG_SLEEVE). Name the outer layer
@@ -405,7 +417,7 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
   // block (coolOutfitBlock); every other bracket keeps the v16
   // segment below byte-for-byte.
   const outfitSegment = job.temp_bracket === 'COOL'
-    ? coolOutfitBlock(keys)
+    ? coolOutfitBlock(keys, poolComposition)
     : ` They are wearing exactly this running outfit and nothing extra: ` +
       `${items.join(', ')}.${layering}${outfitAnchors(keys)} Every item in that outfit list is ` +
       `visibly worn in the photo — nothing from the list is missing or substituted. `
@@ -1005,6 +1017,17 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     const refBytes = await loadCompositeRefBytes(refPaths[0])
 
     let failures: string[] = []
+    // The prompt's correction set (RW-16.22 round 3): the UNION of
+    // every failure class this job has seen — the seeded prior verdict
+    // plus each attempt's own — rather than only the latest sample's.
+    // Field evidence: an attempt prompted with only the jacket clause
+    // fixed nothing and re-lost the tights a sibling attempt had
+    // landed; each attempt is an independent sample, so a class drops
+    // out of the prompt only when a sample has actually passed it —
+    // which ends the job. `failures` keeps its established meaning
+    // (the LAST verdict, written to the job record); promptFailures
+    // is prompt-side only.
+    let promptFailures: string[] = []
     let gateRaw: Record<string, unknown> = {}
     let lastPrompt = ''
     let startAttempt = 1
@@ -1041,6 +1064,7 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
           }
         }
         failures = outcome.failures
+        promptFailures = [...failures]
         console.log(`[personal-hero-worker] job ${job.id} resumed attempt ${resumeAttempt} gate FAILED: ${failures.join('; ')}`)
         startAttempt = resumeAttempt + 1
       } else {
@@ -1078,23 +1102,49 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
           .split('; ').map(s => s.trim()).filter(Boolean)
         if (seeded.length > 0) {
           failures = seeded
+          promptFailures = [...seeded]
           console.log(`[personal-hero-worker] job ${job.id}: seeded attempt ${startAttempt} with the prior gate verdict for ${job.combination_id}: ${failures.join('; ')}`)
         }
       }
     }
 
-    // Reference weighting for the walled bracket (RW-16.22 round 2):
-    // the reference set is three upper-body indoor portraits, and the
-    // COOL generations kept collapsing to the inputs' portrait
-    // composition (waist-up frames with no legs for the gate to see).
-    // For COOL jobs, generate from the first reference only — the
-    // waist-up shot, the least tight crop of the three. The identity
-    // gate is unaffected (it composites the first reference either
-    // way, and its field confidence runs 0.9+ against a 0.6 floor).
-    const genRefUrls = job.temp_bracket === 'COOL' ? refUrls.slice(0, 1) : refUrls
+    // Reference weighting for the walled bracket (RW-16.22 rounds
+    // 2–3): the reference set is three upper-body indoor portraits,
+    // and the COOL generations kept collapsing to the inputs'
+    // portrait composition (waist-up frames with no legs for the
+    // gate to see). For COOL jobs the generation inputs are the
+    // user's first reference (the waist-up shot, the least tight
+    // crop) plus — when the pool holds an approved hero for this
+    // cell — that hero as a composition reference: it already
+    // renders this cell's layered outfit in a full-body frame, the
+    // two things the model's edit prior drops. The pool image is a
+    // generation INPUT only; the output still has to pass the
+    // unchanged gate, identity included (a frame that keeps the
+    // stock runner's face fails closed). The identity gate's own
+    // composite is unaffected — it uses the first reference either
+    // way, and its field confidence runs 0.9+ against a 0.6 floor.
+    let genRefUrls = refUrls
+    let poolRefUrl: string | null = null
+    if (job.temp_bracket === 'COOL') {
+      genRefUrls = refUrls.slice(0, 1)
+      const genders = job.gender === 'UNISEX' ? ['MALE', 'FEMALE'] : [job.gender]
+      for (const g of genders) {
+        const { data: poolRows } = await supabase
+          .from('generated_images')
+          .select('image_url')
+          .like('combination_id', `${g}\_${job.weather}\_${job.temp_bracket}\_${job.time_of_day}\_%`)
+          .eq('review_status', 'approved')
+          .limit(1)
+        if (poolRows && poolRows.length > 0 && poolRows[0].image_url) {
+          poolRefUrl = poolRows[0].image_url as string
+          break
+        }
+      }
+      if (poolRefUrl) genRefUrls = [refUrls[0], poolRefUrl]
+    }
 
     for (let attempt = startAttempt; attempt <= 2; attempt++) {
-      lastPrompt = buildPrompt(job, failures)
+      lastPrompt = buildPrompt(job, promptFailures, poolRefUrl !== null)
       const { url, predictionId } = await generateImage(lastPrompt, genRefUrls)
       await markJob(job.id, { replicate_id: predictionId, attempts: attempt, prompt: lastPrompt })
 
@@ -1111,6 +1161,7 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
         }
       }
       failures = outcome.failures
+      promptFailures = [...new Set([...promptFailures, ...outcome.failures])]
       console.log(`[personal-hero-worker] job ${job.id} attempt ${attempt} gate FAILED: ${failures.join('; ')}`)
     }
 
