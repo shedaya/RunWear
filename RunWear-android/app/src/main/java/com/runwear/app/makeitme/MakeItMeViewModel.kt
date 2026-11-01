@@ -110,6 +110,13 @@ class MakeItMeViewModel @Inject constructor(
      * requests clear the requested-cell set because new references make
      * previously gate-failed cells worth one new attempt.
      *
+     * RW-16.16: the request's outcome is no longer discarded. An
+     * accepted request is noted into the repository's look-status
+     * path, and the home overlay re-reads the server's look state
+     * when the flow finishes — so returning home shows the cell
+     * MAKING (and, later, its delivery or its durable FAILED line)
+     * instead of the old fire-and-forget silence.
+     *
      * @param todaysCell the current recommendation's personal
      *   combination id + outfit item keys, or null to skip generation.
      */
@@ -132,7 +139,14 @@ class MakeItMeViewModel @Inject constructor(
             if (todaysCell != null) {
                 val (combinationId, items) = todaysCell
                 if (replace) repository.invalidateCell(combinationId)
-                repository.requestGeneration(combinationId, items)
+                when (repository.requestGeneration(combinationId, items)) {
+                    is PersonalHeroService.RequestOutcome.Queued,
+                    is PersonalHeroService.RequestOutcome.AlreadyQueued ->
+                        repository.noteLookStatus(combinationId, PersonalLookStatus.Making)
+                    is PersonalHeroService.RequestOutcome.AlreadyAvailable ->
+                        repository.noteLookStatus(combinationId, PersonalLookStatus.Ready)
+                    else -> Unit // refused: the overlay's server read tells the truth
+                }
             }
             onResult(true)
         }

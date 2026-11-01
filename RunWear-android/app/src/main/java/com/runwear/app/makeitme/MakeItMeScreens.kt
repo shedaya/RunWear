@@ -898,6 +898,41 @@ fun MakeItMeProgressLine(modifier: Modifier = Modifier) {
 }
 
 // ============================================================================
+// Look-failure line (spec §7 G5/G6, RW-16.16) — the durable terminal
+// state that replaces G4 silence. Sits with the hero in exactly the
+// progress line's places, for as long as the server reports the
+// cell's look as failed. The standard photo stays up; the retry is
+// user-initiated only (automatic re-request stays off).
+// ============================================================================
+
+@Composable
+fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(RunWearColors.Background)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = MakeItMeStrings.G5_LOOK_FAILED,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = RunWearColors.TextPrimary,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(10.dp))
+        TextButton(onClick = onRetry) {
+            Text(
+                text = MakeItMeStrings.G6_RETRY,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+// ============================================================================
 // The 6th-cell upsell card (spec §5.3, strings U1) — in the normal
 // scroll, below the outfit. Never a modal, never over the hero.
 // ============================================================================

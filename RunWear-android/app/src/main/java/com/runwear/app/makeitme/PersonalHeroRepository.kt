@@ -131,13 +131,50 @@ class PersonalHeroRepository @Inject constructor(
     data class PersonalHeroHit(val imageUrl: String, val version: Int)
 
     /**
+     * RW-16.16: one cell's look as the server reports it — the
+     * verified hero (if any) AND the look status, from the same
+     * get-personal-hero call. The status is what the hero renders
+     * (making / failed lines); it is server-driven so it survives
+     * navigation and process death, and it is remembered per cell
+     * so a transport failure mid-poll degrades to the last known
+     * truth instead of erasing a durable state.
+     */
+    data class CellLook(val hit: PersonalHeroHit?, val status: PersonalLookStatus)
+
+    private val lastKnownStatus = mutableMapOf<String, PersonalLookStatus>()
+
+    /** Record a status learned outside a serve call (e.g. the
+     *  upload flow's accepted generation request). */
+    fun noteLookStatus(combinationId: String, status: PersonalLookStatus) {
+        lastKnownStatus[combinationId] = status
+    }
+
+    suspend fun cellLookFor(combinationId: String): CellLook {
+        val lookup = service.getPersonalHero(combinationId)
+            ?: return CellLook(null, lastKnownStatus[combinationId] ?: PersonalLookStatus.None)
+        val status = PersonalLookStatusPolicy.fromServer(
+            found = lookup.found,
+            lookState = lookup.lookState,
+            lookReason = lookup.lookReason
+        )
+        lastKnownStatus[combinationId] = status
+        val hit = resolveHit(combinationId, lookup)
+        return CellLook(hit, status)
+    }
+
+    /**
      * The verified personal hero for one cell, honoring the versioned
      * cache ([PersonalHeroCachePolicy]): a bumped version yields the new
      * signed URL (the on-screen image changes); an unchanged version
      * inside the freshness window reuses the cached URL.
      */
-    suspend fun personalHeroFor(combinationId: String): PersonalHeroHit? {
-        val lookup = service.getPersonalHero(combinationId) ?: return null
+    suspend fun personalHeroFor(combinationId: String): PersonalHeroHit? =
+        cellLookFor(combinationId).hit
+
+    private suspend fun resolveHit(
+        combinationId: String,
+        lookup: PersonalHeroService.HeroLookup
+    ): PersonalHeroHit? {
         val cached = readCachedEntry(combinationId)
         val decision = PersonalHeroCachePolicy.decide(
             cached = cached,
@@ -197,10 +234,15 @@ class PersonalHeroRepository @Inject constructor(
 
     /**
      * Cells for which a generation request has been ACCEPTED (queued or
-     * already queued). Persisted so a gate-failed cell is never silently
-     * re-requested on every launch — the pool hero serves that cell
-     * indefinitely (spec §2.4/G4: silence, no error state, no loop).
-     * A photo replacement clears the set (new references = new attempts).
+     * already queued). Persisted so a gate-failed cell is never
+     * AUTOMATICALLY re-requested on every launch (the anti-loop rule;
+     * a photo replacement clears the set — new references = new
+     * attempts — and the user can always retry explicitly from the
+     * hero's failed line, spec §7 G6). Since RW-16.16 this set gates
+     * ONLY the automatic request: what the user SEES for the cell is
+     * the server's look state ([cellLookFor]), never this set — the
+     * set's old side effect of also suppressing the progress line is
+     * the silence defect RW-16.16 removed.
      */
     suspend fun wasCellRequested(combinationId: String): Boolean {
         val raw = preferencesRepository.getString(KEY_REQUESTED_CELLS) ?: return false
@@ -253,6 +295,7 @@ class PersonalHeroRepository @Inject constructor(
         val raw = preferencesRepository.getString(KEY_REQUESTED_CELLS)
         raw?.split(",")?.filter { it.isNotBlank() }?.forEach { invalidateCell(it) }
         clearRequestedCells()
+        lastKnownStatus.clear()
         // Cell caches for cells never requested this install can still
         // exist via serving hits; the profile wipe makes them
         // unreachable (personalization is off) and they hold only

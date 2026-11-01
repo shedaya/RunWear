@@ -52,9 +52,24 @@ object MakeItMeStrings {
     const val C3D_REJECT_TOO_CLOSE = "This one is cropped too close. A head-and-shoulders or half-body photo works best."
 
     // G — First generation (spec §2.4). G3 (PROPOSAL P1) intentionally absent.
-    // G4 is silence by spec — no string exists.
+    // G4 was silence by spec — SUPERSEDED Nov 1, 2026 (RW-16.16, spec
+    // §7 amended by dated note): a terminal failure is now a visible,
+    // durable state at the hero (G5 + the G6 retry action), driven by
+    // the server's per-cell look state. G2 amended the same day: the
+    // "About 10 seconds" figure was false against a measured 72 s job
+    // and a 2–4 minute backend norm — the line no longer promises a
+    // number the system misses.
     const val G1_PROGRESS = "Making this outfit yours…"
-    const val G2_PROGRESS_SUB = "About 10 seconds. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    const val G2_PROGRESS_SUB = "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    // G5/G6 added Nov 1, 2026 (RW-16.16 — spec §7 amended by dated
+    // note). One failure line for every reason class in this build;
+    // the class travels in the payload for a later class-specific
+    // pass. G5's wording is a PLACEHOLDER pending Sol's pick from
+    // the options put to him Nov 1, 2026 — wired as this single
+    // constant so the swap is a one-string change. Verbatim-
+    // identical to the iOS deck (MakeItMeCopy.lookFailed).
+    const val G5_LOOK_FAILED = "We couldn't make this look yet — tap to try again."
+    const val G6_RETRY = "Try again"
 
     // S — Settings (spec §3)
     const val S1_SECTION_HEADER = "Make it me"

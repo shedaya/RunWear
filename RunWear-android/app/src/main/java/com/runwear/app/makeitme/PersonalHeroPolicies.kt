@@ -14,7 +14,58 @@ package com.runwear.app.makeitme
  *   camera beside library (RW-16.14).
  * - [SignedUrlPolicy]: how a Storage signedURL becomes a display
  *   URL (RW-16.15).
+ * - [PersonalLookStatusPolicy]: the server's per-cell look state
+ *   (RW-16.16) mapped onto the status the hero renders.
  */
+
+/**
+ * RW-16.16: the personal-look status for one cell, as the SERVER
+ * reports it in get-personal-hero's `look_state` / `look_reason`
+ * (v5+). This — not any local bookkeeping — decides what the user
+ * sees at the hero: the persisted requested-cell set once suppressed
+ * both re-requests AND the progress line for a cell, so a generation
+ * the save flow had requested arrived (or failed) in total silence
+ * (the G4 defect; spec §7 G4 superseded, G5/G6 added Nov 1, 2026).
+ *
+ * The server owns the truth: a look job in flight is MAKING; a
+ * verified hero serving with nothing in flight is READY (the hero
+ * itself is the state — no label); a terminal failure is FAILED
+ * with a coarse reason class (the raw gate/moderation strings never
+ * cross the wire); anything else is NONE.
+ */
+sealed interface PersonalLookStatus {
+    data object None : PersonalLookStatus
+    data object Making : PersonalLookStatus
+    data object Ready : PersonalLookStatus
+    data class Failed(val reason: Reason) : PersonalLookStatus
+
+    enum class Reason { QUALITY_REFUSED, SERVICE_REFUSED, ERROR }
+}
+
+object PersonalLookStatusPolicy {
+
+    /**
+     * Map one get-personal-hero payload onto the status. A payload
+     * with no state field at all (a pre-v5 server) falls back to the
+     * one inference that was always safe: found means READY, a miss
+     * means NONE.
+     */
+    fun fromServer(found: Boolean, lookState: String?, lookReason: String?): PersonalLookStatus =
+        when (lookState) {
+            "making" -> PersonalLookStatus.Making
+            "ready" -> PersonalLookStatus.Ready
+            "failed" -> PersonalLookStatus.Failed(reasonFromServer(lookReason))
+            "none" -> PersonalLookStatus.None
+            else -> if (found) PersonalLookStatus.Ready else PersonalLookStatus.None
+        }
+
+    fun reasonFromServer(lookReason: String?): PersonalLookStatus.Reason =
+        when (lookReason) {
+            "quality_refused" -> PersonalLookStatus.Reason.QUALITY_REFUSED
+            "service_refused" -> PersonalLookStatus.Reason.SERVICE_REFUSED
+            else -> PersonalLookStatus.Reason.ERROR
+        }
+}
 
 /**
  * The named cache trap (acceptance 16): a stored personalized image is

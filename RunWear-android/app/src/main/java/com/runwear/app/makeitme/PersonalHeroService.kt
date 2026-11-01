@@ -211,7 +211,11 @@ class PersonalHeroService @Inject constructor(
         val found: Boolean,
         val imageUrl: String?,
         val version: Int?,
-        val heroId: String?
+        val heroId: String?,
+        /** RW-16.16: the server's per-cell look state (v5+ payloads). */
+        val lookState: String? = null,
+        /** RW-16.16: the failure reason CLASS for a failed look. */
+        val lookReason: String? = null
     )
 
     suspend fun getPersonalHero(combinationId: String): HeroLookup? {
@@ -224,7 +228,9 @@ class PersonalHeroService @Inject constructor(
             found = body["found"]?.jsonPrimitive?.booleanOrNull ?: false,
             imageUrl = body["image_url"]?.jsonPrimitive?.contentOrNull,
             version = body["version"]?.jsonPrimitive?.intOrNull,
-            heroId = body["hero_id"]?.jsonPrimitive?.contentOrNull
+            heroId = body["hero_id"]?.jsonPrimitive?.contentOrNull,
+            lookState = body["look_state"]?.jsonPrimitive?.contentOrNull,
+            lookReason = body["look_reason"]?.jsonPrimitive?.contentOrNull
         )
     }
 

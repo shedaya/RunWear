@@ -127,7 +127,8 @@ fun HeroMainScreen(
     onPersonalCombinationRequest: () -> Pair<String, List<String>>? = { null },
     /** Re-run hero resolution after a personal-layer change. */
     onPersonalLayerChanged: () -> Unit = {},
-    onDismissMakeItMeUpsell: () -> Unit = {}
+    onDismissMakeItMeUpsell: () -> Unit = {},
+    onRetryPersonalLook: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -272,8 +273,17 @@ Get your personalized running outfit at runwear.ai
                                             onCycleHero = onCycleHero,
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (uiState.personalGenerationPending) {
+                                        if (uiState.personalLookStatus ==
+                                            com.runwear.app.makeitme.PersonalLookStatus.Making
+                                        ) {
                                             com.runwear.app.makeitme.MakeItMeProgressLine()
+                                        }
+                                        if (uiState.personalLookStatus is
+                                            com.runwear.app.makeitme.PersonalLookStatus.Failed
+                                        ) {
+                                            com.runwear.app.makeitme.MakeItMeFailedLine(
+                                                onRetry = onRetryPersonalLook
+                                            )
                                         }
                                     }
                                 }
@@ -337,8 +347,17 @@ Get your personalized running outfit at runwear.ai
                                             onCycleHero = onCycleHero,
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (uiState.personalGenerationPending) {
+                                        if (uiState.personalLookStatus ==
+                                            com.runwear.app.makeitme.PersonalLookStatus.Making
+                                        ) {
                                             com.runwear.app.makeitme.MakeItMeProgressLine()
+                                        }
+                                        if (uiState.personalLookStatus is
+                                            com.runwear.app.makeitme.PersonalLookStatus.Failed
+                                        ) {
+                                            com.runwear.app.makeitme.MakeItMeFailedLine(
+                                                onRetry = onRetryPersonalLook
+                                            )
                                         }
                                     }
                                 }
@@ -395,8 +414,18 @@ Get your personalized running outfit at runwear.ai
                                         onCycleHero = onCycleHero,
                                         modifier = Modifier.fillMaxSize()
                                     )
-                                    if (uiState.personalGenerationPending) {
+                                    if (uiState.personalLookStatus ==
+                                        com.runwear.app.makeitme.PersonalLookStatus.Making
+                                    ) {
                                         com.runwear.app.makeitme.MakeItMeProgressLine(
+                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                        )
+                                    }
+                                    if (uiState.personalLookStatus is
+                                        com.runwear.app.makeitme.PersonalLookStatus.Failed
+                                    ) {
+                                        com.runwear.app.makeitme.MakeItMeFailedLine(
+                                            onRetry = onRetryPersonalLook,
                                             modifier = Modifier.align(Alignment.BottomCenter)
                                         )
                                     }

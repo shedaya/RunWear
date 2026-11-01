@@ -208,7 +208,9 @@ class MainActivity : ComponentActivity() {
                                     onPersonalLayerChanged =
                                         viewModel::refreshHeroAfterPersonalChange,
                                     onDismissMakeItMeUpsell =
-                                        viewModel::dismissMakeItMeUpsell
+                                        viewModel::dismissMakeItMeUpsell,
+                                    onRetryPersonalLook =
+                                        viewModel::retryPersonalLook
                                 )
                             }
                         }
