@@ -65,7 +65,15 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            // Bind the release signing config ONLY when the local
+            // keystore.properties exists. In CI it never does, and an
+            // empty-but-bound config makes :app:signReleaseBundle die
+            // with an NPE on the null storeFile — bundle-release.yml
+            // exists precisely to produce the UNSIGNED bundle there
+            // and sign it locally with the pinned upload keystore.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
