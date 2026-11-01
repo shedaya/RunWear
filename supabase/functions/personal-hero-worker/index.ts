@@ -314,7 +314,7 @@ function coolOutfitBlock(keys: string[]): string {
   const lines: string[] = []
   if (has('RAIN_JACKET')) lines.push('a hooded waterproof rain jacket, zipped all the way up, worn as the outermost layer')
   else if (has('INSULATED_JACKET')) lines.push('a puffy insulated winter jacket, zipped all the way up, worn as the outermost layer')
-  else if (has('LIGHT_JACKET')) lines.push('a lightweight zip-up running jacket with long sleeves and a stand-up collar, zipped all the way up, worn as the outermost layer over the shirt')
+  else if (has('LIGHT_JACKET')) lines.push('a lightweight zip-up running jacket with long sleeves and a stand-up collar, zipped all the way up, worn as the outermost layer over the shirt — the jacket is the most visible garment in the photo')
   else if (has('WINDBREAKER')) lines.push('a lightweight windbreaker jacket, zipped all the way up, worn as the outermost layer over the shirt')
   else if (has('LIGHT_VEST')) lines.push('a light running vest worn as the outermost layer over the shirt')
   if (has('QUARTER_ZIP')) lines.push('a quarter-zip pullover worn under the jacket')
@@ -322,7 +322,7 @@ function coolOutfitBlock(keys: string[]): string {
   else if (has('HALF_ZIP_THERMAL')) lines.push('a thermal half-zip worn under the jacket')
   if (has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')) {
     lines.push(hasOuter
-      ? 'a long-sleeve running shirt under the jacket, its full-length sleeves reaching the wrists'
+      ? 'a long-sleeve running shirt underneath the jacket'
       : "a long-sleeve running shirt whose sleeves reach all the way to the wrists")
   } else if (has('SHORT_SLEEVE')) lines.push('a short-sleeve running shirt, its sleeves ending above the elbow')
   else if (has('TANK_TOP')) lines.push('a sleeveless tank top with bare shoulders and arms')
@@ -355,6 +355,13 @@ function coolOutfitBlock(keys: string[]): string {
     `The outfit — every item in this list is mandatory and must be clearly visible: ` +
     `${lines.join('; ')}. `
   if (negatives.length) block += `The runner is NOT wearing ${negatives.join(' or ')}. `
+  // Composition (RW-16.22 round 2): the walled COOL generations came
+  // back as waist-up portraits — the enumerator listed only a shirt
+  // and a headband, no legs at all — so the frame itself is restated
+  // here, against the v16 opening's "large in the frame" pull.
+  block += `Composition: a wide full-length shot — the ENTIRE body is in the frame from ` +
+    `the top of the head to the shoes, both full legs visible mid-stride; not a portrait, ` +
+    `not a close-up, not cropped at the waist. `
   block += `Every item in that outfit list is visibly worn in the photo — nothing from the list is missing or substituted. `
   return block
 }
@@ -1076,9 +1083,19 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       }
     }
 
+    // Reference weighting for the walled bracket (RW-16.22 round 2):
+    // the reference set is three upper-body indoor portraits, and the
+    // COOL generations kept collapsing to the inputs' portrait
+    // composition (waist-up frames with no legs for the gate to see).
+    // For COOL jobs, generate from the first reference only — the
+    // waist-up shot, the least tight crop of the three. The identity
+    // gate is unaffected (it composites the first reference either
+    // way, and its field confidence runs 0.9+ against a 0.6 floor).
+    const genRefUrls = job.temp_bracket === 'COOL' ? refUrls.slice(0, 1) : refUrls
+
     for (let attempt = startAttempt; attempt <= 2; attempt++) {
       lastPrompt = buildPrompt(job, failures)
-      const { url, predictionId } = await generateImage(lastPrompt, refUrls)
+      const { url, predictionId } = await generateImage(lastPrompt, genRefUrls)
       await markJob(job.id, { replicate_id: predictionId, attempts: attempt, prompt: lastPrompt })
 
       const imageResponse = await fetch(url)
