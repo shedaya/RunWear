@@ -15,3 +15,30 @@ port = 54323
 [functions]
 [functions.generate-hero-image]
 enabled = true
+
+[functions.request-personal-generation]
+enabled = true
+
+[functions.personal-hero-worker]
+enabled = true
+
+[functions.get-personal-hero]
+enabled = true
+
+[functions.delete-my-photos]
+enabled = true
+
+[functions.start-personal-fill]
+enabled = true
+
+[functions.revenuecat-webhook]
+enabled = true
+# RevenueCat sends no Supabase JWT; the function authenticates the
+# caller via RevenueCat's webhook authorization header instead.
+verify_jwt = false
+
+[functions.reconcile-personal-entitlement]
+enabled = true
+# Callers are the app's own user JWTs (self-reconciliation) and the
+# service role (operator use) — both are real Supabase credentials,
+# so gateway JWT verification stays ON, like start-personal-fill.

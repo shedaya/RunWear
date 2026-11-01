@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -45,6 +47,7 @@ import com.runwear.shared.domain.model.WeatherConditions
  * - icon: 14px, opacity 0.8
  * - text: 13px, weight 500, white
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WeatherConditionsRow(
     weather: WeatherConditions?,
@@ -53,10 +56,16 @@ fun WeatherConditionsRow(
 ) {
     if (weather == null) return
 
-    Row(
+    // FlowRow, not Row: in a narrow hero (foldable rail pane, landscape
+    // phone) a fixed Row measures pills in order and gives the LAST one
+    // whatever width remains — the UV pill was crushed to a few dp and
+    // its text stacked one character per line (field report, Oct 30).
+    // Flowing wraps the overflow onto a second line instead; when all
+    // pills fit on one line the rendering is identical to the old Row.
+    FlowRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Condition pill (emoji only)
         WeatherPillEmoji(
@@ -168,7 +177,12 @@ private fun WeatherPill(
                     fontSize = 13.sp,                  // 13px per PWA
                     fontWeight = FontWeight.Medium,
                     color = Color.White
-                )
+                ),
+                // Belt-and-braces with the FlowRow above: a pill label
+                // never wraps — worst case in a pathologically narrow
+                // hero it clips, it never stacks character-per-line.
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

@@ -7,19 +7,20 @@ import SwiftUI
 
 struct MakeItMeSettingsSection: View {
     @EnvironmentObject var store: PersonalHeroStore
+    /// The presentation host owned by SettingsModal (RW-16.7).
+    /// This section is CONTENT ONLY: it requests presentations
+    /// through the host and owns no sheet/alert bindings of its
+    /// own. Build (12) carried four .sheet + three .alert
+    /// modifiers here, on a view whose branch is keyed to
+    /// store.mode — a profile refresh could restructure the
+    /// presentation owner mid-flight, doubling and ghosting
+    /// sheets and killing the opt-in commit (RW-16.9 §4/§6).
+    @ObservedObject var presentation: MakeItMePresentationHost
     /// The user's current fit preference, for the consent call.
     let genderPreference: GenderPreference
     /// The cell currently on the main screen, for photo-replacement
     /// regeneration; nil when no recommendation is on screen.
     let currentCombination: () -> PersonalCombination?
-
-    @State private var showOptInFlow = false
-    @State private var showReplaceFlow = false
-    @State private var showPhotos = false
-    @State private var showSubscriptionSheet = false
-    @State private var confirmDelete = false
-    @State private var showDeletedConfirmation = false
-    @State private var deleteFailed = false
 
     var body: some View {
         // A native Form section — Settings is a Form (RW-6.7), so
@@ -31,7 +32,7 @@ struct MakeItMeSettingsSection: View {
                 settingsRow(
                     title: "See yourself in every outfit",
                     subtitle: "Make your outfit photos from your own photos.",
-                    action: { showOptInFlow = true }
+                    action: { presentation.present(.optIn) }
                 )
             case .free, .subscribed:
                 VStack(alignment: .leading, spacing: 4) {
@@ -55,7 +56,7 @@ struct MakeItMeSettingsSection: View {
                 settingsRow(
                     title: "Your photos",
                     subtitle: "View or replace",
-                    action: { showPhotos = true }
+                    action: { presentation.present(.photos) }
                 )
 
                 if store.mode == .subscribed {
@@ -68,12 +69,12 @@ struct MakeItMeSettingsSection: View {
                     settingsRow(
                         title: "Every outfit, instantly",
                         subtitle: "Subscribe, and your photo is ready before you open the app. $0.99/month.",
-                        action: { showSubscriptionSheet = true }
+                        action: { presentation.present(.subscription) }
                     )
                 }
 
                 Button(role: .destructive) {
-                    confirmDelete = true
+                    presentation.alert = .confirmDelete
                 } label: {
                     Text("Delete my photos")
                         .font(.system(size: 16, weight: .medium))
@@ -82,59 +83,6 @@ struct MakeItMeSettingsSection: View {
             }
         } header: {
             Text("Make it me")
-        }
-        .sheet(isPresented: $showOptInFlow) {
-            MakeItMeOptInFlow(
-                mode: .optIn,
-                onCommit: { photos in
-                    try await store.completeOptIn(jpegPhotos: photos, genderPreference: genderPreference)
-                },
-                onFinish: { showOptInFlow = false },
-                onCancel: { showOptInFlow = false }
-            )
-        }
-        .sheet(isPresented: $showReplaceFlow) {
-            MakeItMeOptInFlow(
-                mode: .replace,
-                onCommit: { photos in
-                    try await store.replaceReferences(jpegPhotos: photos, currentCombination: currentCombination())
-                },
-                onFinish: { showReplaceFlow = false },
-                onCancel: { showReplaceFlow = false }
-            )
-        }
-        .sheet(isPresented: $showPhotos) {
-            MakeItMePhotosView(onReplace: {
-                showPhotos = false
-                showReplaceFlow = true
-            })
-        }
-        .sheet(isPresented: $showSubscriptionSheet) {
-            MakeItMeSubscriptionSheet()
-        }
-        .alert("Delete your photos?", isPresented: $confirmDelete) {
-            Button("Delete my photos", role: .destructive) {
-                Task {
-                    do {
-                        try await store.deleteEverything()
-                        showDeletedConfirmation = true
-                    } catch {
-                        // The end-state copy may only claim what the
-                        // system confirmed (§3): on failure nothing
-                        // was deleted and the section stays as it was.
-                        deleteFailed = true
-                    }
-                }
-            }
-            Button("Keep my photos", role: .cancel) {}
-        } message: {
-            Text("Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make it me turns off. This can't be undone.")
-        }
-        .alert("Your photos and pictures are deleted.", isPresented: $showDeletedConfirmation) {
-            Button("OK", role: .cancel) {}
-        }
-        .alert("Your photos could not be deleted. Please try again.", isPresented: $deleteFailed) {
-            Button("OK", role: .cancel) {}
         }
     }
 
@@ -166,8 +114,7 @@ struct MakeItMeSettingsSection: View {
 
 struct MakeItMePhotosView: View {
     let onReplace: () -> Void
-    @State private var imageURLs: [URL] = []
-    @State private var loaded = false
+    @StateObject private var loader = ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)
 
     var body: some View {
         ZStack {
@@ -178,26 +125,40 @@ struct MakeItMePhotosView: View {
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.white)
 
-                    if imageURLs.isEmpty {
-                        Text(loaded ? "No photos on the server." : "Loading…")
-                            .font(.system(size: 15))
-                            .foregroundColor(.white.opacity(0.6))
-                    } else {
+                    switch loader.state {
+                    case .loaded(let imageURLs):
                         HStack(spacing: 12) {
-                            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, url in
-                                AsyncImage(url: url) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image.resizable().aspectRatio(contentMode: .fill)
-                                    default:
-                                        Color.white.opacity(0.08)
-                                    }
-                                }
-                                .frame(width: 96, height: 96)
-                                .clipped()
-                                .cornerRadius(12)
+                            ForEach(imageURLs, id: \.absoluteString) { url in
+                                ReferencePhotoTileView(url: url)
+                                    .frame(width: 96, height: 96)
+                                    .clipped()
+                                    .cornerRadius(12)
                             }
                         }
+                    case .empty:
+                        Text("No photos on the server.")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.6))
+                    case .failed(let message):
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(message)
+                                .font(.system(size: 15))
+                                .foregroundColor(.white.opacity(0.8))
+                            Button {
+                                Task { await loader.load() }
+                            } label: {
+                                Text("Try again")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.1)))
+                            }
+                        }
+                    case .idle, .loading:
+                        Text("Loading…")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.6))
                     }
 
                     Button(action: onReplace) {
@@ -213,18 +174,59 @@ struct MakeItMePhotosView: View {
             }
         }
         .task {
-            let api = PersonalHeroAPI.shared
-            if let paths = try? await api.fetchReferencePaths() {
-                var urls: [URL] = []
-                for path in paths {
-                    if let url = try? await api.signedReferenceURL(path: path) {
-                        urls.append(url)
+            await loader.load()
+        }
+    }
+}
+
+/// One photo tile, driven by its own ReferenceTileLoader
+/// (RW-16.9). Every phase is visibly itself: the image, a
+/// labelled progress skeleton while loading, or the failure
+/// tile with its per-tile retry. No phase renders as the
+/// silent faint box that made build (12)'s stalls invisible.
+private struct ReferencePhotoTileView: View {
+    @StateObject private var tileLoader: ReferenceTileLoader
+
+    init(url: URL) {
+        _tileLoader = StateObject(wrappedValue: ReferenceTileLoader(url: url))
+    }
+
+    var body: some View {
+        Group {
+            switch tileLoader.phase {
+            case .loaded(let image):
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            case .failed:
+                Button {
+                    tileLoader.retry()
+                } label: {
+                    ZStack {
+                        Color.white.opacity(0.08)
+                        VStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundColor(.white.opacity(0.7))
+                            Text("Tap to retry")
+                                .font(.system(size: 10))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
                     }
                 }
-                imageURLs = urls
+            case .idle, .loading:
+                ZStack {
+                    Color.white.opacity(0.08)
+                    VStack(spacing: 4) {
+                        ProgressView()
+                            .tint(.white)
+                        Text("Loading…")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
             }
-            loaded = true
         }
+        .onAppear { tileLoader.loadIfNeeded() }
     }
 }
 
