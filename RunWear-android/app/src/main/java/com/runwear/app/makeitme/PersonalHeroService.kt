@@ -123,22 +123,45 @@ class PersonalHeroService @Inject constructor(
     private suspend fun session(): Session? = sessionMutex.withLock {
         val existing = storedSession()
         val nowSec = System.currentTimeMillis() / 1000L
-        if (existing != null && jwtExpirySeconds(existing.accessToken) > nowSec + 60L) {
+        val tokenValid = existing != null &&
+            jwtExpirySeconds(existing.accessToken) > nowSec + 60L
+        // RW-16.15(iv): every branch is SessionGuardPolicy's decision —
+        // a stored identity is replaced ONLY on a definitive server
+        // rejection of its refresh token, never on an unproven failure
+        // (the pre-guard flow cleared + re-minted on ANY refresh
+        // failure, which silently orphans the old uid's photos,
+        // profile, and entitlement).
+        if (existing == null) {
+            check(
+                SessionGuardPolicy.decide(false, false, null) ==
+                    SessionGuardPolicy.Action.MINT_FRESH
+            )
+            val fresh = anonymousSignIn()
+            if (fresh != null) storeSession(fresh)
+            return@withLock fresh
+        }
+        if (SessionGuardPolicy.decide(true, tokenValid, null) ==
+            SessionGuardPolicy.Action.REUSE_STORED
+        ) {
             return@withLock existing
         }
-        if (existing != null) {
-            val refreshed = refreshSession(existing.refreshToken)
-            if (refreshed != null) {
-                storeSession(refreshed)
-                return@withLock refreshed
+        val (outcome, refreshed) = refreshSession(existing.refreshToken)
+        when (SessionGuardPolicy.decide(true, false, outcome)) {
+            SessionGuardPolicy.Action.USE_REFRESHED -> {
+                storeSession(refreshed!!)
+                refreshed
             }
-            // Refresh failed (revoked/expired): fall through to a fresh
-            // anonymous sign-in, replacing the dead session.
-            clearSession()
+            SessionGuardPolicy.Action.CLEAR_AND_MINT -> {
+                // The server definitively refused the refresh token:
+                // the identity is gone, a fresh start is the recovery.
+                clearSession()
+                val fresh = anonymousSignIn()
+                if (fresh != null) storeSession(fresh)
+                fresh
+            }
+            else -> null // KEEP_STORED_AND_FAIL: stored session left
+            // untouched; this call degrades, the next one retries.
         }
-        val fresh = anonymousSignIn()
-        if (fresh != null) storeSession(fresh)
-        fresh
     }
 
     private suspend fun parseSession(response: HttpResponse): Session? {
@@ -163,14 +186,38 @@ class PersonalHeroService @Inject constructor(
         parseSession(response)
     }.onFailure { Log.w(TAG, "anonymous sign-in failed", it) }.getOrNull()
 
-    private suspend fun refreshSession(refreshToken: String): Session? = runCatching {
-        val response = http.post("$BASE_URL/auth/v1/token?grant_type=refresh_token") {
-            header("apikey", ANON_KEY)
-            contentType(ContentType.Application.Json)
-            setBody("""{"refresh_token":"$refreshToken"}""")
+    /**
+     * Refresh, classified for [SessionGuardPolicy]: REJECTED only when
+     * the server answered and refused the token (4xx); a transport
+     * error, a 5xx, or an unparseable success is UNKNOWN — the stored
+     * identity must survive all three (RW-16.15(iv)).
+     */
+    private suspend fun refreshSession(
+        refreshToken: String
+    ): Pair<SessionGuardPolicy.RefreshOutcome, Session?> {
+        val response = runCatching {
+            http.post("$BASE_URL/auth/v1/token?grant_type=refresh_token") {
+                header("apikey", ANON_KEY)
+                contentType(ContentType.Application.Json)
+                setBody("""{"refresh_token":"$refreshToken"}""")
+            }
+        }.onFailure { Log.w(TAG, "token refresh failed", it) }.getOrElse {
+            return SessionGuardPolicy.RefreshOutcome.UNKNOWN to null
         }
-        parseSession(response)
-    }.onFailure { Log.w(TAG, "token refresh failed", it) }.getOrNull()
+        if (response.status.isSuccess()) {
+            val session = parseSession(response)
+            return if (session != null) {
+                SessionGuardPolicy.RefreshOutcome.SUCCEEDED to session
+            } else {
+                SessionGuardPolicy.RefreshOutcome.UNKNOWN to null
+            }
+        }
+        return if (response.status.value in 400..499) {
+            SessionGuardPolicy.RefreshOutcome.REJECTED to null
+        } else {
+            SessionGuardPolicy.RefreshOutcome.UNKNOWN to null
+        }
+    }
 
     // ── Edge functions ─────────────────────────────────────────────────
 
