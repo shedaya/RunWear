@@ -659,3 +659,74 @@ enum PhotoQualityVerdict {
         return nil
     }
 }
+
+// MARK: - Intake copy (RW-16.14)
+//
+// The full-body guidance Sol ruled on Oct 31, 2026 (RW-16.13's
+// structural lever): the generator preserves what the reference
+// photos show, and Sol's own upper-body portraits produced heroes
+// with no legs for the tights outfits to land on. Guidance only —
+// it recommends; it never validates, and no photo is rejected for
+// lacking a full body (RW-16.10 strictness is a separate, still
+// open question). The lead line and the solo-frame note are Sol's
+// copy direction verbatim in substance: race photos with other
+// runners in frame fail the existing multiple-people check (C3b),
+// so the guidance must not steer anyone into that rejection.
+enum MakeItMeCopy {
+    static let fullBodyGuidance = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
+}
+
+// MARK: - Photo intake source routing (RW-16.14)
+//
+// The intake offers two sources for the same picked-photo seam:
+// the library (PhotosUI) and the camera (Sol, Oct 31: "Both apps
+// should allow camera not just photo roll"). This routing is the
+// pure decision the capture view renders: given what the user
+// asked for and what the camera can do right now, where do we go?
+// The camera outcomes are mirrored from AVFoundation's states
+// without importing it here, so the matrix is unit-tested.
+enum PhotoIntakeSource: Equatable {
+    case camera
+    case library
+}
+
+enum CameraAccess: Equatable {
+    /// No usable camera on this device (or the picker source is
+    /// unavailable, e.g. the Simulator).
+    case unavailable
+    case notDetermined
+    case authorized
+    case denied
+    case restricted
+}
+
+enum PhotoIntakeRoute: Equatable {
+    case camera
+    case library
+    /// The camera was asked for but can't be used: open the
+    /// library anyway and show this line — never a dead end.
+    case libraryWithNote(String)
+}
+
+enum PhotoIntakeRouting {
+    static let cameraUnavailableNote = "No camera is available here — choose from your library instead."
+    static let cameraDeniedNote = "Camera access is off for RunWear. You can turn it on in Settings, or choose from your library."
+
+    static func route(requested: PhotoIntakeSource, cameraAccess: CameraAccess) -> PhotoIntakeRoute {
+        switch requested {
+        case .library:
+            return .library
+        case .camera:
+            switch cameraAccess {
+            case .authorized, .notDetermined:
+                // Not-yet-asked still routes to the camera: the
+                // system asks for permission in context.
+                return .camera
+            case .unavailable:
+                return .libraryWithNote(cameraUnavailableNote)
+            case .denied, .restricted:
+                return .libraryWithNote(cameraDeniedNote)
+            }
+        }
+    }
+}

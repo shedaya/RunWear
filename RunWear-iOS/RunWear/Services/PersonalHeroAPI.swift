@@ -102,6 +102,19 @@ actor PersonalHeroAPI {
         return try JSONDecoder().decode(PersonalHeroLookup.self, from: data)
     }
 
+    /// RW-16.12 Lane B backstop: ask the server to reconcile this
+    /// user's entitlement against RevenueCat. The client asserts
+    /// NOTHING — it sends an empty body under the user's own JWT;
+    /// the server verifies the subscriber state itself, flips its
+    /// entitled flag only on a real transition, and kicks
+    /// start-personal-fill server-side on a grant. Silent and
+    /// idempotent: any failure (offline, no session yet) is
+    /// swallowed — the next bootstrap or entitlement change asks
+    /// again.
+    func reconcileEntitlement() async {
+        _ = try? await functionPost("reconcile-personal-entitlement", body: [:])
+    }
+
     /// Subscriber matrix fill. The server gates this on its OWN
     /// entitled flag (set by the billing webhook, service-role only):
     /// a 403 not_entitled here means the webhook has not landed yet,

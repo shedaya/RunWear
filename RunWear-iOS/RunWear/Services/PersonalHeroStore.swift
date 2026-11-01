@@ -78,6 +78,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             let session = try await SupabaseAuthService.shared.ensureSession()
             authUnavailable = false
             billing.configure(appUserID: session.userId)
+            // RW-16.14 (the hook Lane B owed): reconcile BEFORE the
+            // profile read, so a purchase the webhook never
+            // delivered is already reflected in the state this
+            // bootstrap renders. The server verifies; we only ask.
+            await api.reconcileEntitlement()
             await refreshProfile()
             if billing.isSubscribed {
                 kickFillWithRetry()
@@ -103,6 +108,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     private func entitlementDidChange(active: Bool) {
         if isOptedIn {
             mode = active ? .subscribed : .free
+        }
+        // RW-16.14: every RevenueCat-observed change also asks the
+        // server to reconcile (Lane B backstop) and re-reads the
+        // profile it may have just moved — this is the path a fresh
+        // purchase takes when the webhook hasn't landed.
+        Task {
+            await api.reconcileEntitlement()
+            await refreshProfile()
         }
         if active {
             kickFillWithRetry()

@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import AVFoundation
 
 // MARK: - RW-14 "Make it me" — fork + opt-in flow views
 //
@@ -263,6 +264,13 @@ struct MakeItMeCaptureView: View {
     @State private var photos: [PickedPhoto] = []
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showPicker = false
+    // RW-16.14: the intake offers the camera beside the library.
+    @State private var showSourceChoice = false
+    @State private var showCamera = false
+    /// The honest fallback line when the camera was asked for but
+    /// can't be used (PhotoIntakeRouting's notes) — the flow opens
+    /// the library instead and says why; never a dead end.
+    @State private var intakeNote: String?
 
     /// The photos a commit sends, derived from the picked set via
     /// the shared seam (ReferenceCommitSet). The picked set itself
@@ -287,6 +295,13 @@ struct MakeItMeCaptureView: View {
                     .foregroundColor(.white)
 
                 Text("Front-facing works best: head and shoulders or half body, good light, no sunglasses. The outfit needs a body to land on.")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.7))
+
+                // RW-16.14 guidance (Sol's ruling, Oct 31): a
+                // recommendation, in the flow where photos are
+                // chosen — never a requirement, never validated.
+                Text(MakeItMeCopy.fullBodyGuidance)
                     .font(.system(size: 15))
                     .foregroundColor(.white.opacity(0.7))
 
@@ -353,7 +368,7 @@ struct MakeItMeCaptureView: View {
 
                 if photos.count < 3 {
                     Button {
-                        showPicker = true
+                        showSourceChoice = true
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle")
@@ -365,6 +380,12 @@ struct MakeItMeCaptureView: View {
                         .padding(.vertical, 14)
                         .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.1)))
                     }
+                }
+
+                if let intakeNote {
+                    Text(intakeNote)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.7))
                 }
 
                 if let errorLine {
@@ -418,6 +439,53 @@ struct MakeItMeCaptureView: View {
             pickerItems = []
             Task { await loadPicked(items) }
         }
+        // RW-16.14: the source choice — camera beside library. The
+        // routing decision itself is the pure PhotoIntakeRouting;
+        // this dialog only renders its outcome.
+        .confirmationDialog("Add a photo", isPresented: $showSourceChoice, titleVisibility: .visible) {
+            Button("Take Photo") { routeToSource(.camera) }
+            Button("Choose from Library") { routeToSource(.library) }
+            Button("Cancel", role: .cancel) {}
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraCaptureView(
+                onCapture: { data in
+                    showCamera = false
+                    Task { await addPhoto(originalData: data) }
+                },
+                onCancel: { showCamera = false }
+            )
+            .ignoresSafeArea()
+        }
+    }
+
+    /// Where the "Add photos" choice goes, per PhotoIntakeRouting:
+    /// the camera when it can be used, the library otherwise — with
+    /// the routing's honest note shown when the camera was asked
+    /// for and couldn't be.
+    private func routeToSource(_ source: PhotoIntakeSource) {
+        switch PhotoIntakeRouting.route(requested: source, cameraAccess: cameraAccess) {
+        case .camera:
+            showCamera = true
+        case .library:
+            intakeNote = nil
+            showPicker = true
+        case .libraryWithNote(let note):
+            intakeNote = note
+            showPicker = true
+        }
+    }
+
+    /// This device's camera state, in the model layer's terms.
+    private var cameraAccess: CameraAccess {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return .unavailable }
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: return .authorized
+        case .notDetermined: return .notDetermined
+        case .denied: return .denied
+        case .restricted: return .restricted
+        @unknown default: return .denied
+        }
     }
 
     @ViewBuilder
@@ -435,19 +503,30 @@ struct MakeItMeCaptureView: View {
         for item in items {
             guard photos.count < 3 else { break }
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let picked = PickedPhoto(originalData: data)
-            photos.append(picked)
-            let rejection = await PhotoQualityChecker.rejection(for: data)
-            let jpeg = PhotoQualityChecker.jpegForUpload(data)
-            if let index = photos.firstIndex(where: { $0.id == picked.id }) {
-                if let rejection {
-                    photos[index].state = .rejected(rejection)
-                } else if let jpeg {
-                    photos[index].state = .accepted
-                    photos[index].jpegData = jpeg
-                } else {
-                    photos[index].state = .rejected(.faceUnclear)
-                }
+            await addPhoto(originalData: data)
+        }
+    }
+
+    /// The one intake seam (RW-16.14): every photo — from the
+    /// library picker or the camera — enters here as Data and runs
+    /// the identical path: appended in the checking state, measured
+    /// by PhotoQualityChecker, accepted with its upload JPEG or
+    /// rejected with the checker's specific reason. No source gets
+    /// its own quality path.
+    private func addPhoto(originalData data: Data) async {
+        guard photos.count < 3 else { return }
+        let picked = PickedPhoto(originalData: data)
+        photos.append(picked)
+        let rejection = await PhotoQualityChecker.rejection(for: data)
+        let jpeg = PhotoQualityChecker.jpegForUpload(data)
+        if let index = photos.firstIndex(where: { $0.id == picked.id }) {
+            if let rejection {
+                photos[index].state = .rejected(rejection)
+            } else if let jpeg {
+                photos[index].state = .accepted
+                photos[index].jpegData = jpeg
+            } else {
+                photos[index].state = .rejected(.faceUnclear)
             }
         }
     }

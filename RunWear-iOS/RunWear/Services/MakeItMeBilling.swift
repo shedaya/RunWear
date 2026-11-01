@@ -14,10 +14,14 @@ import UIKit
 // user's id (so the billing webhook can map entitlement events back
 // to the RW-14 profile), surfacing the entitlement state, and the
 // purchase/restore/manage flows. What it NEVER does: write the
-// backend's `entitled` flag — that is the webhook's service-role job
-// (backend §4.5). The client only READS its entitlement here and
-// asks the server to fill the matrix (start-personal-fill), which
-// the server itself gates on the webhook-set flag.
+// backend's `entitled` flag — that is a service-role job with two
+// server paths (backend §4.5): the revenuecat-webhook consumer, and
+// the reconcile-personal-entitlement backstop the store invokes at
+// bootstrap and on every entitlement change observed here (RW-16.12
+// Lane B / RW-16.14) — the server re-verifies against RevenueCat
+// itself, so this class only READS its entitlement and asks. The
+// store also asks the server to fill the matrix
+// (start-personal-fill), which the server itself gates on its flag.
 @MainActor
 final class MakeItMeBilling: ObservableObject {
     static let entitlementId = "make_it_me"
