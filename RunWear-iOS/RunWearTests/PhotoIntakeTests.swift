@@ -100,4 +100,50 @@ final class PhotoIntakeTests: XCTestCase {
         let rejection = await PhotoQualityChecker.rejection(for: Data([0x00, 0x01, 0x02, 0x03]))
         XCTAssertEqual(rejection, .faceUnclear)
     }
+
+    // MARK: - Save confirmation (RW-16.15)
+
+    /// The field defect: a successful save dismissed the flow in
+    /// silence, and the user concluded nothing had saved. The
+    /// contract now: didSave is set BEFORE onFinish runs (the
+    /// confirmation is what the user sees as the flow leaves), and
+    /// the confirmation copy is the deck's C2j string.
+    func testSuccessfulCommitConfirmsTheSaveBeforeFinishing() async {
+        let driver = await MainActor.run { OptInCommitDriver() }
+        var finishSawSaved: Bool?
+        let task = await MainActor.run {
+            driver.commit(
+                photos: [],
+                onCommit: { _ in },
+                onFinish: { finishSawSaved = driver.didSave }
+            )
+        }
+        await task?.value
+        XCTAssertEqual(finishSawSaved, true,
+                       "onFinish must run only after didSave is set — the confirmation precedes dismissal")
+        let didSave = await MainActor.run { driver.didSave }
+        XCTAssertTrue(didSave)
+        XCTAssertEqual(MakeItMeCopy.saveConfirmed, "Your photos are saved.")
+    }
+
+    /// A failed commit never claims a save: didSave stays false
+    /// and onFinish is never invoked.
+    func testFailedCommitNeverConfirmsASave() async {
+        struct StubError: Error {}
+        let driver = await MainActor.run { OptInCommitDriver() }
+        var finishCalled = false
+        let task = await MainActor.run {
+            driver.commit(
+                photos: [],
+                onCommit: { _ in throw StubError() },
+                onFinish: { finishCalled = true }
+            )
+        }
+        await task?.value
+        let didSave = await MainActor.run { driver.didSave }
+        let failure = await MainActor.run { driver.failure }
+        XCTAssertFalse(didSave, "a failed commit must never present as saved")
+        XCTAssertFalse(finishCalled)
+        XCTAssertNotNil(failure)
+    }
 }

@@ -408,6 +408,17 @@ struct CommitFailurePresentation: Equatable {
 final class OptInCommitDriver: ObservableObject {
     @Published private(set) var isCommitting = false
     @Published private(set) var failure: CommitFailurePresentation?
+    /// RW-16.15: the save confirmation. Set on a successful commit,
+    /// BEFORE onFinish dismisses the flow — the capture view renders
+    /// "Your photos are saved." from it during the confirmation
+    /// beat. Neither platform confirmed a save before this (the
+    /// flow just vanished), which read to the user as "my photos
+    /// didn't save"; Android's flow carries the identical contract.
+    @Published private(set) var didSave = false
+
+    /// How long the save confirmation stays on screen before the
+    /// finish hand-off dismisses the flow.
+    static let saveConfirmationBeat: UInt64 = 1_500_000_000
 
     /// Clear a recorded failure without starting a commit
     /// (RW-16.7): the presentation host calls this when a fresh
@@ -417,10 +428,13 @@ final class OptInCommitDriver: ObservableObject {
     func clearFailure() {
         guard !isCommitting else { return }
         failure = nil
+        didSave = false
     }
 
-    /// Run the commit: onCommit first; on success the committing
-    /// flag clears and THEN onFinish is invoked — synchronously,
+    /// Run the commit: onCommit first; on success didSave is set
+    /// (the flow renders the save confirmation), the confirmation
+    /// beat elapses with the committing flag still up, and THEN
+    /// the flag clears and onFinish is invoked — synchronously,
     /// in that order, on the main actor. On failure the flag
     /// clears and the failure presentation is set; onFinish is
     /// never invoked. A call while a commit is already in flight
@@ -434,6 +448,7 @@ final class OptInCommitDriver: ObservableObject {
         guard !isCommitting else { return nil }
         isCommitting = true
         failure = nil
+        didSave = false
         return Task { @MainActor in
             do {
                 try await onCommit(photos)
@@ -442,6 +457,8 @@ final class OptInCommitDriver: ObservableObject {
                 failure = CommitFailurePresentation.forError(error)
                 return
             }
+            didSave = true
+            try? await Task.sleep(nanoseconds: Self.saveConfirmationBeat)
             isCommitting = false
             onFinish()
         }
@@ -674,6 +691,11 @@ enum PhotoQualityVerdict {
 // so the guidance must not steer anyone into that rejection.
 enum MakeItMeCopy {
     static let fullBodyGuidance = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
+    /// RW-16.15 (spec C2j, both platforms verbatim): the save
+    /// confirmation the flow shows after a successful commit,
+    /// before it dismisses — the explicit "it saved" the field
+    /// report found missing on both platforms.
+    static let saveConfirmed = "Your photos are saved."
 }
 
 // MARK: - Photo intake source routing (RW-16.14)

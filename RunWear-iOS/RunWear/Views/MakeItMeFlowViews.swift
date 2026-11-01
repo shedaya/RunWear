@@ -160,6 +160,7 @@ struct MakeItMeOptInFlow: View {
                     isReplace: mode == .replace,
                     attested: $attested,
                     committing: commitDriver.isCommitting,
+                    saved: commitDriver.didSave,
                     errorLine: commitDriver.failure?.line,
                     errorDetail: commitDriver.failure?.detail,
                     onConfirm: { photos in
@@ -256,6 +257,11 @@ struct MakeItMeCaptureView: View {
     let isReplace: Bool
     @Binding var attested: Bool
     let committing: Bool
+    /// RW-16.15: the driver's save confirmation — while true, the
+    /// action area renders "Your photos are saved." instead of the
+    /// confirm/cancel buttons, until the driver's beat ends and
+    /// the flow dismisses.
+    let saved: Bool
     let errorLine: String?
     let errorDetail: String?
     let onConfirm: ([Data]) -> Void
@@ -405,30 +411,46 @@ struct MakeItMeCaptureView: View {
                     }
                 }
 
-                Button {
-                    onConfirm(acceptedJPEGs)
-                } label: {
-                    HStack {
-                        if committing { ProgressView().tint(.white) }
-                        Text(isReplace ? "Save photos" : "Make my first look")
+                if saved {
+                    // RW-16.15 save confirmation (spec C2j): the
+                    // explicit "it saved" — shown for the driver's
+                    // confirmation beat before the flow dismisses.
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundColor(AppTheme.primaryColor)
+                        Text(MakeItMeCopy.saveConfirmed)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
                     }
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(RoundedRectangle(cornerRadius: 14)
-                        .fill(canConfirm ? AppTheme.primaryColor : Color.white.opacity(0.15)))
-                }
-                .disabled(!canConfirm)
-
-                Button(action: onCancel) {
-                    Text("Cancel")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                } else {
+                    Button {
+                        onConfirm(acceptedJPEGs)
+                    } label: {
+                        HStack {
+                            if committing { ProgressView().tint(.white) }
+                            Text(isReplace ? "Save photos" : "Make my first look")
+                        }
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 16)
+                        .background(RoundedRectangle(cornerRadius: 14)
+                            .fill(canConfirm ? AppTheme.primaryColor : Color.white.opacity(0.15)))
+                    }
+                    .disabled(!canConfirm)
+
+                    Button(action: onCancel) {
+                        Text("Cancel")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.white.opacity(0.6))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
+                    .disabled(committing)
                 }
-                .disabled(committing)
             }
             .padding(24)
         }
