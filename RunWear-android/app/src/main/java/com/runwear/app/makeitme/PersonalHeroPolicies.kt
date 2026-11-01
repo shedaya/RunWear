@@ -85,12 +85,25 @@ object PersonalHeroCachePolicy {
     data class CachedEntry(
         val version: Int,
         val imageUrl: String,
-        val fetchedAtMs: Long
+        val fetchedAtMs: Long,
+        /**
+         * RW-16.27: the backend hero row id — what a personal flag
+         * (flag_hero) addresses. The iOS cache entry carries it for
+         * the same reason; Android's entry lacked it, which is part
+         * of why Android had no personal-flag path. Null for entries
+         * persisted before RW-16.27 (they re-derive it on the next
+         * fresh serve).
+         */
+        val heroId: String? = null
     )
 
     sealed interface Decision {
         /** Show this URL (from cache or freshly served — same handling). */
-        data class Serve(val imageUrl: String, val version: Int) : Decision
+        data class Serve(
+            val imageUrl: String,
+            val version: Int,
+            val heroId: String? = null
+        ) : Decision
 
         /** No verified personal hero for the cell: the pool hero serves. */
         data object NoPersonalHero : Decision
@@ -105,13 +118,16 @@ object PersonalHeroCachePolicy {
      *   non-null even on a miss, when the cell row exists but no hero is
      *   verified yet).
      * @param serverUrl the freshly signed URL when [found] is true.
+     * @param serverHeroId the serving hero's backend row id when
+     *   [found] is true (get-personal-hero's `hero_id`).
      */
     fun decide(
         cached: CachedEntry?,
         found: Boolean,
         serverVersion: Int?,
         serverUrl: String?,
-        nowMs: Long
+        nowMs: Long,
+        serverHeroId: String? = null
     ): Decision {
         if (!found || serverUrl == null) return Decision.NoPersonalHero
         val version = serverVersion ?: cached?.version ?: 1
@@ -123,10 +139,30 @@ object PersonalHeroCachePolicy {
             // Same version, URL still fresh: reuse — no re-download, and
             // (critically) the version check above means a REPLACED image
             // (version bump) never takes this branch.
-            return Decision.Serve(cached.imageUrl, version)
+            return Decision.Serve(
+                cached.imageUrl, version,
+                heroId = cached.heroId ?: serverHeroId
+            )
         }
-        return Decision.Serve(serverUrl, version)
+        return Decision.Serve(serverUrl, version, heroId = serverHeroId)
     }
+}
+
+/**
+ * RW-16.27: why a user flagged one of their OWN personalized heroes —
+ * the Android mirror of iOS's PersonalHeroFlagReason (same codes,
+ * same labels, same order). [code] is the value the backend's
+ * flag_hero action validates (the pool flag vocabulary plus the
+ * personal one); the first entry is the spec §4 control, verbatim.
+ * For a personal photo every reason routes to flag_hero, never to
+ * the pool insert — the pool payload cannot identify a personal
+ * hero and would retire nothing.
+ */
+enum class PersonalHeroFlagReason(val code: String, val label: String) {
+    DOESNT_LOOK_LIKE_ME("doesnt_look_like_me", "This doesn't look like me"),
+    LOOKS_BROKEN("looks_broken", "Looks broken"),
+    INAPPROPRIATE("inappropriate", "Inappropriate"),
+    OUTFIT_MISMATCH("outfit_mismatch", "Doesn't match the outfit")
 }
 
 /**

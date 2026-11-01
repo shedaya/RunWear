@@ -116,6 +116,12 @@ fun HeroMainScreen(
     onAnalyticsOptInChange: (Boolean) -> Unit = {},
     onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
     onFlagHero: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit = {},
+    /**
+     * RW-16.27: flag the PERSONAL hero on screen ("This doesn't look
+     * like me") — routes to the backend's flag_hero action, not the
+     * pool insert.
+     */
+    onFlagPersonalHero: (com.runwear.app.makeitme.PersonalHeroFlagReason) -> Unit = {},
     /** Hero refresh: cycle to the cell's next approved image (no flag). */
     onCycleHero: () -> Unit = {},
     onItemTapped: (ClothingItem) -> Unit = {},
@@ -157,7 +163,14 @@ fun HeroMainScreen(
     // Hero-flag flow: the sheet, plus the URL already flagged in this
     // view (one flag per photo view — the chip goes inert for it).
     var showHeroFlagSheet by remember { mutableStateOf(false) }
+    // RW-16.27: the personal hero's own sheet (its menu is headed
+    // "This doesn't look like me"); the same chip opens it while a
+    // personal photo is on screen.
+    var showPersonalFlagSheet by remember { mutableStateOf(false) }
     var flaggedHeroUrl by remember { mutableStateOf<String?>(null) }
+    val onAnyFlagClick: () -> Unit = {
+        if (uiState.heroIsPersonal) showPersonalFlagSheet = true else showHeroFlagSheet = true
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
 
@@ -268,7 +281,7 @@ Get your personalized running outfit at runwear.ai
                                             onShareClick = { shareOutfit() },
                                             onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
-                                            onFlagClick = { showHeroFlagSheet = true },
+                                            onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
                                             modifier = Modifier.fillMaxWidth()
@@ -342,7 +355,7 @@ Get your personalized running outfit at runwear.ai
                                             onShareClick = { shareOutfit() },
                                             onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
-                                            onFlagClick = { showHeroFlagSheet = true },
+                                            onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
                                             modifier = Modifier.fillMaxWidth()
@@ -409,7 +422,7 @@ Get your personalized running outfit at runwear.ai
                                         onShareClick = { shareOutfit() },
                                         onTempClick = onToggleUnit,
                                         onWeatherPillClick = { type -> weatherDetailType = type },
-                                        onFlagClick = { showHeroFlagSheet = true },
+                                        onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
                                         modifier = Modifier.fillMaxSize()
@@ -660,6 +673,25 @@ Get your personalized running outfit at runwear.ai
             onDismiss = { showHeroFlagSheet = false }
         )
     }
+
+    // Personal Hero Flag Sheet — the personal menu, headed "This
+    // doesn't look like me" (spec §4, RW-16.27). Picking a reason
+    // files the flag_hero action; when it lands, the ViewModel
+    // re-resolves the hero and the pool photo serves while the
+    // regeneration the flag queued is pending.
+    if (showPersonalFlagSheet) {
+        PersonalHeroFlagSheet(
+            onSelectReason = { reason ->
+                showPersonalFlagSheet = false
+                flaggedHeroUrl = uiState.heroImageUrl
+                onFlagPersonalHero(reason)
+                screenScope.launch {
+                    snackbarHostState.showSnackbar("Thanks — we'll make a new version of this look")
+                }
+            },
+            onDismiss = { showPersonalFlagSheet = false }
+        )
+    }
 }
 
 // ============================================================================
@@ -764,10 +796,18 @@ private fun HeroSectionContent(
             onShareClick = onShareClick,
             onTempClick = onTempClick,
             onWeatherPillClick = onWeatherPillClick,
-            showFlagButton = uiState.heroImageUrl != null && !uiState.heroIsPersonal,
+            // RW-16.27: the flag chip shows for ANY hero photo — a
+            // personal photo most of all (its menu is the personal
+            // one) — and the refresh chip follows the ROTATION size
+            // (personal photo + pool candidates), so both controls
+            // live in the personal state too.
+            showFlagButton = uiState.heroImageUrl != null,
             flagEnabled = heroFlagEnabled,
             onFlagClick = onFlagClick,
-            showRefreshButton = uiState.heroCandidates.size > 1,
+            heroIsPersonal = uiState.heroIsPersonal,
+            showRefreshButton = uiState.heroImageUrl != null &&
+                uiState.heroCandidates.size +
+                (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
             onRefreshHeroClick = onCycleHero,
             modifier = modifier
         )
@@ -1057,6 +1097,65 @@ private fun HeroFlagSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             com.runwear.shared.domain.model.HeroFlagReason.entries.forEach { reason ->
+                Text(
+                    text = reason.label,
+                    fontSize = 16.sp,
+                    color = RunWearColors.TextPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectReason(reason) }
+                        .padding(vertical = 14.dp)
+                )
+            }
+            Text(
+                text = "Cancel",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onDismiss() }
+                    .padding(vertical = 14.dp)
+            )
+        }
+    }
+}
+
+/**
+ * RW-16.27: the PERSONAL hero's flag sheet — same sheet idiom as
+ * the pool one, but the menu is the personal vocabulary, headed by
+ * "This doesn't look like me" (spec §4, exactly as iOS presents
+ * it), and every pick files the backend's flag_hero action against
+ * the photo on screen: it retires immediately and a regeneration
+ * is queued. (The pool sheet's insert cannot identify a personal
+ * photo and would retire nothing.)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PersonalHeroFlagSheet(
+    onSelectReason: (com.runwear.app.makeitme.PersonalHeroFlagReason) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = RunWearColors.Surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Flag this photo",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            com.runwear.app.makeitme.PersonalHeroFlagReason.entries.forEach { reason ->
                 Text(
                     text = reason.label,
                     fontSize = 16.sp,

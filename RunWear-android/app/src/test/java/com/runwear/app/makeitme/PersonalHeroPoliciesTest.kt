@@ -93,6 +93,91 @@ class PersonalHeroPoliciesTest {
         assertEquals("https://signed/first", (decision as PersonalHeroCachePolicy.Decision.Serve).imageUrl)
     }
 
+    // ── Hero id threading (RW-16.27: the personal flag's address) ───
+
+    @Test
+    fun `a fresh serve carries the server hero id`() {
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = null,
+            found = true,
+            serverVersion = 1,
+            serverUrl = "https://signed/first",
+            nowMs = now,
+            serverHeroId = "hero-1"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-1", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    @Test
+    fun `a cached serve keeps the cached hero id`() {
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = PersonalHeroCachePolicy.CachedEntry(
+                2, "https://signed/cached", now - 60_000, heroId = "hero-2"
+            ),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/new-signed",
+            nowMs = now,
+            serverHeroId = "hero-2"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-2", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    @Test
+    fun `a legacy cached entry adopts the server hero id on a fresh read`() {
+        // Entries persisted before RW-16.27 carry no hero id; while
+        // the cached URL is still served, the flag's address comes
+        // from the same payload's hero_id.
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = PersonalHeroCachePolicy.CachedEntry(2, "https://signed/cached", now - 60_000),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/new-signed",
+            nowMs = now,
+            serverHeroId = "hero-2"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-2", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    @Test
+    fun `a version bump serves the new hero's id, never the replaced one's`() {
+        val decision = PersonalHeroCachePolicy.decide(
+            cached = PersonalHeroCachePolicy.CachedEntry(
+                1, "https://signed/v1", now - 60_000, heroId = "hero-old"
+            ),
+            found = true,
+            serverVersion = 2,
+            serverUrl = "https://signed/v2",
+            nowMs = now,
+            serverHeroId = "hero-new"
+        )
+        assertTrue(decision is PersonalHeroCachePolicy.Decision.Serve)
+        assertEquals("hero-new", (decision as PersonalHeroCachePolicy.Decision.Serve).heroId)
+    }
+
+    // ── Personal flag reasons (RW-16.27, iOS parity) ────────────────
+
+    @Test
+    fun `personal flag reasons mirror the backend vocabulary and iOS labels`() {
+        // The codes are the flag_hero action's validated set; the
+        // first label is the spec §4 control verbatim. Both must
+        // match iOS's PersonalHeroFlagReason exactly.
+        assertEquals(
+            listOf("doesnt_look_like_me", "looks_broken", "inappropriate", "outfit_mismatch"),
+            PersonalHeroFlagReason.entries.map { it.code }
+        )
+        assertEquals(
+            listOf(
+                "This doesn't look like me", "Looks broken",
+                "Inappropriate", "Doesn't match the outfit"
+            ),
+            PersonalHeroFlagReason.entries.map { it.label }
+        )
+    }
+
     // ── Upsell rules (spec §5.2) ────────────────────────────────────
 
     private fun upsell(

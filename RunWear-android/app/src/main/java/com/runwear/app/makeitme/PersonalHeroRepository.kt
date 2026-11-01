@@ -128,7 +128,12 @@ class PersonalHeroRepository @Inject constructor(
 
     // ── Serving ────────────────────────────────────────────────────────
 
-    data class PersonalHeroHit(val imageUrl: String, val version: Int)
+    data class PersonalHeroHit(
+        val imageUrl: String,
+        val version: Int,
+        /** The backend hero row id — what a personal flag addresses. */
+        val heroId: String? = null
+    )
 
     /**
      * RW-16.16: one cell's look as the server reports it — the
@@ -181,23 +186,26 @@ class PersonalHeroRepository @Inject constructor(
             found = lookup.found,
             serverVersion = lookup.version,
             serverUrl = lookup.imageUrl,
-            nowMs = System.currentTimeMillis()
+            nowMs = System.currentTimeMillis(),
+            serverHeroId = lookup.heroId
         )
         return when (decision) {
             is PersonalHeroCachePolicy.Decision.Serve -> {
                 if (cached == null || cached.version != decision.version ||
-                    cached.imageUrl != decision.imageUrl
+                    cached.imageUrl != decision.imageUrl ||
+                    cached.heroId != decision.heroId
                 ) {
                     writeCachedEntry(
                         combinationId,
                         PersonalHeroCachePolicy.CachedEntry(
                             version = decision.version,
                             imageUrl = decision.imageUrl,
-                            fetchedAtMs = System.currentTimeMillis()
+                            fetchedAtMs = System.currentTimeMillis(),
+                            heroId = decision.heroId
                         )
                     )
                 }
-                PersonalHeroHit(decision.imageUrl, decision.version)
+                PersonalHeroHit(decision.imageUrl, decision.version, decision.heroId)
             }
             PersonalHeroCachePolicy.Decision.NoPersonalHero -> null
         }
@@ -205,11 +213,21 @@ class PersonalHeroRepository @Inject constructor(
 
     private suspend fun readCachedEntry(combinationId: String): PersonalHeroCachePolicy.CachedEntry? {
         val raw = preferencesRepository.getString(cellCacheKey(combinationId)) ?: return null
-        val parts = raw.split("|", limit = 3)
-        if (parts.size != 3) return null
-        val version = parts[0].toIntOrNull() ?: return null
-        val fetchedAt = parts[1].toLongOrNull() ?: return null
-        return PersonalHeroCachePolicy.CachedEntry(version, parts[2], fetchedAt)
+        // RW-16.27 format: version|fetchedAt|heroId|imageUrl. Entries
+        // persisted before RW-16.27 have three parts and no hero id —
+        // they parse with heroId null and re-derive it on the next
+        // fresh serve (a flag needs the id, so a stale entry can
+        // delay — never misdirect — a flag).
+        val parts = raw.split("|", limit = 4)
+        val version = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val fetchedAt = parts.getOrNull(1)?.toLongOrNull() ?: return null
+        return when (parts.size) {
+            4 -> PersonalHeroCachePolicy.CachedEntry(
+                version, parts[3], fetchedAt, heroId = parts[2].takeIf { it.isNotBlank() }
+            )
+            3 -> PersonalHeroCachePolicy.CachedEntry(version, parts[2], fetchedAt)
+            else -> null
+        }
     }
 
     private suspend fun writeCachedEntry(
@@ -218,7 +236,7 @@ class PersonalHeroRepository @Inject constructor(
     ) {
         preferencesRepository.setString(
             cellCacheKey(combinationId),
-            "${entry.version}|${entry.fetchedAtMs}|${entry.imageUrl}"
+            "${entry.version}|${entry.fetchedAtMs}|${entry.heroId ?: ""}|${entry.imageUrl}"
         )
     }
 
@@ -254,6 +272,36 @@ class PersonalHeroRepository @Inject constructor(
         val cells = (raw?.split(",")?.filter { it.isNotBlank() } ?: emptyList()).toMutableSet()
         cells.add(combinationId)
         preferencesRepository.setString(KEY_REQUESTED_CELLS, cells.joinToString(","))
+    }
+
+    private suspend fun unmarkCellRequested(combinationId: String) {
+        val raw = preferencesRepository.getString(KEY_REQUESTED_CELLS) ?: return
+        val cells = raw.split(",").filter { it.isNotBlank() && it != combinationId }
+        preferencesRepository.setString(KEY_REQUESTED_CELLS, cells.joinToString(","))
+    }
+
+    /**
+     * RW-16.27: "This doesn't look like me" (spec §4) — flag the
+     * cell's personalized hero with the backend, mirroring iOS's
+     * store. On success the server has already retired the hero and
+     * queued a regeneration; locally the cell's cache entry is
+     * evicted and its automatic-request marker cleared, so the very
+     * next resolution re-looks-up, finds nothing serving, and the
+     * pool photo serves while the regeneration is pending (the
+     * server's look state reports MAKING and the poll picks the new
+     * hero up when it lands). Returns whether the flag landed; a
+     * failed flag changes nothing, silently — the flag must never
+     * disturb the screen it was sent from.
+     */
+    suspend fun flagPersonalHero(
+        combinationId: String,
+        heroId: String,
+        reason: PersonalHeroFlagReason
+    ): Boolean {
+        if (!service.flagPersonalHero(heroId, reason)) return false
+        invalidateCell(combinationId)
+        unmarkCellRequested(combinationId)
+        return true
     }
 
     suspend fun clearRequestedCells() {

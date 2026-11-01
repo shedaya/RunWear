@@ -103,6 +103,15 @@ fun HeroSection(
     flagEnabled: Boolean = true,
     onFlagClick: () -> Unit = {},
     /**
+     * RW-16.27: whether the photo on screen is the user's personal
+     * hero (vs a pool photo). Drives the swap transition only: a
+     * person change (pool ↔ personal) CUTS; a refresh within the
+     * same layer keeps the crossfade ([HeroTransitionPolicy]). The
+     * pre-fix hero crossfaded every swap, so the personal photo
+     * ghosted over a pool stranger for 500 ms (RW-16.26).
+     */
+    heroIsPersonal: Boolean = false,
+    /**
      * Hero-refresh affordance: shown beside the flag chip when the
      * current cell has more than one approved image. Tapping cycles to
      * the next image for the same cell WITHOUT flagging this one.
@@ -120,6 +129,18 @@ fun HeroSection(
     // 64.dp inset (20 + 36 + 8); the measurement corrects it from the
     // first layout pass onward.
     var pillsHeightDp by remember { mutableStateOf(36.dp) }
+    // RW-16.27: the person layer the last composed hero belonged to;
+    // the transition for THIS swap is decided against it before the
+    // effect records the new layer.
+    var previousHeroIsPersonal by remember { mutableStateOf<Boolean?>(null) }
+    val crossfadeHero = HeroTransitionPolicy.shouldCrossfade(
+        previousIsPersonal = previousHeroIsPersonal,
+        newIsPersonal = heroIsPersonal
+    )
+    LaunchedEffect(heroImageUrl, heroIsPersonal) {
+        previousHeroIsPersonal = heroIsPersonal
+    }
+
     // Decode the hero at display size, not at the source's full 800×1200.
     val density = LocalDensity.current
     val heroWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
@@ -184,7 +205,7 @@ fun HeroSection(
                     model = ImageRequest.Builder(context)
                         .data(heroImageUrl)
                         .size(heroWidthPx, heroHeightPx)
-                        .crossfade(500)
+                        .apply { if (crossfadeHero) crossfade(500) else crossfade(false) }
                         .build(),
                     contentDescription = generateHeroAltText(weather, outfit),
                     contentScale = ContentScale.Crop,
@@ -428,6 +449,23 @@ private fun HeroRefreshChip(
                 .size(16.dp)
         )
     }
+}
+
+/**
+ * RW-16.27: the hero swap transition rule. A swap that changes the
+ * PERSON on screen — pool photo ↔ the user's personal photo — must
+ * CUT: crossfading two differently-cropped full-body subjects
+ * composites them into a ghost overlay for the fade's duration
+ * (the RW-16.26 field report). A refresh within the same layer
+ * (pool → pool, or a regenerated personal photo replacing its
+ * predecessor) may keep the crossfade. The first hero a view
+ * composes has no predecessor to ghost over, so it may fade in.
+ * Pure so the rule is unit-tested without composition.
+ */
+object HeroTransitionPolicy {
+
+    fun shouldCrossfade(previousIsPersonal: Boolean?, newIsPersonal: Boolean): Boolean =
+        previousIsPersonal == null || previousIsPersonal == newIsPersonal
 }
 
 /**

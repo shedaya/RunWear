@@ -326,6 +326,22 @@ class PersonalHeroService @Inject constructor(
         }
     }
 
+    /**
+     * RW-16.27: flag one of the caller's own personalized heroes
+     * ("This doesn't look like me", spec §4) — the same flag_hero
+     * action iOS calls. The hero must belong to the caller (a missing
+     * hero and someone else's are the same 404 server-side). On
+     * success the hero is retired in the same call (it stops being
+     * served on the very next get-personal-hero), a snapshot lands
+     * in personal_hero_flags, and a regeneration job is queued for
+     * the cell unless an active job already covers it. True only
+     * when the server confirmed the flag.
+     */
+    suspend fun flagPersonalHero(heroId: String, reason: PersonalHeroFlagReason): Boolean {
+        val body = """{"action":"flag_hero","hero_id":"$heroId","reason":"${reason.code}"}"""
+        return callFunction("request-personal-generation", body) is FunctionResult.Ok
+    }
+
     // ── Subscriber fill / delete ───────────────────────────────────────
 
     /** Enqueue the 20-cell matrix for the (entitled) caller. */

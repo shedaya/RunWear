@@ -200,6 +200,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onItemTapped = viewModel::onAffiliateItemTapped,
                                     onFlagHero = viewModel::flagCurrentHero,
+                                    onFlagPersonalHero = viewModel::flagCurrentPersonalHero,
                                     onCycleHero = viewModel::cycleHeroImage,
                                     makeItMeViewModel = makeItMeViewModel,
                                     makeItMeState = makeItMeState,
