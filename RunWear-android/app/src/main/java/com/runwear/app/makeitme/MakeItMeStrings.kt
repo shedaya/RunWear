@@ -39,6 +39,13 @@ object MakeItMeStrings {
     const val C2G_CHOOSE_FROM_LIBRARY = "Choose from library"
     const val C2C_CONFIRM_FIRST_LOOK = "Make my first look"
     const val C2C_CONFIRM_SAVE = "Save photos"
+    // C2J added Oct 31, 2026 (RW-16.15 — spec §7 amended by dated
+    // note): the save confirmation, shown after a successful commit
+    // before the flow dismisses. Verbatim-identical to the iOS deck
+    // (MakeItMeCopy.saveConfirmed). Neither platform confirmed a
+    // save before this — the flow just vanished, which read to the
+    // user as "my photos didn't save."
+    const val C2J_SAVE_CONFIRMED = "Your photos are saved."
     const val C3A_REJECT_FACE_UNCLEAR = "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow."
     const val C3B_REJECT_MULTIPLE = "This photo has more than one person in it. Pick one that's just you."
     const val C3C_REJECT_TOO_DARK = "This one is too dark to use. Try a photo in brighter light."
@@ -64,6 +71,12 @@ object MakeItMeStrings {
     const val S15_PHOTO_LOADING = "Loading"
     const val S16_PHOTO_LOAD_FAILED = "Couldn't load this photo"
     const val S17_PHOTO_RETRY = "Tap to retry"
+    // S18/S19 added Oct 31, 2026 (RW-16.15 increment): the Your
+    // Photos SCREEN-level load failure — the bounded load always
+    // lands on content or this labeled retry state, never a long
+    // spinner into blankness.
+    const val S18_PHOTOS_LOAD_FAILED = "Couldn't load your photos"
+    const val S19_TRY_AGAIN = "Try again"
     const val S7_REPLACE_NOTE = "Replacing your photos remakes today's look right away. Your other looks update as they're made again."
     const val S8_STATE_B_SUBSCRIBE_ROW = "Every outfit, instantly"
     const val S8_STATE_B_SUBSCRIBE_SUB = "Subscribe, and your photo is ready before you open the app. $0.99/month."

@@ -26,8 +26,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Refresh
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -203,7 +207,7 @@ private fun ForkOptionCard(
 // no photo UI exists before the consent screen.
 // ============================================================================
 
-private enum class UploadStep { CONSENT, PHOTOS, SUBMITTING }
+private enum class UploadStep { CONSENT, PHOTOS, SUBMITTING, SAVED }
 
 private class PickedPhoto(val uri: Uri) {
     var checking: Boolean by mutableStateOf(true)
@@ -227,6 +231,18 @@ fun MakeItMeUploadFlow(
     var working by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     val photos = remember { mutableStateListOf<PickedPhoto>() }
+
+    // RW-16.15: the save-confirmation beat. A successful submit
+    // lands on UploadStep.SAVED (the "Your photos are saved."
+    // state) and only after the beat does the flow finish — the
+    // explicit confirmation the field report found missing. iOS
+    // carries the identical contract in OptInCommitDriver.didSave.
+    LaunchedEffect(step) {
+        if (step == UploadStep.SAVED) {
+            delay(1_500)
+            onFinished()
+        }
+    }
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickMultipleVisualMedia(maxItems = 3)
@@ -514,7 +530,10 @@ fun MakeItMeUploadFlow(
                             todaysCell = todaysCell
                         ) { ok ->
                             if (ok) {
-                                onFinished()
+                                // RW-16.15: confirm the save on
+                                // screen first (UploadStep.SAVED);
+                                // the beat effect above finishes.
+                                step = UploadStep.SAVED
                             } else {
                                 step = UploadStep.PHOTOS
                                 errorText = MakeItMeStrings.TRANSPORT_ERROR
@@ -541,6 +560,30 @@ fun MakeItMeUploadFlow(
                             fontSize = 16.sp
                         )
                     }
+                }
+            }
+
+            UploadStep.SAVED -> {
+                // RW-16.15 save confirmation (spec C2J): the
+                // explicit "it saved," held for the beat by the
+                // LaunchedEffect above, then the flow finishes.
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = RunWearColors.Primary,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = MakeItMeStrings.C2J_SAVE_CONFIRMED,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = RunWearColors.TextPrimary
+                    )
                 }
             }
         }
@@ -674,6 +717,27 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
     }
 }
 
+/**
+ * RW-16.15 increment: the Your Photos screen-level failure state —
+ * the labeled terminal state the bounded load lands on (watchdog
+ * timeout, or a completed load with nothing to show). Retry
+ * re-runs the whole load for fresh signed URLs.
+ */
+@Composable
+private fun PhotosLoadError(onRetry: () -> Unit) {
+    Column {
+        Text(
+            text = MakeItMeStrings.S18_PHOTOS_LOAD_FAILED,
+            fontSize = 14.sp,
+            color = Color(0xFFFF8A80)
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(onClick = onRetry) {
+            Text(MakeItMeStrings.S19_TRY_AGAIN)
+        }
+    }
+}
+
 // ============================================================================
 // Settings "Your photos" view (spec §3): current references + replace.
 // ============================================================================
@@ -691,10 +755,21 @@ fun MakeItMePhotosScreen(
     // path. Fresh signed URLs (not just a Coil re-request), so an
     // expired or bad URL is itself the thing that gets replaced.
     var loadToken by remember { mutableStateOf(0) }
+    // RW-16.15 increment: the load is BOUNDED. The field recording
+    // showed a bare spinner for ~12 s resolving into blank tiles;
+    // now the watchdog lands an unfinished load on the labeled
+    // error/retry state instead — the screen always ends on
+    // content or a labeled state, never spinner-into-blankness.
+    var loadFailed by remember { mutableStateOf(false) }
     LaunchedEffect(loadToken) {
+        loadFailed = false
         viewModel.loadReferenceUrls { result ->
             urls = result
             loaded = true
+        }
+        launch {
+            delay(20_000)
+            if (!loaded) loadFailed = true
         }
     }
     Column(
@@ -725,9 +800,29 @@ fun MakeItMePhotosScreen(
             color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(16.dp))
-        if (!loaded) {
-            CircularProgressIndicator(color = RunWearColors.Primary)
-        } else {
+        when {
+            loadFailed && !loaded -> PhotosLoadError(
+                onRetry = { loadToken++ }
+            )
+            !loaded -> Column {
+                CircularProgressIndicator(color = RunWearColors.Primary)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = MakeItMeStrings.S15_PHOTO_LOADING,
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.65f)
+                )
+            }
+            // A completed load with nothing to show is a failed
+            // load (an opted-in user has a registered set) — the
+            // labeled state, never an empty row over the note.
+            urls.isEmpty() -> PhotosLoadError(
+                onRetry = {
+                    loaded = false
+                    loadToken++
+                }
+            )
+            else -> {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 urls.forEach { url ->
                     ReferencePhotoTile(
@@ -747,6 +842,7 @@ fun MakeItMePhotosScreen(
                 lineHeight = 19.sp,
                 color = Color.White.copy(alpha = 0.6f)
             )
+            }
         }
         Spacer(Modifier.height(24.dp))
         Button(
