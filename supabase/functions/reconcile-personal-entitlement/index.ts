@@ -1,0 +1,232 @@
+// Supabase Edge Function: reconcile-personal-entitlement (RW-16.12 Lane B, 2026-10-31)
+//
+// The entitlement backstop. The revenuecat-webhook function is the
+// primary path that writes personal_profiles.entitled, but it only
+// fires when RevenueCat delivers an event — and RW-16.12 proved that
+// hop can be silently dark (a completed purchase, zero lifetime events
+// project-wide, the flag never set, start-personal-fill refusing every
+// client kick with not_entitled, the matrix never built). This
+// function is the reconciliation path that cannot share that failure
+// mode: it asks RevenueCat directly what state the user is in and
+// brings the server flag to match.
+//
+// Trust model: the client (or an operator) merely ASSERTS "a purchase
+// completed" by calling this function. The assertion is never trusted —
+// the function verifies the user's subscriber record against the
+// RevenueCat REST API (GET /v1/subscribers/{app_user_id}) and only then
+// acts. RevenueCat's record is the system that validated the store
+// receipt, so a forged assertion cannot manufacture an entitlement.
+// Identity is never taken from the request body on the user path:
+// the caller reconciles THEMSELF (uid from the verified JWT). The
+// service-role path (same credential detection as start-personal-fill)
+// takes { "user_id": "..." } for operator / scheduled use.
+//
+// RC API keys: the subscriber read uses the project's PUBLIC SDK keys
+// (function secrets REVENUECAT_PUBLIC_KEY_IOS / _ANDROID), the same
+// keys shipped inside the apps — the v1 subscriber GET is a public-key
+// operation (it is how the SDK itself reads CustomerInfo). Every
+// configured key is tried and the reads are merged, because a
+// subscriber's purchases may sit under either store's app. Upgrade
+// path, when a dashboard hand next touches RevenueCat: mint a
+// read-only SECRET key and swap these secrets — no code change.
+//
+// Behavior (mirrors revenuecat-webhook's discipline):
+// - Calls public.set_personal_entitlement ONLY on an actual
+//   transition, with source 'entitlement-reconciliation', so the
+//   personal_entitlement_events audit trail holds one row per real
+//   change and the path that made it is unambiguous.
+// - Entitlement active in RC := entitlements.make_it_me present with
+//   expires_date null or in the future, and the underlying
+//   subscription not refunded (RC also drops refunded entitlements;
+//   checked anyway).
+// - On a false->true grant, kicks start-personal-fill server-side
+//   (service role + user_id) — the fill does not depend on the client
+//   kicking again in a later session. A failed kick never fails the
+//   reconciliation; it is reported in the response.
+// - On true->false (RC positively shows no active entitlement), the
+//   flag is cleared with the same source. An RC outage or malformed
+//   response NEVER clears a flag: no usable record, no change.
+// - Android caveat, inherited from the webhook: until the Android
+//   client calls Purchases.logIn(supabaseUid), Android purchases live
+//   under RC's anonymous id and cannot be found by Supabase uid here
+//   either. iOS configures Purchases with the Supabase uid and maps
+//   directly.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+const ENTITLEMENT_ID = 'make_it_me'
+const SOURCE = 'entitlement-reconciliation'
+const RC_API = 'https://api.revenuecat.com/v1'
+
+const RC_KEYS = [
+  Deno.env.get('REVENUECAT_PUBLIC_KEY_IOS'),
+  Deno.env.get('REVENUECAT_PUBLIC_KEY_ANDROID'),
+].filter((k): k is string => typeof k === 'string' && k.length > 0)
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+interface RcEntitlementState {
+  // 'active' | 'inactive' — a usable RC record was read.
+  // 'unknown' — no configured key produced a usable record (outage,
+  // bad key, malformed payload). Callers must not mutate state on it.
+  state: 'active' | 'inactive' | 'unknown'
+  productId: string | null
+  expiresDate: string | null
+  isSandbox: boolean | null
+}
+
+// Pure decision over one RC subscriber payload — extracted so the
+// rule can be read (and tested) without the network around it.
+export function entitlementFromSubscriber(subscriber: unknown): RcEntitlementState {
+  const sub = (subscriber as Record<string, unknown> | null)?.subscriber as
+    | Record<string, unknown> | undefined
+  if (!sub || typeof sub !== 'object') {
+    return { state: 'unknown', productId: null, expiresDate: null, isSandbox: null }
+  }
+  const entitlements = (sub.entitlements ?? {}) as Record<string, Record<string, unknown>>
+  const ent = entitlements[ENTITLEMENT_ID]
+  if (!ent) return { state: 'inactive', productId: null, expiresDate: null, isSandbox: null }
+
+  const expires = typeof ent.expires_date === 'string' ? ent.expires_date : null
+  if (expires !== null && Date.parse(expires) <= Date.now()) {
+    return { state: 'inactive', productId: null, expiresDate: expires, isSandbox: null }
+  }
+  const productId = typeof ent.product_identifier === 'string' ? ent.product_identifier : null
+
+  // Refund check on the underlying subscription record, when present.
+  let isSandbox: boolean | null = null
+  if (productId) {
+    const subscriptions = (sub.subscriptions ?? {}) as Record<string, Record<string, unknown>>
+    const record = subscriptions[productId]
+    if (record) {
+      if (typeof record.refunded_at === 'string') {
+        return { state: 'inactive', productId: null, expiresDate: expires, isSandbox: null }
+      }
+      if (typeof record.is_sandbox === 'boolean') isSandbox = record.is_sandbox
+    }
+  }
+  return { state: 'active', productId, expiresDate: expires, isSandbox }
+}
+
+async function fetchRcState(userId: string): Promise<RcEntitlementState> {
+  let sawInactive = false
+  for (const key of RC_KEYS) {
+    try {
+      const resp = await fetch(`${RC_API}/subscribers/${encodeURIComponent(userId)}`, {
+        headers: { 'Authorization': `Bearer ${key}`, 'X-Platform': 'ios' },
+      })
+      if (!resp.ok) continue
+      const state = entitlementFromSubscriber(await resp.json())
+      if (state.state === 'active') return state
+      if (state.state === 'inactive') sawInactive = true
+    } catch { /* try the next key / fall through to unknown */ }
+  }
+  return sawInactive
+    ? { state: 'inactive', productId: null, expiresDate: null, isSandbox: null }
+    : { state: 'unknown', productId: null, expiresDate: null, isSandbox: null }
+}
+
+// Same service-credential detection as start-personal-fill: exact
+// env-key match, a new-format secret key, or a JWT whose role claim
+// is service_role (the gateway has already validated the credential).
+function isServiceCall(authHeader: string): boolean {
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, '')
+  if (!bearerToken) return false
+  if (bearerToken === SUPABASE_SERVICE_ROLE_KEY) return true
+  const secretKeys = Deno.env.get('SUPABASE_SECRET_KEYS')
+  if (secretKeys && secretKeys.includes(bearerToken)) return true
+  try {
+    const part = bearerToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(part + '='.repeat((4 - part.length % 4) % 4)))
+    return payload?.role === 'service_role'
+  } catch { return false }
+}
+
+serve(async (req: Request) => {
+  if (req.method !== 'POST') return jsonResponse({ error: 'method_not_allowed' }, 405)
+  if (RC_KEYS.length === 0) {
+    return jsonResponse({ error: 'rc_keys_not_configured' }, 500)
+  }
+
+  const body = await req.json().catch(() => ({})) as Record<string, unknown>
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+
+  let userId: string | null = null
+  if (isServiceCall(authHeader)) {
+    userId = typeof body.user_id === 'string' ? body.user_id : null
+    if (!userId) return jsonResponse({ error: 'user_id is required for service-role calls' }, 400)
+  } else {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    })
+    const { data, error } = await userClient.auth.getUser()
+    if (error || !data.user) return jsonResponse({ error: 'unauthorized' }, 401)
+    userId = data.user.id
+  }
+
+  const rc = await fetchRcState(userId)
+  if (rc.state === 'unknown') {
+    // No usable answer from RevenueCat — change nothing, say so.
+    return jsonResponse({ ok: false, error: 'rc_state_unknown', user_id: userId }, 502)
+  }
+  const target = rc.state === 'active'
+
+  const { data: profile } = await admin
+    .from('personal_profiles')
+    .select('entitled')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const current = profile?.entitled === true
+
+  if (current === target) {
+    return jsonResponse({
+      ok: true, applied: false, reason: 'state_unchanged',
+      user_id: userId, entitled: current,
+      rc_product_id: rc.productId, rc_expires_date: rc.expiresDate, rc_is_sandbox: rc.isSandbox,
+    })
+  }
+
+  const { error: setError } = await admin.rpc('set_personal_entitlement', {
+    p_user_id: userId, p_entitled: target, p_source: SOURCE,
+  })
+  if (setError) {
+    return jsonResponse({ error: 'set_entitlement_failed', detail: setError.message }, 500)
+  }
+
+  let fill: unknown = null
+  if (target) {
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/start-personal-fill`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+        },
+        body: JSON.stringify({ user_id: userId }),
+      })
+      fill = { status: resp.status, body: await resp.json().catch(() => null) }
+    } catch (e) {
+      fill = { error: String(e) }
+    }
+  }
+
+  return jsonResponse({
+    ok: true, applied: true, user_id: userId, entitled: target,
+    rc_product_id: rc.productId, rc_expires_date: rc.expiresDate, rc_is_sandbox: rc.isSandbox,
+    fill,
+  })
+})
