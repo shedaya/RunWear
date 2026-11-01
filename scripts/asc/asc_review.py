@@ -69,13 +69,35 @@ def main():
     # 3. The specific submission + its items.
     sub = section("reviewSubmission (the Oct 31 submission)",
                   f"/v1/reviewSubmissions/{SUBMISSION_ID}")
-    items = section("reviewSubmission items (include version+build)",
-                    f"/v1/reviewSubmissions/{SUBMISSION_ID}/items?limit=50"
-                    "&include=appStoreVersion,build")
+    items = section("reviewSubmission items (plain)",
+                    f"/v1/reviewSubmissions/{SUBMISSION_ID}/items?limit=50")
     # 4. Each item in full (states / rejection detail live here if anywhere).
     for item in items.get("data", []):
         section(f"reviewSubmissionItem {item.get('id')}",
                 f"/v1/reviewSubmissionItems/{item.get('id')}")
+        section(f"reviewSubmissionItem {item.get('id')} (include all)",
+                f"/v1/reviewSubmissionItems/{item.get('id')}"
+                "?include=appStoreVersion,appCustomProductPageVersion,"
+                "appEvent,appClipDefaultExperience,inAppPurchaseV2,subscription")
+
+    # 5. Subscription + IAP review states (first-submission subscription
+    #    review rides with the app submission; a rejected item may be here).
+    groups = section("subscriptionGroups for app",
+                     f"/v1/apps/{APP_ID}/subscriptionGroups?limit=50")
+    for grp in groups.get("data", []):
+        gid = grp.get("id")
+        subs = section(f"subscriptions in group {gid}",
+                       f"/v1/subscriptionGroups/{gid}/subscriptions?limit=50")
+        for s in subs.get("data", []):
+            section(f"subscription {s.get('id')} full record",
+                    f"/v1/subscriptions/{s.get('id')}")
+    section("inAppPurchasesV2 for app",
+            f"/v1/apps/{APP_ID}/inAppPurchasesV2?limit=50")
+
+    # 6. Version localizations (metadata on record for classification).
+    if version_id:
+        section("appStoreVersionLocalizations",
+                f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations?limit=50")
 
 if __name__ == "__main__":
     main()
