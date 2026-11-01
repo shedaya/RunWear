@@ -26,19 +26,44 @@
 // concurrent invocations cannot double-process; a soft time budget
 // stops claiming new jobs before the function wall clock.
 //
-// Stale-claim recovery (RW-15 remedy, 2026-10-31): every in-code
-// failure path marks a claimed job FAILED, so a job still PROCESSING
-// long after its claim means the invocation itself was terminated by
-// the platform mid-processing (observed live: a job claimed, its
-// generation completed, the invocation killed during the gate — the
-// job then wedged forever, because the drain only claimed QUEUED
-// jobs and the request action answered already_queued against it).
-// Each invocation therefore first scans for PROCESSING jobs whose
-// claim is older than STALE_PROCESSING_MS and either requeues them
+// Stale-claim recovery (RW-15 remedy, 2026-10-31; threshold revised
+// RW-16.12 Lane A, 2026-11-01): every in-code failure path marks a
+// claimed job FAILED, so a job still PROCESSING long after its claim
+// means the invocation itself was terminated by the platform
+// mid-processing (observed live: a job claimed, its generation
+// completed, the invocation killed during the gate — the job then
+// wedged forever, because the drain only claimed QUEUED jobs and the
+// request action answered already_queued against it). Each
+// invocation therefore first scans for PROCESSING jobs whose claim
+// is older than STALE_PROCESSING_MS and either requeues them
 // (spending one reclaim from the job's reclaim_count budget) or, at
 // the budget cap, fails them with the named stale_processing_timeout
-// reason. A reclaimed job that carries a replicate_id resumes by
-// gating the already-generated image before paying for a new one.
+// reason — every terminal state writes its reason. The scan runs at
+// the top of every invocation regardless of job kind (free_on_demand,
+// subscriber_fill, regeneration alike), and the personal-hero-drain
+// pg_cron job invokes this function every 5 minutes, so recovery no
+// longer depends on an unrelated client kick. A reclaimed job that
+// carries a replicate_id resumes by gating the already-generated
+// image before paying for a new one.
+//
+// Reference derivatives (RW-16.12 Lane A, 2026-11-01): the identity
+// gate's composite works at 768 px tall, so it is fed a bounded
+// derivative of the first reference (produced once per reference by
+// the personal-ref-prep function and cached in storage), never the
+// full-resolution original. Decoding a 3600x4800 original was the
+// gate path's dominant memory spike and the wedge mechanism above:
+// attempts died mid-decode and wrote nothing. Generation still uses
+// the full-size signed reference URLs; only the composite input
+// changed, so gate semantics are untouched.
+//
+// Regeneration swap retirement (RW-16.12 Lane C spec, implemented by
+// Lane A): under keep-serving, a kind='regeneration' job whose cell
+// already holds VARIANT_CAP heroes retires the cell's
+// prior-generation heroes (created before the cell's
+// regen_pending_since) inside gateAndDeliver — after the gate
+// passes, before the insert — so the replacement lands in the
+// lowest freed slot. If the gate rejects, nothing is retired and
+// the prior heroes keep serving.
 //
 // Spend: Kontext Pro is $0.04/image (published). Worst case per job is
 // 2 generations + up to 4 vision calls.
@@ -63,20 +88,23 @@ const IDENTITY_MIN_CONFIDENCE = 0.6
 const DEFAULT_DRAIN_LIMIT = 1
 const MAX_DRAIN_LIMIT = 3
 const SOFT_TIME_BUDGET_MS = 100_000
-// Stale-claim threshold: 15 minutes. Justification from this file's
-// own timing bounds — one generation attempt is capped by the
-// Kontext poll timeout (120 s) plus the gate (two vision calls in
-// parallel, each poll-capped at 180 s), so two attempts plus the
-// reference signing/download overhead cannot exceed ~11 minutes of
-// legitimate work, and a typical job finishes in ~1–4 minutes
-// (generation 5–9 s, gate ~40 s). The 100 s soft budget above only
-// governs claiming NEW jobs, never an in-flight one. 15 minutes
-// therefore sits strictly beyond any live invocation's possible
-// duration — a reclaim can never race a worker that is still
-// legitimately processing (no double generation, no double spend) —
-// while the 5-minute drain cadence still recovers a wedged job
-// within ~15–20 minutes of its claim.
-const STALE_PROCESSING_MS = 900_000
+// Stale-claim threshold: 5 minutes — ~7x the top of the
+// field-measured healthy envelope (completed jobs run 17–43 s; the
+// slowest observed legitimate job, a resume-gate followed by a
+// fresh attempt, took ~78 s end to end, and two full attempts at
+// typical timings — generation ~5–9 s, gate ~40–80 s — bound at
+// ~3 minutes). 300 s therefore sits beyond any live invocation's
+// plausible duration, so a reclaim cannot race a worker that is
+// still legitimately processing (and the guarded claim plus the
+// replicate_id resume bound the damage even in the pathological
+// case: a reclaimed job gates its already-generated image before
+// paying for a new one). The polls' hard caps (120 s generation,
+// 180 s gate) are timeouts that throw, not extensions of legitimate
+// processing. The previous 15-minute threshold left the RW-16.12
+// COOL DUSK cell blocked for a quarter hour per wedge cycle; at
+// 5 minutes plus the 5-minute drain cadence, worst-case recovery
+// from a wedge is ~5–10 minutes from the claim.
+const STALE_PROCESSING_MS = 300_000
 // Reclaim budget per job: a job may be reclaimed at most this many
 // times; the next stale scan after the budget is spent fails it with
 // STALE_FAILURE_REASON. Bounds the worst case at 1 + 3 invocations
@@ -472,6 +500,76 @@ async function markJob(id: string, patch: Record<string, unknown>) {
   if (error) console.error('[personal-hero-worker] markJob failed:', error)
 }
 
+// --- Reference derivatives (RW-16.12 Lane A) -------------------------
+// The identity composite only ever needs the first reference at
+// 768 px tall (runGate's H). personal-ref-prep produces that
+// derivative once per reference and caches it in storage at
+// <uid>/refs-small/<name>.jpg; the worker downloads the derivative
+// for the composite instead of decoding the 17.3 MP original in this
+// isolate (the wedge mechanism — see the header). A derivative is
+// fresh iff it exists and was written no earlier than its source
+// object (register_references replaces sources in place, which
+// bumps their updated_at and so invalidates the cache naturally).
+
+function derivativePathFor(sourcePath: string): string {
+  const slash = sourcePath.lastIndexOf('/')
+  const dir = sourcePath.slice(0, slash)               // <uid>/refs
+  const base = sourcePath.slice(slash + 1)             // ref-1.jpg
+  const parent = dir.slice(0, dir.lastIndexOf('/'))    // <uid>
+  const stem = base.replace(/\.[^.]+$/, '')
+  return `${parent}/refs-small/${stem}.jpg`
+}
+
+async function derivativeIsFresh(sourcePath: string, derivativePath: string): Promise<boolean> {
+  try {
+    const srcDir = sourcePath.slice(0, sourcePath.lastIndexOf('/'))
+    const srcName = sourcePath.slice(sourcePath.lastIndexOf('/') + 1)
+    const derDir = derivativePath.slice(0, derivativePath.lastIndexOf('/'))
+    const derName = derivativePath.slice(derivativePath.lastIndexOf('/') + 1)
+    const [{ data: srcList }, { data: derList }] = await Promise.all([
+      supabase.storage.from('personal-heroes').list(srcDir, { search: srcName }),
+      supabase.storage.from('personal-heroes').list(derDir, { search: derName })
+    ])
+    const src = (srcList ?? []).find(e => e.name === srcName)
+    const der = (derList ?? []).find(e => e.name === derName)
+    if (!src || !der || !src.updated_at || !der.updated_at) return false
+    return new Date(der.updated_at).getTime() >= new Date(src.updated_at).getTime()
+  } catch {
+    return false
+  }
+}
+
+// Returns the composite-grade bytes for the reference at sourcePath,
+// producing the derivative via personal-ref-prep when it is missing
+// or stale. Throws a named reference_prep_failed error when the
+// derivative cannot be produced — the job then fails with that
+// reason recorded (and the stale-claim reclaim gives later retries
+// further chances) instead of silently falling back to decoding the
+// full-resolution original in this isolate.
+async function loadCompositeRefBytes(sourcePath: string): Promise<Uint8Array> {
+  const derivativePath = derivativePathFor(sourcePath)
+  if (!(await derivativeIsFresh(sourcePath, derivativePath))) {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/personal-ref-prep`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ path: sourcePath })
+    })
+    if (!resp.ok) {
+      throw new Error(`reference_prep_failed: prep returned ${resp.status} ${(await resp.text()).slice(0, 200)}`)
+    }
+  }
+  const { data, error } = await supabase.storage
+    .from('personal-heroes')
+    .download(derivativePath)
+  if (error || !data) {
+    throw new Error(`reference_prep_failed: derivative download failed: ${error?.message}`)
+  }
+  return new Uint8Array(await data.arrayBuffer())
+}
+
 // Gate one generated image and, iff it passes, store it as a
 // verified hero and run the delivery accounting (free-tier charge on
 // first verified delivery of a genuinely new cell only — see the
@@ -487,7 +585,60 @@ async function gateAndDeliver(
   const gateRaw = { attempt, ...gate.raw }
   if (!gate.pass) return { delivered: false, failures: gate.failures, gateRaw }
 
-  const storagePath = `${job.user_id}/heroes/${job.combination_id}/v${variant}.png`
+  // Regeneration swap retirement (RW-16.12 Lane C spec): the gate
+  // has passed, so a regeneration whose cell is at the variant cap
+  // retires the cell's prior-generation heroes — rows created before
+  // the cell's regen_pending_since — together with their storage
+  // objects, and the replacement takes the lowest freed slot.
+  // Gate-first ordering is the ruling: had the gate rejected,
+  // nothing would be retired and the prior heroes would keep
+  // serving. If the cell is at cap with NO prior-generation heroes
+  // to retire, the delivery fails as variant_cap_reached, exactly
+  // as before.
+  let finalVariant = variant
+  if (job.kind === 'regeneration') {
+    const { data: cellState } = await supabase
+      .from('personal_cells')
+      .select('regen_pending_since')
+      .eq('user_id', job.user_id)
+      .eq('combination_id', job.combination_id)
+      .maybeSingle()
+    const since = cellState?.regen_pending_since
+      ? new Date(cellState.regen_pending_since as string).getTime()
+      : null
+    if (since !== null) {
+      const { data: heroesNow } = await supabase
+        .from('personal_heroes')
+        .select('id, variant, storage_path, created_at')
+        .eq('user_id', job.user_id)
+        .eq('combination_id', job.combination_id)
+      const rows = heroesNow ?? []
+      if (rows.length >= VARIANT_CAP) {
+        const prior = rows.filter(
+          r => new Date(r.created_at as string).getTime() < since)
+        if (prior.length > 0) {
+          const { error: removeError } = await supabase.storage
+            .from('personal-heroes')
+            .remove(prior.map(r => r.storage_path as string))
+          if (removeError) {
+            throw new Error(`Regeneration swap retirement failed (storage): ${removeError.message}`)
+          }
+          const { error: deleteError } = await supabase
+            .from('personal_heroes')
+            .delete()
+            .in('id', prior.map(r => r.id as string))
+          if (deleteError) {
+            throw new Error(`Regeneration swap retirement failed: ${deleteError.message}`)
+          }
+          finalVariant = Math.min(...prior.map(r => r.variant as number))
+          console.log(`[personal-hero-worker] job ${job.id}: regeneration swap retired ${prior.length} prior-generation hero(es) for ${job.combination_id}; replacement takes variant ${finalVariant}`)
+        }
+      }
+    }
+  }
+  if (finalVariant > VARIANT_CAP) throw new Error('variant_cap_reached')
+
+  const storagePath = `${job.user_id}/heroes/${job.combination_id}/v${finalVariant}.png`
   const { error: uploadError } = await supabase.storage
     .from('personal-heroes')
     .upload(storagePath, imageBytes, { contentType: 'image/png', upsert: false })
@@ -502,7 +653,7 @@ async function gateAndDeliver(
       temp_bracket: job.temp_bracket, time_of_day: job.time_of_day,
       outfit_signature: job.outfit_signature,
       outfit_items: job.outfit_items,
-      storage_path: storagePath, variant,
+      storage_path: storagePath, variant: finalVariant,
       prompt, gate_result: gateRaw
     })
     .select('id')
@@ -580,7 +731,12 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       .eq('user_id', job.user_id)
       .eq('combination_id', job.combination_id)
     const used = new Set((existing ?? []).map(r => r.variant as number))
-    if (used.size >= VARIANT_CAP) {
+    // At-cap regeneration jobs are exempt from this early fail:
+    // gateAndDeliver retires the cell's prior-generation heroes
+    // after the gate passes and finalizes the variant slot there
+    // (RW-16.12 Lane C). Every other kind fails fast, before any
+    // generation spend.
+    if (used.size >= VARIANT_CAP && job.kind !== 'regeneration') {
       await markJob(job.id, {
         status: 'FAILED', error_message: 'variant_cap_reached',
         completed_at: new Date().toISOString()
@@ -606,12 +762,13 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     const refUrls = (signed ?? []).map(s => s.signedUrl).filter(Boolean) as string[]
     if (refUrls.length === 0) throw new Error('Could not sign reference photo URLs')
 
-    // First reference bytes for the identity composite.
-    const { data: refBlob, error: dlError } = await supabase.storage
-      .from('personal-heroes')
-      .download(refPaths[0])
-    if (dlError || !refBlob) throw new Error(`Reference download failed: ${dlError?.message}`)
-    const refBytes = new Uint8Array(await refBlob.arrayBuffer())
+    // Composite-grade bytes of the first reference: the bounded
+    // derivative produced by personal-ref-prep (RW-16.12 Lane A),
+    // NOT the full-resolution original — decoding the original in
+    // this isolate was the wedge mechanism. Generation below still
+    // uses the original signed URLs, and the gate's composite
+    // geometry is unchanged (it always worked at 768 px tall).
+    const refBytes = await loadCompositeRefBytes(refPaths[0])
 
     let failures: string[] = []
     let gateRaw: Record<string, unknown> = {}
