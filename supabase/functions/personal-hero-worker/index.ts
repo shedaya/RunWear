@@ -176,7 +176,16 @@ function outfitAnchors(keys: string[]): string {
   else if (has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')) {
     parts.push("the top's long sleeves reach all the way to the wrists")
   }
-  if (keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')) {
+  // The outer layer is restated by its specific construction: a
+  // generic "jacket" anchor got the FREEZING cell's insulated jacket
+  // rendered reliably, but the RAIN COLD cell's shell was repeatedly
+  // rendered as (or read as) a plain shirt — a rain jacket's hood is
+  // its discriminating visual feature.
+  if (has('RAIN_JACKET')) {
+    parts.push('a hooded waterproof rain jacket, zipped up, is worn as the outermost layer')
+  } else if (has('INSULATED_JACKET')) {
+    parts.push('a puffy insulated winter jacket, zipped up, is worn as the outermost layer')
+  } else if (keys.some(k => ITEM_CATEGORY[k] === 'TOP_OUTER')) {
     parts.push('a zipped jacket is worn over the top as the outermost layer')
   }
   if (has('LIGHT_TIGHTS') || has('THERMAL_TIGHTS')) {
@@ -189,7 +198,9 @@ function outfitAnchors(keys: string[]): string {
   // subset's first round (named in the item list, absent from the
   // images), so they get the same on-body restatement.
   if (has('BALACLAVA')) parts.push('a balaclava covers the whole head and face except the eyes')
-  else if (has('LIGHT_BEANIE') || has('THERMAL_BEANIE')) parts.push('a knit beanie covers the head and ears')
+  else if (has('LIGHT_BEANIE') || has('THERMAL_BEANIE')) {
+    parts.push('a knit winter beanie hat covers the head and ears (a beanie, not a baseball cap)')
+  }
   else if (has('HEADBAND')) parts.push('an ear-warmer headband covers the ears')
   else if (has('VISOR')) parts.push('a visor shades the eyes')
   else if (has('BASEBALL_CAP')) parts.push('a running cap is worn on the head')
@@ -199,6 +210,16 @@ function outfitAnchors(keys: string[]): string {
   }
   if (has('NECK_GAITER')) parts.push('a neck gaiter covers the neck and lower face')
   if (has('SUNGLASSES')) parts.push('sunglasses cover the eyes')
+  // Dusk outfits pair reflective gear with the base top; the model's
+  // canonical dusk-runner image is a tee under a hi-viz vest, which
+  // silently replaces a long-sleeved base (COOL DUSK, 5 of 6
+  // generations). State the layering explicitly for that pairing.
+  if (has('REFLECTIVE_GEAR')) {
+    parts.push(has('LONG_SLEEVE_LIGHT') || has('LONG_SLEEVE_THERMAL')
+      ? 'a thin reflective sash is worn over the long-sleeved shirt, whose full-length ' +
+        'sleeves stay visible on the arms down to the wrists'
+      : 'reflective strips on the clothing catch the light')
+  }
   return parts.length ? ` In the photo: ${parts.join('; ')}.` : ''
 }
 
