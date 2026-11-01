@@ -129,7 +129,9 @@ extension PersonalHeroResolving {
 
 // MARK: - Backend DTOs
 
-/// get-personal-hero response (backend §2.1).
+/// get-personal-hero response (backend §2.1; RW-16.16 added the
+/// look-state fields in get-personal-hero v5 — additive, absent
+/// from pre-v5 payloads).
 struct PersonalHeroLookup: Decodable {
     let found: Bool
     let combinationId: String
@@ -138,6 +140,14 @@ struct PersonalHeroLookup: Decodable {
     let imageUrl: String?
     let version: Int?
     let replenishmentQueued: Int?
+    /// RW-16.16: the server's per-cell look state for this caller —
+    /// "none" | "making" | "ready" | "failed"; nil on a pre-v5
+    /// payload.
+    let lookState: String? = nil
+    /// RW-16.16: for a failed look, the coarse reason CLASS —
+    /// "quality_refused" | "service_refused" | "error". The raw
+    /// gate/moderation strings never cross the wire.
+    let lookReason: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -147,6 +157,74 @@ struct PersonalHeroLookup: Decodable {
         case imageUrl = "image_url"
         case version
         case replenishmentQueued = "replenishment_queued"
+        case lookState = "look_state"
+        case lookReason = "look_reason"
+    }
+}
+
+// MARK: - Personal-look state (RW-16.16)
+//
+// The status the hero renders for one cell, as the SERVER reports
+// it in get-personal-hero's look_state / look_reason (v5+). This —
+// not any local bookkeeping — decides what the user sees: the
+// once-per-session requested set once suppressed both re-requests
+// AND the progress surface for a cell, so a generation the save
+// flow had requested arrived (or failed) in total silence (the G4
+// defect; spec §7 G4 superseded, G5/G6 added Nov 1, 2026).
+//
+// The server owns the truth: a look job in flight is MAKING; a
+// verified hero serving with nothing in flight is READY (the hero
+// itself is the state — no label); a terminal failure is FAILED
+// with a coarse reason class; anything else is NONE. Mirrors
+// Android's PersonalLookStatusPolicy exactly.
+
+/// Why a look failed, at the coarse class the server exposes.
+enum PersonalLookFailureReason: Equatable {
+    /// The verification gate refused the generated photo.
+    case qualityRefused
+    /// The generation service refused (moderation class).
+    case serviceRefused
+    /// Anything else — provider errors, timeouts, the unknown.
+    case error
+
+    /// Map the wire class; an unknown or missing class degrades to
+    /// `.error`, never to silence.
+    static func fromServer(_ lookReason: String?) -> PersonalLookFailureReason {
+        switch lookReason {
+        case "quality_refused": return .qualityRefused
+        case "service_refused": return .serviceRefused
+        default: return .error
+        }
+    }
+}
+
+enum PersonalLookState: Equatable {
+    case none
+    case making
+    case ready
+    case failed(reason: PersonalLookFailureReason)
+
+    var isMaking: Bool { self == .making }
+    var isFailed: Bool { if case .failed = self { return true }; return false }
+
+    /// Map one get-personal-hero payload onto the state. A payload
+    /// with no state field at all (a pre-v5 server) falls back to
+    /// the one inference that was always safe: found means READY, a
+    /// miss means NONE. An unrecognized state string falls back the
+    /// same way.
+    static func fromServer(found: Bool, lookState: String?, lookReason: String?) -> PersonalLookState {
+        switch lookState {
+        case "making": return .making
+        case "ready": return .ready
+        case "failed": return .failed(reason: PersonalLookFailureReason.fromServer(lookReason))
+        case "none": return .none
+        default: return found ? .ready : .none
+        }
+    }
+
+    /// The same mapping, from a decoded lookup.
+    static func from(lookup: PersonalHeroLookup) -> PersonalLookState {
+        fromServer(found: lookup.found, lookState: lookup.lookState, lookReason: lookup.lookReason)
     }
 }
 
@@ -696,6 +774,25 @@ enum MakeItMeCopy {
     /// before it dismisses — the explicit "it saved" the field
     /// report found missing on both platforms.
     static let saveConfirmed = "Your photos are saved."
+    /// Spec §7 G1, verbatim: the progress line's title while the
+    /// server reports the current cell's look as making.
+    static let progressTitle = "Making this outfit yours…"
+    /// Spec §7 G2, verbatim as AMENDED Nov 1, 2026 (RW-16.16): the
+    /// original "About 10 seconds" figure was false against a
+    /// measured 72-second job and a 2–4 minute backend norm; the
+    /// amended line promises no number the system misses.
+    static let progressSubline = "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    /// Spec §7 G5 (added Nov 1, 2026 — RW-16.16): the durable
+    /// failed-look line at the hero, shown with the G6 action
+    /// whenever the server reports the current cell's look as
+    /// failed, held until the state changes. One string for every
+    /// failure class in this build. PLACEHOLDER pending Sol's pick
+    /// from the options put to him Nov 1, 2026 — a one-string swap.
+    static let lookFailed = "We couldn't make this look yet — tap to try again."
+    /// Spec §7 G6 (added Nov 1, 2026 — RW-16.16): the failed
+    /// line's retry action. User-initiated only; automatic
+    /// re-request stays off.
+    static let lookRetry = "Try again"
 }
 
 // MARK: - Photo intake source routing (RW-16.14)

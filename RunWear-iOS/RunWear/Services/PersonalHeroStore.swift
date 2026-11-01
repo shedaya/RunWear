@@ -9,10 +9,14 @@ import Combine
 // WeatherViewModel asks it to resolve the hero for the current cell.
 //
 // Doctrine (spec §1): the recommendation is never held hostage. Every
-// failure in here degrades to the pool hero, silently. A cell whose
-// generation fails the backend gate simply never resolves — the pool
-// serves, no error state exists, and (server-side) the free
-// allowance is not charged.
+// failure in here degrades to the pool hero, and (server-side) the
+// free allowance is not charged for a look that never delivers.
+// Since RW-16.16 the degradation is no longer silent: the server
+// reports each cell's look state (making / ready / failed + reason
+// class) and the hero renders it durably (spec §7 G5/G6; G4's
+// silence is superseded). What did NOT change: the pool photo stays
+// up in every non-ready state, and a failed look is retried only by
+// the user's tap — never automatically.
 @MainActor
 final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     enum Mode: Equatable {
@@ -31,9 +35,19 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// flow surfaces one honest line instead of pretending.
     @Published private(set) var authUnavailable = false
     /// Cells with a user-initiated generation in flight (onboarding's
-    /// first look, a Settings-initiated opt-in) — drives the G1/G2
-    /// progress line. Browsing-triggered generations swap silently.
+    /// first look, a Settings-initiated opt-in). Retained as
+    /// bookkeeping; since RW-16.16 the hero's progress/failed
+    /// surfaces are driven by `lookStates`, not by this set.
     @Published private(set) var userInitiatedPending: Set<String> = []
+    /// RW-16.16: the per-cell look state as the SERVER last reported
+    /// it (get-personal-hero v5's look_state / look_reason), folded
+    /// on EVERY lookup — resolution, revalidation, and every poll.
+    /// This is what the hero renders: making shows the progress
+    /// line whoever requested the generation (the save flow
+    /// included), failed shows the G5 line with its retry, and the
+    /// state survives navigation because it is re-derived from the
+    /// server on every display, never held only in session memory.
+    @Published private(set) var lookStates: [String: PersonalLookState] = [:]
     /// The cell the server refused with allowance_exhausted — the
     /// upsell trigger (spec §5).
     @Published private(set) var exhaustedCell: String?
@@ -65,6 +79,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     var isOptedIn: Bool { mode != .stock }
     var freeRemaining: Int { max(0, Self.freeAllowance - freeGenerationsUsed) }
+
+    /// RW-16.16: fold one get-personal-hero payload into the
+    /// per-cell look state the hero renders. Called on every lookup
+    /// path so the rendered status is always the server's latest
+    /// word for the cell.
+    private func noteLookState(_ lookup: PersonalHeroLookup) {
+        lookStates[lookup.combinationId] = PersonalLookState.from(lookup: lookup)
+    }
 
     // MARK: - Bootstrap
 
@@ -131,6 +153,13 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     func resolveHero(for combination: PersonalCombination) async -> String? {
         let cell = combination.combinationId
         if let fresh = cache.freshURL(for: cell, now: Date()) {
+            // A cached verified hero is serving: that IS the ready
+            // state (RW-16.16) — unless the server has already told
+            // us something newer for this cell (a failed regen on a
+            // keep-serving cell must not be painted over here; the
+            // background revalidation below folds the server's word
+            // either way).
+            if lookStates[cell] == nil { lookStates[cell] = .ready }
             // Still revalidate in the background: a version bump
             // (replenishment rotation, regeneration) must replace
             // the on-screen image on the next display.
@@ -149,6 +178,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         guard let lookup = try? await api.getPersonalHero(combinationId: cell) else {
             return nil
         }
+        // RW-16.16: the server's look state folds in BEFORE any
+        // request decision, so the hero renders the truth for this
+        // cell even when the request guard below suppresses a new
+        // automatic request.
+        noteLookState(lookup)
         switch cache.resolve(lookup: lookup, now: Date()) {
         case .show(let url):
             return url
@@ -162,9 +196,12 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     /// Wait for a pending generation to land (polls the serving
     /// endpoint; generation takes ~2–4 min server-side). Returns the
-    /// URL when the hero lands, nil when the poll budget runs out —
-    /// a gate-failed cell simply never lands, and the pool keeps
-    /// serving with nothing said (spec G4).
+    /// URL when the hero lands, nil when the poll resolves FAILED or
+    /// the budget runs out. Every poll folds the server's look state
+    /// (RW-16.16): a terminal failure ends the poll with the failed
+    /// state standing on the hero — the pool photo stays up, the
+    /// failed line stays up, and nothing about the state is erased
+    /// when the poll gives up (the pre-RW-16.16 G4 behavior).
     func awaitHero(for combination: PersonalCombination) async -> String? {
         let cell = combination.combinationId
         if let existing = pollingTasks[cell] {
@@ -177,10 +214,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
                 if Task.isCancelled { break }
                 guard let lookup = try? await self.api.getPersonalHero(combinationId: cell) else { continue }
+                self.noteLookState(lookup)
                 if case .show(let url) = self.cache.resolve(lookup: lookup, now: Date()) {
                     landed = url
                     break
                 }
+                // A terminal failure resolves the poll: the failed
+                // state folded above is the durable surface now.
+                if self.lookStates[cell]?.isFailed == true { break }
             }
             self.userInitiatedPending.remove(cell)
             self.pollingTasks[cell] = nil
@@ -189,6 +230,26 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         }
         pollingTasks[cell] = task
         return await task.value
+    }
+
+    /// RW-16.16 (spec §7 G6): the failed line's "Try again" — the
+    /// ONLY re-request path for a failed cell. Clears the cell's
+    /// once-per-session marker so the request below actually fires
+    /// (the marker's anti-loop role for AUTOMATIC requests is
+    /// untouched), requests through the same path as any first
+    /// request — the server dedupes against an active job, a failed
+    /// look never charged the free allowance, and a retry that
+    /// delivers charges exactly as a first delivery does — then
+    /// polls; each poll folds the server state, so the hero moves
+    /// failed → making → ready (or back to failed) on the server's
+    /// word alone.
+    func retryLook(for combination: PersonalCombination) {
+        let cell = combination.combinationId
+        requestedCells.remove(cell)
+        Task {
+            await requestGenerationIfNeeded(combination: combination, userInitiated: false)
+            _ = await awaitHero(for: combination)
+        }
     }
 
     /// Kick generation for the current cell as a USER-initiated
@@ -215,13 +276,20 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             switch response.status {
             case "already_available":
                 // A hero exists but the lookup raced it; re-lookup.
-                if let lookup = try? await api.getPersonalHero(combinationId: cell),
-                   case .show = cache.resolve(lookup: lookup, now: Date()) {
-                    landedHeroVersion += 1
+                if let lookup = try? await api.getPersonalHero(combinationId: cell) {
+                    noteLookState(lookup)
+                    if case .show = cache.resolve(lookup: lookup, now: Date()) {
+                        landedHeroVersion += 1
+                    }
                 }
                 userInitiatedPending.remove(cell)
             default:
-                break // queued / already_queued — polling delivers it
+                // queued / already_queued — RW-16.16: the hero shows
+                // the making state from the moment the request lands,
+                // whoever sent it (the save flow included — its
+                // outcome is no longer discarded); the polls fold
+                // the server's own word from here.
+                lookStates[cell] = .making
             }
         } catch PersonalHeroAPIError.allowanceExhausted(let used) {
             freeGenerationsUsed = used
@@ -314,6 +382,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     func deleteEverything() async throws {
         try await api.deleteMyPhotos()
         cache.removeAll()
+        lookStates.removeAll()
         requestedCells.removeAll()
         pollingTasks.values.forEach { $0.cancel() }
         pollingTasks.removeAll()
