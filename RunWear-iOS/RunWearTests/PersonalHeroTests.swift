@@ -100,7 +100,9 @@ final class PersonalHeroTests: XCTestCase {
             variant: 1,
             imageUrl: url,
             version: version,
-            replenishmentQueued: 0
+            replenishmentQueued: 0,
+            lookState: nil,
+            lookReason: nil
         )
     }
 

@@ -142,12 +142,16 @@ struct PersonalHeroLookup: Decodable {
     let replenishmentQueued: Int?
     /// RW-16.16: the server's per-cell look state for this caller —
     /// "none" | "making" | "ready" | "failed"; nil on a pre-v5
-    /// payload.
-    let lookState: String? = nil
+    /// payload. NO default value here on purpose: a `let` with an
+    /// initial value is excluded from Decodable synthesis entirely
+    /// (the compiler warns "will not be decoded"), which would
+    /// silently nil these on every payload — the exact failure
+    /// LookStatusTests.testLookupDecodesLookStateAndReason caught.
+    let lookState: String?
     /// RW-16.16: for a failed look, the coarse reason CLASS —
     /// "quality_refused" | "service_refused" | "error". The raw
     /// gate/moderation strings never cross the wire.
-    let lookReason: String? = nil
+    let lookReason: String?
 
     enum CodingKeys: String, CodingKey {
         case found
