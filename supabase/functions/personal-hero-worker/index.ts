@@ -180,9 +180,22 @@ function outfitAnchors(keys: string[]): string {
     parts.push('a zipped jacket is worn over the top as the outermost layer')
   }
   if (has('LIGHT_TIGHTS') || has('THERMAL_TIGHTS')) {
-    parts.push('full-length tights cover the legs completely, down to the ankles')
+    parts.push('full-length tights cover the legs completely, from the waist down to the ' +
+      'ankles — the runner is not wearing shorts and no part of the legs is bare')
   } else if (has('CAPRIS')) parts.push('three-quarter tights end just below the knee')
   else if (has('SHORTS') || has('SHORT_SHORTS')) parts.push('the shorts end above the knee')
+  // Head and hands items were dropped wholesale in the RW-16.13
+  // subset's first round (named in the item list, absent from the
+  // images), so they get the same on-body restatement.
+  if (has('BALACLAVA')) parts.push('a balaclava covers the whole head and face except the eyes')
+  else if (has('LIGHT_BEANIE') || has('THERMAL_BEANIE')) parts.push('a knit beanie covers the head and ears')
+  else if (has('HEADBAND')) parts.push('an ear-warmer headband covers the ears')
+  else if (has('VISOR')) parts.push('a visor shades the eyes')
+  else if (has('BASEBALL_CAP')) parts.push('a running cap is worn on the head')
+  if (has('MITTENS')) parts.push('mittens cover both hands')
+  else if (has('LIGHT_GLOVES') || has('THERMAL_GLOVES')) parts.push('gloves cover both hands')
+  if (has('NECK_GAITER')) parts.push('a neck gaiter covers the neck and lower face')
+  if (has('SUNGLASSES')) parts.push('sunglasses cover the eyes')
   return parts.length ? ` In the photo: ${parts.join('; ')}.` : ''
 }
 
@@ -216,11 +229,14 @@ function buildPrompt(job: JobRow, failureClasses: string[]): string {
     `Photorealistic full-body photo of the same person shown in the reference photos, ` +
     `now running mid-stride along ${background}, ${weatherPhrase[job.weather] ?? 'clear skies'}, ` +
     `${timePhrase[job.time_of_day] ?? 'daylight'}. The runner's whole body is in the frame, ` +
-    `from the top of the head to the shoes, legs and feet included. ` +
+    `from the top of the head to the shoes, legs and feet included, seen from the front ` +
+    `and large in the frame. ` +
     `The reference photos show this person in indoor clothes: replace that clothing completely — ` +
     `do not keep any garment from the reference photos. They are wearing exactly this running ` +
     `outfit and nothing extra: ` +
-    `${items.join(', ')}.${layering}${outfitAnchors(keys)} The runner is looking ahead, not at the camera. ` +
+    `${items.join(', ')}.${layering}${outfitAnchors(keys)} Every item in that outfit list is ` +
+    `visibly worn in the photo — nothing from the list is missing or substituted. ` +
+    `The runner is looking ahead, not at the camera. ` +
     `No visible brand logos, text, or trademarks anywhere in the image: every garment is plain, ` +
     `solid and unbranded — no swooshes, emblems, printed words or brand marks.` +
     QUALITY_SUFFIX
