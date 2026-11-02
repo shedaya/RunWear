@@ -103,7 +103,7 @@ class HeroImageRepository @Inject constructor() {
         val combination = OutfitCombination.fromConditions(weather, outfit, heroGender)
 
         try {
-            val searchResult = getRandomImage(combination)
+            val searchResult = getRandomImage(combination, outfit)
             if (searchResult.image == null) {
                 getFallbackImage(combination)
             } else {
@@ -218,6 +218,9 @@ class HeroImageRepository @Inject constructor() {
      * [candidates] is the SERVABLE (review-approved) pool at the cascade
      * level that produced [image]; [exactMatchCount] counts servable exact
      * matches only, so replenishment targets images users can actually see.
+     * RW-20: both now count only rows that also pass the point-grain
+     * prescription filter — the images a user can actually be served for
+     * the current conditions, which is the honest replenishment signal.
      */
     private data class ImageSearchResult(
         val image: GeneratedImage?,
@@ -238,7 +241,10 @@ class HeroImageRepository @Inject constructor() {
      * | 4        | Opposite Gender + Weather + Temp | MALE_CLEAR_COLD_%          |
      * | 5        | Opposite Gender + Clear + Temp   | MALE_CLEAR_COLD_%          |
      */
-    private suspend fun getRandomImage(combination: OutfitCombination): ImageSearchResult {
+    private suspend fun getRandomImage(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): ImageSearchResult {
         // Lazy client (1.1.2): unavailable → the caller falls back.
         val client = supabase ?: return ImageSearchResult(null, 0, false)
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
@@ -284,7 +290,11 @@ class HeroImageRepository @Inject constructor() {
                 // Review gate: pending/rejected generations are never
                 // served. Pre-migration rows decode reviewStatus = null
                 // and count as approved (HeroPoolPolicy).
-                val images = servableImages(rows)
+                // RW-20 point-grain gate: of the servable rows, only
+                // those whose adjudicated garments and person count
+                // agree with THIS request's exact prescription may be
+                // served; a level with no agreeing row cascades onward.
+                val images = pointGrainImages(rows, outfit)
 
                 if (images.isNotEmpty()) {
                     // Check if this is an exact match query
@@ -444,11 +454,62 @@ internal fun servableImages(rows: List<GeneratedImage>): List<GeneratedImage> =
     rows.filter { HeroPoolPolicy.isServable(it.reviewStatus) }
 
 /**
+ * RW-20: the servable rows that ALSO agree with the exact outfit
+ * prescription at point grain (HeroPointGrainPolicy). Every serving
+ * path draws from this list — a cascade level whose rows all fail the
+ * prescription yields an empty list here, so the caller cascades
+ * onward or falls back to the bundled image, exactly as it does for a
+ * level with no servable rows.
+ */
+internal fun pointGrainImages(
+    rows: List<GeneratedImage>,
+    outfit: OutfitRecommendation
+): List<GeneratedImage> = servableImages(rows).filter { row ->
+    com.runwear.shared.domain.model.HeroPointGrainPolicy.matches(
+        personCount = row.personCount,
+        topBaseClass = row.garmentClasses?.topBase,
+        outerClass = row.garmentClasses?.outer,
+        bottomClass = row.garmentClasses?.bottom,
+        prescribedTopBase = outfit.topBase,
+        prescribedTopOuter = outfit.topOuter,
+        prescribedBottom = outfit.bottom
+    )
+}
+
+/**
+ * The adjudicated garment classes of a pool photo (RW-20 backfill,
+ * 2026-11-02): what the photo actually shows, as recorded by the
+ * RW-16.17 audit / regen adjudication and stored on the row as
+ * garment_classes. Vocabulary is the audit harness's: bottom ∈
+ * {shorts, short_shorts, capris, tights}, topBase ∈ {sleeveless,
+ * short, long}, head ∈ {balaclava, beanie, cap, headband, visor},
+ * hands ∈ {gloves, mittens}; null = not readable in the photo.
+ * Classes sourced from the row's stored prompt (unadjudicated rows)
+ * share the shape; [GeneratedImage.garmentSource] records which.
+ */
+@Serializable
+data class GarmentClasses(
+    @SerialName("topBase") val topBase: String? = null,
+    @SerialName("outer") val outer: Boolean? = null,
+    @SerialName("mid") val mid: Boolean? = null,
+    @SerialName("bottom") val bottom: String? = null,
+    @SerialName("head") val head: String? = null,
+    @SerialName("hands") val hands: String? = null,
+    @SerialName("sunglasses") val sunglasses: Boolean? = null,
+    @SerialName("gaiter") val gaiter: Boolean? = null
+)
+
+/**
  * Database model for generated_images table.
  * review_status arrives with the 2026-10-27 review-gate migration
  * ('approved' | 'pending' | 'rejected'); until that migration is applied
  * the column does not exist and the field decodes as null, which
  * HeroPoolPolicy treats as approved — serving is unchanged either way.
+ *
+ * person_count / garment_classes arrive with the RW-20 backfill
+ * (2026-11-02) and feed the point-grain serving filter
+ * (HeroPointGrainPolicy): null decodes on rows the backfill has not
+ * reached, and the filter fails closed on unreadable garments.
  */
 @Serializable
 data class GeneratedImage(
@@ -457,7 +518,10 @@ data class GeneratedImage(
     @SerialName("image_url") val imageUrl: String,
     @SerialName("thumbnail_url") val thumbnailUrl: String? = null,
     @SerialName("prompt") val prompt: String? = null,
-    @SerialName("review_status") val reviewStatus: String? = null
+    @SerialName("review_status") val reviewStatus: String? = null,
+    @SerialName("person_count") val personCount: Int? = null,
+    @SerialName("garment_classes") val garmentClasses: GarmentClasses? = null,
+    @SerialName("garment_source") val garmentSource: String? = null
 )
 
 
