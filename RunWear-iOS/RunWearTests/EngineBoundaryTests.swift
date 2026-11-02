@@ -216,38 +216,42 @@ final class EngineBoundaryTests: XCTestCase {
         XCTAssertEqual(vm.selectedWeatherSnapshot?.weatherCode, 0)
     }
 
-    // MARK: - RW-23 future-day silent substitution (characterization)
+    // MARK: - RW-23 future-day selection fails visibly
 
     @MainActor
-    func testFutureDaySelectionSilentlySubstitutesCurrentConditions_RW23() {
-        // RW-23 characterization (2026-11-02) — documents the CURRENT
-        // buggy behaviour, which the RW-23 fix stage rewrites: when
-        // the selected date/hour has no hourly forecast entry,
-        // updateSelectedWeatherSnapshot() silently substitutes a
-        // snapshot built from CURRENT conditions labelled with the
-        // selected hour. Nothing on screen says the forecast for
-        // that time does not exist yet. (Android throws visibly in
-        // the equivalent case.)
+    func testFutureDaySelectionFlagsOutsideForecast_RW23() {
+        // RW-23 contract (2026-11-02). This replaces the Stage-1
+        // characterization of the old behaviour: pre-fix, when the
+        // selected date/hour had no hourly forecast entry,
+        // updateSelectedWeatherSnapshot() SILENTLY substituted a
+        // snapshot built from current conditions labelled with the
+        // selected hour — snapshot non-nil, hour == selected hour,
+        // temperature/feels-like/weather code/wind all equal to the
+        // fixture's current-conditions values — and nothing on
+        // screen said the forecast for that time did not exist.
         //
-        // Fixture: hourly covers only 2026-10-29 07:00–08:00, with
-        // values (20°C / 18°C) deliberately distinct from the
-        // fixture's current conditions (10°C, wind 8, code 0 — see
-        // makeViewModel). Selecting a future day beyond the window
-        // must, pre-fix, still produce a snapshot — carrying the
-        // current-conditions values under the selected hour.
+        // Post-fix the fallback snapshot itself stays (the screen
+        // keeps showing current conditions), but the substitution is
+        // no longer silent: selectedTimeOutsideForecast is true for
+        // an out-of-window selection and false for an in-window one,
+        // and WeatherOutfitView renders a notice whenever it is true.
         let vm = makeViewModel(hourly: makeHourly([
             HourSpec(time: "2026-10-29T07:00", tempC: 20, feelsC: 18),
             HourSpec(time: "2026-10-29T08:00", tempC: 21, feelsC: 19)
         ]))
-        vm.updateSelectedTime(date: date(2026, 11, 5), hour: 7)
 
-        let snapshot = vm.selectedWeatherSnapshot
-        XCTAssertNotNil(snapshot, "Pre-fix: an out-of-window selection still yields a snapshot (silent substitution)")
-        XCTAssertEqual(snapshot?.hour, 7)
-        XCTAssertEqual(snapshot?.temperature, 10) // fixture's current-conditions temperature, not any hourly value
-        XCTAssertEqual(snapshot?.feelsLike, 10) // fixture's current-conditions feels-like (currentDetail is nil)
-        XCTAssertEqual(snapshot?.weatherCode, 0) // fixture's current-conditions weather code
-        XCTAssertEqual(snapshot?.windSpeed, 8) // fixture's current-conditions wind speed
+        // Out-of-window (future day beyond the hourly array): flagged,
+        // with the current-conditions fallback snapshot still in place.
+        vm.updateSelectedTime(date: date(2026, 11, 5), hour: 7)
+        XCTAssertTrue(vm.selectedTimeOutsideForecast)
+        XCTAssertNotNil(vm.selectedWeatherSnapshot)
+        XCTAssertEqual(vm.selectedWeatherSnapshot?.hour, 7)
+        XCTAssertEqual(vm.selectedWeatherSnapshot?.temperature, 10) // current-conditions fallback, now labelled as such
+
+        // In-window selection: not flagged.
+        vm.updateSelectedTime(date: date(2026, 10, 29), hour: 7)
+        XCTAssertFalse(vm.selectedTimeOutsideForecast)
+        XCTAssertEqual(vm.selectedWeatherSnapshot?.feelsLike, 18)
     }
 
     // MARK: - Every engine-emittable item resolves a thumbnail (R-07)

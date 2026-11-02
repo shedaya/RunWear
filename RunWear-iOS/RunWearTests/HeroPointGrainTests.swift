@@ -15,11 +15,17 @@ import XCTest
 /// by OutfitRecommendationService.
 final class HeroPointGrainTests: XCTestCase {
 
+    /// Default row = the correct row for the 39°F scenario below:
+    /// at 39°F the prescription is HEADBAND + LIGHT_GLOVES (RW-23:
+    /// head/hands are enforced, so the correct row must record
+    /// them). Scenarios prescribing no head/hands pass nil/nil.
     private func image(
         personCount: Int? = 1,
         topBase: String? = "long",
         outer: Bool? = false,
-        bottom: String? = "tights"
+        bottom: String? = "tights",
+        head: String? = "headband",
+        hands: String? = "gloves"
     ) -> GeneratedImage {
         GeneratedImage(
             id: "row",
@@ -31,7 +37,7 @@ final class HeroPointGrainTests: XCTestCase {
             personCount: personCount,
             garmentClasses: GarmentClasses(
                 topBase: topBase, outer: outer, mid: false,
-                bottom: bottom, head: nil, hands: nil,
+                bottom: bottom, head: head, hands: hands,
                 sunglasses: false, gaiter: false
             ),
             garmentSource: "adjudicated"
@@ -75,6 +81,9 @@ final class HeroPointGrainTests: XCTestCase {
         )
         XCTAssertEqual(outfit.bottom.key, "LIGHT_TIGHTS")
         XCTAssertNil(outfit.topOuter)
+        // RW-23: the 39°F prescription includes head + hands.
+        XCTAssertEqual(outfit.head?.key, "HEADBAND")
+        XCTAssertEqual(outfit.hands?.key, "LIGHT_GLOVES")
 
         XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "shorts"), outfit: outfit))
         XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "short_shorts"), outfit: outfit))
@@ -151,10 +160,15 @@ final class HeroPointGrainTests: XCTestCase {
             windSpeed: 2, humidity: 50, uvIndex: 0, hour: 6
         )
         XCTAssertEqual(outfit.bottom.key, "SHORTS")
+        // RW-23: 47°F prescribes no head and no hands — rows must
+        // record nil/nil, and unprescribed gear rejects.
+        XCTAssertNil(outfit.head)
+        XCTAssertNil(outfit.hands)
 
-        XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(bottom: "shorts"), outfit: outfit))
-        XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(bottom: "short_shorts"), outfit: outfit))
-        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "tights"), outfit: outfit))
-        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(personCount: 2, bottom: "shorts"), outfit: outfit))
+        XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(bottom: "shorts", head: nil, hands: nil), outfit: outfit))
+        XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(bottom: "short_shorts", head: nil, hands: nil), outfit: outfit))
+        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "tights", head: nil, hands: nil), outfit: outfit))
+        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(personCount: 2, bottom: "shorts", head: nil, hands: nil), outfit: outfit))
+        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "shorts", head: "cap", hands: nil), outfit: outfit))
     }
 }
