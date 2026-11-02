@@ -3335,8 +3335,8 @@
             const params = new URLSearchParams({
                 latitude: coarseCoordinate(lat),
                 longitude: coarseCoordinate(lon),
-                current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
-                hourly: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
+                current: 'temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation,precipitation_probability,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index',
+                hourly: 'temperature_2m,relative_humidity_2m,dew_point_2m,apparent_temperature,precipitation_probability,precipitation,rain,snowfall,weather_code,cloud_cover,wind_speed_10m,wind_gusts_10m,uv_index,visibility',
                 temperature_unit: unit,
                 wind_speed_unit: windUnit,
                 timezone: 'auto',
@@ -3350,10 +3350,22 @@
             let weather;
             if (isToday && data.current) {
                 const c = data.current;
+                // Open-Meteo's current block has no visibility field; the
+                // hourly block does. Take this hour's visibility from the
+                // hourly series — real source data, never an estimate.
+                // (RW-7.5: the detail popup previously hardcoded 'Good'.)
+                let visibilityNow;
+                if (data.hourly && data.hourly.time && data.hourly.visibility && c.time) {
+                    const hourPrefix = c.time.slice(0, 13);
+                    const vi = data.hourly.time.findIndex(t => t.startsWith(hourPrefix));
+                    if (vi >= 0) visibilityNow = data.hourly.visibility[vi];
+                }
                 weather = {
                     temp: c.temperature_2m,
                     feelsLike: c.apparent_temperature,
                     humidity: c.relative_humidity_2m,
+                    dewPoint: c.dew_point_2m,
+                    visibility: visibilityNow,
                     windSpeed: c.wind_speed_10m,
                     windGusts: c.wind_gusts_10m,
                     precipitation: c.precipitation,
@@ -3382,6 +3394,8 @@
                     temp: hourly.temperature_2m[idx],
                     feelsLike: hourly.apparent_temperature[idx],
                     humidity: hourly.relative_humidity_2m[idx],
+                    dewPoint: hourly.dew_point_2m[idx],
+                    visibility: hourly.visibility[idx],
                     windSpeed: hourly.wind_speed_10m[idx],
                     windGusts: hourly.wind_gusts_10m[idx],
                     precipitationProbability: hourly.precipitation_probability[idx],
@@ -3445,8 +3459,11 @@
         
         async function getLocationName(lat, lon) {
             try {
+                // Round coordinates to 3 decimals at the request boundary
+                // (RW-19 parity with the native apps' reverse-geocode fix);
+                // full-precision values stay in storage and display.
                 const response = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`
+                    `https://nominatim.openstreetmap.org/reverse?lat=${Math.round(lat * 1000) / 1000}&lon=${Math.round(lon * 1000) / 1000}&format=json&zoom=10`
                 );
                 if (!response.ok) throw new Error('Geocoding failed');
                 const data = await response.json();
@@ -5229,8 +5246,11 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     details = [
                         { label: 'Condition', value: getWeatherDescription(w.weatherCode) },
                         { label: 'Cloud Cover', value: `${w.cloudCover || 0}%` },
-                        { label: 'Visibility', value: 'Good' },
-                        { label: 'Precipitation', value: `${w.precipProb || 0}%` }
+                        // RW-7.5: real visibility from the source; the row is
+                        // omitted when the source has no value — never a
+                        // hardcoded 'Good'.
+                        ...(w.visibility != null ? [{ label: 'Visibility', value: formatVisibility(w.visibility) }] : []),
+                        { label: 'Precipitation', value: `${Math.round(w.precipitationProbability || 0)}%` }
                     ];
                     break;
                 case 'wind':
@@ -5238,7 +5258,10 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     icon = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14.5 17c0 1.65-1.35 3-3 3s-3-1.35-3-3h2c0 .55.45 1 1 1s1-.45 1-1-.45-1-1-1H2v-2h9.5c1.65 0 3 1.35 3 3zM19 6.5C19 4.57 17.43 3 15.5 3S12 4.57 12 6.5h2c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S16.33 8 15.5 8H2v2h13.5c1.93 0 3.5-1.57 3.5-3.5zm-.5 4.5H2v2h16.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5v2c1.93 0 3.5-1.57 3.5-3.5S20.43 11 18.5 11z"/></svg>`;
                     details = [
                         { label: 'Speed', value: `${Math.round(w.windSpeed)} ${windUnit}` },
-                        { label: 'Gusts', value: `${Math.round(w.windGusts || w.windSpeed * 1.3)} ${windUnit}` },
+                        // RW-7.5: gusts come from the source's wind_gusts_10m;
+                        // when it has no value the row is omitted — never
+                        // invented as a multiple of sustained wind.
+                        ...(w.windGusts != null ? [{ label: 'Gusts', value: `${Math.round(w.windGusts)} ${windUnit}` }] : []),
                         { label: 'Direction', value: getWindDirection(w.windDirection || 0) },
                         { label: 'Feels Like Impact', value: w.windSpeed > 20 ? 'Significant' : 'Minimal' }
                     ];
@@ -5248,7 +5271,9 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     icon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 14c0-4 3-7 5-9 2 2 5 5 5 9a5 5 0 01-10 0z"/><path d="M8 14h4"/><path d="M7 17h6"/></svg>`;
                     details = [
                         { label: 'Relative Humidity', value: `${w.humidity}%` },
-                        { label: 'Dew Point', value: `${Math.round(w.dewPoint || w.temp - 5)}${unit}` },
+                        // RW-7.5: real dew point (dew_point_2m) from the source;
+                        // omitted when absent — never derived as temp − 5.
+                        ...(w.dewPoint != null ? [{ label: 'Dew Point', value: `${Math.round(w.dewPoint)}${unit}` }] : []),
                         { label: 'Comfort Level', value: w.humidity > 70 ? 'Muggy' : w.humidity < 30 ? 'Dry' : 'Comfortable' },
                         { label: 'Sweat Impact', value: w.humidity > 60 ? 'Slower evaporation' : 'Normal' }
                     ];
@@ -5260,7 +5285,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
                     const precipAmt = w.precipitation || 0;
                     details = [
                         { label: 'Chance of Rain', value: `${Math.round(precipProb)}%` },
-                        { label: 'Expected Amount', value: precipAmt > 0 ? `${precipAmt.toFixed(1)} ${state.useCelsius ? 'mm' : 'in'}` : 'None' },
+                        { label: 'Expected Amount', value: precipAmt > 0 ? formatPrecipAmount(precipAmt) : 'None' },
                         { label: 'Recommendation', value: precipProb > 50 ? 'Bring rain jacket' : precipProb > 20 ? 'Consider rain gear' : 'Low risk' },
                         { label: 'Running Impact', value: precipProb > 70 ? 'Plan for wet conditions' : 'Minimal impact expected' }
                     ];
@@ -5300,6 +5325,20 @@ MOOD: ${getMoodDesc(tempBracket)}`;
 
             popup.classList.add('active');
             overlay.classList.add('active');
+        }
+
+        // RW-7.5 helpers: format REAL source values only. Open-Meteo reports
+        // visibility in metres and precipitation in millimetres regardless of
+        // the display unit; convert — never relabel, never synthesize.
+        function formatVisibility(meters) {
+            if (state.useCelsius) return `${(meters / 1000).toFixed(1)} km`;
+            return `${(meters / 1609.344).toFixed(1)} mi`;
+        }
+
+        function formatPrecipAmount(mm) {
+            if (state.useCelsius) return `${mm.toFixed(1)} mm`;
+            const inches = mm / 25.4;
+            return inches >= 0.005 ? `${inches.toFixed(2)} in` : 'Trace (<0.01 in)';
         }
 
         function getWindDirection(degrees) {
