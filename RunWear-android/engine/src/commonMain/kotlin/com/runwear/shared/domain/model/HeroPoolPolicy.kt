@@ -139,6 +139,9 @@ object HeroPointGrainPolicy {
                 bottomClass == "capris" || bottomClass == "tights"
             ClothingItem.LIGHT_TIGHTS, ClothingItem.THERMAL_TIGHTS ->
                 bottomClass == "tights" || bottomClass == "capris"
+            // The prescription's bottom slot only ever holds a bottom
+            // item; anything else matches no photo.
+            else -> false
         }
         if (!bottomOk) return false
 
