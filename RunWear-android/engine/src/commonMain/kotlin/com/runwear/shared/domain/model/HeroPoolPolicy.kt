@@ -69,3 +69,127 @@ object HeroPoolPolicy {
     fun ensureQualitySuffix(prompt: String): String =
         if (prompt.contains(QUALITY_MARKER)) prompt else prompt + QUALITY_SUFFIX
 }
+
+/**
+ * RW-20 point-grain serving filter (Sol's ruling, 2026-11-02).
+ *
+ * The pool is stocked, generated, and adjudicated at temperature-BRACKET
+ * grain, but the engine prescribes at POINT grain — inside COOL it draws
+ * lines the bracket does not have (shorts only at 45°F+, tights below;
+ * a shell only when wind or rain calls for one). Bracket-correct stock
+ * therefore contradicted the prescription on screen (2026-11-02 field
+ * failure: at a feels-like of 39°F with Light Tights prescribed, the
+ * rotation dealt three shorts photos, a jacket photo, and a two-runner
+ * photo). This filter is the serving-side correction: a pool row may be
+ * served only when its ADJUDICATED garment classes and person count
+ * agree with the exact prescription for the current conditions.
+ *
+ * Hard rules (a failure on any one rejects the row):
+ *  - person_count: a row adjudicated with 2+ people never serves.
+ *    (Multi-person stock is ALSO retired server-side; this is the
+ *    belt-and-braces client rule.)
+ *  - bottom: the photo's bottom class must sit in the prescribed
+ *    bottom's family — shorts family {shorts, short_shorts} for
+ *    SHORTS/SHORT_SHORTS prescriptions, tights family {tights, capris}
+ *    for tights prescriptions (capris count as leg coverage either
+ *    way). An unreadable bottom rejects: the bottom is the most
+ *    visible garment and the field failure's core contradiction.
+ *  - outer: a shell/jacket in the photo iff the prescription has an
+ *    outer layer. (The 39°F jacket photo was exactly this failure.)
+ *  - top base: when the enumerator could read the base layer it must
+ *    equal the prescribed base's class (sleeveless/short/long). When
+ *    it could not be read, the row passes only if a jacket covers the
+ *    torso (outer seen) — an unseen base under a prescribed jacket is
+ *    not a visible contradiction; an unseen base with NO jacket means
+ *    the torso garment is unknown, so the row rejects.
+ *
+ * NOT enforced, deliberately: head, hands, and mid-layer. The audit's
+ * own bracket-grain protocol treated head/hands as optional (sun and
+ * enumerator-visibility variance), and requiring them at point grain
+ * would empty most cells and push users onto the single bundled
+ * fallback photo — a worse outcome than a pool photo whose hat differs.
+ * The bundled floor assets are held to the stricter standard at
+ * derivation time instead (cold-end prescription, head and hands
+ * included), because they are the photos of last resort.
+ *
+ * Rows with no adjudicated classes at all fail closed: every approved
+ * row carries adjudicated (photo) classes after the RW-20 backfill,
+ * and rows whose classes came from their stored prompt are judged by
+ * the same rules against those classes.
+ */
+object HeroPointGrainPolicy {
+
+    fun matches(
+        personCount: Int?,
+        topBaseClass: String?,
+        outerClass: Boolean?,
+        bottomClass: String?,
+        prescribedTopBase: ClothingItem,
+        prescribedTopOuter: ClothingItem?,
+        prescribedBottom: ClothingItem
+    ): Boolean {
+        // Person count: adjudicated multi-person stock never serves.
+        if (personCount != null && personCount >= 2) return false
+
+        // Bottom: family agreement with the prescription.
+        val bottomOk = when (prescribedBottom) {
+            ClothingItem.SHORT_SHORTS, ClothingItem.SHORTS ->
+                bottomClass == "shorts" || bottomClass == "short_shorts"
+            ClothingItem.CAPRIS ->
+                bottomClass == "capris" || bottomClass == "tights"
+            ClothingItem.LIGHT_TIGHTS, ClothingItem.THERMAL_TIGHTS ->
+                bottomClass == "tights" || bottomClass == "capris"
+            // The prescription's bottom slot only ever holds a bottom
+            // item; anything else matches no photo.
+            else -> false
+        }
+        if (!bottomOk) return false
+
+        // Outer layer: present in the photo iff prescribed.
+        val outerSeen = outerClass == true
+        if ((prescribedTopOuter != null) != outerSeen) return false
+
+        // Top base: exact class when readable; when unreadable, only a
+        // jacket over the torso makes the row safe to serve.
+        if (topBaseClass != null) {
+            val expected = when (prescribedTopBase) {
+                ClothingItem.TANK_TOP -> "sleeveless"
+                ClothingItem.SHORT_SLEEVE -> "short"
+                else -> "long"
+            }
+            if (topBaseClass != expected) return false
+        } else if (!outerSeen) {
+            return false
+        }
+
+        return true
+    }
+
+    /**
+     * Bridge-friendly form of [matches] for the Apple seam, where the
+     * Swift side holds item identities as enum-case KEYS (its
+     * ClothingItem.key) and nullable Kotlin number/boolean boxes are
+     * awkward to construct. A pure adapter — same core, no second
+     * implementation to drift:
+     *  - [personCount]: negative means unrecorded (bridges as Int32).
+     *  - [outerClass]: "true" / "false" / null (unreadable).
+     *  - the prescribed*Key values are ClothingItem case names.
+     */
+    fun matchesByKey(
+        personCount: Int,
+        topBaseClass: String?,
+        outerClass: String?,
+        bottomClass: String?,
+        prescribedTopBaseKey: String,
+        prescribedTopOuterKey: String?,
+        prescribedBottomKey: String
+    ): Boolean = matches(
+        personCount = if (personCount < 0) null else personCount,
+        topBaseClass = topBaseClass,
+        outerClass = outerClass?.let { it.equals("true", ignoreCase = true) },
+        bottomClass = bottomClass,
+        prescribedTopBase = ClothingItem.valueOf(prescribedTopBaseKey),
+        prescribedTopOuter = prescribedTopOuterKey?.let { ClothingItem.valueOf(it) },
+        prescribedBottom = ClothingItem.valueOf(prescribedBottomKey)
+    )
+}
