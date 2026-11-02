@@ -103,14 +103,15 @@ object HeroPoolPolicy {
  *    not a visible contradiction; an unseen base with NO jacket means
  *    the torso garment is unknown, so the row rejects.
  *
- * NOT enforced, deliberately: head, hands, and mid-layer. The audit's
- * own bracket-grain protocol treated head/hands as optional (sun and
- * enumerator-visibility variance), and requiring them at point grain
- * would empty most cells and push users onto the single bundled
- * fallback photo — a worse outcome than a pool photo whose hat differs.
- * The bundled floor assets are held to the stricter standard at
- * derivation time instead (cold-end prescription, head and hands
- * included), because they are the photos of last resort.
+ * Head and hands ARE enforced (RW-23 ruling, Sol, 2026-11-02: no
+ * waiver). Serving enforces the full prescription including head and
+ * hands: a candidate missing a prescribed accessory, or wearing an
+ * unprescribed one, does not serve. Cells will empty more often and
+ * cascade/fall back — that is the accepted cost. (The RW-20 waiver
+ * let the Juneau field failure through: four bare-handed photos
+ * served when light gloves were prescribed.) Mid-layer remains
+ * unenforced, and accessories (sunglasses/gaiter) are not head/hands
+ * slots.
  *
  * Rows with no adjudicated classes at all fail closed: every approved
  * row carries adjudicated (photo) classes after the RW-20 backfill,
@@ -126,7 +127,11 @@ object HeroPointGrainPolicy {
         bottomClass: String?,
         prescribedTopBase: ClothingItem,
         prescribedTopOuter: ClothingItem?,
-        prescribedBottom: ClothingItem
+        prescribedBottom: ClothingItem,
+        headClass: String?,
+        handsClass: String?,
+        prescribedHead: ClothingItem?,
+        prescribedHands: ClothingItem?
     ): Boolean {
         // Person count: adjudicated multi-person stock never serves.
         if (personCount != null && personCount >= 2) return false
@@ -162,6 +167,38 @@ object HeroPointGrainPolicy {
             return false
         }
 
+        // Head (RW-23): exact recorded class for the prescribed item;
+        // no prescription means no head gear may be recorded.
+        val headOk = if (prescribedHead == null) {
+            headClass == null
+        } else {
+            val expectedHead = when (prescribedHead) {
+                ClothingItem.VISOR -> "visor"
+                ClothingItem.BASEBALL_CAP -> "cap"
+                ClothingItem.HEADBAND -> "headband"
+                ClothingItem.LIGHT_BEANIE -> "beanie"
+                ClothingItem.THERMAL_BEANIE -> "beanie"
+                ClothingItem.BALACLAVA -> "balaclava"
+                else -> null
+            }
+            expectedHead != null && headClass == expectedHead
+        }
+        if (!headOk) return false
+
+        // Hands (RW-23): same rule as head.
+        val handsOk = if (prescribedHands == null) {
+            handsClass == null
+        } else {
+            val expectedHands = when (prescribedHands) {
+                ClothingItem.LIGHT_GLOVES -> "gloves"
+                ClothingItem.THERMAL_GLOVES -> "gloves"
+                ClothingItem.MITTENS -> "mittens"
+                else -> null
+            }
+            expectedHands != null && handsClass == expectedHands
+        }
+        if (!handsOk) return false
+
         return true
     }
 
@@ -182,7 +219,11 @@ object HeroPointGrainPolicy {
         bottomClass: String?,
         prescribedTopBaseKey: String,
         prescribedTopOuterKey: String?,
-        prescribedBottomKey: String
+        prescribedBottomKey: String,
+        headClass: String?,
+        handsClass: String?,
+        prescribedHeadKey: String?,
+        prescribedHandsKey: String?
     ): Boolean = matches(
         personCount = if (personCount < 0) null else personCount,
         topBaseClass = topBaseClass,
@@ -190,6 +231,10 @@ object HeroPointGrainPolicy {
         bottomClass = bottomClass,
         prescribedTopBase = ClothingItem.valueOf(prescribedTopBaseKey),
         prescribedTopOuter = prescribedTopOuterKey?.let { ClothingItem.valueOf(it) },
-        prescribedBottom = ClothingItem.valueOf(prescribedBottomKey)
+        prescribedBottom = ClothingItem.valueOf(prescribedBottomKey),
+        headClass = headClass,
+        handsClass = handsClass,
+        prescribedHead = prescribedHeadKey?.let { ClothingItem.valueOf(it) },
+        prescribedHands = prescribedHandsKey?.let { ClothingItem.valueOf(it) }
     )
 }

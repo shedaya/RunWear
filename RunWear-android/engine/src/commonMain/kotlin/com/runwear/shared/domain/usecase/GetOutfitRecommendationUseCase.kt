@@ -51,6 +51,19 @@ class GetOutfitRecommendationUseCase {
          * whenever the selection tables below change.
          */
         const val ENGINE_VERSION = "4.3"
+
+        /**
+         * RW-23: the single frame — the comfort-adjusted feels-like in °F.
+         * This is exactly the value execute()'s warmth selectors read:
+         * raw feels-like converted to °F, plus the comfort adjustment.
+         * Every surface that needs a temperature frame (hero combination
+         * keying included) must derive it here, never from the raw
+         * feels-like alone.
+         */
+        fun adjustedFeelsLikeF(weather: WeatherConditions, comfort: ComfortPreference): Double {
+            val baseTemp = if (weather.isCelsius) weather.feelsLike * 9 / 5 + 32 else weather.feelsLike
+            return baseTemp + comfort.tempAdjustment
+        }
     }
 
     fun execute(weather: WeatherConditions, comfort: ComfortPreference = ComfortPreference.NEUTRAL): OutfitRecommendation {
@@ -58,7 +71,7 @@ class GetOutfitRecommendationUseCase {
         val baseTemp = if (weather.isCelsius) weather.feelsLike * 9 / 5 + 32 else weather.feelsLike
         // Comfort adjustment only: "runs hot" (+10) shifts up, "runs cold" (-10) shifts down
         // No separate running offset — the bracket thresholds are already running-specific.
-        val adjustedTemp = baseTemp + comfort.tempAdjustment
+        val adjustedTemp = adjustedFeelsLikeF(weather, comfort)
 
         val selection = recommendFrames(
             adjustedFeelsLikeF = adjustedTemp,
