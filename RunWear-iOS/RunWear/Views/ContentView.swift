@@ -104,7 +104,12 @@ struct ContentView: View {
         .onAppear {
             // RW-14: wire the personal-hero store into the view model
             // (it consults the store on every hero resolution).
-            viewModel.personalStore = personalStore
+            // "Make it me" OFF (see MakeItMeAvailability): never wire
+            // it — a nil personalStore is the view model's documented
+            // personal-layer-off state, so heroes resolve pool-only.
+            if MakeItMeAvailability.isEnabled {
+                viewModel.personalStore = personalStore
+            }
             // RW-6.8: honor the location choice made in onboarding. A
             // user who picked "Set a City Instead" meets the picker
             // directly — the choice was already made, so the permission

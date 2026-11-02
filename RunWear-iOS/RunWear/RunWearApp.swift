@@ -19,7 +19,13 @@ struct RunWearApp: App {
             }
             .environmentObject(personalHeroStore)
             .task {
-                await personalHeroStore.bootstrap()
+                // "Make it me" OFF (see MakeItMeAvailability): the
+                // store is never bootstrapped, so it stays in its
+                // initial stock mode for the whole session — no
+                // session, no billing, no personal reads at launch.
+                if MakeItMeAvailability.isEnabled {
+                    await personalHeroStore.bootstrap()
+                }
             }
             // RW-6.11: the app is dark by design — declare it, so system
             // chrome (sheets, alerts, keyboards, Form surfaces) renders

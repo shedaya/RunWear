@@ -55,11 +55,17 @@ struct SettingsModal: View {
                 }
 
                 // RW-14 "Make it me" (spec §3, states S1–S14).
-                MakeItMeSettingsSection(
-                    presentation: makeItMePresentation,
-                    genderPreference: genderPreference,
-                    currentCombination: currentCombination
-                )
+                // OFF (see MakeItMeAvailability): the section is not
+                // rendered at all, so every sheet and alert it could
+                // present (opt-in, my photos, subscription) is
+                // unreachable — there is no presenter left.
+                if MakeItMeAvailability.isEnabled {
+                    MakeItMeSettingsSection(
+                        presentation: makeItMePresentation,
+                        genderPreference: genderPreference,
+                        currentCombination: currentCombination
+                    )
+                }
 
                 // R-15: the always-available feedback + rating doors.
                 Section("Support") {

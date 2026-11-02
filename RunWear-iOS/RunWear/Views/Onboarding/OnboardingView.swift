@@ -263,13 +263,21 @@ private struct FirstLookView: View {
             AppTheme.darkBackground.ignoresSafeArea()
 
             if hasRecommendation {
-                MakeItMeForkView(
-                    previewHeroURL: previewVM.heroImageUrl ?? previewVM.fallbackImageUrl,
-                    previewContextLine: contextLine,
-                    previewOutfitLine: outfitLine,
-                    onCustomize: { showOptIn = true },
-                    onStock: onComplete
-                )
+                if MakeItMeAvailability.isEnabled {
+                    MakeItMeForkView(
+                        previewHeroURL: previewVM.heroImageUrl ?? previewVM.fallbackImageUrl,
+                        previewContextLine: contextLine,
+                        previewOutfitLine: outfitLine,
+                        onCustomize: { showOptIn = true },
+                        onStock: onComplete
+                    )
+                } else {
+                    // "Make it me" OFF (see MakeItMeAvailability):
+                    // no fork, no opt-in — the first look is shown
+                    // as itself and the only door completes
+                    // onboarding, exactly the fork's stock door.
+                    firstLookReadyView
+                }
             } else {
                 loadingState
             }
@@ -334,6 +342,48 @@ private struct FirstLookView: View {
         }
     }
 
+    /// The first look with "Make it me" off: the same preview the
+    /// fork shows (the recommendation's photo, context and outfit),
+    /// with no pitch and a single Continue door into the app.
+    private var firstLookReadyView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                VStack(spacing: 8) {
+                    AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        default:
+                            Color.white.opacity(0.05)
+                        }
+                    }
+                    .frame(height: 180)
+                    .clipped()
+                    .cornerRadius(16)
+
+                    Text(contextLine)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                    Text(outfitLine)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.5))
+                        .multilineTextAlignment(.center)
+                }
+
+                Button(action: onComplete) {
+                    Text("Continue")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+        }
+    }
+
     private var contextLine: String {
         "\(previewVM.locationName) · \(previewVM.temperatureUnit.format(previewVM.currentFeelsLike))"
     }
@@ -348,7 +398,11 @@ private struct FirstLookView: View {
     private func start() {
         guard !started else { return }
         started = true
-        previewVM.personalStore = store
+        // "Make it me" OFF (see MakeItMeAvailability): the preview
+        // view model is never wired to the personal store either.
+        if MakeItMeAvailability.isEnabled {
+            previewVM.personalStore = store
+        }
         if let manual = previewVM.restoredManualLocation {
             Task { await previewVM.fetchWeather(for: manual) }
         } else if manualChoice {

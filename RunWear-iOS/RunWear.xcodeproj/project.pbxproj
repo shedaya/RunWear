@@ -147,6 +147,9 @@
 		C10002000000000000000035 /* ReferenceTileLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000026 /* ReferenceTileLoaderTests.swift */; };
 		F10002000000000000000111 /* MakeItMePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000111 /* MakeItMePresentation.swift */; };
 		F10002000000000000000133 /* MakeItMePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000111 /* MakeItMePresentation.swift */; };
+		F10002000000000000000136 /* MakeItMeAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000113 /* MakeItMeAvailability.swift */; };
+		F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000113 /* MakeItMeAvailability.swift */; };
+		C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */; };
 		C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000027 /* MakeItMePresentationTests.swift */; };
 		C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000028 /* PhotoIntakeTests.swift */; };
 		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F10003000000000000000102 /* RevenueCat */; };
@@ -300,8 +303,10 @@
 		F10001000000000000000112 /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		C10001000000000000000026 /* ReferenceTileLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferenceTileLoaderTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000111 /* MakeItMePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePresentation.swift; sourceTree = "<group>"; };
+		F10001000000000000000113 /* MakeItMeAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeAvailability.swift; sourceTree = "<group>"; };
 		C10001000000000000000027 /* MakeItMePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePresentationTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000028 /* PhotoIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoIntakeTests.swift; sourceTree = "<group>"; };
+		C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeAvailabilityTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -412,6 +417,7 @@
 				F10001000000000000000109 /* ReferencePhotosLoader.swift */,
 				F10001000000000000000110 /* ReferenceTileLoader.swift */,
 				F10001000000000000000111 /* MakeItMePresentation.swift */,
+				F10001000000000000000113 /* MakeItMeAvailability.swift */,
 				F10001000000000000000104 /* PhotoQualityChecker.swift */,
 				F10001000000000000000105 /* MakeItMeBilling.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
@@ -516,6 +522,7 @@
 				C10001000000000000000026 /* ReferenceTileLoaderTests.swift */,
 				C10001000000000000000027 /* MakeItMePresentationTests.swift */,
 				C10001000000000000000028 /* PhotoIntakeTests.swift */,
+				C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -728,6 +735,7 @@
 				F10002000000000000000109 /* ReferencePhotosLoader.swift in Sources */,
 				F10002000000000000000110 /* ReferenceTileLoader.swift in Sources */,
 				F10002000000000000000111 /* MakeItMePresentation.swift in Sources */,
+				F10002000000000000000136 /* MakeItMeAvailability.swift in Sources */,
 				F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */,
 				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
 				F10002000000000000000106 /* PersonalHeroStore.swift in Sources */,
@@ -812,8 +820,10 @@
 				C10002000000000000000034 /* ReferencePhotosLoaderTests.swift in Sources */,
 				C10002000000000000000035 /* ReferenceTileLoaderTests.swift in Sources */,
 				F10002000000000000000133 /* MakeItMePresentation.swift in Sources */,
+				F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */,
 				C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */,
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
+				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
