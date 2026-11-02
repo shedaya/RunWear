@@ -62,7 +62,7 @@ import java.time.format.DateTimeFormatter
 // AMAZON AFFILIATE - PWA v2.9 (Amazon ONLY)
 // ============================================================================
 
-private const val AMAZON_AFFILIATE_TAG = "runwear-20"
+private const val AMAZON_AFFILIATE_TAG = "runwearapp-20"
 private const val AMAZON_PLATFORM_SUBTAG = "android"
 
 internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference): String {

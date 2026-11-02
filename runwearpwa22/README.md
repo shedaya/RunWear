@@ -72,7 +72,7 @@ Icons available in `runwear-pwa-icons.zip`.
 Edit these constants in `index.php`:
 
 ```javascript
-const AFFILIATE_TAG = 'runwear-20';      // Amazon Associates tag
+const AFFILIATE_TAG = 'runwearapp-20';      // Amazon Associates tag
 const PLATFORM_SUBTAG = 'pwa';            // Platform identifier
 ```
 
@@ -175,7 +175,7 @@ val url = "https://maps.googleapis.com/maps/api/geocode/json?address=$query&regi
 
 Always include platform subtag:
 ```
-https://www.amazon.com/s?k=running+shoes&tag=runwear-20&ascsubtag=PLATFORM
+https://www.amazon.com/s?k=running+shoes&tag=runwearapp-20&ascsubtag=PLATFORM
 ```
 
 ---
