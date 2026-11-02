@@ -12,7 +12,8 @@ actor HeroImageService {
     // MARK: - Main API
 
     /// Gets a hero image for the given conditions
-    /// Uses 5-level cascade fallback, ultimately falling back to Unsplash
+    /// Uses cascade fallback (canonical levels 1-5, RW-23 legacy-token
+    /// levels 6-7), ultimately falling back to Unsplash (level 8)
     /// - Parameters:
     ///   - gender: User's gender preference
     ///   - weather: Current weather code
@@ -63,7 +64,7 @@ actor HeroImageService {
 
     // MARK: - Cascade Fallback
 
-    /// Attempts to fetch image with 5-level cascade
+    /// Attempts to fetch image with the cascade (levels 1-7)
     private func fetchWithCascade(
         combination: HeroCombinationId,
         isWatch: Bool,
@@ -98,7 +99,25 @@ actor HeroImageService {
             }
         }
 
-        // Level 6: Unsplash fallback
+        // RW-23 levels 6-7: legacy combination tokens (RAINY/SNOWY).
+        // 523 pool rows carry the legacy spellings and no canonical
+        // pattern above matches them; these levels rescue that stock
+        // AFTER the canonical five, filtered by the same point-grain
+        // policy (tryFetch applies it unchanged).
+        if let legacyPattern = combination.legacyWeatherPattern {
+            // Level 6: Legacy weather token, same gender, any time
+            if let result = await tryFetch(pattern: legacyPattern, level: 6, outfit: outfit) {
+                return result
+            }
+        }
+        if let legacyOppositePattern = combination.legacyOppositeGenderPattern {
+            // Level 7: Legacy weather token, opposite gender, any time
+            if let result = await tryFetch(pattern: legacyOppositePattern, level: 7, outfit: outfit) {
+                return result
+            }
+        }
+
+        // Level 8: Unsplash fallback
         return fallbackProvider.getFallbackResult(
             temp: combination.temp,
             weather: combination.weather,

@@ -99,6 +99,14 @@ class WeatherViewModel: ObservableObject {
     // Current weather snapshot for selected date/time
     @Published var selectedWeatherSnapshot: HourlyWeatherSnapshot?
 
+    // RW-23: true when the selected date/hour lies outside the
+    // hourly forecast window, so selectedWeatherSnapshot is the
+    // current-conditions fallback rather than that time's forecast.
+    // Before RW-23 the substitution was silent — the screen showed
+    // current conditions labelled with the selected hour and nothing
+    // said so. The view surfaces a notice whenever this is true.
+    @Published var selectedTimeOutsideForecast = false
+
     // Location source tracking
     @Published var isUsingGPS: Bool = true
 
@@ -344,6 +352,7 @@ class WeatherViewModel: ObservableObject {
     func updateSelectedWeatherSnapshot() {
         guard let weatherData else {
             selectedWeatherSnapshot = nil
+            selectedTimeOutsideForecast = false
             return
         }
 
@@ -363,6 +372,7 @@ class WeatherViewModel: ObservableObject {
             if let index = hourly.time.firstIndex(where: { $0.hasPrefix(prefix) }),
                let snapshot = HourlyWeatherSnapshot.from(hourly: hourly, at: index) {
                 selectedWeatherSnapshot = snapshot
+                selectedTimeOutsideForecast = false
                 return
             }
         }
@@ -370,6 +380,10 @@ class WeatherViewModel: ObservableObject {
         // Selected hour outside the forecast window: fall back to the
         // current-conditions snapshot (real measured values from the
         // extended current block — see HourlyWeatherSnapshot.init).
+        // RW-23: flag it — the view shows a notice that the forecast
+        // isn't available for that time yet, instead of the pre-RW-23
+        // silent substitution.
+        selectedTimeOutsideForecast = true
         selectedWeatherSnapshot = HourlyWeatherSnapshot(
             hour: selectedHour,
             current: weatherData.currentWeather,
@@ -463,7 +477,7 @@ class WeatherViewModel: ObservableObject {
         )
 
         // Only set hero image if it's from Supabase (not Unsplash fallback)
-        if result.fallbackLevel < 6 {
+        if result.fallbackLevel < 8 {
             heroImageUrl = result.imageUrl
             heroImageRowId = result.imageRowId
             heroServedCombinationId = result.combinationId

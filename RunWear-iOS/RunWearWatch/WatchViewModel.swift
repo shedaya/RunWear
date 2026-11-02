@@ -121,7 +121,18 @@ class WatchViewModel: NSObject, ObservableObject {
 
             currentWeather = weather
 
-            let adjustedTemp = comfortLevel.adjustTemperature(weather.currentWeather.temperatureFahrenheit)
+            // RW-23: the watch keys BOTH its recommendation and its
+            // hero on the comfort-adjusted FEELS-LIKE — the same
+            // frame the phone uses. Before RW-23 it keyed on the
+            // comfort-adjusted ACTUAL temperature, a third frame, so
+            // watch and phone could recommend/serve different
+            // outfits for the same conditions. The feels-like comes
+            // from the extended current block (°C → °F, the same
+            // expression the phone's prepareHeroFrame fallback uses),
+            // falling back to the actual temperature when absent.
+            let rawFeelsLikeF = weather.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
+                ?? weather.currentWeather.temperatureFahrenheit
+            let adjustedTemp = comfortLevel.adjustTemperature(rawFeelsLikeF)
             // The watch reads the current-conditions block only (no
             // hourly snapshot), so its rain signal stays the condition
             // class of the current code — the phone derives isRaining
@@ -131,7 +142,7 @@ class WatchViewModel: NSObject, ObservableObject {
             let currentCondition = weather.currentWeather.condition
             let recommendation = outfitService.getRecommendation(
                 for: adjustedTemp,
-                rawTemperature: weather.currentWeather.temperatureFahrenheit,
+                rawTemperature: rawFeelsLikeF,
                 isRaining: currentCondition == .rain || currentCondition == .drizzle || currentCondition == .thunderstorm,
                 windSpeed: weather.currentWeather.windspeed,
                 hour: Calendar.current.component(.hour, from: Date())
@@ -150,7 +161,12 @@ class WatchViewModel: NSObject, ObservableObject {
     private func loadHeroImage() async {
         guard let weather = currentWeather else { return }
 
-        let adjustedTemp = comfortLevel.adjustTemperature(weather.currentWeather.temperatureFahrenheit)
+        // RW-23: same feels-like frame as fetchWeather (see its
+        // note) — the hero is keyed on the recommendation's frame,
+        // never on the actual temperature.
+        let rawFeelsLikeF = weather.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
+            ?? weather.currentWeather.temperatureFahrenheit
+        let adjustedTemp = comfortLevel.adjustTemperature(rawFeelsLikeF)
         let weatherCode = weather.currentWeather.weathercode
         let hour = Calendar.current.component(.hour, from: Date())
 
@@ -185,7 +201,7 @@ class WatchViewModel: NSObject, ObservableObject {
         )
 
         // Only use AI image if not Unsplash fallback
-        if result.fallbackLevel < 6 {
+        if result.fallbackLevel < 8 {
             heroImageUrl = result.imageUrl
         } else {
             heroImageUrl = nil

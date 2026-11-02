@@ -171,6 +171,12 @@ enum HeroPoolPolicy {
 /// its adjudicated garments and person count agree with the exact
 /// prescription for the current conditions (inside COOL: shorts only
 /// at 45°F+, tights below; a shell only when prescribed).
+/// RW-23 (2026-11-02): head and hands are enforced too — no waiver.
+/// A prescribed head/hands item requires its exact recorded class
+/// (BASEBALL_CAP→"cap", LIGHT_GLOVES→"gloves", …), and when none is
+/// prescribed the row must record none; the Juneau field failure
+/// (four bare-handed photos served under a LIGHT_GLOVES prescription)
+/// is what the waiver let through.
 enum HeroPointGrainPolicy {
     static func matches(image: GeneratedImage, outfit: OutfitRecommendation) -> Bool {
         RunWearEngine.HeroPointGrainPolicy.shared.matchesByKey(
@@ -180,7 +186,11 @@ enum HeroPointGrainPolicy {
             bottomClass: image.garmentClasses?.bottom,
             prescribedTopBaseKey: outfit.topBase.key,
             prescribedTopOuterKey: outfit.topOuter?.key,
-            prescribedBottomKey: outfit.bottom.key
+            prescribedBottomKey: outfit.bottom.key,
+            headClass: image.garmentClasses?.head,
+            handsClass: image.garmentClasses?.hands,
+            prescribedHeadKey: outfit.head?.key,
+            prescribedHandsKey: outfit.hands?.key
         )
     }
 }
@@ -199,7 +209,7 @@ struct HeroImageResult {
     /// reached the UI (the same gap Android's flag work closed).
     let imageRowId: String?
     let isFromFallback: Bool
-    let fallbackLevel: Int // 0 = exact match, 1-5 = cascade level, 6 = Unsplash
+    let fallbackLevel: Int // 0 = exact match, 1-7 = cascade level, 8 = Unsplash
 
     /// Creates a result from an exact or cascade match
     static func fromMatch(
@@ -224,7 +234,7 @@ struct HeroImageResult {
             combinationId: nil,
             imageRowId: nil,
             isFromFallback: true,
-            fallbackLevel: 6
+            fallbackLevel: 8
         )
     }
 }
@@ -295,5 +305,30 @@ struct HeroCombinationId {
     /// Pattern with opposite gender and CLEAR weather
     var oppositeGenderClearPattern: String {
         "\(gender.opposite.rawValue)_CLEAR_\(temp.rawValue)_%"
+    }
+
+    /// RW-23: the legacy combination-token name for this weather, if
+    /// any. 523 pool rows carry RAINY/SNOWY tokens written before the
+    /// canonical RAIN/SNOW names settled; no canonical cascade pattern
+    /// matches them, stranding that stock. Canonical conditions with
+    /// no legacy spelling return nil and skip the legacy levels.
+    var legacyWeatherName: String? {
+        switch weather {
+        case .RAIN: return "RAINY"
+        case .SNOW: return "SNOWY"
+        case .CLEAR, .CLOUDY: return nil
+        }
+    }
+
+    /// Legacy-weather pattern, any time of day (like levels 2/4)
+    var legacyWeatherPattern: String? {
+        guard let legacyWeatherName else { return nil }
+        return "\(gender.rawValue)_\(legacyWeatherName)_\(temp.rawValue)_%"
+    }
+
+    /// Legacy-weather pattern with opposite gender, any time of day
+    var legacyOppositeGenderPattern: String? {
+        guard let legacyWeatherName else { return nil }
+        return "\(gender.opposite.rawValue)_\(legacyWeatherName)_\(temp.rawValue)_%"
     }
 }

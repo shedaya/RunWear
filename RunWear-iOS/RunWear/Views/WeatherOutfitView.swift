@@ -319,6 +319,10 @@ struct WeatherOutfitView: View {
                         ScrollView {
                             VStack(spacing: 0) {
                                 weatherPillsSection
+                                if viewModel.selectedTimeOutsideForecast {
+                                    outsideForecastNotice
+                                        .padding(.top, 16)
+                                }
                                 outfitSection
                                     .padding(.top, 24)
                                 personalSection
@@ -337,6 +341,10 @@ struct WeatherOutfitView: View {
                         weatherPillsSection
                             .padding(.top, -30)
                             .zIndex(1)
+                        if viewModel.selectedTimeOutsideForecast {
+                            outsideForecastNotice
+                                .padding(.top, 16)
+                        }
                         outfitGridSection
                             .padding(.top, 24)
                         personalSection
@@ -352,6 +360,10 @@ struct WeatherOutfitView: View {
                         weatherPillsSection
                             .padding(.top, -30)
                             .zIndex(1)
+                        if viewModel.selectedTimeOutsideForecast {
+                            outsideForecastNotice
+                                .padding(.top, 16)
+                        }
                         outfitSection
                             .padding(.top, 24)
                         personalSection
@@ -447,6 +459,31 @@ struct WeatherOutfitView: View {
             "\(viewModel.temperatureUnit.format(viewModel.currentTemperature)) · Feels like \(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))",
             recommendation.temperatureBracket.description
         ]
+    }
+
+    /// RW-23: honest caption for an out-of-forecast selection. The
+    /// screen keeps showing current conditions (the view model's
+    /// fallback snapshot), and this notice — rendered above the
+    /// outfit list in every layout, in the view's caption style —
+    /// says so, with the selected date/time as context, instead of
+    /// the pre-RW-23 silent substitution.
+    private var outsideForecastNotice: some View {
+        Text("Forecast isn't available for that time yet — showing current conditions. (\(navDateString), \(selectedHourString))")
+            .font(.appFootnote)
+            .foregroundColor(.white.opacity(0.75))
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var selectedHourString: String {
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: viewModel.selectedDate)
+        components.hour = viewModel.selectedHour
+        guard let date = Calendar.current.date(from: components) else {
+            return "\(viewModel.selectedHour):00"
+        }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h a"
+        return formatter.string(from: date)
     }
 
     private var navDateString: String {
