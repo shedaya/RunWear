@@ -83,6 +83,66 @@ final class HeroPointGrainTests: XCTestCase {
         XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(), outfit: outfit))
     }
 
+    // MARK: - RW-23 Juneau field failure (hands waiver)
+
+    func testJuneauBareHandedRowMustNotMatchWhenGlovesPrescribed() {
+        // RW-23 (2026-11-02): Juneau — raw feels-like 32°F, rain,
+        // wind 11 mph, comfort +5 → adjusted 37°F. The prescription
+        // includes a rain cap and light gloves. The four photos
+        // served in the field were all bare-handed (hands=nil) and
+        // passed because the RW-20 policy waived head and hands.
+        // Sol ruled: no waiver — serving enforces the FULL
+        // prescription including head and hands.
+        let outfit = OutfitRecommendationService.shared.getRecommendation(
+            for: 37, rawTemperature: 32, isRaining: true,
+            windSpeed: 11, humidity: 80, uvIndex: 0, precipitation: 0.5, hour: 7
+        )
+        XCTAssertEqual(outfit.head?.key, "BASEBALL_CAP")
+        XCTAssertEqual(outfit.hands?.key, "LIGHT_GLOVES")
+        XCTAssertEqual(outfit.bottom.key, "LIGHT_TIGHTS")
+        XCTAssertEqual(outfit.topOuter?.key, "RAIN_JACKET")
+
+        // The Juneau served row: correct top/outer/bottom/head,
+        // but bare-handed (hands=nil).
+        let bareHandedRow = GeneratedImage(
+            id: "juneau-bare-handed",
+            combinationId: "MALE_RAIN_COOL_DAWN_vX",
+            imageUrl: "https://example.test/juneau.webp",
+            thumbnailUrl: nil,
+            prompt: nil,
+            reviewStatus: "approved",
+            personCount: 1,
+            garmentClasses: GarmentClasses(
+                topBase: "long", outer: true, mid: false,
+                bottom: "tights", head: "cap", hands: nil,
+                sunglasses: false, gaiter: false
+            ),
+            garmentSource: "adjudicated"
+        )
+        XCTAssertFalse(
+            HeroPointGrainPolicy.matches(image: bareHandedRow, outfit: outfit),
+            "Bare-handed row must not match when LIGHT_GLOVES are prescribed (RW-23: hands are not waived)"
+        )
+
+        // The correct row — same garments, with gloves — matches.
+        let glovedRow = GeneratedImage(
+            id: "juneau-gloved",
+            combinationId: "MALE_RAIN_COOL_DAWN_vX",
+            imageUrl: "https://example.test/juneau-gloved.webp",
+            thumbnailUrl: nil,
+            prompt: nil,
+            reviewStatus: "approved",
+            personCount: 1,
+            garmentClasses: GarmentClasses(
+                topBase: "long", outer: true, mid: false,
+                bottom: "tights", head: "cap", hands: "gloves",
+                sunglasses: false, gaiter: false
+            ),
+            garmentSource: "adjudicated"
+        )
+        XCTAssertTrue(HeroPointGrainPolicy.matches(image: glovedRow, outfit: outfit))
+    }
+
     // MARK: - The warm side of the breakpoint (47F COOL)
 
     func testAt47FShortsMayMatchAndTightsMustNot() {

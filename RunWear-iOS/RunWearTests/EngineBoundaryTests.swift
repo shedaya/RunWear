@@ -216,6 +216,40 @@ final class EngineBoundaryTests: XCTestCase {
         XCTAssertEqual(vm.selectedWeatherSnapshot?.weatherCode, 0)
     }
 
+    // MARK: - RW-23 future-day silent substitution (characterization)
+
+    @MainActor
+    func testFutureDaySelectionSilentlySubstitutesCurrentConditions_RW23() {
+        // RW-23 characterization (2026-11-02) — documents the CURRENT
+        // buggy behaviour, which the RW-23 fix stage rewrites: when
+        // the selected date/hour has no hourly forecast entry,
+        // updateSelectedWeatherSnapshot() silently substitutes a
+        // snapshot built from CURRENT conditions labelled with the
+        // selected hour. Nothing on screen says the forecast for
+        // that time does not exist yet. (Android throws visibly in
+        // the equivalent case.)
+        //
+        // Fixture: hourly covers only 2026-10-29 07:00–08:00, with
+        // values (20°C / 18°C) deliberately distinct from the
+        // fixture's current conditions (10°C, wind 8, code 0 — see
+        // makeViewModel). Selecting a future day beyond the window
+        // must, pre-fix, still produce a snapshot — carrying the
+        // current-conditions values under the selected hour.
+        let vm = makeViewModel(hourly: makeHourly([
+            HourSpec(time: "2026-10-29T07:00", tempC: 20, feelsC: 18),
+            HourSpec(time: "2026-10-29T08:00", tempC: 21, feelsC: 19)
+        ]))
+        vm.updateSelectedTime(date: date(2026, 11, 5), hour: 7)
+
+        let snapshot = vm.selectedWeatherSnapshot
+        XCTAssertNotNil(snapshot, "Pre-fix: an out-of-window selection still yields a snapshot (silent substitution)")
+        XCTAssertEqual(snapshot?.hour, 7)
+        XCTAssertEqual(snapshot?.temperature, 10) // fixture's current-conditions temperature, not any hourly value
+        XCTAssertEqual(snapshot?.feelsLike, 10) // fixture's current-conditions feels-like (currentDetail is nil)
+        XCTAssertEqual(snapshot?.weatherCode, 0) // fixture's current-conditions weather code
+        XCTAssertEqual(snapshot?.windSpeed, 8) // fixture's current-conditions wind speed
+    }
+
     // MARK: - Every engine-emittable item resolves a thumbnail (R-07)
 
     @MainActor
