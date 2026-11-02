@@ -18,6 +18,8 @@ on:
         options:
           - verify
           - attach
+          - packet-read
+          - packet-apply
         default: verify
         required: true
       version:
@@ -52,3 +54,11 @@ jobs:
         if: inputs.task == 'attach'
         working-directory: scripts/asc
         run: python3 asc_attach_build.py "${{ inputs.version }}" "${{ inputs.build }}"
+      - name: Print the App Store packet state (resubmission prep)
+        if: inputs.task == 'packet-read'
+        working-directory: scripts/asc
+        run: python3 asc_packet.py read "${{ inputs.build }}"
+      - name: Prepare the App Store packet (attach build + set texts; never submits)
+        if: inputs.task == 'packet-apply'
+        working-directory: scripts/asc
+        run: python3 asc_packet.py apply "${{ inputs.build }}"
