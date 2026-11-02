@@ -80,6 +80,24 @@ enum HeroGender: String, Codable, CaseIterable {
 
 // MARK: - Hero Image Data Structures
 
+/// The adjudicated garment classes of a pool photo (RW-20 backfill,
+/// 2026-11-02): what the photo actually shows, per the RW-16.17 audit /
+/// regen adjudication, stored on the row as garment_classes. Keys are
+/// the audit vocabulary (camelCase in the JSON): bottom ∈ {shorts,
+/// short_shorts, capris, tights}, topBase ∈ {sleeveless, short, long},
+/// head ∈ {balaclava, beanie, cap, headband, visor}, hands ∈ {gloves,
+/// mittens}; nil = not readable in the photo.
+struct GarmentClasses: Codable {
+    let topBase: String?
+    let outer: Bool?
+    let mid: Bool?
+    let bottom: String?
+    let head: String?
+    let hands: String?
+    let sunglasses: Bool?
+    let gaiter: Bool?
+}
+
 /// Represents a generated AI image from Supabase
 struct GeneratedImage: Codable, Identifiable {
     let id: String
@@ -90,6 +108,12 @@ struct GeneratedImage: Codable, Identifiable {
     /// Review-gate status from the 2026-10-27 migration
     /// ('approved' | 'pending' | 'rejected'); nil on legacy rows.
     let reviewStatus: String?
+    /// RW-20 backfill: adjudicated person count; nil when unrecorded.
+    let personCount: Int? = nil
+    /// RW-20 backfill: adjudicated garment classes (see GarmentClasses).
+    let garmentClasses: GarmentClasses? = nil
+    /// 'adjudicated' (photo-derived) or 'prompt' (stored-prompt-derived).
+    let garmentSource: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -98,6 +122,9 @@ struct GeneratedImage: Codable, Identifiable {
         case thumbnailUrl = "thumbnail_url"
         case prompt
         case reviewStatus = "review_status"
+        case personCount = "person_count"
+        case garmentClasses = "garment_classes"
+        case garmentSource = "garment_source"
     }
 }
 
@@ -107,6 +134,28 @@ struct GeneratedImage: Codable, Identifiable {
 enum HeroPoolPolicy {
     static func isServable(reviewStatus: String?) -> Bool {
         RunWearEngine.HeroPoolPolicy.shared.isServable(reviewStatus: reviewStatus)
+    }
+}
+
+/// RW-20 point-grain serving filter — delegates to the shared module's
+/// HeroPointGrainPolicy (the same code Android serves through), via its
+/// key-based bridge entry point: Swift holds prescribed items as
+/// enum-case keys (ClothingItem.key) and an unrecorded person count
+/// crosses as a negative number. A pool photo may be served only when
+/// its adjudicated garments and person count agree with the exact
+/// prescription for the current conditions (inside COOL: shorts only
+/// at 45°F+, tights below; a shell only when prescribed).
+enum HeroPointGrainPolicy {
+    static func matches(image: GeneratedImage, outfit: OutfitRecommendation) -> Bool {
+        RunWearEngine.HeroPointGrainPolicy.shared.matchesByKey(
+            personCount: Int32(image.personCount ?? -1),
+            topBaseClass: image.garmentClasses?.topBase,
+            outerClass: image.garmentClasses?.outer.map { $0 ? "true" : "false" },
+            bottomClass: image.garmentClasses?.bottom,
+            prescribedTopBaseKey: outfit.topBase.key,
+            prescribedTopOuterKey: outfit.topOuter?.key,
+            prescribedBottomKey: outfit.bottom.key
+        )
     }
 }
 
