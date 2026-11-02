@@ -155,6 +155,13 @@ class PersonalHeroRepository @Inject constructor(
     }
 
     suspend fun cellLookFor(combinationId: String): CellLook {
+        // Make It Me OFF in this build (MakeItMeAvailability): no
+        // personal hero is ever served and no look status is ever
+        // reported — the pool hero serves and the hero renders no
+        // personal lines. The backend is not consulted at all.
+        if (!MakeItMeAvailability.ENABLED) {
+            return CellLook(null, PersonalLookStatus.None)
+        }
         val lookup = service.getPersonalHero(combinationId)
             ?: return CellLook(null, lastKnownStatus[combinationId] ?: PersonalLookStatus.None)
         val status = PersonalLookStatusPolicy.fromServer(
@@ -312,6 +319,14 @@ class PersonalHeroRepository @Inject constructor(
         combinationId: String,
         outfitItems: List<String>
     ): PersonalHeroService.RequestOutcome {
+        // Make It Me OFF in this build (MakeItMeAvailability): a
+        // generation request never reaches the backend, from any
+        // caller. Callers already treat a Failed outcome as
+        // "refused — re-read the server's truth", and the gated
+        // cellLookFor above answers that re-read with None.
+        if (!MakeItMeAvailability.generationRequestAllowed()) {
+            return PersonalHeroService.RequestOutcome.Failed("make-it-me-unavailable")
+        }
         val outcome = service.requestGeneration(combinationId, outfitItems)
         when (outcome) {
             is PersonalHeroService.RequestOutcome.Queued,

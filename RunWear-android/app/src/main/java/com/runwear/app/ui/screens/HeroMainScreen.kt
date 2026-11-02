@@ -576,7 +576,14 @@ Get your personalized running outfit at runwear.ai
     }
 
     // ── RW-14 overlays ──────────────────────────────────────────────────
-    if (showMakeItMeFlow && makeItMeViewModel != null) {
+    // Make It Me OFF in this build (MakeItMeAvailability): the
+    // upload flow, photos view, and paywall sheet below never
+    // open — their setters are unreachable (the Settings section
+    // does not render and the upsell card never shows), and the
+    // availability conjunct keeps that true at the render site.
+    if (showMakeItMeFlow && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
         com.runwear.app.makeitme.MakeItMeUploadFlow(
             viewModel = makeItMeViewModel,
             gender = uiState.genderPreference.name,
@@ -592,7 +599,9 @@ Get your personalized running outfit at runwear.ai
         )
     }
 
-    if (showMakeItMePhotos && makeItMeViewModel != null) {
+    if (showMakeItMePhotos && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
         com.runwear.app.makeitme.MakeItMePhotosScreen(
             viewModel = makeItMeViewModel,
             onDismiss = { showMakeItMePhotos = false },
@@ -604,7 +613,9 @@ Get your personalized running outfit at runwear.ai
         )
     }
 
-    if (showMakeItMePaywall && makeItMeViewModel != null) {
+    if (showMakeItMePaywall && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
         com.runwear.app.makeitme.MakeItMePaywallSheet(
             viewModel = makeItMeViewModel,
             onDismiss = { showMakeItMePaywall = false },
@@ -679,7 +690,9 @@ Get your personalized running outfit at runwear.ai
     // files the flag_hero action; when it lands, the ViewModel
     // re-resolves the hero and the pool photo serves while the
     // regeneration the flag queued is pending.
-    if (showPersonalFlagSheet) {
+    if (showPersonalFlagSheet &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
         PersonalHeroFlagSheet(
             onSelectReason = { reason ->
                 showPersonalFlagSheet = false

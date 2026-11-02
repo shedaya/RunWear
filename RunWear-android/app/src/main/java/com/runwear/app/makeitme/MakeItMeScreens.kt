@@ -1143,6 +1143,10 @@ fun MakeItMeSettingsSection(
     onManageSubscriptionClick: () -> Unit,
     onDeleted: () -> Unit
 ) {
+    // Make It Me OFF in this build (MakeItMeAvailability): the
+    // whole Settings section — opt-in row, Your photos, subscribe,
+    // manage subscription, delete — does not render at all.
+    if (!MakeItMeAvailability.settingsSectionVisible()) return
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deletedNotice by remember { mutableStateOf(false) }
 

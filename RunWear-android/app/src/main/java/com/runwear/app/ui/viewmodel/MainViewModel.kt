@@ -817,7 +817,15 @@ class MainViewModel @Inject constructor(
             // simply stays on screen; the write that lands is the
             // winner. (The view layer cuts on a person change and
             // crossfades only within a layer — see HeroSection.)
-            if (!personalHeroRepository.state.value.personalizationOn) {
+            // Make It Me OFF in this build (MakeItMeAvailability):
+            // personalLayerEngages is false whatever the stored
+            // opt-in says, so the personal layer never engages —
+            // no personal serve, no overlay, no automatic
+            // generation request, no upsell evaluation. Pool only.
+            if (!com.runwear.app.makeitme.MakeItMeAvailability.personalLayerEngages(
+                    personalHeroRepository.state.value.personalizationOn
+                )
+            ) {
                 personalCellInView = null
                 writePoolHero(chosen)
                 return@launch
@@ -1079,6 +1087,10 @@ class MainViewModel @Inject constructor(
      * MAKING + poll; refused → re-read the server's truth.
      */
     fun retryPersonalLook() {
+        // Make It Me OFF in this build (MakeItMeAvailability): the
+        // failed line that hosts this retry never renders, and the
+        // retry itself is inert — no generation can be requested.
+        if (!com.runwear.app.makeitme.MakeItMeAvailability.ENABLED) return
         val cell = personalCellInView ?: return
         val (combinationId, items) = currentPersonalCombination() ?: return
         if (combinationId != cell) return

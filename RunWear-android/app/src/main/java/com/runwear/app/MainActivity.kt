@@ -259,9 +259,14 @@ class MainActivity : ComponentActivity() {
 
                     // RW-14 onboarding fork: the final onboarding step,
                     // after the first real recommendation (spec §2.1).
+                    // Make It Me OFF in this build
+                    // (MakeItMeAvailability): the fork never comes
+                    // due, so neither the fork screen nor its upload
+                    // flow can appear after onboarding.
                     val forkDue = onboardingJustCompleted &&
                         uiState.outfit != null &&
-                        !makeItMeState.forkDecided
+                        !makeItMeState.forkDecided &&
+                        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
                     if (forkDue && !showForkUpload) {
                         com.runwear.app.makeitme.MakeItMeForkScreen(
                             heroImageUrl = uiState.heroImageUrl,

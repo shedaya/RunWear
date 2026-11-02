@@ -171,6 +171,13 @@ class MakeItMeViewModel @Inject constructor(
     // ── Subscription ───────────────────────────────────────────────────
 
     fun purchase(activity: Activity, packageToPurchase: Package, onResult: (BillingManager.PurchaseOutcome) -> Unit) {
+        // Make It Me OFF in this build (MakeItMeAvailability): no
+        // purchase can start — RevenueCat's purchase call is never
+        // reached, whatever surface asks.
+        if (!MakeItMeAvailability.purchaseAllowed()) {
+            onResult(BillingManager.PurchaseOutcome.Failed("Make It Me is unavailable in this build."))
+            return
+        }
         purchaseInFlight.value = true
         viewModelScope.launch {
             val outcome = billing.purchase(activity, packageToPurchase)
