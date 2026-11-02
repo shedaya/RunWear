@@ -86,10 +86,11 @@ def readback():
         print("--- review notes (verbatim) ---")
         print(ra.get("notes"))
         print("--- end notes ---")
-        s, d = call("GET", f"/v1/appStoreReviewDetails/{rd['id']}/attachments"
-                    + q(limit=50)) if rd.get("id") else (200, {"data": []})
-        print("review detail attachments:",
-              [(x["id"], x["attributes"].get("fileName")) for x in d.get("data", [])])
+        # Attachments on a review detail are NOT exposed by the
+        # ASC API (the relationship does not exist — verified
+        # 2026-11-02: PATH_ERROR 404). The screen recording is
+        # attached in the portal at submission time.
+        print("review detail attachments: not API-readable (portal-only)")
     except SystemExit:
         print("REVIEW DETAIL: none (GET failed)")
 
@@ -141,8 +142,19 @@ def apply(build_number):
     for loc in d.get("data", []):
         if loc["attributes"].get("locale") == "en-US":
             en = loc
-    desc = open(os.path.join(HERE, "packet_description.txt")).read().strip()
-    if en["attributes"].get("description", "").strip() == desc:
+    # The description edit is surgical: packet_description.txt holds
+    # ONLY the corrected closing line; everything above it stays
+    # byte-identical to what is live, so the replacement runs on the
+    # live-fetched text rather than a retyped copy.
+    old_close = ("No account. No subscription. Your location is used "
+                 "only to get your weather.")
+    new_close = open(os.path.join(HERE, "packet_description.txt")).read().strip()
+    live_desc = en["attributes"].get("description", "")
+    if old_close not in live_desc and new_close not in live_desc:
+        print("CLOSING LINE NOT FOUND in live description — aborting apply")
+        sys.exit(1)
+    desc = live_desc.replace(old_close, new_close)
+    if live_desc.strip() == desc.strip():
         print("description already at target — skipping localization PATCH")
     else:
         s, d = call("PATCH", f"/v1/appStoreVersionLocalizations/{en['id']}",
