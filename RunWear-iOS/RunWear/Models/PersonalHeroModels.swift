@@ -790,9 +790,10 @@ enum MakeItMeCopy {
     /// failed-look line at the hero, shown with the G6 action
     /// whenever the server reports the current cell's look as
     /// failed, held until the state changes. One string for every
-    /// failure class in this build. PLACEHOLDER pending Sol's pick
-    /// from the options put to him Nov 1, 2026 — a one-string swap.
-    static let lookFailed = "We couldn't make this look yet — tap to try again."
+    /// failure class in this build. DECIDED Nov 1, 2026
+    /// (RW-16.16): Sol picked the final wording from the options
+    /// put to him — a one-string swap.
+    static let lookFailed = "Your look couldn't be made from these photos — tap to try again."
     /// Spec §7 G6 (added Nov 1, 2026 — RW-16.16): the failed
     /// line's retry action. User-initiated only; automatic
     /// re-request stays off.

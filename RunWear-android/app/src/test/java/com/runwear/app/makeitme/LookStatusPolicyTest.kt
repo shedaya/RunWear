@@ -120,7 +120,7 @@ class LookStatusPolicyTest {
 
     @Test
     fun `failure line and retry action are the deck G5 and G6`() {
-        assertEquals("We couldn't make this look yet — tap to try again.", MakeItMeStrings.G5_LOOK_FAILED)
+        assertEquals("Your look couldn't be made from these photos — tap to try again.", MakeItMeStrings.G5_LOOK_FAILED)
         assertEquals("Try again", MakeItMeStrings.G6_RETRY)
     }
 
