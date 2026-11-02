@@ -27,16 +27,23 @@ class HeroFallbackImagesTest {
     private val table = HeroImageRepository.FALLBACK_IMAGES_2D
 
     @Test
-    fun `table coverage is unchanged - 22 cells, snow only from MILD down`() {
+    fun `table coverage - 21 cells after the RW-20 re-derivation`() {
+        // RW-20 (2026-11-02): the FREEZING×RAIN cell was removed — its
+        // pool holds zero verified-good photos (all 77 FREEZING
+        // rain/rainy rows are rejected), so no honest floor asset
+        // exists for it. Every other cell's asset was re-derived
+        // against an adjudicated-MATCH, single-person, point-grain-
+        // correct source row (9 kept, 12 replaced).
         assertEquals(6, table.size)
         assertEquals(3, table.getValue(TempBracket.HOT).size)
         assertEquals(3, table.getValue(TempBracket.WARM).size)
         assertEquals(4, table.getValue(TempBracket.MILD).size)
         assertEquals(4, table.getValue(TempBracket.COOL).size)
         assertEquals(4, table.getValue(TempBracket.COLD).size)
-        assertEquals(4, table.getValue(TempBracket.FREEZING).size)
+        assertEquals(3, table.getValue(TempBracket.FREEZING).size)
         assertFalse(table.getValue(TempBracket.HOT).containsKey(HeroWeatherCondition.SNOW))
         assertFalse(table.getValue(TempBracket.WARM).containsKey(HeroWeatherCondition.SNOW))
+        assertFalse(table.getValue(TempBracket.FREEZING).containsKey(HeroWeatherCondition.RAIN))
     }
 
     @Test
@@ -96,12 +103,16 @@ class HeroFallbackImagesTest {
     fun `resolution chain is unchanged - missing cells fall back to bracket CLEAR then MILD CLEAR`() {
         val hotClear = table.getValue(TempBracket.HOT).getValue(HeroWeatherCondition.CLEAR)
         val warmClear = table.getValue(TempBracket.WARM).getValue(HeroWeatherCondition.CLEAR)
+        val freezingClear = table.getValue(TempBracket.FREEZING).getValue(HeroWeatherCondition.CLEAR)
         // HOT×SNOW and WARM×SNOW are not defined cells: they resolve to the
         // bracket's CLEAR asset, exactly as with the old stock table.
         assertEquals(hotClear, HeroImageSelector.getWeatherAwareFallback(TempBracket.HOT, HeroWeatherCondition.SNOW))
         assertEquals(hotClear, repository.getWeatherAwareFallback(TempBracket.HOT, HeroWeatherCondition.SNOW))
         assertEquals(warmClear, HeroImageSelector.getWeatherAwareFallback(TempBracket.WARM, HeroWeatherCondition.SNOW))
         assertEquals(warmClear, repository.getWeatherAwareFallback(TempBracket.WARM, HeroWeatherCondition.SNOW))
+        // FREEZING×RAIN (removed by RW-20) resolves to freezing_clear.
+        assertEquals(freezingClear, HeroImageSelector.getWeatherAwareFallback(TempBracket.FREEZING, HeroWeatherCondition.RAIN))
+        assertEquals(freezingClear, repository.getWeatherAwareFallback(TempBracket.FREEZING, HeroWeatherCondition.RAIN))
     }
 
     private fun assetFile(ref: String): File {

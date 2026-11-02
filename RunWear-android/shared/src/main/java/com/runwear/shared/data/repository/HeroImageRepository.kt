@@ -382,6 +382,15 @@ class HeroImageRepository @Inject constructor() {
          * Unsplash stock URLs. Keep in sync with HeroImageSelector's copy of this
          * table in the engine module (a unit test asserts the two agree).
          *
+         * RW-20 (2026-11-02): every asset's provenance was re-derived by
+         * pixel comparison against the pool. 9 assets verified against
+         * adjudicated-MATCH, single-person, point-grain-correct source
+         * rows; 12 were replaced from such rows in the same cell (their
+         * sources were retired, mismatched, multi-person, or merely
+         * UNCERTAIN); the FREEZING×RAIN cell was removed — its pool
+         * holds no verified-good photo at all. Provenance record:
+         * release-prep/rw20-fix-execution-2026-11-02.md.
+         *
          * Image selection:
          * - CLEAR: Sunny, bright conditions
          * - CLOUDY: Overcast, gray sky
@@ -424,11 +433,13 @@ class HeroImageRepository @Inject constructor() {
                 HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/cold_rain.webp", // Cold rain/sleet
                 HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/cold_snow.webp" // Snowy run
             ),
-            // FREEZING (<20°F) - All conditions possible
+            // FREEZING (<20°F) - RAIN cell REMOVED by RW-20 (2026-11-02):
+            // the cell's pool holds zero verified-good photos (all 77
+            // FREEZING rain/rainy rows are rejected), so no honest floor
+            // asset exists; the resolver falls back to freezing_clear.
             TempBracket.FREEZING to mapOf(
                 HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/freezing_clear.webp", // Winter gear sunny
                 HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/freezing_cloudy.webp", // Freezing overcast
-                HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/freezing_rain.webp", // Freezing rain/sleet
                 HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/freezing_snow.webp" // Heavy snow
             )
         )
