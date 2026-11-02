@@ -109,11 +109,37 @@ struct GeneratedImage: Codable, Identifiable {
     /// ('approved' | 'pending' | 'rejected'); nil on legacy rows.
     let reviewStatus: String?
     /// RW-20 backfill: adjudicated person count; nil when unrecorded.
-    let personCount: Int? = nil
+    let personCount: Int?
     /// RW-20 backfill: adjudicated garment classes (see GarmentClasses).
-    let garmentClasses: GarmentClasses? = nil
+    let garmentClasses: GarmentClasses?
     /// 'adjudicated' (photo-derived) or 'prompt' (stored-prompt-derived).
-    let garmentSource: String? = nil
+    let garmentSource: String?
+
+    /// Explicit initializer (the memberwise one would do, but the
+    /// RW-20 columns need defaults so pre-backfill construction sites
+    /// keep compiling unchanged; synthesized Codable decoding does not
+    /// rely on these defaults — absent keys decode as nil).
+    init(
+        id: String,
+        combinationId: String,
+        imageUrl: String,
+        thumbnailUrl: String?,
+        prompt: String?,
+        reviewStatus: String?,
+        personCount: Int? = nil,
+        garmentClasses: GarmentClasses? = nil,
+        garmentSource: String? = nil
+    ) {
+        self.id = id
+        self.combinationId = combinationId
+        self.imageUrl = imageUrl
+        self.thumbnailUrl = thumbnailUrl
+        self.prompt = prompt
+        self.reviewStatus = reviewStatus
+        self.personCount = personCount
+        self.garmentClasses = garmentClasses
+        self.garmentSource = garmentSource
+    }
 
     enum CodingKeys: String, CodingKey {
         case id

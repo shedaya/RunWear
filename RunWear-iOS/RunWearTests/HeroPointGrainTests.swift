@@ -95,6 +95,6 @@ final class HeroPointGrainTests: XCTestCase {
         XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(bottom: "shorts"), outfit: outfit))
         XCTAssertTrue(HeroPointGrainPolicy.matches(image: image(bottom: "short_shorts"), outfit: outfit))
         XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "tights"), outfit: outfit))
-        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(bottom: "shorts", personCount: 2), outfit: outfit))
+        XCTAssertFalse(HeroPointGrainPolicy.matches(image: image(personCount: 2, bottom: "shorts"), outfit: outfit))
     }
 }
