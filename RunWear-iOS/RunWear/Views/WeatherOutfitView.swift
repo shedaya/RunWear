@@ -3,6 +3,15 @@ import StoreKit // for the \.requestReview environment action (R-15)
 
 struct WeatherOutfitView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // RW-25 sheet numeral: ~80pt, Dynamic-Type-scaled relative to
+    // .largeTitle (the RW-6.3 pattern the hero numeral used), capped
+    // by the text's dynamicTypeSize limit at the call site.
+    @ScaledMetric(relativeTo: .largeTitle) private var sheetNumeralSize: CGFloat = 80
+    /// RW-25 "Wear I've Run" dock state. The collection feature is
+    /// not built, so the model only ever yields .preAdd in this
+    /// build and the dock renders nothing.
+    private var miniBarState: WearIveRunState { WearIveRunMiniBarModel.currentState }
     @EnvironmentObject var personalStore: PersonalHeroStore
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
@@ -49,8 +58,8 @@ struct WeatherOutfitView: View {
         // overlay "modals" are now real sheet presentations.
         NavigationStack {
             ZStack {
-                // Dark background
-                AppTheme.darkBackground
+                // RW-25: dynamic theme background
+                AppTheme.background
                     .ignoresSafeArea()
 
                 layoutContent
@@ -93,6 +102,12 @@ struct WeatherOutfitView: View {
                     .transition(.opacity)
                 }
             }
+            // RW-25: the "Wear I've Run" mini bar dock — attached
+            // to the home scroll's container; renders only when the
+            // state is not .preAdd (never, in this build).
+            .safeAreaInset(edge: .bottom) {
+                miniBarDock
+            }
             .onChange(of: showFlagThanks) { _, visible in
                 if visible {
                     Task {
@@ -126,7 +141,7 @@ struct WeatherOutfitView: View {
             // photographed). The title row and the action group now
             // own their band exclusively; content scrolls beneath a
             // solid bar, as it does under Android's app bar.
-            .toolbarBackground(AppTheme.darkBackground, for: .navigationBar)
+            .toolbarBackground(AppTheme.background, for: .navigationBar)
             .toolbarBackgroundVisibility(.visible, for: .navigationBar)
             .toolbarTitleMenu {
                 Button {
@@ -318,7 +333,11 @@ struct WeatherOutfitView: View {
                     VStack(spacing: 0) {
                         ScrollView {
                             VStack(spacing: 0) {
-                                weatherPillsSection
+                                // RW-25 Duo: the sheet content block
+                                // (a)-(e) as a FLAT header on the theme
+                                // background — no overlap in the split
+                                // layout (permanent legibility state).
+                                sheetHeader
                                 if viewModel.selectedTimeOutsideForecast {
                                     outsideForecastNotice
                                         .padding(.top, 16)
@@ -337,44 +356,197 @@ struct WeatherOutfitView: View {
             } else if horizontalSizeClass == .regular {
                 ScrollView {
                     VStack(spacing: 0) {
-                        heroSection()
-                        weatherPillsSection
-                            .padding(.top, -30)
-                            .zIndex(1)
-                        if viewModel.selectedTimeOutsideForecast {
-                            outsideForecastNotice
-                                .padding(.top, 16)
+                        heroWithScrollHandoff
+                        sheetContainer {
+                            outfitGridSection
+                                .padding(.top, 24)
                         }
-                        outfitGridSection
-                            .padding(.top, 24)
-                        personalSection
-                            .padding(.top, 24)
-                        Spacer(minLength: 40)
                     }
                 }
                 .refreshable { onRefresh() }
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        heroSection()
-                        weatherPillsSection
-                            .padding(.top, -30)
-                            .zIndex(1)
-                        if viewModel.selectedTimeOutsideForecast {
-                            outsideForecastNotice
-                                .padding(.top, 16)
+                        heroWithScrollHandoff
+                        sheetContainer {
+                            outfitSection
+                                .padding(.top, 24)
                         }
-                        outfitSection
-                            .padding(.top, 24)
-                        personalSection
-                            .padding(.top, 24)
-                        Spacer(minLength: 40)
                     }
                     .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
                 .refreshable { onRefresh() }
             }
+        }
+    }
+
+    // MARK: - RW-25 Sheet
+
+    /// The hero with the native scroll handoff: as it scrolls up the
+    /// photo scales toward 0.94, clips to 24pt rounded corners and
+    /// gains a 16pt horizontal inset, settling as a card under the
+    /// nav bar. Reduce Motion removes the transform (instant state).
+    @ViewBuilder private var heroWithScrollHandoff: some View {
+        if reduceMotion {
+            heroSection()
+        } else {
+            heroSection()
+                .scrollTransition(.interactive, axis: .vertical) { content, phase in
+                    content
+                        .scaleEffect(phase.isIdentity ? 1 : 0.94)
+                        .clipShape(RoundedRectangle(cornerRadius: phase.isIdentity ? 0 : 24))
+                        .padding(.horizontal, phase.isIdentity ? 0 : 16)
+                }
+        }
+    }
+
+    /// The sheet surface for the stacked layouts: overlaps the
+    /// photo's foot by 28pt, top corners rounded 28, filled with the
+    /// theme sheet color, above the hero — and continuous from the
+    /// header down through the outfit and personal sections.
+    private func sheetContainer<Content: View>(@ViewBuilder outfit: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            sheetHeader
+            if viewModel.selectedTimeOutsideForecast {
+                outsideForecastNotice
+                    .padding(.top, 16)
+            }
+            outfit()
+            personalSection
+                .padding(.top, 24)
+            Spacer(minLength: 40)
+        }
+        .background {
+            UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(topLeading: 28, topTrailing: 28))
+                .fill(AppTheme.sheet)
+        }
+        .padding(.top, -28)
+        .zIndex(1)
+    }
+
+    /// The sheet header block, in order: (a) eyebrow, (b) hero
+    /// number + temperature chip, (c) caption, (d) flat date/time
+    /// pills, (e) the weather pills row. Used by the stacked sheet
+    /// and, flat, by the Duo trailing column.
+    private var sheetHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // (a) Eyebrow: FEELS LIKE · {LOCATION} · {MOMENT}
+            Text("FEELS LIKE \u{00B7} \(viewModel.locationName.uppercased()) \u{00B7} \(sheetMoment.uppercased())")
+                .font(.appEyebrow)
+                .tracking(0.5)
+                .foregroundColor(AppTheme.inkMuted)
+                .lineLimit(1)
+
+            // (b) Hero number (ink, never temperature-colored) +
+            // temperature chip (filled dot + bracket label).
+            HStack(alignment: .center, spacing: 14) {
+                Text(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))
+                    .font(.system(size: sheetNumeralSize, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundColor(AppTheme.inkPrimary)
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(AppTheme.temperatureColor(for: viewModel.currentTempBracket))
+                        .frame(width: 8, height: 8)
+                    Text(viewModel.currentTempBracket.rawValue)
+                        .font(.appEyebrow)
+                        .foregroundColor(AppTheme.inkPrimary)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(AppTheme.cardOnSheet))
+
+                Spacer(minLength: 0)
+            }
+
+            // (c) Caption from the same snapshot values the pills read.
+            Text(sheetCaption)
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
+
+            // (d) Date/time pills, flat on the sheet.
+            sheetDateTimePills
+
+            // (e) Weather pills row (behavior unchanged). The row
+            // carries its own 16pt content inset, so it cancels the
+            // header's inset and spans the sheet edge-to-edge like
+            // it did above the outfit before RW-25.
+            weatherPillsSection
+                .padding(.horizontal, -16)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+    }
+
+    /// "NOW" when viewing now; otherwise the same date + hour
+    /// strings the hero's pills used (Today / Tomorrow / EEE, MMM d
+    /// and h:00 AM/PM).
+    private var sheetMoment: String {
+        isViewingNow ? "NOW" : "\(navDateString) \(heroHourString)"
+    }
+
+    private var heroHourString: String {
+        let hour = viewModel.selectedHour
+        let suffix = hour >= 12 ? "PM" : "AM"
+        let displayHour = hour % 12 == 0 ? 12 : hour % 12
+        return "\(displayHour):00 \(suffix)"
+    }
+
+    private var isViewingNow: Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        return calendar.isDateInToday(viewModel.selectedDate)
+            && viewModel.selectedHour == calendar.component(.hour, from: now)
+    }
+
+    /// "Actual: {x} · {condition} · Wind {speed} · Humidity {pct}%"
+    private var sheetCaption: String {
+        let snapshot = viewModel.selectedWeatherSnapshot
+        let wind = snapshot?.windSpeed ?? weather.currentWeather.windspeed
+        let humidity = snapshot?.humidity ?? 50
+        return "Actual: \(viewModel.temperatureUnit.format(viewModel.currentTemperature)) \u{00B7} \(viewModel.currentCondition.shortDescription) \u{00B7} Wind \(Int(round(wind))) mph \u{00B7} Humidity \(humidity)%"
+    }
+
+    /// The hero's date/time pills, restyled flat on the sheet:
+    /// sheet-tonal fill + ink text; the Now pill's selected state
+    /// uses the pine tint. Same actions as the hero pills had.
+    private var sheetDateTimePills: some View {
+        HStack(spacing: 12) {
+            Button { showDatePicker = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar").font(.appPillLabel)
+                    Text(navDateString).font(.appPillLabel)
+                }
+                .flatSheetPill()
+            }
+            Button { showTimePicker = true } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock").font(.appPillLabel)
+                    Text(heroHourString).font(.appPillLabel).monospacedDigit()
+                }
+                .flatSheetPill()
+            }
+            if !isViewingNow {
+                Button { viewModel.resetToNow() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise").font(.appPillLabel)
+                        Text("Now").font(.appPillLabel)
+                    }
+                    .flatSheetPill(isSelected: true)
+                }
+            }
+        }
+    }
+
+    /// The mini bar dock content: the bar only when the state is
+    /// not .preAdd. In this build the state is always .preAdd, so
+    /// this renders nothing.
+    @ViewBuilder private var miniBarDock: some View {
+        if miniBarState != .preAdd {
+            WearIveRunMiniBarView(state: miniBarState)
         }
     }
 
@@ -387,15 +559,15 @@ struct WeatherOutfitView: View {
             HStack {
                 Text("Full Weather Detail")
                     .font(.appSecondary.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.appFootnote.weight(.semibold))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(AppTheme.inkMuted)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(AppTheme.darkBackground)
+            .background(AppTheme.background)
         }
         .buttonStyle(.plain)
     }
@@ -405,7 +577,7 @@ struct WeatherOutfitView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Recommended Outfit")
                 .font(.appSectionTitle)
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
 
             TemperatureBracketBadge(bracket: recommendation.temperatureBracket, unit: viewModel.temperatureUnit)
@@ -470,7 +642,7 @@ struct WeatherOutfitView: View {
     private var outsideForecastNotice: some View {
         Text("Forecast isn't available for that time yet — showing current conditions. (\(navDateString), \(selectedHourString))")
             .font(.appFootnote)
-            .foregroundColor(.white.opacity(0.75))
+            .foregroundColor(AppTheme.inkSecondary)
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -582,13 +754,8 @@ struct WeatherOutfitView: View {
             }
         )
         .padding(.vertical, 16)
-        .background(
-            LinearGradient(
-                colors: [AppTheme.darkBackground.opacity(0.8), AppTheme.darkBackground],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        // RW-25: no background — the row sits on the sheet now; the
+        // gradient existed only to blend the row into the hero.
     }
 
     // MARK: - RW-14 Personal Section
@@ -612,16 +779,16 @@ struct WeatherOutfitView: View {
                 VStack(spacing: 4) {
                     HStack(spacing: 8) {
                         ProgressView()
-                            .tint(.white.opacity(0.7))
+                            .tint(AppTheme.inkSecondary)
                         // Spec §7 G1, verbatim.
                         Text(MakeItMeCopy.progressTitle)
                             .font(.appSecondary.weight(.semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkPrimary)
                     }
                     // Spec §7 G2, verbatim (as amended Nov 1, 2026).
                     Text(MakeItMeCopy.progressSubline)
                         .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -635,14 +802,14 @@ struct WeatherOutfitView: View {
                 VStack(spacing: 4) {
                     Text(MakeItMeCopy.lookFailed)
                         .font(.appSecondary.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                         .multilineTextAlignment(.center)
                     Button(MakeItMeCopy.lookRetry) {
                         personalStore.retryLook(for: cell)
                         viewModel.refreshHero()
                     }
                     .font(.appSecondary.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 16)
@@ -666,7 +833,7 @@ struct WeatherOutfitView: View {
             HStack {
                 Text("Recommended Outfit")
                     .font(.appSectionTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
 
                 Spacer()
             }
@@ -687,7 +854,7 @@ struct WeatherOutfitView: View {
             if !recommendation.tips.isEmpty {
                 Text("Tips")
                     .font(.appItemName)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     .staggeredAnimation(index: 1 + recommendation.allItems.count, isVisible: hasAppeared)
@@ -695,7 +862,7 @@ struct WeatherOutfitView: View {
                 ForEach(Array(recommendation.tips.enumerated()), id: \.offset) { index, tip in
                     Text(tip)
                         .font(.appSecondary)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 4)
                         .staggeredAnimation(index: 2 + recommendation.allItems.count + index, isVisible: hasAppeared)
@@ -780,13 +947,13 @@ struct DarkClothingItemCard: View {
             ZStack {
                 // Background
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.1))
+                    .fill(AppTheme.inkPrimary.opacity(0.08))
 
                 // Emoji icon (shown as fallback)
                 if thumbnailURL == nil {
                     Image(systemName: item.icon)
                         .font(.title)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
 
                 // AI-generated thumbnail
@@ -797,7 +964,7 @@ struct DarkClothingItemCard: View {
                             // Loading state - show icon
                             Image(systemName: item.icon)
                                 .font(.title)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppTheme.inkSecondary)
                         case .success(let image):
                             image
                                 .resizable()
@@ -807,11 +974,11 @@ struct DarkClothingItemCard: View {
                             // Error state - show icon
                             Image(systemName: item.icon)
                                 .font(.title)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppTheme.inkSecondary)
                         @unknown default:
                             Image(systemName: item.icon)
                                 .font(.title)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppTheme.inkSecondary)
                         }
                     }
                 }
@@ -823,14 +990,14 @@ struct DarkClothingItemCard: View {
                 if let category = category {
                     Text(category.uppercased())
                         .font(.appEyebrow)
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppTheme.inkMuted)
                 }
                 Text(item.name)
                     .font(.appItemName)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                 Text(item.description)
                     .font(.appFootnote)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(AppTheme.inkSecondary)
                     .lineLimit(2)
             }
 
@@ -839,7 +1006,7 @@ struct DarkClothingItemCard: View {
             // External link icon (matching PWA v3.12)
             Image(systemName: "arrow.up.right")
                 .font(.appFootnote.weight(.semibold))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppTheme.inkMuted)
                 .frame(width: 44, height: 44)
         }
         .padding(12)
@@ -847,11 +1014,11 @@ struct DarkClothingItemCard: View {
         // dense text stays off glass for legibility.
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(AppTheme.cardFillOnDark)
+                .fill(AppTheme.cardFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
+                .stroke(AppTheme.cardStroke, lineWidth: 1)
         )
         .padding(.horizontal, 16)
     }
@@ -962,4 +1129,22 @@ struct GenderOption: View {
         ),
         onRefresh: {}
     )
+}
+
+// MARK: - Flat Sheet Pill (RW-25)
+
+extension View {
+    /// Flat pill chrome for the sheet's date/time pills: sheet-tonal
+    /// fill + ink text; the selected state (the Now pill) carries
+    /// the pine tint. Not glass — these are content controls on the
+    /// sheet, not floating chrome.
+    func flatSheetPill(isSelected: Bool = false) -> some View {
+        self
+            .foregroundColor(AppTheme.inkPrimary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                Capsule().fill(isSelected ? AppTheme.primaryColor.opacity(0.25) : AppTheme.cardOnSheet)
+            )
+    }
 }

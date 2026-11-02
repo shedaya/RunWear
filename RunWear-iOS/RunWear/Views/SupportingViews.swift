@@ -9,7 +9,7 @@ struct LoadingView: View {
 
             Text("Getting weather data...")
                 .font(.headline)
-                .foregroundColor(AppTheme.textSecondaryOnDark)
+                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 }
@@ -33,11 +33,11 @@ struct LocationPermissionView: View {
             Text("Location Access Needed")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(AppTheme.textOnDark)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text("RunWear needs your location to provide accurate weather-based outfit recommendations for your area.")
                 .font(.body)
-                .foregroundColor(AppTheme.textSecondaryOnDark)
+                .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
@@ -77,16 +77,16 @@ struct LocationDeniedView: View {
         VStack(spacing: 24) {
             Image(systemName: "location.slash.fill")
                 .font(.system(size: 80))
-                .foregroundColor(AppTheme.textSecondary)
+                .foregroundColor(AppTheme.inkMuted)
 
             Text("Location Access Denied")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(AppTheme.textOnDark)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text("RunWear needs location access to show weather-based outfit recommendations. Please enable location access in Settings, or set your location manually.")
                 .font(.body)
-                .foregroundColor(AppTheme.textSecondaryOnDark)
+                .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
@@ -137,11 +137,11 @@ struct ErrorView: View {
             Text("Something went wrong")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(AppTheme.textOnDark)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text(message)
                 .font(.body)
-                .foregroundColor(AppTheme.textSecondaryOnDark)
+                .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 

@@ -9,8 +9,8 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // Use dark background for the new design
-            AppTheme.darkBackground
+            // RW-25: dynamic theme background (light #F5F5F5 / dark #0A0A0A)
+            AppTheme.background
                 .ignoresSafeArea()
 
             Group {

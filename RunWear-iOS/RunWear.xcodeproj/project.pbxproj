@@ -49,6 +49,9 @@
 		A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		A10002000000000000000011 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
 		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
+		D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
+		C10002000000000000000040 /* RW25NextGenHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000031 /* RW25NextGenHomeTests.swift */; };
 		A10002000000000000000090 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
 		C10002000000000000000090 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
 		C10002000000000000000033 /* FieldFindingsFixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000010 /* FieldFindingsFixTests.swift */; };
@@ -251,6 +254,8 @@
 		A10001000000000000000010 /* GlassMorphismModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMorphismModifiers.swift; sourceTree = "<group>"; };
 		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
 		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
+		D10001000000000000000001 /* WearIveRunMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunMiniBar.swift; sourceTree = "<group>"; };
+		C10001000000000000000031 /* RW25NextGenHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW25NextGenHomeTests.swift; sourceTree = "<group>"; };
 		A10001000000000000000090 /* HeroPhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPhoto.swift; sourceTree = "<group>"; };
 		C10001000000000000000010 /* FieldFindingsFixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FieldFindingsFixTests.swift; sourceTree = "<group>"; };
 		A10001000000000000000013 /* PreferenceControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferenceControls.swift; sourceTree = "<group>"; };
@@ -380,6 +385,7 @@
 				A10004000000000000000002 /* DuoArrangement.swift */,
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
+				D10001000000000000000001 /* WearIveRunMiniBar.swift */,
 				A10001000000000000000090 /* HeroPhoto.swift */,
 				A10003000000000000000001 /* Components */,
 				A10003000000000000000002 /* Modals */,
@@ -526,6 +532,7 @@
 				C10001000000000000000028 /* PhotoIntakeTests.swift */,
 				C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */,
 				C10001000000000000000030 /* HeroPointGrainTests.swift */,
+				C10001000000000000000031 /* RW25NextGenHomeTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -718,6 +725,7 @@
 				A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */,
 				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
 				A10002000000000000000012 /* HeroImageView.swift in Sources */,
+				D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */,
 				A10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				A10002000000000000000013 /* PreferenceControls.swift in Sources */,
 				A10002000000000000000014 /* WeatherPill.swift in Sources */,
@@ -828,6 +836,8 @@
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
 				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,
 				C10002000000000000000039 /* HeroPointGrainTests.swift in Sources */,
+				D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */,
+				C10002000000000000000040 /* RW25NextGenHomeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -966,7 +976,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1004,7 +1014,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1042,7 +1052,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1075,7 +1085,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1105,7 +1115,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -1129,7 +1139,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = Q3FS685XN8;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;

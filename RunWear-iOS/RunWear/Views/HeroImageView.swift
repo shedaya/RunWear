@@ -88,10 +88,11 @@ struct HeroImageView: View {
     // scale transition — content swaps instantly instead.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    // RW-6.3 display-numeral exception: the hero number scales with
-    // Dynamic Type relative to .largeTitle, capped so the layout holds
-    // at accessibility sizes.
-    @ScaledMetric(relativeTo: .largeTitle) private var heroNumeralSize: CGFloat = 96
+    // RW-25: the hero is photo-only — the feels-like numeral, its
+    // eyebrow and the date/time pills moved to the sheet
+    // (WeatherOutfitView's sheet header). The data params above are
+    // kept: other call sites pass them and the flag/tint logic reads
+    // the bracket; this view simply renders no text on the photo.
 
     var body: some View {
         Group {
@@ -113,19 +114,18 @@ struct HeroImageView: View {
         // Attached as an overlay on the hero frame itself so its
         // hit area is only the chip — a full-size clear layer here
         // would swallow taps meant for the hero's own controls.
-        // The 64pt bottom inset matches Android's: it keeps the
-        // chip clear of the hero's bottom content and of the
-        // weather-pills row the parent overlaps onto the hero's
-        // lower edge in the single-column layouts.
+        // RW-25 inset: 40pt = the sheet's 28pt overlap onto the
+        // hero's foot + a 12pt gap, so the chip clears the sheet's
+        // rounded top edge in the stacked layouts.
         .overlay(alignment: .bottomTrailing) {
             if let personalFlagTarget {
                 personalFlagChip(for: personalFlagTarget)
                     .padding(.trailing, 14)
-                    .padding(.bottom, 64)
+                    .padding(.bottom, 40)
             } else if let flagTarget {
                 flagChip(for: flagTarget)
                     .padding(.trailing, 14)
-                    .padding(.bottom, 64)
+                    .padding(.bottom, 40)
             }
         }
     }
@@ -152,24 +152,23 @@ struct HeroImageView: View {
                 AppTheme.temperatureTintOverlay(for: tempBracket, opacity: 0.12)
                     .frame(width: geometry.size.width, height: heroHeight)
 
-                // 6-stop gradient overlay for text readability
-                AppTheme.heroOverlayGradient()
+                // RW-25: bounded TOP gradient only, for chrome
+                // legibility at the hero's head (the nav bar is
+                // opaque in this app, so this stays minimal). The
+                // 6-stop full-frame overlay is gone — no text lives
+                // on the photo's foot anymore.
+                AppTheme.heroTopGradient()
                     .frame(width: geometry.size.width, height: heroHeight)
 
-                // Content overlay
+                // Chrome overlay: top controls only, and only when
+                // a container has not taken the chrome over (home
+                // passes showsTopControls: false).
                 VStack(spacing: 0) {
-                    // Top controls (hidden when the navigation
-                    // container carries the chrome instead)
                     if showsTopControls {
                         topControls(width: geometry.size.width)
                             .padding(.top, geometry.safeAreaInsets.top + 8)
                     }
-
                     Spacer()
-
-                    // Bottom content
-                    bottomContent
-                        .padding(.bottom, 24)
                 }
                 .frame(width: geometry.size.width, height: heroHeight)
             }
@@ -350,99 +349,6 @@ struct HeroImageView: View {
             }
         }
         .padding(.horizontal, 16)
-    }
-
-    // MARK: - Bottom Content
-
-    private var bottomContent: some View {
-        VStack(spacing: 16) {
-            // Temperature display
-            temperatureDisplay
-
-            // Date and time pills
-            dateTimePills
-        }
-        .padding(.horizontal, 16)
-    }
-
-    private var temperatureDisplay: some View {
-        VStack(spacing: 4) {
-            // "FEELS LIKE" caption — the headline number's identity,
-            // carried verbatim from the Android/PWA hero.
-            Text("FEELS LIKE")
-                .font(.appEyebrow)
-                .tracking(0.5)
-                .foregroundColor(.white.opacity(0.7))
-
-            // Large temperature (the raw measured feels-like), unit
-            // attached — the reference surfaces carry the symbol
-            // (Android: "Actual: X°F"; the headline is the same
-            // story), and an unlabeled number next to a labeled
-            // band was the 2026-10-31 incoherence.
-            Text(temperatureUnit.format(temperature))
-                .font(.system(size: heroNumeralSize, weight: .thin))
-                .monospacedDigit()
-                .foregroundColor(.white)
-                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-            // Actual temperature sub-line ("Actual: X°F" on the
-            // reference surfaces)
-            HStack(spacing: 4) {
-                Text("Actual:")
-                    .foregroundColor(.white.opacity(0.7))
-                Text(temperatureUnit.format(actualTemperature))
-                    .monospacedDigit()
-                    .foregroundColor(.white)
-            }
-            .font(.body.weight(.medium))
-        }
-    }
-
-    private var dateTimePills: some View {
-        HStack(spacing: 12) {
-            // Date pill
-            Button(action: onDateTapped) {
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.appPillLabel)
-                    Text(formattedDate)
-                        .font(.appPillLabel)
-                }
-                .foregroundColor(.white)
-                .glassPill()
-            }
-
-            // Time pill
-            Button(action: onTimeTapped) {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.appPillLabel)
-                    Text(formattedTime)
-                        .font(.appPillLabel)
-                        .monospacedDigit()
-                }
-                .foregroundColor(.white)
-                .glassPill()
-            }
-
-            // "Now" shortcut - only visible when viewing different time.
-            // The selected (teal-tinted) state of the shared glass pill —
-            // the same chrome as its siblings, tinted for the active state.
-            if !isViewingNow {
-                Button(action: onNowTapped) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.appPillLabel)
-                        Text("Now")
-                            .font(.appPillLabel)
-                    }
-                    .foregroundColor(.white)
-                    .glassPill(isSelected: true)
-                }
-                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
-            }
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isViewingNow)
     }
 
     // Check if viewing current date and hour

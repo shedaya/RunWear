@@ -20,6 +20,9 @@ struct SettingsModal: View {
     @EnvironmentObject private var personalStore: PersonalHeroStore
 
     @State private var showFeedback = false
+    /// RW-25: appearance preference — the same AppStorage key the
+    /// app root resolves, so this picker and RunWearApp never drift.
+    @AppStorage("appearancePreference") private var appearancePreference: AppearancePreference = .system
     /// RW-16.7: the single owner of every "Make it me"
     /// presentation on this surface — sheets, alerts, and the
     /// opt-in commit driver. Owned HERE, at the level whose own
@@ -42,6 +45,18 @@ struct SettingsModal: View {
     var body: some View {
         NavigationStack {
             Form {
+                // RW-25: native segmented appearance picker
+                // (System / Light / Dark) — Form idioms only.
+                Section("Appearance") {
+                    Picker("Appearance", selection: $appearancePreference) {
+                        ForEach(AppearancePreference.allCases) { preference in
+                            Text(preference.displayName).tag(preference)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 Section("Temperature Unit") {
                     TemperatureUnitPicker(unit: $temperatureUnit)
                 }

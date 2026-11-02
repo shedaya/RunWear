@@ -3,6 +3,9 @@ import SwiftUI
 @main
 struct RunWearApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    /// RW-25: appearance preference (System / Light / Dark), shared
+    /// with the Settings picker via the same AppStorage key.
+    @AppStorage("appearancePreference") private var appearancePreference: AppearancePreference = .system
     /// RW-14 "Make it me": the personalization store lives at the app
     /// root so onboarding, the main screen and Settings share one
     /// state machine.
@@ -27,10 +30,11 @@ struct RunWearApp: App {
                     await personalHeroStore.bootstrap()
                 }
             }
-            // RW-6.11: the app is dark by design — declare it, so system
-            // chrome (sheets, alerts, keyboards, Form surfaces) renders
-            // dark everywhere instead of per-view overrides.
-            .preferredColorScheme(.dark)
+            // RW-25: the appearance pair — the preference resolves
+            // here (system -> nil, no override; light/dark -> the
+            // explicit scheme). The RW-6.11 forced-dark override is
+            // removed: system chrome follows the resolved scheme.
+            .preferredColorScheme(appearancePreference.colorScheme)
         }
     }
 }
