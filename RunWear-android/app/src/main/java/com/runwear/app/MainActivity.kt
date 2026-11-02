@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -33,6 +34,7 @@ import com.runwear.app.ui.screens.OnboardingScreen
 import com.runwear.app.ui.screens.PermissionScreen
 import com.runwear.app.ui.screens.RatingMomentDialog
 import com.runwear.app.ui.theme.RunWearTheme
+import com.runwear.app.ui.theme.resolveDarkTheme
 import com.runwear.app.ui.viewmodel.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -80,8 +82,15 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 StartupTrace.mark(traceContext, "composition-start")
             }
-            RunWearTheme {
-                val uiState by viewModel.uiState.collectAsState()
+            // RW-25: the appearance preference resolves BEFORE the
+            // theme composes — SYSTEM follows the device, LIGHT/DARK
+            // pin. uiState is collected here (outside RunWearTheme)
+            // so the resolved flag can be passed in.
+            val uiState by viewModel.uiState.collectAsState()
+            val systemInDarkTheme = isSystemInDarkTheme()
+            RunWearTheme(
+                darkTheme = resolveDarkTheme(uiState.appearancePreference, systemInDarkTheme)
+            ) {
                 val makeItMeState by makeItMeViewModel.uiState.collectAsState()
                 val locationSearchState by viewModel.locationSearch.collectAsState()
                 val analyticsOptIn by viewModel.analyticsOptIn.collectAsState()
@@ -176,6 +185,8 @@ class MainActivity : ComponentActivity() {
                                     onToggleUnit = viewModel::toggleUnit,
                                     onSetComfortPreference = viewModel::setComfortPreference,
                                     onSetGenderPreference = viewModel::setGenderPreference,
+                                    appearancePreference = uiState.appearancePreference,
+                                    onSetAppearancePreference = viewModel::setAppearancePreference,
                                     onDateSelected = viewModel::selectDate,
                                     onTimeSelected = viewModel::selectHour,
                                     onResetToNow = viewModel::resetToNow,

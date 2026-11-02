@@ -1,20 +1,14 @@
 package com.runwear.app.ui.components
 
-import android.content.Intent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.LocationOn
@@ -32,9 +27,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,61 +36,84 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.runwear.app.feedback.StartupTrace
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.getTemperatureColor
 import com.runwear.app.ui.theme.getTemperatureFallbackGradient
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherConditions
-import java.time.LocalDateTime
-import kotlin.math.roundToInt
 
 /**
- * Hero section with full-bleed AI runner image, weather overlay, and controls.
- * PWA v2.9 aligned.
+ * RW-25: how far the home sheet overlaps the photo's foot. The sheet
+ * block (HeroSheet.kt) is laid out against this in HeroMainScreen, and
+ * the photo's corner chips inset above it by this plus a 12dp gap.
+ */
+val HeroSheetOverlap: Dp = 28.dp
+
+/** The hero photo's height: 75% of the screen height (unchanged). */
+fun heroPhotoHeight(screenHeightDp: Int): Dp = (screenHeightDp * 0.75).dp
+
+/**
+ * RW-25 scroll handoff: as the home list scrolls, the photo settles
+ * from full-bleed into a card under the top chrome. Progress is a pure
+ * function of the scroll offset — the input is already continuous, so
+ * the mapping is 1:1 (no spring on a scroll-linked value) and applied
+ * through graphicsLayer + clip.
+ */
+object HeroScrollHandoff {
+
+    /** Scroll distance (as a fraction of hero height) over which the
+     * handoff completes. */
+    const val TRAVEL_FRACTION = 0.55f
+
+    fun progress(scrollOffsetPx: Float, heroHeightPx: Float): Float =
+        if (heroHeightPx <= 0f) 0f
+        else (scrollOffsetPx / (heroHeightPx * TRAVEL_FRACTION)).coerceIn(0f, 1f)
+
+    /** Photo scale at [progress]: 1f → 0.94f. */
+    fun scale(progress: Float): Float = 1f - 0.06f * progress
+
+    /** Horizontal inset at [progress]: 0dp → 16dp. */
+    fun horizontalInset(progress: Float): Dp = (16f * progress).dp
+
+    /** Corner radius the photo clips to at [progress]: 0dp → 24dp. */
+    fun cornerRadius(progress: Float): Dp = (24f * progress).dp
+}
+
+/**
+ * Hero PHOTO ZONE (RW-25 two-zone home). The photo carries chrome only:
+ * the image itself (same loading/crossfade + [HeroTransitionPolicy]
+ * cut rule), the 12% temperature tint, a bounded top gradient for
+ * chrome legibility, the glass top controls (location pill + share /
+ * settings), and the flag/refresh corner chips.
  *
- * Layout (top to bottom):
- * - Status bar padding
- * - Location button (left) + Share + Settings buttons (right)
- * - Flex space with hero image
- * - Date/Time combined pill (frosted glass)
- * - "FEELS LIKE" label
- * - Large temperature display (color-coded)
- * - "Actual: X°F" line
- * - Weather conditions pills (tappable)
+ * Everything that used to be printed on the photo — the date/time
+ * pill, the FEELS LIKE number, the Actual line, the weather pills —
+ * now lives on the sheet (see HeroSheetBlock), which overlaps this
+ * zone's foot by [HeroSheetOverlap].
  */
 @Composable
 fun HeroSection(
     weather: WeatherConditions?,
     outfit: OutfitRecommendation?,
     locationName: String,
-    selectedDateTime: LocalDateTime,
-    locationNow: LocalDateTime,
-    isNowSelected: Boolean,
     heroImageUrl: String?,
     scrollOffset: Float = 0f,
-    onDateClick: () -> Unit,
-    onTimeClick: () -> Unit,
-    onNowClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onShareClick: () -> Unit,
-    onTempClick: () -> Unit,
-    onWeatherPillClick: (String) -> Unit = {},
     /** Hero-flag affordance: shown only when a hero photo is displayed. */
     showFlagButton: Boolean = false,
     flagEnabled: Boolean = true,
@@ -121,14 +137,8 @@ fun HeroSection(
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
-    val heroHeight = (configuration.screenHeightDp * 0.75).dp
+    val heroHeight = heroPhotoHeight(configuration.screenHeightDp)
 
-    // Measured height of the weather-pills row (one or two flow lines
-    // depending on hero width). Initialized to the typical one-line
-    // height so the corner chips' first frame matches the legacy fixed
-    // 64.dp inset (20 + 36 + 8); the measurement corrects it from the
-    // first layout pass onward.
-    var pillsHeightDp by remember { mutableStateOf(36.dp) }
     // RW-16.27: the person layer the last composed hero belonged to;
     // the transition for THIS swap is decided against it before the
     // effect records the new layer.
@@ -146,7 +156,7 @@ fun HeroSection(
     val heroWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
     val heroHeightPx = with(density) { heroHeight.roundToPx() }
 
-    // Calculate temperature color with smooth animation (500ms transition)
+    // Temperature tint color with smooth animation (500ms transition)
     val tempFahrenheit = weather?.feelsLikeInFahrenheit ?: 65.0
     val targetTempColor = remember(tempFahrenheit) {
         getTemperatureColor(tempFahrenheit)
@@ -157,8 +167,6 @@ fun HeroSection(
         label = "temperatureColorAnimation"
     )
 
-    // Haptic feedback
-    val hapticFeedback = LocalHapticFeedback.current
     val context = LocalContext.current
 
     // Safe-boot diagnostic (1.1.3): the outfit hero card composable was
@@ -169,25 +177,9 @@ fun HeroSection(
         Unit
     }
 
-    // Animated temperature counter
-    val actualTemp = weather?.effectiveTemperature?.roundToInt() ?: 0
-    val startTemp = maxOf(-10, actualTemp - 10)
-    var targetTemp by remember { mutableStateOf(startTemp) }
-    val animatedTemp by animateIntAsState(
-        targetValue = targetTemp,
-        animationSpec = tween(
-            durationMillis = 800,
-            delayMillis = 200,
-            easing = FastOutSlowInEasing
-        ),
-        label = "temperatureCounter"
-    )
-
-    LaunchedEffect(actualTemp) {
-        targetTemp = startTemp
-        kotlinx.coroutines.delay(50)
-        targetTemp = actualTemp
-    }
+    // RW-25 scroll handoff progress (0 = full-bleed, 1 = settled card).
+    val handoff = HeroScrollHandoff.progress(scrollOffset, heroHeightPx.toFloat())
+    val handoffScale = HeroScrollHandoff.scale(handoff)
 
     Box(
         modifier = modifier
@@ -195,67 +187,82 @@ fun HeroSection(
             .height(heroHeight)
             .clipToBounds()
     ) {
-        // 1. Hero Image
+        // 1. Hero image + temperature tint, transformed by the scroll
+        // handoff: the photo scales down, insets and rounds its
+        // corners as the sheet takes over the scroll.
         Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = HeroScrollHandoff.horizontalInset(handoff))
+                .graphicsLayer {
+                    scaleX = handoffScale
+                    scaleY = handoffScale
+                }
+                .clip(RoundedCornerShape(HeroScrollHandoff.cornerRadius(handoff)))
         ) {
-            if (heroImageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(heroImageUrl)
-                        .size(heroWidthPx, heroHeightPx)
-                        .apply { if (crossfadeHero) crossfade(500) else crossfade(false) }
-                        .build(),
-                    contentDescription = generateHeroAltText(weather, outfit),
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .scale(1.1f)
-                )
-            } else {
-                // Fallback gradient when no image
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    getTemperatureFallbackGradient(tempFahrenheit),
-                                    RunWearColors.Background
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (heroImageUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(heroImageUrl)
+                            .size(heroWidthPx, heroHeightPx)
+                            .apply { if (crossfadeHero) crossfade(500) else crossfade(false) }
+                            .build(),
+                        contentDescription = generateHeroAltText(weather, outfit),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .scale(1.1f)
+                    )
+                } else {
+                    // Fallback gradient when no image
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        getTemperatureFallbackGradient(tempFahrenheit),
+                                        RunWearColors.Background
+                                    )
                                 )
                             )
-                        )
-                )
+                    )
+                }
             }
+
+            // 2. Temperature Tint Overlay (12%, unchanged)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(tempColor.copy(alpha = 0.12f))
+            )
         }
 
-        // 2. Temperature Tint Overlay
+        // 3. Bounded TOP gradient only — for chrome legibility. The
+        // pre-RW-25 6-stop scrim's bottom stops existed to seat the
+        // on-photo text block; that text lives on the sheet now.
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(tempColor.copy(alpha = 0.12f))
-        )
-
-        // 3. Gradient Overlay - PWA style 6-stop gradient
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(200.dp)
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.00f to Color.Black.copy(alpha = 0.6f),
-                            0.15f to Color.Black.copy(alpha = 0.3f),
-                            0.40f to Color.Transparent,
-                            0.60f to Color.Transparent,
-                            0.85f to Color.Black.copy(alpha = 0.5f),
-                            1.00f to Color.Black.copy(alpha = 0.95f)
+                            0.00f to Color.Black.copy(alpha = 0.55f),
+                            0.55f to Color.Black.copy(alpha = 0.25f),
+                            1.00f to Color.Transparent
                         )
                     )
                 )
         )
 
-        // 4. Top Controls (Location + Share + Settings)
+        // 4. Top Controls (Location + Share + Settings) — glass chrome,
+        // theme-independent, unchanged.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -291,90 +298,18 @@ fun HeroSection(
             }
         }
 
-        // 5. Bottom Content (Date/Time Pill, Temp, Conditions)
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            // Combined Date/Time Pill (PWA v2.9 frosted glass style)
-            // Shows "Now" shortcut when viewing different time
-            DateTimePill(
-                dateTime = selectedDateTime,
-                referenceNow = locationNow,
-                isNowSelected = isNowSelected,
-                onDateClick = onDateClick,
-                onTimeClick = onTimeClick,
-                onNowClick = onNowClick,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // "FEELS LIKE" label
-            Text(
-                text = "FEELS LIKE",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.7f),
-                letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-
-            // Large Temperature (tappable to toggle units)
-            Text(
-                text = "${animatedTemp}°",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 96.sp,
-                fontWeight = FontWeight.Black,
-                color = tempColor,
-                letterSpacing = (-2).sp,
-                lineHeight = 80.sp,
-                modifier = Modifier.clickable {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onTempClick()
-                }
-            )
-
-            // "Actual: X°F" line (PWA format)
-            weather?.let {
-                val unitSymbol = if (it.isCelsius) "°C" else "°F"
-                Text(
-                    text = "Actual: ${it.temperature.toInt()}$unitSymbol",
-                    fontSize = 14.sp,
-                    color = Color.White.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Weather Pills (tappable for detail popups). Measured so
-            // the corner chips below can float exactly above this row
-            // at every width — the pills flow to two lines in narrow
-            // panes, and a fixed chip inset overlapped them (Oct 30).
-            WeatherPillsRow(
-                weather = weather,
-                onPillClick = onWeatherPillClick,
-                modifier = Modifier.onSizeChanged { size ->
-                    pillsHeightDp = with(density) { size.height.toDp() }
-                }
-            )
-        }
-
-        // 6. Hero corner chips — bottom-trailing corner of the photo:
+        // 5. Hero corner chips — bottom-trailing corner of the photo:
         // refresh (cycle to the cell's next approved image) beside the
         // flag. Deliberately quiet: small dark translucent discs, no
-        // labels. They float above the weather-pills row — the bottom
-        // inset is DERIVED from the pills row's measured height
-        // (20.dp hero bottom padding + pills height + 8.dp gap), so
-        // the chips can never overlap the pills at any width, whether
-        // the pills take one line or two. Rendered only while a photo
-        // is actually on screen.
+        // labels. RW-25: the inset no longer derives from a pills row
+        // (the pills moved to the sheet) — the chips sit above the
+        // sheet's overlap of the photo's foot: overlap (28dp) + a
+        // 12dp gap. Rendered only while a photo is actually on screen.
         if (heroImageUrl != null && (showFlagButton || showRefreshButton)) {
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = 20.dp + pillsHeightDp + 8.dp),
+                    .padding(end = 14.dp, bottom = HeroSheetOverlap + 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

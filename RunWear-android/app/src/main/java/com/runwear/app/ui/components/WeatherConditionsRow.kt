@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.domain.model.WeatherConditions
 
 /**
@@ -52,9 +54,22 @@ import com.runwear.shared.domain.model.WeatherConditions
 fun WeatherConditionsRow(
     weather: WeatherConditions?,
     modifier: Modifier = Modifier,
-    onPillClick: (String) -> Unit = {}
+    onPillClick: (String) -> Unit = {},
+    /**
+     * RW-25: on the home sheet the pills render FLAT (tonal surface
+     * fill, ink text) instead of the photo-side white-glass treatment.
+     * Behavior — which pills appear, their tap targets — is unchanged.
+     */
+    onSheet: Boolean = false
 ) {
     if (weather == null) return
+
+    val pillBackground = if (onSheet) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        Color.White.copy(alpha = 0.1f)
+    }
+    val pillInk = if (onSheet) RunWearColors.TextPrimary else Color.White
 
     // FlowRow, not Row: in a narrow hero (foldable rail pane, landscape
     // phone) a fixed Row measures pills in order and gives the LAST one
@@ -70,21 +85,26 @@ fun WeatherConditionsRow(
         // Condition pill (emoji only)
         WeatherPillEmoji(
             emoji = weather.weatherCode.icon,
-            onClick = { onPillClick("condition") }
+            onClick = { onPillClick("condition") },
+            background = pillBackground
         )
 
         // Wind pill
         WeatherPill(
             icon = Icons.Outlined.Air,
             text = "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}",
-            onClick = { onPillClick("wind") }
+            onClick = { onPillClick("wind") },
+            background = pillBackground,
+            ink = pillInk
         )
 
         // Humidity pill - Thermostat icon per PWA v2.7
         WeatherPill(
             icon = Icons.Outlined.Thermostat,
             text = "${weather.humidity}%",
-            onClick = { onPillClick("humidity") }
+            onClick = { onPillClick("humidity") },
+            background = pillBackground,
+            ink = pillInk
         )
 
         // Precipitation pill (only shown if > 0%) - WaterDrop icon
@@ -92,7 +112,9 @@ fun WeatherConditionsRow(
             WeatherPill(
                 icon = Icons.Outlined.WaterDrop,
                 text = "${weather.precipitationProbability}%",
-                onClick = { onPillClick("precipitation") }
+                onClick = { onPillClick("precipitation") },
+                background = pillBackground,
+                ink = pillInk
             )
         }
 
@@ -101,7 +123,9 @@ fun WeatherConditionsRow(
             WeatherPill(
                 icon = Icons.Outlined.WbSunny,
                 text = "UV ${weather.uvIndex.toInt()}",
-                onClick = { onPillClick("uv") }
+                onClick = { onPillClick("uv") },
+                background = pillBackground,
+                ink = pillInk
             )
         }
     }
@@ -114,9 +138,15 @@ fun WeatherConditionsRow(
 fun WeatherPillsRow(
     weather: WeatherConditions?,
     modifier: Modifier = Modifier,
-    onPillClick: (String) -> Unit = {}
+    onPillClick: (String) -> Unit = {},
+    onSheet: Boolean = false
 ) {
-    WeatherConditionsRow(weather = weather, modifier = modifier, onPillClick = onPillClick)
+    WeatherConditionsRow(
+        weather = weather,
+        modifier = modifier,
+        onPillClick = onPillClick,
+        onSheet = onSheet
+    )
 }
 
 /**
@@ -126,12 +156,13 @@ fun WeatherPillsRow(
 private fun WeatherPillEmoji(
     emoji: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    background: Color = Color.White.copy(alpha = 0.1f)
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(100.dp))
-            .background(Color.White.copy(alpha = 0.1f))
+            .background(background)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
@@ -152,12 +183,14 @@ private fun WeatherPill(
     icon: ImageVector,
     text: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    background: Color = Color.White.copy(alpha = 0.1f), // 10% white per PWA
+    ink: Color = Color.White
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(100.dp))
-            .background(Color.White.copy(alpha = 0.1f)) // 10% white per PWA
+            .background(background)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
@@ -168,7 +201,7 @@ private fun WeatherPill(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.8f), // 0.8 opacity per PWA
+                tint = ink.copy(alpha = 0.8f), // 0.8 opacity per PWA
                 modifier = Modifier.size(14.dp)        // 14dp per PWA
             )
             Text(
@@ -176,7 +209,7 @@ private fun WeatherPill(
                 style = TextStyle(
                     fontSize = 13.sp,                  // 13px per PWA
                     fontWeight = FontWeight.Medium,
-                    color = Color.White
+                    color = ink
                 ),
                 // Belt-and-braces with the FlowRow above: a pill label
                 // never wraps — worst case in a pathologically narrow

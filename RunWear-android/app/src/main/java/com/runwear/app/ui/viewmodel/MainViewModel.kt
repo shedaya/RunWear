@@ -11,6 +11,7 @@ import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
 import com.runwear.shared.domain.model.AffiliatePartner
+import com.runwear.shared.domain.model.AppearancePreference
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
@@ -79,6 +80,8 @@ data class MainUiState(
     val temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
     val comfortPreference: ComfortPreference = ComfortPreference.NEUTRAL,
     val genderPreference: GenderPreference = GenderPreference.UNISEX,
+    /** RW-25: appearance preference driving the resolved app theme. */
+    val appearancePreference: AppearancePreference = AppearancePreference.SYSTEM,
     val hasLocationPermission: Boolean = false,
     val hasCompletedOnboarding: Boolean = true, // Assume true, check in init
     val showDatePicker: Boolean = false,
@@ -379,6 +382,7 @@ class MainViewModel @Inject constructor(
                         temperatureUnit = prefs.temperatureUnit,
                         comfortPreference = prefs.comfortPreference,
                         genderPreference = prefs.genderPreference,
+                        appearancePreference = prefs.appearancePreference,
                         hasCompletedOnboarding = prefs.hasCompletedOnboarding
                     )
                 }
@@ -1374,6 +1378,14 @@ class MainViewModel @Inject constructor(
         }
     }
     
+    /** RW-25: persist the appearance preference; the theme re-resolves
+     * from uiState in MainActivity and every token read follows. */
+    fun setAppearancePreference(preference: AppearancePreference) {
+        viewModelScope.launch {
+            preferencesRepository.setAppearancePreference(preference)
+        }
+    }
+
     fun setComfortPreference(preference: ComfortPreference) {
         viewModelScope.launch {
             preferencesRepository.setComfortPreference(preference)

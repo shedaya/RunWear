@@ -50,6 +50,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +63,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -71,12 +75,17 @@ import androidx.compose.ui.unit.sp
 import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.components.BrandedLoadingScreen
 import com.runwear.app.ui.components.HeroSection
+import com.runwear.app.ui.components.HeroSheetBlock
+import com.runwear.app.ui.components.HeroSheetOverlap
+import com.runwear.app.ui.components.heroPhotoHeight
 import com.runwear.app.ui.components.loadingStatusText
 import com.runwear.app.ui.components.OutfitCard
 import com.runwear.app.ui.components.OutfitListShimmer
 import com.runwear.app.ui.components.TipsSection
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
+import com.runwear.app.weariverun.WearIveRunBarState
+import com.runwear.app.weariverun.WearIveRunBarStateHolder
+import com.runwear.app.weariverun.WearIveRunMiniBar
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
@@ -105,6 +114,10 @@ fun HeroMainScreen(
     onToggleUnit: () -> Unit,
     onSetComfortPreference: (com.runwear.shared.domain.model.ComfortPreference) -> Unit,
     onSetGenderPreference: (com.runwear.shared.domain.model.GenderPreference) -> Unit,
+    /** RW-25: appearance preference + setter for the Settings sheet. */
+    appearancePreference: com.runwear.shared.domain.model.AppearancePreference =
+        com.runwear.shared.domain.model.AppearancePreference.SYSTEM,
+    onSetAppearancePreference: (com.runwear.shared.domain.model.AppearancePreference) -> Unit = {},
     onDateSelected: (LocalDate) -> Unit,
     onTimeSelected: (Int) -> Unit,
     onResetToNow: () -> Unit,
@@ -173,6 +186,12 @@ fun HeroMainScreen(
     }
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
+
+    // RW-25: "Wear I've Run" mini bar dock state. The collection
+    // feature is not built anywhere yet, so the holder only ever
+    // yields PreAdd and the dock at the root renders nothing.
+    val wearIveRunHolder = remember { WearIveRunBarStateHolder() }
+    val wearIveRunState by wearIveRunHolder.state.collectAsState()
 
     val listState = rememberLazyListState()
     // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
@@ -264,12 +283,22 @@ Get your personalized running outfit at runwear.ai
                         AdaptiveLayout.COMPACT -> {
                             LazyColumn(
                                 state = listState,
-                                modifier = Modifier.fillMaxSize(),
+                                // RW-25: the scroll's ground IS the sheet
+                                // surface — the sheet reads continuous
+                                // from its overlap of the photo to the
+                                // footer.
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(RunWearColors.Surface),
                                 contentPadding = PaddingValues(bottom = 60.dp)
                             ) {
                                 item {
-                                    Column {
-                                        HeroSectionContent(
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(RunWearColors.Surface)
+                                    ) {
+                                        HeroStackedUnit(
                                             uiState = uiState,
                                             contentVisible = contentVisible,
                                             scrollOffset = scrollOffset.value,
@@ -332,7 +361,9 @@ Get your personalized running outfit at runwear.ai
                             LazyVerticalGrid(
                                 columns = GridCells.Adaptive(minSize = OUTFIT_GRID_MIN_CELL),
                                 state = gridState,
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(RunWearColors.Surface),
                                 contentPadding = PaddingValues(
                                     start = spec.pagePadding,
                                     end = spec.pagePadding,
@@ -342,8 +373,12 @@ Get your personalized running outfit at runwear.ai
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 item(span = { GridItemSpan(maxLineSpan) }) {
-                                    Column {
-                                        HeroSectionContent(
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(RunWearColors.Surface)
+                                    ) {
+                                        HeroStackedUnit(
                                             uiState = uiState,
                                             contentVisible = contentVisible,
                                             scrollOffset = gridScrollOffset.value,
@@ -414,14 +449,9 @@ Get your personalized running outfit at runwear.ai
                                         uiState = uiState,
                                         contentVisible = contentVisible,
                                         scrollOffset = 0f,
-                                        onDateClick = { showDatePicker = true },
-                                        onTimeClick = { showTimePicker = true },
-                                        onNowClick = onResetToNow,
                                         onLocationClick = { showLocationPicker = true },
                                         onSettingsClick = { showSettings = true },
                                         onShareClick = { shareOutfit() },
-                                        onTempClick = onToggleUnit,
-                                        onWeatherPillClick = { type -> weatherDetailType = type },
                                         onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
@@ -449,7 +479,8 @@ Get your personalized running outfit at runwear.ai
                                     state = gridState,
                                     modifier = Modifier
                                         .weight(1f)
-                                        .fillMaxHeight(),
+                                        .fillMaxHeight()
+                                        .background(RunWearColors.Surface),
                                     contentPadding = PaddingValues(
                                         start = spec.pagePadding,
                                         end = spec.pagePadding,
@@ -458,6 +489,23 @@ Get your personalized running outfit at runwear.ai
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
+                                    // RW-25: in the split layout the sheet
+                                    // block tops the right pane as its
+                                    // first full-span item — no overlap
+                                    // (the photo is the left pane).
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        HeroSheetContent(
+                                            uiState = uiState,
+                                            contentVisible = contentVisible,
+                                            onDateClick = { showDatePicker = true },
+                                            onTimeClick = { showTimePicker = true },
+                                            onNowClick = onResetToNow,
+                                            onTempClick = onToggleUnit,
+                                            onWeatherPillClick = { type -> weatherDetailType = type },
+                                            overlapsPhoto = false,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                     outfitGridItems(
                                         uiState = uiState,
                                         contentVisible = contentVisible,
@@ -504,6 +552,24 @@ Get your personalized running outfit at runwear.ai
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 24.dp)
         )
+
+        // RW-25: "Wear I've Run" mini bar dock — bottom-aligned above
+        // the content, its slot kept clear of the snackbar's (the
+        // snackbar offset above is preserved). Renders only for
+        // non-PreAdd states; the holder yields PreAdd only in this
+        // build (the collection is not built), so nothing shows.
+        if (wearIveRunState != WearIveRunBarState.PreAdd) {
+            WearIveRunMiniBar(
+                state = wearIveRunState,
+                onExpandClick = {},
+                onCollapseClick = {},
+                onRemoveClick = {},
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 88.dp)
+            )
+        }
     }
 
     // Date Picker
@@ -540,6 +606,8 @@ Get your personalized running outfit at runwear.ai
             onToggleUnit = onToggleUnit,
             onSetComfortPreference = onSetComfortPreference,
             onSetGenderPreference = onSetGenderPreference,
+            appearancePreference = appearancePreference,
+            onSetAppearancePreference = onSetAppearancePreference,
             analyticsOptIn = analyticsOptIn,
             onAnalyticsOptInChange = onAnalyticsOptInChange,
             onSendFeedback = {
@@ -768,10 +836,101 @@ internal fun outfitGridColumns(contentWidth: Dp, gap: Dp): Int {
 }
 
 /**
- * Hero section with entrance animation (shared across all adaptive layouts).
+ * Hero PHOTO zone with entrance animation (shared across all adaptive
+ * layouts). RW-25: the photo carries chrome only — everything else
+ * lives on the sheet ([HeroSheetContent]).
  */
 @Composable
 private fun HeroSectionContent(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    scrollOffset: Float,
+    onLocationClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onShareClick: () -> Unit,
+    onFlagClick: () -> Unit,
+    heroFlagEnabled: Boolean,
+    onCycleHero: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = contentVisible,
+        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+    ) {
+        HeroSection(
+            weather = uiState.weather,
+            outfit = uiState.outfit,
+            locationName = uiState.locationName,
+            heroImageUrl = uiState.heroImageUrl,
+            scrollOffset = scrollOffset,
+            onLocationClick = onLocationClick,
+            onSettingsClick = onSettingsClick,
+            onShareClick = onShareClick,
+            // RW-16.27: the flag chip shows for ANY hero photo — a
+            // personal photo most of all (its menu is the personal
+            // one) — and the refresh chip follows the ROTATION size
+            // (personal photo + pool candidates), so both controls
+            // live in the personal state too.
+            showFlagButton = uiState.heroImageUrl != null,
+            flagEnabled = heroFlagEnabled,
+            onFlagClick = onFlagClick,
+            heroIsPersonal = uiState.heroIsPersonal,
+            showRefreshButton = uiState.heroImageUrl != null &&
+                uiState.heroCandidates.size +
+                (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
+            onRefreshHeroClick = onCycleHero,
+            modifier = modifier
+        )
+    }
+}
+
+/**
+ * The home SHEET block with the same entrance treatment as the photo
+ * zone. [overlapsPhoto] is true in the stacked layouts (rounded top
+ * over the photo's foot) and false atop the EXPANDED right pane.
+ */
+@Composable
+private fun HeroSheetContent(
+    uiState: MainUiState,
+    contentVisible: Boolean,
+    onDateClick: () -> Unit,
+    onTimeClick: () -> Unit,
+    onNowClick: () -> Unit,
+    onTempClick: () -> Unit,
+    onWeatherPillClick: (String) -> Unit,
+    overlapsPhoto: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = contentVisible,
+        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+    ) {
+        HeroSheetBlock(
+            weather = uiState.weather,
+            locationName = uiState.locationName,
+            selectedDateTime = uiState.selectedDateTime,
+            locationNow = uiState.locationNow,
+            isNowSelected = uiState.isNowSelected,
+            onDateClick = onDateClick,
+            onTimeClick = onTimeClick,
+            onNowClick = onNowClick,
+            onTempClick = onTempClick,
+            onWeatherPillClick = onWeatherPillClick,
+            overlapsPhoto = overlapsPhoto,
+            modifier = modifier
+        )
+    }
+}
+
+/**
+ * RW-25: the stacked layouts' two-zone unit — the photo zone with the
+ * sheet block overlapping its foot by [HeroSheetOverlap]. The Box is
+ * sized heroHeight + sheetBlockHeight − overlap; the sheet's height
+ * is measured as it composes (seeded with a close estimate so the
+ * first frame barely moves).
+ */
+@Composable
+private fun HeroStackedUnit(
     uiState: MainUiState,
     contentVisible: Boolean,
     scrollOffset: Float,
@@ -788,41 +947,46 @@ private fun HeroSectionContent(
     onCycleHero: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    AnimatedVisibility(
-        visible = contentVisible,
-        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val heroHeight = heroPhotoHeight(configuration.screenHeightDp)
+    var sheetHeight by remember { mutableStateOf(248.dp) }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(heroHeight + sheetHeight - HeroSheetOverlap)
     ) {
-        HeroSection(
-            weather = uiState.weather,
-            outfit = uiState.outfit,
-            locationName = uiState.locationName,
-            selectedDateTime = uiState.selectedDateTime,
-            locationNow = uiState.locationNow,
-            isNowSelected = uiState.isNowSelected,
-            heroImageUrl = uiState.heroImageUrl,
+        HeroSectionContent(
+            uiState = uiState,
+            contentVisible = contentVisible,
             scrollOffset = scrollOffset,
-            onDateClick = onDateClick,
-            onTimeClick = onTimeClick,
-            onNowClick = onNowClick,
             onLocationClick = onLocationClick,
             onSettingsClick = onSettingsClick,
             onShareClick = onShareClick,
+            onFlagClick = onFlagClick,
+            heroFlagEnabled = heroFlagEnabled,
+            onCycleHero = onCycleHero,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .fillMaxWidth()
+        )
+        HeroSheetContent(
+            uiState = uiState,
+            contentVisible = contentVisible,
+            onDateClick = onDateClick,
+            onTimeClick = onTimeClick,
+            onNowClick = onNowClick,
             onTempClick = onTempClick,
             onWeatherPillClick = onWeatherPillClick,
-            // RW-16.27: the flag chip shows for ANY hero photo — a
-            // personal photo most of all (its menu is the personal
-            // one) — and the refresh chip follows the ROTATION size
-            // (personal photo + pool candidates), so both controls
-            // live in the personal state too.
-            showFlagButton = uiState.heroImageUrl != null,
-            flagEnabled = heroFlagEnabled,
-            onFlagClick = onFlagClick,
-            heroIsPersonal = uiState.heroIsPersonal,
-            showRefreshButton = uiState.heroImageUrl != null &&
-                uiState.heroCandidates.size +
-                (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
-            onRefreshHeroClick = onCycleHero,
-            modifier = modifier
+            overlapsPhoto = true,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .onSizeChanged { size ->
+                    val measured = with(density) { size.height.toDp() }
+                    if (measured != sheetHeight) sheetHeight = measured
+                }
         )
     }
 }
@@ -852,14 +1016,12 @@ private fun OutfitSectionHeader(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-                // "X Items for Your Run"
+                // "X Items for Your Run" — RW-25: Bebas retired from
+                // the home surface; M3 headlineSmall (semibold sans).
                 Text(
                     text = "$itemCount Items for Your Run",
-                    fontFamily = BebasNeueFontFamily,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = RunWearColors.TextPrimary,
-                    letterSpacing = 0.56.sp
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = RunWearColors.TextPrimary
                 )
 
                 // Shop button - opens shop modal

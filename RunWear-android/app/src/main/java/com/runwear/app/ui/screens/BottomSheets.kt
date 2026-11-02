@@ -49,7 +49,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.runwear.app.ui.components.getCategoryIconRes
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.domain.model.*
@@ -107,9 +106,7 @@ fun DatePickerSheet(
         ) {
             Text(
                 text = "SELECT DATE",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary
             )
 
@@ -195,9 +192,7 @@ fun TimePickerSheet(
         ) {
             Text(
                 text = "SELECT TIME",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary
             )
 
@@ -306,6 +301,10 @@ fun SettingsSheet(
     onToggleUnit: () -> Unit,
     onSetComfortPreference: (ComfortPreference) -> Unit,
     onSetGenderPreference: (GenderPreference) -> Unit,
+    /** RW-25: appearance (System / Light / Dark); defaulted so other
+     * call sites and tests don't churn. */
+    appearancePreference: AppearancePreference = AppearancePreference.SYSTEM,
+    onSetAppearancePreference: (AppearancePreference) -> Unit = {},
     analyticsOptIn: Boolean,
     onAnalyticsOptInChange: (Boolean) -> Unit,
     onSendFeedback: () -> Unit,
@@ -335,9 +334,7 @@ fun SettingsSheet(
         ) {
             Text(
                 text = "SETTINGS",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
@@ -350,6 +347,29 @@ fun SettingsSheet(
                 UnitToggle(
                     isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
                     onToggle = { onToggleUnit() }
+                )
+            }
+
+            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+
+            // Appearance (RW-25) — System follows the device; Light /
+            // Dark pin the app theme.
+            Column {
+                Text(
+                    text = "Appearance",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = RunWearColors.TextPrimary
+                )
+                Text(
+                    text = "Match your device, or always light or dark",
+                    fontSize = 12.sp,
+                    color = RunWearColors.TextMuted,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                )
+                AppearanceSelector(
+                    selected = appearancePreference,
+                    onSelect = onSetAppearancePreference
                 )
             }
 
@@ -581,6 +601,48 @@ private fun UnitToggle(
 }
 
 /**
+ * RW-25 Appearance Selector — the sheet's picker-row idiom (same
+ * track + selected-fill treatment as [ComfortSelector]) with the
+ * three appearance options.
+ */
+@Composable
+private fun AppearanceSelector(
+    selected: AppearancePreference,
+    onSelect: (AppearancePreference) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(RunWearColors.BgCardLight)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        AppearancePreference.entries.forEach { pref ->
+            val isSelected = pref == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
+                    .clickable { onSelect(pref) }
+                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = pref.label,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (isSelected) Color.White else RunWearColors.TextPrimary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/**
  * PWA v2.9 Comfort Selector - 5 options in a row
  */
 @Composable
@@ -716,9 +778,7 @@ fun LocationPickerSheet(
         ) {
             Text(
                 text = "SET LOCATION",
-                fontFamily = BebasNeueFontFamily,
-                fontSize = 24.sp,
-                letterSpacing = 0.48.sp,
+                style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
@@ -982,9 +1042,7 @@ fun ShopAllSheet(
             ) {
                 Text(
                     text = "SHOP YOUR OUTFIT",
-                    fontFamily = BebasNeueFontFamily,
-                    fontSize = 24.sp,
-                    letterSpacing = 0.48.sp,
+                    style = MaterialTheme.typography.titleLarge,
                     color = RunWearColors.TextPrimary
                 )
 

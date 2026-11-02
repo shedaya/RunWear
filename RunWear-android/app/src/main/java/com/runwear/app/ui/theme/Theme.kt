@@ -1,63 +1,201 @@
 package com.runwear.app.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import com.runwear.shared.domain.model.AppearancePreference
+import com.runwear.shared.domain.model.TempBracket
 
 // ============================================================================
-// RUNWEAR HERO-IMAGE DESIGN SYSTEM - January 2026
+// RUNWEAR DESIGN SYSTEM — RW-25 theme pair (dark + light, pine seed)
 // ============================================================================
 
 /**
- * RunWear Color System
- * Based on hero-image design spec with temperature-reactive tints
+ * RW-25: the full token set for one appearance. Every token name that
+ * [RunWearColors] has always exposed lives here; [DarkPalette] and
+ * [LightPalette] are the two instances, and [RunWearTheme] publishes the
+ * active one so the legacy `RunWearColors.X` reads keep working at every
+ * existing call site while following the resolved theme.
+ *
+ * The temperature bracket hexes are SHARED by both palettes and must not
+ * drift — they are pinned by unit tests (RW-25 gate).
+ */
+data class RunWearPalette(
+    val Primary: Color,
+    val PrimaryLight: Color,
+    val PrimaryDark: Color,
+    val PrimaryGlow: Color,
+    val CategoryTop: Color,
+    val CategoryBottom: Color,
+    val CategoryHead: Color,
+    val CategoryHands: Color,
+    val CategoryAccessories: Color,
+    val TempFreezing: Color,
+    val TempCold: Color,
+    val TempCool: Color,
+    val TempMild: Color,
+    val TempWarm: Color,
+    val TempHot: Color,
+    val Background: Color,
+    /** The home sheet's surface (and the M3 surface role). */
+    val Surface: Color,
+    /** Card-on-sheet fill: outfit cards sit on the sheet surface. */
+    val BgCard: Color,
+    val SurfaceElevated: Color,
+    val BgCardLight: Color,
+    val TextPrimary: Color,
+    val TextSecondary: Color,
+    val TextMuted: Color,
+    val GlassBackground: Color,
+    val GlassBorder: Color,
+    val GlassBackgroundHover: Color
+)
+
+// Pine seed (RW-25 rebrand): replaces the legacy teal primary family in
+// BOTH palettes. Buttons/links that read Primary (shop gradient, the
+// feedback link, toggles) rebrand with it — intended.
+private val PinePrimary = Color(0xFF175E4C)
+private val PinePrimaryLight = Color(0xFF2E7D64)
+private val PinePrimaryDark = Color(0xFF0E3D30)
+private val PinePrimaryGlow = Color(0x4D175E4C) // pine at 30% alpha
+
+// Temperature bracket colors — the newer Android set, kept exactly.
+private val TempFreezingHex = Color(0xFF8B5CF6) // Purple - <20°F
+private val TempColdHex = Color(0xFF6366F1)     // Indigo - 20-34°F
+private val TempCoolHex = Color(0xFF3B82F6)     // Blue - 35-49°F
+private val TempMildHex = Color(0xFF10B981)     // Teal - 50-64°F
+private val TempWarmHex = Color(0xFFF59E0B)     // Amber - 65-79°F
+private val TempHotHex = Color(0xFFF97316)      // Orange - 80°F+
+
+// Glass morphism colors - PWA v2.9 exact values. Photo chrome is
+// theme-independent, so both palettes carry the same glass tokens.
+private val GlassBackgroundHex = Color(0x1FFFFFFF)   // rgba(255, 255, 255, 0.12)
+private val GlassBorderHex = Color(0x26FFFFFF)       // rgba(255, 255, 255, 0.15)
+private val GlassBackgroundHoverHex = Color(0x26FFFFFF)
+
+val DarkPalette = RunWearPalette(
+    Primary = PinePrimary,
+    PrimaryLight = PinePrimaryLight,
+    PrimaryDark = PinePrimaryDark,
+    PrimaryGlow = PinePrimaryGlow,
+    // Category Colors (for outfit items) - WCAG AA compliant on white backgrounds
+    CategoryTop = Color(0xFF00796B),
+    CategoryBottom = Color(0xFF1565C0),
+    CategoryHead = Color(0xFF2E7D32),
+    CategoryHands = Color(0xFF5E35B1),
+    CategoryAccessories = Color(0xFFE65100),
+    TempFreezing = TempFreezingHex,
+    TempCold = TempColdHex,
+    TempCool = TempCoolHex,
+    TempMild = TempMildHex,
+    TempWarm = TempWarmHex,
+    TempHot = TempHotHex,
+    // Surface Colors (dark theme base) - PWA v2.7 values, unchanged
+    Background = Color(0xFF0A0A0A),
+    Surface = Color(0xFF1A1A1A),
+    BgCard = Color(0xFF1A1A1A),
+    SurfaceElevated = Color(0xFF262626),
+    BgCardLight = Color(0xFF262626),
+    TextPrimary = Color(0xFFFFFFFF),
+    TextSecondary = Color(0xFFB3B3B3),
+    // RW-25 contrast floor: raised from #737373, which failed AA on the
+    // dark surfaces it is actually read on.
+    TextMuted = Color(0xFF9A9A9A),
+    GlassBackground = GlassBackgroundHex,
+    GlassBorder = GlassBorderHex,
+    GlassBackgroundHover = GlassBackgroundHoverHex
+)
+
+val LightPalette = RunWearPalette(
+    Primary = PinePrimary,
+    PrimaryLight = PinePrimaryLight,
+    PrimaryDark = PinePrimaryDark,
+    PrimaryGlow = PinePrimaryGlow,
+    CategoryTop = Color(0xFF00796B),
+    CategoryBottom = Color(0xFF1565C0),
+    CategoryHead = Color(0xFF2E7D32),
+    CategoryHands = Color(0xFF5E35B1),
+    CategoryAccessories = Color(0xFFE65100),
+    TempFreezing = TempFreezingHex,
+    TempCold = TempColdHex,
+    TempCool = TempCoolHex,
+    TempMild = TempMildHex,
+    TempWarm = TempWarmHex,
+    TempHot = TempHotHex,
+    Background = Color(0xFFF5F5F5),
+    Surface = Color(0xFFFFFFFF),
+    BgCard = Color(0xFFF5F5F5),
+    SurfaceElevated = Color(0xFFFFFFFF),
+    BgCardLight = Color(0xFFF5F5F5),
+    TextPrimary = Color(0xFF17191C),
+    TextSecondary = Color(0xFF5A6068),
+    TextMuted = Color(0xFF6B7280),
+    GlassBackground = GlassBackgroundHex,
+    GlassBorder = GlassBorderHex,
+    GlassBackgroundHover = GlassBackgroundHoverHex
+)
+
+/**
+ * RunWear Color System — now a theme-driven token holder (RW-25).
+ *
+ * Every property delegates to the palette [RunWearTheme] most recently
+ * published (dark until a theme composes). Reads during composition
+ * subscribe to the palette snapshot, so an appearance change re-themes
+ * every surface that reads tokens — which is all of them.
  */
 object RunWearColors {
-    // Brand Colors
-    val Primary = Color(0xFF00796B)           // Teal - PRIMARY brand color
-    val PrimaryLight = Color(0xFF4DB6AC)      // Lighter teal
-    val PrimaryDark = Color(0xFF004D40)       // Darker teal
-    val PrimaryGlow = Color(0x4D00796B)       // rgba(0, 121, 107, 0.3)
+    private var activePalette by mutableStateOf<RunWearPalette>(DarkPalette)
 
-    // Category Colors (for outfit items) - WCAG AA compliant on white backgrounds
-    val CategoryTop = Color(0xFF00796B)       // Teal (tops)
-    val CategoryBottom = Color(0xFF1565C0)    // Blue (bottoms)
-    val CategoryHead = Color(0xFF2E7D32)      // Green (head)
-    val CategoryHands = Color(0xFF5E35B1)     // Purple (hands)
-    val CategoryAccessories = Color(0xFFE65100) // Orange (accessories)
+    internal fun setActivePalette(palette: RunWearPalette) {
+        activePalette = palette
+    }
 
-    // Temperature Bracket Colors (for hero tint and temperature display)
-    val TempFreezing = Color(0xFF8B5CF6)      // Purple - <20°F
-    val TempCold = Color(0xFF6366F1)          // Indigo - 20-34°F
-    val TempCool = Color(0xFF3B82F6)          // Blue - 35-49°F
-    val TempMild = Color(0xFF10B981)          // Teal - 50-64°F
-    val TempWarm = Color(0xFFF59E0B)          // Amber - 65-79°F
-    val TempHot = Color(0xFFF97316)           // Orange - 80°F+
+    /** The palette currently published by [RunWearTheme] (test-visible). */
+    val currentPalette: RunWearPalette get() = activePalette
 
-    // Surface Colors (dark theme base) - PWA v2.7 values
-    val Background = Color(0xFF0A0A0A)        // --bg-dark: #0A0A0A
-    val Surface = Color(0xFF1A1A1A)           // --bg-card: #1A1A1A
-    val BgCard = Color(0xFF1A1A1A)            // Outfit cards use this
-    val SurfaceElevated = Color(0xFF262626)   // --bg-card-light: #262626
-    val BgCardLight = Color(0xFF262626)       // Alias for toggle backgrounds
+    val Primary: Color get() = activePalette.Primary
+    val PrimaryLight: Color get() = activePalette.PrimaryLight
+    val PrimaryDark: Color get() = activePalette.PrimaryDark
+    val PrimaryGlow: Color get() = activePalette.PrimaryGlow
 
-    // Text Colors
-    val TextPrimary = Color(0xFFFFFFFF)
-    val TextSecondary = Color(0xFFB3B3B3)
-    val TextMuted = Color(0xFF737373)
+    val CategoryTop: Color get() = activePalette.CategoryTop
+    val CategoryBottom: Color get() = activePalette.CategoryBottom
+    val CategoryHead: Color get() = activePalette.CategoryHead
+    val CategoryHands: Color get() = activePalette.CategoryHands
+    val CategoryAccessories: Color get() = activePalette.CategoryAccessories
 
-    // Glass morphism colors - PWA v2.9 exact values
-    // NOTE: These are the EXACT PWA values from index.php CSS
-    val GlassBackground = Color(0x1FFFFFFF)   // rgba(255, 255, 255, 0.12) = 12% white
-    val GlassBorder = Color(0x26FFFFFF)       // rgba(255, 255, 255, 0.15) = 15% white
-    val GlassBackgroundHover = Color(0x26FFFFFF) // rgba(255, 255, 255, 0.15) = 15% white (active state)
+    val TempFreezing: Color get() = activePalette.TempFreezing
+    val TempCold: Color get() = activePalette.TempCold
+    val TempCool: Color get() = activePalette.TempCool
+    val TempMild: Color get() = activePalette.TempMild
+    val TempWarm: Color get() = activePalette.TempWarm
+    val TempHot: Color get() = activePalette.TempHot
+
+    val Background: Color get() = activePalette.Background
+    val Surface: Color get() = activePalette.Surface
+    val BgCard: Color get() = activePalette.BgCard
+    val SurfaceElevated: Color get() = activePalette.SurfaceElevated
+    val BgCardLight: Color get() = activePalette.BgCardLight
+
+    val TextPrimary: Color get() = activePalette.TextPrimary
+    val TextSecondary: Color get() = activePalette.TextSecondary
+    val TextMuted: Color get() = activePalette.TextMuted
+
+    val GlassBackground: Color get() = activePalette.GlassBackground
+    val GlassBorder: Color get() = activePalette.GlassBorder
+    val GlassBackgroundHover: Color get() = activePalette.GlassBackgroundHover
 }
 
 // Legacy color aliases for backward compatibility with existing code
-val NeoMint = RunWearColors.Primary
+val NeoMint = DarkPalette.Primary
 val ElectricCoral = Color(0xFFFF6B6B)
 val PrimaryOrange = Color(0xFFFF6B35)
 val PrimaryOrangeDark = Color(0xFFE55A2B)
@@ -76,6 +214,22 @@ val TempFreezing = Color(0xFF9C27B0)
 val InterFontFamily = FontFamily.Default
 
 // ============================================================================
+// APPEARANCE RESOLUTION (RW-25)
+// ============================================================================
+
+/**
+ * Resolve the user's [AppearancePreference] to the dark-theme flag
+ * [RunWearTheme] consumes. SYSTEM follows the device; LIGHT/DARK pin.
+ * Pure — unit-tested as a truth table.
+ */
+fun resolveDarkTheme(preference: AppearancePreference, systemInDarkTheme: Boolean): Boolean =
+    when (preference) {
+        AppearancePreference.SYSTEM -> systemInDarkTheme
+        AppearancePreference.LIGHT -> false
+        AppearancePreference.DARK -> true
+    }
+
+// ============================================================================
 // TEMPERATURE COLOR FUNCTIONS
 // ============================================================================
 
@@ -90,6 +244,21 @@ fun getTemperatureColor(tempFahrenheit: Double): Color = when {
     tempFahrenheit < 65 -> RunWearColors.TempMild
     tempFahrenheit < 80 -> RunWearColors.TempWarm
     else -> RunWearColors.TempHot
+}
+
+/**
+ * RW-25: the temperature color for a [TempBracket] — the sheet's
+ * temperature chip dot. Same hexes as [getTemperatureColor]; the
+ * bracket boundaries in [TempBracket.fromFahrenheit] align with the
+ * thresholds above. Pinned by unit tests.
+ */
+fun temperatureBracketColor(bracket: TempBracket): Color = when (bracket) {
+    TempBracket.FREEZING -> RunWearColors.TempFreezing
+    TempBracket.COLD -> RunWearColors.TempCold
+    TempBracket.COOL -> RunWearColors.TempCool
+    TempBracket.MILD -> RunWearColors.TempMild
+    TempBracket.WARM -> RunWearColors.TempWarm
+    TempBracket.HOT -> RunWearColors.TempHot
 }
 
 /**
@@ -110,30 +279,29 @@ fun getTemperatureFallbackGradient(tempFahrenheit: Double): Color {
 }
 
 // ============================================================================
-// MATERIAL 3 COLOR SCHEMES
+// MATERIAL 3 COLOR SCHEMES — roles rebuilt from the palettes (RW-25)
 // ============================================================================
 
-// Dark theme colors (primary theme for hero-image design)
 private val DarkColorScheme = darkColorScheme(
-    primary = RunWearColors.Primary,
+    primary = DarkPalette.Primary,
     onPrimary = Color.White,
-    primaryContainer = RunWearColors.PrimaryDark,
-    onPrimaryContainer = RunWearColors.PrimaryLight,
-    secondary = Color(0xFF4DB6AC),
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF00363D),
-    onSecondaryContainer = Color(0xFF70F5E6),
-    tertiary = Color(0xFFF59E0B),
+    primaryContainer = DarkPalette.PrimaryDark,
+    onPrimaryContainer = DarkPalette.PrimaryLight,
+    secondary = DarkPalette.PrimaryLight,
+    onSecondary = Color.White,
+    secondaryContainer = DarkPalette.PrimaryDark,
+    onSecondaryContainer = DarkPalette.PrimaryLight,
+    tertiary = DarkPalette.TempWarm,
     onTertiary = Color.Black,
     tertiaryContainer = Color(0xFF5F3D00),
     onTertiaryContainer = Color(0xFFFFDDB3),
-    background = RunWearColors.Background,
-    onBackground = RunWearColors.TextPrimary,
-    surface = RunWearColors.Surface,
-    onSurface = RunWearColors.TextPrimary,
-    surfaceVariant = RunWearColors.SurfaceElevated,
-    onSurfaceVariant = RunWearColors.TextSecondary,
-    outline = RunWearColors.TextMuted,
+    background = DarkPalette.Background,
+    onBackground = DarkPalette.TextPrimary,
+    surface = DarkPalette.Surface,
+    onSurface = DarkPalette.TextPrimary,
+    surfaceVariant = DarkPalette.SurfaceElevated,
+    onSurfaceVariant = DarkPalette.TextSecondary,
+    outline = DarkPalette.TextMuted,
     outlineVariant = Color(0xFF3D3D3D),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
@@ -141,28 +309,27 @@ private val DarkColorScheme = darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6)
 )
 
-// Light theme colors (fallback, but hero design prefers dark)
 private val LightColorScheme = lightColorScheme(
-    primary = RunWearColors.Primary,
+    primary = LightPalette.Primary,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFB2DFDB),
-    onPrimaryContainer = RunWearColors.PrimaryDark,
-    secondary = Color(0xFF00897B),
+    primaryContainer = LightPalette.PrimaryLight,
+    onPrimaryContainer = Color.White,
+    secondary = LightPalette.PrimaryLight,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFB2DFDB),
-    onSecondaryContainer = Color(0xFF00363D),
-    tertiary = Color(0xFFE65100),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFCC80),
+    secondaryContainer = LightPalette.BgCard,
+    onSecondaryContainer = LightPalette.PrimaryDark,
+    tertiary = LightPalette.TempWarm,
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFFFFDDB3),
     onTertiaryContainer = Color(0xFF5F3D00),
-    background = Color(0xFFFFFBFE),
-    onBackground = Color(0xFF1C1B1F),
-    surface = Color(0xFFFFFBFE),
-    onSurface = Color(0xFF1C1B1F),
-    surfaceVariant = Color(0xFFE7E0EC),
-    onSurfaceVariant = Color(0xFF49454F),
-    outline = Color(0xFF79747E),
-    outlineVariant = Color(0xFFCAC4D0),
+    background = LightPalette.Background,
+    onBackground = LightPalette.TextPrimary,
+    surface = LightPalette.Surface,
+    onSurface = LightPalette.TextPrimary,
+    surfaceVariant = LightPalette.BgCard,
+    onSurfaceVariant = LightPalette.TextSecondary,
+    outline = LightPalette.TextMuted,
+    outlineVariant = Color(0xFFD8D8D8),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),
@@ -175,14 +342,26 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun RunWearTheme(
-    darkTheme: Boolean = true, // Default to dark for hero-image design
-    dynamicColor: Boolean = false, // Disable dynamic colors to maintain design consistency
+    // RW-25: an unresolved call follows the SYSTEM appearance — the
+    // pre-RW-25 hardcoded `= true` forced dark on every surface that
+    // did not pass the flag (tests, previews, secondary screens).
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    // Dynamic color stays OFF by design (RW-25): Material You would
+    // re-seed the scheme from the wallpaper and fight the pine brand
+    // seed. The pine palette is the product's color identity.
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val palette = if (darkTheme) DarkPalette else LightPalette
+
+    // Publish the palette to the RunWearColors token holder so every
+    // legacy token read follows this theme.
+    SideEffect {
+        RunWearColors.setActivePalette(palette)
+    }
 
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
         content = content
     )

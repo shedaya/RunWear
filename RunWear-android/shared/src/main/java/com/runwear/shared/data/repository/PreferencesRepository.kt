@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.runwear.shared.domain.model.AppearancePreference
 import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.TemperatureUnit
@@ -29,7 +30,9 @@ data class UserPreferences(
     val temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
     val comfortPreference: ComfortPreference = ComfortPreference.NEUTRAL,
     val genderPreference: GenderPreference = GenderPreference.UNISEX,
-    val hasCompletedOnboarding: Boolean = false
+    val hasCompletedOnboarding: Boolean = false,
+    /** RW-25: appearance (theme) preference; SYSTEM until the user pins one. */
+    val appearancePreference: AppearancePreference = AppearancePreference.SYSTEM
 )
 
 data class SavedLocation(
@@ -47,6 +50,7 @@ class PreferencesRepository @Inject constructor(
         val USE_CELSIUS = booleanPreferencesKey("use_celsius")
         val COMFORT_PREFERENCE = intPreferencesKey("comfort_preference")
         val GENDER_PREFERENCE = intPreferencesKey("gender_preference")
+        val APPEARANCE_PREFERENCE = intPreferencesKey("appearance_preference")
         val COMPLETED_ONBOARDING = booleanPreferencesKey("completed_onboarding")
         // Manual location keys
         val MANUAL_LAT = stringPreferencesKey("manual_lat")
@@ -62,7 +66,9 @@ class PreferencesRepository @Inject constructor(
                 ?: ComfortPreference.NEUTRAL,
             genderPreference = GenderPreference.entries.getOrNull(prefs[Keys.GENDER_PREFERENCE] ?: 2)
                 ?: GenderPreference.UNISEX,
-            hasCompletedOnboarding = prefs[Keys.COMPLETED_ONBOARDING] ?: false
+            hasCompletedOnboarding = prefs[Keys.COMPLETED_ONBOARDING] ?: false,
+            appearancePreference = AppearancePreference.entries.getOrNull(prefs[Keys.APPEARANCE_PREFERENCE] ?: 0)
+                ?: AppearancePreference.SYSTEM
         )
     }
     
@@ -81,6 +87,12 @@ class PreferencesRepository @Inject constructor(
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[Keys.COMPLETED_ONBOARDING] = completed
+        }
+    }
+
+    suspend fun setAppearancePreference(preference: AppearancePreference) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.APPEARANCE_PREFERENCE] = preference.ordinal
         }
     }
 
