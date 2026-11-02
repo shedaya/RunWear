@@ -38,6 +38,20 @@ data class LocationResult(
 internal fun coarseCoordinate(value: Double): Double =
     (value * 10).roundToInt() / 10.0
 
+/**
+ * The place-name rounding applied at the reverse-geocode request
+ * boundary: coordinates are rounded to 3 decimal places (~111 m)
+ * before they are handed to Nominatim, so the request never carries
+ * the full-precision GPS fix — the declared posture is approximate
+ * location. Finer than [coarseCoordinate] on purpose: a place name
+ * must remain the user's actual locality, and 1 dp (~11 km) can name
+ * a neighbouring town. Applied only inside [WeatherRepository.reverseGeocode];
+ * callers keep passing full precision in and stored/displayed
+ * coordinates are never rounded.
+ */
+internal fun geocodeCoordinate(value: Double): Double =
+    (value * 1000).roundToInt() / 1000.0
+
 @Singleton
 class WeatherRepository @Inject constructor(
     private val weatherApi: OpenMeteoApi,
@@ -236,7 +250,10 @@ class WeatherRepository @Inject constructor(
     }
     
     suspend fun reverseGeocode(latitude: Double, longitude: Double): Result<String> = runCatching {
-        val response = nominatimApi.reverseGeocode(latitude, longitude)
+        val response = nominatimApi.reverseGeocode(
+            geocodeCoordinate(latitude),
+            geocodeCoordinate(longitude)
+        )
         val address = response.address
         
         val city = address?.city ?: address?.town ?: address?.village 
