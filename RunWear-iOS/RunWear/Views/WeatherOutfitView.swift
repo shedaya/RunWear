@@ -12,6 +12,10 @@ struct WeatherOutfitView: View {
     /// not built, so the model only ever yields .preAdd in this
     /// build and the dock renders nothing.
     private var miniBarState: WearIveRunState { WearIveRunMiniBarModel.currentState }
+    /// RW-25 scroll-handoff progress (0 = hero full-frame at rest,
+    /// 1 = settled as a card under the nav bar), driven by
+    /// onScrollGeometryChange on the stacked scroll views.
+    @State private var heroScrollProgress: CGFloat = 0
     @EnvironmentObject var personalStore: PersonalHeroStore
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
@@ -363,6 +367,11 @@ struct WeatherOutfitView: View {
                         }
                     }
                 }
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
+                } action: { _, offset in
+                    updateHeroScrollProgress(offset: offset)
+                }
                 .refreshable { onRefresh() }
             } else {
                 ScrollView {
@@ -376,6 +385,11 @@ struct WeatherOutfitView: View {
                     .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    max(0, geometry.contentOffset.y + geometry.contentInsets.top)
+                } action: { _, offset in
+                    updateHeroScrollProgress(offset: offset)
+                }
                 .refreshable { onRefresh() }
             }
         }
@@ -386,19 +400,25 @@ struct WeatherOutfitView: View {
     /// The hero with the native scroll handoff: as it scrolls up the
     /// photo scales toward 0.94, clips to 24pt rounded corners and
     /// gains a 16pt horizontal inset, settling as a card under the
-    /// nav bar. Reduce Motion removes the transform (instant state).
-    @ViewBuilder private var heroWithScrollHandoff: some View {
-        if reduceMotion {
-            heroSection()
-        } else {
-            heroSection()
-                .scrollTransition(.interactive, axis: .vertical) { content, phase in
-                    content
-                        .scaleEffect(phase.isIdentity ? 1 : 0.94)
-                        .clipShape(RoundedRectangle(cornerRadius: phase.isIdentity ? 0 : 24))
-                        .padding(.horizontal, phase.isIdentity ? 0 : 16)
-                }
-        }
+    /// nav bar. Driven by onScrollGeometryChange state: the first
+    /// attempt used .scrollTransition(.interactive), whose content
+    /// is a VisualEffect in the current SDK — it has no clipShape /
+    /// padding members (CI run 41527045612 is the evidence), so the
+    /// spec's fallback drives the same end state from scroll
+    /// geometry instead. Reduce Motion removes the transform
+    /// entirely (the state still updates; nothing animates/scales).
+    private var heroWithScrollHandoff: some View {
+        let progress = reduceMotion ? 0 : heroScrollProgress
+        return heroSection()
+            .scaleEffect(1 - 0.06 * progress)
+            .clipShape(RoundedRectangle(cornerRadius: 24 * progress))
+            .padding(.horizontal, 16 * progress)
+    }
+
+    /// Scroll-offset -> handoff progress: full transition over the
+    /// first 220pt of scroll.
+    private func updateHeroScrollProgress(offset: CGFloat) {
+        heroScrollProgress = min(1, max(0, offset / 220))
     }
 
     /// The sheet surface for the stacked layouts: overlaps the
