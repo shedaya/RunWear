@@ -1,9 +1,11 @@
 package com.runwear.shared.data.repository
 
 import com.runwear.shared.domain.model.ClothingItem
+import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
+import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import kotlinx.datetime.LocalDateTime
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -109,6 +111,50 @@ class HeroPointGrainServingTest {
         val pending = row("pending", status = "pending")
         val rejected = row("rejected", status = "rejected")
         assertTrue(pointGrainImages(listOf(pending, rejected), cool39Outfit).isEmpty())
+    }
+
+    @Test
+    fun `Juneau rain serving - bare-handed rows must not serve when gloves are prescribed`() {
+        val juneauWeather = WeatherConditions(
+            dateTime = LocalDateTime(2026, 11, 5, 7, 0),
+            temperature = 40.0,
+            feelsLike = 32.0,
+            humidity = 80,
+            windSpeed = 11.0,
+            windGusts = 15.0,
+            precipitationProbability = 80,
+            precipitation = 0.5,
+            isRaining = true,
+            isSnowing = false,
+            cloudCover = 90,
+            uvIndex = 0.0,
+            weatherCode = WeatherCode.RAIN_MODERATE,
+            isCelsius = false
+        )
+        val outfit = GetOutfitRecommendationUseCase().execute(juneauWeather, ComfortPreference.RUNS_WARM)
+        assertEquals(ClothingItem.BASEBALL_CAP, outfit.head)
+        assertEquals(ClothingItem.LIGHT_GLOVES, outfit.hands)
+        assertEquals(ClothingItem.LIGHT_TIGHTS, outfit.bottom)
+        assertEquals(ClothingItem.RAIN_JACKET, outfit.topOuter)
+        assertEquals(ClothingItem.LONG_SLEEVE_LIGHT, outfit.topBase)
+
+        fun juneauRow(id: String, combinationId: String, hands: String?) = GeneratedImage(
+            id = id,
+            combinationId = combinationId,
+            imageUrl = "https://example.test/$id.webp",
+            reviewStatus = "approved",
+            personCount = 1,
+            garmentClasses = GarmentClasses(topBase = "long", outer = true, bottom = "tights", head = "cap", hands = hands)
+        )
+
+        val served1 = juneauRow("served1", "MALE_RAIN_COOL_MIDDAY_v6", null)
+        val served2 = juneauRow("served2", "MALE_RAIN_COOL_DUSK_v21", null)
+        val served3 = juneauRow("served3", "MALE_RAIN_COOL_NIGHT_v13", null)
+        val served4 = juneauRow("served4", "MALE_RAIN_COOL_DUSK_v14", null)
+        val correct = juneauRow("correct", "MALE_RAIN_COLD_DAWN_vX", "gloves")
+
+        val served = pointGrainImages(listOf(served1, served2, served3, served4, correct), outfit)
+        assertEquals(listOf("correct"), served.map { it.id })
     }
 
     @Test
