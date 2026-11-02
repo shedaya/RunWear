@@ -27,6 +27,27 @@ import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 /**
+ * RW-7.4 — the location privacy line, pinned verbatim by
+ * PermissionCopyTest. Every clause is checkable against the build:
+ * the most recent GPS fix is saved on-device (PreferencesRepository
+ * .saveGPSLocation) so the app reopens where the user left off;
+ * weather queries send coordinates rounded to 1 decimal place to
+ * Open-Meteo (WeatherRepository.coarseCoordinate); place-name
+ * reverse geocoding sends coordinates to Nominatim/OpenStreetMap.
+ * The previous line ("never stored or shared") was false on both
+ * halves and must not come back.
+ */
+object PermissionCopy {
+    const val LOCATION_PRIVACY_LINE =
+        "Your location fetches your weather and names your place. Your most " +
+            "recent location is saved on this phone so RunWear reopens where " +
+            "you left off. Weather lookups send your coordinates, rounded to " +
+            "a rough area, to Open-Meteo; place-name lookups send them to " +
+            "OpenStreetMap (Nominatim). Your location is never sold or used " +
+            "for advertising."
+}
+
+/**
  * Location permission screen, styled to match the main app interface:
  * centered status-screen layout (same pattern as the main screen's error
  * state) on RunWearColors.Background, Bebas Neue title (the app's display
@@ -164,7 +185,7 @@ fun PermissionScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Your location is only used to fetch weather data and is never stored or shared.",
+                text = PermissionCopy.LOCATION_PRIVACY_LINE,
                 fontSize = 12.sp,
                 color = RunWearColors.TextMuted,
                 textAlign = TextAlign.Center,
