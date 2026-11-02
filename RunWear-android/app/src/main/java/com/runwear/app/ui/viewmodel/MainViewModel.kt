@@ -311,7 +311,8 @@ class MainViewModel @Inject constructor(
         _uiState.update { state ->
             if (state.outfit != null) state else {
                 val seededHero = com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
-                    lastGood.weather, lastGood.outfit, state.genderPreference
+                    lastGood.weather, lastGood.outfit, state.genderPreference,
+                    frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(lastGood.weather, _uiState.value.comfortPreference)
                 )
                 state.copy(
                     isLoading = false,
@@ -789,7 +790,8 @@ class MainViewModel @Inject constructor(
                     heroImageRepository.getHeroImage(
                         weather = weather,
                         outfit = outfit,
-                        gender = gender
+                        gender = gender,
+                        comfort = _uiState.value.comfortPreference
                     )
                 }
             }.getOrNull()
@@ -799,7 +801,8 @@ class MainViewModel @Inject constructor(
             // no URL (shouldn't happen) degrades to the curated fallback.
             val hero = result?.takeIf { it.imageUrl != null }
                 ?: com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
-                    weather, outfit, gender
+                    weather, outfit, gender,
+                    frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, _uiState.value.comfortPreference)
                 )
             // If the user already used the refresh control today for
             // this cell, restore their pick over the random one.
@@ -917,7 +920,8 @@ class MainViewModel @Inject constructor(
         outfit: OutfitRecommendation
     ): Pair<String, List<String>> {
         val combination = com.runwear.shared.domain.model.OutfitCombination.fromConditions(
-            weather, outfit, _uiState.value.genderPreference
+            weather, outfit, _uiState.value.genderPreference,
+            frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, _uiState.value.comfortPreference)
         )
         return combination.id to outfit.allItems.map { it.name }
     }

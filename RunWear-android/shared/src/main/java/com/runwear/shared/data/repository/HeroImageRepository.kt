@@ -1,5 +1,6 @@
 package com.runwear.shared.data.repository
 
+import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.HeroImageResult
 import com.runwear.shared.domain.model.HeroPoolPolicy
@@ -88,7 +89,8 @@ class HeroImageRepository @Inject constructor() {
     suspend fun getHeroImage(
         weather: WeatherConditions?,
         outfit: OutfitRecommendation?,
-        gender: GenderPreference = GenderPreference.UNISEX
+        gender: GenderPreference = GenderPreference.UNISEX,
+        comfort: ComfortPreference
     ): HeroImageResult = withContext(Dispatchers.IO) {
         if (weather == null || outfit == null) {
             return@withContext HeroImageResult(
@@ -100,7 +102,10 @@ class HeroImageRepository @Inject constructor() {
 
         // v3.10: Use hero-specific gender (random when UNISEX) for image variety
         val heroGender = getHeroImageGender(gender)
-        val combination = OutfitCombination.fromConditions(weather, outfit, heroGender)
+        val combination = OutfitCombination.fromConditions(
+            weather, outfit, heroGender,
+            frameFeelsLikeF = com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, comfort)
+        )
 
         try {
             val searchResult = getRandomImage(combination, outfit)
@@ -256,18 +261,7 @@ class HeroImageRepository @Inject constructor() {
         val requestedCombo = "${gender}_${weather}_${temp}_${time}"
         val oppositeGender = if (gender == "MALE") "FEMALE" else "MALE"
 
-        // v3.11: Extended cascade with opposite gender fallback
-        val queries = mutableListOf(
-            "${gender}_${weather}_${temp}_${time}_%",  // 1. Exact
-            "${gender}_${weather}_${temp}_%",          // 2. Any time
-        )
-        // 3. Clear weather fallback (only if not already CLEAR)
-        if (weather != "CLEAR") {
-            queries.add("${gender}_CLEAR_${temp}_%")
-        }
-        // 4-5. Fall back to opposite gender (better than the bundled fallback)
-        queries.add("${oppositeGender}_${weather}_${temp}_%")
-        queries.add("${oppositeGender}_CLEAR_${temp}_%")
+        val queries = heroCascadePatterns(gender, weather, temp, time, oppositeGender)
 
         var exactMatchCount = 0
         var foundViaFallback = false
@@ -447,6 +441,46 @@ class HeroImageRepository @Inject constructor() {
 }
 
 /**
+ * RW-23: the hero cascade pattern list, in serving order.
+ *
+ * Canonical levels (v3.11, preserved exactly):
+ * 1. exact, 2. any-time, 3. clear-weather only when weather != "CLEAR",
+ * 4. opposite gender + weather, 5. opposite gender + clear.
+ *
+ * Legacy-token levels (appended AFTER every canonical level):
+ * 523 pool rows live under legacy RAINY/SNOWY combination tokens no
+ * canonical pattern can match (105 of them fully on-prescription);
+ * they join the cascade only after every canonical level, under the
+ * same review + point-grain gates.
+ */
+internal fun heroCascadePatterns(
+    gender: String,
+    weather: String,
+    temp: String,
+    time: String,
+    oppositeGender: String
+): List<String> {
+    val queries = mutableListOf(
+        "${gender}_${weather}_${temp}_${time}_%",
+        "${gender}_${weather}_${temp}_%"
+    )
+    if (weather != "CLEAR") {
+        queries.add("${gender}_CLEAR_${temp}_%")
+    }
+    queries.add("${oppositeGender}_${weather}_${temp}_%")
+    queries.add("${oppositeGender}_CLEAR_${temp}_%")
+    if (weather == "RAIN") {
+        queries.add("${gender}_RAINY_${temp}_%")
+        queries.add("${oppositeGender}_RAINY_${temp}_%")
+    }
+    if (weather == "SNOW") {
+        queries.add("${gender}_SNOWY_${temp}_%")
+        queries.add("${oppositeGender}_SNOWY_${temp}_%")
+    }
+    return queries
+}
+
+/**
  * THE hero serving gate: the rows from a generated_images query that
  * may be served, in pool order. Every serving path (the random pick
  * and the refresh control's candidate list alike) draws from this
@@ -483,7 +517,11 @@ internal fun pointGrainImages(
         bottomClass = row.garmentClasses?.bottom,
         prescribedTopBase = outfit.topBase,
         prescribedTopOuter = outfit.topOuter,
-        prescribedBottom = outfit.bottom
+        prescribedBottom = outfit.bottom,
+        headClass = row.garmentClasses?.head,
+        handsClass = row.garmentClasses?.hands,
+        prescribedHead = outfit.head,
+        prescribedHands = outfit.hands
     )
 }
 

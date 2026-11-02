@@ -105,13 +105,21 @@ data class OutfitCombination(
          * - TEMP_BRACKET: HOT, WARM, MILD, COOL, COLD, FREEZING
          * - TIME_OF_DAY: DAWN, MIDDAY, DUSK, NIGHT
          * - OUTFIT_HASH: 8-char hex from sorted outfit item names
+         *
+         * Frame contract (RW-23): [frameFeelsLikeF] is the comfort-adjusted
+         * feels-like in °F — the same value the outfit's warmth selectors
+         * read (see GetOutfitRecommendationUseCase.adjustedFeelsLikeF).
+         * The temp bracket derives from that value, NEVER from the raw
+         * feels-like, so the retrieval key and the prescription can never
+         * key off different frames.
          */
         fun fromConditions(
             weather: WeatherConditions,
             outfit: OutfitRecommendation,
-            gender: GenderPreference
+            gender: GenderPreference,
+            frameFeelsLikeF: Double
         ): OutfitCombination {
-            val tempBracket = TempBracket.fromFahrenheit(weather.feelsLikeInFahrenheit)
+            val tempBracket = TempBracket.fromFahrenheit(frameFeelsLikeF)
             val timeOfDay = TimeOfDay.fromHour(weather.dateTime.hour)
             val heroWeather = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
 
@@ -261,7 +269,8 @@ object HeroImageSelector {
     fun getFallbackImage(
         weather: WeatherConditions?,
         outfit: OutfitRecommendation?,
-        gender: GenderPreference = GenderPreference.UNISEX
+        gender: GenderPreference = GenderPreference.UNISEX,
+        frameFeelsLikeF: Double
     ): HeroImageResult {
         if (weather == null || outfit == null) {
             return HeroImageResult(
@@ -271,7 +280,7 @@ object HeroImageSelector {
             )
         }
 
-        val combination = OutfitCombination.fromConditions(weather, outfit, gender)
+        val combination = OutfitCombination.fromConditions(weather, outfit, gender, frameFeelsLikeF)
         val weatherCondition = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
         val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition)
 
@@ -312,9 +321,10 @@ object HeroImageSelector {
     fun getImageUrl(
         weather: WeatherConditions?,
         outfit: OutfitRecommendation?,
-        gender: GenderPreference = GenderPreference.UNISEX
+        gender: GenderPreference = GenderPreference.UNISEX,
+        frameFeelsLikeF: Double
     ): String? {
-        return getFallbackImage(weather, outfit, gender).imageUrl
+        return getFallbackImage(weather, outfit, gender, frameFeelsLikeF).imageUrl
     }
 }
 

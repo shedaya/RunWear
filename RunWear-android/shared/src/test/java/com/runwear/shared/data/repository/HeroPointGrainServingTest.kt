@@ -56,7 +56,7 @@ class HeroPointGrainServingTest {
         status: String? = "approved",
         personCount: Int? = 1,
         classes: GarmentClasses? = GarmentClasses(
-            topBase = "long", outer = false, bottom = "tights"
+            topBase = "long", outer = false, bottom = "tights", head = "headband", hands = "gloves"
         )
     ) = GeneratedImage(
         id = id,
@@ -164,8 +164,8 @@ class HeroPointGrainServingTest {
             topBase = ClothingItem.LONG_SLEEVE_LIGHT,
             bottom = ClothingItem.SHORTS
         )
-        val shorts = row("shorts", classes = GarmentClasses(topBase = "long", outer = false, bottom = "shorts"))
-        val tights = row("tights")
+        val shorts = row("shorts", classes = GarmentClasses(topBase = "long", outer = false, bottom = "shorts", head = null, hands = null))
+        val tights = row("tights", classes = GarmentClasses(topBase = "long", outer = false, bottom = "tights", head = null, hands = null))
         val served = pointGrainImages(listOf(shorts, tights), outfit47)
         assertEquals(listOf("shorts"), served.map { it.id })
     }

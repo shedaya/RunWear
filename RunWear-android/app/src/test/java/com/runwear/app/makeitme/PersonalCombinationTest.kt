@@ -5,7 +5,9 @@ import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.OutfitCombination
 import com.runwear.shared.domain.model.OutfitRecommendation
 import com.runwear.shared.domain.model.WeatherCode
+import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.WeatherConditions
+import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import kotlinx.datetime.LocalDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -45,7 +47,7 @@ class PersonalCombinationTest {
             topBase = ClothingItem.LONG_SLEEVE_LIGHT,
             bottom = ClothingItem.SHORTS
         )
-        val combination = OutfitCombination.fromConditions(w, outfit, GenderPreference.MALE)
+        val combination = OutfitCombination.fromConditions(w, outfit, GenderPreference.MALE, frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(w, ComfortPreference.NEUTRAL))
         assertEquals("MALE_CLEAR_MILD_DAWN_726beba2", combination.id)
     }
 
@@ -59,7 +61,7 @@ class PersonalCombinationTest {
             bottom = ClothingItem.SHORTS,
             head = ClothingItem.BASEBALL_CAP
         )
-        val combination = OutfitCombination.fromConditions(w, outfit, GenderPreference.MALE)
+        val combination = OutfitCombination.fromConditions(w, outfit, GenderPreference.MALE, frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(w, ComfortPreference.NEUTRAL))
         assertEquals("MALE_RAIN_MILD_DAWN_9236f3e0", combination.id)
     }
 
@@ -72,7 +74,7 @@ class PersonalCombinationTest {
             bottom = ClothingItem.SHORTS,
             head = ClothingItem.BASEBALL_CAP
         )
-        val combination = OutfitCombination.fromConditions(w, outfit, GenderPreference.MALE)
+        val combination = OutfitCombination.fromConditions(w, outfit, GenderPreference.MALE, frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(w, ComfortPreference.NEUTRAL))
         assertEquals("MALE_CLEAR_WARM_DAWN_3c451777", combination.id)
     }
 }

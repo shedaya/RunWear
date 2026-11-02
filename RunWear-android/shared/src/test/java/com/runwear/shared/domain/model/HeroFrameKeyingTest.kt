@@ -28,7 +28,26 @@ class HeroFrameKeyingTest {
     fun `mirror Juneau - bracket keys off comfort-adjusted frame not raw feels-like`() {
         val weather = rainWeather(37.0)
         val outfit = GetOutfitRecommendationUseCase().execute(weather, ComfortPreference.RUNS_COLD)
-        val combination = OutfitCombination.fromConditions(weather, outfit, GenderPreference.MALE)
+        val combination = OutfitCombination.fromConditions(
+            weather, outfit, GenderPreference.MALE,
+            frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, ComfortPreference.RUNS_COLD)
+        )
         assertEquals(TempBracket.COLD, combination.tempBracket)
+    }
+
+    @Test
+    fun `Juneau direction - raw 32 plus runs warm keys COOL with the Juneau prescription`() {
+        val weather = rainWeather(32.0)
+        val outfit = GetOutfitRecommendationUseCase().execute(weather, ComfortPreference.RUNS_WARM)
+        assertEquals(ClothingItem.BASEBALL_CAP, outfit.head)
+        assertEquals(ClothingItem.LIGHT_GLOVES, outfit.hands)
+        assertEquals(ClothingItem.LIGHT_TIGHTS, outfit.bottom)
+        assertEquals(ClothingItem.RAIN_JACKET, outfit.topOuter)
+        assertEquals(ClothingItem.LONG_SLEEVE_LIGHT, outfit.topBase)
+        val combination = OutfitCombination.fromConditions(
+            weather, outfit, GenderPreference.MALE,
+            frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, ComfortPreference.RUNS_WARM)
+        )
+        assertEquals(TempBracket.COOL, combination.tempBracket)
     }
 }

@@ -136,7 +136,8 @@ class WearViewModel @Inject constructor(
                     val heroResult = heroImageRepository.getHeroImage(
                         weather = weather,
                         outfit = outfit,
-                        gender = GenderPreference.UNISEX
+                        gender = GenderPreference.UNISEX,
+                        comfort = _uiState.value.comfortPreference
                     )
                     _uiState.update { it.copy(heroImageUrl = heroResult.imageUrl) }
                 },

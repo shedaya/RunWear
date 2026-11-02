@@ -44,7 +44,9 @@ class HeroPointGrainPolicyTest {
         personCount: Int? = 1,
         topBase: String? = "long",
         outer: Boolean? = false,
-        bottom: String? = "tights"
+        bottom: String? = "tights",
+        head: String? = "headband",
+        hands: String? = "gloves"
     ): Boolean = HeroPointGrainPolicy.matches(
         personCount = personCount,
         topBaseClass = topBase,
@@ -52,7 +54,11 @@ class HeroPointGrainPolicyTest {
         bottomClass = bottom,
         prescribedTopBase = outfit.topBase,
         prescribedTopOuter = outfit.topOuter,
-        prescribedBottom = outfit.bottom
+        prescribedBottom = outfit.bottom,
+        headClass = head,
+        handsClass = hands,
+        prescribedHead = outfit.head,
+        prescribedHands = outfit.hands
     )
 
     @Test
@@ -61,6 +67,8 @@ class HeroPointGrainPolicyTest {
         assertEquals(ClothingItem.LIGHT_TIGHTS, outfit.bottom)
         assertEquals(ClothingItem.LONG_SLEEVE_LIGHT, outfit.topBase)
         assertEquals(null, outfit.topOuter)
+        assertEquals(ClothingItem.HEADBAND, outfit.head)
+        assertEquals(ClothingItem.LIGHT_GLOVES, outfit.hands)
     }
 
     @Test
@@ -108,22 +116,26 @@ class HeroPointGrainPolicyTest {
     @Test
     fun `47F COOL may surface shorts stock but not tights`() {
         val outfit = outfitAt(47.0)
-        // At 47F the prescribed base is still a light long sleeve.
-        assertTrue(matches(outfit, bottom = "shorts"))
-        assertTrue(matches(outfit, bottom = "short_shorts"))
-        assertFalse(matches(outfit, bottom = "tights"))
-        assertFalse(matches(outfit, bottom = "shorts", personCount = 2))
+        // At 47F the prescribed base is still a light long sleeve, and
+        // no head or hands are prescribed.
+        assertEquals(null, outfit.head)
+        assertEquals(null, outfit.hands)
+        assertTrue(matches(outfit, bottom = "shorts", head = null, hands = null))
+        assertTrue(matches(outfit, bottom = "short_shorts", head = null, hands = null))
+        assertFalse(matches(outfit, bottom = "tights", head = null, hands = null))
+        assertFalse(matches(outfit, bottom = "shorts", personCount = 2, head = null, hands = null))
     }
 
     @Test
     fun `rain at 39F prescribes a shell and the filter requires one`() {
         val outfit = outfitAt(39.0, raining = true)
         assertEquals(ClothingItem.RAIN_JACKET, outfit.topOuter)
-        assertFalse(matches(outfit, outer = false))
+        assertEquals(ClothingItem.BASEBALL_CAP, outfit.head)
+        assertFalse(matches(outfit, outer = false, head = "cap"))
         // Base layer unreadable UNDER the prescribed jacket passes.
-        assertTrue(matches(outfit, outer = true, topBase = null))
+        assertTrue(matches(outfit, outer = true, topBase = null, head = "cap"))
         // A visible wrong base under the jacket still fails.
-        assertFalse(matches(outfit, outer = true, topBase = "sleeveless"))
+        assertFalse(matches(outfit, outer = true, topBase = "sleeveless", head = "cap"))
     }
 
     @Test
@@ -131,16 +143,18 @@ class HeroPointGrainPolicyTest {
         val outfit = outfitAt(85.0)
         assertEquals(ClothingItem.TANK_TOP, outfit.topBase)
         assertEquals(ClothingItem.SHORT_SHORTS, outfit.bottom)
-        assertTrue(matches(outfit, topBase = "sleeveless", bottom = "short_shorts"))
-        assertTrue(matches(outfit, topBase = "sleeveless", bottom = "shorts"))
-        assertFalse(matches(outfit, topBase = "sleeveless", bottom = "tights"))
-        assertFalse(matches(outfit, topBase = "short", bottom = "shorts"))
+        assertEquals(null, outfit.head)
+        assertEquals(null, outfit.hands)
+        assertTrue(matches(outfit, topBase = "sleeveless", bottom = "short_shorts", head = null, hands = null))
+        assertTrue(matches(outfit, topBase = "sleeveless", bottom = "shorts", head = null, hands = null))
+        assertFalse(matches(outfit, topBase = "sleeveless", bottom = "tights", head = null, hands = null))
+        assertFalse(matches(outfit, topBase = "short", bottom = "shorts", head = null, hands = null))
     }
 
     @Test
     fun `a row with no garment classes at all fails closed`() {
         val outfit = outfitAt(39.0)
-        assertFalse(matches(outfit, topBase = null, outer = null, bottom = null))
+        assertFalse(matches(outfit, topBase = null, outer = null, bottom = null, head = null, hands = null))
     }
 
     @Test
@@ -155,7 +169,11 @@ class HeroPointGrainPolicyTest {
             bottom: String? = "tights",
             topBaseKey: String = "LONG_SLEEVE_LIGHT",
             topOuterKey: String? = null,
-            bottomKey: String = "LIGHT_TIGHTS"
+            bottomKey: String = "LIGHT_TIGHTS",
+            head: String? = "headband",
+            hands: String? = "gloves",
+            headKey: String? = "HEADBAND",
+            handsKey: String? = "LIGHT_GLOVES"
         ): Boolean = HeroPointGrainPolicy.matchesByKey(
             personCount = personCount,
             topBaseClass = topBase,
@@ -163,7 +181,11 @@ class HeroPointGrainPolicyTest {
             bottomClass = bottom,
             prescribedTopBaseKey = topBaseKey,
             prescribedTopOuterKey = topOuterKey,
-            prescribedBottomKey = bottomKey
+            prescribedBottomKey = bottomKey,
+            headClass = head,
+            handsClass = hands,
+            prescribedHeadKey = headKey,
+            prescribedHandsKey = handsKey
         )
 
         assertTrue(byKey())
@@ -172,12 +194,67 @@ class HeroPointGrainPolicyTest {
         assertFalse(byKey(outer = "true"))
         // Unrecorded person count (negative) behaves like null.
         assertTrue(byKey(personCount = -1))
-        // 47F keys: shorts prescribed.
+        // Head/hands verdicts agree through the bridge too.
+        assertFalse(byKey(head = "cap"))
+        assertFalse(byKey(head = null))
+        assertFalse(byKey(hands = null))
+        assertFalse(byKey(hands = "mittens"))
+        // 47F keys: shorts prescribed, no head/hands prescribed.
         assertTrue(
-            byKey(bottom = "shorts", bottomKey = "SHORTS")
+            byKey(bottom = "shorts", bottomKey = "SHORTS", head = null, hands = null, headKey = null, handsKey = null)
         )
         assertFalse(
-            byKey(bottom = "tights", bottomKey = "SHORTS")
+            byKey(bottom = "tights", bottomKey = "SHORTS", head = null, hands = null, headKey = null, handsKey = null)
         )
+        assertFalse(
+            byKey(bottom = "shorts", bottomKey = "SHORTS", head = "cap", hands = null, headKey = null, handsKey = null)
+        )
+    }
+
+    @Test
+    fun `beanie family - light and thermal beanie prescriptions both accept recorded beanie`() {
+        val lightBeanie = OutfitSelection(
+            topBase = ClothingItem.LONG_SLEEVE_LIGHT,
+            bottom = ClothingItem.LIGHT_TIGHTS,
+            head = ClothingItem.LIGHT_BEANIE,
+            hands = ClothingItem.LIGHT_GLOVES
+        )
+        assertTrue(matches(lightBeanie, head = "beanie", hands = "gloves"))
+        assertFalse(matches(lightBeanie, head = "headband", hands = "gloves"))
+
+        val thermalBeanie = OutfitSelection(
+            topBase = ClothingItem.LONG_SLEEVE_THERMAL,
+            bottom = ClothingItem.THERMAL_TIGHTS,
+            head = ClothingItem.THERMAL_BEANIE,
+            hands = ClothingItem.THERMAL_GLOVES
+        )
+        assertTrue(matches(thermalBeanie, bottom = "tights", head = "beanie", hands = "gloves"))
+        assertFalse(matches(thermalBeanie, bottom = "tights", head = "headband", hands = "gloves"))
+    }
+
+    @Test
+    fun `mittens prescription accepts mittens and rejects gloves`() {
+        val mittens = OutfitSelection(
+            topBase = ClothingItem.LONG_SLEEVE_THERMAL,
+            bottom = ClothingItem.THERMAL_TIGHTS,
+            head = ClothingItem.THERMAL_BEANIE,
+            hands = ClothingItem.MITTENS
+        )
+        assertTrue(matches(mittens, bottom = "tights", head = "beanie", hands = "mittens"))
+        assertFalse(matches(mittens, bottom = "tights", head = "beanie", hands = "gloves"))
+    }
+
+    @Test
+    fun `prescribed-null head and hands reject recorded gear`() {
+        val outfit = outfitAt(47.0)
+        assertFalse(matches(outfit, bottom = "shorts", head = "cap", hands = null))
+        assertFalse(matches(outfit, bottom = "shorts", head = null, hands = "gloves"))
+    }
+
+    @Test
+    fun `prescribed head and hands with recorded null do not serve`() {
+        val outfit = outfitAt(39.0)
+        assertFalse(matches(outfit, head = null, hands = "gloves"))
+        assertFalse(matches(outfit, head = "headband", hands = null))
     }
 }
