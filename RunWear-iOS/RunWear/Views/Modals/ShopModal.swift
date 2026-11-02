@@ -16,7 +16,7 @@ struct ShopModal: View {
     @State private var selectedItem: ClothingItem?
 
     // Affiliate configuration
-    private let affiliateTag = "runwear-20"
+    private let affiliateTag = "runwearapp-20"
     private let subtag = "ios"
 
     // Presented as a real .sheet (design record §5.2): the system
