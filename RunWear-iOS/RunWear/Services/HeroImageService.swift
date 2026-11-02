@@ -47,7 +47,8 @@ actor HeroImageService {
         // Try cascade fallback
         let result = await fetchWithCascade(
             combination: combination,
-            isWatch: isWatch
+            isWatch: isWatch,
+            outfit: outfit
         )
 
         // RW-14 (BACKLOG acceptance (11)): the legacy generic
@@ -65,33 +66,34 @@ actor HeroImageService {
     /// Attempts to fetch image with 5-level cascade
     private func fetchWithCascade(
         combination: HeroCombinationId,
-        isWatch: Bool
+        isWatch: Bool,
+        outfit: OutfitRecommendation?
     ) async -> HeroImageResult {
         // Level 1: Exact match (gender + weather + temp + time)
-        if let result = await tryFetch(pattern: combination.exactPattern, level: 1) {
+        if let result = await tryFetch(pattern: combination.exactPattern, level: 1, outfit: outfit) {
             return result
         }
 
         // Level 2: Any time of day
-        if let result = await tryFetch(pattern: combination.anyTimePattern, level: 2) {
+        if let result = await tryFetch(pattern: combination.anyTimePattern, level: 2, outfit: outfit) {
             return result
         }
 
         // Level 3: Clear weather fallback (if not already CLEAR)
         if combination.weather != .CLEAR {
-            if let result = await tryFetch(pattern: combination.clearWeatherPattern, level: 3) {
+            if let result = await tryFetch(pattern: combination.clearWeatherPattern, level: 3, outfit: outfit) {
                 return result
             }
         }
 
         // Level 4: Opposite gender, same weather
-        if let result = await tryFetch(pattern: combination.oppositeGenderPattern, level: 4) {
+        if let result = await tryFetch(pattern: combination.oppositeGenderPattern, level: 4, outfit: outfit) {
             return result
         }
 
         // Level 5: Opposite gender, clear weather
         if combination.weather != .CLEAR {
-            if let result = await tryFetch(pattern: combination.oppositeGenderClearPattern, level: 5) {
+            if let result = await tryFetch(pattern: combination.oppositeGenderClearPattern, level: 5, outfit: outfit) {
                 return result
             }
         }
@@ -105,10 +107,27 @@ actor HeroImageService {
     }
 
     /// Tries to fetch images matching a pattern
-    private func tryFetch(pattern: String, level: Int) async -> HeroImageResult? {
+    ///
+    /// RW-20 point-grain gate (mirrors Android's HeroPointGrainPolicy
+    /// serving filter): of the review-servable rows at this level, only
+    /// those whose adjudicated garments and person count agree with the
+    /// exact prescription may be served; a level with no agreeing row
+    /// returns nil so the cascade continues. Without an outfit there is
+    /// no prescription to judge against, so no pool row is served —
+    /// the same contract as Android's getHeroImage, which returns the
+    /// bundled fallback when the outfit is missing.
+    private func tryFetch(
+        pattern: String,
+        level: Int,
+        outfit: OutfitRecommendation?
+    ) async -> HeroImageResult? {
+        guard let outfit else { return nil }
         do {
             let images = try await supabase.fetchGeneratedImages(pattern: pattern)
-            guard let image = images.randomElement() else { return nil }
+            let agreeing = images.filter {
+                HeroPointGrainPolicy.matches(image: $0, outfit: outfit)
+            }
+            guard let image = agreeing.randomElement() else { return nil }
             return HeroImageResult.fromMatch(image: image, fallbackLevel: level)
         } catch {
             print("HeroImageService: Failed to fetch pattern '\(pattern)': \(error)")

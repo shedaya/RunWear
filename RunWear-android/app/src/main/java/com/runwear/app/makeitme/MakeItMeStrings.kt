@@ -64,11 +64,11 @@ object MakeItMeStrings {
     // G5/G6 added Nov 1, 2026 (RW-16.16 — spec §7 amended by dated
     // note). One failure line for every reason class in this build;
     // the class travels in the payload for a later class-specific
-    // pass. G5's wording is a PLACEHOLDER pending Sol's pick from
-    // the options put to him Nov 1, 2026 — wired as this single
+    // pass. DECIDED Nov 1, 2026 (RW-16.16): Sol picked the final
+    // wording from the options put to him — wired as this single
     // constant so the swap is a one-string change. Verbatim-
     // identical to the iOS deck (MakeItMeCopy.lookFailed).
-    const val G5_LOOK_FAILED = "We couldn't make this look yet — tap to try again."
+    const val G5_LOOK_FAILED = "Your look couldn't be made from these photos — tap to try again."
     const val G6_RETRY = "Try again"
 
     // S — Settings (spec §3)

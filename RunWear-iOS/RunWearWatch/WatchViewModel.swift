@@ -165,13 +165,23 @@ class WatchViewModel: NSObject, ObservableObject {
             size: .watchOS
         )
 
-        // Fetch AI hero image
+        // Fetch AI hero image — with the loaded recommendation, so the
+        // RW-20 point-grain gate can judge pool photos against the
+        // exact prescription (the phone passes its outfit the same
+        // way; without one the service serves no pool row).
+        let outfit: OutfitRecommendation?
+        if case .loaded(_, let recommendation) = state {
+            outfit = recommendation
+        } else {
+            outfit = nil
+        }
         let result = await heroImageService.getHeroImage(
             gender: genderPreference,
             weatherCode: weatherCode,
             feelsLikeTemp: adjustedTemp,
             hour: hour,
-            isWatch: true
+            isWatch: true,
+            outfit: outfit
         )
 
         // Only use AI image if not Unsplash fallback

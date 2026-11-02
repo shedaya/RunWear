@@ -2,10 +2,21 @@ import Foundation
 
 /// Provides fallback hero images when Supabase pool images are unavailable.
 ///
-/// Since 2026-10-30 the fallbacks are the SAME 22 approved AI pool photos
+/// Since 2026-10-30 the fallbacks are the SAME approved AI pool photos
 /// the Android app bundles, shipped inside the app bundle under
 /// `hero_fallback/` — no more remote Unsplash stock. Cell-for-cell
 /// identical to Android's WebP fallback table (and the PWA's).
+///
+/// RW-20 (2026-11-02): all 22 assets' provenance was re-derived by
+/// pixel comparison against the pool. 9 verified against
+/// adjudicated-MATCH, single-person, point-grain-correct source rows;
+/// 12 were replaced from such rows in the same cell (their sources
+/// were retired, garment-mismatched, multi-person, or merely
+/// UNCERTAIN); FREEZING×RAIN was removed — its pool holds no
+/// verified-good photo at all (all 77 FREEZING rain/rainy rows are
+/// rejected), so the lookup falls back to freezing_clear there.
+/// 21 cells remain. Provenance record:
+/// release-prep/rw20-fix-execution-2026-11-02.md.
 struct FallbackImageProvider {
     static let shared = FallbackImageProvider()
 
@@ -20,45 +31,49 @@ struct FallbackImageProvider {
     }
 
     /// Bundled asset file names organized by temperature and weather —
-    /// an exact mirror of Android's FALLBACK_IMAGES (22 populated cells).
-    /// HOT and WARM have no SNOW cell on any platform; the lookup below
-    /// falls back to the bracket's CLEAR image, as Android's does.
+    /// an exact mirror of Android's FALLBACK_IMAGES (21 populated cells
+    /// after RW-20). HOT and WARM have no SNOW cell and FREEZING no
+    /// longer has a RAIN cell on any platform; the lookup below falls
+    /// back to the bracket's CLEAR image, as Android's does.
+    ///
+    /// Source combinations below are the RW-20-verified provenance
+    /// (2026-11-02); entries marked RW-20 replaced a retired,
+    /// mismatched, multi-person, or UNCERTAIN original.
     ///
     /// The previous iOS table pointed at Unsplash stock photos and had
     /// drifted from the pool (its HOT/CLOUDY cell was once a desk with
     /// code on monitors, served to Sol as a "Miami hero"). Gone.
     private let assetNames: [HeroTempBracket: [HeroWeatherCondition: String]] = [
         .FREEZING: [
-            .CLEAR: "freezing_clear",   // MALE_CLEAR_FREEZING_DUSK_v1160
+            .CLEAR: "freezing_clear",   // RW-20: FEMALE_CLEAR_FREEZING_DAWN_v100
             .CLOUDY: "freezing_cloudy",  // FEMALE_CLOUDY_FREEZING_MIDDAY_v1177
-            .RAIN: "freezing_rain", // FEMALE_RAINY_FREEZING_MIDDAY_v5
             .SNOW: "freezing_snow"  // MALE_SNOWY_FREEZING_NIGHT_v1
         ],
         .COLD: [
-            .CLEAR: "cold_clear",   // UNISEX_CLEAR_COLD_DUSK_v4
+            .CLEAR: "cold_clear",   // RW-20: FEMALE_CLEAR_COLD_DAWN_v2
             .CLOUDY: "cold_cloudy",  // FEMALE_CLOUDY_COLD_MIDDAY_v3
-            .RAIN: "cold_rain",    // MALE_RAIN_COLD_MIDDAY_v2
+            .RAIN: "cold_rain",    // RW-20: FEMALE_RAIN_COLD_DAWN_v12
             .SNOW: "cold_snow"     // FEMALE_SNOW_COLD_DUSK_v5
         ],
         .COOL: [
-            .CLEAR: "cool_clear",   // MALE_CLEAR_COOL_DUSK_v2
-            .CLOUDY: "cool_cloudy",  // FEMALE_CLOUDY_COOL_MIDDAY
-            .RAIN: "cool_rain",    // FEMALE_RAIN_COOL_MIDDAY_v3
-            .SNOW: "cool_snow"     // FEMALE_SNOW_COOL_MIDDAY_v3
+            .CLEAR: "cool_clear",   // RW-20: FEMALE_CLEAR_COOL_DAWN_v15
+            .CLOUDY: "cool_cloudy",  // RW-20: FEMALE_CLOUDY_COOL_DAWN_v12
+            .RAIN: "cool_rain",    // RW-20: FEMALE_RAIN_COOL_NIGHT_v693
+            .SNOW: "cool_snow"     // RW-20: MALE_SNOW_COOL_MIDDAY_v26
         ],
         .MILD: [
-            .CLEAR: "mild_clear",   // FEMALE_CLEAR_MILD_DUSK_v6
-            .CLOUDY: "mild_cloudy",  // FEMALE_CLOUDY_MILD_MIDDAY_v3
+            .CLEAR: "mild_clear",   // RW-20: FEMALE_CLEAR_MILD_DUSK_v4
+            .CLOUDY: "mild_cloudy",  // RW-20: FEMALE_CLOUDY_MILD_DUSK_v3
             .RAIN: "mild_rain", // FEMALE_RAIN_MILD_DUSK_v4
-            .SNOW: "mild_snow"  // FEMALE_SNOWY_MILD_MIDDAY_v3
+            .SNOW: "mild_snow"  // RW-20: FEMALE_SNOW_MILD_DAWN_v16
         ],
         .WARM: [
             .CLEAR: "warm_clear",   // MALE_CLEAR_WARM_MIDDAY_v3
             .CLOUDY: "warm_cloudy",    // MALE_CLOUDY_WARM_DAWN_v5
-            .RAIN: "warm_rain"     // MALE_RAINY_WARM_DUSK_v5
+            .RAIN: "warm_rain"     // RW-20: FEMALE_RAIN_WARM_DAWN_v858
         ],
         .HOT: [
-            .CLEAR: "hot_clear",   // MALE_CLEAR_HOT_MIDDAY_v1070
+            .CLEAR: "hot_clear",   // RW-20: FEMALE_CLEAR_HOT_DAWN_v1
             .CLOUDY: "hot_cloudy",  // MALE_CLOUDY_HOT_DUSK_v2
             .RAIN: "hot_rain"     // FEMALE_RAINY_HOT_DAWN_v6
         ]

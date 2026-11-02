@@ -1,0 +1,26 @@
+Thank you for the review. This submission answers the information request for RunWear 1.0.
+
+RECORDING: A screen recording made on a physical iPhone running the latest iOS is attached in App Review Information. It starts at app launch and shows the complete typical flow described below, from launch through today's outfit, the Shop links, and Settings.
+
+1) PURPOSE, AUDIENCE, AND VALUE
+RunWear tells a runner what to wear for a run. It takes the local weather forecast and returns a concrete outfit recommendation — top, layers, bottoms, and extras such as gloves or a visor — adjusted to the runner's temperature sensitivity and fit preference. Target audience: recreational and committed runners who train outdoors. The problem it solves: runners otherwise have to translate a raw forecast into clothing choices themselves, and dressing for the start line usually means overdressing by mile two; RunWear's recommendations account for that.
+
+2) SETUP, ACCESS, AND THE TYPICAL FLOW
+There is no account, sign-in, or registration anywhere in this app, and nothing is gated: every feature is available to every user immediately, so there are no demo credentials to provide.
+- Launch: the app asks for location permission (optional). With permission it fetches weather for the runner's area (coarse location); without it, the user can search for any place by name instead.
+- Home: today's outfit recommendation with the forecast behind it (feels-like temperature, conditions, wind, humidity), plus Tomorrow and Now views and planning for other days, times, and cities.
+- Shop: outfit items link out to retailer searches in Safari. RunWear is an Amazon Associate and earns from qualifying purchases made through those links; purchases complete on the retailer's site, never in the app.
+- Settings: temperature unit (°F/°C), fit preference, and body-temperature sensitivity. These are the only settings.
+There is no user-generated content (so no reporting or blocking flows exist), no social features, and no paid content: this version contains no in-app purchases or subscriptions and no purchase surface exists in the app. (Two subscription products sit in App Store Connect under a separate feature that is switched off in this version; they are not offered anywhere in the app, are not attached to this version, and are not part of this submission.)
+
+3) EXTERNAL SERVICES
+- Open-Meteo (open-meteo.com): the weather forecast data that drives the recommendations — the app's core data provider.
+- OpenStreetMap Nominatim: place-name search, and naming the place a forecast belongs to.
+- Amazon Associates: affiliate product links, opened in Safari.
+No authentication provider, payment processor, or AI service is used by this version.
+
+4) REGIONAL CONSISTENCY
+The app functions consistently across regions: forecasts come from Open-Meteo's global coverage, recommendations are computed on-device from the same rules everywhere, and temperatures display in °F or °C per the user's setting.
+
+5) REGULATED INDUSTRY / THIRD-PARTY MATERIAL
+Not applicable. RunWear does not operate in a regulated industry, and it contains no protected third-party material; the outfit photography is the developer's own imagery.

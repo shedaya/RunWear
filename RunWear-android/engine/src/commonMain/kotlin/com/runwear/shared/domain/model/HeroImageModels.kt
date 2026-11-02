@@ -242,11 +242,13 @@ object HeroImageSelector {
             HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/cold_rain.webp", // Cold rain/sleet
             HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/cold_snow.webp" // Snowy run
         ),
-        // FREEZING (<20°F) - All conditions possible
+        // FREEZING (<20°F) - RAIN cell REMOVED by RW-20 (2026-11-02):
+        // the cell's pool holds zero verified-good photos (all 77
+        // FREEZING rain/rainy rows are rejected), so no honest floor
+        // asset exists; the resolver falls back to freezing_clear.
         TempBracket.FREEZING to mapOf(
             HeroWeatherCondition.CLEAR to "file:///android_asset/hero_fallback/freezing_clear.webp", // Winter gear sunny
             HeroWeatherCondition.CLOUDY to "file:///android_asset/hero_fallback/freezing_cloudy.webp", // Freezing overcast
-            HeroWeatherCondition.RAIN to "file:///android_asset/hero_fallback/freezing_rain.webp", // Freezing rain/sleet
             HeroWeatherCondition.SNOW to "file:///android_asset/hero_fallback/freezing_snow.webp" // Heavy snow
         )
     )

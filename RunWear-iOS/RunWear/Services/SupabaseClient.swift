@@ -18,7 +18,7 @@ actor SupabaseClient {
             .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? pattern
 
         let endpoint = "/rest/v1/generated_images"
-        let query = "combination_id=like.\(encodedPattern)&select=id,combination_id,image_url,thumbnail_url,prompt,review_status"
+        let query = "combination_id=like.\(encodedPattern)&select=id,combination_id,image_url,thumbnail_url,prompt,review_status,person_count,garment_classes,garment_source"
 
         guard let url = URL(string: "\(baseURL)\(endpoint)?\(query)") else {
             throw SupabaseError.invalidURL
