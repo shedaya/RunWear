@@ -116,9 +116,26 @@ export function drawBudgetFor(weather: string, bracket: string): number {
 // lane's plan.py build_prompt (the pinned recipe of record), with the
 // recalibration header ("OUTFIT:", no legibility-pressure line) the
 // comparison/full-body drivers applied at send time. Bullets are the
-// ENGINE's point-grain prescription (job.outfit_items), one per item,
-// in wearing order (base, mid, outer, bottom, head, hands, then
-// accessories). Nothing follows the MOOD line.
+// ENGINE's point-grain prescription (job.outfit_items), one per item.
+// EMPHASIS (yield experiment arm B, adopted 2026-11-03): the
+// prescribed head and hands bullets move to the FRONT of the outfit
+// list (head first) and both items are named in the opening subject
+// sentence ("…, wearing a light beanie and light gloves, running
+// mid-stride"); the remaining bullets keep wearing order (base, mid,
+// outer, bottom, then accessories). Measured on the production host:
+// delivery 12.5% → 38.9%, cost per usable $0.221 → $0.072 (record:
+// rw-mim-yield-experiment-2026-11-03). The construction is the
+// experiment's own, generalized only in that a prescription carrying
+// just one of head/hands names and fronts that one item; with both
+// prescribed the output is byte-identical to arm B. Expected garment
+// classes are unchanged (same items, different order/emphasis) —
+// the gate derives them from the outfit segment, which is
+// order-insensitive. Nothing follows the MOOD line.
+// RAIN: the rain-jacket bullet pins the hood DOWN ("…with the hood
+// down") — the bare bullet let FLUX render the jacket hood-up, and
+// the raised hood occupied the head slot and ate the prescribed cap
+// (yield experiment Part 1 addendum). "hood" maps to no garment
+// class, so no gate expectation moves.
 // ---------------------------------------------------------------------
 const BULLET: Record<string, string> = {
   TANK_TOP: 'Sleeveless tank top',
@@ -131,7 +148,7 @@ const BULLET: Record<string, string> = {
   LIGHT_VEST: 'Light vest',
   WINDBREAKER: 'Windbreaker jacket',
   LIGHT_JACKET: 'Light running jacket',
-  RAIN_JACKET: 'Waterproof rain jacket',
+  RAIN_JACKET: 'Waterproof rain jacket with the hood down',
   INSULATED_JACKET: 'Insulated jacket',
   SHORTS: 'Running shorts',
   SHORT_SHORTS: 'Short shorts',
@@ -208,21 +225,57 @@ const STYLE_BLOCK =
   'captured mid-step. Sharp focus on runner with slight motion energy, soft bokeh background. ' +
   'Authentic and dynamic, like a Nike campaign shot. The scene should make viewers FEEL the '
 
+// Emphasis phrase helpers (yield-experiment arm B construction):
+// the subject sentence names the head item with its indefinite
+// article and the hands item bare. The article rule reproduces the
+// experiment's hand-written phrases exactly — "a light beanie"
+// (LIGHT_BEANIE), "a running cap" (BASEBALL_CAP), "an ear warmer
+// headband" (HEADBAND), "light gloves" (LIGHT_GLOVES).
+const HEAD_KEYS: ReadonlySet<string> = new Set([
+  'VISOR', 'BASEBALL_CAP', 'HEADBAND', 'LIGHT_BEANIE', 'THERMAL_BEANIE', 'BALACLAVA'
+])
+const HANDS_KEYS: ReadonlySet<string> = new Set([
+  'LIGHT_GLOVES', 'THERMAL_GLOVES', 'MITTENS'
+])
+
+function headPhrase(key: string): string {
+  const b = (BULLET[key] ?? key).toLowerCase()
+  return `${/^[aeiou]/.test(b) ? 'an' : 'a'} ${b}`
+}
+function handsPhrase(key: string): string {
+  return (BULLET[key] ?? key).toLowerCase()
+}
+
 export function buildPrompt(job: {
   gender: string, weather: string, temp_bracket: string, time_of_day: string,
   outfit_items: unknown
 }): string {
   const items = [...(job.outfit_items as string[])]
     .sort((a, b) => (SLOT_ORDER[a] ?? 9) - (SLOT_ORDER[b] ?? 9))
+  // Emphasis (arm B): the prescribed head + hands bullets move to
+  // the front of the outfit list and are named in the subject
+  // sentence. `items` is slot-sorted, so the promoted items are
+  // already head-before-hands; the rest keep wearing order.
+  const headItem = items.find(k => HEAD_KEYS.has(k))
+  const handsItem = items.find(k => HANDS_KEYS.has(k))
+  const promoted = items.filter(k => HEAD_KEYS.has(k) || HANDS_KEYS.has(k))
+  const ordered = promoted.length
+    ? [...promoted, ...items.filter(k => !HEAD_KEYS.has(k) && !HANDS_KEYS.has(k))]
+    : items
+  const wearing = headItem && handsItem
+    ? `, wearing ${headPhrase(headItem)} and ${handsPhrase(handsItem)},`
+    : headItem ? `, wearing ${headPhrase(headItem)},`
+    : handsItem ? `, wearing ${handsPhrase(handsItem)},`
+    : ''
   const g = job.gender === 'FEMALE' ? 'female' : job.gender === 'MALE' ? 'male' : null
   const subject = g
-    ? `A ${g} runner in their 30s running mid-stride along a suburban sidewalk during a ` +
+    ? `A ${g} runner in their 30s${wearing} running mid-stride along a suburban sidewalk during a ` +
       `${BRACKET_PHRASE[job.temp_bracket] ?? ''} ${TIME_WORD[job.time_of_day] ?? ''} with ` +
       `${WEATHER_WORD[job.weather] ?? ''} conditions.`
-    : `A runner in their 30s running mid-stride along a suburban sidewalk during a ` +
+    : `A runner in their 30s${wearing} running mid-stride along a suburban sidewalk during a ` +
       `${BRACKET_PHRASE[job.temp_bracket] ?? ''} ${TIME_WORD[job.time_of_day] ?? ''} with ` +
       `${WEATHER_WORD[job.weather] ?? ''} conditions.`
-  const outfit = 'OUTFIT:\n' + items.map(k => `- ${BULLET[k] ?? k}`).join('\n')
+  const outfit = 'OUTFIT:\n' + ordered.map(k => `- ${BULLET[k] ?? k}`).join('\n')
   const scene = (job.weather === 'SNOW' && job.temp_bracket === 'MILD')
     ? SCENE_MILD_SNOW : (SCENE[job.weather] ?? SCENE.CLEAR)
   const env = `ENVIRONMENT: ${LIGHT[job.time_of_day] ?? ''}${scene}`

@@ -37,16 +37,111 @@ Deno.test('prompt: warm clear midday matches the validated Part-4 shape', () => 
   assert(p.trimEnd().endsWith('MOOD: Light and free, easy summer rhythm'), 'nothing follows the MOOD line')
 })
 
-Deno.test('prompt: cold clear midday items in wearing order', () => {
+Deno.test('prompt: cold clear midday — emphasis fronts head + hands and names them in the subject', () => {
   const p = buildPrompt({
     gender: 'FEMALE', weather: 'CLEAR', temp_bracket: 'COLD', time_of_day: 'MIDDAY',
     outfit_items: ['NECK_GAITER', 'THERMAL_TIGHTS', 'LIGHT_GLOVES', 'QUARTER_ZIP', 'LONG_SLEEVE_LIGHT', 'LIGHT_BEANIE']
   })
+  assertStringIncludes(p, 'A female runner in their 30s, wearing a light beanie and light gloves, running mid-stride')
   const seg = p.split('OUTFIT:\n')[1].split('\n\n')[0]
   assertEquals(seg, [
+    '- Light beanie', '- Light gloves',
     '- Light long sleeve shirt', '- Quarter zip pullover', '- Thermal tights',
-    '- Light beanie', '- Light gloves', '- Neck gaiter'
+    '- Neck gaiter'
   ].join('\n'))
+})
+
+Deno.test('prompt: byte-identical to yield-experiment arm B on its measured cells', () => {
+  // The reference strings are the experiment driver's own output:
+  // the pre-emphasis builder's prompt run through yield_driver.ts's
+  // emphasize() verbatim (rw-mim-yield-experiment-2026-11-03). The
+  // rain reference additionally carries the hood-down bullet fix.
+  const cold = buildPrompt({
+    gender: 'MALE', weather: 'CLEAR', temp_bracket: 'COLD', time_of_day: 'MIDDAY',
+    outfit_items: ['LIGHT_BEANIE', 'LONG_SLEEVE_LIGHT', 'QUARTER_ZIP', 'THERMAL_TIGHTS',
+      'LIGHT_GLOVES', 'SUNGLASSES', 'NECK_GAITER']
+  })
+  assertEquals(cold, `A male runner in their 30s, wearing a light beanie and light gloves, running mid-stride along a suburban sidewalk during a cold winter midday with clear conditions.
+
+OUTFIT:
+- Light beanie
+- Light gloves
+- Light long sleeve shirt
+- Quarter zip pullover
+- Thermal tights
+- Sunglasses
+- Neck gaiter
+
+ENVIRONMENT: Bright daylight; Clear sky, suburban neighborhood with sidewalks and trees
+
+STYLE: Professional athletic action photography. Full body in motion, natural running stride, captured mid-step. Sharp focus on runner with slight motion energy, soft bokeh background. Authentic and dynamic, like a Nike campaign shot. The scene should make viewers FEEL the cold clear conditions.
+
+MOOD: Strong and steady, winter grit`)
+  const rain = buildPrompt({
+    gender: 'FEMALE', weather: 'RAIN', temp_bracket: 'COOL', time_of_day: 'MIDDAY',
+    outfit_items: ['BASEBALL_CAP', 'LONG_SLEEVE_LIGHT', 'RAIN_JACKET', 'LIGHT_TIGHTS', 'LIGHT_GLOVES']
+  })
+  assertEquals(rain, `A female runner in their 30s, wearing a running cap and light gloves, running mid-stride along a suburban sidewalk during a cool autumn midday with rainy conditions.
+
+OUTFIT:
+- Running cap
+- Light gloves
+- Light long sleeve shirt
+- Waterproof rain jacket with the hood down
+- Light running tights
+
+ENVIRONMENT: Bright daylight; Rain falling, wet glistening pavement, puddles, gray sky
+
+STYLE: Professional athletic action photography. Full body in motion, natural running stride, captured mid-step. Sharp focus on runner with slight motion energy, soft bokeh background. Authentic and dynamic, like a Nike campaign shot. The scene should make viewers FEEL the cool rainy conditions.
+
+MOOD: Undeterred and strong, splashing through the rain`)
+  const snow = buildPrompt({
+    gender: 'MALE', weather: 'SNOW', temp_bracket: 'COOL', time_of_day: 'DUSK',
+    outfit_items: ['HEADBAND', 'LONG_SLEEVE_LIGHT', 'LIGHT_TIGHTS', 'LIGHT_GLOVES']
+  })
+  assertEquals(snow, `A male runner in their 30s, wearing an ear warmer headband and light gloves, running mid-stride along a suburban sidewalk during a cool autumn evening with snowy conditions.
+
+OUTFIT:
+- Ear warmer headband
+- Light gloves
+- Light long sleeve shirt
+- Light running tights
+
+ENVIRONMENT: Golden evening light, long shadows; Snow falling, snow-covered streets and trees, soft winter light
+
+STYLE: Professional athletic action photography. Full body in motion, natural running stride, captured mid-step. Sharp focus on runner with slight motion energy, soft bokeh background. Authentic and dynamic, like a Nike campaign shot. The scene should make viewers FEEL the cool snowy conditions.
+
+MOOD: Quiet and powerful, tracks in fresh snow`)
+  // Expected classes are emphasis-invariant: the gate derives the
+  // same classes from the emphasized prompts as from the control
+  // prompts (the experiment's own pre-spend sanity property).
+  assertEquals(expectedClassesForPrompt(cold), {
+    topBase: 'long', outer: false, mid: true, bottom: 'tights',
+    head: 'beanie', hands: 'gloves', sunglasses: true, gaiter: true
+  })
+  assertEquals(expectedClassesForPrompt(rain), {
+    topBase: 'long', outer: true, mid: false, bottom: 'tights',
+    head: 'cap', hands: 'gloves', sunglasses: false, gaiter: false
+  })
+  assertEquals(expectedClassesForPrompt(snow), {
+    topBase: 'long', outer: false, mid: false, bottom: 'tights',
+    head: 'headband', hands: 'gloves', sunglasses: false, gaiter: false
+  })
+})
+
+Deno.test('prompt: emphasis with only one of head/hands names and fronts that item', () => {
+  const headOnly = buildPrompt({
+    gender: 'MALE', weather: 'CLEAR', temp_bracket: 'MILD', time_of_day: 'MIDDAY',
+    outfit_items: ['SHORT_SLEEVE', 'SHORTS', 'BASEBALL_CAP']
+  })
+  assertStringIncludes(headOnly, 'A male runner in their 30s, wearing a running cap, running mid-stride')
+  assertStringIncludes(headOnly, 'OUTFIT:\n- Running cap\n- Short sleeve shirt\n- Running shorts')
+  const handsOnly = buildPrompt({
+    gender: 'FEMALE', weather: 'CLEAR', temp_bracket: 'FREEZING', time_of_day: 'DAWN',
+    outfit_items: ['LONG_SLEEVE_THERMAL', 'THERMAL_TIGHTS', 'MITTENS']
+  })
+  assertStringIncludes(handsOnly, 'A female runner in their 30s, wearing mittens, running mid-stride')
+  assertStringIncludes(handsOnly, 'OUTFIT:\n- Mittens\n- Thermal long sleeve shirt\n- Thermal tights')
 })
 
 Deno.test('expected classes derive from the prompt segment (lane method)', () => {
