@@ -36,9 +36,9 @@ import Foundation
 /// ungendered request keeps the legacy chain byte-for-byte over the
 /// legacy view (see `legacyAssetNames`): FREEZING × RAIN still
 /// degrades to freezing_clear there, exactly as before WS-7 — the
-/// same treatment Android gives UNISEX. WS-6 wires the gender
-/// argument at the painting call sites (D-20); this provider honors
-/// it correctly whenever it is supplied.
+/// same treatment Android gives UNISEX. WS-6 wired the gender
+/// argument at the app-target painting call sites (D-20); this
+/// provider honors it correctly whenever it is supplied.
 ///
 /// Point-grain standing (D-22): every bundled asset carries its
 /// manifest provenance — the pool source combination it was rendered
@@ -181,7 +181,10 @@ struct FallbackImageProvider {
     /// MILD × CLEAR, landing on the same subject it always landed
     /// on. FREEZING × RAIN is deliberately absent: under the legacy
     /// chain it still degrades to freezing_clear, exactly as before
-    /// WS-7. No ungendered-specific asset exists or is needed.
+    /// WS-7. No ungendered-specific asset exists or is needed. Since
+    /// WS-6 (D-20) the legacy view serves only a unisex preference
+    /// (and the watch — see the WS-6 gate report): every app-target
+    /// painting call site passes the user's fit preference.
     static let legacyAssetNames: [HeroTempBracket: [HeroWeatherCondition: String]] = {
         var view: [HeroTempBracket: [HeroWeatherCondition: String]] = [:]
         for (bracket, conditions) in legacySubjects {

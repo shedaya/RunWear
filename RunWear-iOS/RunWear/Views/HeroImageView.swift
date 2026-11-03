@@ -413,7 +413,7 @@ struct HeroImageView: View {
         date: Date(),
         hour: 14,
         tempBracket: .MILD,
-        fallbackImageUrl: FallbackImageProvider.shared.getImageURL(temp: .MILD, weather: .CLEAR),
+        fallbackImageUrl: FallbackImageProvider.shared.getImageURL(temp: .MILD, weather: .CLEAR, gender: .FEMALE),
         aiImageUrl: nil
     )
     .background(Color.black)

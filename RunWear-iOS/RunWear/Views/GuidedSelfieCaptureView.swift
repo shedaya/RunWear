@@ -240,6 +240,23 @@ final class GuidedSelfieCameraModel: NSObject, ObservableObject {
         if let connection = videoOutput.connection(with: .video) {
             connection.videoRotationAngle = 90
         }
+        // WS-6 (F-1, capture-pipeline audit): the PHOTO connection
+        // gets the same rotation the preview/analysis connection
+        // has always had. Before this, the still capture was taken
+        // with NO rotation angle set: the front camera's sensor is
+        // landscape-native, so the delivered still arrived in
+        // sensor orientation with the correction carried only by
+        // metadata (AVCapturePhoto's file representation writes an
+        // EXIF orientation tag) — pixels sideways for any consumer
+        // that reads raw pixels, which is exactly the F-1 artifact
+        // class. Setting the angle makes the capture itself
+        // portrait; the intake checker's EXIF bake + roll gate
+        // (PhotoQualityChecker) remain as the proving checks
+        // behind it for every door, this one included.
+        if let photoConnection = photoOutput.connection(with: .video),
+           photoConnection.isVideoRotationAngleSupported(90) {
+            photoConnection.videoRotationAngle = 90
+        }
         session.commitConfiguration()
     }
 

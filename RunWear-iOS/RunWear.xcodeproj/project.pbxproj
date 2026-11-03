@@ -186,6 +186,7 @@
 		N10002000000000000000002 /* HeroServeTelemetry.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000001 /* HeroServeTelemetry.swift */; };
 		N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */; };
 		N10002000000000000000004 /* HeroServeTelemetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000003 /* HeroServeTelemetryTests.swift */; };
+		W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W60001000000000000000001 /* WS6PipelinesTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -349,6 +350,7 @@
 		N10001000000000000000001 /* HeroServeTelemetry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroServeTelemetry.swift; sourceTree = "<group>"; };
 		N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFallbackProvenanceTests.swift; sourceTree = "<group>"; };
 		N10001000000000000000003 /* HeroServeTelemetryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroServeTelemetryTests.swift; sourceTree = "<group>"; };
+		W60001000000000000000001 /* WS6PipelinesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS6PipelinesTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -604,6 +606,7 @@
 				C1000100000000000000003B /* HeroFallbackGenderTests.swift */,
 				N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */,
 				N10001000000000000000003 /* HeroServeTelemetryTests.swift */,
+				W60001000000000000000001 /* WS6PipelinesTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -938,6 +941,7 @@
 				N10002000000000000000002 /* HeroServeTelemetry.swift in Sources */,
 				N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */,
 				N10002000000000000000004 /* HeroServeTelemetryTests.swift in Sources */,
+				W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

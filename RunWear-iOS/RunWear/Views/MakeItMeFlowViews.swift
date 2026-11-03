@@ -553,16 +553,21 @@ struct MakeItMeCaptureView: View {
     /// by PhotoQualityChecker, accepted with its upload JPEG or
     /// rejected with the checker's specific reason. No source gets
     /// its own quality path.
+    ///
+    /// WS-6 (F-1): the seam runs the checker's ONE unified check —
+    /// the accepted JPEG is the artifact the check itself produced
+    /// (EXIF baked at decode, a residual quarter-turn corrected),
+    /// never a separate re-encode of the original bytes, which is
+    /// how a corrected measurement could still upload sideways.
     private func addPhoto(originalData data: Data) async {
         guard photos.count < 3 else { return }
         let picked = PickedPhoto(originalData: data)
         photos.append(picked)
-        let rejection = await PhotoQualityChecker.rejection(for: data)
-        let jpeg = PhotoQualityChecker.jpegForUpload(data)
+        let result = await PhotoQualityChecker.check(imageData: data)
         if let index = photos.firstIndex(where: { $0.id == picked.id }) {
-            if let rejection {
+            if let rejection = result.rejection {
                 photos[index].state = .rejected(rejection)
-            } else if let jpeg {
+            } else if let jpeg = result.uploadData {
                 photos[index].state = .accepted
                 photos[index].jpegData = jpeg
             } else {

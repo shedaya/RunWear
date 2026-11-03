@@ -46,13 +46,6 @@ struct WeatherOutfitView: View {
     // shown briefly after the user flags the hero photo.
     @State private var showFlagThanks = false
 
-    // The hero photo the share payload carries (RW-6.5): the AI
-    // photo when there is one, else the fallback — the image the
-    // hero itself shows. Loaded as an Image because ShareLink
-    // vends an Image, not a URL; nil until it arrives (the share
-    // button falls back to text-only meanwhile, never blocked).
-    @State private var heroShareImage: Image?
-
     // R-15 rating moment: this view exists only when a recommendation
     // is on screen, so appearing here IS the proven-value signal. The
     // tracker counts distinct view days; the ask comes after the 3rd,
@@ -163,7 +156,6 @@ struct WeatherOutfitView: View {
             }
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    shareButton
                     Button {
                         showSettings = true
                     } label: {
@@ -310,54 +302,18 @@ struct WeatherOutfitView: View {
         } message: {
             Text("A quick rating helps other runners find their outfit.")
         }
-        .task(id: heroSharePhotoURL) {
-            heroShareImage = await Self.loadShareImage(from: heroSharePhotoURL)
-        }
     }
 
-    // MARK: - Share (RW-6.5)
+    // MARK: - Share (WS-6 / T-4 ruling)
 
-    /// Native ShareLink — it anchors its own popover on iPad and
-    /// stacks over presented sheets, the two failure modes of the
-    /// hand-rolled UIActivityViewController it replaces (which
-    /// presented from the root view controller with no anchor — a
-    /// documented iPad crash risk on this iPad-shipping target).
-    /// Payload: the hero photo (once loaded) + the aligned share
-    /// text; text-only until the photo arrives.
-    @ViewBuilder private var shareButton: some View {
-        if let text = viewModel.shareText {
-            if let heroShareImage {
-                ShareLink(
-                    item: heroShareImage,
-                    subject: Text("RunWear Outfit"),
-                    message: Text(text),
-                    preview: SharePreview("RunWear Outfit", image: heroShareImage)
-                ) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            } else {
-                ShareLink(item: text) {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                }
-            }
-        }
-    }
-
-    /// The hero photo's URL in the hero's own priority: the AI
-    /// photo, else the bundled fallback — the image on screen.
-    private var heroSharePhotoURL: URL? {
-        let string = viewModel.heroImageUrl ?? viewModel.fallbackImageUrl ?? defaultFallbackUrl
-        return URL(string: string)
-    }
-
-    private static func loadShareImage(from url: URL?) async -> Image? {
-        guard let url,
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let uiImage = UIImage(data: data) else {
-            return nil
-        }
-        return Image(uiImage: uiImage)
-    }
+    // There is NO home-level share. The RW-6.5 toolbar ShareLink
+    // that sent the raw hero photo + text from here was removed by
+    // the T-4 ruling (Sol, Nov 3, 2026 — register D-15's iOS half):
+    // the design has no home share on either platform, and sharing
+    // lives in the collection, whose Poster / Kit Card share is
+    // the designed artifact path (WearIveRunCollectionView). The
+    // view model's shareText composition remains as a tested
+    // view-model computation with no home consumer.
 
     // MARK: - Layouts (design record §5.2, frame f5)
 
@@ -861,8 +817,9 @@ struct WeatherOutfitView: View {
         // computed". A pool miss settles (loading ends) with the
         // fallback as the FINAL image and paints it then. Later
         // reloads keep the on-screen photo (the previous hero URL
-        // survives a reload) and crossfade per §1.1. The D-20
-        // wiring of the fallback call itself remains WS-6's scope.
+        // survives a reload) and crossfade per §1.1. The fallback
+        // that settles is resolved with the user's fit preference
+        // (WS-6, D-20).
         if viewModel.heroImageUrl == nil
             && (viewModel.isHeroImageLoading || viewModel.fallbackImageUrl == nil) {
             heroSkeleton(heightMode: heightMode)
@@ -910,8 +867,9 @@ struct WeatherOutfitView: View {
             aiImageUrl: viewModel.heroImageUrl,
             onSettingsTapped: { showSettings = true },
             // No onShareTapped: the hero's top controls are off
-            // (showsTopControls below) — sharing lives in the
-            // toolbar as a ShareLink (RW-6.5).
+            // (showsTopControls below) — and since WS-6 (T-4)
+            // there is no home share at all; sharing lives in
+            // the collection (Poster / Kit Card).
             onLocationTapped: { showLocationPicker = true },
             onDateTapped: { showDatePicker = true },
             onTimeTapped: { showTimePicker = true },
@@ -935,10 +893,15 @@ struct WeatherOutfitView: View {
     }
 
     private var defaultFallbackUrl: String {
+        // WS-6 (D-20): this default paints the hero whenever the
+        // view model has no fallback of its own yet, so it resolves
+        // with the user's fit preference like every other painting
+        // call site — no painting path uses the ungendered chain.
         FallbackImageProvider.shared.getImageURL(
             temp: .MILD,
             weather: .CLEAR,
-            size: .iOS
+            size: .iOS,
+            gender: viewModel.genderPreference.fallbackHeroGender
         )
     }
 

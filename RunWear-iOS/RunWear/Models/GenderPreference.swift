@@ -49,6 +49,21 @@ enum GenderPreference: String, Codable, CaseIterable {
         return "\(searchPrefix)\(baseTerm)"
     }
 
+    /// WS-6 (D-20): the DETERMINISTIC hero gender the bundled
+    /// fallback paints with. Unlike `forHeroImage()` — whose
+    /// unisex case is a coin flip for pool variety — the fallback
+    /// call sites must resolve the same asset every time for a
+    /// given preference, and a unisex preference has no gendered
+    /// asset to demand: it keeps the legacy ungendered chain,
+    /// exactly the treatment Android gives UNISEX. Nil = legacy.
+    var fallbackHeroGender: HeroGender? {
+        switch self {
+        case .male: return .MALE
+        case .female: return .FEMALE
+        case .unisex: return nil
+        }
+    }
+
     /// Returns a HeroGender for hero image selection
     /// For unisex preference, randomly returns MALE or FEMALE (50/50)
     /// This ensures variety in hero images when no preference is set

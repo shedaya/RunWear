@@ -469,6 +469,25 @@ class WeatherViewModel: ObservableObject {
         )
     }
 
+    /// WS-6 (D-20): the bundled asset name the pre-paint fallback
+    /// resolves to for the current fit preference — the exact
+    /// resolution `loadHeroImage` paints from (its URL form is the
+    /// same call through `getImageURL`). Internal (not private) so
+    /// the WS-6 gate tests drive the production resolution in a
+    /// logic-test host, where bundle URLs cannot resolve and the
+    /// asset NAME is the honest testable surface (the same surface
+    /// WS-7's provider tests pin).
+    func prePaintFallbackAssetName(
+        temp: HeroTempBracket,
+        weather: HeroWeatherCondition
+    ) -> String {
+        fallbackProvider.resolvedAssetName(
+            temp: temp,
+            weather: weather,
+            gender: genderPreference.fallbackHeroGender
+        )
+    }
+
     private func loadHeroImage() async {
         isHeroImageLoading = true
 
@@ -500,7 +519,17 @@ class WeatherViewModel: ObservableObject {
         // Set fallback image immediately (zero-lag)
         let tempBracket = HeroTempBracket.from(feelsLikeTemperature: feelsLike)
         let weatherCondition = HeroWeatherCondition.from(weatherCode: weatherCode)
-        fallbackImageUrl = fallbackProvider.getImageURL(temp: tempBracket, weather: weatherCondition, size: .iOS)
+        // WS-6 (D-20): the pre-paint fallback is resolved WITH the
+        // user's fit preference — the gender-aware path is the path
+        // that paints, first frame and (below) pool-miss alike. A
+        // unisex preference passes nil and keeps the legacy chain
+        // (see GenderPreference.fallbackHeroGender).
+        fallbackImageUrl = fallbackProvider.getImageURL(
+            temp: tempBracket,
+            weather: weatherCondition,
+            size: .iOS,
+            gender: genderPreference.fallbackHeroGender
+        )
 
         // Fetch AI hero image — with the actual outfit, so a
         // replenishment prompt describes what the engine recommended
@@ -530,11 +559,10 @@ class WeatherViewModel: ObservableObject {
         // if the pool missed — the pre-paint fallback URL above is
         // the paint in that case (the cascade's own level-8 result
         // is not what renders), so the serve record names THIS
-        // asset. (The fallback URL is still resolved ungendered
-        // here — wiring the gender argument at this call site is
-        // WS-6's D-20 work; the record describes the paint as it
-        // actually happens, and will carry the gendered asset with
-        // no telemetry change once WS-6 lands.)
+        // asset. Since WS-6 (D-20) the URL above is resolved with
+        // the user's fit preference, so the asset this record names
+        // is the gendered one — the record follows the paint with
+        // no telemetry change.
         let paintedBundledAsset: String? = result.fallbackLevel < 8
             ? nil
             : fallbackImageUrl.map { FallbackImageProvider.assetFile(fromURLString: $0) }

@@ -730,6 +730,7 @@ enum PhotoRejection: Equatable {
     case tooDark          // C3c
     case tooClose         // C3d
     case faceTooSmall     // C3E (RW-26: frame 18's failed check)
+    case rotated          // C3G (WS-6 / F-1: the roll gate)
 
     var specString: String {
         switch self {
@@ -745,6 +746,85 @@ enum PhotoRejection: Equatable {
             // C3E: failure-specific, and the camera is offered
             // first (the guided capture frames the face for you).
             return "Your face is too small in this photo to use. Take a selfie with the camera instead — the guide helps you frame it."
+        case .rotated:
+            // C3G: verbatim with Android's MakeItMeStrings
+            // C3G_REJECT_ROTATED (both platforms, one string).
+            return "This photo came out sideways. Retake it holding your phone upright, or pick a photo that's already upright."
+        }
+    }
+}
+
+// MARK: - Intake orientation (WS-6 / F-1)
+//
+// The intake orientation rules — pure, no Vision/UIKit types, so
+// the gate exercises every seam with rotated inputs. Mirror of
+// Android's IntakeOrientation (same constants, same math).
+//
+// F-1's root cause (field diagnosis, Nov 3 2026): the guided-selfie
+// capture's artifact arrived SIDEWAYS and no stage read in-plane
+// rotation — the identity screen scored a 90°-rotated face at
+// 0.19–0.25 against the 0.40 line, so no draw could ever deliver.
+// The client fix has three parts, all decided here or in
+// PhotoQualityChecker:
+//
+//  1. EXIF-at-decode: the checker bakes the photo's EXIF
+//     orientation into the pixels before anything measures or
+//     encodes it, so the captured artifact is upright at the
+//     source (PhotoQualityChecker's job — UIImage orientation is
+//     iOS's EXIF face).
+//  2. Roll gate: `rollWithinGate` — the subject face's roll (the
+//     Vision face observation's `roll`, read by the checker for
+//     the first time in the app) must sit within
+//     ±`maxRollDegrees` of upright (the same 30° line the
+//     server's ref-prep uses).
+//  3. Quarter-turn correction: a residual roll that is a near
+//     quarter-turn (an EXIF-less sideways photo — a screenshot, an
+//     edited export) is corrected by `quarterTurnCorrection` and
+//     re-measured; a roll that is neither within the gate nor a
+//     clean quarter-turn is NOT guessed at — the photo is
+//     rejected .rotated and retaken (the server safety net
+//     behaves the same).
+enum IntakeOrientation {
+
+    /// Roll gate half-width in degrees (mirrors ref-prep's 30° line).
+    static let maxRollDegrees: Double = 30
+    /// How close a residual roll must sit to a quarter-turn to be corrected.
+    static let quarterTurnToleranceDegrees: Double = 15
+
+    /// Normalize any roll reading into (-180, 180].
+    static func normalizeRoll(_ rollDegrees: Double) -> Double {
+        var r = rollDegrees.truncatingRemainder(dividingBy: 360)
+        if r > 180 { r -= 360 }
+        if r <= -180 { r += 360 }
+        return r
+    }
+
+    /// The roll gate: the subject face reads upright.
+    static func rollWithinGate(_ rollDegrees: Double) -> Bool {
+        abs(normalizeRoll(rollDegrees)) <= maxRollDegrees
+    }
+
+    /// The compensating clockwise rotation (90, 180, or 270) that
+    /// uprights a bitmap whose subject face reads `rollDegrees` —
+    /// or nil when the roll is within the gate (nothing to correct)
+    /// or is not a clean quarter-turn (not correctable by rotation
+    /// alone; the gate rejects it instead). The correction is the
+    /// INVERSE of the measured roll, snapped to the nearest
+    /// quarter-turn (the diagnosis measured roll ≈ +90° on the
+    /// sideways reference, and uprighting took the inverse turn).
+    /// The checker never trusts the sign blindly: a corrected
+    /// photo is re-measured, and only a re-measurement inside the
+    /// gate is accepted (see PhotoQualityChecker).
+    static func quarterTurnCorrection(rollDegrees: Double) -> Int? {
+        let roll = normalizeRoll(rollDegrees)
+        if abs(roll) <= maxRollDegrees { return nil }
+        let snapped = (roll / 90).rounded() * 90
+        if abs(roll - snapped) > quarterTurnToleranceDegrees { return nil }
+        let correction = ((-snapped).truncatingRemainder(dividingBy: 360) + 360)
+            .truncatingRemainder(dividingBy: 360)
+        switch correction {
+        case 90, 180, 270: return Int(correction)
+        default: return nil
         }
     }
 }
@@ -769,13 +849,23 @@ enum PhotoQualityVerdict {
     /// darkness first; the Android lane applies count-first from
     /// this train. (PhotoIntakePolicy governs source routing, not
     /// check order, on both platforms.)
+    ///
+    /// WS-6 (F-1) inserts the ROLL gate directly after the count
+    /// checks — the same seat Android's policy gives it: a subject
+    /// face whose roll is beyond IntakeOrientation's gate (and was
+    /// not a correctable quarter-turn — the checker corrects those
+    /// before this verdict runs) is rejected .rotated for retake,
+    /// never waved through sideways. `faceRollDegrees` defaults to
+    /// 0 (upright) so pre-F-1 call sites keep their verdicts.
     static func rejection(
         faceCount: Int,
         largestFaceAreaRatio: Double,
-        meanLuminance: Double
+        meanLuminance: Double,
+        faceRollDegrees: Double = 0
     ) -> PhotoRejection? {
         if faceCount == 0 { return .faceUnclear }
         if faceCount > 1 { return .multiplePeople }
+        if !IntakeOrientation.rollWithinGate(faceRollDegrees) { return .rotated }
         if meanLuminance < darkThreshold { return .tooDark }
         if largestFaceAreaRatio < tooSmallThreshold { return .faceTooSmall }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
