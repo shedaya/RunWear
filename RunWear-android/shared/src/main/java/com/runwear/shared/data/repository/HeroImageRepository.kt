@@ -141,7 +141,11 @@ class HeroImageRepository @Inject constructor() {
             )
         }
         val candidates = if (HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
-            val floorUrl = getWeatherAwareFallback(combination.tempBracket, heroWeather)
+            // RW-26: the floor candidate is resolved gender-aware, so the
+            // curated photo that joins the rotation is never an
+            // opposite-gender subject for this combination's (already
+            // UNISEX-resolved) gender.
+            val floorUrl = getWeatherAwareFallback(combination.tempBracket, heroWeather, combination.genderPreference)
             if (poolCandidates.any { it.imageUrl == floorUrl }) {
                 poolCandidates
             } else {
@@ -325,7 +329,10 @@ class HeroImageRepository @Inject constructor() {
      */
     private fun getFallbackImage(combination: OutfitCombination): HeroImageResult {
         val weatherCondition = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition)
+        // RW-26: gender-aware — the combination carries the resolved
+        // hero gender, so the last-resort photo matches it (see the
+        // subject table on the resolver below).
+        val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition, combination.genderPreference)
 
         return HeroImageResult(
             imageUrl = url,
@@ -338,7 +345,30 @@ class HeroImageRepository @Inject constructor() {
      * Get weather-aware fallback image URL.
      * Priority: temp + weather match > temp only > default
      */
-    internal fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String {
+    internal fun getWeatherAwareFallback(tempBracket: TempBracket, weatherCondition: HeroWeatherCondition): String =
+        getWeatherAwareFallback(tempBracket, weatherCondition, GenderPreference.UNISEX)
+
+    /**
+     * RW-26 (2026-11-02): gender-aware form — mirror of the engine's
+     * HeroImageSelector resolver (the two copies are kept in agreement
+     * by HeroFallbackImagesTest / HeroFallbackGenderTest). A MALE or
+     * FEMALE request never resolves to an asset whose photographed
+     * subject is the other gender while any bundled asset matches;
+     * UNISEX keeps the legacy chain exactly.
+     */
+    internal fun getWeatherAwareFallback(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition,
+        gender: GenderPreference
+    ): String {
+        if (gender != GenderPreference.UNISEX) {
+            val match = orderedFallbackCells(tempBracket, weatherCondition)
+                .firstOrNull { FALLBACK_SUBJECT_GENDER[it] == gender }
+            if (match != null) {
+                return FALLBACK_IMAGES_2D.getValue(match.first).getValue(match.second)
+            }
+        }
+
         // Try to get exact temp + weather match
         val bracketImages = FALLBACK_IMAGES_2D[tempBracket]
         val weatherImages = bracketImages?.get(weatherCondition)
@@ -356,6 +386,41 @@ class HeroImageRepository @Inject constructor() {
         // Ultimate fallback - mild + clear
         return FALLBACK_IMAGES_2D[TempBracket.MILD]?.get(HeroWeatherCondition.CLEAR)
             ?: "file:///android_asset/hero_fallback/mild_clear.webp"
+    }
+
+    /** The subject gender of this copy's bundled asset for a cell (RW-26). */
+    internal fun fallbackSubjectGender(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition
+    ): GenderPreference? = FALLBACK_SUBJECT_GENDER[tempBracket to weatherCondition]
+
+    /** Mirror of HeroImageSelector.orderedFallbackCells (RW-26). */
+    private fun orderedFallbackCells(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition
+    ): List<Pair<TempBracket, HeroWeatherCondition>> {
+        val cells = LinkedHashSet<Pair<TempBracket, HeroWeatherCondition>>()
+        fun addBracket(bracket: TempBracket) {
+            cells.add(bracket to weatherCondition)
+            for (w in listOf(
+                HeroWeatherCondition.CLEAR, HeroWeatherCondition.CLOUDY,
+                HeroWeatherCondition.RAIN, HeroWeatherCondition.SNOW
+            )) {
+                cells.add(bracket to w)
+            }
+        }
+        addBracket(tempBracket)
+        val idx = BRACKET_WARMTH_ORDER.indexOf(tempBracket)
+        val neighbours = BRACKET_WARMTH_ORDER
+            .filter { it != tempBracket }
+            .sortedWith(
+                compareBy(
+                    { kotlin.math.abs(BRACKET_WARMTH_ORDER.indexOf(it) - idx) },
+                    { -BRACKET_WARMTH_ORDER.indexOf(it) }
+                )
+            )
+        for (b in neighbours) addBracket(b)
+        return cells.filter { FALLBACK_IMAGES_2D[it.first]?.containsKey(it.second) == true }
     }
 
     /**
@@ -397,6 +462,43 @@ class HeroImageRepository @Inject constructor() {
          * - RAIN: Wet conditions, rain gear visible
          * - SNOW: Winter snow conditions
          */
+        /**
+         * RW-26 (2026-11-02): subject gender of every bundled fallback
+         * asset, from the RW-20-verified provenance of its source pool
+         * row. Mirror of the engine HeroImageSelector table — the two
+         * copies are pinned to each other by HeroFallbackGenderTest.
+         * (Diagnosis: release-prep/rw-gender-preference-diagnosis-2026-11-02.md.)
+         */
+        internal val FALLBACK_SUBJECT_GENDER: Map<Pair<TempBracket, HeroWeatherCondition>, GenderPreference> = mapOf(
+            (TempBracket.FREEZING to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.FREEZING to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.FREEZING to HeroWeatherCondition.SNOW) to GenderPreference.MALE,
+            (TempBracket.COLD to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.COLD to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.COLD to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.COLD to HeroWeatherCondition.SNOW) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.COOL to HeroWeatherCondition.SNOW) to GenderPreference.MALE,
+            (TempBracket.MILD to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.MILD to HeroWeatherCondition.CLOUDY) to GenderPreference.FEMALE,
+            (TempBracket.MILD to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.MILD to HeroWeatherCondition.SNOW) to GenderPreference.FEMALE,
+            (TempBracket.WARM to HeroWeatherCondition.CLEAR) to GenderPreference.MALE,
+            (TempBracket.WARM to HeroWeatherCondition.CLOUDY) to GenderPreference.MALE,
+            (TempBracket.WARM to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE,
+            (TempBracket.HOT to HeroWeatherCondition.CLEAR) to GenderPreference.FEMALE,
+            (TempBracket.HOT to HeroWeatherCondition.CLOUDY) to GenderPreference.MALE,
+            (TempBracket.HOT to HeroWeatherCondition.RAIN) to GenderPreference.FEMALE
+        )
+
+        /** Warmth order (coldest first) for walking neighbouring brackets (RW-26). */
+        internal val BRACKET_WARMTH_ORDER: List<TempBracket> = listOf(
+            TempBracket.FREEZING, TempBracket.COLD, TempBracket.COOL,
+            TempBracket.MILD, TempBracket.WARM, TempBracket.HOT
+        )
+
         internal val FALLBACK_IMAGES_2D: Map<TempBracket, Map<HeroWeatherCondition, String>> = mapOf(
             // HOT (80°F+) - Snow impossible
             TempBracket.HOT to mapOf(
