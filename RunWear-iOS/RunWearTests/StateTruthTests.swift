@@ -342,10 +342,21 @@ final class StateTruthTests: XCTestCase {
 
     // MARK: - A unit change is a pure re-render
 
+    /// Deterministic encoding for state comparison: JSONEncoder's
+    /// default key order varies per encoder instance (two encodes
+    /// of the identical struct differ in key order only — verified
+    /// on the fixture), so byte comparison must sort the keys; the
+    /// pinned quantity is the canonical CONTENT.
+    private func canonicalJSON(_ weather: WeatherData) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(weather)
+    }
+
     @MainActor
     func testUnitFlipIsPureReRender_canonicalStateUntouched() throws {
         let vm = loadedViewModel(unit: .fahrenheit)
-        let weatherBefore = try JSONEncoder().encode(vm.weatherData!)
+        let weatherBefore = try canonicalJSON(vm.weatherData!)
         let snapshotBefore = vm.selectedWeatherSnapshot
         let itemsBefore = vm.recommendation!.allItems.map(\.key)
         let bracketBefore = vm.recommendation!.temperatureBracket
@@ -353,9 +364,9 @@ final class StateTruthTests: XCTestCase {
 
         flipCheckingConsistency(vm, times: 10)
 
-        // Ten flips later the canonical state is byte-identical:
+        // Ten flips later the canonical state is content-identical:
         // the unit write touched nothing but the preference itself.
-        XCTAssertEqual(try JSONEncoder().encode(vm.weatherData!), weatherBefore)
+        XCTAssertEqual(try canonicalJSON(vm.weatherData!), weatherBefore)
         XCTAssertEqual(vm.selectedWeatherSnapshot?.temperature, snapshotBefore?.temperature)
         XCTAssertEqual(vm.selectedWeatherSnapshot?.feelsLike, snapshotBefore?.feelsLike)
         XCTAssertEqual(vm.selectedWeatherSnapshot?.windSpeed, snapshotBefore?.windSpeed)
