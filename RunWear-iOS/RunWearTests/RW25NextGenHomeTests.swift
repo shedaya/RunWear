@@ -145,12 +145,14 @@ final class RW25NextGenHomeTests: XCTestCase {
             WearIveRunBackgroundPolicy.style(for: .expanded, isDark: false),
             .opaqueSheet
         )
+        // WS-3: the cue is a state of the ONE machine now — the
+        // retired `.endOfScrollCue` presentation case is `.cue`.
         XCTAssertEqual(
-            WearIveRunBackgroundPolicy.style(for: .endOfScrollCue, isDark: true),
+            WearIveRunBackgroundPolicy.style(for: .cue, isDark: true),
             .opaqueSheet
         )
         XCTAssertEqual(
-            WearIveRunBackgroundPolicy.style(for: .endOfScrollCue, isDark: false),
+            WearIveRunBackgroundPolicy.style(for: .cue, isDark: false),
             .opaqueSheet
         )
     }

@@ -647,6 +647,16 @@ struct WeatherOutfitView: View {
         }
     }
 
+    /// WS-3 (D-11): the sheet-open seam the element consumes for
+    /// dimming. WS-5 owns the sheets themselves; home only reports
+    /// whether any of its sheets is presented, and the element —
+    /// which belongs to home's layer — dims with the backdrop.
+    private var anyHomeSheetPresented: Bool {
+        showSettings || showDatePicker || showTimePicker || showShop
+            || showLocationPicker || selectedWeatherDetail != nil
+            || showCollection || showFeedbackSheet
+    }
+
     /// The mini bar dock: today's entry drives the bar — absent
     /// pre-entry, narrating once the day's first generation lands.
     @ViewBuilder private var miniBarDock: some View {
@@ -669,6 +679,7 @@ struct WeatherOutfitView: View {
                 } ?? "",
                 cueCount: collectionModel.cueCount,
                 isAtEndOfScroll: isAtEndOfScroll,
+                isDimmedBySheet: anyHomeSheetPresented,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
                     collectionModel.removeToday(placeName: viewModel.placeDisplayName)
