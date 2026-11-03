@@ -128,6 +128,26 @@ actor PersonalHeroAPI {
         _ = try await functionPost("delete-my-photos", body: [:])
     }
 
+    private struct DeleteMyDataResponse: Decodable {
+        let accountDeleted: Bool
+        enum CodingKeys: String, CodingKey { case accountDeleted = "account_deleted" }
+    }
+
+    /// Full account-data deletion (delete-my-data, RW-16.30
+    /// decision 5a): the photos sweep plus the webhook log and the
+    /// account itself. The server reports a failed account deletion
+    /// in the receipt (account_deleted = false) instead of failing
+    /// the call; anything but an explicit true throws here so the
+    /// caller claims nothing — the data is gone but the account is
+    /// not, and the user's retry completes it.
+    func deleteMyData() async throws {
+        let data = try await functionPost("delete-my-data", body: [:])
+        let receipt = try JSONDecoder().decode(DeleteMyDataResponse.self, from: data)
+        guard receipt.accountDeleted else {
+            throw PersonalHeroAPIError.server(message: "account deletion not confirmed")
+        }
+    }
+
     // MARK: - Profile + reference reads (PostgREST, owner-SELECT)
 
     func fetchProfile() async throws -> PersonalProfileRow? {

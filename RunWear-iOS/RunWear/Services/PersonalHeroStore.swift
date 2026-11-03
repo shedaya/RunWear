@@ -381,6 +381,21 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// resolveHero finds nothing for a stock user.
     func deleteEverything() async throws {
         try await api.deleteMyPhotos()
+        resetToStock()
+    }
+
+    /// Delete my data (RW-16.30 decision 5a): the full account
+    /// deletion. Same local reset as the photos erasure, plus the
+    /// local session is forgotten — the account it belonged to no
+    /// longer exists server-side, so the next session is a fresh
+    /// anonymous account, exactly like a first launch.
+    func deleteAllData() async throws {
+        try await api.deleteMyData()
+        resetToStock()
+        await SupabaseAuthService.shared.clearLocalSession()
+    }
+
+    private func resetToStock() {
         cache.removeAll()
         lookStates.removeAll()
         requestedCells.removeAll()
