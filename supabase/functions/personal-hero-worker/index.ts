@@ -88,9 +88,13 @@ const VARIANT_CAP = 3
 const DEFAULT_DRAIN_LIMIT = 1
 const MAX_DRAIN_LIMIT = 3
 const SOFT_TIME_BUDGET_MS = 100_000
-// Identity screen delivered line (lanes' instrument of record:
-// buffalo_l cosine >= 0.40 = delivered).
-const IDENTITY_DELIVERED_MIN = 0.40
+// Identity screen delivered line (instrument of record since the
+// 2026-11-03 swap: YuNet+SFace cosine >= 0.42 = delivered — the
+// licensing package's measured line for the SFace stack. Deployed
+// as worker v33 together with the swapped screen; this constant
+// must move with the screen's IDENTITY_THRESHOLD, or SFace scores
+// would silently be judged on buffalo_l's 0.40 line).
+const IDENTITY_DELIVERED_MIN = 0.42
 
 // Stale-claim recovery — unchanged from v23 (see the v23 header for
 // the full reasoning; thresholds and budgets carry over verbatim).
