@@ -178,12 +178,14 @@ abstract class HomeCompositionHarness {
      * SemanticsNode.children in this Compose version (the
      * LazyColumn node exposes scroll properties only) and
      * SemanticsOwner has no flat accessor — but the accessibility
-     * delegate materializes every item, which is also the tree
-     * that proves the chrome is reachable at rest.
+     * NodeProvider materializes every item, which is also the
+     * tree that proves the chrome is reachable at rest.
      */
     protected fun a11yEntries(view: View): List<A11yEntry> {
         val out = mutableListOf<A11yEntry>()
-        fun walk(info: android.view.accessibility.AccessibilityNodeInfo) {
+        val provider = view.accessibilityNodeProvider ?: return out
+        fun walk(virtualId: Int) {
+            val info = provider.createAccessibilityNodeInfo(virtualId) ?: return
             val bounds = android.graphics.Rect()
             info.getBoundsInScreen(bounds)
             out += A11yEntry(
@@ -194,10 +196,10 @@ abstract class HomeCompositionHarness {
                 leftPx = bounds.left.toFloat()
             )
             for (i in 0 until info.childCount) {
-                info.getChild(i)?.let { walk(it) }
+                walk(info.getChildId(i).toInt())
             }
         }
-        view.createAccessibilityNodeInfo()?.let { walk(it) }
+        walk(android.view.accessibility.AccessibilityNodeProvider.HOST_VIEW_ID)
         return out
     }
 
