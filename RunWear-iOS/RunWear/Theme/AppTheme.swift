@@ -13,11 +13,12 @@ enum AppTheme {
     // MARK: - Background Colors
     // RW-26 (consolidated design, notes §1): the cream + Warm Charcoal
     // pair replaces the phase-1 neutral pair. These legacy constants
-    // carry the same values as the dynamic tokens below so the
-    // surfaces that still pin the dark ground (onboarding's
-    // preferences phase, the location picker, Shop) warm up too.
-    // Weather detail, the Make It Me flows, and Your Photos moved
-    // to the dynamic pair in the dual-mode conversion.
+    // carry the same values as the dynamic tokens below. Every
+    // user-facing surface now renders on the dynamic pair — weather
+    // detail, the Make It Me flows, and Your Photos in the dual-mode
+    // conversion; onboarding's preferences phase and Shop in the
+    // follow-on — so the constants remain as the value record the
+    // dynamic hexes mirror (and the watch target's reference).
     static let backgroundColor = Color(hex: "F5F1E8")
     static let darkBackground = Color(hex: "16130F")
     static let cardBackground = Color(hex: "FDFBF6")

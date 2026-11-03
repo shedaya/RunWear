@@ -582,4 +582,47 @@ final class RW26Phase2Tests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Dual-mode follow-on (onboarding preferences phase + Shop)
+
+    /// The follow-on conversion's card pairings. Onboarding's
+    /// preferences phase renders its ink/secondary text and its
+    /// bordered-button tint on the ground — the pairings the §9
+    /// test above already asserts. Shop's rows and its disclosure
+    /// card sit on the dynamic cardFill: the sheet hex in light
+    /// mode (asserted above), and in dark mode white@5% over the
+    /// ground, whose composite hex is 221F1B — the one ground the
+    /// §9 pins did not name. Ink and secondary text on it clear
+    /// the 4.5:1 floor (14.57:1 / 7.50:1).
+    func testDualModeFollowOnCardPairingsClearTheFloor() {
+        let cardFillDarkComposite = "221F1B" // white@0.05 over groundDarkHex 16130F
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.inkDarkHex, cardFillDarkComposite), 4.5, "ink on dark cardFill")
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.mutedDarkHex, cardFillDarkComposite), 4.5, "muted on dark cardFill")
+    }
+
+    /// Shop's thumbnail tiles: the row tile sits on cardOnSheet
+    /// (light = the ground hex; dark = the card hex) and the
+    /// inspector tile on cardFill, both with the §9 tile pattern's
+    /// inkSecondary glyph; the rows' cart glyph is seed pine on
+    /// the light card — a graphic, asserted at the text floor
+    /// anyway (7.41:1). The dark cart glyph is the shipped
+    /// rendering (pine on the dark card) and is unchanged.
+    func testDualModeFollowOnTilePairingsClearTheFloor() {
+        // Row tile glyph (cardOnSheet grounds).
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.inkSecondaryLightHex, AppTheme.groundLightHex), 4.5, "tile glyph light")
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.mutedDarkHex, AppTheme.cardDarkHex), 4.5, "tile glyph dark")
+        // Inspector tile glyph (cardFill grounds: sheet hex light,
+        // 221F1B composite dark).
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.inkSecondaryLightHex, AppTheme.sheetLightHex), 4.5, "inspector glyph light")
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.mutedDarkHex, "221F1B"), 4.5, "inspector glyph dark")
+        // Cart glyph, light mode.
+        XCTAssertGreaterThanOrEqual(
+            contrast("175E4C", AppTheme.sheetLightHex), 4.5, "pine cart glyph on light card")
+    }
 }

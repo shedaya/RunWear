@@ -65,7 +65,7 @@ struct OnboardingView: View {
             .padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(AppTheme.darkBackground.ignoresSafeArea())
+        .background(AppTheme.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
             // The single advance action, pinned and always reachable.
             // RW-14: it no longer completes onboarding — it moves to
@@ -81,7 +81,7 @@ struct OnboardingView: View {
             .tint(AppTheme.primaryColor)
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
-            .background(AppTheme.darkBackground)
+            .background(AppTheme.background)
         }
     }
 
@@ -91,22 +91,22 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: "figure.run")
                 .font(.system(size: 48))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.inkPrimary)
 
             Text("Welcome to RunWear")
                 .font(.title.weight(.bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.inkPrimary)
 
             Text("Outfit recommendations tuned to your weather. Set your preferences once — you can change them anytime in Settings.")
                 .font(.appSecondary)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(AppTheme.inkSecondary)
 
             // Frame 28: product truth only — answers "will this
             // cost me?" early and honestly. It is information,
             // not an ask (§9 placement table).
             Text("Your first 5 looks are free")
                 .font(.appSecondary.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.inkPrimary)
         }
     }
 
@@ -116,11 +116,11 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: icon)
                 .font(.appSectionTitle)
-                .foregroundStyle(.white)
+                .foregroundStyle(AppTheme.inkPrimary)
 
             Text(description)
                 .font(.appSecondary)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(AppTheme.inkSecondary)
         }
     }
 
@@ -149,7 +149,7 @@ struct OnboardingView: View {
             if genderPreference == .unisex {
                 Text("No preference selected - showing unisex options")
                     .font(.appFootnote)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(AppTheme.inkSecondary)
             }
         }
     }
@@ -181,7 +181,7 @@ struct OnboardingView: View {
             // never leaves the phone.
             Text("Your location stays on this phone. Forecast lookups are rounded to a rough area — never your exact spot — and your location is never sold or used for advertising.")
                 .font(.appFootnote)
-                .foregroundStyle(.white.opacity(0.6))
+                .foregroundStyle(AppTheme.inkSecondary)
 
             Button {
                 locationChoice = .gps
@@ -200,7 +200,7 @@ struct OnboardingView: View {
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.bordered)
-            .tint(.white)
+            .tint(AppTheme.inkPrimary)
 
             Button {
                 locationChoice = .manual
@@ -218,7 +218,7 @@ struct OnboardingView: View {
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.bordered)
-            .tint(.white)
+            .tint(AppTheme.inkPrimary)
         }
     }
 
@@ -282,9 +282,9 @@ private struct FirstLookView: View {
         ZStack {
             // Dual-mode conversion: the first-look surface hosts
             // the Make It Me fork, so it follows the app's
-            // appearance with the rest of the flow. (Onboarding's
-            // preferences phase above keeps its own ground — a
-            // separate surface, unchanged here.)
+            // appearance with the rest of the flow. (The
+            // preferences phase above follows the appearance
+            // too — the follow-on conversion.)
             AppTheme.background.ignoresSafeArea()
 
             if showFirstLookMoment {

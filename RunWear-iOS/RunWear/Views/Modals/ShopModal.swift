@@ -58,35 +58,35 @@ struct ShopModal: View {
                 VStack(spacing: 12) {
                     Text("Affiliate Disclosure: ")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
                     + Text("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(AppTheme.cardFillOnDark)
+                        .fill(AppTheme.cardFill)
                 )
                 .padding(.horizontal, 24)
 
                 Button(action: dismiss) {
                     Text("Close")
                         .font(.appSecondary.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                .stroke(AppTheme.cardStroke, lineWidth: 1)
                         )
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
                 .padding(.bottom, 16)
             }
-            .background(AppTheme.darkBackground.ignoresSafeArea())
+            .background(AppTheme.background.ignoresSafeArea())
             .inspector(isPresented: itemInspectorPresented) {
                 itemInspector
             }
@@ -112,7 +112,7 @@ struct ShopModal: View {
                 // Text(item.icon), i.e. the SF Symbol NAME as text.)
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppTheme.cardFill)
 
                     if let url = ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: genderPreference) {
                         AsyncImage(url: url) { phase in
@@ -125,22 +125,22 @@ struct ShopModal: View {
                             default:
                                 Image(systemName: item.icon)
                                     .font(.largeTitle)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.inkSecondary)
                             }
                         }
                     } else {
                         Image(systemName: item.icon)
                             .font(.largeTitle)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
                 .frame(width: 72, height: 72)
                 Text(item.name)
                     .font(.appSectionTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                 Text(item.description)
                     .font(.appSecondary)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
                 Button(action: { openAmazon(for: item) }) {
                     HStack(spacing: 6) {
                         Image(systemName: "cart.fill")
@@ -158,7 +158,7 @@ struct ShopModal: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.darkBackground.ignoresSafeArea())
+            .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle(item.name)
             .inspectorColumnWidth(min: 240, ideal: 300, max: 360)
         }
@@ -181,12 +181,12 @@ struct ShopModal: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Shop Gear")
                     .font(.appSheetTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
 
                 Text("\(items.count) items recommended")
                     .font(.appSecondary)
                     .monospacedDigit()
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(AppTheme.inkSecondary)
             }
 
             Spacer()
@@ -272,7 +272,7 @@ private struct ShopItemRow: View {
                 // text, clipped to fragments like "ts…"/"fig…"/"lig…".
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(AppTheme.cardOnSheet)
 
                     if let url = ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: genderPreference) {
                         AsyncImage(url: url) { phase in
@@ -285,13 +285,13 @@ private struct ShopItemRow: View {
                             default:
                                 Image(systemName: item.icon)
                                     .font(.title)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.inkSecondary)
                             }
                         }
                     } else {
                         Image(systemName: item.icon)
                             .font(.title)
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -300,11 +300,11 @@ private struct ShopItemRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.name)
                         .font(.appItemName)
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
 
                     Text(item.description)
                         .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .lineLimit(2)
                 }
 
@@ -319,11 +319,11 @@ private struct ShopItemRow: View {
             // Flat content card (AppTheme tokens) — not glass.
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.cardFillOnDark)
+                    .fill(AppTheme.cardFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
+                    .stroke(AppTheme.cardStroke, lineWidth: 1)
             )
         }
     }
