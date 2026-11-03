@@ -106,7 +106,7 @@ class WidgetLastGoodTest {
     }
 
     @Test
-    fun `no unit value is written into the snapshot (WS-2)`) {
+    fun `no unit value is written into the snapshot (WS-2)`() {
         // The cache key set is part of the WS-2 contract: weather is
         // canonical, and no unit may ride inside the persisted record
         // (a stored unit flag is exactly the stale-unit first paint
@@ -121,7 +121,7 @@ class WidgetLastGoodTest {
     }
 
     @Test
-    fun `a legacy metric snapshot converts to canonical once, at the read boundary (WS-2)`) {
+    fun `a legacy metric snapshot converts to canonical once, at the read boundary (WS-2)`() {
         // A snapshot written by a pre-WS-2 build in °C mode: values in
         // °C / km/h under a w_is_celsius flag. Reading it must yield
         // the canonical °F / mph values — never the raw metric numbers
