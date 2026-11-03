@@ -2,6 +2,11 @@ name: identity-screen-image
 
 on:
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "manual run"
+        required: false
+        default: "ops"
 
 permissions:
   contents: read
