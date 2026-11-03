@@ -10,6 +10,8 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import com.runwear.app.ui.components.HeroSection
+import androidx.compose.ui.graphics.toArgb
+import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.RunWearTheme
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
@@ -34,23 +36,22 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * WS-1 (RC-1) rendered evidence: the production home composition,
  * hosted exactly like the fluid-shot harness (Robolectric native
- * graphics, real engine outfit), asserted at the SEMANTICS level —
- * the composed picture, not the source:
+ * graphics, real engine outfit). Two assertion layers:
  *
- *  - at rest, the location pill (A3) is present in the photo zone's
- *    top area, showing the SimplePlace form ("Aspen, CO", never the
- *    raw "Aspen, Colorado" the state carries), and the Settings
- *    control is present and enabled;
- *  - the sheet's "FEELS LIKE" label sits at the handoff — its top
- *    is within a few dp of heroHeight − 28dp, NOT at the top of the
- *    screen (D-01's regression puts it at y≈0, clipped under the
- *    status bar, D-03);
- *  - the same assertions hold at the unfolded-Fold width and in
- *    dark theme;
- *  - the photo-zone chrome at the END of the handoff travel is
- *    non-interactive (HeroSection rendered directly at full
- *    scroll offset): the Settings control carries the disabled
- *    semantics property, while at rest it does not.
+ *  - PIXEL probes on the drawn full-screen frames (phone + Fold,
+ *    light + dark): the top chrome band and the band just above
+ *    the handoff are photo (gradient), the band just below the
+ *    handoff is the sheet's flat Surface reaching the page edge —
+ *    the sheet top IS heroHeight − 28dp, never at y≈0 over the
+ *    chrome (D-01/D-02) and never a floating card. Lazy-item
+ *    semantics are unreachable from this harness's semantics/a11y
+ *    trees (the LazyColumn node exposes scroll properties only),
+ *    so the full-screen composition is judged on its pixels.
+ *  - SEMANTICS on HeroSection rendered directly: at rest the
+ *    location pill (A3) is present showing the SimplePlace form
+ *    ("New York, NY") and Settings is enabled; at the END of the
+ *    handoff travel the Settings control carries the disabled
+ *    semantics property — chrome fade completes and disables.
  *
  * PNGs land in build/render-out-ws1/ (CI evidence is the passing
  * assertions, per the harness limitation WS-2/WS-8 recorded).
@@ -98,7 +99,7 @@ abstract class HomeCompositionHarness {
         name: String,
         widthDp: Int,
         heightDp: Int
-    ) {
+    ): Bitmap {
         val density = activity.resources.displayMetrics.density
         val widthPx = (widthDp * density).toInt()
         val heightPx = (heightDp * density).toInt()
@@ -112,6 +113,7 @@ abstract class HomeCompositionHarness {
         File(outDir, "$name.png").outputStream().use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
         }
+        return bitmap
     }
 
     /** The semantics root: ComposeView hosts its composition in a
@@ -163,46 +165,6 @@ abstract class HomeCompositionHarness {
         return found ?: throw IllegalStateException("no ViewRootForTest under $view")
     }
 
-    /** One accessibility-tree entry: what TalkBack would see. */
-    protected data class A11yEntry(
-        val text: String?,
-        val contentDescription: String?,
-        val enabled: Boolean,
-        val topPx: Float,
-        val leftPx: Float
-    )
-
-    /**
-     * The full accessibility tree of the compose view, flattened.
-     * Lazy-list item semantics are NOT reachable through
-     * SemanticsNode.children in this Compose version (the
-     * LazyColumn node exposes scroll properties only) and
-     * SemanticsOwner has no flat accessor — but the accessibility
-     * NodeProvider materializes every item, which is also the
-     * tree that proves the chrome is reachable at rest.
-     */
-    protected fun a11yEntries(view: View): List<A11yEntry> {
-        val out = mutableListOf<A11yEntry>()
-        val provider = view.accessibilityNodeProvider ?: return out
-        fun walk(virtualId: Int) {
-            val info = provider.createAccessibilityNodeInfo(virtualId) ?: return
-            val bounds = android.graphics.Rect()
-            info.getBoundsInScreen(bounds)
-            out += A11yEntry(
-                text = info.text?.toString(),
-                contentDescription = info.contentDescription?.toString(),
-                enabled = info.isEnabled,
-                topPx = bounds.top.toFloat(),
-                leftPx = bounds.left.toFloat()
-            )
-            for (i in 0 until info.childCount) {
-                walk(info.getChildId(i).toInt())
-            }
-        }
-        walk(android.view.accessibility.AccessibilityNodeProvider.HOST_VIEW_ID)
-        return out
-    }
-
     /** All semantics nodes in the tree, flattened. */
     protected fun nodes(root: SemanticsNode): List<SemanticsNode> =
         listOf(root) + root.children.flatMap { nodes(it) }
@@ -229,49 +191,70 @@ abstract class HomeCompositionHarness {
 
     protected fun assertHomeComposition(
         composeView: ComposeView,
+        bitmap: Bitmap,
         density: Float,
         screenHeightDp: Int,
         label: String
     ) {
-        val flat = a11yEntries(composeView)
+        // The content branch composed (not skeleton / error): the
+        // semantics tree carries the LazyColumn collection node.
+        val root = rootNode(composeView)
+        val hasCollection = nodes(root).any {
+            it.config.contains(
+                androidx.compose.ui.semantics.SemanticsProperties.CollectionInfo
+            )
+        }
+        assertTrue("[$label] home content branch must be composed", hasCollection)
 
-        // A3: the location pill is on screen at rest, in the photo
-        // zone's top area, in the SimplePlace form.
-        val pill = flat.firstOrNull { it.text == "Aspen, CO" }
-        val allTexts = flat.mapNotNull { it.text }.distinct().take(60)
-        assertTrue(
-            "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts",
-            pill != null
-        )
-        val pillTopDp = pill!!.topPx / density
-        assertTrue(
-            "[$label] pill must sit in the photo zone's top area (top=${pillTopDp}dp)",
-            pillTopDp < 120f
-        )
-
-        // D-02: Settings is present and enabled at rest.
-        val settings = flat.firstOrNull { it.contentDescription == "Settings" }
-        assertTrue("[$label] Settings control must be present at rest", settings != null)
-        assertTrue(
-            "[$label] Settings must be interactive at rest",
-            settings!!.enabled
-        )
-
-        // D-01/D-03: the sheet's label sits at the handoff —
-        // heroHeight − 28dp (plus the sheet's own 20dp top padding),
-        // never at the top of the screen.
+        // Pixel probes on the actual drawn frame. The sheet is a
+        // flat RunWearColors.Surface; the photo zone behind it is
+        // the temperature gradient. (Lazy-item semantics are not
+        // reachable from the semantics/a11y trees in this harness —
+        // the LazyColumn node exposes scroll properties only — so
+        // the composition is asserted on the rendered pixels, the
+        // same evidence the fluid-shot harness judges.)
+        val surface = RunWearColors.Surface.toArgb()
+        fun px(xDp: Float, yDp: Float): Int =
+            bitmap.getPixel(
+                (xDp * density).toInt().coerceIn(0, bitmap.width - 1),
+                (yDp * density).toInt().coerceIn(0, bitmap.height - 1)
+            )
+        fun channelDiff(a: Int, b: Int): Int {
+            var d = 0
+            for (shift in listOf(16, 8, 0)) {
+                d = maxOf(d, kotlin.math.abs((a shr shift and 0xFF) - (b shr shift and 0xFF)))
+            }
+            return d
+        }
+        val centerX = bitmap.width / 2 / density
         val heroHeightDp = screenHeightDp * 0.75f
-        val feels = flat.firstOrNull { it.text == "FEELS LIKE" }
+        val sheetTopDp = heroHeightDp - 28f
+
+        // D-02/A3: the top chrome band shows the PHOTO, not the
+        // sheet — D-01's mis-placement covers it with Surface.
         assertTrue(
-            "[$label] FEELS LIKE label must be present; texts=$allTexts",
-            feels != null
+            "[$label] top chrome band must be photo, not sheet surface",
+            channelDiff(px(centerX, 60f), surface) > 8
         )
-        val feelsTopDp = feels!!.topPx / density
-        val expected = heroHeightDp - 28f + 20f
+        // Just above the handoff: still photo.
         assertTrue(
-            "[$label] sheet label top must be at the handoff ≈${expected}dp " +
-                "(was ${feelsTopDp}dp; D-01 puts it near 0)",
-            feelsTopDp > expected - 24f && feelsTopDp < expected + 24f
+            "[$label] just above the handoff must be photo",
+            channelDiff(px(centerX, sheetTopDp - 40f), surface) > 8
+        )
+        // Just below the handoff: the sheet's flat surface — the
+        // sheet top IS the handoff (heroHeight − 28dp), in every
+        // scroll position, never floating and never at y≈0.
+        assertTrue(
+            "[$label] just below the handoff must be the sheet surface " +
+                "(sheetTop≈${sheetTopDp}dp)",
+            channelDiff(px(centerX, sheetTopDp + 30f), surface) <= 2
+        )
+        // Near the sheet's left edge below its rounded corner: the
+        // same flat surface (full-bleed sheet, not a floating card
+        // inset from the page edges).
+        assertTrue(
+            "[$label] sheet must reach the left page edge (no floating card)",
+            channelDiff(px(3f, sheetTopDp + 40f), surface) <= 2
         )
     }
 
@@ -318,9 +301,9 @@ abstract class HomeCompositionHarness {
             }
         }
         settle(composeView)
-        drawAndSave(activity, composeView, name, widthDp, heightDp)
+        val bitmap = drawAndSave(activity, composeView, name, widthDp, heightDp)
         val density = activity.resources.displayMetrics.density
-        assertHomeComposition(composeView, density, heightDp, name)
+        assertHomeComposition(composeView, bitmap, density, heightDp, name)
         controller.pause().stop().destroy()
     }
 }
