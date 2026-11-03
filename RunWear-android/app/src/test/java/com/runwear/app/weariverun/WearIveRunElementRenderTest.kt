@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
@@ -16,7 +17,6 @@ import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -72,7 +72,7 @@ abstract class WearElementHarness {
     protected fun render(
         name: String,
         dark: Boolean,
-        content: androidx.compose.runtime.Composable () -> Unit
+        content: @Composable () -> Unit
     ): Rendered {
         val controller = Robolectric.buildActivity(ComponentActivity::class.java)
         val activity = controller.create().start().resume().visible().get()
@@ -144,8 +144,8 @@ abstract class WearElementHarness {
             it.config.contains(SemanticsProperties.ContentDescription) &&
                 it.config[SemanticsProperties.ContentDescription].any { d -> d == description } &&
                 it.config.contains(SemanticsActions.OnClick)
-        } ?: fail("no clickable node with description '$description'")
-        node!!.config[SemanticsActions.OnClick].action()
+        } ?: throw AssertionError("no clickable node with description '$description'")
+        node.config[SemanticsActions.OnClick].action()
     }
 
     /** Click the clickable node that carries [text] — the body tap. */
@@ -154,8 +154,8 @@ abstract class WearElementHarness {
             it.config.contains(SemanticsProperties.Text) &&
                 it.config[SemanticsProperties.Text].any { t -> t.text.contains(text) } &&
                 it.config.contains(SemanticsActions.OnClick)
-        } ?: fail("no clickable body node carrying '$text'")
-        node!!.config[SemanticsActions.OnClick].action()
+        } ?: throw AssertionError("no clickable body node carrying '$text'")
+        node.config[SemanticsActions.OnClick].action()
     }
 }
 
