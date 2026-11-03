@@ -281,15 +281,17 @@ fun HeroMainScreen(
     fun shareOutfit() {
         val weather = uiState.weather ?: return
         val outfit = uiState.outfit ?: return
-        val unit = if (weather.isCelsius) "°C" else "°F"
-        val tempBracket = getTempBracket(weather.effectiveTemperature, weather.isCelsius)
+        // WS-2: the share text projects the canonical store through
+        // the state's unit preference, like every other surface.
+        val unit = uiState.temperatureUnit
+        val tempBracket = getTempBracket(weather.effectiveTemperature)
 
         val itemsList = outfit.allItems.joinToString("\n") { "• ${it.displayName}" }
         val shareText = """
 🏃 RunWear Recommendation
 
 📍 ${uiState.locationName}
-🌡️ Feels like ${weather.effectiveTemperature.toInt()}$unit ($tempBracket)
+🌡️ Feels like ${unit.formatTemperature(weather.effectiveTemperature)} ($tempBracket)
 ${weather.weatherCode.icon} ${weather.weatherCode.description}
 
 What to wear:
@@ -379,7 +381,6 @@ Get your personalized running outfit at runwear.ai
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
                                             onShareClick = { shareOutfit() },
-                                            onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
@@ -459,7 +460,6 @@ Get your personalized running outfit at runwear.ai
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
                                             onShareClick = { shareOutfit() },
-                                            onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
@@ -571,7 +571,6 @@ Get your personalized running outfit at runwear.ai
                                             onDateClick = { showDatePicker = true },
                                             onTimeClick = { showTimePicker = true },
                                             onNowClick = onResetToNow,
-                                            onTempClick = onToggleUnit,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             overlapsPhoto = false,
                                             modifier = Modifier.fillMaxWidth()
@@ -852,7 +851,8 @@ Get your personalized running outfit at runwear.ai
             WeatherDetailSheet(
                 type = type,
                 weather = weather,
-                onDismiss = { weatherDetailType = null }
+                onDismiss = { weatherDetailType = null },
+                temperatureUnit = uiState.temperatureUnit
             )
         }
     }
@@ -1023,7 +1023,6 @@ private fun HeroSheetContent(
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
     onNowClick: () -> Unit,
-    onTempClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit,
     overlapsPhoto: Boolean = true,
     modifier: Modifier = Modifier
@@ -1041,10 +1040,10 @@ private fun HeroSheetContent(
             onDateClick = onDateClick,
             onTimeClick = onTimeClick,
             onNowClick = onNowClick,
-            onTempClick = onTempClick,
             onWeatherPillClick = onWeatherPillClick,
             overlapsPhoto = overlapsPhoto,
-            modifier = modifier
+            modifier = modifier,
+            temperatureUnit = uiState.temperatureUnit
         )
     }
 }
@@ -1067,7 +1066,6 @@ private fun HeroStackedUnit(
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onShareClick: () -> Unit,
-    onTempClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
@@ -1104,7 +1102,6 @@ private fun HeroStackedUnit(
             onDateClick = onDateClick,
             onTimeClick = onTimeClick,
             onNowClick = onNowClick,
-            onTempClick = onTempClick,
             onWeatherPillClick = onWeatherPillClick,
             overlapsPhoto = true,
             modifier = Modifier
@@ -1470,8 +1467,9 @@ private fun PersonalHeroFlagSheet(
  * Temperature bracket label (ported from web PWA getTempBracket).
  * Used in share text to describe conditions.
  */
-private fun getTempBracket(temp: Double, isCelsius: Boolean): String {
-    val f = if (isCelsius) temp * 9 / 5 + 32 else temp
+private fun getTempBracket(tempF: Double): String {
+    // Canonical storage is °F (WS-2) — the bracket reads the stored frame.
+    val f = tempF
     return when {
         f >= 80 -> "hot"
         f >= 65 -> "warm"

@@ -60,6 +60,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.LocalDateTime
 
@@ -119,10 +120,19 @@ class OutfitWidget : GlanceAppWidget() {
         val lastGood = store.read()
         val nowMs = System.currentTimeMillis()
 
+        // WS-2: the widget's figures project the canonical store
+        // through the user's unit preference, read here at render
+        // time (never stored with the snapshot). Direct repository
+        // construction keeps the fresh path's no-Hilt seam intact.
+        val displayUnit = runCatching {
+            PreferencesRepository(context.applicationContext)
+                .preferencesFlow.first().temperatureUnit
+        }.getOrDefault(com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT)
+
         val state: WidgetState = when {
             lastGood != null &&
                 WidgetFreshness.ageMs(lastGood.savedAtEpochMs, nowMs) < WidgetFreshness.FRESH_ENOUGH_MS ->
-                lastGood.toWidgetState()
+                lastGood.toWidgetState(displayUnit)
 
             else -> when (val outcome = WidgetDataLoader.load(
                 weatherRepository = entryPoint(context).weatherRepository(),
@@ -134,12 +144,12 @@ class OutfitWidget : GlanceAppWidget() {
                     // Just persist; this very render shows the fresh data and
                     // the publisher's updateAll belongs to out-of-band writes.
                     store.write(outcome.lastGood)
-                    outcome.lastGood.toWidgetState()
+                    outcome.lastGood.toWidgetState(displayUnit)
                 }
                 WidgetDataLoader.Outcome.NoPermission ->
-                    lastGood?.toWidgetState() ?: WidgetState.NoPermission
+                    lastGood?.toWidgetState(displayUnit) ?: WidgetState.NoPermission
                 is WidgetDataLoader.Outcome.Failed ->
-                    lastGood?.toWidgetState()
+                    lastGood?.toWidgetState(displayUnit)
                         ?: WidgetState.Error(outcome.category, outcome.detail)
             }
         }
@@ -195,13 +205,16 @@ class RefreshWidgetAction : ActionCallback {
     }
 }
 
-private fun WidgetLastGood.toWidgetState(): WidgetState.Success = WidgetState.Success(
+private fun WidgetLastGood.toWidgetState(
+    displayUnit: com.runwear.shared.domain.model.TemperatureUnit
+): WidgetState.Success = WidgetState.Success(
     weather = weather,
     outfit = outfit,
     locationName = locationName,
     lastUpdated = savedAtLocal,
     savedAtEpochMs = savedAtEpochMs,
-    laterTodayLine = laterTodayLine
+    laterTodayLine = laterTodayLine,
+    temperatureUnit = displayUnit
 )
 
 @Composable
@@ -276,18 +289,18 @@ private fun RefreshAffordance(refreshing: Boolean) {
  */
 private fun footerSegments(state: WidgetState.Success, full: Boolean): List<String> {
     val w = state.weather
-    val feels = "Feels like ${formatTemperature(w.feelsLike, w.isCelsius)}"
+    val feels = "Feels like ${formatTemperature(w.feelsLike, state.temperatureUnit)}"
     if (!full) return listOf(feels, w.weatherCode.description)
     return listOf(
         feels,
-        "Actual ${formatTemperature(w.temperature, w.isCelsius)}",
-        "Wind ${formatWind(w)}",
+        "Actual ${formatTemperature(w.temperature, state.temperatureUnit)}",
+        "Wind ${formatWind(w, state.temperatureUnit)}",
         w.weatherCode.description
     )
 }
 
 private fun actualSegment(state: WidgetState.Success): String =
-    "Actual ${formatTemperature(state.weather.temperature, state.weather.isCelsius)}"
+    "Actual ${formatTemperature(state.weather.temperature, state.temperatureUnit)}"
 
 /**
  * One garment row: the item's garment emoji as its marker + name (Sol,
@@ -490,7 +503,7 @@ private fun HeroBlock(state: WidgetState.Success, plan: WidgetLayout.SlotPlan) {
             Spacer(modifier = GlanceModifier.height(2.dp))
         }
         Text(
-            text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+            text = formatTemperature(state.weather.feelsLike, state.temperatureUnit),
             style = TextStyle(
                 color = ColorProvider(WidgetTextPrimary),
                 fontSize = plan.tempSp.sp,
@@ -624,7 +637,7 @@ private fun HorizontalWidgetContent(
         // Weather as a supporting stack: feels-like, condition, wind.
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = formatTemperature(state.weather.feelsLike, state.weather.isCelsius),
+                text = formatTemperature(state.weather.feelsLike, state.temperatureUnit),
                 style = TextStyle(
                     color = ColorProvider(WidgetTextPrimary),
                     fontSize = WidgetLayout.Sizes.HORIZ_TEMP.sp,
@@ -642,7 +655,7 @@ private fun HorizontalWidgetContent(
             )
             if (plan.showWind) {
                 Text(
-                    text = "Wind ${formatWind(state.weather)}",
+                    text = "Wind ${formatWind(state.weather, state.temperatureUnit)}",
                     style = TextStyle(
                         color = ColorProvider(WidgetTextMuted),
                         fontSize = WidgetLayout.Sizes.HORIZ_WIND.sp
@@ -962,18 +975,17 @@ private fun RetryRow() {
     }
 }
 
-private fun formatTemperature(value: Double, isCelsius: Boolean): String {
-    return if (isCelsius) {
-        "${value.toInt()}°C"
-    } else {
-        "${value.toInt()}°F"
-    }
-}
+/** WS-2: a canonical °F value projected through the render-time unit. */
+private fun formatTemperature(
+    valueFahrenheit: Double,
+    unit: com.runwear.shared.domain.model.TemperatureUnit
+): String = unit.formatTemperature(valueFahrenheit)
 
 /** Wind in the app's own unit convention (WeatherConditionsRow): mph, or km/h when Celsius. */
-private fun formatWind(weather: WeatherConditions): String {
-    return "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}"
-}
+private fun formatWind(
+    weather: WeatherConditions,
+    unit: com.runwear.shared.domain.model.TemperatureUnit
+): String = unit.formatWind(weather.windSpeed)
 
 sealed class WidgetState {
     object Loading : WidgetState()
@@ -989,7 +1001,10 @@ sealed class WidgetState {
         val locationName: String,
         val lastUpdated: LocalDateTime,
         val savedAtEpochMs: Long,
-        val laterTodayLine: String?
+        val laterTodayLine: String?,
+        /** WS-2: the render-time unit projection (never persisted with the data). */
+        val temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+            com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
     ) : WidgetState()
 }
 

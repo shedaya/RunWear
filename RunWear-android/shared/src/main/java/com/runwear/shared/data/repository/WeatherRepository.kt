@@ -5,7 +5,6 @@ import com.runwear.shared.data.api.NominatimApi
 import com.runwear.shared.data.api.OpenMeteoApi
 import com.runwear.shared.data.model.OpenMeteoResponse
 import com.runwear.shared.domain.model.HourlyForecast
-import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import kotlinx.datetime.Clock
@@ -91,16 +90,18 @@ class WeatherRepository @Inject constructor(
      */
     suspend fun getForecast(
         latitude: Double,
-        longitude: Double,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        longitude: Double
     ): Result<OpenMeteoResponse> = runCatching {
-        val tempUnit = if (unit == TemperatureUnit.CELSIUS) "celsius" else "fahrenheit"
-        val windUnit = if (unit == TemperatureUnit.CELSIUS) "kmh" else "mph"
+        // WS-2 (RC-2): the fetch is ALWAYS in the canonical frame
+        // (°F / mph), whatever the user's display preference is. The
+        // preference is a render-time projection and never reaches
+        // the request — so a unit change can never trigger a refetch
+        // or stamp a unit into the data that comes back.
         weatherApi.getWeather(
             latitude = coarseCoordinate(latitude),
             longitude = coarseCoordinate(longitude),
-            temperatureUnit = tempUnit,
-            windSpeedUnit = windUnit
+            temperatureUnit = "fahrenheit",
+            windSpeedUnit = "mph"
         )
     }
 
@@ -120,8 +121,7 @@ class WeatherRepository @Inject constructor(
 
     /** Parse the current-conditions block of a shared forecast response. */
     fun parseCurrentWeather(
-        response: OpenMeteoResponse,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        response: OpenMeteoResponse
     ): WeatherConditions {
         val current = response.current ?: throw Exception("No current weather data")
 
@@ -149,24 +149,21 @@ class WeatherRepository @Inject constructor(
             isSnowing = current.snowfall > 0,
             cloudCover = current.cloudCover,
             uvIndex = current.uvIndex ?: 0.0,
-            weatherCode = WeatherCode.fromCode(current.weatherCode),
-            isCelsius = unit == TemperatureUnit.CELSIUS
+            weatherCode = WeatherCode.fromCode(current.weatherCode)
         )
     }
 
     /** Convenience: one fetch + current-conditions parse. */
     suspend fun getCurrentWeather(
         latitude: Double,
-        longitude: Double,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        longitude: Double
     ): Result<WeatherConditions> =
-        getForecast(latitude, longitude, unit).mapCatching { parseCurrentWeather(it, unit) }
+        getForecast(latitude, longitude).mapCatching { parseCurrentWeather(it) }
 
     /** Parse the hourly entry matching [dateTime]'s hour from a shared response. */
     fun parseWeatherForDateTime(
         response: OpenMeteoResponse,
-        dateTime: LocalDateTime,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        dateTime: LocalDateTime
     ): WeatherConditions {
         val hourly = response.hourly ?: throw Exception("No hourly weather data")
 
@@ -199,8 +196,7 @@ class WeatherRepository @Inject constructor(
             isSnowing = hourly.snowfall[index] > 0,
             cloudCover = hourly.cloudCover[index],
             uvIndex = hourly.uvIndex[index],
-            weatherCode = WeatherCode.fromCode(hourly.weatherCode[index]),
-            isCelsius = unit == TemperatureUnit.CELSIUS
+            weatherCode = WeatherCode.fromCode(hourly.weatherCode[index])
         )
     }
 
@@ -208,17 +204,15 @@ class WeatherRepository @Inject constructor(
     suspend fun getWeatherForDateTime(
         latitude: Double,
         longitude: Double,
-        dateTime: LocalDateTime,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        dateTime: LocalDateTime
     ): Result<WeatherConditions> =
-        getForecast(latitude, longitude, unit).mapCatching {
-            parseWeatherForDateTime(it, dateTime, unit)
+        getForecast(latitude, longitude).mapCatching {
+            parseWeatherForDateTime(it, dateTime)
         }
 
     /** Parse the hourly forecast list from a shared response. */
     fun parseHourlyForecast(
-        response: OpenMeteoResponse,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        response: OpenMeteoResponse
     ): List<HourlyForecast> {
         val hourly = response.hourly ?: throw Exception("No hourly weather data")
 
@@ -231,8 +225,7 @@ class WeatherRepository @Inject constructor(
                 windSpeed = hourly.windSpeed[index],
                 precipitationProbability = hourly.precipitationProbability[index],
                 weatherCode = WeatherCode.fromCode(hourly.weatherCode[index]),
-                uvIndex = hourly.uvIndex[index],
-                isCelsius = unit == TemperatureUnit.CELSIUS
+                uvIndex = hourly.uvIndex[index]
             )
         }
     }
@@ -240,10 +233,9 @@ class WeatherRepository @Inject constructor(
     /** Convenience: one fetch + hourly-list parse. */
     suspend fun getHourlyForecast(
         latitude: Double,
-        longitude: Double,
-        unit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+        longitude: Double
     ): Result<List<HourlyForecast>> =
-        getForecast(latitude, longitude, unit).mapCatching { parseHourlyForecast(it, unit) }
+        getForecast(latitude, longitude).mapCatching { parseHourlyForecast(it) }
 
     suspend fun searchLocation(query: String): Result<List<LocationResult>> = runCatching {
         val results = nominatimApi.searchLocation(query)

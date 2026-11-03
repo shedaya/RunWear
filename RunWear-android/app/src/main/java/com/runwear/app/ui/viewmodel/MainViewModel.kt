@@ -246,6 +246,15 @@ class MainViewModel @Inject constructor(
     /** The widget's last-good store — the main screen seeds from it at startup. */
     private val lastGoodStore by lazy { WidgetLastGoodStore(appContext) }
 
+    /**
+     * WS-2 (RC-2, D-05): completes when the FIRST preferences emission
+     * has been applied to [_uiState]. The last-good seed awaits it, so
+     * the first paint is determined by the user's actual preferences
+     * (their unit included) — never by a default that later flips
+     * when the collector lands.
+     */
+    private val preferencesApplied = kotlinx.coroutines.CompletableDeferred<Unit>()
+
     // ── Feedback + analytics (spec) ─────────────────────────────────────────
     // Everything here is inert unless the user opts in to analytics; feedback
     // sends only on the user's own tap. See the feedback package.
@@ -317,6 +326,9 @@ class MainViewModel @Inject constructor(
      * belongs to a different place.
      */
     private suspend fun seedFromLastGood(lat: Double, lon: Double) {
+        // WS-2: never paint the seed before the user's preferences
+        // (the unit above all) are the state the paint projects from.
+        preferencesApplied.await()
         if (_uiState.value.outfit != null) return
         val lastGood = runCatching { lastGoodStore.read() }.getOrNull() ?: return
         val dLat = lastGood.latitude - lat
@@ -395,7 +407,15 @@ class MainViewModel @Inject constructor(
             // If no saved location, MainActivity will call checkLocationPermission()
         }
 
-        // Observe preferences
+        // Observe preferences. WS-2 (RC-2, D-05): a preference write
+        // ONLY updates state — it never refetches weather. Weather is
+        // stored canonically (°F) and the unit is a render-time
+        // projection, so this state update re-renders every figure in
+        // the new unit in the same frame; the pre-WS-2 collector
+        // refetched on every emission, which is what painted the
+        // screen in the other unit mid-session (and raced the fetch
+        // it superseded). Comfort/gender writes have their own
+        // recalculation paths in their setters.
         viewModelScope.launch {
             preferencesRepository.preferencesFlow.collect { prefs ->
                 _uiState.update {
@@ -407,7 +427,7 @@ class MainViewModel @Inject constructor(
                         hasCompletedOnboarding = prefs.hasCompletedOnboarding
                     )
                 }
-                if (currentLat != null) fetchWeather()
+                if (!preferencesApplied.isCompleted) preferencesApplied.complete(Unit)
             }
         }
 
@@ -696,14 +716,14 @@ class MainViewModel @Inject constructor(
             }
 
             val dt = _uiState.value.selectedDateTime
-            val unit = _uiState.value.temperatureUnit
             val nowSelected = _uiState.value.isNowSelected
 
             // ONE forecast fetch per refresh: current conditions, the
             // selected hour and the hourly list all parse from the same
             // response (this used to be two identical serial requests, plus
             // a timezone round-trip ahead of them).
-            val forecastResult = weatherRepository.getForecast(lat, lon, unit)
+            // WS-2: the fetch carries no unit — canonical (°F) always.
+            val forecastResult = weatherRepository.getForecast(lat, lon)
 
             // The repository's runCatching also wraps CancellationException:
             // a superseded fetch must land nowhere, not even as an error.
@@ -721,9 +741,9 @@ class MainViewModel @Inject constructor(
                         // location-local wall time matched against the
                         // location-local hourly forecast.
                         if (nowSelected) {
-                            weatherRepository.parseCurrentWeather(response, unit)
+                            weatherRepository.parseCurrentWeather(response)
                         } else {
-                            weatherRepository.parseWeatherForDateTime(response, dt.toKotlinLocalDateTime(), unit)
+                            weatherRepository.parseWeatherForDateTime(response, dt.toKotlinLocalDateTime())
                         }
                     }.getOrElse { e ->
                         _uiState.update {
@@ -734,7 +754,7 @@ class MainViewModel @Inject constructor(
                     }
                     val outfit = getOutfitRecommendation.execute(weather, _uiState.value.comfortPreference)
                     val forecast = runCatching {
-                        weatherRepository.parseHourlyForecast(response, unit)
+                        weatherRepository.parseHourlyForecast(response)
                     }.getOrDefault(emptyList())
 
                     // Feedback + analytics bookkeeping (all inert unless the
@@ -773,7 +793,7 @@ class MainViewModel @Inject constructor(
                                     weatherRepository = weatherRepository,
                                     latitude = lat,
                                     longitude = lon,
-                                    unit = unit,
+                                    displayUnit = _uiState.value.temperatureUnit,
                                     current = weather,
                                     currentOutfit = outfit,
                                     comfort = _uiState.value.comfortPreference,
@@ -1409,6 +1429,14 @@ class MainViewModel @Inject constructor(
         fetchWeather()
     }
     
+    /**
+     * WS-2 (T-1 ruling): the Settings sheet's unit toggle — the ONLY
+     * place the unit changes. It persists the preference; the
+     * preferences collector applies it to state and every figure
+     * re-renders in the new unit in one frame. Nothing refetches.
+     * (The hero numeral's hidden tap-to-toggle is removed — the
+     * numeral is a readout.)
+     */
     fun toggleUnit() {
         viewModelScope.launch {
             val newUnit = if (_uiState.value.temperatureUnit == TemperatureUnit.FAHRENHEIT) {

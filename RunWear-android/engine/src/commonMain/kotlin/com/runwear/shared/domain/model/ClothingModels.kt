@@ -92,8 +92,8 @@ data class OutfitRecommendation(
     
     val summary: String
         get() {
-            val tempStr = if (weather.isCelsius) "${weather.effectiveTemperature.toInt()}°C"
-                          else "${weather.effectiveTemperature.toInt()}°F"
+            // Canonical storage is °F (WS-2) — the summary names that frame.
+            val tempStr = "${weather.effectiveTemperature.toInt()}°F"
             return "Feels like $tempStr — ${weather.weatherCode.description}"
         }
 }

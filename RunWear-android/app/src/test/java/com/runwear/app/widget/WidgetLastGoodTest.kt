@@ -33,7 +33,6 @@ class WidgetLastGoodTest {
         cloudCover = 62,
         uvIndex = 1.4,
         weatherCode = WeatherCode.RAIN_MODERATE,
-        isCelsius = false
     )
 
     private fun sample(weather: WeatherConditions) = WidgetLastGood(
@@ -104,6 +103,48 @@ class WidgetLastGoodTest {
         assertNull(restored.outfit.topMid)
         assertNull(restored.outfit.topOuter)
         assertNull(restored.laterTodayLine)
+    }
+
+    @Test
+    fun `no unit value is written into the snapshot (WS-2)`) {
+        // The cache key set is part of the WS-2 contract: weather is
+        // canonical, and no unit may ride inside the persisted record
+        // (a stored unit flag is exactly the stale-unit first paint
+        // D-05 was made of).
+        val entries = sample(sampleWeather()).toEntries()
+        assertTrue(
+            "snapshot keys must carry no unit: ${entries.keys}",
+            entries.keys.none {
+                it.contains("celsius", ignoreCase = true) || it.contains("unit", ignoreCase = true)
+            }
+        )
+    }
+
+    @Test
+    fun `a legacy metric snapshot converts to canonical once, at the read boundary (WS-2)`) {
+        // A snapshot written by a pre-WS-2 build in °C mode: values in
+        // °C / km/h under a w_is_celsius flag. Reading it must yield
+        // the canonical °F / mph values — never the raw metric numbers
+        // wearing an imperial label.
+        val entries = sample(sampleWeather()).toEntries().toMutableMap()
+        entries["w_temperature"] = "7.0" // 7°C ≙ 44.6°F
+        entries["w_feels_like"] = "5.0" //  5°C ≙ 41.0°F
+        entries["w_wind_speed"] = "16.0" // 16 km/h ≙ 9.94 mph
+        entries["w_wind_gusts"] = "32.0" // 32 km/h ≙ 19.88 mph
+        entries["w_is_celsius"] = "true"
+
+        val restored = WidgetLastGood.fromEntries(entries)!!
+        assertEquals(44.6, restored.weather.temperature, 0.001)
+        assertEquals(41.0, restored.weather.feelsLike, 0.001)
+        assertEquals(16.0 / 1.609344, restored.weather.windSpeed, 0.001)
+        assertEquals(32.0 / 1.609344, restored.weather.windGusts, 0.001)
+
+        // And a legacy IMPERIAL snapshot passes through untouched.
+        val imperial = sample(sampleWeather()).toEntries().toMutableMap()
+        imperial["w_is_celsius"] = "false"
+        val restoredImperial = WidgetLastGood.fromEntries(imperial)!!
+        assertEquals(46.4, restoredImperial.weather.temperature, 0.0)
+        assertEquals(11.0, restoredImperial.weather.windSpeed, 0.0)
     }
 
     @Test

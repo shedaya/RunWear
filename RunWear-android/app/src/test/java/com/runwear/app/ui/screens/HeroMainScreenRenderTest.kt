@@ -68,7 +68,6 @@ abstract class HeroFluidShotHarness {
             cloudCover = 10,
             uvIndex = 1.0,
             weatherCode = code,
-            isCelsius = false
         )
 
     /** Sol's Aspen scenario class: 42°F actual / 33°F feels-like — layered outfit, 6+ items. */

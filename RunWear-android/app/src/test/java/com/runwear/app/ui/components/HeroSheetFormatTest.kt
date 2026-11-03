@@ -19,8 +19,7 @@ class HeroSheetFormatTest {
         temperature: Double,
         feelsLike: Double,
         humidity: Int,
-        windSpeed: Double,
-        isCelsius: Boolean
+        windSpeed: Double
     ) = WeatherConditions(
         dateTime = KotlinLocalDateTime(2026, 11, 2, 7, 0),
         temperature = temperature,
@@ -34,8 +33,7 @@ class HeroSheetFormatTest {
         isSnowing = false,
         cloudCover = 10,
         uvIndex = 1.0,
-        weatherCode = WeatherCode.CLEAR_SKY,
-        isCelsius = isCelsius
+        weatherCode = WeatherCode.CLEAR_SKY
     )
 
     @Test
@@ -80,16 +78,21 @@ class HeroSheetFormatTest {
 
     @Test
     fun `caption carries the actual temperature only (RW-26 section 7 amendment 1)`() {
+        // WS-2: the stored value is canonical °F (42°F); the caption
+        // projects it through the render-time unit — the SAME stored
+        // weather reads 42° under °F and 6° under °C.
         assertEquals(
             "Actual 42°",
             HeroSheetFormat.caption(
-                weather(temperature = 42.0, feelsLike = 33.0, humidity = 31, windSpeed = 5.0, isCelsius = false)
+                weather(temperature = 42.0, feelsLike = 33.0, humidity = 31, windSpeed = 5.0),
+                com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
             )
         )
         assertEquals(
             "Actual 6°",
             HeroSheetFormat.caption(
-                weather(temperature = 6.0, feelsLike = 4.0, humidity = 40, windSpeed = 12.0, isCelsius = true)
+                weather(temperature = 42.0, feelsLike = 33.0, humidity = 31, windSpeed = 5.0),
+                com.runwear.shared.domain.model.TemperatureUnit.CELSIUS
             )
         )
     }

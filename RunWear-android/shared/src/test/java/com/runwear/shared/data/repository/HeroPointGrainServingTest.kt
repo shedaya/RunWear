@@ -39,7 +39,6 @@ class HeroPointGrainServingTest {
         cloudCover = 10,
         uvIndex = 0.0,
         weatherCode = WeatherCode.CLEAR_SKY,
-        isCelsius = false
     )
 
     /** Sol's 2026-11-02 field prescription: 39F, Light Long Sleeve + Light Tights. */
@@ -129,7 +128,6 @@ class HeroPointGrainServingTest {
             cloudCover = 90,
             uvIndex = 0.0,
             weatherCode = WeatherCode.RAIN_MODERATE,
-            isCelsius = false
         )
         val outfit = GetOutfitRecommendationUseCase().execute(juneauWeather, ComfortPreference.RUNS_WARM)
         assertEquals(ClothingItem.BASEBALL_CAP, outfit.head)

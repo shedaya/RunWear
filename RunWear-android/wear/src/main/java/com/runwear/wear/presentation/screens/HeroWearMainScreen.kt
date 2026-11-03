@@ -123,7 +123,8 @@ private fun HeroWearContent(
                     heroImageUrl = uiState.heroImageUrl,
                     locationName = uiState.locationName,
                     outfitItemCount = uiState.outfit!!.allItems.size,
-                    onToggleUnit = onToggleUnit
+                    onToggleUnit = onToggleUnit,
+                    temperatureUnit = uiState.temperatureUnit
                 )
                 1 -> OutfitPage(
                     outfit = uiState.outfit!!,
@@ -159,13 +160,17 @@ internal fun HeroWeatherPage(
     heroImageUrl: String?,
     locationName: String,
     outfitItemCount: Int,
-    onToggleUnit: () -> Unit
+    onToggleUnit: () -> Unit,
+    /** WS-2: render-time projection of the canonical store. */
+    temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+        com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
 ) {
     val tempColor = WeatherColors.forTemperature(weather.feelsLikeInFahrenheit)
     val tintColor = WeatherColors.forTemperatureTint(weather.feelsLikeInFahrenheit)
 
-    // Animated temperature
-    val actualTemp = weather.effectiveTemperature.roundToInt()
+    // Animated temperature (WS-2: the animated target is the
+    // projected display value; the stored value is canonical °F)
+    val actualTemp = temperatureUnit.convert(weather.effectiveTemperature).roundToInt()
     val startTemp = maxOf(-10, actualTemp - 8)
     var targetTemp by remember { mutableIntStateOf(startTemp) }
     val animatedTemp by animateIntAsState(
@@ -266,7 +271,8 @@ internal fun HeroWeatherPage(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     // Temperature with colored accent border/shadow
-                    val unitSymbol = if (weather.isCelsius) "C" else "F"
+                    val unitSymbol = if (temperatureUnit ==
+                        com.runwear.shared.domain.model.TemperatureUnit.CELSIUS) "C" else "F"
                     Box(contentAlignment = Alignment.Center) {
                         // Shadow layer for depth
                         Text(

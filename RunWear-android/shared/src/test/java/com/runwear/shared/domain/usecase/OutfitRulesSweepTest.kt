@@ -130,8 +130,7 @@ class OutfitRulesSweepTest {
                 isSnowing = snowing,
                 cloudCover = cloud,
                 uvIndex = uv,
-                weatherCode = code,
-                isCelsius = false
+                weatherCode = code
             )
         }
 
@@ -726,44 +725,65 @@ class OutfitRulesSweepTest {
         assertTrue("inv10: ${mismatches.size} actual-temp mismatches", mismatches.isEmpty())
     }
 
-    // ── inv11 (extra, observational): Celsius round-trip equivalence ─────
+    // ── inv11 (extra, observational): display-projection round-trip ─────
+    //
+    // WS-2 rewrite: this invariant used to construct a Celsius weather
+    // object and feed it to the engine. That object no longer exists —
+    // weather is stored canonically in °F and the unit is a render-time
+    // projection (TemperatureUnit) that never reaches the engine. What
+    // remains worth observing is the projection's own round-trip
+    // (canonical °F → displayed °C → back), which is a DISPLAY artifact
+    // only: it can land a hair below the original (e.g. 39.999… instead
+    // of 40.0), and if it ever leaked into a selection frame it would
+    // pick the colder bracket at boundaries. Counted and listed as a
+    // finding, not asserted — and the engine half is asserted outright:
+    // the canonical weather for every scenario still selects the grid's
+    // outfit, because nothing converts it on the way in.
 
     @Test
     fun inv11_celsiusRoundTrip() {
         var checks = 0
+        var projectionDrift = 0
         val mismatches = mutableListOf<String>()
         for (feelsF in -20..110 step 5) for (wind in listOf(0.0, 12.0, 25.0))
             for (comfort in COMFORTS) for (cond in listOf(Cond.DRY, Cond.RAIN)) {
                 val s = Scenario(feelsF, wind, cond, comfort, 30, Env.DAY_GREY)
-                val celsiusWeather = weatherFor(s).copy(
-                    temperature = (feelsF - 32.0) * 5.0 / 9.0,
-                    feelsLike = (feelsF - 32.0) * 5.0 / 9.0,
-                    isCelsius = true
-                )
                 checks++
-                val outfit = engine.execute(celsiusWeather, comfort)
+                // The engine reads the canonical value, unconverted.
+                val outfit = engine.execute(weatherFor(s), comfort)
                 val expected = GRID.getValue(s)
                 if (recOf(outfit).mask != expected.mask) {
-                    val roundTripped = (feelsF - 32.0) * 5.0 / 9.0 * 9.0 / 5.0 + 32.0
-                    mismatches += "MISMATCH feels=${feelsF}F via Celsius (round-trips to $roundTripped): " +
-                        "${s.describe()} -> F-run ${describe(expected.mask, expected.total, expected.torso)} " +
-                        "vs C-run ${outfitString(outfit)}"
+                    mismatches += "MISMATCH feels=${feelsF}F canonical: " +
+                        "${s.describe()} -> grid ${describe(expected.mask, expected.total, expected.torso)} " +
+                        "vs engine ${outfitString(outfit)}"
+                }
+                // The display projection's round-trip drift, observed
+                // here so the finding stays on record (display only).
+                val displayedC = com.runwear.shared.domain.model.TemperatureUnit.CELSIUS
+                    .convert(feelsF.toDouble())
+                val roundTripped = displayedC * 9.0 / 5.0 + 32.0
+                if (kotlin.math.abs(roundTripped - feelsF) > 0.001) {
+                    // Noted in the section text below via the counter.
+                    projectionDrift++
                 }
             }
         section(
             "inv11",
             buildString {
-                appendLine("## inv11 (extra, observational) — Celsius round-trip equivalence")
+                appendLine("## inv11 (extra, observational) — display-projection round-trip (WS-2 rewrite)")
                 appendLine("Checks: $checks (feels step 5°F, winds {0,12,25}, all comforts, dry+rain, day-grey)")
-                appendLine("Mismatches: ${mismatches.size}")
-                appendLine("The engine converts °C feels-like back to °F in floating point; values that")
-                appendLine("land a hair below a bracket boundary (e.g. 39.999… instead of 40.0) select")
-                appendLine("the colder bracket. Counted and listed here as a finding, not asserted:")
-                appendLine("it is not one of the nine v4.2 invariants.")
+                appendLine("Engine mismatches on canonical input: ${mismatches.size} (asserted zero below)")
+                appendLine("Projection round-trips drifting >0.001°F: $projectionDrift — a display-only")
+                appendLine("artifact of °F → °C → °F in floating point; the projection never reaches the")
+                appendLine("engine, so the drift can move a displayed integer, never a selection.")
                 mismatches.forEach { appendLine(it) }
             }
         )
-        println("inv11: ${mismatches.size} Celsius round-trip mismatches out of $checks checks")
+        println("inv11: ${mismatches.size} engine mismatches out of $checks checks; $projectionDrift projection drifts")
+        org.junit.Assert.assertTrue(
+            "inv11: engine must select the grid outfit for canonical input",
+            mismatches.isEmpty()
+        )
     }
 
     // ── spot table ────────────────────────────────────────────────────────

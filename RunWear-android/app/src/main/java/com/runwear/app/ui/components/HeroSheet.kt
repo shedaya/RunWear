@@ -1,10 +1,6 @@
 package com.runwear.app.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,16 +14,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -36,11 +25,11 @@ import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.temperatureBracketColor
 import com.runwear.shared.domain.model.TempBracket
+import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherConditions
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.roundToInt
 
 /**
  * RW-25 sheet text composition — pure, no composition, unit-tested.
@@ -109,9 +98,30 @@ object HeroSheetFormat {
      * carries the ACTUAL temperature only — "Actual NN°" and nothing
      * else. Condition/wind/humidity live in the weather strip below;
      * duplicating them here was the contradiction class §2 fixed.
+     *
+     * WS-2: [unit] is the render-time projection of the canonical
+     * store — the number is the stored °F value converted by the
+     * preference, in the same frame transaction as every other
+     * figure on the sheet.
      */
-    fun caption(weather: WeatherConditions): String {
-        return "Actual ${weather.temperature.toInt()}°"
+    fun caption(weather: WeatherConditions, unit: TemperatureUnit): String {
+        return "Actual ${unit.displayValue(weather.temperature)}°"
+    }
+
+    /**
+     * WS-2 (RC-2, T-1 ruling): the hero numeral is a READOUT of the
+     * canonical feels-like, projected through [unit]. It is computed
+     * directly from state on every frame — there is no counter, no
+     * tween, and no tap target: the value on screen is always the
+     * current state, never an intermediate count toward it.
+     */
+    fun heroNumeral(weather: WeatherConditions, unit: TemperatureUnit): String {
+        return "${unit.displayValue(weather.effectiveTemperature)}°"
+    }
+
+    /** The wind pill's text, projected through [unit] like every other figure. */
+    fun windText(weather: WeatherConditions, unit: TemperatureUnit): String {
+        return unit.formatWind(weather.windSpeed)
     }
 }
 
@@ -141,10 +151,16 @@ fun HeroSheetBlock(
     onDateClick: () -> Unit,
     onTimeClick: () -> Unit,
     onNowClick: () -> Unit,
-    onTempClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit = {},
     overlapsPhoto: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * WS-2: the render-time unit projection. Every figure in this
+     * block (numeral, caption, wind pill) converts from the canonical
+     * store through this ONE preference value in the same composition
+     * pass, so a unit change swaps the whole sheet atomically.
+     */
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
     val shape = if (overlapsPhoto) {
         RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -152,27 +168,6 @@ fun HeroSheetBlock(
         RoundedCornerShape(28.dp)
     }
 
-    // Animated temperature counter — the count-up the on-photo number
-    // always had, moved with the number to the sheet.
-    val actualTemp = weather?.effectiveTemperature?.roundToInt() ?: 0
-    val startTemp = maxOf(-10, actualTemp - 10)
-    var targetTemp by remember { mutableStateOf(startTemp) }
-    val animatedTemp by animateIntAsState(
-        targetValue = targetTemp,
-        animationSpec = tween(
-            durationMillis = 800,
-            delayMillis = 200,
-            easing = FastOutSlowInEasing
-        ),
-        label = "temperatureCounter"
-    )
-    LaunchedEffect(actualTemp) {
-        targetTemp = startTemp
-        kotlinx.coroutines.delay(50)
-        targetTemp = actualTemp
-    }
-
-    val hapticFeedback = LocalHapticFeedback.current
     val bracket = weather?.let { TempBracket.fromFahrenheit(it.feelsLikeInFahrenheit) }
 
     Column(
@@ -215,9 +210,12 @@ fun HeroSheetBlock(
 
         // (b) Hero number row: the numeral in ink beside the bracket
         // chip. Only the chip's dot carries the temperature color.
+        // WS-2 (T-1 ruling): the numeral is display-only — no tap
+        // target, no haptic, no counter animation. The unit is
+        // changed in Settings only.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "$animatedTemp°",
+                text = weather?.let { HeroSheetFormat.heroNumeral(it, temperatureUnit) } ?: "0°",
                 style = TextStyle(
                     fontFamily = FontFamily.Default,
                     fontWeight = FontWeight.SemiBold,
@@ -225,11 +223,7 @@ fun HeroSheetBlock(
                     lineHeight = 80.sp,
                     fontFeatureSettings = "tnum"
                 ),
-                color = RunWearColors.TextPrimary,
-                modifier = Modifier.clickable {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onTempClick()
-                }
+                color = RunWearColors.TextPrimary
             )
             if (bracket != null) {
                 Spacer(Modifier.size(14.dp))
@@ -240,7 +234,7 @@ fun HeroSheetBlock(
         // (c) Caption line
         weather?.let {
             Text(
-                text = HeroSheetFormat.caption(it),
+                text = HeroSheetFormat.caption(it, temperatureUnit),
                 style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp)
@@ -266,7 +260,8 @@ fun HeroSheetBlock(
         WeatherPillsRow(
             weather = weather,
             onPillClick = onWeatherPillClick,
-            onSheet = true
+            onSheet = true,
+            temperatureUnit = temperatureUnit
         )
     }
 }

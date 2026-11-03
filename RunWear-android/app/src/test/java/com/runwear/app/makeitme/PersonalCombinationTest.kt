@@ -36,7 +36,6 @@ class PersonalCombinationTest {
             cloudCover = 10,
             uvIndex = 3.0,
             weatherCode = code,
-            isCelsius = false
         )
 
     @Test

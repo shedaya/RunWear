@@ -35,7 +35,10 @@ object FeedbackBundleFactory {
     ): Bundle {
         val weather = state.weather
         val outfit = state.outfit
-        val unitSymbol = if (weather?.isCelsius == true) "°C" else "°F"
+        // WS-2: display figures project the canonical store through
+        // the state's unit preference — the same projection the user
+        // saw on screen.
+        val unit = state.temperatureUnit
 
         val fitLabel = when (state.genderPreference) {
             GenderPreference.MALE -> "Male"
@@ -53,11 +56,11 @@ object FeedbackBundleFactory {
         fields += "Outfit engine" to "v${GetOutfitRecommendationUseCase.ENGINE_VERSION}"
         fields += "City" to state.locationName
         if (weather != null) {
-            fields += "Feels like" to "${weather.feelsLike.toInt()}$unitSymbol"
-            fields += "Actual temperature" to "${weather.temperature.toInt()}$unitSymbol"
+            fields += "Feels like" to unit.formatTemperature(weather.feelsLike)
+            fields += "Actual temperature" to unit.formatTemperature(weather.temperature)
             fields += "Conditions" to weather.weatherCode.description
             fields += "Humidity" to "${weather.humidity}%"
-            fields += "Wind" to "${weather.windSpeed.toInt()} (gusts ${weather.windGusts.toInt()})"
+            fields += "Wind" to "${unit.formatWind(weather.windSpeed)} (gusts ${unit.formatWind(weather.windGusts)})"
             fields += "Chance of precipitation" to "${weather.precipitationProbability}%"
             fields += "UV index" to weather.uvIndex.toInt().toString()
         }
@@ -89,7 +92,9 @@ object FeedbackBundleFactory {
             put("cityLabel", state.locationName.take(64))
             if (weather != null) {
                 put("effectiveTemp", weather.effectiveTemperature)
-                put("tempUnits", if (weather.isCelsius) "C" else "F")
+                // WS-2: the wire values are the canonical store (°F /
+                // mph) — tempUnits names the frame OF THE VALUES.
+                put("tempUnits", "F")
                 put("feelsLike", weather.feelsLike)
                 put("humidity", weather.humidity)
                 put("windSpeed", weather.windSpeed)

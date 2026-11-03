@@ -114,8 +114,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
 
                 val weather = weatherRepository.getCurrentWeather(
                     location.latitude,
-                    location.longitude,
-                    prefs.temperatureUnit
+                    location.longitude
                 ).getOrNull()
                 Log.w(TAG, "loadWeatherData: weather=${weather?.effectiveTemperature}")
                 if (weather != null) Result.success(weather)
@@ -167,11 +166,8 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
         val prefs = preferencesRepository.preferencesFlow.first()
         val outfit = getOutfitRecommendation.execute(weather, prefs.comfortPreference)
 
-        val tempText = if (weather.isCelsius) {
-            "${weather.effectiveTemperature.toInt()}°C"
-        } else {
-            "${weather.effectiveTemperature.toInt()}°F"
-        }
+        // WS-2: canonical store, projected through the preference.
+        val tempText = prefs.temperatureUnit.formatTemperature(weather.effectiveTemperature)
 
         val outfitItems = listOfNotNull(
             outfit.topBase.displayName.split(" ").take(2).joinToString(" "),
@@ -189,22 +185,18 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
             .build()
     }
 
-    private fun createRangedValueComplication(weather: WeatherConditions): RangedValueComplicationData {
-        val tempF = if (weather.isCelsius) {
-            weather.effectiveTemperature * 9 / 5 + 32
-        } else {
-            weather.effectiveTemperature
-        }
+    private suspend fun createRangedValueComplication(weather: WeatherConditions): RangedValueComplicationData {
+        // WS-2: the stored value IS °F (canonical); the text projects
+        // it through the user's preference, read like the long-text
+        // complication does.
+        val prefs = preferencesRepository.preferencesFlow.first()
+        val tempF = weather.effectiveTemperature
 
         val minTemp = 10f
         val maxTemp = 100f
         val clampedTemp = tempF.toFloat().coerceIn(minTemp, maxTemp)
 
-        val tempText = if (weather.isCelsius) {
-            "${weather.effectiveTemperature.toInt()}°C"
-        } else {
-            "${weather.effectiveTemperature.toInt()}°F"
-        }
+        val tempText = prefs.temperatureUnit.formatTemperature(weather.effectiveTemperature)
 
         return RangedValueComplicationData.Builder(
             value = clampedTemp,

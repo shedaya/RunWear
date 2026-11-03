@@ -61,14 +61,15 @@ class GetOutfitRecommendationUseCase {
          * feels-like alone.
          */
         fun adjustedFeelsLikeF(weather: WeatherConditions, comfort: ComfortPreference): Double {
-            val baseTemp = if (weather.isCelsius) weather.feelsLike * 9 / 5 + 32 else weather.feelsLike
-            return baseTemp + comfort.tempAdjustment
+            // Canonical storage is °F (WS-2): the stored feels-like IS the °F frame.
+            return weather.feelsLike + comfort.tempAdjustment
         }
     }
 
     fun execute(weather: WeatherConditions, comfort: ComfortPreference = ComfortPreference.NEUTRAL): OutfitRecommendation {
-        // Convert to Fahrenheit for consistent logic (engine uses F internally)
-        val baseTemp = if (weather.isCelsius) weather.feelsLike * 9 / 5 + 32 else weather.feelsLike
+        // Canonical storage is °F (WS-2) — the engine's internal frame is
+        // the stored frame, no conversion exists to apply.
+        val baseTemp = weather.feelsLike
         // Comfort adjustment only: "runs hot" (+10) shifts up, "runs cold" (-10) shifts down
         // No separate running offset — the bracket thresholds are already running-specific.
         val adjustedTemp = adjustedFeelsLikeF(weather, comfort)

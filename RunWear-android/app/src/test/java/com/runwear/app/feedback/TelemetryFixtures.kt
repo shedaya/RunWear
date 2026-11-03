@@ -32,7 +32,6 @@ object TelemetryFixtures {
         cloudCover = 20,
         uvIndex = 2.0,
         weatherCode = WeatherCode.MAINLY_CLEAR,
-        isCelsius = false
     )
 
     val outfit = OutfitRecommendation(

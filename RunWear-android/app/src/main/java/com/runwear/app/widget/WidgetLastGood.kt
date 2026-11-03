@@ -50,7 +50,6 @@ data class WidgetLastGood(
             "w_cloud_cover" to w.cloudCover.toString(),
             "w_uv_index" to w.uvIndex.toString(),
             "w_code" to w.weatherCode.code.toString(),
-            "w_is_celsius" to w.isCelsius.toString(),
             "o_top_base" to o.topBase.name,
             "o_bottom" to o.bottom.name,
             "location_name" to locationName,
@@ -85,13 +84,21 @@ data class WidgetLastGood(
             val weatherDateTime = req("w_datetime")?.let {
                 runCatching { LocalDateTime.parse(it, FMT) }.getOrNull()?.toKotlinLocalDateTime()
             } ?: return null
+            // WS-2 migration: snapshots written before the canonical
+            // store carry a "w_is_celsius" flag and values in that
+            // unit. Convert a legacy metric snapshot to canonical
+            // ONCE, here at the read boundary; snapshots written by
+            // this build carry no unit key and are already canonical.
+            val legacyMetric = entries["w_is_celsius"]?.toBooleanStrictOrNull() == true
+            fun canonTemp(v: Double) = if (legacyMetric) v * 9 / 5 + 32 else v
+            fun canonWind(v: Double) = if (legacyMetric) v / 1.609344 else v
             val weather = WeatherConditions(
                 dateTime = weatherDateTime,
-                temperature = req("w_temperature")?.toDoubleOrNull() ?: return null,
-                feelsLike = req("w_feels_like")?.toDoubleOrNull() ?: return null,
+                temperature = req("w_temperature")?.toDoubleOrNull()?.let(::canonTemp) ?: return null,
+                feelsLike = req("w_feels_like")?.toDoubleOrNull()?.let(::canonTemp) ?: return null,
                 humidity = req("w_humidity")?.toIntOrNull() ?: return null,
-                windSpeed = req("w_wind_speed")?.toDoubleOrNull() ?: return null,
-                windGusts = req("w_wind_gusts")?.toDoubleOrNull() ?: return null,
+                windSpeed = req("w_wind_speed")?.toDoubleOrNull()?.let(::canonWind) ?: return null,
+                windGusts = req("w_wind_gusts")?.toDoubleOrNull()?.let(::canonWind) ?: return null,
                 windDirection = req("w_wind_direction")?.toIntOrNull() ?: 0,
                 precipitationProbability = req("w_precip_prob")?.toIntOrNull() ?: return null,
                 precipitation = req("w_precip")?.toDoubleOrNull() ?: return null,
@@ -99,8 +106,7 @@ data class WidgetLastGood(
                 isSnowing = req("w_is_snowing")?.toBooleanStrictOrNull() ?: return null,
                 cloudCover = req("w_cloud_cover")?.toIntOrNull() ?: return null,
                 uvIndex = req("w_uv_index")?.toDoubleOrNull() ?: return null,
-                weatherCode = WeatherCode.fromCode(req("w_code")?.toIntOrNull() ?: return null),
-                isCelsius = req("w_is_celsius")?.toBooleanStrictOrNull() ?: return null
+                weatherCode = WeatherCode.fromCode(req("w_code")?.toIntOrNull() ?: return null)
             )
             val topBase = item("o_top_base") ?: return null
             val bottom = item("o_bottom") ?: return null

@@ -93,7 +93,6 @@ class WidgetRenderTest {
         cloudCover = 90,
         uvIndex = 2.0,
         weatherCode = code,
-        isCelsius = false
     )
 
     private fun fixture(

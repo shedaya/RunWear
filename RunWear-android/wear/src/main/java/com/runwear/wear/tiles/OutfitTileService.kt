@@ -100,7 +100,7 @@ class OutfitTileService : SuspendingTileService() {
         val layout = when (tileState) {
             is TileState.Loading -> createLoadingLayout()
             is TileState.Error -> createErrorLayout(tileState.message)
-            is TileState.Success -> createOutfitLayout(tileState.weather, tileState.outfit, tileState.locationName)
+            is TileState.Success -> createOutfitLayout(tileState.weather, tileState.outfit, tileState.locationName, tileState.temperatureUnit)
             is TileState.NoPermission -> createNoPermissionLayout()
         }
 
@@ -148,8 +148,7 @@ class OutfitTileService : SuspendingTileService() {
 
                 val weather = weatherRepository.getCurrentWeather(
                     location.latitude,
-                    location.longitude,
-                    prefs.temperatureUnit
+                    location.longitude
                 ).getOrThrow()
                 Log.w(TAG, "loadTileData: got weather ${weather.effectiveTemperature}°")
 
@@ -161,7 +160,7 @@ class OutfitTileService : SuspendingTileService() {
                 val outfit = getOutfitRecommendation.execute(weather, prefs.comfortPreference)
                 Log.w(TAG, "loadTileData: got outfit, topBase=${outfit.topBase}")
 
-                TileState.Success(weather, outfit, locationName)
+                TileState.Success(weather, outfit, locationName, prefs.temperatureUnit)
             }
 
             result ?: TileState.Error("Timed out loading weather")
@@ -178,11 +177,12 @@ class OutfitTileService : SuspendingTileService() {
     private fun createOutfitLayout(
         weather: WeatherConditions,
         outfit: OutfitRecommendation,
-        locationName: String
+        locationName: String,
+        /** WS-2: render-time projection of the canonical store. */
+        temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit
     ): LayoutElementBuilders.LayoutElement {
-        val unit = if (weather.isCelsius) "°C" else "°F"
-        val feelsText = "${weather.feelsLike.toInt()}$unit"
-        val actualText = "${weather.effectiveTemperature.toInt()}$unit"
+        val feelsText = temperatureUnit.formatTemperature(weather.feelsLike)
+        val actualText = temperatureUnit.formatTemperature(weather.effectiveTemperature)
 
         val clickable = ModifiersBuilders.Clickable.Builder()
             .setId("open_app")
@@ -505,7 +505,9 @@ class OutfitTileService : SuspendingTileService() {
         data class Success(
             val weather: WeatherConditions,
             val outfit: OutfitRecommendation,
-            val locationName: String
+            val locationName: String,
+            val temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+                com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
         ) : TileState()
     }
 }

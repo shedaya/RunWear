@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.RunWearColors
+import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherConditions
 
 /**
@@ -60,7 +61,9 @@ fun WeatherConditionsRow(
      * fill, ink text) instead of the photo-side white-glass treatment.
      * Behavior — which pills appear, their tap targets — is unchanged.
      */
-    onSheet: Boolean = false
+    onSheet: Boolean = false,
+    /** WS-2: the render-time unit projection for the wind pill. */
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
     if (weather == null) return
 
@@ -92,7 +95,7 @@ fun WeatherConditionsRow(
         // Wind pill
         WeatherPill(
             icon = Icons.Outlined.Air,
-            text = "${weather.windSpeed.toInt()} ${if (weather.isCelsius) "km/h" else "mph"}",
+            text = HeroSheetFormat.windText(weather, temperatureUnit),
             onClick = { onPillClick("wind") },
             background = pillBackground,
             ink = pillInk
@@ -139,13 +142,15 @@ fun WeatherPillsRow(
     weather: WeatherConditions?,
     modifier: Modifier = Modifier,
     onPillClick: (String) -> Unit = {},
-    onSheet: Boolean = false
+    onSheet: Boolean = false,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
     WeatherConditionsRow(
         weather = weather,
         modifier = modifier,
         onPillClick = onPillClick,
-        onSheet = onSheet
+        onSheet = onSheet,
+        temperatureUnit = temperatureUnit
     )
 }
 

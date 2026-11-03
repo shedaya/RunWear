@@ -91,7 +91,6 @@ abstract class WearShotHarness {
         cloudCover = cloudCover,
         uvIndex = uv,
         weatherCode = code,
-        isCelsius = false
     )
 
     protected val mildWeather = weather(60.0, 58.0, WeatherCode.CLEAR_SKY, 45, 6.0, 5.5, 10)

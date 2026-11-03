@@ -131,7 +131,7 @@ object DebugManager {
                 sb.appendLine("Precipitation Prob: ${weather.precipitationProbability}%")
                 sb.appendLine("UV Index: ${weather.uvIndex}")
                 sb.appendLine("Cloud Cover: ${weather.cloudCover}%")
-                sb.appendLine("Is Celsius: ${weather.isCelsius}")
+                sb.appendLine("Stored frame: canonical °F/mph (WS-2); display unit: ${uiState.temperatureUnit}")
                 sb.appendLine()
             }
 

@@ -21,7 +21,6 @@ class HeroFrameKeyingTest {
         cloudCover = 90,
         uvIndex = 0.0,
         weatherCode = WeatherCode.RAIN_MODERATE,
-        isCelsius = false
     )
 
     @Test

@@ -114,12 +114,13 @@ class WearViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             val dt = _uiState.value.selectedDateTime
-            val unit = _uiState.value.temperatureUnit
 
+            // WS-2: canonical fetch (no unit); the unit in state is
+            // the render-time projection only.
             val result = if (isNow(dt)) {
-                weatherRepository.getCurrentWeather(lat, lon, unit)
+                weatherRepository.getCurrentWeather(lat, lon)
             } else {
-                weatherRepository.getWeatherForDateTime(lat, lon, dt.toKotlinLocalDateTime(), unit)
+                weatherRepository.getWeatherForDateTime(lat, lon, dt.toKotlinLocalDateTime())
             }
 
             result.fold(

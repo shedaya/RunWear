@@ -79,17 +79,20 @@ object LaterTodayLine {
         return parts.joinToString(" · ")
     }
 
-    /** Stable-outfit fallback: next-hours feels-like range + peak rain chance. */
-    fun stableLine(hours: List<HourlyForecast>): String? {
+    /**
+     * Stable-outfit fallback: next-hours feels-like range + peak rain
+     * chance. WS-2: the stored hours are canonical °F; [displayUnit]
+     * is the render-time projection for the range text only.
+     */
+    fun stableLine(hours: List<HourlyForecast>, displayUnit: TemperatureUnit): String? {
         if (hours.isEmpty()) return null
         val min = hours.minOf { it.feelsLike }
         val max = hours.maxOf { it.feelsLike }
         val peakRain = hours.maxOf { it.precipitationProbability }
-        val unit = if (hours.first().isCelsius) "°C" else "°F"
-        val range = if (min.toInt() == max.toInt()) {
-            "feels like ${min.toInt()}$unit"
+        val range = if (displayUnit.displayValue(min) == displayUnit.displayValue(max)) {
+            "feels like ${displayUnit.formatTemperature(min)}"
         } else {
-            "feels like ${min.toInt()}–${max.toInt()}$unit"
+            "feels like ${displayUnit.displayValue(min)}–${displayUnit.formatTemperature(max)}"
         }
         val parts = mutableListOf("Later today: $range")
         if (peakRain >= RAIN_MENTION_THRESHOLD) parts += "rain up to $peakRain%"
@@ -106,7 +109,7 @@ object LaterTodayLine {
         weatherRepository: WeatherRepository,
         latitude: Double,
         longitude: Double,
-        unit: TemperatureUnit,
+        displayUnit: TemperatureUnit,
         current: WeatherConditions,
         currentOutfit: OutfitRecommendation,
         comfort: ComfortPreference,
@@ -120,20 +123,20 @@ object LaterTodayLine {
             for (hoursAhead in listOf(3L, 6L)) {
                 val target = currentJava.plusHours(hoursAhead)
                 val laterWeather = weatherRepository
-                    .getWeatherForDateTime(latitude, longitude, target.toKotlinLocalDateTime(), unit)
+                    .getWeatherForDateTime(latitude, longitude, target.toKotlinLocalDateTime())
                     .getOrNull() ?: continue
                 val laterOutfit = getOutfit.execute(laterWeather, comfort)
                 deltaLine(target, currentOutfit, laterOutfit, laterWeather)?.let { return@runCatching it }
             }
             val forecast = hourly ?: weatherRepository
-                .getHourlyForecast(latitude, longitude, unit)
+                .getHourlyForecast(latitude, longitude)
                 .getOrDefault(emptyList())
             val window = forecast.filter {
                 val forecastJava = it.dateTime.toJavaLocalDateTime()
                 forecastJava.isAfter(currentJava) &&
                     !forecastJava.isAfter(currentJava.plusHours(6))
             }
-            stableLine(window)
+            stableLine(window, displayUnit)
         }.getOrNull()
     }
 }

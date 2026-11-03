@@ -1425,7 +1425,9 @@ private fun getCategoryDisplayName(category: ClothingCategory): String {
 fun WeatherDetailSheet(
     type: String,
     weather: WeatherConditions,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** WS-2: the render-time unit projection for every figure in the sheet. */
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
     val sheetState = rememberModalBottomSheetState()
 
@@ -1441,10 +1443,10 @@ fun WeatherDetailSheet(
                 .padding(24.dp)
         ) {
             when (type) {
-                "condition" -> WeatherConditionDetail(weather)
-                "wind" -> WindDetail(weather)
+                "condition" -> WeatherConditionDetail(weather, temperatureUnit)
+                "wind" -> WindDetail(weather, temperatureUnit)
                 "humidity" -> HumidityDetail(weather)
-                "precipitation" -> PrecipitationDetail(weather)
+                "precipitation" -> PrecipitationDetail(weather, temperatureUnit)
                 "uv" -> UVDetail(weather)
             }
 
@@ -1454,7 +1456,7 @@ fun WeatherDetailSheet(
 }
 
 @Composable
-private fun WeatherConditionDetail(weather: WeatherConditions) {
+private fun WeatherConditionDetail(weather: WeatherConditions, unit: TemperatureUnit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(text = weather.weatherCode.icon, fontSize = 40.sp)
@@ -1468,14 +1470,13 @@ private fun WeatherConditionDetail(weather: WeatherConditions) {
         }
         Spacer(Modifier.height(16.dp))
         DetailRow("Cloud Cover", "${weather.cloudCover}%")
-        DetailRow("Temperature", "${weather.temperature.toInt()}°")
-        DetailRow("Feels Like", "${weather.feelsLike.toInt()}°")
+        DetailRow("Temperature", unit.formatTemperature(weather.temperature))
+        DetailRow("Feels Like", unit.formatTemperature(weather.feelsLike))
     }
 }
 
 @Composable
-private fun WindDetail(weather: WeatherConditions) {
-    val unit = if (weather.isCelsius) "km/h" else "mph"
+private fun WindDetail(weather: WeatherConditions, unit: TemperatureUnit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -1493,8 +1494,8 @@ private fun WindDetail(weather: WeatherConditions) {
             )
         }
         Spacer(Modifier.height(16.dp))
-        DetailRow("Speed", "${weather.windSpeed.toInt()} $unit")
-        DetailRow("Gusts", "${weather.windGusts.toInt()} $unit")
+        DetailRow("Speed", unit.formatWind(weather.windSpeed))
+        DetailRow("Gusts", unit.formatWind(weather.windGusts))
         DetailRow("Direction", "${windDirectionLabel(weather.windDirection)} (${weather.windDirection}°)")
         Spacer(Modifier.height(12.dp))
         Text(
@@ -1555,7 +1556,7 @@ private fun HumidityDetail(weather: WeatherConditions) {
 }
 
 @Composable
-private fun PrecipitationDetail(weather: WeatherConditions) {
+private fun PrecipitationDetail(weather: WeatherConditions, unit: TemperatureUnit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -1577,7 +1578,7 @@ private fun PrecipitationDetail(weather: WeatherConditions) {
         // Match web: show "None" when 0, use in/mm by unit (Open-Meteo returns mm)
         val amountText = when {
             weather.precipitation <= 0 -> "None"
-            weather.isCelsius -> "${weather.precipitation} mm"
+            unit == TemperatureUnit.CELSIUS -> "${weather.precipitation} mm"
             else -> "${String.format("%.2f", weather.precipitation / 25.4)} in"
         }
         DetailRow("Expected Amount", amountText)
