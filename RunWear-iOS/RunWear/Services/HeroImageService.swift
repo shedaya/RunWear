@@ -117,11 +117,14 @@ actor HeroImageService {
             }
         }
 
-        // Level 8: Unsplash fallback
+        // Level 8: Bundled fallback — RW-26: resolved gender-aware, so
+        // the last-resort photo's subject matches the combination's
+        // (already UNISEX-resolved) gender.
         return fallbackProvider.getFallbackResult(
             temp: combination.temp,
             weather: combination.weather,
-            isWatch: isWatch
+            isWatch: isWatch,
+            gender: combination.gender
         )
     }
 
