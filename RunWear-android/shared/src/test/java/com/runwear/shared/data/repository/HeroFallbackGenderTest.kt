@@ -10,24 +10,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * RW-26 (2026-11-02): the bundled fallback matrix is keyed bracket ×
- * weather only, but its assets are photographs of specific people —
- * 15 of 21 subjects are women, and the COLD and MILD brackets hold no
- * male-subject asset at all. Before this fix, every fallback serve
- * (last-resort, resolve-timeout substitution, and the Android rotation
- * floor merge) ignored the user's fit preference: a male-preference
- * user in New York was served a woman's photo by every COLD/MILD/COOL
- * fallback cell he could hit. Field instances, 2026-11-02 ~21:40 EST:
- * the COOL×CLEAR asset (pink long-sleeve) behind a Male-selected
- * settings sheet, and a flagged MALE_CLEAR_MILD_NIGHT serve of the
- * MILD×CLEAR asset. Diagnosis:
- * release-prep/rw-gender-preference-diagnosis-2026-11-02.md.
+ * WS-7 (2026-11-03) — the RW-26 full fix, superseding the RW-26
+ * containment contract this file used to pin.
  *
- * The contract pinned here: a gendered fallback resolution NEVER
- * returns an asset whose photographed subject is the other gender
- * while any bundled asset matches; the subject census itself is
- * pinned against the RW-20 provenance; UNISEX resolution is the
- * legacy chain, byte for byte.
+ * The bundled matrix is now gender-PAIRED (22 cells x MALE/FEMALE,
+ * derived from verified approved pool stock — bundle manifest in
+ * release-prep/rw26-fallback-bundle-2026-11-03/). The contract:
+ *
+ * - Every paired cell resolves to ITS OWN gender-paired asset, for
+ *   both genders: subject match AND scene match at the requested
+ *   cell, by direct lookup — no walk is involved at a paired cell.
+ * - The resolver bound (D-19): subject gender NEVER outranks the
+ *   scene at a paired cell. The RW-26 construction that deterministically
+ *   resolved MALE + COOL + CLEAR to the snow asset (COOL's only male
+ *   subject in the old matrix) now resolves to cool_clear_male.
+ * - FREEZING x RAIN serves its own paired assets for both genders;
+ *   the designed degradation survives ONLY in the UNISEX legacy chain.
+ * - UNISEX resolution is the legacy chain, unchanged.
+ *
+ * The RW-20 census below survives as the UNISEX legacy view's subject
+ * table (which paired file each legacy cell's legacy chain lands on).
  */
 class HeroFallbackGenderTest {
 
@@ -36,7 +38,7 @@ class HeroFallbackGenderTest {
     private fun assetName(url: String): String =
         url.removePrefix("file:///android_asset/hero_fallback/").removeSuffix(".webp")
 
-    /** The RW-20 provenance census: subject gender per bundled asset. */
+    /** The RW-20 provenance census: subject gender per legacy (UNISEX-view) asset. */
     private val expectedSubjects: Map<String, GenderPreference> = mapOf(
         "freezing_clear" to GenderPreference.FEMALE,
         "freezing_cloudy" to GenderPreference.FEMALE,
@@ -62,23 +64,30 @@ class HeroFallbackGenderTest {
     )
 
     @Test
-    fun `subject census covers exactly the 21 bundled cells and both copies agree`() {
+    fun `legacy census covers exactly the 21 legacy cells and both copies agree`() {
         val table = HeroImageRepository.FALLBACK_IMAGES_2D
         var cells = 0
         for ((bracket, weathers) in table) {
             for ((condition, ref) in weathers) {
                 cells++
-                val expected = expectedSubjects[assetName(ref)]
+                val legacyName = assetName(ref).removeSuffix("_female").removeSuffix("_male")
+                val expected = expectedSubjects[legacyName]
                 assertTrue("no census entry for ${assetName(ref)}", expected != null)
                 assertEquals(
-                    "engine subject for $bracket/$condition",
+                    "engine census subject for $bracket/$condition",
                     expected,
                     HeroImageSelector.fallbackSubjectGender(bracket, condition)
                 )
                 assertEquals(
-                    "repository subject for $bracket/$condition",
+                    "repository census subject for $bracket/$condition",
                     expected,
                     repository.fallbackSubjectGender(bracket, condition)
+                )
+                // The legacy view's file IS the census subject's paired file.
+                assertEquals(
+                    "legacy view file for $bracket/$condition",
+                    "${legacyName}_${expected!!.name.lowercase()}",
+                    assetName(ref)
                 )
             }
         }
@@ -87,29 +96,35 @@ class HeroFallbackGenderTest {
     }
 
     @Test
-    fun `field instance 2 - MALE MILD CLEAR never resolves to the female mild_clear asset`() {
-        // Sol's flagged serve: requested MALE_CLEAR_MILD_NIGHT, served
-        // the MILD×CLEAR fallback (a woman). MILD holds no male-subject
-        // asset, so the resolver must walk to the nearest matching one:
-        // WARM×CLEAR (a man, t-shirt and shorts).
-        for (url in listOf(
-            HeroImageSelector.getWeatherAwareFallback(
-                TempBracket.MILD, HeroWeatherCondition.CLEAR, GenderPreference.MALE
-            ),
-            repository.getWeatherAwareFallback(
-                TempBracket.MILD, HeroWeatherCondition.CLEAR, GenderPreference.MALE
-            )
-        )) {
-            assertNotEquals("mild_clear", assetName(url))
-            assertEquals("warm_clear", assetName(url))
+    fun `every paired cell resolves to its own gender-paired asset for both genders`() {
+        val paired = HeroImageRepository.FALLBACK_IMAGES_PAIRED
+        assertEquals(22, paired.size)
+        for ((cell, genders) in paired) {
+            for (gender in listOf(GenderPreference.MALE, GenderPreference.FEMALE)) {
+                val expected = genders.getValue(gender)
+                assertEquals(
+                    "engine serve for $cell/$gender",
+                    expected,
+                    HeroImageSelector.getWeatherAwareFallback(cell.first, cell.second, gender)
+                )
+                assertEquals(
+                    "repository serve for $cell/$gender",
+                    expected,
+                    repository.getWeatherAwareFallback(cell.first, cell.second, gender)
+                )
+                // Scene match AND subject match, by construction of the name.
+                assertEquals(
+                    "${cell.first.name.lowercase()}_${cell.second.name.lowercase()}_${gender.name.lowercase()}",
+                    assetName(expected)
+                )
+            }
         }
     }
 
     @Test
-    fun `field instance 1 - MALE COOL CLEAR never resolves to the female cool_clear asset`() {
-        // The screenshot: Fit Preference Male, hero = cool_clear (a
-        // woman in a pink long-sleeve). COOL's only male-subject asset
-        // is its SNOW cell.
+    fun `D-19 construction case - MALE COOL CLEAR resolves to the paired clear asset, never snow`() {
+        // The deterministic RW-26 failure: MALE + COOL + CLEAR walked
+        // past CLEAR/CLOUDY/RAIN (female subjects) to COOL x SNOW.
         for (url in listOf(
             HeroImageSelector.getWeatherAwareFallback(
                 TempBracket.COOL, HeroWeatherCondition.CLEAR, GenderPreference.MALE
@@ -118,55 +133,35 @@ class HeroFallbackGenderTest {
                 TempBracket.COOL, HeroWeatherCondition.CLEAR, GenderPreference.MALE
             )
         )) {
-            assertNotEquals("cool_clear", assetName(url))
-            assertEquals("cool_snow", assetName(url))
+            assertEquals("cool_clear_male", assetName(url))
+            assertNotEquals("cool_snow_male", assetName(url))
+            assertNotEquals("cool_snow", assetName(url))
         }
-    }
-
-    @Test
-    fun `FEMALE WARM CLEAR never resolves to the male warm_clear asset`() {
-        // Mirror case: WARM×CLEAR and WARM×CLOUDY are men; the bracket's
-        // female-subject asset is its RAIN cell.
-        val url = HeroImageSelector.getWeatherAwareFallback(
-            TempBracket.WARM, HeroWeatherCondition.CLEAR, GenderPreference.FEMALE
-        )
-        assertEquals("warm_rain", assetName(url))
+        // And the field instance behind D-18/D-19's sibling case:
+        // MALE + MILD + CLEAR (Sol's flagged waterfront-woman serve)
+        // now serves the paired male mild-clear asset in-bracket.
         assertEquals(
-            url,
-            repository.getWeatherAwareFallback(
-                TempBracket.WARM, HeroWeatherCondition.CLEAR, GenderPreference.FEMALE
-            )
-        )
-    }
-
-    @Test
-    fun `matching exact cell is unchanged - FEMALE MILD CLEAR still resolves to mild_clear`() {
-        assertEquals(
-            "mild_clear",
+            "mild_clear_male",
             assetName(
                 HeroImageSelector.getWeatherAwareFallback(
-                    TempBracket.MILD, HeroWeatherCondition.CLEAR, GenderPreference.FEMALE
+                    TempBracket.MILD, HeroWeatherCondition.CLEAR, GenderPreference.MALE
+                )
+            )
+        )
+        // Mirror: FEMALE + WARM + CLEAR serves warm_clear_female
+        // in-bracket (the RW-26 walk served warm_rain instead).
+        assertEquals(
+            "warm_clear_female",
+            assetName(
+                HeroImageSelector.getWeatherAwareFallback(
+                    TempBracket.WARM, HeroWeatherCondition.CLEAR, GenderPreference.FEMALE
                 )
             )
         )
         assertEquals(
-            "warm_clear",
+            "cold_cloudy_male",
             assetName(
-                HeroImageSelector.getWeatherAwareFallback(
-                    TempBracket.WARM, HeroWeatherCondition.CLEAR, GenderPreference.MALE
-                )
-            )
-        )
-    }
-
-    @Test
-    fun `MALE COLD has no in-bracket match and walks to the nearest male subject`() {
-        // Every COLD asset is a woman. Nearest bracket by warmth
-        // (warmer first on ties) is COOL; its male subject is SNOW.
-        assertEquals(
-            "cool_snow",
-            assetName(
-                HeroImageSelector.getWeatherAwareFallback(
+                repository.getWeatherAwareFallback(
                     TempBracket.COLD, HeroWeatherCondition.CLOUDY, GenderPreference.MALE
                 )
             )
@@ -174,21 +169,72 @@ class HeroFallbackGenderTest {
     }
 
     @Test
-    fun `every gendered resolution returns a matching subject, for every cell`() {
+    fun `FREEZING RAIN serves its own paired assets for both genders - degradation retired`() {
+        assertEquals(
+            "freezing_rain_female",
+            assetName(
+                HeroImageSelector.getWeatherAwareFallback(
+                    TempBracket.FREEZING, HeroWeatherCondition.RAIN, GenderPreference.FEMALE
+                )
+            )
+        )
+        assertEquals(
+            "freezing_rain_male",
+            assetName(
+                repository.getWeatherAwareFallback(
+                    TempBracket.FREEZING, HeroWeatherCondition.RAIN, GenderPreference.MALE
+                )
+            )
+        )
+    }
+
+    @Test
+    fun `gender never outranks scene - no gendered resolution crosses weather at a paired cell`() {
         for (bracket in TempBracket.values()) {
             for (condition in HeroWeatherCondition.values()) {
+                val isPairedCell = HeroImageRepository.FALLBACK_IMAGES_PAIRED.containsKey(bracket to condition)
                 for (gender in listOf(GenderPreference.MALE, GenderPreference.FEMALE)) {
-                    val engineUrl = HeroImageSelector.getWeatherAwareFallback(bracket, condition, gender)
-                    val repoUrl = repository.getWeatherAwareFallback(bracket, condition, gender)
-                    assertEquals("engine/repository disagree for $bracket/$condition/$gender", engineUrl, repoUrl)
-                    assertEquals(
-                        "wrong-gender subject for $bracket/$condition/$gender",
-                        gender,
-                        expectedSubjects[assetName(engineUrl)]
+                    val name = assetName(
+                        HeroImageSelector.getWeatherAwareFallback(bracket, condition, gender)
                     )
+                    // Subject always matches the request.
+                    assertTrue(
+                        "$bracket/$condition/$gender served a wrong-gender subject: $name",
+                        name.endsWith("_${gender.name.lowercase()}")
+                    )
+                    if (isPairedCell) {
+                        // Scene always matches at a paired cell.
+                        assertEquals(
+                            "$bracket/$condition/$gender crossed the scene",
+                            "${bracket.name.lowercase()}_${condition.name.lowercase()}_${gender.name.lowercase()}",
+                            name
+                        )
+                    }
                 }
             }
         }
+    }
+
+    @Test
+    fun `non-cells resolve scene-first inside the bracket with the requested gender`() {
+        // HOT x SNOW / WARM x SNOW have no paired asset; the walk takes
+        // the bracket's own CLEAR paired asset for the requested gender.
+        assertEquals(
+            "hot_clear_male",
+            assetName(
+                HeroImageSelector.getWeatherAwareFallback(
+                    TempBracket.HOT, HeroWeatherCondition.SNOW, GenderPreference.MALE
+                )
+            )
+        )
+        assertEquals(
+            "warm_clear_female",
+            assetName(
+                repository.getWeatherAwareFallback(
+                    TempBracket.WARM, HeroWeatherCondition.SNOW, GenderPreference.FEMALE
+                )
+            )
+        )
     }
 
     @Test
@@ -205,11 +251,17 @@ class HeroFallbackGenderTest {
                     repository.getWeatherAwareFallback(bracket, condition),
                     repository.getWeatherAwareFallback(bracket, condition, GenderPreference.UNISEX)
                 )
+                // Engine and repository agree on every UNISEX serve too.
+                assertEquals(
+                    "UNISEX engine/repository disagree for $bracket/$condition",
+                    HeroImageSelector.getWeatherAwareFallback(bracket, condition, GenderPreference.UNISEX),
+                    repository.getWeatherAwareFallback(bracket, condition, GenderPreference.UNISEX)
+                )
             }
         }
-        // Spot-check the legacy landings the old test pins.
+        // Spot-check the legacy landings: same subjects as the RW-20 set.
         assertEquals(
-            "mild_clear",
+            "mild_clear_female",
             assetName(
                 HeroImageSelector.getWeatherAwareFallback(
                     TempBracket.MILD, HeroWeatherCondition.CLEAR, GenderPreference.UNISEX
@@ -217,10 +269,18 @@ class HeroFallbackGenderTest {
             )
         )
         assertEquals(
-            "hot_clear",
+            "hot_clear_female",
             assetName(
                 HeroImageSelector.getWeatherAwareFallback(
                     TempBracket.HOT, HeroWeatherCondition.SNOW, GenderPreference.UNISEX
+                )
+            )
+        )
+        assertEquals(
+            "cool_snow_male",
+            assetName(
+                HeroImageSelector.getWeatherAwareFallback(
+                    TempBracket.COOL, HeroWeatherCondition.SNOW, GenderPreference.UNISEX
                 )
             )
         )

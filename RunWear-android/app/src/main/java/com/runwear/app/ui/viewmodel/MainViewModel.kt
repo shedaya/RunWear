@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.runwear.shared.data.repository.AffiliateRepository
 import com.runwear.shared.data.repository.HeroImageRepository
+import com.runwear.shared.data.repository.HeroServeTelemetry
 import com.runwear.shared.data.repository.LocationResult
 import com.runwear.shared.data.repository.PreferencesRepository
 import com.runwear.shared.data.repository.WeatherRepository
@@ -23,7 +24,9 @@ import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import com.runwear.shared.util.LocationErrorReason
 import com.runwear.shared.util.LocationFetchResult
 import com.runwear.shared.util.LocationProvider
+import com.runwear.app.BuildConfig
 import com.runwear.app.feedback.FeedbackBundleFactory
+import com.runwear.app.feedback.HeroServeDiagnostics
 import com.runwear.app.feedback.FeedbackCategory
 import com.runwear.app.feedback.FeedbackStore
 import com.runwear.app.feedback.RunWearEvents
@@ -867,7 +870,22 @@ class MainViewModel @Inject constructor(
                 ?: com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
                     weather, outfit, gender,
                     frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, _uiState.value.comfortPreference)
-                )
+                ).also { selectorHero ->
+                    // WS-7 / RW-26(c): the resolve-timeout substitution
+                    // is a bundled serve the repository never emitted a
+                    // record for — emit it here, with its trigger named.
+                    // (RW-26(b)'s 2,000 ms budget itself is unchanged.)
+                    recordHeroServe(
+                        com.runwear.shared.domain.model.HeroServeRecord(
+                            source = com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
+                            requestedCombinationId = selectorHero.combinationId,
+                            gender = gender,
+                            fallbackAssetFile = selectorHero.fallbackAssetFile,
+                            fallbackProvenance = selectorHero.fallbackProvenance,
+                            trigger = "resolve-timeout"
+                        )
+                    )
+                }
             // If the user already used the refresh control today for
             // this cell, restore their pick over the random one.
             val chosen = applyPersistedHeroChoice(hero)
@@ -916,6 +934,19 @@ class MainViewModel @Inject constructor(
                         com.runwear.app.makeitme.PersonalLookStatus.Ready
                     else -> look.status
                 }
+                recordHeroServe(
+                    com.runwear.shared.domain.model.HeroServeRecord(
+                        source = if (hit.serveKind == com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD) {
+                            com.runwear.shared.domain.model.HeroServeSource.SCAFFOLD
+                        } else {
+                            com.runwear.shared.domain.model.HeroServeSource.PERSONAL
+                        },
+                        requestedCombinationId = chosen.combinationId,
+                        servedCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
+                        gender = gender,
+                        trigger = "personal-overlay"
+                    )
+                )
                 _uiState.update {
                     it.copy(
                         heroImageUrl = hit.imageUrl,
@@ -946,8 +977,39 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /**
+     * WS-7 / RW-26(c): record one hero serve. Every record rides the
+     * HeroServe channel (HeroServeTelemetry); a BUNDLED-FALLBACK serve
+     * additionally files remotely under the automated `diagnostics`
+     * category (HeroServeDiagnostics) — the bundled serve is the one
+     * serve with no server-side trace, and D-18 is the failure that
+     * closes. Filing is fire-and-forget; failures are dropped, never
+     * queued (a stale serve report would misattribute).
+     */
+    private fun recordHeroServe(record: com.runwear.shared.domain.model.HeroServeRecord) {
+        HeroServeTelemetry.emit(record)
+        if (record.source == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK) {
+            viewModelScope.launch {
+                runCatching {
+                    val payload = HeroServeDiagnostics.payload(
+                        record, BuildConfig.VERSION_NAME, feedbackStore.installId()
+                    )
+                    telemetryClient.sendFeedbackNow(payload)
+                }
+            }
+        }
+    }
+
     /** The pool layer's hero write for one resolution. */
     private fun writePoolHero(chosen: com.runwear.shared.domain.model.HeroImageResult) {
+        // WS-7: a bundled paint from the pool layer files its
+        // diagnostics record at paint time (the repository emitted the
+        // serve record when it resolved; this is the remote filing).
+        if (chosen.serveSource == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK ||
+            (chosen.imageUrl?.startsWith("file:///android_asset/hero_fallback/") == true)
+        ) {
+            recordHeroServeDiagnosticsOnly(chosen)
+        }
         _uiState.update {
             it.copy(
                 heroImageUrl = chosen.imageUrl,
@@ -961,6 +1023,26 @@ class MainViewModel @Inject constructor(
                 personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.None,
                 showMakeItMeUpsell = false
             )
+        }
+    }
+
+    /** File a bundled serve's diagnostics record without re-emitting its HeroServe record. */
+    private fun recordHeroServeDiagnosticsOnly(chosen: com.runwear.shared.domain.model.HeroImageResult) {
+        val record = com.runwear.shared.domain.model.HeroServeRecord(
+            source = com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
+            requestedCombinationId = chosen.combinationId,
+            servedCombinationId = chosen.servedCombinationId,
+            fallbackAssetFile = chosen.fallbackAssetFile,
+            fallbackProvenance = chosen.fallbackProvenance,
+            trigger = "bundled-paint"
+        )
+        viewModelScope.launch {
+            runCatching {
+                val payload = HeroServeDiagnostics.payload(
+                    record, BuildConfig.VERSION_NAME, feedbackStore.installId()
+                )
+                telemetryClient.sendFeedbackNow(payload)
+            }
         }
     }
 
@@ -1096,6 +1178,18 @@ class MainViewModel @Inject constructor(
                 ?: continue
             val hit = look.hit
             if (hit != null && _uiState.value.heroImageUrl != hit.imageUrl) {
+                recordHeroServe(
+                    com.runwear.shared.domain.model.HeroServeRecord(
+                        source = if (hit.serveKind == com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD) {
+                            com.runwear.shared.domain.model.HeroServeSource.SCAFFOLD
+                        } else {
+                            com.runwear.shared.domain.model.HeroServeSource.PERSONAL
+                        },
+                        requestedCombinationId = cell,
+                        gender = _uiState.value.genderPreference,
+                        trigger = "personal-poll-delivery"
+                    )
+                )
                 // RW-16.27: the pool candidate list survives this swap
                 // (it is the refresh rotation; emptying it killed the
                 // refresh control in the personal state), and the
