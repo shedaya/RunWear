@@ -827,7 +827,51 @@ struct WeatherOutfitView: View {
 
     // MARK: - Hero Section
 
+    @ViewBuilder
     private func heroSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
+        // WS-1 (§1.1 first paint): until the hero serve RESOLVES,
+        // the photo zone paints the designed skeleton — never the
+        // bundled fallback "for now" and silently replaced (the
+        // D-18/D-20 paint pattern §1.1 specifies out). The view
+        // model sets fallbackImageUrl BEFORE the pool cascade
+        // resolves, so the unresolved state is "no hero yet, and
+        // either still loading or no fallback has even been
+        // computed". A pool miss settles (loading ends) with the
+        // fallback as the FINAL image and paints it then. Later
+        // reloads keep the on-screen photo (the previous hero URL
+        // survives a reload) and crossfade per §1.1. The D-20
+        // wiring of the fallback call itself remains WS-6's scope.
+        if viewModel.heroImageUrl == nil
+            && (viewModel.isHeroImageLoading || viewModel.fallbackImageUrl == nil) {
+            heroSkeleton(heightMode: heightMode)
+        } else {
+            heroImageView(heightMode: heightMode)
+        }
+    }
+
+    /// The hero zone's loading skeleton (frame 46's treatment at
+    /// hero scale): a sheet-toned block in the hero's own frame —
+    /// the same container fraction / fill mechanics as the photo,
+    /// so the sheet composes against identical geometry and
+    /// nothing moves when the photo lands.
+    @ViewBuilder
+    private func heroSkeleton(heightMode: HeroImageView.HeightMode) -> some View {
+        let block = Rectangle()
+            .fill(AppTheme.cardOnSheet)
+            .overlay {
+                ProgressView()
+                    .tint(AppTheme.inkSecondary)
+            }
+        if heightMode == .fill {
+            block.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            block.containerRelativeFrame(.vertical) { length, _ in
+                length * AppTheme.heroHeightRatio
+            }
+        }
+    }
+
+    private func heroImageView(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
         HeroImageView(
             locationName: viewModel.placeDisplayName,
             // Hero contract (Android/PWA): headline = raw feels-like,

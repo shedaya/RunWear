@@ -210,6 +210,18 @@ final class HomeCompositionTests: XCTestCase {
         XCTAssertTrue(view.contains("showLocationPicker = true"))
     }
 
+    func testHeroFirstPaintIsSkeletonUntilTheServeResolves_sourcePin() throws {
+        // §1.1: the first painted hero is the resolved serve or
+        // the skeleton — the photo zone gates on the view model's
+        // unresolved state (no hero URL and no settled fallback).
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("viewModel.heroImageUrl == nil"),
+                      "the hero zone must skeleton-gate on the unresolved serve")
+        XCTAssertTrue(view.contains("viewModel.isHeroImageLoading || viewModel.fallbackImageUrl == nil"),
+                      "the gate must cover the whole pool-resolution window")
+        XCTAssertTrue(view.contains("heroSkeleton(heightMode: heightMode)"))
+    }
+
     func testFirstPaintIsTheDesignedSkeleton_sourcePin() throws {
         // §1.1 first paint: until weather + recommendation exist,
         // ContentView paints the designed skeleton (frame 46's
