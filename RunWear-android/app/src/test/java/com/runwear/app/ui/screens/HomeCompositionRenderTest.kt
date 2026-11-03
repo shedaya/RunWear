@@ -233,7 +233,11 @@ abstract class HomeCompositionHarness {
         // D-02/A3: the top chrome band shows the PHOTO, not the
         // sheet — D-01's mis-placement covers it with Surface.
         assertTrue(
-            "[$label] top chrome band must be photo, not sheet surface",
+            "[$label] top chrome band must be photo, not sheet surface " +
+                "(px=${Integer.toHexString(px(centerX, 60f))} surface=${Integer.toHexString(surface)} " +
+                "above=${Integer.toHexString(px(centerX, sheetTopDp - 40f))} " +
+                "below=${Integer.toHexString(px(centerX, sheetTopDp + 30f))} " +
+                "edge=${Integer.toHexString(px(3f, sheetTopDp + 40f))})",
             channelDiff(px(centerX, 60f), surface) > 8
         )
         // Just above the handoff: still photo.
