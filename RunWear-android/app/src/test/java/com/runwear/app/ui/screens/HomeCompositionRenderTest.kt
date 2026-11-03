@@ -206,7 +206,7 @@ abstract class HomeCompositionHarness {
                 } else "")
         fun tree(n: SemanticsNode, d: Int): String =
             "  ".repeat(d) + "node bounds=${n.boundsInRoot} keys=" +
-                n.config.keys.joinToString(",") { it.name } + "\n" +
+                n.config.joinToString(",") { it.key.name } + "\n" +
                 (if (d < 3) n.children.joinToString("") { tree(it, d + 1) } else "")
         val diag = "rootChildren=${root.children.size} rootBounds=${root.boundsInRoot} " +
             "candidates=${nodes(root).size}\n" + tree(root, 0) + hier(composeView, 0)
