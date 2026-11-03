@@ -58,16 +58,30 @@ class FillCanonicalOutfitsTest {
         )
         private val BRACKETS = listOf("FREEZING", "COLD", "COOL", "MILD", "WARM", "HOT")
 
-        /** The 20 fill cells with their representative frames. */
+        /**
+         * The 88 launch-set fill cells with their representative
+         * frames (RW-16.30): weather x bracket x daypart minus the
+         * verified-unreachable WARM/HOT SNOW cells. Dry frames
+         * (CLEAR/CLOUDY/SNOW — the engine reads measured rain only):
+         * UV 2/4/2/0 and hour 8/13/18/22 for DAWN/MIDDAY/DUSK/NIGHT.
+         * RAIN frames: UV 1 (0 at NIGHT), precipitation replayed as
+         * 1.0mm by the test body.
+         */
         fun expectedCells(): List<Cell> {
             val cells = mutableListOf<Cell>()
-            for (b in BRACKETS) {
-                cells += Cell("CLEAR", b, "DAWN", TEMP.getValue(b), 2.0, 8)
-                cells += Cell("CLEAR", b, "DUSK", TEMP.getValue(b), 2.0, 18)
-                cells += Cell("RAIN", b, "DAWN", TEMP.getValue(b), 1.0, 8)
+            val times = listOf("DAWN", "MIDDAY", "DUSK", "NIGHT")
+            val dryUv = mapOf("DAWN" to 2.0, "MIDDAY" to 4.0, "DUSK" to 2.0, "NIGHT" to 0.0)
+            val rainUv = mapOf("DAWN" to 1.0, "MIDDAY" to 1.0, "DUSK" to 1.0, "NIGHT" to 0.0)
+            val hour = mapOf("DAWN" to 8, "MIDDAY" to 13, "DUSK" to 18, "NIGHT" to 22)
+            for (w in listOf("CLEAR", "CLOUDY", "RAIN", "SNOW")) {
+                for (b in BRACKETS) {
+                    if (w == "SNOW" && (b == "WARM" || b == "HOT")) continue
+                    for (t in times) {
+                        val uv = (if (w == "RAIN") rainUv else dryUv).getValue(t)
+                        cells += Cell(w, b, t, TEMP.getValue(b), uv, hour.getValue(t))
+                    }
+                }
             }
-            cells += Cell("CLEAR", "WARM", "MIDDAY", TEMP.getValue("WARM"), 4.0, 13)
-            cells += Cell("CLEAR", "HOT", "MIDDAY", TEMP.getValue("HOT"), 4.0, 13)
             return cells
         }
 

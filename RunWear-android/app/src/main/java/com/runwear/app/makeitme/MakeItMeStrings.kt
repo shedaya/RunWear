@@ -50,6 +50,14 @@ object MakeItMeStrings {
     const val C3B_REJECT_MULTIPLE = "This photo has more than one person in it. Pick one that's just you."
     const val C3C_REJECT_TOO_DARK = "This one is too dark to use. Try a photo in brighter light."
     const val C3D_REJECT_TOO_CLOSE = "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+    // C3E/C3F added Nov 2, 2026 (RW-16.30 — the Route 2 intake
+    // policy): the generation evidence showed delivery tracks the
+    // FACE in the reference — a face under ~50 px in the normalized
+    // reference or turned/dim delivers a stranger. Copy follows the
+    // full-body run record's retake prompts. Verbatim-identical to
+    // the iOS deck (PhotoRejection.specString).
+    const val C3E_REJECT_FACE_TOO_SMALL = "A closer selfie works best — a mirror selfie is great too."
+    const val C3F_REJECT_TURNED_AWAY = "Try facing a window or light, looking at the camera."
 
     // G — First generation (spec §2.4). G3 (PROPOSAL P1) intentionally absent.
     // G4 was silence by spec — SUPERSEDED Nov 1, 2026 (RW-16.16, spec

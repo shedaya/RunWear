@@ -16,21 +16,25 @@
 // Identity mapping (verified against the client code, 2026-10-31):
 // - iOS configures Purchases with appUserID = the Supabase user id, so
 //   app_user_id IS the auth.users id.
-// - Android currently configures Purchases with NO app user id and never
-//   calls logIn, so its purchases arrive under RC's anonymous id
-//   ($RCAnonymousID:...). Such events are mapped when any of the event's
-//   aliases / original_app_user_id is a known Supabase user id (the
-//   state after a future logIn merge); otherwise they are accepted with
-//   200 and logged as unmapped so RC does not retry-storm, and the gap
-//   stays visible in personal_webhook_events. The permanent fix is one
-//   client line (Android: Purchases.logIn(supabaseUid) once its
-//   anonymous Supabase session exists) — out of this function's scope,
-//   named in the follow-up report.
+// - Android configures Purchases anonymously but links identity via
+//   Purchases.logIn(supabaseUid) as soon as its anonymous Supabase
+//   session exists (PersonalHeroRepository step 1; the merge then
+//   arrives here as a TRANSFER event — handled below). Purchases made
+//   BEFORE the link still arrive under RC's anonymous id
+//   ($RCAnonymousID:...); such events are mapped when any of the
+//   event's aliases / original_app_user_id is a known Supabase user
+//   id; otherwise they are accepted with 200 and logged as unmapped
+//   so RC does not retry-storm, and the gap stays visible in
+//   personal_webhook_events. (This paragraph corrects the RW-14-era
+//   note that Android never called logIn — stale since the identity
+//   link landed; corrected RW-16.30, 2026-11-02.)
 //
 // Event mapping (entitlement make_it_me; products rw_makeitme_monthly /
 // rw_makeitme_annual on both stores, Play ids carry the :monthly /
 // :annual base-plan suffix in RC):
 //   INITIAL_PURCHASE, RENEWAL, PRODUCT_CHANGE, UNCANCELLATION -> grant
+//   TRANSFER (RW-16.30) -> grant to the transferred_to user (identity
+//                          merge after the client's Purchases.logIn)
 //   EXPIRATION                                                -> clear
 //   CANCELLATION  -> no-op (access runs to expiration; EXPIRATION clears)
 //   BILLING_ISSUE -> no-op (RC keeps the entitlement during grace)
@@ -67,7 +71,7 @@ const ATTACHED_PRODUCTS = new Set([
   'rw_makeitme_monthly:monthly',
   'rw_makeitme_annual:annual',
 ])
-const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION'])
+const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'TRANSFER'])
 const CLEAR_TYPES = new Set(['EXPIRATION'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -141,8 +145,17 @@ serve(async (req: Request) => {
   }
 
   // Identity mapping: first candidate id that is a real Supabase user.
+  // RW-16.30: a TRANSFER event (the entitlement moved — the shape a
+  // RevenueCat identity merge takes after the client calls logIn)
+  // names its destination in transferred_to; those ids lead the
+  // candidate order so the grant lands on the receiving user, never
+  // the anonymous source.
   const candidates: string[] = []
-  for (const raw of [event.app_user_id, event.original_app_user_id, ...(Array.isArray(event.aliases) ? event.aliases : [])]) {
+  const rawCandidates: unknown[] = type === 'TRANSFER' && Array.isArray(event.transferred_to)
+    ? [...(event.transferred_to as unknown[]), event.app_user_id, event.original_app_user_id,
+       ...(Array.isArray(event.aliases) ? event.aliases : [])]
+    : [event.app_user_id, event.original_app_user_id, ...(Array.isArray(event.aliases) ? event.aliases : [])]
+  for (const raw of rawCandidates) {
     if (typeof raw === 'string' && UUID_RE.test(raw) && !candidates.includes(raw)) candidates.push(raw)
   }
   let userId: string | null = null

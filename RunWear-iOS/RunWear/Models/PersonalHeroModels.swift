@@ -723,6 +723,8 @@ enum PhotoRejection: Equatable {
     case multiplePeople   // C3b
     case tooDark          // C3c
     case tooClose         // C3d
+    case faceTooSmall     // C3e (RW-16.30)
+    case turnedAway       // C3f (RW-16.30)
 
     var specString: String {
         switch self {
@@ -734,6 +736,10 @@ enum PhotoRejection: Equatable {
             return "This one is too dark to use. Try a photo in brighter light."
         case .tooClose:
             return "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+        case .faceTooSmall:
+            return "A closer selfie works best — a mirror selfie is great too."
+        case .turnedAway:
+            return "Try facing a window or light, looking at the camera."
         }
     }
 }
@@ -745,16 +751,28 @@ enum PhotoQualityVerdict {
     /// close" (a head-and-shoulders frame keeps the face well under
     /// half the frame).
     static let tooCloseThreshold: Double = 0.45
+    /// RW-16.30 intake floor (one policy, both platforms + the
+    /// server's identity-screen /intake): face height as a share of
+    /// the photo's height must reach ~50 px in the 768-normalized
+    /// reference (50/768 ≈ 0.065). Bracketed by the full-body record:
+    /// 43 px delivered 0/8; 59 px and up delivered.
+    static let minFaceHeightRatio: Double = 50.0 / 768.0
+    /// RW-16.30 frontality: |yaw| beyond this is "turned away".
+    static let maxYawDegrees: Double = 25
 
     static func rejection(
         faceCount: Int,
         largestFaceAreaRatio: Double,
-        meanLuminance: Double
+        meanLuminance: Double,
+        largestFaceHeightRatio: Double = 1,
+        faceYawDegrees: Double? = nil
     ) -> PhotoRejection? {
         if faceCount == 0 { return .faceUnclear }
         if faceCount > 1 { return .multiplePeople }
         if meanLuminance < darkThreshold { return .tooDark }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
+        if largestFaceHeightRatio < minFaceHeightRatio { return .faceTooSmall }
+        if let yaw = faceYawDegrees, abs(yaw) > maxYawDegrees { return .turnedAway }
         return nil
     }
 }

@@ -296,6 +296,14 @@ serve(async (req) => {
             (jobs[0]?.outfit_items as string[] | undefined)
           if (outfitItems && outfitItems.length > 0) {
             const parts = combinationId.split('_')
+            // RW-16.30: regeneration jobs carry the current photo-set
+            // epoch (fetched here; the replenishment hook below reads
+            // the same row again for its own enqueue).
+            const { data: epochProfile } = await sb
+              .from('personal_profiles')
+              .select('photo_epoch')
+              .eq('user_id', userId)
+              .maybeSingle()
             const { error: enqueueError } = await sb
               .from('personal_generation_jobs')
               .insert({
@@ -307,6 +315,7 @@ serve(async (req) => {
                 outfit_items: outfitItems,
                 kind: 'regeneration',
                 priority: 20,
+                epoch: (epochProfile?.photo_epoch as number | undefined) ?? 0,
                 status: 'QUEUED'
               })
             if (!enqueueError) {
@@ -379,7 +388,7 @@ serve(async (req) => {
     let replenishmentQueued = 0
     const { data: profile } = await sb
       .from('personal_profiles')
-      .select('entitled')
+      .select('entitled, photo_epoch')
       .eq('user_id', userId)
       .maybeSingle()
     if (profile?.entitled === true && regenStatus === 'current' && serving.length < VARIANT_CAP) {
@@ -405,6 +414,7 @@ serve(async (req) => {
           outfit_items: hero.outfit_items,
           kind: 'replenishment',
           priority: PRIORITY_REPLENISHMENT,
+          epoch: (profile.photo_epoch as number | undefined) ?? 0,
           status: 'QUEUED'
         }))
         const { error: enqueueError } = await sb.from('personal_generation_jobs').insert(rows)

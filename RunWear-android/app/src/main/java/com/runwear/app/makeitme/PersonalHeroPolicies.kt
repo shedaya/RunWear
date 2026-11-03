@@ -201,7 +201,9 @@ enum class PhotoRejection {
     FACE_UNCLEAR,
     MULTIPLE_PEOPLE,
     TOO_DARK,
-    TOO_CLOSE
+    TOO_CLOSE,
+    FACE_TOO_SMALL,
+    TURNED_AWAY
 }
 
 /**
@@ -221,15 +223,35 @@ object PhotoQualityPolicy {
     /** A face wider than this fraction of the frame is "cropped too close". */
     const val MAX_FACE_WIDTH_FRACTION: Float = 0.80f
 
+    /**
+     * RW-16.30 intake floor: the face's height as a fraction of the
+     * photo's height must reach ~50 px in the 768-normalized
+     * reference (50/768 ≈ 0.065). Bracketed by the full-body record:
+     * a 43 px face delivered 0/8 (a confident stranger); faces at
+     * 59 px and up delivered. The same constant runs server-side
+     * (identity-screen /intake) and on iOS — one policy, three
+     * enforcement points.
+     */
+    const val MIN_FACE_HEIGHT_FRACTION: Float = 50f / 768f
+
+    /** RW-16.30 frontality: |yaw| beyond this is "turned away". */
+    const val MAX_YAW_DEGREES: Float = 25f
+
     fun decide(
         faceCount: Int,
         largestFaceWidthFraction: Float,
-        meanLuminance: Double
+        meanLuminance: Double,
+        largestFaceHeightFraction: Float = 1f,
+        faceYawDegrees: Float? = null
     ): PhotoRejection? {
         if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
         if (faceCount == 0) return PhotoRejection.FACE_UNCLEAR
         if (faceCount > 1) return PhotoRejection.MULTIPLE_PEOPLE
         if (largestFaceWidthFraction > MAX_FACE_WIDTH_FRACTION) return PhotoRejection.TOO_CLOSE
+        if (largestFaceHeightFraction < MIN_FACE_HEIGHT_FRACTION) return PhotoRejection.FACE_TOO_SMALL
+        if (faceYawDegrees != null && kotlin.math.abs(faceYawDegrees) > MAX_YAW_DEGREES) {
+            return PhotoRejection.TURNED_AWAY
+        }
         return null
     }
 
@@ -239,6 +261,8 @@ object PhotoQualityPolicy {
         PhotoRejection.MULTIPLE_PEOPLE -> MakeItMeStrings.C3B_REJECT_MULTIPLE
         PhotoRejection.TOO_DARK -> MakeItMeStrings.C3C_REJECT_TOO_DARK
         PhotoRejection.TOO_CLOSE -> MakeItMeStrings.C3D_REJECT_TOO_CLOSE
+        PhotoRejection.FACE_TOO_SMALL -> MakeItMeStrings.C3E_REJECT_FACE_TOO_SMALL
+        PhotoRejection.TURNED_AWAY -> MakeItMeStrings.C3F_REJECT_TURNED_AWAY
     }
 }
 

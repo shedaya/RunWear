@@ -261,6 +261,44 @@ final class PersonalHeroTests: XCTestCase {
         )
     }
 
+    // MARK: - RW-16.30 intake floor + frontality (Route 2 policy)
+
+    func testPhotoVerdictFaceTooSmall() {
+        XCTAssertEqual(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.01, meanLuminance: 0.5,
+                largestFaceHeightRatio: 0.05, faceYawDegrees: 0),
+            .faceTooSmall
+        )
+    }
+
+    func testPhotoVerdictBracketedPassHeightPasses() {
+        // 59 px in the 768-normalized frame ≈ 0.077 — the full-body
+        // record's smallest delivering face.
+        XCTAssertNil(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.02, meanLuminance: 0.5,
+                largestFaceHeightRatio: 59.0 / 768.0, faceYawDegrees: 5)
+        )
+    }
+
+    func testPhotoVerdictTurnedAway() {
+        XCTAssertEqual(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.05, meanLuminance: 0.5,
+                largestFaceHeightRatio: 0.3, faceYawDegrees: -42),
+            .turnedAway
+        )
+    }
+
+    func testPhotoVerdictUnknownYawNeverRejects() {
+        XCTAssertNil(
+            PhotoQualityVerdict.rejection(
+                faceCount: 1, largestFaceAreaRatio: 0.05, meanLuminance: 0.5,
+                largestFaceHeightRatio: 0.3, faceYawDegrees: nil)
+        )
+    }
+
     func testPhotoRejectionStringsAreTheSpecDeck() {
         // Spec §7 C3a–d, verbatim — pinned so a copy edit in code
         // without a spec change fails loudly.
@@ -268,6 +306,8 @@ final class PersonalHeroTests: XCTestCase {
         XCTAssertEqual(PhotoRejection.multiplePeople.specString, "This photo has more than one person in it. Pick one that's just you.")
         XCTAssertEqual(PhotoRejection.tooDark.specString, "This one is too dark to use. Try a photo in brighter light.")
         XCTAssertEqual(PhotoRejection.tooClose.specString, "This one is cropped too close. A head-and-shoulders or half-body photo works best.")
+        XCTAssertEqual(PhotoRejection.faceTooSmall.specString, "A closer selfie works best — a mirror selfie is great too.")
+        XCTAssertEqual(PhotoRejection.turnedAway.specString, "Try facing a window or light, looking at the camera.")
     }
 
     // MARK: - RW-15 (1): request payload contract

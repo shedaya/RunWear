@@ -296,6 +296,52 @@ class PersonalHeroPoliciesTest {
         )
     }
 
+    // ── RW-16.30 intake floor + frontality (Route 2 policy) ────────
+
+    @Test
+    fun `face under the height floor rejected as too small`() {
+        assertEquals(
+            PhotoRejection.FACE_TOO_SMALL,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.2f, meanLuminance = 0.5,
+                largestFaceHeightFraction = 0.05f, faceYawDegrees = 0f
+            )
+        )
+    }
+
+    @Test
+    fun `face at the bracketed pass height passes`() {
+        // 59 px in the 768-normalized frame ≈ 0.077 — the full-body
+        // record's smallest delivering face.
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.2f, meanLuminance = 0.5,
+                largestFaceHeightFraction = 59f / 768f, faceYawDegrees = 5f
+            )
+        )
+    }
+
+    @Test
+    fun `turned face rejected as turned away`() {
+        assertEquals(
+            PhotoRejection.TURNED_AWAY,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.3f, meanLuminance = 0.5,
+                largestFaceHeightFraction = 0.3f, faceYawDegrees = -42f
+            )
+        )
+    }
+
+    @Test
+    fun `unknown yaw never rejects on frontality`() {
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.3f, meanLuminance = 0.5,
+                largestFaceHeightFraction = 0.3f, faceYawDegrees = null
+            )
+        )
+    }
+
     // ── Billing identity link (acceptance 17) ───────────────────────
 
     private val supabaseUid = "381d4f7d-0000-4000-8000-000000000000"

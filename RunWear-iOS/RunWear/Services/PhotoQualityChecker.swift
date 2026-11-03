@@ -17,6 +17,11 @@ enum PhotoQualityChecker {
         let faceCount: Int
         let largestFaceAreaRatio: Double
         let meanLuminance: Double
+        /// RW-16.30: largest face's height as a share of the photo's
+        /// height (Vision bounding boxes are already normalized) and
+        /// its yaw in degrees, when the observation carries one.
+        let largestFaceHeightRatio: Double
+        let faceYawDegrees: Double?
     }
 
     /// Measure + classify one picked photo. Returns nil when the
@@ -30,7 +35,9 @@ enum PhotoQualityChecker {
         return PhotoQualityVerdict.rejection(
             faceCount: measurement.faceCount,
             largestFaceAreaRatio: measurement.largestFaceAreaRatio,
-            meanLuminance: measurement.meanLuminance
+            meanLuminance: measurement.meanLuminance,
+            largestFaceHeightRatio: measurement.largestFaceHeightRatio,
+            faceYawDegrees: measurement.faceYawDegrees
         )
     }
 
@@ -40,7 +47,9 @@ enum PhotoQualityChecker {
 
         let faces: [VNFaceObservation] = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let request = VNDetectFaceRectanglesRequest()
+                // Landmarks request: it also populates the
+                // observation's yaw (RW-16.30 frontality).
+                let request = VNDetectFaceLandmarksRequest()
                 let handler = VNImageRequestHandler(cgImage: cgImage, orientation: cgOrientation(from: image.imageOrientation), options: [:])
                 try? handler.perform([request])
                 continuation.resume(returning: (request.results as? [VNFaceObservation]) ?? [])
@@ -50,11 +59,17 @@ enum PhotoQualityChecker {
         let largestFaceRatio = faces
             .map { Double($0.boundingBox.width * $0.boundingBox.height) }
             .max() ?? 0
+        let largest = faces.max {
+            ($0.boundingBox.width * $0.boundingBox.height) <
+                ($1.boundingBox.width * $1.boundingBox.height)
+        }
 
         return Measurement(
             faceCount: faces.count,
             largestFaceAreaRatio: largestFaceRatio,
-            meanLuminance: meanLuminance(of: cgImage)
+            meanLuminance: meanLuminance(of: cgImage),
+            largestFaceHeightRatio: largest.map { Double($0.boundingBox.height) } ?? 1,
+            faceYawDegrees: largest?.yaw.map { $0.doubleValue * 180 / .pi }
         )
     }
 

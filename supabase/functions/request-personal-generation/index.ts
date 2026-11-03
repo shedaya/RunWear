@@ -112,6 +112,16 @@ export function outfitHash(itemKeys: string[]): string {
   return (h >>> 0).toString(16).slice(-8).padStart(8, '0')
 }
 
+// RW-16.30: the photo-set hash — sha256 hex over the sorted
+// "path@stamp" entries of a reference set. Stored on the profile as
+// the epoch's cache key when a changed set opens a new epoch.
+async function photoSetHash(entries: string[]): Promise<string> {
+  const text = [...entries].sort().join('\n')
+  const digest = await crypto.subtle.digest(
+    'SHA-256', new TextEncoder().encode(text))
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 type Cell = {
   gender: string, weather: string, tempBracket: string,
   timeOfDay: string, signature: string, combinationId: string
@@ -402,9 +412,30 @@ serve(async (req) => {
       }))
       const { error: insertError } = await sb.from('personal_reference_photos').insert(rows)
       if (insertError) throw insertError
+
+      // RW-16.30 epoch: a changed set opens a new photo-set epoch
+      // for THIS user only. Jobs enqueued from now on carry the new
+      // epoch; the worker supersedes unprocessed prior-epoch jobs
+      // (no spend, no delivery from the old face), and keep-serving
+      // (Lane C above) still governs the heroes already banked.
+      let photoEpoch = (profile.photo_epoch as number | undefined) ?? 0
+      if (referencesChanged) {
+        photoEpoch += 1
+        const setHash = await photoSetHash(
+          (paths as string[]).map(p => `${p}@${currentStamps.get(p) ?? ''}`))
+        const { error: epochError } = await sb
+          .from('personal_profiles')
+          .update({
+            photo_epoch: photoEpoch, photo_set_hash: setHash,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id)
+        if (epochError) throw epochError
+      }
       return jsonResponse({
         ok: true, references: rows.length,
         references_changed: referencesChanged,
+        photo_epoch: photoEpoch,
         // Kept for response compatibility with shipped clients; the
         // keep-serving ruling means a reference change now retires
         // nothing at registration time.
@@ -585,6 +616,7 @@ serve(async (req) => {
           // prompt is built by the worker from the canonical template
           kind: isRegeneration ? 'regeneration' : 'free_on_demand',
           priority: isRegeneration ? PRIORITY_REGENERATION : PRIORITY_FREE_ON_DEMAND,
+          epoch: (profile.photo_epoch as number | undefined) ?? 0,
           status: 'QUEUED'
         })
         .select('id')
@@ -692,6 +724,7 @@ serve(async (req) => {
             outfit_items: hero.outfit_items,
             kind: 'regeneration',
             priority: PRIORITY_REGENERATION,
+            epoch: (profile.photo_epoch as number | undefined) ?? 0,
             status: 'QUEUED'
           })
           .select('id')

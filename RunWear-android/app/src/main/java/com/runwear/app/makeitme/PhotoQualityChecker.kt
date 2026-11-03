@@ -39,11 +39,13 @@ object PhotoQualityChecker {
             try {
                 val luminance = meanLuminance(bitmap)
                 val faces = detectFaces(bitmap)
-                val largestFaceFraction = faces.maxOfOrNull { it } ?: 0f
+                val largest = faces.maxByOrNull { it.widthFraction }
                 val rejection = PhotoQualityPolicy.decide(
                     faceCount = faces.size,
-                    largestFaceWidthFraction = largestFaceFraction,
-                    meanLuminance = luminance
+                    largestFaceWidthFraction = largest?.widthFraction ?: 0f,
+                    meanLuminance = luminance,
+                    largestFaceHeightFraction = largest?.heightFraction ?: 1f,
+                    faceYawDegrees = largest?.yawDegrees
                 )
                 if (rejection != null) {
                     CheckResult(rejection, null)
@@ -108,7 +110,14 @@ object PhotoQualityChecker {
      * "no faces", which the policy rejects as FACE_UNCLEAR — the check
      * fails closed rather than waving an unmeasured photo through.
      */
-    private suspend fun detectFaces(bitmap: Bitmap): List<Float> {
+    /** One detected face's RW-16.30 intake measurements. */
+    data class FaceMeasure(
+        val widthFraction: Float,
+        val heightFraction: Float,
+        val yawDegrees: Float?
+    )
+
+    private suspend fun detectFaces(bitmap: Bitmap): List<FaceMeasure> {
         val detector = FaceDetection.getClient(
             FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
@@ -120,8 +129,13 @@ object PhotoQualityChecker {
                     .addOnSuccessListener { faces ->
                         cont.resume(
                             faces.map { face ->
-                                face.boundingBox.width().toFloat() /
-                                    bitmap.width.toFloat().coerceAtLeast(1f)
+                                FaceMeasure(
+                                    widthFraction = face.boundingBox.width().toFloat() /
+                                        bitmap.width.toFloat().coerceAtLeast(1f),
+                                    heightFraction = face.boundingBox.height().toFloat() /
+                                        bitmap.height.toFloat().coerceAtLeast(1f),
+                                    yawDegrees = face.headEulerAngleY
+                                )
                             }
                         )
                     }

@@ -41,6 +41,10 @@ import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts"
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+// RW-16.30: the identity-screen service also runs the intake quality
+// checks (same deployment as the worker's IDENTITY_SCREEN_URL).
+const IDENTITY_SCREEN_URL = (Deno.env.get('IDENTITY_SCREEN_URL') ?? '').replace(/\/$/, '')
+const IDENTITY_SCREEN_KEY = Deno.env.get('IDENTITY_SCREEN_KEY') ?? ''
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
@@ -109,6 +113,56 @@ function downscaleRGBA(
   return dst
 }
 
+// RW-16.30 intake quality: run the shared intake policy (face
+// detected, normalized face height >= ~50/768, |yaw| <= 25 deg) on
+// the derivative via the identity-screen service and store the
+// verdict on the reference row. The worker's anchor selection reads
+// it (a failing photo is never the anchor while a passing one
+// exists). When the service is not configured the verdict stays
+// null — checks run when the service exists; go-live requires it.
+async function checkIntakeQuality(
+  sourcePath: string, derivative: Uint8Array
+): Promise<Record<string, unknown> | null> {
+  if (!IDENTITY_SCREEN_URL) return null
+  try {
+    let binary = ''
+    for (let i = 0; i < derivative.length; i += 8192) {
+      binary += String.fromCharCode(...derivative.subarray(i, i + 8192))
+    }
+    const resp = await fetch(`${IDENTITY_SCREEN_URL}/intake`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(IDENTITY_SCREEN_KEY ? { 'Authorization': `Bearer ${IDENTITY_SCREEN_KEY}` } : {})
+      },
+      body: JSON.stringify({ image_b64: btoa(binary) })
+    })
+    if (!resp.ok) {
+      console.error(`[personal-ref-prep] intake check returned ${resp.status}`)
+      return null
+    }
+    const body = await resp.json() as Record<string, unknown>
+    const quality = {
+      face_detected: body.detected === true,
+      face_height_norm: body.height_norm ?? null,
+      yaw_deg: body.yaw_deg ?? null,
+      pitch_deg: body.pitch_deg ?? null,
+      verdict: typeof body.verdict === 'string' ? body.verdict : null,
+      retake_key: body.retake_key ?? null,
+      checked_at: new Date().toISOString()
+    }
+    const { error } = await supabase
+      .from('personal_reference_photos')
+      .update({ quality })
+      .eq('storage_path', sourcePath)
+    if (error) console.error('[personal-ref-prep] quality write failed:', error)
+    return quality
+  } catch (e) {
+    console.error('[personal-ref-prep] intake check failed:', (e as Error).message)
+    return null
+  }
+}
+
 serve(async (req) => {
   try {
     if (req.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405)
@@ -169,11 +223,13 @@ serve(async (req) => {
       if (upError) {
         return jsonResponse({ error: `Derivative upload failed: ${upError.message}` }, 502)
       }
+      const quality = await checkIntakeQuality(path, derivative)
       return jsonResponse({
         ok: true, source_path: path, derivative_path: derivativePath,
         source_width: w, source_height: h,
         derivative_width: out.width, derivative_height: out.height,
-        derivative_bytes: derivative.length, decoder: 'imagescript-fallback'
+        derivative_bytes: derivative.length, decoder: 'imagescript-fallback',
+        quality
       })
     }
 
@@ -203,11 +259,13 @@ serve(async (req) => {
     if (upError) {
       return jsonResponse({ error: `Derivative upload failed: ${upError.message}` }, 502)
     }
+    const quality = await checkIntakeQuality(path, derivative)
     return jsonResponse({
       ok: true, source_path: path, derivative_path: derivativePath,
       source_width: w, source_height: h,
       derivative_width: outW, derivative_height: outH,
-      derivative_bytes: derivative.length
+      derivative_bytes: derivative.length,
+      quality
     })
   } catch (error) {
     console.error('[personal-ref-prep] error:', error)
