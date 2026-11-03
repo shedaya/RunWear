@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import com.runwear.app.ui.theme.DarkPalette
 import com.runwear.app.ui.theme.LightPalette
+import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.RunWearTheme
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -44,6 +45,15 @@ abstract class OnboardingShotHarness {
         File(System.getProperty("ws8ShotsDir") ?: "build/render-out-ws8")
 
     protected fun shoot(name: String, darkTheme: Boolean) {
+        // RunWearTheme publishes the palette to the RunWearColors
+        // holder from a SideEffect, which lands AFTER the first
+        // composition reads its tokens — in a two-class harness the
+        // first frame would paint the previous class's palette.
+        // Pre-publish the mode under test (exactly what the theme is
+        // about to publish) so the render is deterministic.
+        RunWearColors.setActivePalette(
+            if (darkTheme) DarkPalette else LightPalette
+        )
         val controller = Robolectric.buildActivity(ComponentActivity::class.java)
         val activity = controller.create().start().resume().visible().get()
         val composeView = ComposeView(activity)
