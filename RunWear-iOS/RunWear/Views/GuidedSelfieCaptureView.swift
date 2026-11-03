@@ -239,7 +239,8 @@ final class GuidedSelfieCameraModel: NSObject, ObservableObject {
         photoCompletion = completion
         let settings = AVCapturePhotoSettings()
         sessionQueue.async { [weak self] in
-            self?.photoOutput.capturePhoto(with: settings, delegate: self)
+            guard let self else { return }
+            self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
 }

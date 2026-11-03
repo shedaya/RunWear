@@ -428,7 +428,7 @@ struct WearIveRunDayView: View {
         let view = MorningPosterView(entry: entry, hero: hero, formatTemperature: formatTemperature)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3
-        return renderer.image.map { Image(uiImage: $0) }
+        return renderer.uiImage.map { Image(uiImage: $0) }
     }
 
     @MainActor
@@ -436,7 +436,7 @@ struct WearIveRunDayView: View {
         let view = KitCardView(entry: entry, genderPreference: genderPreference, thumbnails: kitThumbnails)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3
-        return renderer.image.map { Image(uiImage: $0) }
+        return renderer.uiImage.map { Image(uiImage: $0) }
     }
 
     private func loadKitThumbnails() async -> [String: UIImage] {
