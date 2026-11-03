@@ -121,3 +121,72 @@ final class MakeItMePresentationTests: XCTestCase {
                      "a fresh flow must not open wearing the previous attempt's error line")
     }
 }
+
+/// RW-16.30 pricing experiment readiness (Nov 2, 2026) — the iOS half
+/// of the cross-platform paywall-price rule (Android:
+/// MakeItMePriceLabelTest). Every price in the paywall path renders
+/// from the fetched current RevenueCat offering: unresolved rows
+/// fall back to price-free plan names, and the annual row's savings
+/// suffix is computed from the fetched amounts — present at the base
+/// prices, absent at the $19.99/$29.99 experiment arms where it
+/// would be false.
+final class MakeItMePriceLabelTests: XCTestCase {
+
+    func testUnresolvedRowsFallBackToPriceFreePlanNames() {
+        XCTAssertEqual("Monthly", MakeItMePriceLabels.monthlyRowLabel(priceString: nil))
+        XCTAssertEqual(
+            "Annual",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: nil, annual: nil, monthly: nil)
+        )
+    }
+
+    func testMonthlyLabelRendersTheOfferingPrice() {
+        XCTAssertEqual("$19.99 / month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$19.99"))
+        XCTAssertEqual("$0.99 / month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"))
+    }
+
+    func testBasePricesReproduceTheOriginalAnnualCopy() {
+        // $0.99/mo vs $9.99/yr: 1 - 9.99/11.88 = 15.9% -> "about 16%".
+        XCTAssertEqual(
+            16,
+            MakeItMePriceLabels.annualSavingsPercent(monthly: Decimal(string: "0.99"),
+                                                     annual: Decimal(string: "9.99"))
+        )
+        XCTAssertEqual(
+            "$9.99 / year — about 16% less than paying monthly",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99",
+                                               annual: Decimal(string: "9.99"),
+                                               monthly: Decimal(string: "0.99"))
+        )
+    }
+
+    func testExperimentArmsDropTheSavingsClaimInsteadOfLying() {
+        XCTAssertNil(MakeItMePriceLabels.annualSavingsPercent(monthly: Decimal(string: "0.99"),
+                                                              annual: Decimal(string: "19.99")))
+        XCTAssertNil(MakeItMePriceLabels.annualSavingsPercent(monthly: Decimal(string: "0.99"),
+                                                              annual: Decimal(string: "29.99")))
+        XCTAssertEqual(
+            "$19.99 / year",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$19.99",
+                                               annual: Decimal(string: "19.99"),
+                                               monthly: Decimal(string: "0.99"))
+        )
+        XCTAssertEqual(
+            "$29.99 / year",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$29.99",
+                                               annual: Decimal(string: "29.99"),
+                                               monthly: Decimal(string: "0.99"))
+        )
+    }
+
+    func testUnknownMonthlyPriceYieldsNoSavingsClaim() {
+        XCTAssertNil(MakeItMePriceLabels.annualSavingsPercent(monthly: nil,
+                                                              annual: Decimal(string: "9.99")))
+        XCTAssertEqual(
+            "$9.99 / year",
+            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99",
+                                               annual: Decimal(string: "9.99"),
+                                               monthly: nil)
+        )
+    }
+}

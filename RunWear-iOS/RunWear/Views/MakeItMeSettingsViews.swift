@@ -68,7 +68,7 @@ struct MakeItMeSettingsSection: View {
                 } else {
                     settingsRow(
                         title: "Every outfit, instantly",
-                        subtitle: "Subscribe, and your photo is ready before you open the app. $0.99/month.",
+                        subtitle: "Subscribe, and your photo is ready before you open the app.",
                         action: { presentation.present(.subscription) }
                     )
                 }
@@ -248,11 +248,11 @@ struct MakeItMeSubscriptionSheet: View {
                         .foregroundColor(.white)
 
                     priceRow(
-                        label: "\(store.billing.monthlyPriceString ?? "$0.99") / month",
+                        label: store.billing.monthlyRowLabel,
                         action: { purchase(annual: false) }
                     )
                     priceRow(
-                        label: "\(store.billing.annualPriceString ?? "$9.99") / year — about 16% less than paying monthly",
+                        label: store.billing.annualRowLabel,
                         action: { purchase(annual: true) }
                     )
 
@@ -344,7 +344,7 @@ struct MakeItMeUpsellCard: View {
             Button {
                 showSubscriptionSheet = true
             } label: {
-                Text("See myself in every outfit — $0.99/month")
+                Text("See myself in every outfit")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
