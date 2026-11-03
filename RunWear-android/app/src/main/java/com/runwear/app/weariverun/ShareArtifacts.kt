@@ -73,7 +73,11 @@ class ShareCaptureHandle internal constructor(
     private val layer: GraphicsLayer
 ) {
     fun recordModifier(): Modifier = Modifier.drawWithContent {
-        layer.record { drawContent() }
+        // Explicit receiver: inside record's DrawScope lambda, the
+        // ContentDrawScope's drawContent must be named through the
+        // captured outer scope or the compiler refuses the call.
+        val contentScope = this
+        layer.record { contentScope.drawContent() }
         drawLayer(layer)
     }
 
