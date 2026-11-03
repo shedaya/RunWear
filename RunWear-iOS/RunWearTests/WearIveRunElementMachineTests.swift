@@ -482,7 +482,7 @@ final class WearIveRunElementMachineTests: XCTestCase {
         // The cue haptic is the §1.7 SOFT impact on the machine's
         // nonce — not the old light impact on the raw cue counter;
         // the trash keeps its own light impact.
-        XCTAssertTrue(view.contains(".sensoryFeedback(.impact(weight: .soft), trigger: cueHapticNonce)"))
+        XCTAssertTrue(view.contains(".sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)"))
         XCTAssertTrue(view.contains(".sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)"))
         XCTAssertFalse(view.contains("trigger: cueCount)"),
                        "haptics must fire from machine effects, not the raw counter")

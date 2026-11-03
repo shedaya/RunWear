@@ -266,7 +266,7 @@ struct WearIveRunMiniBarView: View {
             // §1.7: the cue's soft haptic and the trash's light
             // haptic are the ONLY sounds this surface makes.
             // Expand/collapse and scrolling are silent.
-            .sensoryFeedback(.impact(weight: .soft), trigger: cueHapticNonce)
+            .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
             .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
             .onAppear { reconcileInitialState() }
             .onChange(of: cueCount) { oldValue, newValue in
