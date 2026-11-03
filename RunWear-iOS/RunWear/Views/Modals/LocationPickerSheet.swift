@@ -1,6 +1,14 @@
 import SwiftUI
 import CoreLocation
 
+// MARK: - Location (RW-26, Section E — frames 23–25)
+//
+// Search on top; a "Current location" row (marked CURRENT when it
+// is the active selection); RECENT LOCATIONS — places actually
+// selected before, most-recent-first, capped at 5, removed by the
+// native swipe → Remove; browse/search results below. First run:
+// the recents section is absent and a quiet hint card sits where
+// the list will live.
 struct LocationPickerSheet: View {
     @Binding var isPresented: Bool
     var isUsingGPS: Bool
@@ -10,36 +18,141 @@ struct LocationPickerSheet: View {
     @State private var searchText = ""
     @State private var searchResults: [LocationSearchResult] = []
     @State private var isSearching = false
+    @StateObject private var recentsModel = RecentLocationsModel()
 
     private let geocoder = CLGeocoder()
 
-    // Task-sheet grammar (RW-6.12): NavigationStack + toolbar title +
-    // Done, like Settings. The system owns the backdrop, drag handle,
-    // and dismissal (design record §5.2).
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Use Current Location option
-                    currentLocationButton
-
-                    // Divider
-                    dividerWithText
-
-                    // Search field
-                    searchField
-
-                    // Search results
-                    if !searchResults.isEmpty {
-                        searchResultsList
+            List {
+                // Search on top.
+                Section {
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(AppTheme.inkMuted)
+                        TextField("Search for a city", text: $searchText)
+                            .autocorrectionDisabled()
+                            .onChange(of: searchText) { _, newValue in
+                                if newValue.count >= 2 {
+                                    searchLocation(query: newValue)
+                                } else {
+                                    searchResults = []
+                                }
+                            }
+                        if isSearching {
+                            ProgressView()
+                        }
                     }
-
-                    Spacer().frame(height: 16)
                 }
-                .padding(24)
-                .frame(maxWidth: .infinity)
+
+                // Current location row.
+                Section {
+                    Button {
+                        onUseCurrentLocation()
+                        close()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "location.fill")
+                                .foregroundColor(AppTheme.pinePayload)
+                            Text("Current location")
+                                .font(.appSecondary.weight(.semibold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Spacer()
+                            if isUsingGPS {
+                                Text("CURRENT")
+                                    .font(.appEyebrow)
+                                    .foregroundColor(AppTheme.pinePayload)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(Capsule().fill(AppTheme.primaryColor.opacity(0.15)))
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                // Recents — actually-selected places only.
+                if recentsModel.recents.isEmpty {
+                    Section {
+                        // First run (frame 25): no ghost rows —
+                        // a quiet hint card where the list will live.
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Places you pick will be kept here")
+                                .font(.appSecondary.weight(.semibold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Text("Search above and choose a place, and it will be one tap away next time.")
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } else {
+                    Section("Recent Locations") {
+                        ForEach(recentsModel.recents) { recent in
+                            Button {
+                                onSelectLocation(
+                                    CLLocationCoordinate2D(
+                                        latitude: recent.latitude,
+                                        longitude: recent.longitude
+                                    ),
+                                    recent.name
+                                )
+                                recentsModel.record(recent)
+                                close()
+                            } label: {
+                                HStack {
+                                    Text(recent.name)
+                                        .font(.appSecondary)
+                                        .foregroundColor(AppTheme.inkPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.appFootnote.weight(.semibold))
+                                        .foregroundColor(AppTheme.inkMuted)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button("Remove", role: .destructive) {
+                                    recentsModel.remove(id: recent.id)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Browse / search results below.
+                if !searchResults.isEmpty {
+                    Section("Results") {
+                        ForEach(searchResults) { result in
+                            Button {
+                                onSelectLocation(result.coordinate, result.displayName)
+                                recentsModel.record(RecentLocation(
+                                    name: result.displayName,
+                                    latitude: result.coordinate.latitude,
+                                    longitude: result.coordinate.longitude
+                                ))
+                                close()
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.name)
+                                        .font(.appSecondary.weight(.medium))
+                                        .foregroundColor(AppTheme.inkPrimary)
+                                    Text(result.subtitle)
+                                        .font(.appFootnote)
+                                        .foregroundColor(AppTheme.inkSecondary)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
-            .background(AppTheme.darkBackground.ignoresSafeArea())
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle("Set Location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -48,155 +161,6 @@ struct LocationPickerSheet: View {
                 }
             }
         }
-    }
-
-
-    // MARK: - Use Current Location Button
-
-    private var currentLocationButton: some View {
-        Button(action: {
-            onUseCurrentLocation()
-            close()
-        }) {
-            HStack(spacing: 14) {
-                // GPS Icon
-                Circle()
-                    .fill(AppTheme.primaryColor)
-                    .frame(width: 44, height: 44)
-                    .overlay(
-                        Image(systemName: "location.fill")
-                            .font(.title3)
-                            .foregroundColor(.white)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text("Use Current Location")
-                            .font(.appSecondary.weight(.semibold))
-                            .foregroundColor(.white)
-
-                        if isUsingGPS {
-                            Label("Active", systemImage: "checkmark")
-                                .font(.appEyebrow)
-                                .foregroundColor(AppTheme.primaryColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(AppTheme.primaryColor.opacity(0.2))
-                                )
-                        }
-                    }
-
-                    Text(isUsingGPS ? "GPS location enabled" : "Requires location permission")
-                        .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.6))
-                }
-
-                Spacer()
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isUsingGPS ? AppTheme.primaryColor.opacity(0.2) : Color.white.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isUsingGPS ? AppTheme.primaryColor : Color.clear, lineWidth: 2)
-            )
-        }
-    }
-
-    // MARK: - Divider
-
-    private var dividerWithText: some View {
-        HStack {
-            Rectangle()
-                .fill(Color.white.opacity(0.15))
-                .frame(height: 1)
-
-            Text("or enter manually")
-                .font(.appFootnote)
-                .foregroundColor(.white.opacity(0.5))
-                .padding(.horizontal, 12)
-
-            Rectangle()
-                .fill(Color.white.opacity(0.15))
-                .frame(height: 1)
-        }
-        .padding(.vertical, 4)
-    }
-
-    // MARK: - Search Field
-
-    private var searchField: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.white.opacity(0.5))
-
-            TextField("Enter city or ZIP code", text: $searchText)
-                .foregroundColor(.white)
-                .autocorrectionDisabled()
-                .onChange(of: searchText) { _, newValue in
-                    if newValue.count >= 2 {
-                        searchLocation(query: newValue)
-                    } else {
-                        searchResults = []
-                    }
-                }
-
-            if isSearching {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                    .scaleEffect(0.8)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
-        )
-    }
-
-    // MARK: - Search Results
-
-    private var searchResultsList: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(searchResults) { result in
-                    Button(action: {
-                        onSelectLocation(result.coordinate, result.displayName)
-                        close()
-                    }) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(result.name)
-                                    .font(.appSecondary.weight(.medium))
-                                    .foregroundColor(.white)
-                                Text(result.subtitle)
-                                    .font(.appFootnote)
-                                    .foregroundColor(.white.opacity(0.6))
-                            }
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.appFootnote)
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                        .padding(.vertical, 12)
-                    }
-
-                    Divider()
-                        .background(Color.white.opacity(0.1))
-                }
-            }
-        }
-        .frame(maxHeight: 200)
     }
 
     // MARK: - Search Logic
@@ -231,11 +195,31 @@ struct LocationPickerSheet: View {
         }
     }
 
-
-    /// State-driven dismissal (RW-6.12): the sheet's presentation
-    /// animation belongs to the system — no hand-rolled wrapper.
+    /// State-driven dismissal (RW-6.12).
     private func close() {
         isPresented = false
+    }
+}
+
+/// Observable wrapper over the recents store (the store itself is
+/// the pure, test-pinned half).
+@MainActor
+final class RecentLocationsModel: ObservableObject {
+    @Published private(set) var recents: [RecentLocation]
+    private let store = RecentLocationsStore()
+
+    init() {
+        self.recents = store.recents
+    }
+
+    func record(_ selection: RecentLocation) {
+        store.record(selection)
+        recents = store.recents
+    }
+
+    func remove(id: String) {
+        store.remove(id: id)
+        recents = store.recents
     }
 }
 

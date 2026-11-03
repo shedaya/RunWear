@@ -110,13 +110,13 @@ final class PremiumPassTests: XCTestCase {
     // MARK: - R-15 feedback composer
 
     func testFeedbackComposerRejectsEmptyMessage() {
-        XCTAssertNil(FeedbackComposer.mailtoURL(category: .bugReport, message: "", replyEmail: "", appVersion: "1.0 (7)"))
-        XCTAssertNil(FeedbackComposer.mailtoURL(category: .bugReport, message: "  \n ", replyEmail: "", appVersion: "1.0 (7)"))
+        XCTAssertNil(FeedbackComposer.mailtoURL(category: .somethingWrong, message: "", replyEmail: "", appVersion: "1.0 (7)"))
+        XCTAssertNil(FeedbackComposer.mailtoURL(category: .somethingWrong, message: "  \n ", replyEmail: "", appVersion: "1.0 (7)"))
     }
 
     func testFeedbackComposerBuildsAddressedEmail() throws {
         let url = try XCTUnwrap(FeedbackComposer.mailtoURL(
-            category: .bugReport,
+            category: .somethingWrong,
             message: "The UV pill shows the wrong value.",
             replyEmail: "runner@example.com",
             appVersion: "1.0 (7)"
@@ -126,7 +126,7 @@ final class PremiumPassTests: XCTestCase {
         let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
         XCTAssertEqual(components.path, FeedbackComposer.supportEmail)
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-        XCTAssertEqual(query["subject"], "RunWear Feedback — Bug Report")
+        XCTAssertEqual(query["subject"], "RunWear Feedback — Something's wrong")
         let body = try XCTUnwrap(query["body"])
         XCTAssertTrue(body.contains("The UV pill shows the wrong value."))
         XCTAssertTrue(body.contains("RunWear 1.0 (7)"))

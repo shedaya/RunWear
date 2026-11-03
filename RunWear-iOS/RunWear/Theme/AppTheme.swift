@@ -11,14 +11,18 @@ enum AppTheme {
     static let primaryDark = Color(hex: "0E3D30")
 
     // MARK: - Background Colors
-    static let backgroundColor = Color(hex: "F5F5F5")
-    static let darkBackground = Color(hex: "0A0A0A")
-    static let cardBackground = Color.white
-    static let darkCardBackground = Color(hex: "1A1A1A")
+    // RW-26 (consolidated design, notes §1): the cream + Warm Charcoal
+    // pair replaces the phase-1 neutral pair. These legacy constants
+    // carry the same values as the dynamic tokens below so forced-dark
+    // surfaces (onboarding, location picker, photos) warm up too.
+    static let backgroundColor = Color(hex: "F5F1E8")
+    static let darkBackground = Color(hex: "16130F")
+    static let cardBackground = Color(hex: "FDFBF6")
+    static let darkCardBackground = Color(hex: "211D17")
 
     // MARK: - Text Colors
-    static let textPrimary = Color(hex: "212121")
-    static let textSecondary = Color(hex: "757575")
+    static let textPrimary = Color(hex: "17191C")
+    static let textSecondary = Color(hex: "5F5B52")
     static let textOnDark = Color.white
     static let textSecondaryOnDark = Color.white.opacity(0.7)
 
@@ -122,26 +126,75 @@ enum AppTheme {
     static let cardFillOnDark = Color.white.opacity(0.05)
     static let cardStrokeOnDark = Color.white.opacity(0.1)
 
-    // MARK: - Dynamic Theme Pair (RW-25)
+    // MARK: - Dynamic Theme Pair (RW-25; token pass RW-26)
     //
-    // Trait-dynamic tokens for the appearance pair. Light values are
-    // the dormant light set, activated; dark values are the shipped
-    // dark design. On watchOS (always dark, and UIColor dynamic
+    // Trait-dynamic tokens for the appearance pair. RW-26 replaces
+    // the phase-1 pair (light #F5F5F5/#FFFFFF, dark
+    // #0A0A0A/#1A1A1A/#262626) with the consolidated cream + Warm
+    // Charcoal pair (final design notes §1). Warmth lives in the
+    // neutrals only: pine, the temperature hexes, and data ink are
+    // unchanged. The hex constants are the pins the unit tests
+    // assert. On watchOS (always dark, and UIColor dynamic
     // providers are unavailable) the tokens resolve to the dark side.
-    static let background = dynamicColor(lightHex: "F5F5F5", darkHex: "0A0A0A")
-    static let sheet = dynamicColor(lightHex: "FFFFFF", darkHex: "1A1A1A")
-    static let cardOnSheet = dynamicColor(lightHex: "F5F5F5", darkHex: "262626")
-    static let inkPrimary = dynamicColor(lightHex: "17191C", darkHex: "FFFFFF")
+    static let groundLightHex = "F5F1E8"
+    static let sheetLightHex = "FDFBF6"
+    static let inkLightHex = "17191C"
+    static let inkSecondaryLightHex = "5F5B52"
+    static let groundDarkHex = "16130F"
+    static let sheetDarkHex = "211D17"
+    static let cardDarkHex = "2A251E"
+    static let inkDarkHex = "F5F1EA"
+    static let mutedDarkHex = "B8AEA0"
+    /// Dark-mode pine accent (notes §1: dark accent #5CC79F); the
+    /// light-mode payload pine stays the seed #175E4C.
+    static let pineAccentDarkHex = "5CC79F"
+    /// Warm white for the script logo over photography (notes §7.3).
+    static let warmWhiteHex = "F5F1EA"
+
+    static let background = dynamicColor(lightHex: groundLightHex, darkHex: groundDarkHex)
+    static let sheet = dynamicColor(lightHex: sheetLightHex, darkHex: sheetDarkHex)
+    /// Card on the sheet: light cards share the sheet hex (notes §1:
+    /// "sheet/cards #FDFBF6"), so on the home sheet a card separates
+    /// by sitting on the ground-toned chip fill below; dark cards are
+    /// the Warm Charcoal card hex.
+    static let cardOnSheet = dynamicColor(lightHex: groundLightHex, darkHex: cardDarkHex)
+    static let inkPrimary = dynamicColor(lightHex: inkLightHex, darkHex: inkDarkHex)
     static let inkSecondary = dynamicColor(
-        light: UIColor(hexRGB: "5A6068", alpha: 1),
-        dark: UIColor(hexRGB: "FFFFFF", alpha: 0.7)
+        lightHex: inkSecondaryLightHex,
+        darkHex: mutedDarkHex
     )
-    static let inkMuted = dynamicColor(lightHex: "6B7280", darkHex: "9A9A9A")
+    /// The design defines exactly two neutral text tones per mode
+    /// (ink + secondary/muted), so the muted token resolves to the
+    /// same pair as inkSecondary.
+    static let inkMuted = dynamicColor(
+        lightHex: inkSecondaryLightHex,
+        darkHex: mutedDarkHex
+    )
+    /// Pine for payload text (mini-bar narration, accents): the seed
+    /// in light mode, the brightened accent on Warm Charcoal.
+    static let pinePayload = dynamicColor(lightHex: "175E4C", darkHex: pineAccentDarkHex)
+
+    // MARK: - Weather pill legibility (RW-26, phase-1 flag closure)
+    //
+    // The weather pills keep Liquid Glass (chrome class) in both
+    // modes, but the phase-1 white label cannot survive the cream
+    // sheet: clear glass over #FDFBF6 renders ≈that hex, and white
+    // on #FDFBF6 is ≈1.03:1 — below even the 3:1 large-text floor,
+    // let alone 4.5:1 for the ~15pt pill labels. The fix lives in
+    // the shared WeatherPill: content (label + icon) is ink
+    // #17191C in light mode (17.03:1 on the sheet, per the design's
+    // own contrast table) and stays white/hued in dark mode (white
+    // on #211D17 ≈ 16.7:1). Glass itself is unchanged.
+    static func weatherPillContentHex(isDark: Bool) -> String {
+        isDark ? "FFFFFF" : inkLightHex
+    }
+    /// The script logo's warm white over photography (both modes).
+    static let warmWhite = Color(hex: warmWhiteHex)
     /// Dynamic successor to cardFillOnDark/cardStrokeOnDark for the
     /// home path: light = white fill with ink-8% stroke; dark =
     /// white@5% fill with white@10% stroke.
     static let cardFill = dynamicColor(
-        light: UIColor(hexRGB: "FFFFFF", alpha: 1),
+        light: UIColor(hexRGB: "FDFBF6", alpha: 1),
         dark: UIColor(hexRGB: "FFFFFF", alpha: 0.05)
     )
     static let cardStroke = dynamicColor(

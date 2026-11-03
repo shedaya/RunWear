@@ -58,20 +58,88 @@ struct RatingPromptTracker {
     }
 }
 
-// MARK: - Feedback Composer (R-15)
+// MARK: - Feedback (R-15; RW-26 channel wiring)
 //
-// The Support section's "Send Feedback" form composes a pre-addressed
-// email to the studio support inbox. (No feedback HTTP endpoint exists
-// for RunWear; the sibling apps' api.uptimeventuresllc.com route is not
-// provisioned for this app, so the composer uses the provably live
-// support address instead.)
+// RW-26 closes the RW-18/RW-1 residual: the iOS form previously
+// only composed a mailto: — it contributed ZERO items to the
+// feedback channel. The form now submits through the SAME intake
+// Android uses (FeedbackRouting: POST /v1/feedback/runwear,
+// schema runwear-feedback/1), under the five HUMAN categories
+// (Android's ids verbatim). Machine traffic never files here:
+// diagnostics and crash reports carry their own category names
+// and destinations (FeedbackRouting.diagnosticsCategory /
+// crashReportCategory). The mailto composer survives only as the
+// fallback the form offers when a submission fails.
 enum FeedbackCategory: String, CaseIterable, Identifiable {
-    case bugReport = "Bug Report"
-    case featureRequest = "Feature Request"
-    case outfitFeedback = "Outfit Feedback"
-    case other = "Something Else"
+    case somethingWrong = "Something's wrong"
+    case recommendationOff = "The recommendation seems off"
+    case confusing = "Confusing"
+    case idea = "Idea"
+    case other = "Other"
 
-    var id: String { rawValue }
+    /// The wire id — Android's FeedbackCategory ids, verbatim.
+    var wireId: String {
+        switch self {
+        case .somethingWrong: return "something_wrong"
+        case .recommendationOff: return "recommendation_off"
+        case .confusing: return "confusing"
+        case .idea: return "idea"
+        case .other: return "other"
+        }
+    }
+
+    var id: String { wireId }
+}
+
+/// Submits feedback to the first-party intake. The per-install id
+/// is created lazily at the first send (Android's rule — never at
+/// first launch).
+enum FeedbackSubmissionService {
+    private static let installIdKey = "feedback.installId"
+
+    static func installId(defaults: UserDefaults = .standard) -> String {
+        if let existing = defaults.string(forKey: installIdKey) {
+            return existing
+        }
+        let created = UUID().uuidString
+        defaults.set(created, forKey: installIdKey)
+        return created
+    }
+
+    /// POST one human feedback report. True only on a 2xx — the
+    /// form claims "sent" solely when the intake accepted it.
+    static func submit(
+        category: FeedbackCategory,
+        message: String,
+        replyEmail: String,
+        appVersion: String,
+        bundle: [String: String]
+    ) async -> Bool {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              FeedbackRouting.isHumanCategory(category.wireId),
+              let data = FeedbackPayloads.feedbackData(
+                  appVersion: appVersion,
+                  installId: installId(),
+                  categoryId: category.wireId,
+                  text: trimmed,
+                  replyEmail: replyEmail,
+                  entryPoint: "settings",
+                  bundle: bundle
+              ),
+              let url = URL(string: FeedbackRouting.Destination.feedback.urlString) else {
+            return false
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse else {
+            return false
+        }
+        return (200..<300).contains(http.statusCode)
+    }
 }
 
 enum FeedbackComposer {

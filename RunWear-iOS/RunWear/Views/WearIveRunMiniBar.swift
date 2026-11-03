@@ -1,30 +1,28 @@
 import SwiftUI
 
-// MARK: - "Wear I've Run" Mini Bar (RW-25, PRE-ADD STATE ONLY)
+// MARK: - "Wear I've Run" Mini Bar (RW-25 scaffolding; RW-26 full behavior)
 //
-// The collection feature is NOT built in code anywhere in this
-// build — there is no store, no persistence, no capture flow. What
-// ships here is scaffolding only:
-//   (a) a pure state model + narration formatter, unit-tested;
-//   (b) the mini bar view, fully styled, driven by a state that
-//       only ever yields .preAdd in this build — so NOTHING renders
-//       (WeatherOutfitView's dock renders the bar only when the
-//       state != .preAdd, and the model's currentState is .preAdd).
-// Do not wire a real data source into currentState without the
-// collection feature itself landing first.
-
-// MARK: - State model
+// The bar is the collection's doorway (no tab bar — notes §1):
+// - absent before today's entry exists;
+// - collapsed at rest, semi-transparent (light 85% / dark 82% sheet
+//   tint layered over .regularMaterial; text/icons 100%);
+// - expands at end-of-scroll, on tap, and on the creation/update
+//   cue — with ONE gentle pulse + a soft haptic, then quiet;
+// - two grayed right-end controls: expand and trash. Trash removes
+//   today's entry in one tap, no confirmation; the bar leaves
+//   until a later generation re-creates the entry.
+// The narration pattern: the script wordmark leads, a verb, and
+// the payload in pine.
 
 enum WearIveRunState: Equatable {
-    /// Nothing added yet — the only state this build produces.
+    /// No entry for today yet — the bar does not render.
     case preAdd
-    /// An entry was added at a place and moment.
+    /// Today's entry was created at a place and moment.
     case added(place: String, moment: String)
-    /// The current entry was updated to a new payload.
+    /// Today's entry was re-settled to a new payload.
     case updated(payload: String)
 }
 
-/// How the bar is being presented; drives the background policy.
 enum WearIveRunPresentation: Equatable {
     case mini
     case expanded
@@ -32,24 +30,31 @@ enum WearIveRunPresentation: Equatable {
 }
 
 enum WearIveRunMiniBarModel {
-    /// The bar's state for this build: always .preAdd, because the
-    /// collection is not built. This is the single source the dock
-    /// reads — a future collection feature replaces this value,
-    /// nothing else about the dock changes.
-    static let currentState: WearIveRunState = .preAdd
-
     static let wordmark = "Wear I've Run"
+
+    /// The bar's state from today's entry: absent without one;
+    /// "Added" on the day's first settle; "Update to" when a later
+    /// settle changed the entry the session already narrated.
+    static func state(
+        todaysEntry: WearIveRunEntry?,
+        moment: String,
+        wasUpdatedThisSession: Bool,
+        updatePayload: String?
+    ) -> WearIveRunState {
+        guard let entry = todaysEntry else { return .preAdd }
+        if wasUpdatedThisSession, let updatePayload {
+            return .updated(payload: updatePayload)
+        }
+        return .added(place: entry.placeName, moment: moment)
+    }
 }
 
 // MARK: - Narration formatter
 
 enum WearIveRunNarration {
-    /// The one narration line under the wordmark.
     /// - preAdd: nil (the bar does not render at all)
-    /// - added: "Added {place}, {moment}" — the comma form, e.g.
-    ///   "Added New York, Now"
-    /// - updated: "Update to {payload}" (the payload renders pine
-    ///   at the call site; the plain string is the test surface)
+    /// - added: "Added {place}, {moment}" — the comma form
+    /// - updated: "Update to {payload}" (payload renders pine)
     static func line(for state: WearIveRunState) -> String? {
         switch state {
         case .preAdd:
@@ -60,27 +65,24 @@ enum WearIveRunNarration {
             return "Update to \(payload)"
         }
     }
+
+    /// The expanded bar's entry line (frame 3 anatomy):
+    /// "{Place} · Today — {feels-like} feels like · {n} items".
+    static func expandedLine(for entry: WearIveRunEntry, formattedFeelsLike: String) -> String {
+        let items = entry.itemNames.count == 1 ? "1 item" : "\(entry.itemNames.count) items"
+        return "\(entry.placeName) · Today — \(formattedFeelsLike) feels like · \(items)"
+    }
 }
 
-// MARK: - Background policy (translucency amendment, Sol — binding)
+// MARK: - Background policy (translucency, notes §1)
 //
-// MINI state background is TRANSLUCENT; the FULL EXPRESSION
-// (expanded / end-of-scroll / cue) is fully OPAQUE sheet color.
-// Text and icons are always 100% opacity in every state.
-//
-// iOS choice: the mini background is rendered with the native
-// Material (.regular) tinted toward the sheet color by layering
-// the sheet color at the policy opacity over it — Material tinting
-// via a hand-rolled alpha fought the native material's own
-// vibrancy, so the shipped recipe is Material + sheet-color layer
-// at 78% (dark) / 85% (light), exactly the fallback the amendment
-// allows. The policy below is pure and unit-tested; the view only
-// renders what it returns.
+// MINI state is TRANSLUCENT at the settled tints (light 85% / dark
+// 82% over the warm surfaces, layered over .regularMaterial on
+// iOS); the FULL EXPRESSION (expanded / end-of-scroll / cue) is
+// fully opaque. Text and icons are always 100% opacity.
 
 enum WearIveRunBackgroundStyle: Equatable {
-    /// Native Material + sheet-color layer at `sheetOpacity`.
     case translucentMaterial(sheetOpacity: Double)
-    /// Fully opaque sheet color.
     case opaqueSheet
 }
 
@@ -91,10 +93,66 @@ enum WearIveRunBackgroundPolicy {
     ) -> WearIveRunBackgroundStyle {
         switch presentation {
         case .mini:
-            return .translucentMaterial(sheetOpacity: isDark ? 0.78 : 0.85)
+            return .translucentMaterial(sheetOpacity: isDark ? 0.82 : 0.85)
         case .expanded, .endOfScrollCue:
             return .opaqueSheet
         }
+    }
+}
+
+// MARK: - Collection model (observable wrapper over the store)
+
+@MainActor
+final class WearIveRunCollectionModel: ObservableObject {
+    @Published private(set) var entries: [WearIveRunEntry] = []
+    /// True when a settle this session replaced today's entry with
+    /// different content — the narration's "Update to" case.
+    @Published private(set) var todaysEntryWasUpdated = false
+    /// Bumped on every creation/update of today's entry — the cue
+    /// trigger (expand + one pulse + soft haptic).
+    @Published private(set) var cueCount = 0
+
+    private let store: WearIveRunStore
+    private var narratedEntryID: String?
+
+    init(store: WearIveRunStore = WearIveRunStore()) {
+        self.store = store
+        self.entries = store.entries
+    }
+
+    func todaysEntry(placeName: String, today: Date = Date()) -> WearIveRunEntry? {
+        store.todaysEntry(placeName: placeName, today: today)
+    }
+
+    /// Record the day's settled version. The first settle of the
+    /// day creates the entry (and fires the cue); a later settle
+    /// with different content updates it (and fires the cue); an
+    /// identical settle is quiet.
+    func recordSettled(_ entry: WearIveRunEntry) {
+        let existing = entries.first { $0.id == entry.id }
+        store.record(entry)
+        entries = store.entries
+        if existing == nil {
+            narratedEntryID = entry.id
+            todaysEntryWasUpdated = false
+            cueCount += 1
+        } else if existing != entry {
+            if narratedEntryID == entry.id {
+                todaysEntryWasUpdated = true
+            }
+            cueCount += 1
+        }
+    }
+
+    /// The trash control: today's entry at this place goes away in
+    /// one tap; the bar leaves with it.
+    func removeToday(placeName: String, today: Date = Date()) {
+        let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: today)
+        store.remove(dayStart: dayStart, placeName: placeName)
+        entries = store.entries
+        todaysEntryWasUpdated = false
+        narratedEntryID = nil
     }
 }
 
@@ -102,30 +160,57 @@ enum WearIveRunBackgroundPolicy {
 
 struct WearIveRunMiniBarView: View {
     let state: WearIveRunState
+    /// Today's entry, for the expanded anatomy; nil only in preAdd.
+    let entry: WearIveRunEntry?
+    /// The feels-like, formatted in the user's unit.
+    let formattedFeelsLike: String
+    /// Creation/update cue counter — a change expands the bar with
+    /// one pulse + soft haptic.
+    let cueCount: Int
+    /// The parent scroll's end-of-scroll signal.
+    let isAtEndOfScroll: Bool
+    let onOpenCollection: () -> Void
+    let onTrash: () -> Void
+
     @State private var presentation: WearIveRunPresentation = .mini
+    @State private var pulse = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        // Pre-add renders nothing — the dock's guard also checks,
-        // and this is the second line of defense.
         if state != .preAdd {
-            switch presentation {
-            case .mini:
-                miniBar
-            case .expanded, .endOfScrollCue:
-                expandedBar
+            Group {
+                switch presentation {
+                case .mini:
+                    miniBar
+                case .expanded, .endOfScrollCue:
+                    expandedBar
+                }
+            }
+            .scaleEffect(pulse ? 1.02 : 1)
+            .animation(.easeInOut(duration: 0.45), value: pulse)
+            .sensoryFeedback(.impact(weight: .light), trigger: cueCount)
+            .onChange(of: cueCount) { _, _ in
+                // The creation/update cue: expand, one gentle
+                // pulse, then quiet.
+                presentation = .expanded
+                pulse = true
+                Task {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    pulse = false
+                }
+            }
+            .onChange(of: isAtEndOfScroll) { _, atEnd in
+                if atEnd { presentation = .endOfScrollCue }
             }
         }
     }
 
-    // The wordmark. No Great Vibes asset exists in the bundle
-    // (checked 2026-11-02: no script font file in the app target),
-    // so it renders in a script-style system fallback; bundling the
-    // genuine font is a flagged follow-up. This view never renders
-    // in this build, so no user sees the fallback.
+    /// The wordmark in the genuine Great Vibes (RW-26: the Snell
+    /// Roundhand fallback call site is retired — the font is
+    /// bundled and `Font.greatVibes` resolves it).
     private var wordmarkView: some View {
         Text(WearIveRunMiniBarModel.wordmark)
-            .font(.custom("Snell Roundhand", size: 17).weight(.bold))
+            .font(.greatVibes(size: 20))
             .foregroundColor(AppTheme.inkPrimary)
     }
 
@@ -140,23 +225,32 @@ struct WearIveRunMiniBarView: View {
                 }
             }
             Spacer(minLength: 0)
-            // Two grayed 14pt icons with >=44pt hit areas.
+            barControls
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background { miniBackground }
+        .contentShape(Rectangle())
+        .onTapGesture { presentation = .expanded }
+    }
+
+    /// Two tiny grayed controls at the right end: expand + trash.
+    private var barControls: some View {
+        HStack(spacing: 4) {
             Button {
-                presentation = .expanded
+                presentation = presentation == .mini ? .expanded : .mini
             } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                Image(systemName: presentation == .mini
+                      ? "arrow.up.left.and.arrow.down.right"
+                      : "arrow.down.right.and.arrow.up.left")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.inkMuted)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Expand")
-            Button {
-                // Remove is inert in this build: there is no
-                // collection to remove from. The future feature
-                // wires its quiet Remove here.
-            } label: {
+            .accessibilityLabel(presentation == .mini ? "Expand" : "Collapse")
+            Button(action: onTrash) {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.inkMuted)
@@ -164,19 +258,19 @@ struct WearIveRunMiniBarView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove")
+            .accessibilityLabel("Remove today's entry")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background { miniBackground }
     }
 
-    /// The narration line; an update's payload carries the pine
-    /// tint, the rest is ink. Text is always 100% opacity.
     private func narrationText(_ line: String) -> Text {
         if case .updated(let payload) = state {
             return Text("Update to ").foregroundColor(AppTheme.inkSecondary)
-                + Text(payload).foregroundColor(AppTheme.primaryColor)
+                + Text(payload).foregroundColor(AppTheme.pinePayload)
+        }
+        if case .added(let place, let moment) = state {
+            // The payload "{Place}, {Moment}" carries the pine.
+            return Text("Added ").foregroundColor(AppTheme.inkSecondary)
+                + Text("\(place), \(moment)").foregroundColor(AppTheme.pinePayload)
         }
         return Text(line).foregroundColor(AppTheme.inkSecondary)
     }
@@ -197,40 +291,43 @@ struct WearIveRunMiniBarView: View {
         }
     }
 
-    /// The full expression: opaque sheet color, thumbnail slot,
-    /// entry data, quiet Remove.
+    /// The full expression: opaque, the entry's thumbnail + data,
+    /// a door into the collection, and the same grayed controls.
     private var expandedBar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                // Thumbnail slot (the future collection's entry art).
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(AppTheme.cardOnSheet)
-                    .frame(width: 56, height: 56)
+                AsyncImage(url: entry.flatMap { URL(string: $0.heroImageReference) }) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        Rectangle().fill(AppTheme.cardOnSheet)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .clipped()
+                .cornerRadius(10)
+
                 VStack(alignment: .leading, spacing: 2) {
                     wordmarkView
-                    if let line = WearIveRunNarration.line(for: state) {
-                        narrationText(line)
-                            .font(.appFootnote)
+                    if let entry {
+                        Text(WearIveRunNarration.expandedLine(
+                            for: entry,
+                            formattedFeelsLike: formattedFeelsLike
+                        ))
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
                 Spacer(minLength: 0)
-                Button {
-                    presentation = .mini
-                } label: {
-                    Image(systemName: "arrow.down.right.and.arrow.up.left")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.inkMuted)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Collapse")
+                barControls
             }
-            Button("Remove") {
-                // Inert in this build (no collection exists).
+            Button(action: onOpenCollection) {
+                Text("Open the collection")
+                    .font(.appFootnote.weight(.semibold))
+                    .foregroundColor(AppTheme.pinePayload)
             }
-            .font(.appFootnote)
-            .foregroundColor(AppTheme.inkSecondary)
+            .buttonStyle(.plain)
         }
         .padding(16)
         .background(AppTheme.sheet)

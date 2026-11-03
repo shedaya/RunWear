@@ -723,6 +723,7 @@ enum PhotoRejection: Equatable {
     case multiplePeople   // C3b
     case tooDark          // C3c
     case tooClose         // C3d
+    case faceTooSmall     // C3E (RW-26: frame 18's failed check)
 
     var specString: String {
         switch self {
@@ -734,6 +735,10 @@ enum PhotoRejection: Equatable {
             return "This one is too dark to use. Try a photo in brighter light."
         case .tooClose:
             return "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+        case .faceTooSmall:
+            // C3E: failure-specific, and the camera is offered
+            // first (the guided capture frames the face for you).
+            return "Your face is too small in this photo to use. Take a selfie with the camera instead — the guide helps you frame it."
         }
     }
 }
@@ -745,7 +750,19 @@ enum PhotoQualityVerdict {
     /// close" (a head-and-shoulders frame keeps the face well under
     /// half the frame).
     static let tooCloseThreshold: Double = 0.45
+    /// Largest-face area share below which the face is too small to
+    /// read (RW-26, frame 18's failed check). Deliberately far
+    /// below the guided capture's coaching target — this rejects
+    /// only faces no pipeline could use.
+    static let tooSmallThreshold: Double = 0.02
 
+    /// THE check order (F7 harmonization, RW-26): face COUNT first
+    /// (no face, then multiple faces), then DARKNESS, then framing
+    /// (too small, too close). Both platforms now apply this one
+    /// order — Android's PhotoQualityPolicy previously judged
+    /// darkness first; the Android lane applies count-first from
+    /// this train. (PhotoIntakePolicy governs source routing, not
+    /// check order, on both platforms.)
     static func rejection(
         faceCount: Int,
         largestFaceAreaRatio: Double,
@@ -754,6 +771,7 @@ enum PhotoQualityVerdict {
         if faceCount == 0 { return .faceUnclear }
         if faceCount > 1 { return .multiplePeople }
         if meanLuminance < darkThreshold { return .tooDark }
+        if largestFaceAreaRatio < tooSmallThreshold { return .faceTooSmall }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
         return nil
     }

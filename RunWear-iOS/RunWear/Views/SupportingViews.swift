@@ -1,16 +1,44 @@
 import SwiftUI
 
+/// RW-26 (frame 46): loading is the home screen's own skeleton —
+/// the two-zone shape (photo block, sheet with header lines and
+/// outfit rows) in the theme surfaces, never a spinner over blank.
 struct LoadingView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            ProgressView()
-                .scaleEffect(1.5)
-                .tint(AppTheme.primaryColor)
-
-            Text("Getting weather data...")
-                .font(.headline)
-                .foregroundColor(AppTheme.inkSecondary)
+        VStack(spacing: 0) {
+            // Photo zone.
+            RoundedRectangle(cornerRadius: 0)
+                .fill(AppTheme.cardOnSheet)
+                .frame(height: 300)
+            // Sheet zone.
+            VStack(alignment: .leading, spacing: 14) {
+                skeletonLine(width: 90, height: 12)
+                skeletonLine(width: 170, height: 18)
+                skeletonLine(width: 120, height: 44)
+                skeletonLine(width: 70, height: 14)
+                HStack(spacing: 8) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        Capsule().fill(AppTheme.cardOnSheet).frame(width: 74, height: 34)
+                    }
+                }
+                skeletonLine(width: .infinity, height: 64)
+                skeletonLine(width: .infinity, height: 64)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(AppTheme.sheet)
+            Spacer()
         }
+        .background(AppTheme.background)
+        .redacted(reason: .placeholder)
+        .accessibilityLabel("Loading your weather")
+    }
+
+    private func skeletonLine(width: CGFloat, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(AppTheme.cardOnSheet)
+            .frame(width: width == .infinity ? nil : width, height: height)
+            .frame(maxWidth: width == .infinity ? .infinity : nil, alignment: .leading)
     }
 }
 
@@ -134,7 +162,10 @@ struct ErrorView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.orange)
 
-            Text("Something went wrong")
+            // RW-26 (frame 47; §8 Q3): the honest headline — the
+            // "Oops!"-era tone retires. The message below names
+            // what is safe / what happened.
+            Text("Couldn't load your weather")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.inkPrimary)

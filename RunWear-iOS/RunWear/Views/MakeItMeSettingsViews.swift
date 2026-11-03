@@ -39,7 +39,9 @@ struct MakeItMeSettingsSection: View {
                     Text("You're in your photos.")
                         .font(.system(size: 16, weight: .semibold))
                     if store.mode == .subscribed {
-                        Text("Subscribed — your photo is ready for every outfit, instantly.")
+                        // Frame 37: management only — this line is
+                        // a state fact (§9), not a pitch.
+                        Text("Your photo is ready before you open the app.")
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                     } else if store.freeGenerationsUsed >= PersonalHeroStore.freeAllowance {
@@ -66,9 +68,12 @@ struct MakeItMeSettingsSection: View {
                         action: { Task { await store.billing.showManageSubscriptions() } }
                     )
                 } else {
+                    // Frame 35: the free state's quiet meter card —
+                    // the real meter above, this §9 line verbatim,
+                    // one door. No price string (§9 price rule).
                     settingsRow(
-                        title: "Every outfit, instantly",
-                        subtitle: "Subscribe, and your photo is ready before you open the app.",
+                        title: "Premium",
+                        subtitle: "Made ahead, without limit — every outfit is ready when you open the app.",
                         action: { presentation.present(.subscription) }
                     )
                 }
@@ -82,7 +87,12 @@ struct MakeItMeSettingsSection: View {
                 }
             }
         } header: {
-            Text("Make it me")
+            // RW-26 (notes §7.5): "Make It Me" is a script
+            // wordmark wherever it appears as a title.
+            Text("Make It Me")
+                .font(.greatVibes(size: 20))
+                .textCase(nil)
+                .foregroundColor(AppTheme.inkPrimary)
         }
     }
 
@@ -161,6 +171,13 @@ struct MakeItMePhotosView: View {
                             .foregroundColor(.white.opacity(0.6))
                     }
 
+                    // Frame 38: the epoch rule, in plain words —
+                    // a retake re-makes what's AHEAD and never
+                    // rewrites the collection behind it.
+                    Text("This is the photo your looks are made from. If you retake it, the looks ahead are re-made from the new photo — the days already in your collection stay as they are.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.6))
+
                     Button(action: onReplace) {
                         Text("Replace photos")
                             .font(.system(size: 16, weight: .semibold))
@@ -230,7 +247,15 @@ private struct ReferencePhotoTileView: View {
     }
 }
 
-// MARK: - Subscription sheet (§5.3, strings U2)
+// MARK: - Subscription sheet — the paywall (frame 22; notes §§5–6)
+//
+// ONE design at every price: the price is a parameterized slot
+// rendered ONLY from the fetched RevenueCat Offering (the
+// experiment's variable — $9.99 control / $19.99 / $29.99 arms);
+// when the Offering has not resolved the slot is price-free.
+// Structure: free bar + real meter, "How Premium works", ONE
+// highlighted card, the CTA. No Founding / Limited-time /
+// struck-through elements anywhere (the §5 contamination fix).
 
 struct MakeItMeSubscriptionSheet: View {
     @EnvironmentObject var store: PersonalHeroStore
@@ -240,21 +265,88 @@ struct MakeItMeSubscriptionSheet: View {
 
     var body: some View {
         ZStack {
-            AppTheme.darkBackground.ignoresSafeArea()
+            AppTheme.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("Every outfit, instantly.")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
+                    // The feature's script title (§7.5: 30pt instance).
+                    Text("Make It Me")
+                        .font(.greatVibes(size: 30))
+                        .foregroundColor(AppTheme.inkPrimary)
 
-                    priceRow(
-                        label: store.billing.monthlyRowLabel,
-                        action: { purchase(annual: false) }
+                    // Free bar + the real meter (§1 wording pass).
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("Free plan")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Spacer()
+                            Text("5 looks included")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                        Text("\(store.freeGenerationsUsed) of 5 used · Free looks never expire — and your first ones take about a minute to make.")
+                            .font(.system(size: 13))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+
+                    // How Premium works — the convergence copy,
+                    // verbatim (§6 audit table, row 3).
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("How Premium works")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("Looks of you for every scenario. This week's weather is made first; the rest are made as you need them, and each one is banked for good once it's made.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+
+                    // The ONE highlighted card. Its price slot is
+                    // the Offering's annual price and nothing else.
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Premium")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("All of Make It Me.")
+                            .font(.system(size: 15))
+                            .foregroundColor(AppTheme.inkSecondary)
+                        if let price = store.billing.annualPriceString {
+                            Text("\(price)/yr")
+                                .font(.system(size: 19, weight: .bold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.sheet))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(AppTheme.primaryColor, lineWidth: 2)
                     )
-                    priceRow(
-                        label: store.billing.annualRowLabel,
-                        action: { purchase(annual: true) }
-                    )
+
+                    if store.billing.isSubscribed {
+                        Text("You're subscribed — your photo is ready before you open the app.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    } else {
+                        // The CTA carries NO price (§6, row 7).
+                        Button {
+                            purchase()
+                        } label: {
+                            HStack {
+                                Text("Keep going with Premium")
+                                    .font(.system(size: 17, weight: .semibold))
+                                if purchasing { ProgressView() }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(purchasing)
+                    }
 
                     if let unavailableLine {
                         Text(unavailableLine)
@@ -270,14 +362,8 @@ struct MakeItMeSubscriptionSheet: View {
                     } label: {
                         Text("Restore purchases")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
-
-                    // U2c — the honest edge, on the purchase surface
-                    // itself, before money moves.
-                    Text("Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions.")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.5))
                 }
                 .padding(24)
             }
@@ -285,28 +371,11 @@ struct MakeItMeSubscriptionSheet: View {
         .task { await store.billing.refresh() }
     }
 
-    private func priceRow(label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.leading)
-                Spacer()
-                if purchasing { ProgressView().tint(.white) }
-            }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.08)))
-        }
-        .buttonStyle(.plain)
-        .disabled(purchasing)
-    }
-
-    private func purchase(annual: Bool) {
+    private func purchase() {
         purchasing = true
         unavailableLine = nil
         Task {
-            let outcome = annual ? await store.billing.purchaseAnnual() : await store.billing.purchaseMonthly()
+            let outcome = await store.billing.purchaseAnnual()
             purchasing = false
             switch outcome {
             case .subscribed:
@@ -314,9 +383,6 @@ struct MakeItMeSubscriptionSheet: View {
             case .cancelled:
                 break
             case .unavailable:
-                // DEVIATION-COPY (no deck entry): the products exist
-                // in App Store Connect but may not resolve in the
-                // store yet — say so instead of failing silently.
                 unavailableLine = "Purchases aren't available right now. Please try again later."
             }
         }

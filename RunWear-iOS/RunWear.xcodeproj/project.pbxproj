@@ -141,6 +141,11 @@
 		F10002000000000000000105 /* MakeItMeBilling.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000105 /* MakeItMeBilling.swift */; };
 		F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000138 /* MakeItMePriceLabels.swift */; };
 		F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000138 /* MakeItMePriceLabels.swift */; };
+		G10002000000000000000001 /* RW26CollectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000001 /* RW26CollectionModels.swift */; };
+		G10002000000000000000002 /* RW26CollectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000001 /* RW26CollectionModels.swift */; };
+		G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000002 /* GuidedSelfieCaptureView.swift */; };
+		G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000003 /* WearIveRunCollectionView.swift */; };
+		G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000004 /* RW26Phase2Tests.swift */; };
 		F10002000000000000000106 /* PersonalHeroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000106 /* PersonalHeroStore.swift */; };
 		F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
@@ -308,6 +313,10 @@
 		F10001000000000000000104 /* PhotoQualityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoQualityChecker.swift; sourceTree = "<group>"; };
 		F10001000000000000000105 /* MakeItMeBilling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeBilling.swift; sourceTree = "<group>"; };
 		F10001000000000000000138 /* MakeItMePriceLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePriceLabels.swift; sourceTree = "<group>"; };
+		G10001000000000000000001 /* RW26CollectionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26CollectionModels.swift; sourceTree = "<group>"; };
+		G10001000000000000000002 /* GuidedSelfieCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedSelfieCaptureView.swift; sourceTree = "<group>"; };
+		G10001000000000000000003 /* WearIveRunCollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunCollectionView.swift; sourceTree = "<group>"; };
+		G10001000000000000000004 /* RW26Phase2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26Phase2Tests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -395,6 +404,8 @@
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
 				D10001000000000000000001 /* WearIveRunMiniBar.swift */,
+				G10001000000000000000002 /* GuidedSelfieCaptureView.swift */,
+				G10001000000000000000003 /* WearIveRunCollectionView.swift */,
 				A10001000000000000000090 /* HeroPhoto.swift */,
 				A10003000000000000000001 /* Components */,
 				A10003000000000000000002 /* Modals */,
@@ -438,6 +449,7 @@
 				F10001000000000000000104 /* PhotoQualityChecker.swift */,
 				F10001000000000000000105 /* MakeItMeBilling.swift */,
 				F10001000000000000000138 /* MakeItMePriceLabels.swift */,
+				G10001000000000000000001 /* RW26CollectionModels.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
 			);
 			path = Services;
@@ -543,6 +555,7 @@
 				C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */,
 				C10001000000000000000030 /* HeroPointGrainTests.swift */,
 				C10001000000000000000031 /* RW25NextGenHomeTests.swift */,
+				G10001000000000000000004 /* RW26Phase2Tests.swift */,
 				C10001000000000000000032 /* GreatVibesFontTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
@@ -763,6 +776,9 @@
 				F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */,
 				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
 				F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */,
+				G10002000000000000000001 /* RW26CollectionModels.swift in Sources */,
+				G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */,
+				G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */,
 				F10002000000000000000106 /* PersonalHeroStore.swift in Sources */,
 				F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */,
 				F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */,
@@ -847,6 +863,8 @@
 				F10002000000000000000133 /* MakeItMePresentation.swift in Sources */,
 				F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */,
 				F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */,
+				G10002000000000000000002 /* RW26CollectionModels.swift in Sources */,
+				G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */,
 				C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */,
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
 				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,

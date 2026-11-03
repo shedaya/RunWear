@@ -83,13 +83,39 @@ final class RW25NextGenHomeTests: XCTestCase {
         )
     }
 
-    func testMiniBarShipsInPreAddState() {
-        // The collection feature is not built in this build, so the
-        // model's current state — the dock's only source — is preAdd
-        // and the narration is nil (nothing renders).
-        XCTAssertEqual(WearIveRunMiniBarModel.currentState, .preAdd)
-        XCTAssertNil(WearIveRunNarration.line(for: WearIveRunMiniBarModel.currentState))
+    func testMiniBarStateDerivation() {
+        // RW-26: the collection is built — the bar's state derives
+        // from today's entry. No entry: preAdd, narration nil
+        // (nothing renders). An entry: the "Added" narration.
+        // (Phase 1 pinned a hard-coded preAdd; the pin now covers
+        // the derivation instead.)
         XCTAssertEqual(WearIveRunMiniBarModel.wordmark, "Wear I've Run")
+        let noEntry = WearIveRunMiniBarModel.state(
+            todaysEntry: nil, moment: "Now",
+            wasUpdatedThisSession: false, updatePayload: nil
+        )
+        XCTAssertEqual(noEntry, .preAdd)
+        XCTAssertNil(WearIveRunNarration.line(for: noEntry))
+        let entry = WearIveRunEntry(
+            dayStart: Date(timeIntervalSince1970: 1_762_560_000),
+            placeName: "New York", feelsLikeF: 41, actualF: 38,
+            condition: "Cloudy", itemNames: ["Tee"], itemKeys: ["tee"],
+            heroImageReference: "hero"
+        )
+        XCTAssertEqual(
+            WearIveRunMiniBarModel.state(
+                todaysEntry: entry, moment: "Now",
+                wasUpdatedThisSession: false, updatePayload: nil
+            ),
+            .added(place: "New York", moment: "Now")
+        )
+        XCTAssertEqual(
+            WearIveRunMiniBarModel.state(
+                todaysEntry: entry, moment: "Now",
+                wasUpdatedThisSession: true, updatePayload: "5 items · 41°F"
+            ),
+            .updated(payload: "5 items · 41°F")
+        )
     }
 
     // MARK: - Mini bar background policy (translucency amendment)
@@ -97,7 +123,7 @@ final class RW25NextGenHomeTests: XCTestCase {
     func testMiniBackgroundIsTranslucentMaterial() {
         XCTAssertEqual(
             WearIveRunBackgroundPolicy.style(for: .mini, isDark: true),
-            .translucentMaterial(sheetOpacity: 0.78)
+            .translucentMaterial(sheetOpacity: 0.82)
         )
         XCTAssertEqual(
             WearIveRunBackgroundPolicy.style(for: .mini, isDark: false),

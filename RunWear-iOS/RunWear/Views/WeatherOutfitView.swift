@@ -8,10 +8,17 @@ struct WeatherOutfitView: View {
     // .largeTitle (the RW-6.3 pattern the hero numeral used), capped
     // by the text's dynamicTypeSize limit at the call site.
     @ScaledMetric(relativeTo: .largeTitle) private var sheetNumeralSize: CGFloat = 80
-    /// RW-25 "Wear I've Run" dock state. The collection feature is
-    /// not built, so the model only ever yields .preAdd in this
-    /// build and the dock renders nothing.
-    private var miniBarState: WearIveRunState { WearIveRunMiniBarModel.currentState }
+    /// RW-26 "Wear I've Run": the collection model — today's entry
+    /// drives the mini bar dock; the store behind it is the
+    /// collection itself.
+    @StateObject private var collectionModel = WearIveRunCollectionModel()
+    @State private var showCollection = false
+    /// End-of-scroll signal for the mini bar's full expression,
+    /// driven by the same onScrollGeometryChange feed as the hero
+    /// handoff.
+    @State private var isAtEndOfScroll = false
+    /// RW-26 feedback door from the rating moment (frame 49).
+    @State private var showFeedbackSheet = false
     /// RW-25 scroll-handoff progress (0 = hero full-frame at rest,
     /// 1 = settled as a card under the nav bar), driven by
     /// onScrollGeometryChange on the stacked scroll views.
@@ -251,10 +258,37 @@ struct WeatherOutfitView: View {
             if ratingTracker.shouldPrompt() {
                 showRatingPrompt = true
             }
+            recordTodaysEntry()
         }
-        // Neutral two-door ask: either door closes it for the season;
-        // the positive door hands off to the system review sheet.
+        // A re-settled recommendation (refresh, hour change back to
+        // now, outfit change) updates today's entry — the saved
+        // entry is the day's last settled version.
+        .onChange(of: recommendation.allItems.map(\.id)) { _, _ in
+            recordTodaysEntry()
+        }
+        .sheet(isPresented: $showCollection) {
+            NavigationStack {
+                WearIveRunCollectionView(
+                    model: collectionModel,
+                    formatTemperature: { viewModel.temperatureUnit.formatFromFahrenheit($0) },
+                    genderPreference: viewModel.genderPreference
+                )
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showFeedbackSheet) {
+            FeedbackSheet()
+        }
+        // Neutral THREE-door rating moment (frame 49): feedback
+        // first, then the rating door, then not-now. Any door
+        // closes it for the season; the rating door hands off to
+        // the system review sheet.
         .alert("Enjoying RunWear?", isPresented: $showRatingPrompt) {
+            Button("Send Feedback") {
+                ratingTracker.recordPromptShown()
+                showFeedbackSheet = true
+            }
             Button("Rate RunWear") {
                 ratingTracker.recordPromptShown()
                 requestReview()
@@ -329,6 +363,7 @@ struct WeatherOutfitView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             heroSection(heightMode: .fill)
+                                .overlay(alignment: .top) { scriptLogo }
                                 .frame(height: geo.size.height * 0.62)
                         }
                         .padding(.bottom, 24)
@@ -372,6 +407,11 @@ struct WeatherOutfitView: View {
                 } action: { _, offset in
                     updateHeroScrollProgress(offset: offset)
                 }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.visibleRect.maxY >= geometry.contentSize.height - 60
+                } action: { _, atEnd in
+                    isAtEndOfScroll = atEnd
+                }
                 .refreshable { onRefresh() }
             } else {
                 ScrollView {
@@ -389,6 +429,11 @@ struct WeatherOutfitView: View {
                     max(0, geometry.contentOffset.y + geometry.contentInsets.top)
                 } action: { _, offset in
                     updateHeroScrollProgress(offset: offset)
+                }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.visibleRect.maxY >= geometry.contentSize.height - 60
+                } action: { _, atEnd in
+                    isAtEndOfScroll = atEnd
                 }
                 .refreshable { onRefresh() }
             }
@@ -410,9 +455,23 @@ struct WeatherOutfitView: View {
     private var heroWithScrollHandoff: some View {
         let progress = reduceMotion ? 0 : heroScrollProgress
         return heroSection()
+            .overlay(alignment: .top) { scriptLogo }
             .scaleEffect(1 - 0.06 * progress)
             .clipShape(RoundedRectangle(cornerRadius: 24 * progress))
             .padding(.horizontal, 16 * progress)
+    }
+
+    /// RW-26 (notes §7.3): the script logo at the top of the main
+    /// screen — genuine Great Vibes "RunWear", warm-white #F5F1EA,
+    /// 29pt, centered, as photo-zone chrome (a brand mark, not
+    /// data). The family's 24pt floor is respected.
+    private var scriptLogo: some View {
+        Text("RunWear")
+            .font(.greatVibes(size: 29))
+            .foregroundColor(AppTheme.warmWhite)
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
+            .padding(.top, 10)
+            .accessibilityHidden(true)
     }
 
     /// Scroll-offset -> handoff progress: full transition over the
@@ -445,18 +504,31 @@ struct WeatherOutfitView: View {
         .zIndex(1)
     }
 
-    /// The sheet header block, in order: (a) eyebrow, (b) hero
-    /// number + temperature chip, (c) caption, (d) flat date/time
-    /// pills, (e) the weather pills row. Used by the stacked sheet
-    /// and, flat, by the Duo trailing column.
+    /// The sheet header block, in order (notes §7.2): (i) "Feels
+    /// like" label, (ii) location line, (iii) hero number +
+    /// temperature chip, (iv) "Actual NN°" line, (v) weather
+    /// strip — then the flat date/time pills. Used by the stacked
+    /// sheet and, flat, by the Duo trailing column.
     private var sheetHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // (a) Eyebrow: FEELS LIKE · {LOCATION} · {MOMENT}
-            Text("FEELS LIKE \u{00B7} \(viewModel.locationName.uppercased()) \u{00B7} \(sheetMoment.uppercased())")
-                .font(.appEyebrow)
-                .tracking(0.5)
-                .foregroundColor(AppTheme.inkMuted)
+            // (a)+(b) RW-26 settled header stack (notes §7.2): the
+            // "Feels like" label stands alone as the small uppercase
+            // label, and the location line sits beneath it as its
+            // own piece — never one undifferentiated eyebrow block.
+            VStack(alignment: .leading, spacing: 4) {
+                Text(HomeHeaderCopy.feelsLikeLabel)
+                    .font(.appEyebrow)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+                    .foregroundColor(AppTheme.inkMuted)
+                Text(HomeHeaderCopy.locationLine(
+                    place: viewModel.locationName,
+                    moment: sheetMoment
+                ))
+                .font(.system(size: 15.5, weight: .semibold))
+                .foregroundColor(AppTheme.inkPrimary)
                 .lineLimit(1)
+            }
 
             // (b) Hero number (ink, never temperature-colored) +
             // temperature chip (filled dot + bracket label).
@@ -482,10 +554,14 @@ struct WeatherOutfitView: View {
                 Spacer(minLength: 0)
             }
 
-            // (c) Caption from the same snapshot values the pills read.
-            Text(sheetCaption)
-                .font(.appSecondary)
-                .foregroundColor(AppTheme.inkSecondary)
+            // (c) RW-26 (notes §7.1): the line carries the actual
+            // temperature ONLY — condition/wind/humidity live in
+            // the weather strip beneath it, nowhere else.
+            Text(HomeHeaderCopy.actualLine(
+                formattedTemperature: viewModel.temperatureUnit.format(viewModel.currentTemperature)
+            ))
+            .font(.appSecondary)
+            .foregroundColor(AppTheme.inkSecondary)
 
             // (d) Date/time pills, flat on the sheet.
             sheetDateTimePills
@@ -501,11 +577,11 @@ struct WeatherOutfitView: View {
         .padding(.top, 20)
     }
 
-    /// "NOW" when viewing now; otherwise the same date + hour
-    /// strings the hero's pills used (Today / Tomorrow / EEE, MMM d
-    /// and h:00 AM/PM).
+    /// "Now" when viewing now (sentence case — the location line
+    /// is a sentence-case piece, notes §7.2); otherwise the same
+    /// date + hour strings the hero's pills used.
     private var sheetMoment: String {
-        isViewingNow ? "NOW" : "\(navDateString) \(heroHourString)"
+        isViewingNow ? "Now" : "\(navDateString) \(heroHourString)"
     }
 
     private var heroHourString: String {
@@ -520,14 +596,6 @@ struct WeatherOutfitView: View {
         let now = Date()
         return calendar.isDateInToday(viewModel.selectedDate)
             && viewModel.selectedHour == calendar.component(.hour, from: now)
-    }
-
-    /// "Actual: {x} · {condition} · Wind {speed} · Humidity {pct}%"
-    private var sheetCaption: String {
-        let snapshot = viewModel.selectedWeatherSnapshot
-        let wind = snapshot?.windSpeed ?? weather.currentWeather.windspeed
-        let humidity = snapshot?.humidity ?? 50
-        return "Actual: \(viewModel.temperatureUnit.format(viewModel.currentTemperature)) \u{00B7} \(viewModel.currentCondition.shortDescription) \u{00B7} Wind \(Int(round(wind))) mph \u{00B7} Humidity \(humidity)%"
     }
 
     /// The hero's date/time pills, restyled flat on the sheet:
@@ -561,13 +629,60 @@ struct WeatherOutfitView: View {
         }
     }
 
-    /// The mini bar dock content: the bar only when the state is
-    /// not .preAdd. In this build the state is always .preAdd, so
-    /// this renders nothing.
+    /// The mini bar dock: today's entry drives the bar — absent
+    /// pre-entry, narrating once the day's first generation lands.
     @ViewBuilder private var miniBarDock: some View {
-        if miniBarState != .preAdd {
-            WearIveRunMiniBarView(state: miniBarState)
+        let todays = collectionModel.todaysEntry(placeName: viewModel.locationName)
+        let state = WearIveRunMiniBarModel.state(
+            todaysEntry: todays,
+            moment: sheetMoment,
+            wasUpdatedThisSession: collectionModel.todaysEntryWasUpdated,
+            updatePayload: todays.map {
+                "\($0.itemNames.count) items · \(viewModel.temperatureUnit.formatFromFahrenheit($0.feelsLikeF))"
+            }
+        )
+        if state != .preAdd {
+            WearIveRunMiniBarView(
+                state: state,
+                entry: todays,
+                formattedFeelsLike: todays.map {
+                    viewModel.temperatureUnit.formatFromFahrenheit($0.feelsLikeF)
+                } ?? "",
+                cueCount: collectionModel.cueCount,
+                isAtEndOfScroll: isAtEndOfScroll,
+                onOpenCollection: { showCollection = true },
+                onTrash: {
+                    collectionModel.removeToday(placeName: viewModel.locationName)
+                }
+            )
         }
+    }
+
+    /// Automatic entry creation (checklist §C): the day's first
+    /// generation settles an entry; later settles the same day
+    /// replace it (the saved entry is the day's LAST settled
+    /// version). Only the viewed-now day at the current place
+    /// records — browsing another day or hour never writes.
+    private func recordTodaysEntry() {
+        guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
+        let snapshot = viewModel.selectedWeatherSnapshot
+        let feelsLikeF = snapshot?.feelsLikeFahrenheit
+            ?? (weather.currentWeather.temperatureFahrenheit)
+        let actualF = snapshot?.temperatureFahrenheit
+            ?? weather.currentWeather.temperatureFahrenheit
+        let entry = WearIveRunEntry(
+            dayStart: Calendar.current.startOfDay(for: viewModel.selectedDate),
+            placeName: viewModel.locationName,
+            feelsLikeF: feelsLikeF,
+            actualF: actualF,
+            condition: viewModel.currentCondition.shortDescription,
+            itemNames: recommendation.allItems.map(\.name),
+            itemKeys: recommendation.allItems.map(\.key),
+            heroImageReference: viewModel.heroImageUrl
+                ?? viewModel.fallbackImageUrl
+                ?? defaultFallbackUrl
+        )
+        collectionModel.recordSettled(entry)
     }
 
     /// The outfit column's pinned foot entry (f5): opens the full
@@ -796,23 +911,40 @@ struct WeatherOutfitView: View {
         if let cell = viewModel.currentPersonalCombination {
             switch personalStore.lookStates[cell.combinationId] ?? .none {
             case .making:
-                VStack(spacing: 4) {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .tint(AppTheme.inkSecondary)
-                        // Spec §7 G1, verbatim.
-                        Text(MakeItMeCopy.progressTitle)
-                            .font(.appSecondary.weight(.semibold))
-                            .foregroundColor(AppTheme.inkPrimary)
-                    }
-                    // Spec §7 G2, verbatim (as amended Nov 1, 2026).
-                    Text(MakeItMeCopy.progressSubline)
+                // RW-26 scaffold policy (§9 silence — informational
+                // only, no upsell, no meter): when a personal photo
+                // is already on screen while this cell makes, that
+                // photo is the user's own banked scaffold, and it
+                // carries the honest badge instead of a spinner.
+                if PersonalServePolicy.presentation(
+                    hasPersonalPhoto: viewModel.currentPersonalHeroId != nil,
+                    lookState: .making
+                ) == .scaffold(badge: PersonalServePolicy.scaffoldBadge) {
+                    Text(PersonalServePolicy.scaffoldBadge)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.horizontal, 16)
+                } else {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .tint(AppTheme.inkSecondary)
+                            // Spec §7 G1, verbatim.
+                            Text(MakeItMeCopy.progressTitle)
+                                .font(.appSecondary.weight(.semibold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                        }
+                        // Spec §7 G2, verbatim (as amended Nov 1, 2026).
+                        Text(MakeItMeCopy.progressSubline)
+                            .font(.appFootnote)
+                            .foregroundColor(AppTheme.inkSecondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, 16)
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 16)
             case .failed:
                 // Spec §7 G5/G6 (RW-16.16): the durable failed line
                 // and its user-initiated retry. The retry goes

@@ -60,8 +60,10 @@ struct MakeItMeForkView: View {
 
                 // Option A — customize
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Make it me")
-                        .font(.system(size: 18, weight: .bold))
+                    // RW-26 (notes §7.5): the fork introduces the
+                    // feature under its script wordmark.
+                    Text("Make It Me")
+                        .font(.greatVibes(size: 25))
                         .foregroundColor(.white)
                     Text("Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at. Your first 5 looks are free.")
                         .font(.system(size: 15))
@@ -470,7 +472,12 @@ struct MakeItMeCaptureView: View {
             Button("Cancel", role: .cancel) {}
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraCaptureView(
+            // RW-26: the camera door IS the guided capture —
+            // camera-first with live coaching (frames 15–16). The
+            // captured photo enters the identical seam a library
+            // photo uses (addPhoto → PhotoQualityChecker), so both
+            // doors are judged by the same checks.
+            GuidedSelfieCaptureView(
                 onCapture: { data in
                     showCamera = false
                     Task { await addPhoto(originalData: data) }

@@ -54,11 +54,19 @@
 # overrides (JLK run #2 history: any gap lets Xcode default to a
 # nonexistent "iOS Development" identity).
 #
-# CURRENT_PROJECT_VERSION is overridden with this workflow's run
-# number. A new workflow's run numbers start at 1, and the project's
-# build number is 1 with nothing uploaded yet, so the first upload is
-# version 1.0 build 1 and every later run increments. If an upload
-# ever collides with an existing build number, add an offset.
+# CURRENT_PROJECT_VERSION (RW-26 resolution, 2026-11-02): the
+# build number is INTENTIONAL, not incidental. It used to be
+# overridden with this workflow's run number — which happened to
+# reach 18 on the next dispatch only because the workflow had
+# exactly 17 historical runs; any failed or archive-only dispatch
+# would have burned the number and silently skipped it. The
+# archive now takes the `build_number` dispatch input (default
+# 18 — the next build for the next-gen train; the last submitted
+# App Store build was 17, and the project file also carries 18 on
+# every target). Bump the input's default when the train ships.
+# Set `upload_to_testflight` to false for an archive-only run:
+# the signed IPA is kept as a workflow artifact and NOTHING is
+# uploaded to App Store Connect / TestFlight.
 #
 # Upload uses `xcrun altool` (ships with Xcode), as in the JLK
 # pipeline. Manual dispatch ONLY — macOS minutes bill at 10x on
@@ -73,6 +81,15 @@ on:
         description: "Marketing version to archive"
         required: true
         default: "1.0"
+      build_number:
+        description: "Build number (CURRENT_PROJECT_VERSION) the archive will carry"
+        required: true
+        default: "18"
+      upload_to_testflight:
+        description: "Upload the exported IPA to App Store Connect / TestFlight (false = archive only, IPA kept as an artifact)"
+        type: boolean
+        required: true
+        default: true
 
 concurrency:
   group: ios-testflight
@@ -238,7 +255,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/RunWear.xcarchive" \
             MARKETING_VERSION="${{ inputs.marketing_version }}" \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CURRENT_PROJECT_VERSION="${{ inputs.build_number }}" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
@@ -289,6 +306,7 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
 
       - name: Upload to App Store Connect / TestFlight
+        if: ${{ inputs.upload_to_testflight }}
         env:
           ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -303,8 +321,8 @@ jobs:
             --apiKey "$ASC_KEY_ID" \
             --apiIssuer "$ASC_ISSUER_ID"
 
-      - name: Upload the IPA as a workflow artifact (debugging a failed upload)
-        if: failure()
+      - name: Upload the IPA as a workflow artifact (archive-only runs, and debugging a failed upload)
+        if: ${{ failure() || !inputs.upload_to_testflight }}
         uses: actions/upload-artifact@v4
         with:
           name: runwear-ios-ipa

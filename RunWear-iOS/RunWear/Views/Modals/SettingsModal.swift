@@ -20,6 +20,10 @@ struct SettingsModal: View {
     @EnvironmentObject private var personalStore: PersonalHeroStore
 
     @State private var showFeedback = false
+    /// RW-26 (notes §8 Q1): the analytics opt-in — Android has
+    /// carried it alone until now; parity requires it on iOS with
+    /// identical copy and the identical default: OFF.
+    @AppStorage("analyticsOptIn") private var analyticsOptIn = false
     /// RW-25: appearance preference — the same AppStorage key the
     /// app root resolves, so this picker and RunWearApp never drift.
     @AppStorage("appearancePreference") private var appearancePreference: AppearancePreference = .system
@@ -67,6 +71,33 @@ struct SettingsModal: View {
 
                 Section("Body Temperature") {
                     ComfortLevelControl(comfortLevel: $comfortLevel)
+                }
+
+                // RW-26: "Help improve the app" — copy and default
+                // IDENTICAL to Android's settings sheet (§8 Q1).
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $analyticsOptIn) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Help improve the app")
+                                    .font(.appSecondary.weight(.medium))
+                                Text("Count how the app is used")
+                                    .font(.appFootnote)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        Text("We count how the app is used — which features get used and where recommendations miss — and nothing else. No account, no advertising ID, and your location never leaves the phone more precisely than the city name. Turn this off and nothing is counted or sent.")
+                            .font(.appFootnote)
+                            .foregroundColor(.secondary)
+                        if !analyticsOptIn {
+                            Text("Off. Nothing is being counted.")
+                                .font(.appFootnote.weight(.medium))
+                        }
+                        Text("If the app crashes, it can send us the technical details so we can fix it. This happens only after a crash, and only with your permission here.")
+                            .font(.appFootnote)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
 
                 // RW-14 "Make it me" (spec §3, states S1–S14).
@@ -233,18 +264,25 @@ struct SettingsModal: View {
     }
 }
 
-// MARK: - Feedback Sheet (R-15)
+// MARK: - Feedback Sheet (R-15; RW-26 channel wiring)
 //
-// Category + message + optional reply address, composed into a
-// pre-addressed email to the studio support inbox (FeedbackComposer).
-// Presented from Settings; dismisses itself after handing off to Mail.
+// Category + message + optional reply address. RW-26: the Send
+// action SUBMITS to the first-party intake — the same channel
+// Android uses (FeedbackSubmissionService) — under a human
+// category, with the what's-sent disclosure (frame 48) readable
+// BEFORE sending. If a submission fails, the sheet says so and
+// offers the old mailto composer as a fallback; it never claims
+// a send that did not land.
 struct FeedbackSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
-    @State private var category: FeedbackCategory = .bugReport
+    @State private var category: FeedbackCategory = .somethingWrong
     @State private var message = ""
     @State private var replyEmail = ""
+    @State private var sending = false
+    @State private var sendFailed = false
+    @State private var sent = false
 
     private var appVersion: String {
         let info = Bundle.main.infoDictionary
@@ -253,13 +291,23 @@ struct FeedbackSheet: View {
         return "\(short) (\(build))"
     }
 
-    private var composedURL: URL? {
+    /// The derived bundle that rides with the report — exactly
+    /// what the disclosure section lists.
+    private var bundle: [String: String] {
+        ["App version": appVersion]
+    }
+
+    private var fallbackURL: URL? {
         FeedbackComposer.mailtoURL(
             category: category,
             message: message,
             replyEmail: replyEmail,
             appVersion: appVersion
         )
+    }
+
+    private var canSend: Bool {
+        !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending
     }
 
     var body: some View {
@@ -291,6 +339,39 @@ struct FeedbackSheet: View {
                 } footer: {
                     Text("Only used to reply to your feedback.")
                 }
+
+                // Frame 48: the what's-sent disclosure, before Send.
+                Section("What We're Sending With This") {
+                    ForEach(FeedbackPayloads.disclosureLines(bundle: bundle), id: \.self) { line in
+                        Text(line)
+                            .font(.appFootnote)
+                            .foregroundColor(.secondary)
+                    }
+                    Text("Plus your message, exactly as written, under the category you picked. Nothing else — no location beyond what you type, no photos.")
+                        .font(.appFootnote)
+                        .foregroundColor(.secondary)
+                }
+
+                if sent {
+                    Section {
+                        Label("Thanks — your feedback is in.", systemImage: "checkmark.circle")
+                            .foregroundColor(AppTheme.pinePayload)
+                    }
+                }
+
+                if sendFailed {
+                    Section {
+                        Text("That didn't send. Check your connection and try again — or email it instead.")
+                            .font(.appFootnote)
+                            .foregroundColor(.secondary)
+                        if let fallbackURL {
+                            Button("Email it instead") {
+                                openURL(fallbackURL)
+                                dismiss()
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("Send Feedback")
             .navigationBarTitleDisplayMode(.inline)
@@ -299,15 +380,31 @@ struct FeedbackSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Send") {
-                        if let url = composedURL {
-                            openURL(url)
-                            dismiss()
-                        }
+                    Button(sending ? "Sending…" : "Send") {
+                        Task { await submit() }
                     }
-                    .disabled(composedURL == nil)
+                    .disabled(!canSend)
                 }
             }
+        }
+    }
+
+    private func submit() async {
+        sending = true
+        sendFailed = false
+        let ok = await FeedbackSubmissionService.submit(
+            category: category,
+            message: message,
+            replyEmail: replyEmail,
+            appVersion: appVersion,
+            bundle: bundle
+        )
+        sending = false
+        if ok {
+            sent = true
+            dismiss()
+        } else {
+            sendFailed = true
         }
     }
 }

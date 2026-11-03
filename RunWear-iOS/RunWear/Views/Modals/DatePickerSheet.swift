@@ -6,8 +6,19 @@ struct DatePickerSheet: View {
 
 
     private let calendar = Calendar.current
+    /// The forecast horizon is 7 days (WeatherService forecast_days).
+    /// Browsing extends 3 days past it; those days are NAMED as
+    /// beyond the forecast in the grid (frame 42) and land on the
+    /// RW-23 out-of-forecast notice when picked — never dressed on
+    /// invented weather.
+    static let forecastHorizonDays = 7
+    static let browseDays = 10
     private var availableDates: [Date] {
-        (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: Date())) }
+        (0..<Self.browseDays).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: Date())) }
+    }
+
+    static func isBeyondForecast(dayIndex: Int) -> Bool {
+        dayIndex >= forecastHorizonDays
     }
 
     // Presented as a real .sheet (design record §5.2): the system
@@ -17,7 +28,7 @@ struct DatePickerSheet: View {
             // Title
             Text("Select Date")
                 .font(.appSheetTitle)
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
 
             // Date grid
             dateGrid
@@ -26,7 +37,7 @@ struct DatePickerSheet: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.darkBackground.ignoresSafeArea())
+        .background(AppTheme.background.ignoresSafeArea())
         // RW-6.10: one selection tick per change — nothing more.
         .sensoryFeedback(.selection, trigger: selectedDate)
     }
@@ -36,9 +47,10 @@ struct DatePickerSheet: View {
 
     private var dateGrid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 12) {
-            ForEach(availableDates, id: \.self) { date in
+            ForEach(Array(availableDates.enumerated()), id: \.offset) { index, date in
                 DateButton(
                     date: date,
+                    isBeyondForecast: Self.isBeyondForecast(dayIndex: index),
                     isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
                     action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -65,6 +77,7 @@ struct DatePickerSheet: View {
 
 private struct DateButton: View {
     let date: Date
+    var isBeyondForecast: Bool = false
     let isSelected: Bool
     let action: () -> Void
 
@@ -76,18 +89,27 @@ private struct DateButton: View {
                 // Day label (Today, Tomorrow, or day name)
                 Text(dayLabel)
                     .font(.appEyebrow)
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                    .foregroundColor(isSelected ? .white : AppTheme.inkMuted)
 
                 // Date number
                 Text("\(calendar.component(.day, from: date))")
                     .font(.title2.weight(.semibold))
                     .monospacedDigit()
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.9))
+                    .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
 
                 // Month abbreviation
                 Text(monthLabel)
                     .font(.appEyebrow)
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .white.opacity(0.5))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.inkSecondary)
+
+                // Frame 42: beyond-forecast days are named as such.
+                if isBeyondForecast {
+                    Text("Beyond forecast")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.inkMuted)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)

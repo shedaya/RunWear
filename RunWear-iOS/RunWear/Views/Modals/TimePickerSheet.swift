@@ -15,7 +15,7 @@ struct TimePickerSheet: View {
             // Title
             Text("Select Time")
                 .font(.appSheetTitle)
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
 
             // Time grid
             timeGrid
@@ -24,7 +24,7 @@ struct TimePickerSheet: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.darkBackground.ignoresSafeArea())
+        .background(AppTheme.background.ignoresSafeArea())
         // RW-6.10: one selection tick per change — nothing more.
         .sensoryFeedback(.selection, trigger: selectedHour)
     }
@@ -72,11 +72,11 @@ private struct TimeButton: View {
                 Text(formattedHour)
                     .font(.appItemName)
                     .monospacedDigit()
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.9))
+                    .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
 
                 Text(period)
                     .font(.appEyebrow)
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : .white.opacity(0.5))
+                    .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.inkSecondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
