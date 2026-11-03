@@ -151,7 +151,25 @@ fun HeroMainScreen(
     /** Re-run hero resolution after a personal-layer change. */
     onPersonalLayerChanged: () -> Unit = {},
     onDismissMakeItMeUpsell: () -> Unit = {},
-    onRetryPersonalLook: () -> Unit = {}
+    onRetryPersonalLook: () -> Unit = {},
+    /**
+     * WS-1 (D-03): the Scaffold's content padding from MainActivity.
+     * Consumed ONCE, here, by the screen's ONE scroll container: its
+     * bottom padding lands in the container's contentPadding (so the
+     * last rows clear the navigation bar). The TOP inset is
+     * deliberately NOT applied to the root — the photo zone is
+     * full-bleed behind the status bar by design, and its chrome
+     * consumes the top inset itself via statusBarsPadding() at
+     * exactly one point inside the photo zone. Before WS-1 this
+     * screen had no inset parameter at all: the Scaffold inset was
+     * applied per-destination to Onboarding/Permission and simply
+     * dropped here, which is the mechanism that left the (then
+     * mis-placed) sheet's eyebrow clipped under the status bar.
+     */
+    scaffoldContentPadding: PaddingValues = PaddingValues(0.dp),
+    /** WS-1: the root modifier, applied once to the screen's root
+     * container — no destination-internal node re-applies it. */
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
 
@@ -317,7 +335,7 @@ Get your personalized running outfit at runwear.ai
     //   stacked layout, outfit cards flowing into a grid as width allows
     // EXPANDED: tablet landscape / desktop (> 840dp) — two-pane rail
     BoxWithConstraints(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
@@ -363,7 +381,9 @@ Get your personalized running outfit at runwear.ai
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(RunWearColors.Surface),
-                                contentPadding = PaddingValues(bottom = 60.dp)
+                                contentPadding = PaddingValues(
+                                    bottom = 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                )
                             ) {
                                 item {
                                     Column(
@@ -439,7 +459,7 @@ Get your personalized running outfit at runwear.ai
                                 contentPadding = PaddingValues(
                                     start = spec.pagePadding,
                                     end = spec.pagePadding,
-                                    bottom = 60.dp
+                                    bottom = 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -526,7 +546,8 @@ Get your personalized running outfit at runwear.ai
                                         onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
+                                        fillHeight = true
                                     )
                                     if (uiState.personalLookStatus ==
                                         com.runwear.app.makeitme.PersonalLookStatus.Making
@@ -555,7 +576,7 @@ Get your personalized running outfit at runwear.ai
                                     contentPadding = PaddingValues(
                                         start = spec.pagePadding,
                                         end = spec.pagePadding,
-                                        bottom = 60.dp
+                                        bottom = 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -973,16 +994,26 @@ private fun HeroSectionContent(
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** EXPANDED split pane only: the photo fills the pane's height. */
+    fillHeight: Boolean = false
 ) {
+    // WS-1 (D-01 mechanism, applied to the photo half): the caller's
+    // modifier belongs to THIS root — the direct child of the
+    // stacking Box — never forwarded to an inner node, or the Box
+    // cannot read its alignment from it.
     AnimatedVisibility(
         visible = contentVisible,
-        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+        enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
+        modifier = modifier
     ) {
         HeroSection(
             weather = uiState.weather,
             outfit = uiState.outfit,
-            locationName = uiState.locationName,
+            // WS-4/WS-1: the photo-zone chrome (the location pill)
+            // shows the SIMPLE place form, never the raw geocode
+            // string.
+            locationName = uiState.simplePlace?.display ?: uiState.locationName,
             heroImageUrl = uiState.heroImageUrl,
             scrollOffset = scrollOffset,
             onLocationClick = onLocationClick,
@@ -1006,7 +1037,7 @@ private fun HeroSectionContent(
             } else {
                 null
             },
-            modifier = modifier
+            modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
         )
     }
 }
@@ -1027,9 +1058,18 @@ private fun HeroSheetContent(
     overlapsPhoto: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    // WS-1 (D-01, THE critical fix): [modifier] is applied to THIS
+    // AnimatedVisibility — the DIRECT child of the stacking Box — so
+    // the Box reads its Alignment.BottomStart from it and the sheet
+    // composes overlapping the photo's foot. Before WS-1 the
+    // modifier was forwarded to the inner HeroSheetBlock and this
+    // root carried none, so the Box placed the sheet at its default
+    // TopStart — ON TOP of the photo, burying the chrome row
+    // (D-02/A3) and manufacturing the scroll void (D-04).
     AnimatedVisibility(
         visible = contentVisible,
-        enter = fadeIn(tween(400, easing = FastOutSlowInEasing))
+        enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
+        modifier = modifier
     ) {
         HeroSheetBlock(
             weather = uiState.weather,
@@ -1042,7 +1082,7 @@ private fun HeroSheetContent(
             onNowClick = onNowClick,
             onWeatherPillClick = onWeatherPillClick,
             overlapsPhoto = overlapsPhoto,
-            modifier = modifier,
+            modifier = Modifier.fillMaxWidth(),
             temperatureUnit = uiState.temperatureUnit
         )
     }
@@ -1080,7 +1120,18 @@ private fun HeroStackedUnit(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(heroHeight + sheetHeight - HeroSheetOverlap)
+            // WS-1: the reservation is HeroStackedGeometry's — the
+            // first item reserves EXACTLY hero + sheet − 28dp, the
+            // sheet is bottom-anchored inside it, and the accessory
+            // rows that follow the unit (Make It Me progress/failed
+            // lines) live in the same first list item, so they scroll
+            // with the page. No height in this item is unoccupied at
+            // any sheet height (D-04's void is zero by construction).
+            .height(
+                com.runwear.app.ui.components.HeroStackedGeometry.unitHeight(
+                    heroHeight, sheetHeight
+                )
+            )
     ) {
         HeroSectionContent(
             uiState = uiState,

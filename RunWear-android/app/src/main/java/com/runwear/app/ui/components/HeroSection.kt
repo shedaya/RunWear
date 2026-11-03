@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
@@ -52,7 +51,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
@@ -96,6 +94,179 @@ object HeroScrollHandoff {
 
     /** Corner radius the photo clips to at [progress]: 0dp → 24dp. */
     fun cornerRadius(progress: Float): Dp = (24f * progress).dp
+
+    /**
+     * WS-1 (Part 1 §1.1): the photo parallaxes at 0.5× the sheet's
+     * travel. Expressed on the crop anchor, not a layer translation
+     * (a translation would open a gap at the photo's edge): the
+     * served slice's vertical anchor bias drifts from top (−1) at
+     * HALF the handoff's own drift toward center, so the slice moves
+     * at 0.5× while the frame moves at 1×. At rest the anchor is
+     * exactly top — see [HeroImageGeometry] for why that keeps the
+     * runner's head in frame.
+     */
+    fun parallaxAnchorBias(progress: Float): Float =
+        -1f + PARALLAX_FACTOR * progress
+
+    /** The fraction of handoff travel over which the photo-zone
+     * chrome (script logo, location pill, share, settings) fades. */
+    const val CHROME_FADE_FRACTION = 0.4f
+
+    /** Parallax rate: the slice anchor moves at half the frame's rate. */
+    const val PARALLAX_FACTOR = 0.5f
+
+    /**
+     * WS-1 (Part 1 §1.1): chrome opacity 1 → 0 across the FIRST 40%
+     * of handoff travel; fully present again at rest. The chrome
+     * never slides — opacity only.
+     */
+    fun chromeAlpha(progress: Float): Float =
+        1f - (progress / CHROME_FADE_FRACTION).coerceIn(0f, 1f)
+
+    /**
+     * WS-1: the chrome is interactive at rest and becomes
+     * non-interactive at the END of its fade (progress ≥ 40% of
+     * travel) — a faded-out button must never swallow a tap meant
+     * for the sheet beneath it.
+     */
+    fun chromeInteractive(progress: Float): Boolean =
+        progress < CHROME_FADE_FRACTION
+}
+
+/**
+ * WS-1 motion tokens for the home surface (Part 1 §1.1/§1.2 of the
+ * rebuild spec): the hero crossfade's in/out durations and the
+ * day-strip selection settle. Named once, here, so no surface
+ * re-invents its own timing.
+ */
+object HeroMotionTokens {
+    /** Hero photo crossfade IN — begins only once the incoming
+     * image has fully decoded (see HeroSection's painter gating). */
+    const val HERO_CROSSFADE_IN_MS = 600
+
+    /** Hero photo crossfade OUT (the outgoing layer's fade). */
+    const val HERO_CROSSFADE_OUT_MS = 250
+
+    /** Day/time strip selection settle (micro transition). */
+    const val DAY_STRIP_SETTLE_MS = 120
+}
+
+/**
+ * WS-1 (D-23, home half): the head-crop geometry, COMPUTED from the
+ * served image's own aspect at the served width — never eyeballed.
+ *
+ * Hero serves are 800×1200 (the decode target documented in
+ * HeroSection). Display uses Crop: the served slice is the largest
+ * centered slice of the source that fills the display box, with its
+ * vertical anchor at the TOP at rest ([HeroScrollHandoff]'s parallax
+ * drifts it at 0.5× from there). Because the slice starts at source
+ * y = 0, the runner's head band — measured on the audited serve at
+ * source y ≈ 392–509 of 1200 (RW-27 D-23) — is inside the slice
+ * whenever the slice is at least [HEAD_BAND_BOTTOM_FRACTION] tall,
+ * and the reserved top chrome zone (status bar + controls row) sits
+ * ABOVE the head's displayed top whenever it is no taller than the
+ * head's displayed offset. Both constraints are pure functions of
+ * (source size, display size) and are pinned by tests across the
+ * phone / unfolded-Fold / split-pane width matrix.
+ */
+object HeroImageGeometry {
+
+    const val SOURCE_WIDTH_PX = 800
+    const val SOURCE_HEIGHT_PX = 1200
+
+    /** Audited head band on the served frame (RW-27 D-23 fit). */
+    const val HEAD_BAND_TOP_FRACTION = 392f / 1200f
+    const val HEAD_BAND_BOTTOM_FRACTION = 509f / 1200f
+
+    /** Crop scale for a display box: the source scales until it
+     * fills the box on both axes. */
+    fun cropScale(displayWidthPx: Float, displayHeightPx: Float): Float {
+        if (displayWidthPx <= 0f || displayHeightPx <= 0f) return 0f
+        return maxOf(
+            displayWidthPx / SOURCE_WIDTH_PX,
+            displayHeightPx / SOURCE_HEIGHT_PX
+        )
+    }
+
+    /** Height (source px) of the slice Crop shows for a display box. */
+    fun sliceHeightSourcePx(displayWidthPx: Float, displayHeightPx: Float): Float {
+        val scale = cropScale(displayWidthPx, displayHeightPx)
+        return if (scale <= 0f) 0f else displayHeightPx / scale
+    }
+
+    /**
+     * Source y where the slice starts for a vertical anchor [bias]
+     * (−1 = top, 0 = center). At rest the bias is −1, so this is 0:
+     * nothing above the slice exists to crop the head away.
+     */
+    fun sliceTopSourcePx(
+        displayWidthPx: Float,
+        displayHeightPx: Float,
+        bias: Float = -1f
+    ): Float {
+        val slice = sliceHeightSourcePx(displayWidthPx, displayHeightPx)
+        val overflow = (SOURCE_HEIGHT_PX - slice).coerceAtLeast(0f)
+        return overflow * ((bias + 1f) / 2f)
+    }
+
+    /** True when the whole head band lies inside the served slice. */
+    fun headBandVisible(
+        displayWidthPx: Float,
+        displayHeightPx: Float,
+        bias: Float = -1f
+    ): Boolean {
+        val top = sliceTopSourcePx(displayWidthPx, displayHeightPx, bias)
+        val bottom = top + sliceHeightSourcePx(displayWidthPx, displayHeightPx)
+        return top <= HEAD_BAND_TOP_FRACTION * SOURCE_HEIGHT_PX &&
+            bottom >= HEAD_BAND_BOTTOM_FRACTION * SOURCE_HEIGHT_PX
+    }
+
+    /** Displayed offset (px) of the head band's top within the box. */
+    fun headTopDisplayPx(displayWidthPx: Float, displayHeightPx: Float): Float {
+        val scale = cropScale(displayWidthPx, displayHeightPx)
+        val top = sliceTopSourcePx(displayWidthPx, displayHeightPx)
+        return (HEAD_BAND_TOP_FRACTION * SOURCE_HEIGHT_PX - top) * scale
+    }
+
+    /**
+     * The reserved top zone's sizing rule: the chrome zone reserved
+     * over the photo (status-bar inset + the controls row) must not
+     * extend past the head's displayed top — the runner's head stays
+     * out of the chrome zone by construction, at any served width.
+     */
+    fun reservedTopZoneFits(
+        reservedTopZonePx: Float,
+        displayWidthPx: Float,
+        displayHeightPx: Float
+    ): Boolean = reservedTopZonePx <= headTopDisplayPx(displayWidthPx, displayHeightPx)
+}
+
+/**
+ * WS-1 (D-01/D-04): the stacked unit's geometry — one pure place
+ * where the reservation is computed. The unit (the LazyColumn's
+ * first item) is exactly hero + sheet − overlap tall; the sheet is
+ * anchored to the unit's BOTTOM, so its top sits at hero − overlap
+ * and the −28dp overlap of the photo's foot holds at EVERY sheet
+ * height and every scroll position. The void the audit measured
+ * (≈ sheetHeight − 28dp of blank) is zero by construction here:
+ * [voidDp] is identically zero, and the tests pin that across
+ * short and long sheet heights.
+ */
+object HeroStackedGeometry {
+
+    /** The sheet's overlap of the photo's foot: −28dp, constant. */
+    val OVERLAP: Dp = HeroSheetOverlap
+
+    /** Total height reserved for the stacked unit. */
+    fun unitHeight(heroHeight: Dp, sheetHeight: Dp): Dp =
+        heroHeight + sheetHeight - OVERLAP
+
+    /** The sheet's top edge within the unit. */
+    fun sheetTop(heroHeight: Dp): Dp = heroHeight - OVERLAP
+
+    /** Unoccupied height inside the reserved unit: zero, always. */
+    fun voidHeight(heroHeight: Dp, sheetHeight: Dp): Dp =
+        unitHeight(heroHeight, sheetHeight) - (sheetTop(heroHeight) + sheetHeight)
 }
 
 /**
@@ -188,6 +359,10 @@ fun HeroSection(
     // RW-25 scroll handoff progress (0 = full-bleed, 1 = settled card).
     val handoff = HeroScrollHandoff.progress(scrollOffset, heroHeightPx.toFloat())
     val handoffScale = HeroScrollHandoff.scale(handoff)
+    // WS-1: photo-zone chrome fades over the first 40% of travel and
+    // is non-interactive from the end of the fade.
+    val chromeAlpha = HeroScrollHandoff.chromeAlpha(handoff)
+    val chromeInteractive = HeroScrollHandoff.chromeInteractive(handoff)
 
     Box(
         modifier = modifier
@@ -213,17 +388,48 @@ fun HeroSection(
                 contentAlignment = Alignment.Center
             ) {
                 if (heroImageUrl != null) {
-                    AsyncImage(
+                    // WS-1 (Part 1 §1.1; D-12 home half): the
+                    // crossfade begins ONLY after the incoming image
+                    // has fully decoded. The painter's alpha stays 0
+                    // until its state is Success — no placeholder, no
+                    // broken-image glyph, no half-decoded frame is
+                    // ever painted. In: 600 ms; out (on swap away):
+                    // 250 ms; a person change CUTS per
+                    // HeroTransitionPolicy. The crop anchor is the
+                    // parallax bias (top at rest — D-23 geometry);
+                    // there is NO extra 1.1× zoom (the pre-WS-1 zoom
+                    // cropped the served frame arbitrarily).
+                    val heroPainter = coil.compose.rememberAsyncImagePainter(
                         model = ImageRequest.Builder(context)
                             .data(heroImageUrl)
                             .size(heroWidthPx, heroHeightPx)
-                            .apply { if (crossfadeHero) crossfade(500) else crossfade(false) }
-                            .build(),
+                            .crossfade(false)
+                            .build()
+                    )
+                    val heroDecoded =
+                        heroPainter.state is coil.compose.AsyncImagePainter.State.Success
+                    val heroAlpha by androidx.compose.animation.core.animateFloatAsState(
+                        targetValue = if (heroDecoded) 1f else 0f,
+                        animationSpec = androidx.compose.animation.core.tween(
+                            durationMillis = when {
+                                !crossfadeHero -> 0
+                                heroDecoded -> HeroMotionTokens.HERO_CROSSFADE_IN_MS
+                                else -> HeroMotionTokens.HERO_CROSSFADE_OUT_MS
+                            }
+                        ),
+                        label = "heroCrossfade"
+                    )
+                    androidx.compose.foundation.Image(
+                        painter = heroPainter,
                         contentDescription = generateHeroAltText(weather, outfit),
                         contentScale = ContentScale.Crop,
+                        alignment = androidx.compose.ui.BiasAlignment(
+                            horizontalBias = 0f,
+                            verticalBias = HeroScrollHandoff.parallaxAnchorBias(handoff)
+                        ),
                         modifier = Modifier
                             .fillMaxSize()
-                            .scale(1.1f)
+                            .graphicsLayer { alpha = heroAlpha }
                     )
                 } else {
                     // Fallback gradient when no image
@@ -288,23 +494,33 @@ fun HeroSection(
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
                 .padding(top = 10.dp)
+                .graphicsLayer { alpha = chromeAlpha }
         )
 
         // 4. Top Controls (Location + Share + Settings) — glass chrome,
-        // theme-independent, unchanged.
+        // theme-independent. WS-1: this row is the photo-zone chrome —
+        // it fades with the handoff's first 40% and goes
+        // non-interactive at the end of the fade. The LOCATION PILL
+        // (A3) is the designed home entry to the Section E picker;
+        // its label is the SimplePlace form (WS-4), normalized at
+        // this render boundary so a raw geocode string can never
+        // reach it.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(16.dp),
+                .padding(16.dp)
+                .graphicsLayer { alpha = chromeAlpha },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Location button (pill with text) - constrained to prevent overflow
             GlassButton(
                 icon = Icons.Outlined.LocationOn,
-                text = locationName,
+                text = com.runwear.shared.domain.model.SimplePlace
+                    .fromRawDisplayString(locationName).display,
                 onClick = onLocationClick,
+                enabled = chromeInteractive,
                 modifier = Modifier.weight(1f, fill = false)
             )
 
@@ -317,12 +533,14 @@ fun HeroSection(
                 GlassButtonIcon(
                     icon = Icons.Outlined.Share,
                     onClick = onShareClick,
-                    contentDescription = "Share"
+                    contentDescription = "Share",
+                    enabled = chromeInteractive
                 )
                 GlassButtonIcon(
                     icon = Icons.Outlined.Settings,
                     onClick = onSettingsClick,
-                    contentDescription = "Settings"
+                    contentDescription = "Settings",
+                    enabled = chromeInteractive
                 )
             }
         }

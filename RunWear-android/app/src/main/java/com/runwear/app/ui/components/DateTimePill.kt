@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -102,7 +103,16 @@ fun DateTimePill(
     // RW-25 flat-on-sheet tokens: tonal fill from the M3 scheme, ink
     // from the palette, the "Now" accent in the pine family.
     val containerColor = if (onSheet) MaterialTheme.colorScheme.surfaceVariant else glassBackground
-    val activeSectionColor = if (onSheet) MaterialTheme.colorScheme.surface else glassActiveSection
+    // WS-1 (Part 1 §1.1): the day/time strip's selection settles in
+    // 120 ms — the active section's color crossfades at the micro
+    // token instead of snapping when the selection state changes.
+    val activeSectionColor by androidx.compose.animation.animateColorAsState(
+        targetValue = if (onSheet) MaterialTheme.colorScheme.surface else glassActiveSection,
+        animationSpec = androidx.compose.animation.core.tween(
+            HeroMotionTokens.DAY_STRIP_SETTLE_MS
+        ),
+        label = "dayStripSettle"
+    )
     val primaryInk = if (onSheet) RunWearColors.TextPrimary else Color.White
     val secondaryInk = if (onSheet) RunWearColors.TextSecondary else Color.White.copy(alpha = 0.7f)
     val dividerColor = if (onSheet) {

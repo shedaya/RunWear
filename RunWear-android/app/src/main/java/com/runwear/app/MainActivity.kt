@@ -226,7 +226,14 @@ class MainActivity : ComponentActivity() {
                                     onDismissMakeItMeUpsell =
                                         viewModel::dismissMakeItMeUpsell,
                                     onRetryPersonalLook =
-                                        viewModel::retryPersonalLook
+                                        viewModel::retryPersonalLook,
+                                    // WS-1 (D-03): the Scaffold inset
+                                    // reaches the main screen too —
+                                    // HeroMainScreen consumes it ONCE
+                                    // in its scroll container (see its
+                                    // parameter doc); it is no longer
+                                    // dropped for this destination.
+                                    scaffoldContentPadding = innerPadding
                                 )
                             }
                         }

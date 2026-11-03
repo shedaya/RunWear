@@ -52,7 +52,10 @@ fun GlassButton(
     icon: ImageVector,
     text: String? = null,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** WS-1: photo-zone chrome goes non-interactive at the end of
+     * its handoff fade — a disabled Surface swallows no taps. */
+    enabled: Boolean = true
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -61,6 +64,7 @@ fun GlassButton(
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
         },
+        enabled = enabled,
         modifier = modifier,
         shape = RoundedCornerShape(100.dp), // Pill shape
         color = GlassBackground,
@@ -105,7 +109,9 @@ fun GlassButtonIcon(
     icon: ImageVector,
     onClick: () -> Unit,
     contentDescription: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** WS-1: see [GlassButton.enabled]. */
+    enabled: Boolean = true
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -114,6 +120,7 @@ fun GlassButtonIcon(
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
             onClick()
         },
+        enabled = enabled,
         modifier = modifier.size(44.dp),
         shape = CircleShape,
         color = GlassBackground,
