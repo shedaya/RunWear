@@ -1,0 +1,29 @@
+# RunWear identity-screen — production image (RW-16.30 provisioning package)
+#
+# Wraps the in-repo service UNMODIFIED. Build context is the repo's
+# services/identity-screen/ directory (app.py + requirements.txt are
+# copied from there verbatim). The only differences from the in-repo
+# Dockerfile:
+#   1. the buffalo_l weights (~326 MB) are downloaded at BUILD time and
+#      baked into the image, so a machine start is just the model load
+#      (~11 s measured) instead of a 326 MB download on every start;
+#   2. a HEALTHCHECK on the service's own /health endpoint.
+#
+# SCREEN_KEY is a runtime env var (set as a host secret) — never bake
+# it into the image. app.py enforces it as a Bearer token on all POSTs.
+FROM python:3.12-slim
+WORKDIR /srv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 libgl1 curl && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY app.py .
+# Bake the model weights into the image layer (~/.insightface/models).
+RUN python -c "from insightface.app import FaceAnalysis; \
+    a = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); \
+    a.prepare(ctx_id=-1, det_size=(640, 640))"
+ENV PORT=8080
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
+  CMD curl -fs http://127.0.0.1:8080/health || exit 1
+CMD ["python", "app.py"]
