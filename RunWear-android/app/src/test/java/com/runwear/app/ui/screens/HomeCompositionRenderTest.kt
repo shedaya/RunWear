@@ -362,8 +362,7 @@ class HomeChromeHandoffTest : HomeCompositionHarness() {
                     heroImageUrl = null,
                     scrollOffset = scrollOffset,
                     onLocationClick = {},
-                    onSettingsClick = {},
-                    onShareClick = {}
+                    onSettingsClick = {}
                 )
             }
         }

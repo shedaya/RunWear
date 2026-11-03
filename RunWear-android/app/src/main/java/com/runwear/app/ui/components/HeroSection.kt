@@ -290,7 +290,6 @@ fun HeroSection(
     scrollOffset: Float = 0f,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onShareClick: () -> Unit,
     /** Hero-flag affordance: shown only when a hero photo is displayed. */
     showFlagButton: Boolean = false,
     flagEnabled: Boolean = true,
@@ -526,16 +525,12 @@ fun HeroSection(
 
             Spacer(Modifier.width(8.dp))
 
-            // Right side: Share + Settings (icon-only circular buttons)
+            // Right side: Settings (icon-only circular button).
+            // WS-6 (D-15): no home share button — sharing lives in
+            // the collection, card by card, by design.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GlassButtonIcon(
-                    icon = Icons.Outlined.Share,
-                    onClick = onShareClick,
-                    contentDescription = "Share",
-                    enabled = chromeInteractive
-                )
                 GlassButtonIcon(
                     icon = Icons.Outlined.Settings,
                     onClick = onSettingsClick,

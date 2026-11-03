@@ -354,38 +354,10 @@ fun HeroMainScreen(
         }
     }
 
-    // Share function - matches web PWA shareOutfit verbatim
-    fun shareOutfit() {
-        val weather = uiState.weather ?: return
-        val outfit = uiState.outfit ?: return
-        // WS-2: the share text projects the canonical store through
-        // the state's unit preference, like every other surface.
-        val unit = uiState.temperatureUnit
-        val tempBracket = getTempBracket(weather.effectiveTemperature)
-
-        val itemsList = outfit.allItems.joinToString("\n") { "• ${it.displayName}" }
-        val shareText = """
-🏃 RunWear Recommendation
-
-📍 ${uiState.locationName}
-🌡️ Feels like ${unit.formatTemperature(weather.effectiveTemperature)} ($tempBracket)
-${weather.weatherCode.icon} ${weather.weatherCode.description}
-
-What to wear:
-$itemsList
-
-${if (outfit.tips.isNotEmpty()) "💡 Tip: ${outfit.tips.first()}" else ""}
-
-Get your personalized running outfit at runwear.ai
-        """.trimIndent()
-
-        val sendIntent = Intent().apply {
-            action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, shareText)
-            type = "text/plain"
-        }
-        context.startActivity(Intent.createChooser(sendIntent, "Share your outfit"))
-    }
+    // WS-6 (D-15): there is NO home-level share. The design moved
+    // sharing inside the collection, card by card (Morning Poster /
+    // Kit Card, rasterized — see ShareArtifacts); the home text
+    // share that lived here is removed with its emoji payload.
 
     // WS-3 (D-11): the element's dim seam — true whenever ANY sheet
     // or sheet-like surface hosted from home is up. The element dims
@@ -476,7 +448,6 @@ Get your personalized running outfit at runwear.ai
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
-                                            onShareClick = { shareOutfit() },
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
@@ -555,7 +526,6 @@ Get your personalized running outfit at runwear.ai
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
-                                            onShareClick = { shareOutfit() },
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
@@ -618,7 +588,6 @@ Get your personalized running outfit at runwear.ai
                                         scrollOffset = 0f,
                                         onLocationClick = { showLocationPicker = true },
                                         onSettingsClick = { showSettings = true },
-                                        onShareClick = { shareOutfit() },
                                         onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
@@ -770,7 +739,8 @@ Get your personalized running outfit at runwear.ai
             WearIveRunCollectionScreen(
                 entries = wearIveRunEntries,
                 today = uiState.locationNow.toLocalDate(),
-                onDismiss = { showWearIveRunCollection = false }
+                onDismiss = { showWearIveRunCollection = false },
+                gender = uiState.genderPreference
             )
         }
     }
@@ -1105,7 +1075,6 @@ private fun HeroSectionContent(
     scrollOffset: Float,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onShareClick: () -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
@@ -1133,7 +1102,6 @@ private fun HeroSectionContent(
             scrollOffset = scrollOffset,
             onLocationClick = onLocationClick,
             onSettingsClick = onSettingsClick,
-            onShareClick = onShareClick,
             // RW-16.27: the flag chip shows for ANY hero photo — a
             // personal photo most of all (its menu is the personal
             // one) — and the refresh chip follows the ROTATION size
@@ -1220,7 +1188,6 @@ private fun HeroStackedUnit(
     onNowClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    onShareClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
@@ -1254,7 +1221,6 @@ private fun HeroStackedUnit(
             scrollOffset = scrollOffset,
             onLocationClick = onLocationClick,
             onSettingsClick = onSettingsClick,
-            onShareClick = onShareClick,
             onFlagClick = onFlagClick,
             heroFlagEnabled = heroFlagEnabled,
             onCycleHero = onCycleHero,
@@ -1568,12 +1534,17 @@ private fun HeroFlagSheet(
 
 /**
  * RW-16.27: the PERSONAL hero's flag sheet — same sheet idiom as
- * the pool one, but the menu is the personal vocabulary, headed by
- * "This doesn't look like me" (spec §4, exactly as iOS presents
- * it), and every pick files the backend's flag_hero action against
- * the photo on screen: it retires immediately and a regeneration
- * is queued. (The pool sheet's insert cannot identify a personal
- * photo and would retire nothing.)
+ * the pool one, but the menu is the personal vocabulary, and every
+ * pick files the backend's flag_hero action against the photo on
+ * screen: it retires immediately and a regeneration is queued.
+ * (The pool sheet's insert cannot identify a personal photo and
+ * would retire nothing.)
+ *
+ * WS-6 (D-17): the hierarchy is design frame 45's — the sheet LEADS
+ * with "This doesn't look like me" as its heading (the heading is
+ * the lead reason's own control), its consequence stated beneath
+ * it; the other reasons follow as rows. The generic "Flag this
+ * photo" header belongs to the pool variant only.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1593,14 +1564,30 @@ private fun PersonalHeroFlagSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
         ) {
-            Text(
-                text = "Flag this photo",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = RunWearColors.TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            com.runwear.app.makeitme.PersonalHeroFlagReason.entries.forEach { reason ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onSelectReason(
+                            com.runwear.app.makeitme.PersonalFlagSheetContent.headingReason
+                        )
+                    }
+                    .padding(bottom = 8.dp)
+            ) {
+                Text(
+                    text = com.runwear.app.makeitme.PersonalFlagSheetContent.heading,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = RunWearColors.TextPrimary
+                )
+                Text(
+                    text = com.runwear.app.makeitme.PersonalFlagSheetContent.HEADING_CONSEQUENCE,
+                    fontSize = 14.sp,
+                    color = RunWearColors.TextSecondary,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            com.runwear.app.makeitme.PersonalFlagSheetContent.rowReasons.forEach { reason ->
                 Text(
                     text = reason.label,
                     fontSize = 16.sp,
@@ -1628,23 +1615,6 @@ private fun PersonalHeroFlagSheet(
 // ============================================================================
 // ERROR SCREEN
 // ============================================================================
-
-/**
- * Temperature bracket label (ported from web PWA getTempBracket).
- * Used in share text to describe conditions.
- */
-private fun getTempBracket(tempF: Double): String {
-    // Canonical storage is °F (WS-2) — the bracket reads the stored frame.
-    val f = tempF
-    return when {
-        f >= 80 -> "hot"
-        f >= 65 -> "warm"
-        f >= 50 -> "mild"
-        f >= 35 -> "cool"
-        f >= 20 -> "cold"
-        else -> "freezing"
-    }
-}
 
 @Composable
 private fun HeroErrorScreen(

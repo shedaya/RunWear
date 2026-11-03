@@ -202,6 +202,31 @@ enum class PersonalHeroFlagReason(val code: String, val label: String) {
 }
 
 /**
+ * WS-6 (D-17): the personal flag sheet's presentation hierarchy,
+ * per design frame 45 — the lead phrase is the sheet's HEADING,
+ * not a row under a generic header, and its consequence is stated
+ * in the sheet ("We'll stop showing this photo and make it
+ * again."). The heading is itself the lead reason's control
+ * (tapping it files DOESNT_LOOK_LIKE_ME); the remaining reasons
+ * follow as rows. Pure, so the gate pins the hierarchy.
+ */
+object PersonalFlagSheetContent {
+
+    /** The reason the heading states — and selects. */
+    val headingReason: PersonalHeroFlagReason = PersonalHeroFlagReason.DOESNT_LOOK_LIKE_ME
+
+    /** The heading text: the lead phrase itself. */
+    val heading: String = headingReason.label
+
+    /** The consequence line under the heading (frame 45, verbatim). */
+    const val HEADING_CONSEQUENCE: String = "We'll stop showing this photo and make it again."
+
+    /** The reasons that remain rows, in their settled order. */
+    val rowReasons: List<PersonalHeroFlagReason> =
+        PersonalHeroFlagReason.entries.filter { it != headingReason }
+}
+
+/**
  * Spec §5.2 frequency rules for the 6th-new-cell subscription card:
  * shown when a free user's allowance is spent and a genuinely new cell
  * has no personal hero; if dismissed, it may reappear on a LATER new
