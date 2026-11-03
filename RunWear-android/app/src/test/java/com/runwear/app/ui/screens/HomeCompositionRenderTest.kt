@@ -174,8 +174,20 @@ abstract class HomeCompositionHarness {
         val out = mutableListOf<SemanticsNode>()
         fun collect(v: View) {
             if (v is androidx.compose.ui.platform.ViewRootForTest) {
-                out += v.semanticsOwner.getAllSemanticsNodes(mergingEnabled = false)
-                out += v.semanticsOwner.getAllSemanticsNodes(mergingEnabled = true)
+                // getAllSemanticsNodes is internal in this Compose
+                // version — reach it reflectively (its JVM name
+                // carries the module suffix).
+                val owner = v.semanticsOwner
+                val m = owner.javaClass.methods.firstOrNull {
+                    it.name.startsWith("getAllSemanticsNodes") &&
+                        it.parameterTypes.size == 1
+                }
+                if (m != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    out += m.invoke(owner, false) as List<SemanticsNode>
+                    @Suppress("UNCHECKED_CAST")
+                    out += m.invoke(owner, true) as List<SemanticsNode>
+                }
             }
             if (v is android.view.ViewGroup) {
                 for (i in 0 until v.childCount) collect(v.getChildAt(i))
