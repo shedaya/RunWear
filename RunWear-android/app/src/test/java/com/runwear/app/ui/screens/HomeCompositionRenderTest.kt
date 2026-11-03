@@ -241,7 +241,21 @@ abstract class HomeCompositionHarness {
         // A3: the location pill is on screen at rest, in the photo
         // zone's top area, in the SimplePlace form.
         val pill = findText("Aspen, CO")
-        val allTexts = flat.flatMap { texts(it) }.distinct().take(60)
+        var methodNames = "n/a"
+        fun grabNames(v: View) {
+            if (v is androidx.compose.ui.platform.ViewRootForTest) {
+                methodNames = v.semanticsOwner.javaClass.methods
+                    .map { it.name + "(" + it.parameterTypes.size + ")" }
+                    .filter { it.contains("emantic", ignoreCase = true) }
+                    .distinct().joinToString(",")
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) grabNames(v.getChildAt(i))
+            }
+        }
+        grabNames(composeView.rootView)
+        val allTexts = flat.flatMap { texts(it) }.distinct().take(60) +
+            listOf("flatSize=${flat.size}", "methods=$methodNames")
         assertTrue(
             "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts",
             pill != null
