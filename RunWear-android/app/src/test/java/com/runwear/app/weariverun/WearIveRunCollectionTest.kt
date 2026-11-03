@@ -42,7 +42,8 @@ class WearIveRunCollectionLogicTest {
 
     @Test
     fun `multi-stay chapter counts stays and names the last stay`() {
-        // Mar 2-4, Mar 8-10, Mar 11-13 interleaved with another place.
+        // Mar 2-4 and Mar 8-13 (Mar 10 -> Mar 11 is consecutive, so
+        // 8-13 is ONE stay) interleaved with another place.
         val dates = listOf("2027-03-02", "2027-03-03", "2027-03-04",
             "2027-03-08", "2027-03-09", "2027-03-10",
             "2027-03-11", "2027-03-12", "2027-03-13", "2027-03-13")
@@ -52,7 +53,7 @@ class WearIveRunCollectionLogicTest {
         val chapter = WearIveRunCollectionLogic.chapters(entries).first { it.place == "Kansas City" }
         assertEquals(9, chapter.dayCount)
         assertEquals(2, chapter.stayCount) // Mar 8-13 is ONE stay (consecutive)
-        assertTrue(chapter.summaryLine().startsWith("2 stays · 9 days · Last stay · Mar 11–13"))
+        assertTrue(chapter.summaryLine().startsWith("2 stays · 9 days · Last stay · Mar 8–13"))
     }
 
     @Test
