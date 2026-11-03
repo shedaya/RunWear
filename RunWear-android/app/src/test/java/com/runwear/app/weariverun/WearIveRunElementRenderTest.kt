@@ -145,7 +145,8 @@ abstract class WearElementHarness {
                 it.config[SemanticsProperties.ContentDescription].any { d -> d == description } &&
                 it.config.contains(SemanticsActions.OnClick)
         } ?: throw AssertionError("no clickable node with description '$description'")
-        node.config[SemanticsActions.OnClick].action()
+        node.config[SemanticsActions.OnClick].action?.invoke()
+            ?: throw AssertionError("OnClick action missing")
     }
 
     /** Click the clickable node that carries [text] — the body tap. */
@@ -155,7 +156,8 @@ abstract class WearElementHarness {
                 it.config[SemanticsProperties.Text].any { t -> t.text.contains(text) } &&
                 it.config.contains(SemanticsActions.OnClick)
         } ?: throw AssertionError("no clickable body node carrying '$text'")
-        node.config[SemanticsActions.OnClick].action()
+        node.config[SemanticsActions.OnClick].action?.invoke()
+            ?: throw AssertionError("OnClick action missing")
     }
 }
 
