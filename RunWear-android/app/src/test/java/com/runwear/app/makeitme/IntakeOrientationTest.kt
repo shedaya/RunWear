@@ -68,7 +68,7 @@ class IntakeOrientationTest {
     }
 
     @Test
-    fun `roll normalization lands in (-180, 180]`() {
+    fun `roll normalization lands in the minus-180 to 180 range`() {
         assertEquals(90f, IntakeOrientation.normalizeRoll(450f), 0.001f)
         assertEquals(-90f, IntakeOrientation.normalizeRoll(270f), 0.001f)
         assertEquals(180f, IntakeOrientation.normalizeRoll(-180f), 0.001f)
