@@ -163,37 +163,41 @@ abstract class HomeCompositionHarness {
         return found ?: throw IllegalStateException("no ViewRootForTest under $view")
     }
 
+    /** One accessibility-tree entry: what TalkBack would see. */
+    protected data class A11yEntry(
+        val text: String?,
+        val contentDescription: String?,
+        val enabled: Boolean,
+        val topPx: Float,
+        val leftPx: Float
+    )
+
     /**
-     * EVERY semantics node in the window, flat: lazy-list item
-     * semantics are NOT reachable through SemanticsNode.children
-     * (the LazyColumn node exposes scroll properties only — its
-     * items live in the owner's flat node list). Both merging
-     * modes are collected; finders match on either.
+     * The full accessibility tree of the compose view, flattened.
+     * Lazy-list item semantics are NOT reachable through
+     * SemanticsNode.children in this Compose version (the
+     * LazyColumn node exposes scroll properties only) and
+     * SemanticsOwner has no flat accessor — but the accessibility
+     * delegate materializes every item, which is also the tree
+     * that proves the chrome is reachable at rest.
      */
-    protected fun allNodes(view: View): List<SemanticsNode> {
-        val out = mutableListOf<SemanticsNode>()
-        fun collect(v: View) {
-            if (v is androidx.compose.ui.platform.ViewRootForTest) {
-                // getAllSemanticsNodes is internal in this Compose
-                // version — reach it reflectively (its JVM name
-                // carries the module suffix).
-                val owner = v.semanticsOwner
-                val m = owner.javaClass.methods.firstOrNull {
-                    it.name.startsWith("getAllSemanticsNodes") &&
-                        it.parameterTypes.size == 1
-                }
-                if (m != null) {
-                    @Suppress("UNCHECKED_CAST")
-                    out += m.invoke(owner, false) as List<SemanticsNode>
-                    @Suppress("UNCHECKED_CAST")
-                    out += m.invoke(owner, true) as List<SemanticsNode>
-                }
-            }
-            if (v is android.view.ViewGroup) {
-                for (i in 0 until v.childCount) collect(v.getChildAt(i))
+    protected fun a11yEntries(view: View): List<A11yEntry> {
+        val out = mutableListOf<A11yEntry>()
+        fun walk(info: android.view.accessibility.AccessibilityNodeInfo) {
+            val bounds = android.graphics.Rect()
+            info.getBoundsInScreen(bounds)
+            out += A11yEntry(
+                text = info.text?.toString(),
+                contentDescription = info.contentDescription?.toString(),
+                enabled = info.isEnabled,
+                topPx = bounds.top.toFloat(),
+                leftPx = bounds.left.toFloat()
+            )
+            for (i in 0 until info.childCount) {
+                info.getChild(i)?.let { walk(it) }
             }
         }
-        collect(view.rootView)
+        view.createAccessibilityNodeInfo()?.let { walk(it) }
         return out
     }
 
@@ -227,60 +231,40 @@ abstract class HomeCompositionHarness {
         screenHeightDp: Int,
         label: String
     ) {
-        val flat = allNodes(composeView)
-        fun findText(text: String): SemanticsNode? =
-            flat.firstOrNull { n ->
-                texts(n).any { it == text }
-            }
-        fun findDesc(desc: String): SemanticsNode? =
-            flat.firstOrNull { n ->
-                n.config.contains(SemanticsProperties.ContentDescription) &&
-                    n.config[SemanticsProperties.ContentDescription].any { it == desc }
-            }
+        val flat = a11yEntries(composeView)
 
         // A3: the location pill is on screen at rest, in the photo
         // zone's top area, in the SimplePlace form.
-        val pill = findText("Aspen, CO")
-        var methodNames = "n/a"
-        fun grabNames(v: View) {
-            if (v is androidx.compose.ui.platform.ViewRootForTest) {
-                methodNames = v.semanticsOwner.javaClass.methods
-                    .map { it.name + "(" + it.parameterTypes.size + ")" }
-                    .filter { it.contains("emantic", ignoreCase = true) }
-                    .distinct().joinToString(",")
-            }
-            if (v is android.view.ViewGroup) {
-                for (i in 0 until v.childCount) grabNames(v.getChildAt(i))
-            }
-        }
-        grabNames(composeView.rootView)
-        val allTexts = flat.flatMap { texts(it) }.distinct().take(60) +
-            listOf("flatSize=${flat.size}", "methods=$methodNames")
+        val pill = flat.firstOrNull { it.text == "Aspen, CO" }
+        val allTexts = flat.mapNotNull { it.text }.distinct().take(60)
         assertTrue(
             "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts",
             pill != null
         )
-        val pillTopDp = pill!!.boundsInRoot.top / density
+        val pillTopDp = pill!!.topPx / density
         assertTrue(
             "[$label] pill must sit in the photo zone's top area (top=${pillTopDp}dp)",
             pillTopDp < 120f
         )
 
         // D-02: Settings is present and enabled at rest.
-        val settings = findDesc("Settings")
+        val settings = flat.firstOrNull { it.contentDescription == "Settings" }
         assertTrue("[$label] Settings control must be present at rest", settings != null)
-        assertFalse(
+        assertTrue(
             "[$label] Settings must be interactive at rest",
-            settings!!.config.contains(SemanticsProperties.Disabled)
+            settings!!.enabled
         )
 
         // D-01/D-03: the sheet's label sits at the handoff —
         // heroHeight − 28dp (plus the sheet's own 20dp top padding),
         // never at the top of the screen.
         val heroHeightDp = screenHeightDp * 0.75f
-        val feels = findText("FEELS LIKE")
-        assertTrue("[$label] FEELS LIKE label must be present", feels != null)
-        val feelsTopDp = feels!!.boundsInRoot.top / density
+        val feels = flat.firstOrNull { it.text == "FEELS LIKE" }
+        assertTrue(
+            "[$label] FEELS LIKE label must be present; texts=$allTexts",
+            feels != null
+        )
+        val feelsTopDp = feels!!.topPx / density
         val expected = heroHeightDp - 28f + 20f
         assertTrue(
             "[$label] sheet label top must be at the handoff ≈${expected}dp " +
