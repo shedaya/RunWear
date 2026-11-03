@@ -32,6 +32,14 @@
 //
 // Invocation: POST { "path": "<uid>/refs/ref-1.jpg" }, service-role
 // bearer. Idempotent: re-running overwrites the derivative.
+//
+// RW-27 F-1 (2026-11-03): before encoding, prep probes the decoded
+// frame's face roll via the identity screen; a reference stored
+// sideways (|roll| > 30 deg) is uprighted by quarter-turns in the
+// DERIVATIVE only — the original object is never rewritten — and
+// the correction is recorded in the stored quality verdict. A
+// correction that cannot be verified upright fails the verdict
+// with retake_key 'rotated' rather than passing.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -113,21 +121,95 @@ function downscaleRGBA(
   return dst
 }
 
-// RW-16.30 intake quality: run the shared intake policy (face
+// Rotate an RGBA frame by whole quarter-turns counter-clockwise
+// (RW-27 F-1). Only quarter-turns are ever applied: the correction
+// targets in-plane rotation of the stored pixels (a sideways or
+// upside-down photo), which is a quarter-turn class of defect.
+function rotateRGBAQuarterTurns(
+  src: Uint8ClampedArray, w: number, h: number, turnsCCW: number
+): { data: Uint8ClampedArray, width: number, height: number } {
+  const t = ((turnsCCW % 4) + 4) % 4
+  if (t === 0) return { data: src, width: w, height: h }
+  const dw = t === 2 ? w : h, dh = t === 2 ? h : w
+  const dst = new Uint8ClampedArray(dw * dh * 4)
+  for (let y = 0; y < dh; y++) {
+    for (let x = 0; x < dw; x++) {
+      // Source pixel for destination (x, y), per turn count:
+      // 1 (90 CCW): src(w-1-y, x) · 2 (180): src(w-1-x, h-1-y)
+      // 3 (90 CW):  src(y, h-1-x)
+      let sx = x, sy = y
+      if (t === 1) { sx = w - 1 - y; sy = x }
+      else if (t === 2) { sx = w - 1 - x; sy = h - 1 - y }
+      else { sx = y; sy = h - 1 - x }
+      const di = (y * dw + x) * 4, si = (sy * w + sx) * 4
+      dst[di] = src[si]; dst[di + 1] = src[si + 1]
+      dst[di + 2] = src[si + 2]; dst[di + 3] = src[si + 3]
+    }
+  }
+  return { data: dst, width: dw, height: dh }
+}
+
+// F-1 orientation probe: read the face's in-plane rotation (roll)
+// from the identity screen on a bounded-size JPEG rendering of the
+// decoded source frame. Roll is scale-invariant, so the probe runs
+// at derivative scale. Returns the correction to apply, or null
+// when no correction is warranted / the screen is unavailable.
+// Correction direction is empirical, from the F-1 diagnosis: a
+// measured roll of +90 deg is uprighted by rotating the pixels
+// 90 deg counter-clockwise (post-rotation roll read -0.3 deg, and
+// the identity comparison against the same person went from
+// 0.19 not-delivered to 0.73 delivered).
+async function probeOrientation(
+  frame: DecodedFrame
+): Promise<OrientationInfo | null> {
+  if (!IDENTITY_SCREEN_URL) return null
+  const scale = Math.min(1, MAX_HEIGHT / frame.height, MAX_WIDTH / frame.width)
+  let probeData = frame.data, pw = frame.width, ph = frame.height
+  if (scale < 1) {
+    pw = Math.max(1, Math.round(frame.width * scale))
+    ph = Math.max(1, Math.round(frame.height * scale))
+    probeData = downscaleRGBA(frame.data, frame.width, frame.height, pw, ph)
+  }
+  const probeJpeg = new Uint8Array(await encodeJpeg(
+    { data: probeData, width: pw, height: ph, colorSpace: 'srgb' },
+    { quality: JPEG_QUALITY }))
+  const body = await screenIntake(probeJpeg)
+  if (!body || body.detected !== true) return null
+  const roll = body.roll_deg
+  if (typeof roll !== 'number' || Math.abs(roll) <= 30) return null
+  const turnsCCW = Math.round(roll / 90)
+  if (turnsCCW === 0) return null
+  return { rollBeforeDeg: roll, correctedDeg: turnsCCW * 90 }
+}
+
+
 // detected, normalized face height >= ~50/768, |yaw| <= 25 deg) on
 // the derivative via the identity-screen service and store the
 // verdict on the reference row. The worker's anchor selection reads
 // it (a failing photo is never the anchor while a passing one
 // exists). When the service is not configured the verdict stays
 // null — checks run when the service exists; go-live requires it.
-async function checkIntakeQuality(
-  sourcePath: string, derivative: Uint8Array
+//
+// RW-27 F-1 (2026-11-03): the verdict record also carries the
+// screen's roll read (roll_deg) and, when prep uprighted a sideways
+// reference, orientation_corrected_deg + roll_before_deg (see
+// probeOrientation / the serve handler). A correction that cannot
+// be verified upright fails with retake_key 'rotated' instead of
+// passing — a sideways reference silently poisoned every identity
+// comparison against it (Sol's field failure: draws at 0.20-0.25
+// against the 0.40 line while intake said PASS).
+type OrientationInfo = {
+  rollBeforeDeg: number, correctedDeg: number
+}
+
+async function screenIntake(
+  jpegBytes: Uint8Array
 ): Promise<Record<string, unknown> | null> {
   if (!IDENTITY_SCREEN_URL) return null
   try {
     let binary = ''
-    for (let i = 0; i < derivative.length; i += 8192) {
-      binary += String.fromCharCode(...derivative.subarray(i, i + 8192))
+    for (let i = 0; i < jpegBytes.length; i += 8192) {
+      binary += String.fromCharCode(...jpegBytes.subarray(i, i + 8192))
     }
     const resp = await fetch(`${IDENTITY_SCREEN_URL}/intake`, {
       method: 'POST',
@@ -141,26 +223,54 @@ async function checkIntakeQuality(
       console.error(`[personal-ref-prep] intake check returned ${resp.status}`)
       return null
     }
-    const body = await resp.json() as Record<string, unknown>
-    const quality = {
-      face_detected: body.detected === true,
-      face_height_norm: body.height_norm ?? null,
-      yaw_deg: body.yaw_deg ?? null,
-      pitch_deg: body.pitch_deg ?? null,
-      verdict: typeof body.verdict === 'string' ? body.verdict : null,
-      retake_key: body.retake_key ?? null,
-      checked_at: new Date().toISOString()
-    }
-    const { error } = await supabase
-      .from('personal_reference_photos')
-      .update({ quality })
-      .eq('storage_path', sourcePath)
-    if (error) console.error('[personal-ref-prep] quality write failed:', error)
-    return quality
+    return await resp.json() as Record<string, unknown>
   } catch (e) {
     console.error('[personal-ref-prep] intake check failed:', (e as Error).message)
     return null
   }
+}
+
+async function checkIntakeQuality(
+  sourcePath: string, derivative: Uint8Array,
+  orientation: OrientationInfo | null = null
+): Promise<Record<string, unknown> | null> {
+  if (!IDENTITY_SCREEN_URL) return null
+  const body = await screenIntake(derivative)
+  if (!body) return null
+  let verdict = typeof body.verdict === 'string' ? body.verdict : null
+  let retakeKey = (body.retake_key as string | null) ?? null
+  if (orientation) {
+    // The derivative was rotated to upright this reference. If the
+    // corrected pixels still do not read upright — face lost in the
+    // rotation, or roll still beyond the threshold — the photo
+    // could not be uprighted: fail it with the 'rotated' retake
+    // key instead of letting it pass as an anchor.
+    const rollAfter = typeof body.roll_deg === 'number' ? body.roll_deg : null
+    if (body.detected !== true || rollAfter === null || Math.abs(rollAfter) > 30) {
+      verdict = 'fail'
+      retakeKey = 'rotated'
+    }
+  }
+  const quality = {
+    face_detected: body.detected === true,
+    face_height_norm: body.height_norm ?? null,
+    yaw_deg: body.yaw_deg ?? null,
+    pitch_deg: body.pitch_deg ?? null,
+    roll_deg: body.roll_deg ?? null,
+    verdict,
+    retake_key: retakeKey,
+    ...(orientation ? {
+      orientation_corrected_deg: orientation.correctedDeg,
+      roll_before_deg: orientation.rollBeforeDeg
+    } : {}),
+    checked_at: new Date().toISOString()
+  }
+  const { error } = await supabase
+    .from('personal_reference_photos')
+    .update({ quality })
+    .eq('storage_path', sourcePath)
+  if (error) console.error('[personal-ref-prep] quality write failed:', error)
+  return quality
 }
 
 serve(async (req) => {
@@ -202,38 +312,37 @@ serve(async (req) => {
     if (dlError || !blob) {
       return jsonResponse({ error: `Reference download failed: ${dlError?.message}` }, 502)
     }
-    const sourceBytes = new Uint8Array(await blob.arrayBuffer())
+    let sourceBytes = new Uint8Array(await blob.arrayBuffer())
 
     const isJpeg = sourceBytes[0] === 0xFF && sourceBytes[1] === 0xD8
+    let decoder = 'jsquash'
     if (!isJpeg) {
-      // Non-JPEG source (e.g. PNG): fall back to the imagescript
-      // decode the worker used to perform. Registered references are
-      // JPEG in practice (the observed wedge class); this path keeps
-      // the function correct for other formats.
+      // Non-JPEG source (e.g. PNG): decode once with imagescript
+      // (the fallback the worker used to perform) and re-encode to
+      // JPEG, then run the uniform JPEG path below — orientation
+      // probing/correction included. Registered references are
+      // JPEG in practice (the observed wedge class).
       const img = await Image.decode(sourceBytes)
-      const w = img.width, h = img.height
-      const scale = Math.min(1, MAX_HEIGHT / h, MAX_WIDTH / w)
-      const out = scale < 1
-        ? img.resize(Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)))
-        : img
-      const derivative = await out.encodeJPEG(JPEG_QUALITY)
-      const { error: upError } = await supabase.storage
-        .from(BUCKET)
-        .upload(derivativePath, derivative, { contentType: 'image/jpeg', upsert: true })
-      if (upError) {
-        return jsonResponse({ error: `Derivative upload failed: ${upError.message}` }, 502)
-      }
-      const quality = await checkIntakeQuality(path, derivative)
-      return jsonResponse({
-        ok: true, source_path: path, derivative_path: derivativePath,
-        source_width: w, source_height: h,
-        derivative_width: out.width, derivative_height: out.height,
-        derivative_bytes: derivative.length, decoder: 'imagescript-fallback',
-        quality
-      })
+      sourceBytes = await img.encodeJPEG(JPEG_QUALITY)
+      decoder = 'imagescript-fallback'
     }
 
-    const frame = await decodeJpeg(sourceBytes)
+    let frame = await decodeJpeg(sourceBytes)
+
+    // RW-27 F-1: upright a sideways reference BEFORE the derivative
+    // is encoded. Only the derivative is corrected — the stored
+    // original is never rewritten (retention ruling: originals are
+    // kept as uploaded; derivatives are working copies).
+    const orientation = await probeOrientation(frame)
+    if (orientation) {
+      const turnsCCW = orientation.correctedDeg / 90
+      const rotated = rotateRGBAQuarterTurns(frame.data, frame.width, frame.height, turnsCCW)
+      frame = {
+        data: rotated.data, width: rotated.width, height: rotated.height,
+        colorSpace: frame.colorSpace
+      }
+    }
+
     const w = frame.width, h = frame.height
     const scale = Math.min(1, MAX_HEIGHT / h, MAX_WIDTH / w)
     let derivative: Uint8Array
@@ -259,12 +368,13 @@ serve(async (req) => {
     if (upError) {
       return jsonResponse({ error: `Derivative upload failed: ${upError.message}` }, 502)
     }
-    const quality = await checkIntakeQuality(path, derivative)
+    const quality = await checkIntakeQuality(path, derivative, orientation)
     return jsonResponse({
       ok: true, source_path: path, derivative_path: derivativePath,
       source_width: w, source_height: h,
       derivative_width: outW, derivative_height: outH,
-      derivative_bytes: derivative.length,
+      derivative_bytes: derivative.length, decoder,
+      orientation_corrected_deg: orientation?.correctedDeg ?? null,
       quality
     })
   } catch (error) {

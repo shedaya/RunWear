@@ -15,12 +15,15 @@ Endpoints (JSON; bearer auth when SCREEN_KEY is set):
   GET  /health  -> {"ok": true, "model": "buffalo_l"}
   POST /compare {reference_image_b64, candidate_image_b64}
        -> {similarity, delivered, reference_face, candidate_face}
-          face = {detected, height_norm, yaw_deg, pitch_deg}
+          face = {detected, height_norm, yaw_deg, pitch_deg, roll_deg}
           (height_norm = face bbox height / image height, in the
-          ORIGINAL image's frame; yaw/pitch from the detector pose)
+          ORIGINAL image's frame; yaw/pitch/roll from the detector
+          pose — roll is the in-plane rotation, pose[2]; RW-27 F-1:
+          personal-ref-prep reads roll_deg to upright sideways
+          references before encoding their derivatives)
   POST /intake  {image_b64}
        -> {face_detected, face_height_norm, yaw_deg, pitch_deg,
-           verdict: "pass"|"fail", retake_key}
+           roll_deg, verdict: "pass"|"fail", retake_key}
           The shared intake policy: face detected, normalized face
           height >= 50/768 (~0.065 — bracketed by the full-body
           record: 43px failed, 59px+ delivered), |yaw| <= 25 deg.
@@ -97,15 +100,17 @@ def face_meta(img):
     face, dx, dy, w, h = largest_face(img)
     if face is None:
         return None, {"detected": False, "height_norm": None,
-                      "yaw_deg": None, "pitch_deg": None}
+                      "yaw_deg": None, "pitch_deg": None, "roll_deg": None}
     x1, y1, x2, y2 = [float(v) for v in face.bbox]
     height_norm = (y2 - y1) / float(h)
     pose = getattr(face, "pose", None)
     pitch = float(pose[0]) if pose is not None else None
     yaw = float(pose[1]) if pose is not None else None
+    roll = float(pose[2]) if pose is not None else None
     return face, {"detected": True, "height_norm": round(height_norm, 4),
                   "yaw_deg": round(yaw, 1) if yaw is not None else None,
-                  "pitch_deg": round(pitch, 1) if pitch is not None else None}
+                  "pitch_deg": round(pitch, 1) if pitch is not None else None,
+                  "roll_deg": round(roll, 1) if roll is not None else None}
 
 
 def embedding(img):
