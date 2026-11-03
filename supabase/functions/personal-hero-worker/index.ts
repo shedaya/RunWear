@@ -21,10 +21,12 @@
 //        cached by image sha256 in personal_gate_verdicts)
 //     -> deliver, or fall back to stock for that cell.
 // Draw counts by cell difficulty (stop at first usable): Warm 2,
-// Cold 3, Rain 4, Snow 5. ACCESSORY REPAIR: an identity-delivered
-// draw failing ONLY on accessory classes (head / hands / sunglasses)
-// gets ONE flux-fill-pro inpaint attempt + identity re-screen +
-// re-gate before any redraw.
+// Cold 3, Rain 4, Snow 5. There is NO repair stage: a gate-failed
+// draw is a counted failure and the loop redraws within budget.
+// (An accessory inpaint repair stage existed until 2026-11-03; the
+// persisting re-battery measured its rescue rate at 0/15 — the
+// head-band mask repaints the face and fails the identity re-screen
+// by construction — and Sol ruled it dropped, 2026-11-03 04:13 EST.)
 //
 // Epoch discipline (RW-16.30): jobs carry the photo-set epoch they
 // were enqueued under. A job whose epoch no longer matches the
@@ -76,8 +78,6 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 // /v1/predictions with the latest version resolved per invocation,
 // the lanes' predict pattern).
 const GENERATION_MODEL_SLUG = 'zsxkib/flux-pulid'
-// Accessory repair: official inpaint model, /v1/models endpoint.
-const REPAIR_MODEL = 'black-forest-labs/flux-fill-pro'
 // The gate instrument of record: same model string the lanes'
 // adjudicate_compare.py sends (env-overridable for the workspace's
 // deployment naming, never for a different judge).
@@ -365,12 +365,6 @@ export type GateVerdict = {
   seen: GarmentClasses, answers: Record<string, string | null>,
   conditionsSeen: string | null, lightSeen: string | null,
   garmentText: string
-}
-
-const ACCESSORY_CLASSES: ReadonlySet<string> = new Set(['head', 'hands', 'sunglasses'])
-
-export function isAccessoryOnlyFailure(failures: GateFailure[]): boolean {
-  return failures.length > 0 && failures.every(f => ACCESSORY_CLASSES.has(f.cls))
 }
 
 // Line-for-line port of adjudicate_compare.gate(). `cellWeather` and
@@ -776,102 +770,6 @@ async function fetchPredictionOutputBytes(predictionId: string): Promise<Uint8Ar
 }
 
 // ---------------------------------------------------------------------
-// Accessory repair — ONE flux-fill-pro inpaint attempt for an
-// identity-delivered draw failing ONLY on accessory classes. The mask
-// is built from the missing/extra accessory classes (region bands —
-// the comparison lane's repair used landmark bands for sunglasses;
-// production generalizes by class region). The repaired image is
-// identity re-screened and re-gated before it can deliver; a repair
-// that moves the face or the outfit fails closed like any draw.
-// ---------------------------------------------------------------------
-export async function buildRepairMask(
-  width: number, height: number, classes: string[]
-): Promise<Uint8Array> {
-  const mask = new Image(width, height)
-  mask.fill(0x000000FF)
-  const band = (x: number, y: number, w: number, h: number) => {
-    const x0 = Math.max(0, Math.floor(x)), y0 = Math.max(0, Math.floor(y))
-    const x1 = Math.min(width, Math.ceil(x + w)), y1 = Math.min(height, Math.ceil(y + h))
-    // imagescript pixels are 1-indexed: (0, 0) throws. Caught by the
-    // RW-16.30 battery — the 0-based loop made every repair attempt
-    // throw (contained by the caller's try/catch, so repair silently
-    // never happened).
-    for (let yy = y0; yy < y1; yy++) {
-      for (let xx = x0; xx < x1; xx++) mask.setPixelAt(xx + 1, yy + 1, 0xFFFFFFFF)
-    }
-  }
-  if (classes.includes('head')) band(0, 0, width, height * 0.30)
-  if (classes.includes('sunglasses')) band(0, height * 0.24, width, height * 0.22)
-  if (classes.includes('hands')) {
-    band(0, height * 0.42, width * 0.30, height * 0.48)
-    band(width * 0.70, height * 0.42, width * 0.30, height * 0.48)
-  }
-  return await mask.encode() // imagescript: encode() emits PNG
-}
-
-async function attemptRepair(
-  job: JobRow, candBytes: Uint8Array, verdict: GateVerdict, prompt: string
-): Promise<{ bytes: Uint8Array, prompt: string } | null> {
-  const missing: string[] = []
-  const items = job.outfit_items as string[]
-  const has = (k: string) => items.includes(k)
-  for (const f of verdict.failures) {
-    if (f.cls === 'head') {
-      const headItem = ['BALACLAVA', 'THERMAL_BEANIE', 'LIGHT_BEANIE', 'HEADBAND', 'VISOR', 'BASEBALL_CAP']
-        .find(has)
-      if (headItem) missing.push(BULLET[headItem])
-    } else if (f.cls === 'hands') {
-      const handItem = ['MITTENS', 'THERMAL_GLOVES', 'LIGHT_GLOVES'].find(has)
-      if (handItem) missing.push(BULLET[handItem])
-    } else if (f.cls === 'sunglasses' && has('SUNGLASSES')) {
-      missing.push('Sunglasses')
-    }
-  }
-  // Extra-accessory failures (something worn that was not prescribed)
-  // cannot be repaired by adding paint, and a failure whose garment
-  // cannot be named gets no repair — redraw is the honest path.
-  if (missing.length === 0) return null
-  const img = await Image.decode(candBytes)
-  const classes = [...new Set(verdict.failures.map(f => f.cls))]
-  const maskBytes = await buildRepairMask(img.width, img.height, classes)
-  const srcPath = `${job.user_id}/repair/${job.id}-src.png`
-  const maskPath = `${job.user_id}/repair/${job.id}-mask.png`
-  try {
-    for (const [path, bytes] of [[srcPath, candBytes], [maskPath, maskBytes]] as Array<[string, Uint8Array]>) {
-      const { error } = await supabase.storage.from('personal-heroes')
-        .upload(path, bytes, { contentType: 'image/png', upsert: true })
-      if (error) throw new Error(`repair upload failed: ${error.message}`)
-    }
-    const { data: signed, error: signError } = await supabase.storage
-      .from('personal-heroes').createSignedUrls([srcPath, maskPath], 3600)
-    if (signError || !signed || signed.length < 2) throw new Error('repair signing failed')
-    const repairPrompt =
-      `The runner wearing ${missing.join(' and ')}, photorealistic athletic photography, ` +
-      `seamlessly matching the photo's lighting, scene and running pose`
-    const resp = await fetch(`https://api.replicate.com/v1/models/${REPAIR_MODEL}/predictions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${REPLICATE_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        input: {
-          image: signed[0].signedUrl, mask: signed[1].signedUrl,
-          prompt: repairPrompt
-        }
-      })
-    })
-    if (!resp.ok) throw new Error(`Repair create failed: ${resp.status} ${await resp.text()}`)
-    const created = await resp.json()
-    const bytes = await predictionOutputBytes(created.id as string, 180_000)
-    return { bytes, prompt: `${prompt} [repair: ${missing.join(', ')}]` }
-  } finally {
-    await supabase.storage.from('personal-heroes').remove([srcPath, maskPath])
-      .catch(() => { /* temp objects; cleanup is best-effort */ })
-  }
-}
-
-// ---------------------------------------------------------------------
 // Reference loading — anchor selection + derivative bytes (kept from
 // v23: the derivative is produced by personal-ref-prep and bounded to
 // the identity working size; decoding a full-resolution original in
@@ -953,8 +851,7 @@ type JobRow = {
   weather: string, temp_bracket: string, time_of_day: string,
   outfit_signature: string, outfit_items: unknown, kind: string,
   attempts: number, replicate_id: string | null, prompt: string | null,
-  reclaim_count: number, epoch: number, draws_used: number,
-  repair_attempted: boolean
+  reclaim_count: number, epoch: number, draws_used: number
 }
 
 async function markJob(id: string, patch: Record<string, unknown>) {
@@ -966,7 +863,7 @@ type DrawRecord = {
   draw: number, prediction_id: string | null, image_hash: string | null,
   identity_similarity: number | null, stage: string,
   gate_pass?: boolean, gate_cached?: boolean,
-  failures?: GateFailure[], notes?: string[], repaired?: boolean
+  failures?: GateFailure[], notes?: string[]
 }
 
 type ScreenedDraw = {
@@ -1214,7 +1111,6 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     const draws: DrawRecord[] = []
     let drawsUsedTotal = job.draws_used ?? 0
     let identityBest: number | null = null
-    let repairAttempted = job.repair_attempted === true
     let lastStage = 'identity_screen'
     let lastFailures: GateFailure[] = []
 
@@ -1308,50 +1204,6 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
           combination_id: job.combination_id, draws
         }
       }
-      // Accessory repair: ONE inpaint attempt for an identity-
-      // delivered draw failing only on accessories, before any
-      // redraw. Screen/gate failures of the repaired image are
-      // recorded on the same draw record.
-      if (rec.stage === 'prescription_gate' && !repairAttempted &&
-          rec.failures && isAccessoryOnlyFailure(rec.failures)) {
-        repairAttempted = true
-        await markJob(job.id, { repair_attempted: true })
-        try {
-          const { data: vRow } = await supabase
-            .from('personal_gate_verdicts')
-            .select('detail')
-            .eq('image_hash', rec.image_hash!)
-            .maybeSingle()
-          const detail = (vRow?.detail ?? {}) as Record<string, unknown>
-          const verdictForRepair: GateVerdict = {
-            pass: false, failures: rec.failures, notes: rec.notes ?? [],
-            seen: detail.seen as GarmentClasses,
-            answers: (detail.answers ?? {}) as Record<string, string | null>,
-            conditionsSeen: null, lightSeen: null, garmentText: ''
-          }
-          const repaired = await attemptRepair(job, bytes, verdictForRepair, prompt)
-          if (repaired) {
-            const repairRec: DrawRecord = {
-              draw: drawNo, prediction_id: null,
-              image_hash: await sha256Hex(repaired.bytes),
-              identity_similarity: null, stage: 'repair', repaired: true
-            }
-            if (await tryCandidate(repaired.bytes, repairRec, repaired.prompt)) {
-              draws.push(rec, repairRec)
-              return {
-                job_id: job.id, status: 'COMPLETED',
-                combination_id: job.combination_id, draws, repaired: true
-              }
-            }
-            if (repairRec.stage === 'prescription_gate') repairRec.stage = 'repair_gate'
-            lastStage = repairRec.stage
-            draws.push(repairRec)
-            console.log(`[personal-hero-worker] job ${job.id} draw ${drawNo} repair did not deliver (stage ${repairRec.stage})`)
-          }
-        } catch (e) {
-          console.log(`[personal-hero-worker] job ${job.id} draw ${drawNo} repair unavailable: ${(e as Error).message}`)
-        }
-      }
       draws.push(rec)
       console.log(`[personal-hero-worker] job ${job.id} draw ${drawNo}/${budget} ended at ${rec.stage}` +
         (rec.failures ? `: ${rec.failures.map(f => f.message).join('; ')}` : ''))
@@ -1360,7 +1212,7 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     // Budget exhausted: nothing stored; stock keeps serving. For an
     // entitled user this is the RW-16.20 fallback — counted, never
     // silent.
-    const failureText = lastStage === 'prescription_gate' || lastStage === 'repair_gate'
+    const failureText = lastStage === 'prescription_gate'
       ? `gate_failed: ${lastFailures.map(f => f.message).join('; ')}`
       : `gate_failed: identity_screen (best similarity ${identityBest ?? 'none'})`
     await markJob(job.id, {
@@ -1499,7 +1351,7 @@ if (import.meta.main) {
 
     const { data: jobs, error } = await supabase
       .from('personal_generation_jobs')
-      .select('id, user_id, combination_id, gender, weather, temp_bracket, time_of_day, outfit_signature, outfit_items, kind, attempts, replicate_id, prompt, reclaim_count, epoch, draws_used, repair_attempted')
+      .select('id, user_id, combination_id, gender, weather, temp_bracket, time_of_day, outfit_signature, outfit_items, kind, attempts, replicate_id, prompt, reclaim_count, epoch, draws_used')
       .eq('status', 'QUEUED')
       .order('priority', { ascending: true })
       .order('requested_at', { ascending: true })

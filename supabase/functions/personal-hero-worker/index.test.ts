@@ -18,11 +18,10 @@ function assertEquals(actual: unknown, expected: unknown, msg?: string) {
 function assertStringIncludes(s: string, sub: string, msg?: string) {
   if (!s.includes(sub)) throw new Error(msg ?? `assertStringIncludes: missing ${JSON.stringify(sub)}`)
 }
-import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts"
 import {
   buildPrompt, classesFromText, expectedClassesForPrompt,
   evaluateGate, parseGateText, drawBudgetFor, selectAnchor,
-  isAccessoryOnlyFailure, buildRepairMask, type GarmentClasses
+  type GarmentClasses
 } from "./index.ts"
 
 const baseJob = {
@@ -172,11 +171,21 @@ Deno.test('gate: ruling 7 (balaclava clarification) — a covered head satisfies
   assertEquals(parsed.seen.head, 'balaclava')
 })
 
-Deno.test('gate: accessory-only classification drives repair eligibility', () => {
-  assert(isAccessoryOnlyFailure([{ cls: 'head', message: 'x' }, { cls: 'sunglasses', message: 'y' }]))
-  assert(isAccessoryOnlyFailure([{ cls: 'hands', message: 'x' }]))
-  assert(!isAccessoryOnlyFailure([{ cls: 'head', message: 'x' }, { cls: 'bottom', message: 'y' }]))
-  assert(!isAccessoryOnlyFailure([]))
+Deno.test('no repair stage: a gate-failed draw performs no fill call and no repair storage write (Sol ruling 2026-11-03)', () => {
+  // The repair stage was dropped by Sol's ruling (2026-11-03 04:13
+  // EST) after the persisting re-battery measured rescue at 0/15.
+  // processJob is not unit-runnable (it is bound to the live
+  // database), so the pin is structural: the worker source must
+  // contain no fill model, no repair invocation, no mask builder,
+  // and no repair storage path — a gate-failed draw can only fall
+  // back or consume another draw from the budget.
+  const source = Deno.readTextFileSync(new URL('./index.ts', import.meta.url))
+  assert(!source.includes('flux-fill-pro'), 'no fill model reference remains')
+  assert(!source.includes('attemptRepair'), 'no repair invocation remains')
+  assert(!source.includes('buildRepairMask'), 'no repair mask builder remains')
+  assert(!source.includes('isAccessoryOnlyFailure'), 'no repair eligibility classifier remains')
+  assert(!source.includes('/repair/'), 'no repair storage path remains')
+  assert(!source.includes('repair_attempted'), 'no repair bookkeeping is read or written')
 })
 
 Deno.test('parse: enumeration text extracts answers + conditions', () => {
@@ -193,15 +202,6 @@ Deno.test('parse: enumeration text extracts answers + conditions', () => {
   assertEquals(parsed.seen.topBase, 'long')
   assertEquals(parsed.seen.bottom, 'tights')
   assertEquals(parsed.seen.head, 'beanie')
-})
-
-Deno.test('repair mask: 1-indexed bands render without throwing (battery regression)', async () => {
-  const png = await buildRepairMask(64, 96, ['head', 'hands', 'sunglasses'])
-  assert(png.length > 0)
-  const img = await Image.decode(png)
-  assertEquals([img.width, img.height], [64, 96])
-  assertEquals(img.getPixelAt(32, 5), 0xFFFFFFFF)   // head band is white
-  assertEquals(img.getPixelAt(32, 90), 0x000000FF)  // below the hands band stays black
 })
 
 Deno.test('anchor: first passing reference wins; failures are skipped, never blended', () => {
