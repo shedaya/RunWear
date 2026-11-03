@@ -625,4 +625,29 @@ final class RW26Phase2Tests: XCTestCase {
         XCTAssertGreaterThanOrEqual(
             contrast("175E4C", AppTheme.sheetLightHex), 4.5, "pine cart glyph on light card")
     }
+
+    // MARK: - Home gate manual-location buttons (dual-mode top residual)
+
+    /// The home gate's "Set Location Manually" buttons
+    /// (LocationPermissionView + LocationDeniedView) carried a
+    /// white label and a white@0.4 stroke with NO fill on the
+    /// dynamic home ground: on the light cream ground the label
+    /// was 1.13:1 — illegible. The buttons now use the inkPrimary
+    /// label / cardStroke outline pair. These pins assert the
+    /// label against BOTH grounds (light cream, dark charcoal)
+    /// at the 4.5:1 text floor; the pre-fix white label is
+    /// asserted to FAIL on the light ground so the defect itself
+    /// stays pinned. (inkPrimary's two sides are inkLightHex /
+    /// inkDarkHex by construction in AppTheme.)
+    func testHomeGateManualLocationButtonLabelClearsTheFloor() {
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.inkLightHex, AppTheme.groundLightHex), 4.5,
+            "manual-location label, light mode (15.63:1)")
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.inkDarkHex, AppTheme.groundDarkHex), 4.5,
+            "manual-location label, dark mode (16.45:1)")
+        // The defect this replaces: white on the light ground.
+        XCTAssertLessThan(contrast("FFFFFF", AppTheme.groundLightHex), 4.5,
+                          "pre-fix white label on cream was 1.13:1")
+    }
 }

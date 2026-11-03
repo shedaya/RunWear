@@ -81,14 +81,20 @@ struct LocationPermissionView: View {
             .padding(.horizontal, 32)
 
             Button(action: onSetLocationManually) {
+                // Token pair, not white: this button sits on the
+                // dynamic home ground with no fill, and white on
+                // the light cream ground is 1.13:1 — illegible.
+                // inkPrimary clears 4.5:1 in both modes (pinned in
+                // RW26Phase2Tests); cardStroke is the app's standard
+                // card outline in both modes.
                 Text("Set Location Manually")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                            .stroke(AppTheme.cardStroke, lineWidth: 1)
                     )
             }
             .padding(.horizontal, 32)
@@ -130,14 +136,17 @@ struct LocationDeniedView: View {
             .padding(.horizontal, 32)
 
             Button(action: onSetLocationManually) {
+                // Same token pair as LocationPermissionView's
+                // button (see the note there): white on the light
+                // cream ground is 1.13:1 with no fill behind it.
                 Text("Set Location Manually")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                            .stroke(AppTheme.cardStroke, lineWidth: 1)
                     )
             }
             .padding(.horizontal, 32)
