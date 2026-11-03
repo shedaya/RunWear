@@ -2,15 +2,17 @@
 #
 # Wraps the in-repo service UNMODIFIED. Build context is the repo's
 # services/identity-screen/ directory (app.py + requirements.txt are
-# copied from there verbatim). The only differences from the in-repo
-# Dockerfile:
-#   1. the buffalo_l weights (~326 MB) are downloaded at BUILD time and
-#      baked into the image, so a machine start is just the model load
-#      (~11 s measured) instead of a 326 MB download on every start;
-#   2. a HEALTHCHECK on the service's own /health endpoint.
+# copied from there verbatim). Differences from the in-repo Dockerfile:
+#   1. a HEALTHCHECK on the service's own /health endpoint.
+# The model weights (YuNet + SFace, ~39 MB total) are downloaded at
+# BUILD time with sha256 pins in both Dockerfiles, so a machine start
+# is just the model load. (The buffalo_l image this replaces baked
+# ~326 MB of InsightFace weights via a prepare() download step; the
+# 2026-11-03 swap removed that step together with the stack.)
 #
 # SCREEN_KEY is a runtime env var (set as a host secret) — never bake
 # it into the image. app.py enforces it as a Bearer token on all POSTs.
+# IDENTITY_THRESHOLD is likewise a runtime env var (default 0.42).
 FROM python:3.12-slim
 WORKDIR /srv
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,10 +20,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
-# Bake the model weights into the image layer (~/.insightface/models).
-RUN python -c "from insightface.app import FaceAnalysis; \
-    a = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); \
-    a.prepare(ctx_id=-1, det_size=(640, 640))"
+RUN mkdir -p models \
+ && curl -fsSL -o models/face_detection_yunet_2023mar.onnx \
+      https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx \
+ && echo "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4  models/face_detection_yunet_2023mar.onnx" | sha256sum -c - \
+ && curl -fsSL -o models/face_recognition_sface_2021dec.onnx \
+      https://github.com/opencv/opencv_zoo/raw/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx \
+ && echo "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79  models/face_recognition_sface_2021dec.onnx" | sha256sum -c -
 ENV PORT=8080
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \

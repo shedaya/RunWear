@@ -1,4 +1,7 @@
-insightface==2.1
-onnxruntime==1.31.1
+# YuNet + SFace run inside OpenCV (FaceDetectorYN / FaceRecognizerSF).
+# No insightface, no onnxruntime: the ONNX models are loaded by
+# OpenCV's DNN module directly. Model files are NOT pip packages —
+# see Dockerfile (build-time download, sha256-pinned) or place them
+# in ./models/ for a local run.
 opencv-python-headless>=4.9
 numpy>=1.26
