@@ -49,9 +49,10 @@ data class SimplePlace(
                 // "Singapore, Singapore" / "Hong Kong, Hong Kong": the
                 // region adds nothing once it cannot be abbreviated.
                 cleanRegion.equals(cleanCity, ignoreCase = true) -> SimplePlace(cleanCity, null)
-                // A short or single-word region is already simple
-                // ("London, England", "Munich, Bavaria").
-                !cleanRegion.contains(' ') || cleanRegion.length <= 3 ->
+                // A short single-token region is already simple
+                // ("London, England", "Munich, Bavaria"). A long
+                // compound token ("Île-de-France") is not.
+                !cleanRegion.contains(' ') && cleanRegion.length <= 10 ->
                     SimplePlace(cleanCity, cleanRegion)
                 // A long multi-word region with no known abbreviation
                 // is exactly the raw-geocode verbosity the simple form
