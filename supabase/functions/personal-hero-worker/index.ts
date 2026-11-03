@@ -136,6 +136,25 @@ export function drawBudgetFor(weather: string, bracket: string): number {
 // the raised hood occupied the head slot and ate the prescribed cap
 // (yield experiment Part 1 addendum). "hood" maps to no garment
 // class, so no gate expectation moves.
+// DESCRIPTIVE EXPANSION (yield experiment ROUND TWO arm F, adopted
+// 2026-11-03): every prescribed HEAD and HANDS item is described by
+// its attributes instead of merely named — in the subject sentence
+// AND in its fronted bullet (HEAD_DESC / HANDS_DESC below). Measured
+// on the production host against the emphasis control: delivery
+// 22.2% → 40.3% (z = 2.34; snow 7.1% → 40.9% throttle-adjusted),
+// cost per usable $0.105 → $0.067, identity screen unharmed
+// (record: rw-mim-yield-round2-2026-11-03). The wording is the
+// experiment's verbatim, including its one documented deviation:
+// the headband is a "wide KNITTED headband", not fleece — "fleece"
+// is the gate parser's mid-layer token and would have moved the
+// expected classes. Every description was checked against
+// classesFromText: each still parses to the item's own class, so
+// expected garment classes are unchanged. VISOR was not exercised
+// by the experiment; its wording extends the cap's in the identical
+// spirit ("a running visor with the brim facing forward") and is
+// the only non-experiment wording in the maps. Round two's other
+// arms (G completeness close, H extended emphasis, I exclusion)
+// MATCHED the control and are NOT adopted.
 // ---------------------------------------------------------------------
 const BULLET: Record<string, string> = {
   TANK_TOP: 'Sleeveless tank top',
@@ -230,7 +249,10 @@ const STYLE_BLOCK =
 // article and the hands item bare. The article rule reproduces the
 // experiment's hand-written phrases exactly — "a light beanie"
 // (LIGHT_BEANIE), "a running cap" (BASEBALL_CAP), "an ear warmer
-// headband" (HEADBAND), "light gloves" (LIGHT_GLOVES).
+// headband" (HEADBAND), "light gloves" (LIGHT_GLOVES). Since the
+// round-two arm-F adoption, the HEAD_DESC / HANDS_DESC wording
+// below supersedes this rule for every item it defines; the rule
+// remains only as the fallback for an item with no description.
 const HEAD_KEYS: ReadonlySet<string> = new Set([
   'VISOR', 'BASEBALL_CAP', 'HEADBAND', 'LIGHT_BEANIE', 'THERMAL_BEANIE', 'BALACLAVA'
 ])
@@ -238,11 +260,41 @@ const HANDS_KEYS: ReadonlySet<string> = new Set([
   'LIGHT_GLOVES', 'THERMAL_GLOVES', 'MITTENS'
 ])
 
+// Descriptive expansion (round-two arm F, adopted 2026-11-03):
+// subject-sentence forms of the head/hands descriptions, verbatim
+// from the experiment driver (HEAD_DESC / HANDS_DESC there). The
+// bullet form is the description with its article stripped and the
+// first letter capitalized (the driver's bulletForm()). Items with
+// no entry keep the plain arm-B phrasing.
+const HEAD_DESC: Record<string, string> = {
+  LIGHT_BEANIE: 'a knitted beanie pulled down over the ears',
+  THERMAL_BEANIE: 'a knitted beanie pulled down over the ears',
+  BASEBALL_CAP: 'a running cap with the brim facing forward',
+  HEADBAND: 'a wide knitted headband covering the ears',
+  BALACLAVA: 'a balaclava covering the head and neck',
+  VISOR: 'a running visor with the brim facing forward'
+}
+const HANDS_DESC: Record<string, string> = {
+  LIGHT_GLOVES: 'fitted running gloves with separate fingers',
+  THERMAL_GLOVES: 'fitted running gloves with separate fingers',
+  MITTENS: 'thick insulated mittens with no separate fingers'
+}
+function bulletForm(desc: string): string {
+  const bare = desc.replace(/^(a|an) /, '')
+  return bare.charAt(0).toUpperCase() + bare.slice(1)
+}
+function bulletText(key: string): string {
+  const desc = HEAD_DESC[key] ?? HANDS_DESC[key]
+  return desc ? bulletForm(desc) : (BULLET[key] ?? key)
+}
+
 function headPhrase(key: string): string {
+  if (HEAD_DESC[key]) return HEAD_DESC[key]
   const b = (BULLET[key] ?? key).toLowerCase()
   return `${/^[aeiou]/.test(b) ? 'an' : 'a'} ${b}`
 }
 function handsPhrase(key: string): string {
+  if (HANDS_DESC[key]) return HANDS_DESC[key]
   return (BULLET[key] ?? key).toLowerCase()
 }
 
@@ -275,7 +327,7 @@ export function buildPrompt(job: {
     : `A runner in their 30s${wearing} running mid-stride along a suburban sidewalk during a ` +
       `${BRACKET_PHRASE[job.temp_bracket] ?? ''} ${TIME_WORD[job.time_of_day] ?? ''} with ` +
       `${WEATHER_WORD[job.weather] ?? ''} conditions.`
-  const outfit = 'OUTFIT:\n' + ordered.map(k => `- ${BULLET[k] ?? k}`).join('\n')
+  const outfit = 'OUTFIT:\n' + ordered.map(k => `- ${bulletText(k)}`).join('\n')
   const scene = (job.weather === 'SNOW' && job.temp_bracket === 'MILD')
     ? SCENE_MILD_SNOW : (SCENE[job.weather] ?? SCENE.CLEAR)
   const env = `ENVIRONMENT: ${LIGHT[job.time_of_day] ?? ''}${scene}`

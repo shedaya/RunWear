@@ -37,35 +37,37 @@ Deno.test('prompt: warm clear midday matches the validated Part-4 shape', () => 
   assert(p.trimEnd().endsWith('MOOD: Light and free, easy summer rhythm'), 'nothing follows the MOOD line')
 })
 
-Deno.test('prompt: cold clear midday — emphasis fronts head + hands and names them in the subject', () => {
+Deno.test('prompt: cold clear midday — emphasis fronts head + hands, described (arm F) in subject and bullets', () => {
   const p = buildPrompt({
     gender: 'FEMALE', weather: 'CLEAR', temp_bracket: 'COLD', time_of_day: 'MIDDAY',
     outfit_items: ['NECK_GAITER', 'THERMAL_TIGHTS', 'LIGHT_GLOVES', 'QUARTER_ZIP', 'LONG_SLEEVE_LIGHT', 'LIGHT_BEANIE']
   })
-  assertStringIncludes(p, 'A female runner in their 30s, wearing a light beanie and light gloves, running mid-stride')
+  assertStringIncludes(p, 'A female runner in their 30s, wearing a knitted beanie pulled down over the ears and fitted running gloves with separate fingers, running mid-stride')
   const seg = p.split('OUTFIT:\n')[1].split('\n\n')[0]
   assertEquals(seg, [
-    '- Light beanie', '- Light gloves',
+    '- Knitted beanie pulled down over the ears', '- Fitted running gloves with separate fingers',
     '- Light long sleeve shirt', '- Quarter zip pullover', '- Thermal tights',
     '- Neck gaiter'
   ].join('\n'))
 })
 
-Deno.test('prompt: byte-identical to yield-experiment arm B on its measured cells', () => {
-  // The reference strings are the experiment driver's own output:
-  // the pre-emphasis builder's prompt run through yield_driver.ts's
-  // emphasize() verbatim (rw-mim-yield-experiment-2026-11-03). The
-  // rain reference additionally carries the hood-down bullet fix.
+Deno.test('prompt: byte-identical to yield round-two arm F on its measured cells', () => {
+  // The reference strings are the round-two experiment driver's own
+  // arm-F output, verbatim from its pre-spend prompt dump
+  // (rw-mim-yield-round2-2026-11-03/work/dump_out.txt): the control
+  // prompt (arm-B emphasis + hood-down rain bullet) run through
+  // round2_driver.ts's armF(). The production builder must now emit
+  // these strings directly.
   const cold = buildPrompt({
     gender: 'MALE', weather: 'CLEAR', temp_bracket: 'COLD', time_of_day: 'MIDDAY',
     outfit_items: ['LIGHT_BEANIE', 'LONG_SLEEVE_LIGHT', 'QUARTER_ZIP', 'THERMAL_TIGHTS',
       'LIGHT_GLOVES', 'SUNGLASSES', 'NECK_GAITER']
   })
-  assertEquals(cold, `A male runner in their 30s, wearing a light beanie and light gloves, running mid-stride along a suburban sidewalk during a cold winter midday with clear conditions.
+  assertEquals(cold, `A male runner in their 30s, wearing a knitted beanie pulled down over the ears and fitted running gloves with separate fingers, running mid-stride along a suburban sidewalk during a cold winter midday with clear conditions.
 
 OUTFIT:
-- Light beanie
-- Light gloves
+- Knitted beanie pulled down over the ears
+- Fitted running gloves with separate fingers
 - Light long sleeve shirt
 - Quarter zip pullover
 - Thermal tights
@@ -78,14 +80,14 @@ STYLE: Professional athletic action photography. Full body in motion, natural ru
 
 MOOD: Strong and steady, winter grit`)
   const rain = buildPrompt({
-    gender: 'FEMALE', weather: 'RAIN', temp_bracket: 'COOL', time_of_day: 'MIDDAY',
+    gender: 'MALE', weather: 'RAIN', temp_bracket: 'COOL', time_of_day: 'MIDDAY',
     outfit_items: ['BASEBALL_CAP', 'LONG_SLEEVE_LIGHT', 'RAIN_JACKET', 'LIGHT_TIGHTS', 'LIGHT_GLOVES']
   })
-  assertEquals(rain, `A female runner in their 30s, wearing a running cap and light gloves, running mid-stride along a suburban sidewalk during a cool autumn midday with rainy conditions.
+  assertEquals(rain, `A male runner in their 30s, wearing a running cap with the brim facing forward and fitted running gloves with separate fingers, running mid-stride along a suburban sidewalk during a cool autumn midday with rainy conditions.
 
 OUTFIT:
-- Running cap
-- Light gloves
+- Running cap with the brim facing forward
+- Fitted running gloves with separate fingers
 - Light long sleeve shirt
 - Waterproof rain jacket with the hood down
 - Light running tights
@@ -99,11 +101,11 @@ MOOD: Undeterred and strong, splashing through the rain`)
     gender: 'MALE', weather: 'SNOW', temp_bracket: 'COOL', time_of_day: 'DUSK',
     outfit_items: ['HEADBAND', 'LONG_SLEEVE_LIGHT', 'LIGHT_TIGHTS', 'LIGHT_GLOVES']
   })
-  assertEquals(snow, `A male runner in their 30s, wearing an ear warmer headband and light gloves, running mid-stride along a suburban sidewalk during a cool autumn evening with snowy conditions.
+  assertEquals(snow, `A male runner in their 30s, wearing a wide knitted headband covering the ears and fitted running gloves with separate fingers, running mid-stride along a suburban sidewalk during a cool autumn evening with snowy conditions.
 
 OUTFIT:
-- Ear warmer headband
-- Light gloves
+- Wide knitted headband covering the ears
+- Fitted running gloves with separate fingers
 - Light long sleeve shirt
 - Light running tights
 
@@ -129,19 +131,52 @@ MOOD: Quiet and powerful, tracks in fresh snow`)
   })
 })
 
-Deno.test('prompt: emphasis with only one of head/hands names and fronts that item', () => {
+Deno.test('prompt: emphasis with only one of head/hands names and fronts that item (described, arm F)', () => {
   const headOnly = buildPrompt({
     gender: 'MALE', weather: 'CLEAR', temp_bracket: 'MILD', time_of_day: 'MIDDAY',
     outfit_items: ['SHORT_SLEEVE', 'SHORTS', 'BASEBALL_CAP']
   })
-  assertStringIncludes(headOnly, 'A male runner in their 30s, wearing a running cap, running mid-stride')
-  assertStringIncludes(headOnly, 'OUTFIT:\n- Running cap\n- Short sleeve shirt\n- Running shorts')
+  assertStringIncludes(headOnly, 'A male runner in their 30s, wearing a running cap with the brim facing forward, running mid-stride')
+  assertStringIncludes(headOnly, 'OUTFIT:\n- Running cap with the brim facing forward\n- Short sleeve shirt\n- Running shorts')
   const handsOnly = buildPrompt({
     gender: 'FEMALE', weather: 'CLEAR', temp_bracket: 'FREEZING', time_of_day: 'DAWN',
     outfit_items: ['LONG_SLEEVE_THERMAL', 'THERMAL_TIGHTS', 'MITTENS']
   })
-  assertStringIncludes(handsOnly, 'A female runner in their 30s, wearing mittens, running mid-stride')
-  assertStringIncludes(handsOnly, 'OUTFIT:\n- Mittens\n- Thermal long sleeve shirt\n- Thermal tights')
+  assertStringIncludes(handsOnly, 'A female runner in their 30s, wearing thick insulated mittens with no separate fingers, running mid-stride')
+  assertStringIncludes(handsOnly, 'OUTFIT:\n- Thick insulated mittens with no separate fingers\n- Thermal long sleeve shirt\n- Thermal tights')
+})
+
+Deno.test('prompt: arm F descriptions cover every head/hands item and keep expected classes unchanged', () => {
+  // The experiment exercised LIGHT_BEANIE / BASEBALL_CAP / HEADBAND /
+  // LIGHT_GLOVES. The remaining descriptions (experiment-brief
+  // verbatim for THERMAL_BEANIE / THERMAL_GLOVES / BALACLAVA /
+  // MITTENS; VISOR extended in the identical spirit) must render in
+  // both places and parse to the same expected classes as the plain
+  // bullets did.
+  const thermal = buildPrompt({
+    gender: 'MALE', weather: 'SNOW', temp_bracket: 'FREEZING', time_of_day: 'MIDDAY',
+    outfit_items: ['THERMAL_BEANIE', 'LONG_SLEEVE_THERMAL', 'THERMAL_TIGHTS', 'THERMAL_GLOVES']
+  })
+  assertStringIncludes(thermal, 'wearing a knitted beanie pulled down over the ears and fitted running gloves with separate fingers,')
+  assertStringIncludes(thermal, '- Knitted beanie pulled down over the ears\n- Fitted running gloves with separate fingers')
+  assertEquals(expectedClassesForPrompt(thermal).head, 'beanie')
+  assertEquals(expectedClassesForPrompt(thermal).hands, 'gloves')
+  const balaclava = buildPrompt({
+    gender: 'FEMALE', weather: 'CLEAR', temp_bracket: 'FREEZING', time_of_day: 'NIGHT',
+    outfit_items: ['BALACLAVA', 'LONG_SLEEVE_THERMAL', 'THERMAL_TIGHTS', 'MITTENS']
+  })
+  assertStringIncludes(balaclava, 'wearing a balaclava covering the head and neck and thick insulated mittens with no separate fingers,')
+  assertStringIncludes(balaclava, '- Balaclava covering the head and neck\n- Thick insulated mittens with no separate fingers')
+  assertEquals(expectedClassesForPrompt(balaclava).head, 'balaclava')
+  assertEquals(expectedClassesForPrompt(balaclava).hands, 'mittens')
+  assertEquals(expectedClassesForPrompt(balaclava).gaiter, false)
+  const visor = buildPrompt({
+    gender: 'FEMALE', weather: 'CLEAR', temp_bracket: 'HOT', time_of_day: 'MIDDAY',
+    outfit_items: ['TANK_TOP', 'SHORT_SHORTS', 'VISOR']
+  })
+  assertStringIncludes(visor, 'wearing a running visor with the brim facing forward,')
+  assertStringIncludes(visor, '- Running visor with the brim facing forward')
+  assertEquals(expectedClassesForPrompt(visor).head, 'visor')
 })
 
 Deno.test('expected classes derive from the prompt segment (lane method)', () => {
