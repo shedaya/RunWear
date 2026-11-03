@@ -13,7 +13,7 @@ import XCTest
 /// Mirror of Android's HeroFallbackGenderTest.
 final class HeroFallbackGenderTests: XCTestCase {
 
-    private let provider = FallbackImageProvider()
+    private let provider = FallbackImageProvider.shared
 
     private func assetName(_ url: String) -> String {
         let last = (url as NSString).lastPathComponent
