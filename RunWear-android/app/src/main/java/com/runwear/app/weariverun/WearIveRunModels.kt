@@ -5,17 +5,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * RW-25: "Wear I've Run" — the collection mini bar's state model,
- * narration formatter, and translucency policy.
+ * RW-25 / RW-26 / WS-3 (RC-3): "Wear I've Run" — the element's ONE
+ * state machine, narration formatter, and translucency policy.
  *
- * The collection feature itself is NOT built anywhere in the app yet:
- * there is no collection store, no add-to-collection action, no
- * entries. This build therefore ships the bar in its PRE-ADD state
- * only — [WearIveRunBarStateHolder] can only ever yield
- * [WearIveRunBarState.PreAdd], and the dock in HeroMainScreen renders
- * nothing for PreAdd. The model, formatter, and fully-styled composable
- * (WearIveRunMiniBar.kt) are in place so the collection feature, when
- * it lands, only has to start feeding real states.
+ * WS-3 replaces the three competing expand drivers of the RW-27
+ * audit (D-07: a 3-second cue re-fired by a LaunchedEffect keyed on
+ * outfit/weather/location/hero URL, an end-of-scroll latch with no
+ * collapse counterpart, and a tap that opened the collection instead
+ * of expanding) with [WearIveRunElementMachine]: an enumerated event
+ * set and a total transition table. The event set is the ONLY way
+ * the element's state ever changes — there is deliberately no event
+ * for an asynchronous landing (weather refresh, hero URL resolution,
+ * unit re-render, foregrounding), so those landings cannot move the
+ * element; the holder folds them into the presented entry's CONTENT
+ * silently (see [WearIveRunBarStateHolder.onEntriesChanged]).
  */
 
 /** One collection entry, as the expanded bar presents it. */
@@ -68,27 +71,172 @@ data class WearIveRunNarration(
     val payload: String get() = text.substring(payloadStart, payloadEnd)
 }
 
-/** The bar's display states. Only [PreAdd] is reachable in this build. */
+/** The element's display states — exactly the spec's four (§1.2). */
 sealed interface WearIveRunBarState {
 
-    /** Nothing added yet — the bar does not render at all. */
-    data object PreAdd : WearIveRunBarState
+    /** The machine's kind, for transition-table tests and pins. */
+    val kind: WearIveRunElementKind
 
-    /** Mini state: wordmark + one narration line + quiet icons. */
-    data class Mini(
-        val narration: WearIveRunNarration,
+    /** Nothing for today yet — the element does not render at all. */
+    data object Absent : WearIveRunBarState {
+        override val kind = WearIveRunElementKind.ABSENT
+    }
+
+    /** A state that carries content: narration + the presented entry. */
+    sealed interface Present : WearIveRunBarState {
+        val narration: WearIveRunNarration
         val entry: WearIveRunEntry
-    ) : WearIveRunBarState
+    }
+
+    /** Mini state: wordmark + one narration line + the two icons. */
+    data class Mini(
+        override val narration: WearIveRunNarration,
+        override val entry: WearIveRunEntry
+    ) : Present {
+        override val kind = WearIveRunElementKind.MINI
+    }
 
     /**
-     * Full expression: expanded (also the end-of-scroll-expanded and
-     * cue-moment presentations) — thumbnail, entry data, quiet Remove,
+     * Full expression: thumbnail, entry data, and the SAME two icons
+     * as Mini (collapse + trash — no "Remove" text button, D-10),
      * fully opaque background.
      */
     data class Expanded(
-        val narration: WearIveRunNarration,
-        val entry: WearIveRunEntry
-    ) : WearIveRunBarState
+        override val narration: WearIveRunNarration,
+        override val entry: WearIveRunEntry
+    ) : Present {
+        override val kind = WearIveRunElementKind.EXPANDED
+    }
+
+    /**
+     * CUE: a timed PRESENTATION of Expanded, not a fifth content
+     * state — it carries exactly the expanded content and renders it
+     * with the cue motion (rise + one pulse + one soft haptic). Its
+     * only exits are the cue timeout, a touch on the element, trash,
+     * and day rollover.
+     */
+    data class Cue(
+        override val narration: WearIveRunNarration,
+        override val entry: WearIveRunEntry
+    ) : Present {
+        override val kind = WearIveRunElementKind.CUE
+    }
+}
+
+/** The four states of §1.2, as a kind the machine transitions over. */
+enum class WearIveRunElementKind { ABSENT, MINI, EXPANDED, CUE }
+
+/**
+ * Every driver of the element — the COMPLETE list (§1.2's driver
+ * table, WS-3 task table). Anything not named here cannot move the
+ * element: there is no event for a weather refresh landing, a hero
+ * URL resolving, a location string changing, a unit re-render, or
+ * the app foregrounding. Those landings update content only.
+ */
+enum class WearIveRunElementEvent {
+    /** A generation/update for today settles into a NEW entry version. */
+    GENERATION_LANDED,
+    /** The user taps the mini bar's body. */
+    TAP_BODY,
+    /** The user taps the expand control. */
+    EXPAND_CONTROL,
+    /** The user taps the collapse control (the flipped glyph). */
+    COLLAPSE_CONTROL,
+    /** The cue's 3.0 s timer expires with no interaction. */
+    CUE_TIMEOUT,
+    /** The home scroll arrives at its end (within 8 dp of max). */
+    SCROLL_ARRIVED_AT_END,
+    /** The home scroll departs its end by more than 48 dp. */
+    SCROLL_DEPARTED_END,
+    /** The user taps trash, in either present state. */
+    TRASH,
+    /** The local day at the presented place rolls over. */
+    DAY_ROLLOVER
+}
+
+/**
+ * WS-3: THE state machine — one pure, total transition table.
+ *
+ * Illegal transitions are unrepresentable as drivers: an event that
+ * has no row for a state is a NO-OP in that state (the table returns
+ * the state unchanged), never a fall-through into another driver.
+ * The table, state by state:
+ *
+ * - ABSENT: only GENERATION_LANDED leaves it (→ CUE, the creation
+ *   cue). Everything else is a no-op — nothing can expand, collapse,
+ *   or time out an element that does not exist.
+ * - MINI: GENERATION_LANDED → CUE (a user-caused update); TAP_BODY
+ *   and EXPAND_CONTROL → EXPANDED (D-07: the body tap expands, it no
+ *   longer opens the collection); SCROLL_ARRIVED_AT_END → EXPANDED;
+ *   TRASH → ABSENT; DAY_ROLLOVER → ABSENT.
+ * - EXPANDED: GENERATION_LANDED → CUE; COLLAPSE_CONTROL → MINI;
+ *   SCROLL_DEPARTED_END → MINI (symmetric with arrival — D-07's
+ *   latch is retired); SCROLL_ARRIVED_AT_END → stays EXPANDED;
+ *   TRASH → ABSENT; DAY_ROLLOVER → ABSENT.
+ * - CUE: GENERATION_LANDED → stays CUE (the landing restarts the
+ *   timer — the holder bumps the cue sequence); CUE_TIMEOUT → MINI;
+ *   TAP_BODY / EXPAND_CONTROL → EXPANDED (a touch cancels the timer
+ *   and obeys the touch); COLLAPSE_CONTROL → MINI; scroll events do
+ *   NOT move a cueing element; TRASH → ABSENT; DAY_ROLLOVER → ABSENT.
+ */
+object WearIveRunElementMachine {
+
+    /** The cue's lifetime before it settles to MINI (§1.2: 3.0 s). */
+    const val CUE_TIMEOUT_MS = 3_000L
+
+    /** The cue's single pulse: 900 ms ease-in-out, exactly once (§1.2). */
+    const val CUE_PULSE_MS = 900L
+
+    /** The cue's rise into place: 350 ms emphasized-decelerate (§1.2). */
+    const val CUE_RISE_MS = 350L
+
+    /** Rise distance of the cue entrance, in dp (§1.2: 12 dp). */
+    const val CUE_RISE_DP = 12f
+
+    /** End-of-scroll arrival: within this distance of max (dp). */
+    const val END_ARRIVAL_EPSILON_DP = 8
+
+    /** End-of-scroll departure: beyond this distance from max (dp). */
+    const val END_DEPARTURE_THRESHOLD_DP = 48
+
+    /** Height-collapse duration when trash removes the element (§1.2). */
+    const val TRASH_COLLAPSE_MS = 250L
+
+    fun transition(
+        kind: WearIveRunElementKind,
+        event: WearIveRunElementEvent
+    ): WearIveRunElementKind = when (kind) {
+        WearIveRunElementKind.ABSENT -> when (event) {
+            WearIveRunElementEvent.GENERATION_LANDED -> WearIveRunElementKind.CUE
+            else -> WearIveRunElementKind.ABSENT
+        }
+        WearIveRunElementKind.MINI -> when (event) {
+            WearIveRunElementEvent.GENERATION_LANDED -> WearIveRunElementKind.CUE
+            WearIveRunElementEvent.TAP_BODY -> WearIveRunElementKind.EXPANDED
+            WearIveRunElementEvent.EXPAND_CONTROL -> WearIveRunElementKind.EXPANDED
+            WearIveRunElementEvent.SCROLL_ARRIVED_AT_END -> WearIveRunElementKind.EXPANDED
+            WearIveRunElementEvent.TRASH -> WearIveRunElementKind.ABSENT
+            WearIveRunElementEvent.DAY_ROLLOVER -> WearIveRunElementKind.ABSENT
+            else -> WearIveRunElementKind.MINI
+        }
+        WearIveRunElementKind.EXPANDED -> when (event) {
+            WearIveRunElementEvent.GENERATION_LANDED -> WearIveRunElementKind.CUE
+            WearIveRunElementEvent.COLLAPSE_CONTROL -> WearIveRunElementKind.MINI
+            WearIveRunElementEvent.SCROLL_DEPARTED_END -> WearIveRunElementKind.MINI
+            WearIveRunElementEvent.TRASH -> WearIveRunElementKind.ABSENT
+            WearIveRunElementEvent.DAY_ROLLOVER -> WearIveRunElementKind.ABSENT
+            else -> WearIveRunElementKind.EXPANDED
+        }
+        WearIveRunElementKind.CUE -> when (event) {
+            WearIveRunElementEvent.CUE_TIMEOUT -> WearIveRunElementKind.MINI
+            WearIveRunElementEvent.TAP_BODY -> WearIveRunElementKind.EXPANDED
+            WearIveRunElementEvent.EXPAND_CONTROL -> WearIveRunElementKind.EXPANDED
+            WearIveRunElementEvent.COLLAPSE_CONTROL -> WearIveRunElementKind.MINI
+            WearIveRunElementEvent.TRASH -> WearIveRunElementKind.ABSENT
+            WearIveRunElementEvent.DAY_ROLLOVER -> WearIveRunElementKind.ABSENT
+            else -> WearIveRunElementKind.CUE
+        }
+    }
 }
 
 /** Pure narration composition for the bar's one line. */
@@ -147,104 +295,290 @@ object WearIveRunMiniBarPolicy {
         else -> MINI_ALPHA_LIGHT
     }
 
-    /** Whether [state] counts as full expression for the alpha rule. */
+    /** Whether [state] counts as full expression for the alpha rule.
+     * CUE is a presentation of Expanded, so it is full expression too. */
     fun isFullExpression(state: WearIveRunBarState): Boolean =
-        state is WearIveRunBarState.Expanded
+        state is WearIveRunBarState.Expanded || state is WearIveRunBarState.Cue
+
+    /**
+     * WS-3 (D-11): whenever any sheet is up over home, the element —
+     * a citizen of home's layer — dims WITH the home backdrop. Its
+     * content takes this alpha as a whole (the backdrop scrim's
+     * weight, halved light), instead of staying fully bright over
+     * the dimmed home the way the root-Box overlay did.
+     */
+    const val SHEET_DIMMED_ALPHA = 0.5f
+
+    /** The element's whole-surface alpha for a given backdrop state. */
+    fun surfaceAlpha(dimmedBySheet: Boolean): Float =
+        if (dimmedBySheet) SHEET_DIMMED_ALPHA else 1.0f
+
+    /**
+     * §1.0 rule 4 (reduced motion): when the system animator
+     * duration scale is 0, the cue's pulse is disabled — the element
+     * still cues (state + timeout are information-free motion), it
+     * just does not pulse or rise.
+     */
+    fun cuePulseEnabled(animatorDurationScale: Float): Boolean =
+        animatorDurationScale > 0f
 }
 
 /**
- * RW-26: the bar's state holder, now driven by the real collection.
- * It starts at [WearIveRunBarState.PreAdd] (absent before the first
- * entry exists) and thereafter reflects the current entry — today's
- * when there is one, else the most recent. A creation or a same-day
- * replacement (the day's last settled version changing) increments
- * [cueCount] exactly once: the dock answers with one gentle pulse +
- * soft haptic and an expansion, then goes quiet.
+ * RW-26 / WS-3: the element's ONE state holder, driven by the real
+ * collection through [WearIveRunElementMachine] and nothing else.
+ *
+ * It starts ABSENT and thereafter presents an entry — today's when
+ * there is one, else the most recent (the collection doorway's rest
+ * state). The holder translates the store's entry list into AT MOST
+ * one machine event per distinct settled version:
+ *
+ * - the FIRST version of today's entry (creation — including its
+ *   re-creation after a trash) and a version whose KIT changed (a
+ *   real update: the narration's payload is the first kit item) fire
+ *   GENERATION_LANDED → CUE and bump [cueSequence] exactly once;
+ * - every other landing is CONTENT, never a driver: an identical
+ *   re-delivery, a hero-reference-only change (the thumbnail lands),
+ *   a feels-like/condition drift, a place-string re-render — these
+ *   update the presented entry in place and leave kind, narration,
+ *   and cue sequence untouched. This is the abolished-drivers rule:
+ *   outfit/weather/location/hero-URL landings as such never move
+ *   the element (the D-07 churn mechanism).
+ *
+ * [cueSequence] is the cue's identity: the UI keys the 3.0 s timeout,
+ * the single pulse, and the single soft haptic on it, so a cue fires
+ * exactly once per landing and content landings mid-cue cannot
+ * restart it.
  */
 class WearIveRunBarStateHolder {
 
-    private val _state = MutableStateFlow<WearIveRunBarState>(WearIveRunBarState.PreAdd)
+    private val _state = MutableStateFlow<WearIveRunBarState>(WearIveRunBarState.Absent)
     val state: StateFlow<WearIveRunBarState> = _state.asStateFlow()
 
-    private val _cueCount = MutableStateFlow(0)
-    val cueCount: StateFlow<Int> = _cueCount.asStateFlow()
+    private val _cueSequence = MutableStateFlow(0)
 
-    private var expanded = false
+    /** Monotonic cue identity — increments exactly once per landing that cues. */
+    val cueSequence: StateFlow<Int> = _cueSequence.asStateFlow()
+
+    private var kind: WearIveRunElementKind = WearIveRunElementKind.ABSENT
     private var current: WearIveRunDayEntry? = null
+    private var narration: WearIveRunNarration? = null
 
-    /** The entry the bar currently presents (today's, else latest). */
+    /** The day the holder believes it is in; null until first contact. */
+    private var knownDay: java.time.LocalDate? = null
+
+    /** After a rollover, no older entry may present until today's
+     * first generation lands (the rollover rule, §1.2 task table). */
+    private var awaitingTodaysGeneration = false
+
+    /** The (date, place) trashed in this session for today: while it
+     * stands, an entries list without today's entry must NOT fall
+     * back to an older entry and resurrect the element. Its
+     * re-appearance in the list IS its re-creation. */
+    private var trashedTodayKey: Pair<java.time.LocalDate, String>? = null
+
+    /** The entry the element currently presents (today's, else latest). */
     fun currentEntry(): WearIveRunDayEntry? = current
 
-    fun onEntriesChanged(entries: List<WearIveRunDayEntry>, today: java.time.LocalDate) {
-        val next = entries.firstOrNull { it.date == today }
-            ?: entries.maxByOrNull { it.date }
-        if (next == null) {
-            current = null
-            _state.value = WearIveRunBarState.PreAdd
-            return
-        }
-        val previous = current
-        val isCreation = previous == null ||
-            previous.date != next.date || previous.place != next.place
-        val isUpdate = !isCreation && previous != next
-        current = next
-        // WS-4 (D-08): narration content is built from the SIMPLE
-        // place, the narration day form ("Now", never the collection's
-        // "Today"), and — for updates — the entry's REAL payload, its
-        // first kit item. The place is normalized at this seam too, so
-        // no raw geocode string can reach the line from any source.
-        val simplePlace = com.runwear.shared.domain.model.SimplePlace
-            .fromRawDisplayString(next.place).display
-        val dayForm = WearIveRunCollectionLogic.narrationDayForm(next.date, today)
-        val firstItem = next.items.firstOrNull()?.takeIf { it.isNotBlank() }
-        val narration = when {
-            isUpdate && firstItem != null ->
-                WearIveRunNarrationFormatter.update(firstItem)
-            isUpdate ->
-                WearIveRunNarrationFormatter.update("$simplePlace, $dayForm")
-            else -> WearIveRunNarrationFormatter.added(simplePlace, dayForm)
-        }
-        val barEntry = WearIveRunEntry(
-            place = simplePlace,
-            timeLabel = dayForm,
-            payload = firstItem,
-            thumbnailUrl = next.heroRef,
-            feelsLikeF = next.feelsLikeF,
-            itemCount = next.items.size
-        )
-        _state.value = if (expanded) {
-            WearIveRunBarState.Expanded(narration, barEntry)
-        } else {
-            WearIveRunBarState.Mini(narration, barEntry)
-        }
-        if (isCreation || isUpdate) {
-            _cueCount.value = _cueCount.value + 1
+    /** The machine's current kind. */
+    fun currentKind(): WearIveRunElementKind = kind
+
+    private fun emit() {
+        val entry = current
+        val line = narration
+        _state.value = when {
+            kind == WearIveRunElementKind.ABSENT || entry == null || line == null ->
+                WearIveRunBarState.Absent
+            kind == WearIveRunElementKind.MINI ->
+                WearIveRunBarState.Mini(line, barEntryOf(entry))
+            kind == WearIveRunElementKind.EXPANDED ->
+                WearIveRunBarState.Expanded(line, barEntryOf(entry))
+            else -> WearIveRunBarState.Cue(line, barEntryOf(entry))
         }
     }
 
-    fun setExpanded(value: Boolean, today: java.time.LocalDate) {
-        expanded = value
-        val entry = current ?: return
-        // WS-4: same content construction as onEntriesChanged —
-        // simple place, narration day form, real payload fields.
+    /** WS-4 content construction: simple place, narration day form,
+     * the entry's real payload (its first kit item). */
+    private fun barEntryOf(entry: WearIveRunDayEntry): WearIveRunEntry {
         val simplePlace = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(entry.place).display
-        val dayForm = WearIveRunCollectionLogic.narrationDayForm(entry.date, today)
-        val barEntry = WearIveRunEntry(
+        return WearIveRunEntry(
             place = simplePlace,
-            timeLabel = dayForm,
-            payload = entry.items.firstOrNull(),
+            timeLabel = WearIveRunCollectionLogic.narrationDayForm(
+                entry.date, knownDay ?: entry.date
+            ),
+            payload = entry.items.firstOrNull()?.takeIf { it.isNotBlank() },
             thumbnailUrl = entry.heroRef,
             feelsLikeF = entry.feelsLikeF,
             itemCount = entry.items.size
         )
-        val narration = (_state.value as? WearIveRunBarState.Mini)?.narration
-            ?: (_state.value as? WearIveRunBarState.Expanded)?.narration
-            ?: WearIveRunNarrationFormatter.added(simplePlace, dayForm)
-        _state.value = if (value) {
-            WearIveRunBarState.Expanded(narration, barEntry)
+    }
+
+    private fun addedNarration(entry: WearIveRunDayEntry): WearIveRunNarration {
+        val simplePlace = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(entry.place).display
+        return WearIveRunNarrationFormatter.added(
+            simplePlace,
+            WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)
+        )
+    }
+
+    private fun updateNarration(entry: WearIveRunDayEntry): WearIveRunNarration {
+        val firstItem = entry.items.firstOrNull()?.takeIf { it.isNotBlank() }
+        return if (firstItem != null) {
+            WearIveRunNarrationFormatter.update(firstItem)
         } else {
-            WearIveRunBarState.Mini(narration, barEntry)
+            val simplePlace = com.runwear.shared.domain.model.SimplePlace
+                .fromRawDisplayString(entry.place).display
+            WearIveRunNarrationFormatter.update(
+                "$simplePlace, ${WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)}"
+            )
+        }
+    }
+
+    /** Dispatch one machine event — the UI's only way to move the element. */
+    fun onEvent(event: WearIveRunElementEvent) {
+        if (event == WearIveRunElementEvent.DAY_ROLLOVER) {
+            // Rollover needs the new day; route through onDayRollover.
+            return
+        }
+        if (event == WearIveRunElementEvent.TRASH) {
+            val entry = current
+            if (entry != null && entry.date == knownDay) {
+                trashedTodayKey = entry.date to entry.place
+            }
+            kind = WearIveRunElementMachine.transition(kind, event)
+            if (kind == WearIveRunElementKind.ABSENT) {
+                current = null
+                narration = null
+            }
+            emit()
+            return
+        }
+        kind = WearIveRunElementMachine.transition(kind, event)
+        emit()
+    }
+
+    /** Day rollover: ABSENT until the new day's first generation. */
+    fun onDayRollover(newDay: java.time.LocalDate) {
+        if (knownDay == newDay) return
+        knownDay = newDay
+        kind = WearIveRunElementMachine.transition(kind, WearIveRunElementEvent.DAY_ROLLOVER)
+        current = null
+        narration = null
+        trashedTodayKey = null
+        awaitingTodaysGeneration = true
+        emit()
+    }
+
+    fun onEntriesChanged(entries: List<WearIveRunDayEntry>, today: java.time.LocalDate) {
+        // A new day arriving at this seam is a rollover too.
+        if (knownDay != null && knownDay != today) {
+            onDayRollover(today)
+        }
+        knownDay = today
+
+        val todays = entries.firstOrNull { it.date == today }
+
+        // Trash suppression: today's entry is gone by the user's own
+        // tap — never fall back to an older entry behind their back.
+        val trashed = trashedTodayKey
+        if (trashed != null && trashed.first == today) {
+            if (todays == null) {
+                current = null
+                narration = null
+                kind = WearIveRunElementKind.ABSENT
+                emit()
+                return
+            }
+            // It is back in the list: a later generation re-created
+            // it — the creation cue fires for the re-creation.
+            trashedTodayKey = null
+            current = todays
+            narration = addedNarration(todays)
+            kind = WearIveRunElementMachine.transition(
+                WearIveRunElementKind.ABSENT, WearIveRunElementEvent.GENERATION_LANDED
+            )
+            _cueSequence.value = _cueSequence.value + 1
+            emit()
+            return
+        }
+
+        if (awaitingTodaysGeneration && todays == null) {
+            // Rolled over and today has no generation yet: ABSENT,
+            // and yesterday's entry does not present.
+            current = null
+            narration = null
+            kind = WearIveRunElementKind.ABSENT
+            emit()
+            return
+        }
+
+        val next = todays ?: entries.maxByOrNull { it.date }
+        if (next == null) {
+            current = null
+            narration = null
+            kind = WearIveRunElementKind.ABSENT
+            emit()
+            return
+        }
+        if (next.date == today) awaitingTodaysGeneration = false
+
+        val previous = current
+        when {
+            previous == null -> {
+                // First presentation. Today's entry arriving IS the
+                // day's generation landing (creation cue); an older
+                // entry is just the doorway at rest (MINI, no cue).
+                current = next
+                narration = addedNarration(next)
+                kind = if (next.date == today) {
+                    _cueSequence.value = _cueSequence.value + 1
+                    WearIveRunElementMachine.transition(
+                        kind, WearIveRunElementEvent.GENERATION_LANDED
+                    )
+                } else {
+                    WearIveRunElementKind.MINI
+                }
+                emit()
+            }
+            previous == next -> {
+                // Identical re-delivery of the settled version: not
+                // a landing. Nothing moves, nothing re-fires.
+                return
+            }
+            previous.date != next.date || previous.place != next.place -> {
+                // A different day/place is now the presented entry.
+                // For today that is a creation; for an older entry it
+                // is a content swap at rest.
+                current = next
+                narration = addedNarration(next)
+                if (next.date == today) {
+                    kind = WearIveRunElementMachine.transition(
+                        kind, WearIveRunElementEvent.GENERATION_LANDED
+                    )
+                    _cueSequence.value = _cueSequence.value + 1
+                }
+                emit()
+            }
+            else -> {
+                // Same day + place, a new version of the entry. Only
+                // a KIT change is an update the element announces —
+                // the narration's payload is the first kit item, so a
+                // kit change is the update. Everything else (hero
+                // reference, feels-like, condition) is an async
+                // landing: content updates in place, state does not
+                // move, the cue does not re-fire.
+                val kitChanged = previous.items != next.items
+                current = next
+                if (kitChanged) {
+                    narration = updateNarration(next)
+                    kind = WearIveRunElementMachine.transition(
+                        kind, WearIveRunElementEvent.GENERATION_LANDED
+                    )
+                    _cueSequence.value = _cueSequence.value + 1
+                }
+                emit()
+            }
         }
     }
 }

@@ -39,8 +39,11 @@ class WearIveRunSimplePlaceTest {
         return holder
     }
 
+    /** The presented content, whatever present state the machine is
+     * in (WS-3: creation lands in CUE, the timed presentation of
+     * EXPANDED — the narration assertions below are state-agnostic). */
     private fun mini(holder: WearIveRunBarStateHolder) =
-        holder.state.value as WearIveRunBarState.Mini
+        holder.state.value as WearIveRunBarState.Present
 
     @Test
     fun `creation narration is Added simple place comma Now - from a raw geocode input`() {
@@ -110,7 +113,8 @@ class WearIveRunSimplePlaceTest {
     @Test
     fun `expanded subtitle is the entry detail and duplicates nothing from the narration`() {
         val holder = holderWith(entry(place = "New York, New York"))
-        holder.setExpanded(true, today)
+        // WS-3: a touch on the cueing element lands it in EXPANDED.
+        holder.onEvent(WearIveRunElementEvent.TAP_BODY)
         val expanded = holder.state.value as WearIveRunBarState.Expanded
         val subtitle = WearIveRunSubtitle.detail(expanded.entry)
         assertEquals("41° feels like · 2 items", subtitle)

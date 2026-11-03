@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -84,8 +85,11 @@ import com.runwear.app.ui.components.OutfitCard
 import com.runwear.app.ui.components.OutfitListShimmer
 import com.runwear.app.ui.components.TipsSection
 import com.runwear.app.ui.theme.RunWearColors
+import androidx.compose.runtime.snapshotFlow
 import com.runwear.app.weariverun.WearIveRunBarState
 import com.runwear.app.weariverun.WearIveRunBarStateHolder
+import com.runwear.app.weariverun.WearIveRunElementEvent
+import com.runwear.app.weariverun.WearIveRunElementMachine
 import com.runwear.app.weariverun.WearIveRunCollectionScreen
 import com.runwear.app.weariverun.WearIveRunDayEntry
 import com.runwear.app.weariverun.WearIveRunMiniBar
@@ -209,18 +213,18 @@ fun HeroMainScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
 
-    // RW-26: "Wear I've Run" — the collection is built. The store
-    // persists entries (one per day per place, last settled version);
-    // the holder derives the mini bar's state from them. Entries are
-    // created automatically when a generation for TODAY settles
-    // (the outfit + weather on screen), never backfilled.
+    // RW-26 / WS-3 (RC-3): "Wear I've Run" — the collection is built.
+    // The store persists entries (one per day per place, last settled
+    // version); the holder — the element's ONE state machine
+    // (WearIveRunElementMachine) — derives the element's state from
+    // them. Entries are created automatically when a generation for
+    // TODAY settles (the outfit + weather on screen), never backfilled.
     val wearIveRunStore = remember { WearIveRunStore(context.applicationContext) }
     val wearIveRunHolder = remember { WearIveRunBarStateHolder() }
     val wearIveRunState by wearIveRunHolder.state.collectAsState()
-    val wearIveRunCue by wearIveRunHolder.cueCount.collectAsState()
+    val wearCueSequence by wearIveRunHolder.cueSequence.collectAsState()
     val wearIveRunEntries by wearIveRunStore.entriesFlow.collectAsState(initial = emptyList())
     var showWearIveRunCollection by remember { mutableStateOf(false) }
-    val wearHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
 
     LaunchedEffect(wearIveRunEntries) {
         wearIveRunHolder.onEntriesChanged(
@@ -229,7 +233,21 @@ fun HeroMainScreen(
         )
     }
 
-    // Record the day's settled version at generation time.
+    // Day rollover: the local day at the presented place changing is
+    // a machine driver — the element goes ABSENT until the new day's
+    // first generation lands.
+    val wearToday = uiState.locationNow.toLocalDate()
+    LaunchedEffect(wearToday) {
+        wearIveRunHolder.onDayRollover(wearToday)
+    }
+
+    // Record the day's settled version at generation time. NOTE
+    // (WS-3, abolished drivers): this effect RECORDS the entry; it
+    // does not drive the element. The holder turns a recording into a
+    // cue only when it is a genuinely new settled version (creation,
+    // or a kit change) — a re-recording with the same kit (a weather
+    // refresh, a hero URL landing, a location re-render) updates the
+    // entry's content silently and never moves the element.
     LaunchedEffect(uiState.outfit, uiState.weather, uiState.locationName, uiState.heroImageUrl) {
         val outfit = uiState.outfit
         val weather = uiState.weather
@@ -237,11 +255,12 @@ fun HeroMainScreen(
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
                     date = uiState.locationNow.toLocalDate(),
-                    // WS-4 (content seam only — the recording effect and
-                    // its drivers are WS-3's): the entry's place is the
+                    // WS-4 (content seam): the entry's place is the
                     // SIMPLE form from the place model, so the
                     // collection, its chapter covers, and the narration
-                    // can never carry a raw geocode string.
+                    // can never carry a raw geocode string. (WS-3:
+                    // this recording is content, not a state driver —
+                    // see the abolished-drivers note above.)
                     place = uiState.simplePlace?.display
                         ?: com.runwear.shared.domain.model.SimplePlace
                             .fromRawDisplayString(uiState.locationName).display,
@@ -256,31 +275,71 @@ fun HeroMainScreen(
         }
     }
 
-    // Creation/update cue: ONE gentle pulse (the expansion) + a soft
-    // haptic, then quiet — the bar collapses back after a few seconds.
-    LaunchedEffect(wearIveRunCue) {
-        if (wearIveRunCue > 0) {
-            wearHaptic.performHapticFeedback(
-                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
-            )
-            wearIveRunHolder.setExpanded(true, uiState.locationNow.toLocalDate())
-            kotlinx.coroutines.delay(3000)
-            wearIveRunHolder.setExpanded(false, uiState.locationNow.toLocalDate())
+    // WS-3: the cue's timer — the pulse and the soft haptic live in
+    // the element itself (WearIveRunMiniBar, keyed on the cue
+    // sequence); this effect owns ONLY the 3.0 s timeout. It is
+    // keyed on (isCue, cueSequence): leaving CUE for any reason
+    // (a touch, trash, a scroll departure, rollover) cancels it, and
+    // a silent content landing mid-cue — which changes neither key —
+    // cannot restart it. A NEW landing bumps the sequence and the
+    // timer restarts (§1.2: stays CUE, timer restarts).
+    val wearIsCue = wearIveRunState is WearIveRunBarState.Cue
+    LaunchedEffect(wearIsCue, wearCueSequence) {
+        if (wearIsCue) {
+            kotlinx.coroutines.delay(WearIveRunElementMachine.CUE_TIMEOUT_MS)
+            wearIveRunHolder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
         }
     }
 
     val listState = rememberLazyListState()
-    // RW-26: reaching the end of the scroll expands the mini bar.
-    val wearAtEndOfScroll by remember {
+    // WS-3: end-of-scroll, SYMMETRIC (D-07's latch retired). The
+    // proximity zone is computed from the list's own layout info:
+    // NEAR = the last item is visible and its end is within 8 dp of
+    // the viewport's end; BEYOND = the last item is not the final
+    // one, or its end is more than 48 dp past the viewport's end;
+    // BETWEEN is a hysteresis dead zone that fires nothing. Events
+    // are EDGE-triggered: entering NEAR dispatches arrival, leaving
+    // NEAR all the way to BEYOND dispatches departure — so a tap
+    // expansion away from the end is never instantly collapsed by
+    // the element's resting scroll position.
+    val wearEndEpsilonPx = with(LocalDensity.current) {
+        WearIveRunElementMachine.END_ARRIVAL_EPSILON_DP.dp.roundToPx()
+    }
+    val wearEndDeparturePx = with(LocalDensity.current) {
+        WearIveRunElementMachine.END_DEPARTURE_THRESHOLD_DP.dp.roundToPx()
+    }
+    val wearEndZone by remember(listState, wearEndEpsilonPx, wearEndDeparturePx) {
         derivedStateOf {
             val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
-            info.totalItemsCount > 0 && last >= info.totalItemsCount - 1
+            val last = info.visibleItemsInfo.lastOrNull()
+            when {
+                info.totalItemsCount == 0 || last == null -> WearEndZone.BETWEEN
+                last.index < info.totalItemsCount - 1 -> WearEndZone.BEYOND
+                else -> {
+                    val pastEnd = (last.offset + last.size) - info.viewportEndOffset
+                    when {
+                        pastEnd <= wearEndEpsilonPx -> WearEndZone.NEAR
+                        pastEnd > wearEndDeparturePx -> WearEndZone.BEYOND
+                        else -> WearEndZone.BETWEEN
+                    }
+                }
+            }
         }
     }
-    LaunchedEffect(wearAtEndOfScroll) {
-        if (wearAtEndOfScroll && wearIveRunState != WearIveRunBarState.PreAdd) {
-            wearIveRunHolder.setExpanded(true, uiState.locationNow.toLocalDate())
+    LaunchedEffect(listState) {
+        var wasNearEnd = false
+        snapshotFlow { wearEndZone }.collect { zone ->
+            when {
+                zone == WearEndZone.NEAR && !wasNearEnd -> {
+                    wasNearEnd = true
+                    wearIveRunHolder.onEvent(WearIveRunElementEvent.SCROLL_ARRIVED_AT_END)
+                }
+                zone == WearEndZone.BEYOND && wasNearEnd -> {
+                    wasNearEnd = false
+                    wearIveRunHolder.onEvent(WearIveRunElementEvent.SCROLL_DEPARTED_END)
+                }
+                zone == WearEndZone.BEYOND -> wasNearEnd = false
+            }
         }
     }
     // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
@@ -328,6 +387,16 @@ Get your personalized running outfit at runwear.ai
         context.startActivity(Intent.createChooser(sendIntent, "Share your outfit"))
     }
 
+    // WS-3 (D-11): the element's dim seam — true whenever ANY sheet
+    // or sheet-like surface hosted from home is up. The element dims
+    // with the home backdrop under the sheet's scrim. This lane does
+    // not rebuild any sheet (WS-5); it only consumes these existing
+    // open/closed booleans.
+    val wearAnySheetUp = showDatePicker || showTimePicker || showSettings ||
+        showLocationPicker || showShopAll || weatherDetailType != null ||
+        showHeroFlagSheet || showPersonalFlagSheet || showWearIveRunCollection ||
+        showMakeItMeFlow || showMakeItMePhotos || showMakeItMePaywall
+
     // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned),
     // fluid at every width per the PWA's fully-responsive standard:
     // COMPACT: phone portrait (< 600dp) — single column, unchanged
@@ -364,11 +433,18 @@ Get your personalized running outfit at runwear.ai
                     }
                 }
 
+                // WS-3 (D-06): the content branch is a Column — the
+                // scroll area takes the flexible space and the Wear
+                // I've Run element docks BELOW it as a citizen of the
+                // layout flow (a sticky bottom dock at the end of the
+                // home content), never as a root-Box overlay floating
+                // over list rows.
+                Column(modifier = Modifier.fillMaxSize()) {
                 PullToRefreshBox(
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
                     state = pullToRefreshState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.weight(1f)
                 ) {
                     when (layout) {
                         AdaptiveLayout.COMPACT -> {
@@ -622,6 +698,47 @@ Get your personalized running outfit at runwear.ai
                         }
                     }
                 }
+                // WS-3: the Wear I've Run dock — the last citizen of
+                // the content Column, in flow, below the scroll area.
+                // It renders only for present states (the machine's
+                // ABSENT renders nothing and takes no space).
+                // D-11 seam: `dimmed` consumes the host's sheet state
+                // (any sheet up over home) — WS-5 owns sheet
+                // internals; this lane only reads their open/closed
+                // booleans, listed in wearAnySheetUp below.
+                if (wearIveRunState != WearIveRunBarState.Absent) {
+                    WearIveRunMiniBar(
+                        state = wearIveRunState,
+                        cueSequence = wearCueSequence,
+                        dimmed = wearAnySheetUp,
+                        onExpandClick = {
+                            wearIveRunHolder.onEvent(WearIveRunElementEvent.TAP_BODY)
+                        },
+                        onCollapseClick = {
+                            wearIveRunHolder.onEvent(WearIveRunElementEvent.COLLAPSE_CONTROL)
+                        },
+                        onRemoveClick = {
+                            // Trash: one tap, NO confirmation; the
+                            // machine goes ABSENT and the day's entry
+                            // is deleted — a later generation
+                            // re-creates it and fires the creation cue.
+                            val entry = wearIveRunHolder.currentEntry()
+                            wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
+                            if (entry != null) {
+                                screenScope.launch {
+                                    wearIveRunStore.remove(entry.date, entry.place)
+                                }
+                            }
+                        },
+                        onOpenCollection = { showWearIveRunCollection = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .padding(top = 8.dp, bottom = 8.dp)
+                            .navigationBarsPadding()
+                    )
+                }
+                }
             }
             // No content yet: the branded loading state while the first
             // load runs (the low-contrast shimmer read as a black screen),
@@ -644,35 +761,10 @@ Get your personalized running outfit at runwear.ai
                 .padding(bottom = 24.dp)
         )
 
-        // RW-25: "Wear I've Run" mini bar dock — bottom-aligned above
-        // the content, its slot kept clear of the snackbar's (the
-        // snackbar offset above is preserved). Renders only for
-        // non-PreAdd states; the holder yields PreAdd only in this
-        // build (the collection is not built), so nothing shows.
-        if (wearIveRunState != WearIveRunBarState.PreAdd) {
-            WearIveRunMiniBar(
-                state = wearIveRunState,
-                onExpandClick = { showWearIveRunCollection = true },
-                onCollapseClick = {
-                    wearIveRunHolder.setExpanded(false, uiState.locationNow.toLocalDate())
-                },
-                onRemoveClick = {
-                    // Trash: removes TODAY's entry, one tap, NO
-                    // confirmation; the bar leaves the dock until a
-                    // later generation re-creates the entry.
-                    val entry = wearIveRunHolder.currentEntry()
-                    if (entry != null) {
-                        screenScope.launch {
-                            wearIveRunStore.remove(entry.date, entry.place)
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 88.dp)
-            )
-        }
+        // (WS-3: the Wear I've Run element no longer lives here — it
+        // docks in the content branch's Column above, in the layout
+        // flow. The collection screen remains hosted at this level;
+        // it is a Dialog window of its own, WS-5's concern.)
 
         if (showWearIveRunCollection) {
             WearIveRunCollectionScreen(
@@ -928,6 +1020,15 @@ Get your personalized running outfit at runwear.ai
  * tablets, and desktop windows — recomposes automatically on posture changes.
  */
 internal enum class AdaptiveLayout { COMPACT, MEDIUM, EXPANDED }
+
+/**
+ * WS-3: the home list's end-of-scroll proximity zone, from
+ * [WearIveRunElementMachine]'s thresholds — NEAR (within 8 dp of the
+ * end), BEYOND (more than 48 dp from it, or the final item not yet
+ * visible), BETWEEN (the hysteresis dead zone between them). Only
+ * NEAR→BEYOND and →NEAR edges dispatch machine events.
+ */
+internal enum class WearEndZone { NEAR, BETWEEN, BEYOND }
 
 /** Minimum outfit-card cell width — the PWA grid's minmax(290px, 1fr). */
 internal val OUTFIT_GRID_MIN_CELL: Dp = 290.dp

@@ -6,10 +6,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * RW-25: the "Wear I've Run" narration formatter and translucency
- * policy — pure rules, no composition. The bar ships in pre-add state
- * (the collection is not built), so these tests also pin that the
- * state holder can only yield PreAdd in this build.
+ * RW-25 / WS-3: the "Wear I've Run" narration formatter and
+ * translucency policy — pure rules, no composition. The holder tests
+ * here pin the machine's basic shape (ABSENT at start, creation
+ * lands in CUE, one cue per distinct version); the full transition
+ * matrix and interruption suite live in
+ * WearIveRunElementMachineTest / WearIveRunElementHolderTest.
  */
 class WearIveRunNarrationFormatterTest {
 
@@ -58,24 +60,25 @@ class WearIveRunMiniBarPolicyTest {
     }
 
     @Test
-    fun `only the expanded state counts as full expression`() {
+    fun `the expanded and cue states count as full expression - mini and absent do not`() {
         val entry = WearIveRunEntry(place = "New York", timeLabel = "Now")
         val narration = WearIveRunNarrationFormatter.added("New York", "Now")
         assertTrue(WearIveRunMiniBarPolicy.isFullExpression(WearIveRunBarState.Expanded(narration, entry)))
+        assertTrue(WearIveRunMiniBarPolicy.isFullExpression(WearIveRunBarState.Cue(narration, entry)))
         assertFalse(WearIveRunMiniBarPolicy.isFullExpression(WearIveRunBarState.Mini(narration, entry)))
-        assertFalse(WearIveRunMiniBarPolicy.isFullExpression(WearIveRunBarState.PreAdd))
+        assertFalse(WearIveRunMiniBarPolicy.isFullExpression(WearIveRunBarState.Absent))
     }
 }
 
-class WearIveRunPreAddStateTest {
+class WearIveRunAbsentStateTest {
 
     @Test
-    fun `the state holder starts at PreAdd before any entry exists`() {
-        assertEquals(WearIveRunBarState.PreAdd, WearIveRunBarStateHolder().state.value)
+    fun `the state holder starts ABSENT before any entry exists`() {
+        assertEquals(WearIveRunBarState.Absent, WearIveRunBarStateHolder().state.value)
     }
 
     @Test
-    fun `the holder leaves PreAdd once an entry exists and cues once per change`() {
+    fun `creation lands in CUE and cues exactly once per distinct version`() {
         val holder = WearIveRunBarStateHolder()
         val today = java.time.LocalDate.of(2026, 11, 2)
         val entry = com.runwear.app.weariverun.WearIveRunDayEntry(
@@ -84,19 +87,27 @@ class WearIveRunPreAddStateTest {
             items = listOf("Tights"), heroRef = null
         )
         holder.onEntriesChanged(listOf(entry), today)
-        assertTrue(holder.state.value is WearIveRunBarState.Mini)
-        assertEquals(1, holder.cueCount.value)
+        // WS-3: creation is a GENERATION_LANDED — the element lands
+        // in CUE (the timed presentation of EXPANDED), not Mini.
+        assertTrue(holder.state.value is WearIveRunBarState.Cue)
+        assertEquals(1, holder.cueSequence.value)
         // WS-4 (D-08): creation narration is the design's pattern —
         // simple place + the narration day form "Now".
-        val created = (holder.state.value as WearIveRunBarState.Mini).narration
+        val created = (holder.state.value as WearIveRunBarState.Cue).narration
         assertEquals("Added New York, Now", created.text)
-        // Same settled version re-delivered: no second cue.
+        // Same settled version re-delivered: no second cue, no move.
         holder.onEntriesChanged(listOf(entry), today)
-        assertEquals(1, holder.cueCount.value)
-        // A later generation the same day replaces it: an update cue.
+        assertEquals(1, holder.cueSequence.value)
+        assertTrue(holder.state.value is WearIveRunBarState.Cue)
+        // The cue times out to MINI.
+        holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
+        assertTrue(holder.state.value is WearIveRunBarState.Mini)
+        // A later generation the same day with a NEW KIT replaces
+        // it: an update cue, exactly once.
         holder.onEntriesChanged(listOf(entry.copy(items = listOf("Jacket"))), today)
-        assertEquals(2, holder.cueCount.value)
-        val narration = (holder.state.value as WearIveRunBarState.Mini).narration
+        assertEquals(2, holder.cueSequence.value)
+        assertTrue(holder.state.value is WearIveRunBarState.Cue)
+        val narration = (holder.state.value as WearIveRunBarState.Cue).narration
         // WS-4 (D-08): the update payload is the entry's REAL payload —
         // its first kit item — not "place, Today".
         assertEquals("Update to Jacket", narration.text)
