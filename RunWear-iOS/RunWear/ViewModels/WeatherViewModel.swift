@@ -642,8 +642,10 @@ class WeatherViewModel: ObservableObject {
             // serve when the exact look is still making and the
             // photo on screen is the user's own banked photo for
             // nearest conditions (PersonalServePolicy's rule, read
-            // off the concrete store's folded look state).
-            let lookState = (store as? PersonalHeroStore)?.lookStates[combo.combinationId] ?? .none
+            // off the store's folded look state through the
+            // resolving contract — the concrete store is not part
+            // of every target this view model compiles into).
+            let lookState = store.lookState(for: combo)
             recordHeroServe(
                 HeroServeRecord(
                     source: lookState == .making ? .scaffold : .personal,

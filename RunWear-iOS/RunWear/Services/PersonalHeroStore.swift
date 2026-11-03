@@ -352,6 +352,13 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         cache.heroId(for: combination.combinationId)
     }
 
+    /// WS-7: the server's folded look state for this cell (the
+    /// PersonalHeroResolving surface the paint layer classifies a
+    /// personal serve from — see WeatherViewModel's serve records).
+    func lookState(for combination: PersonalCombination) -> PersonalLookState {
+        lookStates[combination.combinationId] ?? .none
+    }
+
     /// "This doesn't look like me" (spec §4): flag the cell's
     /// personalized hero with the backend. On success the server
     /// has already retired the hero (its cell version bumped) and

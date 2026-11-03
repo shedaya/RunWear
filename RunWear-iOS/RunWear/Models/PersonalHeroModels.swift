@@ -118,6 +118,11 @@ protocol PersonalHeroResolving: AnyObject {
     /// flag landed. Failure is silent — the screen is never
     /// disturbed by a flag that didn't land.
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool
+    /// WS-7: the server's folded look state for this cell, when the
+    /// resolver tracks one — the paint layer reads it to classify a
+    /// personal serve for its serve-source record (scaffold while
+    /// the exact look is still making, personal when it is ready).
+    func lookState(for combination: PersonalCombination) -> PersonalLookState
 }
 
 extension PersonalHeroResolving {
@@ -125,6 +130,7 @@ extension PersonalHeroResolving {
     /// flag surface; PersonalHeroStore provides the real ones.
     func personalHeroId(for combination: PersonalCombination) -> String? { nil }
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool { false }
+    func lookState(for combination: PersonalCombination) -> PersonalLookState { .none }
 }
 
 // MARK: - Backend DTOs
