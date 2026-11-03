@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -115,7 +114,7 @@ fun DatePickerSheet(
     onSelectDate: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val days = (0 until ForecastHorizonPolicy.BROWSE_DAYS).map { today.plusDays(it.toLong()) }
 
     ModalBottomSheet(
@@ -209,7 +208,7 @@ fun TimePickerSheet(
     onSelectTime: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Option B: the 5 AM–9 PM peak grid stays primary; the remaining hours
     // live under a "Night & early morning" tier in the same sheet. If the
     // current selection IS a night hour, the tier opens expanded so the
@@ -358,7 +357,11 @@ fun SettingsSheet(
     onMakeItMeDeleted: () -> Unit = {},
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    // WS-5 (D-13): one anchor — the sheet rests at full or hidden,
+    // nothing between (skipPartiallyExpanded). Dismissal is the
+    // sheet's own: swipe-down in one gesture or scrim tap, both
+    // through onDismissRequest.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -366,196 +369,319 @@ fun SettingsSheet(
         containerColor = RunWearColors.Surface,
         dragHandle = { ModalDragHandle() }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp)
-        ) {
+        SettingsSheetContent(
+            temperatureUnit = temperatureUnit,
+            comfortPreference = comfortPreference,
+            genderPreference = genderPreference,
+            onToggleUnit = onToggleUnit,
+            onSetComfortPreference = onSetComfortPreference,
+            onSetGenderPreference = onSetGenderPreference,
+            appearancePreference = appearancePreference,
+            onSetAppearancePreference = onSetAppearancePreference,
+            analyticsOptIn = analyticsOptIn,
+            onAnalyticsOptInChange = onAnalyticsOptInChange,
+            onSendFeedback = onSendFeedback,
+            makeItMeViewModel = makeItMeViewModel,
+            makeItMeState = makeItMeState,
+            onMakeItMeOptInClick = onMakeItMeOptInClick,
+            onMakeItMePhotosClick = onMakeItMePhotosClick,
+            onMakeItMeSubscribeClick = onMakeItMeSubscribeClick,
+            onMakeItMeManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
+            onMakeItMeDeleted = onMakeItMeDeleted
+        )
+    }
+}
+
+/**
+ * WS-5 (D-13 + D-14): the Settings sheet's content, separated from
+ * the sheet wrapper so the inventory is render-testable.
+ *
+ * Sheet discipline: the content's ONE scroll consumer is this
+ * LazyColumn, which the ModalBottomSheet owns through its nested
+ * scroll connection. The D-13 ghosting mechanism — a plain Column
+ * carrying its own verticalScroll nested inside the anchored sheet
+ * (two competing consumers) — is gone by construction.
+ *
+ * Inventory discipline: the sections are [SettingsInventory]'s
+ * registry, one item each, keyed by section id, in registry order.
+ * Every section renders in every configuration (see the registry's
+ * doc): the Make It Me section is composed unconditionally (it
+ * carries the plain not-started row with the feature flag OFF),
+ * Delete-my-data is its own section after it, and About closes the
+ * sheet, matching iOS's inventory.
+ */
+@Composable
+fun SettingsSheetContent(
+    temperatureUnit: TemperatureUnit,
+    comfortPreference: ComfortPreference,
+    genderPreference: GenderPreference,
+    onToggleUnit: () -> Unit,
+    onSetComfortPreference: (ComfortPreference) -> Unit,
+    onSetGenderPreference: (GenderPreference) -> Unit,
+    appearancePreference: AppearancePreference = AppearancePreference.SYSTEM,
+    onSetAppearancePreference: (AppearancePreference) -> Unit = {},
+    analyticsOptIn: Boolean,
+    onAnalyticsOptInChange: (Boolean) -> Unit,
+    onSendFeedback: () -> Unit,
+    makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
+    makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
+        com.runwear.app.makeitme.MakeItMeUiState(),
+    onMakeItMeOptInClick: () -> Unit = {},
+    onMakeItMePhotosClick: () -> Unit = {},
+    onMakeItMeSubscribeClick: () -> Unit = {},
+    onMakeItMeManageSubscriptionClick: () -> Unit = {},
+    onMakeItMeDeleted: () -> Unit = {}
+) {
+    val sections = SettingsInventory.sectionsFor(
+        makeItMeEnabled = com.runwear.app.makeitme.MakeItMeAvailability.ENABLED,
+        makeItMeMode = makeItMeState.mode
+    )
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 32.dp)
+    ) {
+        item(key = "settings-title") {
             Text(
                 text = "SETTINGS",
                 style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 24.dp)
             )
-
-            // Appearance FIRST (RW-26 §H) — System follows the device;
-            // Light / Dark pin the app theme.
-            Column {
-                Text(
-                    text = "Appearance",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
-                )
-                Text(
-                    text = "Match your device, or always light or dark",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                )
-                AppearanceSelector(
-                    selected = appearancePreference,
-                    onSelect = onSetAppearancePreference
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Temperature Unit - PWA v2.9 toggle style
-            SettingRow(
-                label = "Temperature Unit",
-                sublabel = "Display temperature in"
-            ) {
-                UnitToggle(
-                    isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
-                    onToggle = { onToggleUnit() }
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Body Temperature / Comfort
-            Column {
-                Text(
-                    text = "Body Temperature",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
-                )
-                Text(
-                    text = "How do you typically feel when running?",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                )
-                ComfortSelector(
-                    selected = comfortPreference,
-                    onSelect = onSetComfortPreference
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Fit Preference - PWA v2.9 toggleable Male/Female
-            Column {
-                Text(
-                    text = "Fit Preference",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
-                )
-                Text(
-                    text = "Tap to select, tap again to deselect",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                )
-                GenderToggleSettings(
-                    selected = genderPreference,
-                    onSelect = onSetGenderPreference
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // RW-14 "Make it me" section (spec §3) — between Fit
-            // Preference and Send feedback.
-            if (makeItMeViewModel != null) {
-                com.runwear.app.makeitme.MakeItMeSettingsSection(
-                    viewModel = makeItMeViewModel,
-                    state = makeItMeState,
-                    onOptInClick = onMakeItMeOptInClick,
-                    onPhotosClick = onMakeItMePhotosClick,
-                    onSubscribeClick = onMakeItMeSubscribeClick,
-                    onManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
-                    onDeleted = onMakeItMeDeleted
-                )
-
-                HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-            }
-
-            // Send feedback — the durable route into the feedback system.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { onSendFeedback() }
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Send feedback",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = RunWearColors.TextPrimary
-                    )
-                    Text(
-                        text = "Tell us what happened, in your own words.",
-                        fontSize = 12.sp,
-                        color = RunWearColors.TextSecondary,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
-                }
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = RunWearColors.TextSecondary
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Help improve the app — the analytics opt-in (spec §4.3 copy).
-            // The toggle is OFF until the user turns it on; while it is off,
-            // nothing is counted and nothing is sent, crash reports included.
-            Column {
-                SettingRow(
-                    label = "Help improve the app",
-                    sublabel = "Count how the app is used"
-                ) {
-                    Switch(
-                        checked = analyticsOptIn,
-                        onCheckedChange = onAnalyticsOptInChange,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = RunWearColors.Primary,
-                            uncheckedThumbColor = RunWearColors.TextSecondary,
-                            uncheckedTrackColor = RunWearColors.BgCardLight
+        }
+        sections.forEach { section ->
+            when (section) {
+                SettingsSectionId.APPEARANCE -> item(key = section.name) {
+                    // Appearance FIRST (RW-26 §H) — System follows the
+                    // device; Light / Dark pin the app theme.
+                    Column {
+                        Text(
+                            text = "Appearance",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
                         )
-                    )
+                        Text(
+                            text = "Match your device, or always light or dark",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                        AppearanceSelector(
+                            selected = appearancePreference,
+                            onSelect = onSetAppearancePreference
+                        )
+                    }
+                    SettingsDivider()
                 }
-                Text(
-                    text = "We count how the app is used — which features get used and where " +
-                        "recommendations miss — and nothing else. No account, no advertising ID, " +
-                        "and your location never leaves the phone more precisely than the city " +
-                        "name. Turn this off and nothing is counted or sent.",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-                if (!analyticsOptIn) {
-                    Text(
-                        text = "Off. Nothing is being counted.",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = RunWearColors.TextPrimary,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
+                SettingsSectionId.TEMPERATURE_UNIT -> item(key = section.name) {
+                    SettingRow(
+                        label = "Temperature Unit",
+                        sublabel = "Display temperature in"
+                    ) {
+                        UnitToggle(
+                            isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
+                            onToggle = { onToggleUnit() }
+                        )
+                    }
+                    SettingsDivider()
                 }
-                Text(
-                    text = "If the app crashes, it can send us the technical details so we can " +
-                        "fix it. This happens only after a crash, and only with your permission here.",
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
+                SettingsSectionId.BODY_TEMPERATURE -> item(key = section.name) {
+                    Column {
+                        Text(
+                            text = "Body Temperature",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = "How do you typically feel when running?",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                        ComfortSelector(
+                            selected = comfortPreference,
+                            onSelect = onSetComfortPreference
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.FIT_PREFERENCE -> item(key = section.name) {
+                    Column {
+                        Text(
+                            text = "Fit Preference",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = "Tap to select, tap again to deselect",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+                        )
+                        GenderToggleSettings(
+                            selected = genderPreference,
+                            onSelect = onSetGenderPreference
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.MAKE_IT_ME -> item(key = section.name) {
+                    // RW-14 "Make it me" section (spec §3) — between
+                    // Fit Preference and Support. WS-5 (D-14):
+                    // composed UNCONDITIONALLY — the section itself
+                    // decides what its state shows (with the flag
+                    // OFF, the plain not-started row of frame 36);
+                    // it may never emit nothing.
+                    com.runwear.app.makeitme.MakeItMeSettingsSection(
+                        viewModel = makeItMeViewModel,
+                        state = makeItMeState,
+                        onOptInClick = onMakeItMeOptInClick,
+                        onPhotosClick = onMakeItMePhotosClick,
+                        onSubscribeClick = onMakeItMeSubscribeClick,
+                        onManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
+                        onDeleted = onMakeItMeDeleted
+                    )
+                    SettingsDivider()
+                }
+                SettingsSectionId.DELETE_MY_DATA -> item(key = section.name) {
+                    // WS-5 (D-14): Delete-my-data is its OWN section,
+                    // reachable without the Make It Me section's
+                    // emission — a stock-mode user still has an
+                    // account to delete (RW-16.30 decision 5a).
+                    com.runwear.app.makeitme.DeleteMyDataSettingsRow(
+                        viewModel = makeItMeViewModel,
+                        onDeleted = onMakeItMeDeleted
+                    )
+                    SettingsDivider()
+                }
+                SettingsSectionId.SEND_FEEDBACK -> item(key = section.name) {
+                    // Send feedback — the durable route into the
+                    // feedback system.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onSendFeedback() }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Send feedback",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary
+                            )
+                            Text(
+                                text = "Tell us what happened, in your own words.",
+                                fontSize = 12.sp,
+                                color = RunWearColors.TextSecondary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Outlined.ChevronRight,
+                            contentDescription = null,
+                            tint = RunWearColors.TextSecondary
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.HELP_IMPROVE -> item(key = section.name) {
+                    // Help improve the app — the analytics opt-in
+                    // (spec §4.3 copy). The toggle is OFF until the
+                    // user turns it on; while it is off, nothing is
+                    // counted and nothing is sent, crash reports
+                    // included.
+                    Column {
+                        SettingRow(
+                            label = "Help improve the app",
+                            sublabel = "Count how the app is used"
+                        ) {
+                            Switch(
+                                checked = analyticsOptIn,
+                                onCheckedChange = onAnalyticsOptInChange,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = RunWearColors.Primary,
+                                    uncheckedThumbColor = RunWearColors.TextSecondary,
+                                    uncheckedTrackColor = RunWearColors.BgCardLight
+                                )
+                            )
+                        }
+                        Text(
+                            text = "We count how the app is used — which features get used and where " +
+                                "recommendations miss — and nothing else. No account, no advertising ID, " +
+                                "and your location never leaves the phone more precisely than the city " +
+                                "name. Turn this off and nothing is counted or sent.",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                        if (!analyticsOptIn) {
+                            Text(
+                                text = "Off. Nothing is being counted.",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary,
+                                modifier = Modifier.padding(top = 6.dp)
+                            )
+                        }
+                        Text(
+                            text = "If the app crashes, it can send us the technical details so we can " +
+                                "fix it. This happens only after a crash, and only with your permission here.",
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 10.dp)
+                        )
+                    }
+                    SettingsDivider()
+                }
+                SettingsSectionId.ABOUT -> item(key = section.name) {
+                    // WS-5 (D-14): About — the section iOS's Settings
+                    // has always carried (Version, in its
+                    // "name (code)" form) and Android lacked.
+                    Column {
+                        Text(
+                            text = "About",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Version",
+                                fontSize = 14.sp,
+                                color = RunWearColors.TextSecondary
+                            )
+                            Text(
+                                text = SettingsInventory.versionLabel(
+                                    com.runwear.app.BuildConfig.VERSION_NAME,
+                                    com.runwear.app.BuildConfig.VERSION_CODE
+                                ),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RunWearColors.TextPrimary
+                            )
+                        }
+                    }
+                }
             }
-
-            Spacer(Modifier.height(32.dp))
         }
     }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
 }
 
 @Composable
@@ -1190,7 +1316,7 @@ fun ShopAllSheet(
     weatherCode: Int,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
 
     ModalBottomSheet(
@@ -1429,7 +1555,7 @@ fun WeatherDetailSheet(
     /** WS-2: the render-time unit projection for every figure in the sheet. */
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

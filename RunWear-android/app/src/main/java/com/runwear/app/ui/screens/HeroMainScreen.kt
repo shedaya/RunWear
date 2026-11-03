@@ -873,15 +873,29 @@ Get your personalized running outfit at runwear.ai
     if (showMakeItMePhotos && makeItMeViewModel != null &&
         com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
     ) {
-        com.runwear.app.makeitme.MakeItMePhotosScreen(
-            viewModel = makeItMeViewModel,
-            onDismiss = { showMakeItMePhotos = false },
-            onReplaceClick = {
-                showMakeItMePhotos = false
-                makeItMeFlowReplace = true
-                showMakeItMeFlow = true
-            }
-        )
+        // WS-5 (F-2): Your Photos is a real presentation structure —
+        // a full-screen Dialog window of its own, not a boolean
+        // overlay drawn over home. System Back / the predictive-back
+        // gesture lands on the Dialog's onDismissRequest and returns
+        // to home (the surface that opened it); before this, no
+        // BackHandler existed anywhere and Back fell through to the
+        // activity, closing the app.
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showMakeItMePhotos = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            com.runwear.app.makeitme.MakeItMePhotosScreen(
+                viewModel = makeItMeViewModel,
+                onDismiss = { showMakeItMePhotos = false },
+                onReplaceClick = {
+                    showMakeItMePhotos = false
+                    makeItMeFlowReplace = true
+                    showMakeItMeFlow = true
+                }
+            )
+        }
     }
 
     if (showMakeItMePaywall && makeItMeViewModel != null &&
@@ -1508,7 +1522,7 @@ private fun HeroFlagSheet(
     onSelectReason: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1567,7 +1581,7 @@ private fun PersonalHeroFlagSheet(
     onSelectReason: (com.runwear.app.makeitme.PersonalHeroFlagReason) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

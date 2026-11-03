@@ -1,0 +1,246 @@
+package com.runwear.app.ui.screens
+
+import com.runwear.app.makeitme.UploadBackAction
+import com.runwear.app.makeitme.UploadBackPolicy
+import com.runwear.app.makeitme.UploadStep
+import java.io.File
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
+
+/**
+ * WS-5 (RC-5: D-13 + D-14 + F-2) — source pins for the sheet
+ * discipline and the back behavior the rendered tests cannot see
+ * directly:
+ *
+ *  - EVERY ModalBottomSheet in the app rests on ONE anchor
+ *    (skipPartiallyExpanded = true) — rest at full or hidden;
+ *  - the Settings sheet's content has exactly ONE scroll consumer
+ *    (its LazyColumn) — no nested verticalScroll, the D-13 ghosting
+ *    mechanism;
+ *  - every sheet dismisses through its own onDismissRequest (swipe
+ *    or scrim — and system Back, which M3 routes there);
+ *  - F-2: Your Photos is hosted in a full-screen Dialog (Back →
+ *    onDismissRequest → home), the upload flow and the feedback
+ *    overlay carry BackHandlers with the step-back policy, and the
+ *    manifest opts into predictive back.
+ */
+class SheetDisciplinePinTest {
+
+    private fun sourceFile(androidRootRelative: String): File {
+        var dir: File? = File(System.getProperty("user.dir")).absoluteFile
+        val candidates = listOf(
+            androidRootRelative,
+            "RunWear-android/$androidRootRelative",
+            "../$androidRootRelative"
+        )
+        while (dir != null) {
+            for (candidate in candidates) {
+                val file = File(dir, candidate)
+                if (file.isFile) return file
+            }
+            dir = dir.parentFile
+        }
+        fail("source file not found: $androidRootRelative (user.dir=${System.getProperty("user.dir")})")
+        throw AssertionError("unreachable")
+    }
+
+    private fun bottomSheets() =
+        sourceFile("app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt").readText()
+
+    private fun heroMainScreen() =
+        sourceFile("app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt").readText()
+
+    private fun makeItMeScreens() =
+        sourceFile("app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt").readText()
+
+    private fun occurrences(source: String, needle: String): Int =
+        source.split(needle).size - 1
+
+    @Test
+    fun `every sheet state in BottomSheets is single-anchor`() {
+        val sheets = bottomSheets()
+        val states = occurrences(sheets, "rememberModalBottomSheetState(")
+        assertEquals(
+            "every rememberModalBottomSheetState must pass skipPartiallyExpanded = true",
+            states,
+            occurrences(sheets, "rememberModalBottomSheetState(skipPartiallyExpanded = true)")
+        )
+        assertTrue("BottomSheets must actually contain sheets", states >= 6)
+    }
+
+    @Test
+    fun `every sheet state in HeroMainScreen is single-anchor`() {
+        val host = heroMainScreen()
+        val states = occurrences(host, "rememberModalBottomSheetState(")
+        assertEquals(2, states)
+        assertEquals(
+            states,
+            occurrences(host, "rememberModalBottomSheetState(skipPartiallyExpanded = true)")
+        )
+    }
+
+    @Test
+    fun `the paywall sheet is single-anchor`() {
+        val mim = makeItMeScreens()
+        assertTrue(
+            mim.contains("rememberModalBottomSheetState(\n        skipPartiallyExpanded = true\n    )")
+        )
+        assertTrue(mim.contains("sheetState = sheetState"))
+    }
+
+    @Test
+    fun `no sheet state anywhere in the app is left at the M3 default`() {
+        val mainRoot = sourceFile("app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt")
+            .parentFile?.parentFile // java/com/runwear/app -> walk via known files below
+        val files = listOf(
+            "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt",
+            "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt",
+            "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt"
+        )
+        for (path in files) {
+            val text = sourceFile(path).readText()
+            assertFalse(
+                "$path must not create a sheet state at the default (partially-expanded) anchors",
+                text.contains("rememberModalBottomSheetState()")
+            )
+        }
+        assertTrue(mainRoot != null)
+    }
+
+    @Test
+    fun `settings content has exactly one scroll consumer - its LazyColumn`() {
+        val sheets = bottomSheets()
+        assertFalse(
+            "no verticalScroll may remain in BottomSheets (the D-13 nested consumer)",
+            sheets.contains(".verticalScroll(")
+        )
+        val contentStart = sheets.indexOf("fun SettingsSheetContent(")
+        assertTrue(contentStart >= 0)
+        val content = sheets.substring(contentStart)
+        assertTrue(content.contains("LazyColumn("))
+        assertTrue(
+            "the content composes the registry, in order",
+            content.contains("SettingsInventory.sectionsFor(")
+        )
+        assertTrue(
+            "one LazyColumn item per registered section, keyed by section id",
+            content.contains("item(key = section.name)")
+        )
+    }
+
+    @Test
+    fun `settings composes Make It Me and Delete-my-data unconditionally, plus About`() {
+        val sheets = bottomSheets()
+        val contentStart = sheets.indexOf("fun SettingsSheetContent(")
+        val content = sheets.substring(contentStart)
+        assertTrue(content.contains("MakeItMeSettingsSection("))
+        assertTrue(content.contains("DeleteMyDataSettingsRow("))
+        assertFalse(
+            "the Make It Me section may not be gated on a non-null view model (D-14)",
+            content.contains("if (makeItMeViewModel != null)")
+        )
+        assertTrue(content.contains("SettingsInventory.versionLabel("))
+        assertTrue(content.contains("com.runwear.app.BuildConfig.VERSION_NAME"))
+    }
+
+    @Test
+    fun `the Make It Me section renders the not-started row with the flag OFF`() {
+        val mim = makeItMeScreens()
+        assertTrue(mim.contains("if (!MakeItMeAvailability.ENABLED)"))
+        assertFalse(
+            "the section may not early-return on the availability gate (D-14)",
+            mim.contains("if (!MakeItMeAvailability.settingsSectionVisible()) return")
+        )
+    }
+
+    @Test
+    fun `every sheet dismisses through onDismissRequest`() {
+        for ((path, min) in listOf(
+            "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt" to 6,
+            "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt" to 2,
+            "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt" to 1
+        )) {
+            val text = sourceFile(path).readText()
+            assertTrue(
+                "$path: every ModalBottomSheet carries onDismissRequest",
+                occurrences(text, "ModalBottomSheet(") <= occurrences(text, "onDismissRequest = onDismiss")
+            )
+            assertTrue(occurrences(text, "ModalBottomSheet(") >= min)
+        }
+    }
+
+    // ── F-2 ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `your photos is hosted in a full-screen Dialog whose dismiss returns home`() {
+        val host = heroMainScreen()
+        val photosAt = host.indexOf("MakeItMePhotosScreen(")
+        assertTrue(photosAt >= 0)
+        val before = host.substring(maxOf(0, photosAt - 1200), photosAt)
+        assertTrue(
+            "MakeItMePhotosScreen must be hosted inside a Dialog (F-2 conversion)",
+            before.contains("androidx.compose.ui.window.Dialog(")
+        )
+        assertTrue(before.contains("onDismissRequest = { showMakeItMePhotos = false }"))
+        assertTrue(before.contains("usePlatformDefaultWidth = false"))
+    }
+
+    @Test
+    fun `the upload flow carries a BackHandler driven by the step-back policy`() {
+        val mim = makeItMeScreens()
+        val flowAt = mim.indexOf("fun MakeItMeUploadFlow(")
+        assertTrue(flowAt >= 0)
+        val flowHead = mim.substring(flowAt, flowAt + 2500)
+        assertTrue(flowHead.contains("androidx.activity.compose.BackHandler"))
+        assertTrue(flowHead.contains("UploadBackPolicy.actionFor(step)"))
+        assertTrue(flowHead.contains("UploadBackAction.STEP_BACK_TO_CONSENT"))
+    }
+
+    @Test
+    fun `upload back policy - back steps back, then exits, never falls through`() {
+        assertEquals(UploadBackAction.EXIT_FLOW, UploadBackPolicy.actionFor(UploadStep.CONSENT))
+        assertEquals(
+            UploadBackAction.STEP_BACK_TO_CONSENT,
+            UploadBackPolicy.actionFor(UploadStep.PHOTOS)
+        )
+        assertEquals(UploadBackAction.STAY, UploadBackPolicy.actionFor(UploadStep.SUBMITTING))
+        assertEquals(UploadBackAction.STAY, UploadBackPolicy.actionFor(UploadStep.SAVED))
+    }
+
+    @Test
+    fun `the feedback overlay carries a BackHandler too`() {
+        val feedback = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/FeedbackScreen.kt"
+        ).readText()
+        assertTrue(feedback.contains("androidx.activity.compose.BackHandler"))
+        assertTrue(feedback.contains("BackHandler(enabled = !sending) { onDismiss() }"))
+    }
+
+    @Test
+    fun `the collection Dialog dismisses through onDismissRequest`() {
+        val collection = sourceFile(
+            "app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"
+        ).readText()
+        assertTrue(collection.contains("Dialog(onDismissRequest = onDismiss"))
+    }
+
+    @Test
+    fun `predictive back is registered in the manifest`() {
+        val manifest = sourceFile("app/src/main/AndroidManifest.xml").readText()
+        assertTrue(manifest.contains("android:enableOnBackInvokedCallback=\"true\""))
+    }
+
+    @Test
+    fun `back handlers exist in the app - the F-2 absence cannot return silently`() {
+        val mim = makeItMeScreens()
+        val feedback = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/FeedbackScreen.kt"
+        ).readText()
+        assertTrue(
+            occurrences(mim, "BackHandler") + occurrences(feedback, "BackHandler") >= 2
+        )
+    }
+}

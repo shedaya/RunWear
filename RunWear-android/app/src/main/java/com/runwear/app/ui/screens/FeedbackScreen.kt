@@ -70,6 +70,12 @@ fun FeedbackScreen(
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Boolean?>(null) } // true = sent, false = saved for retry
 
+    // WS-5 (F-2 class): this screen is hosted as a boolean overlay
+    // from MainActivity, so without a handler system Back fell
+    // through to the activity and closed the app. Back now returns
+    // to the surface that opened it, like its on-screen Back arrow.
+    androidx.activity.compose.BackHandler(enabled = !sending) { onDismiss() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

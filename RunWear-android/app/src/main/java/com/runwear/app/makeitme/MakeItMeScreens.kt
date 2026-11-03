@@ -221,7 +221,27 @@ private fun ForkOptionCard(
 // no photo UI exists before the consent screen.
 // ============================================================================
 
-private enum class UploadStep { CONSENT, PHOTOS, SUBMITTING, SAVED }
+internal enum class UploadStep { CONSENT, PHOTOS, SUBMITTING, SAVED }
+
+/** What a system Back press does at one upload-flow step (WS-5, F-2). */
+internal enum class UploadBackAction { EXIT_FLOW, STEP_BACK_TO_CONSENT, STAY }
+
+/**
+ * WS-5 (F-2): the upload flow's back policy — Back steps back
+ * through the flow, then exits it; it never falls through to the
+ * activity. Pure, so the gate can pin every step's action.
+ */
+internal object UploadBackPolicy {
+    fun actionFor(step: UploadStep): UploadBackAction = when (step) {
+        UploadStep.CONSENT -> UploadBackAction.EXIT_FLOW
+        UploadStep.PHOTOS -> UploadBackAction.STEP_BACK_TO_CONSENT
+        // A submit in flight and the save-confirmation beat own
+        // their moment: Back does nothing rather than stranding
+        // either half-finished.
+        UploadStep.SUBMITTING -> UploadBackAction.STAY
+        UploadStep.SAVED -> UploadBackAction.STAY
+    }
+}
 
 private class PickedPhoto(val uri: Uri) {
     var checking: Boolean by mutableStateOf(true)
@@ -241,6 +261,19 @@ fun MakeItMeUploadFlow(
 ) {
     val context = LocalContext.current
     var step by remember { mutableStateOf(UploadStep.CONSENT) }
+    // WS-5 (F-2): system Back is the flow's own — step back, then
+    // exit the flow to the surface that opened it (the host clears
+    // its state via onExitAsStock). BackHandler registers with the
+    // activity's OnBackPressedDispatcher, which is also the
+    // predictive-back path; before this, the app had no BackHandler
+    // anywhere and Back finished the activity from mid-flow.
+    androidx.activity.compose.BackHandler {
+        when (UploadBackPolicy.actionFor(step)) {
+            UploadBackAction.EXIT_FLOW -> onExitAsStock()
+            UploadBackAction.STEP_BACK_TO_CONSENT -> step = UploadStep.CONSENT
+            UploadBackAction.STAY -> Unit
+        }
+    }
     var attested by remember { mutableStateOf(false) }
     var working by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -1107,8 +1140,13 @@ fun MakeItMePaywallSheet(
         }
     }
 
+    // WS-5 (D-13): one anchor, like every sheet in the app.
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = RunWearColors.Surface
     ) {
         Column(
@@ -1276,9 +1314,38 @@ private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit
 // server has confirmed the erasure.
 // ============================================================================
 
+/**
+ * WS-5 (D-14): what the Make It Me settings section presents in
+ * each configuration, as row titles — the pure mirror the inventory
+ * gate tests, so "the section emits something in every
+ * configuration" is a tested fact, not a review finding. The
+ * composable below renders exactly these rows (same string
+ * constants, same order).
+ */
+object MakeItMeSettingsPresentation {
+    fun rowTitles(makeItMeEnabled: Boolean, mode: MakeItMeMode): List<String> =
+        if (!makeItMeEnabled) {
+            // Flag OFF: the plain not-started row (frame 36) — the
+            // section exists, the feature's doors stay shut.
+            listOf(MakeItMeStrings.S2_STATE_A_ROW)
+        } else when (mode) {
+            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S2_STATE_A_ROW)
+            MakeItMeMode.FREE -> listOf(
+                MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S8_STATE_B_SUBSCRIBE_ROW,
+                MakeItMeStrings.S10_DELETE_ROW
+            )
+            MakeItMeMode.SUBSCRIBED -> listOf(
+                MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                MakeItMeStrings.S10_DELETE_ROW
+            )
+        }
+}
+
 @Composable
 fun MakeItMeSettingsSection(
-    viewModel: MakeItMeViewModel,
+    viewModel: MakeItMeViewModel?,
     state: MakeItMeUiState,
     onOptInClick: () -> Unit,
     onPhotosClick: () -> Unit,
@@ -1286,14 +1353,8 @@ fun MakeItMeSettingsSection(
     onManageSubscriptionClick: () -> Unit,
     onDeleted: () -> Unit
 ) {
-    // Make It Me OFF in this build (MakeItMeAvailability): the
-    // whole Settings section — opt-in row, Your photos, subscribe,
-    // manage subscription, delete — does not render at all.
-    if (!MakeItMeAvailability.settingsSectionVisible()) return
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deletedNotice by remember { mutableStateOf(false) }
-    var showDeleteDataDialog by remember { mutableStateOf(false) }
-    var dataDeletedNotice by remember { mutableStateOf(false) }
 
     Column {
         Text(
@@ -1313,13 +1374,21 @@ fun MakeItMeSettingsSection(
             )
         }
 
-        if (dataDeletedNotice && state.mode == MakeItMeMode.STOCK) {
-            Text(
-                text = MakeItMeStrings.S25_POST_DELETE_DATA,
-                fontSize = 13.sp,
-                color = RunWearColors.TextPrimary,
-                modifier = Modifier.padding(bottom = 10.dp)
+        // WS-5 (D-14): with the feature flag OFF the section still
+        // renders — the plain not-started row the design specifies
+        // (frame 36). What the flag keeps shut is the feature's
+        // function (opt-in flow, photos, purchase, generation —
+        // MakeItMeAvailability, consulted at those hosts), not the
+        // section's existence. Before WS-5 this composable returned
+        // early on the flag and the whole section — and everything
+        // hosted inside it — silently vanished from the sheet.
+        if (!MakeItMeAvailability.ENABLED) {
+            MakeItMeSettingsRow(
+                title = MakeItMeStrings.S2_STATE_A_ROW,
+                sub = MakeItMeStrings.S2_STATE_A_SUB,
+                onClick = onOptInClick
             )
+            return@Column
         }
 
         when (state.mode) {
@@ -1379,22 +1448,9 @@ fun MakeItMeSettingsSection(
                 )
             }
         }
-
-        // Delete my data (RW-16.30 decision 5a): the account-level
-        // erasure, offered in EVERY mode — a stock-mode user still
-        // has an account, and the deletion must be reachable without
-        // opting in first. Sits apart from the mode content so it
-        // never reads as part of the feature's state.
-        Spacer(Modifier.height(6.dp))
-        MakeItMeSettingsRow(
-            title = MakeItMeStrings.S20_DELETE_DATA_ROW,
-            sub = null,
-            destructive = true,
-            onClick = { showDeleteDataDialog = true }
-        )
     }
 
-    if (showDeleteDialog) {
+    if (showDeleteDialog && viewModel != null) {
         MakeItMeDeleteDialog(
             viewModel = viewModel,
             onDismiss = { showDeleteDialog = false },
@@ -1405,14 +1461,47 @@ fun MakeItMeSettingsSection(
             }
         )
     }
+}
 
-    if (showDeleteDataDialog) {
+/**
+ * WS-5 (D-14): Delete-my-data as its OWN settings row (RW-16.30
+ * decision 5a: the account-level erasure, offered in every mode —
+ * a stock-mode user still has an account). It used to be composed
+ * inside [MakeItMeSettingsSection], so it vanished whenever that
+ * section emitted nothing; now Settings hosts it as a registered
+ * section of its own, independent of the feature's flag and mode.
+ */
+@Composable
+fun DeleteMyDataSettingsRow(
+    viewModel: MakeItMeViewModel?,
+    onDeleted: () -> Unit
+) {
+    var showDeleteDataDialog by remember { mutableStateOf(false) }
+    var dataDeletedNotice by remember { mutableStateOf(false) }
+
+    Column {
+        if (dataDeletedNotice) {
+            Text(
+                text = MakeItMeStrings.S25_POST_DELETE_DATA,
+                fontSize = 13.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+        }
+        MakeItMeSettingsRow(
+            title = MakeItMeStrings.S20_DELETE_DATA_ROW,
+            sub = null,
+            destructive = true,
+            onClick = { showDeleteDataDialog = true }
+        )
+    }
+
+    if (showDeleteDataDialog && viewModel != null) {
         MakeItMeDeleteDataDialog(
             viewModel = viewModel,
             onDismiss = { showDeleteDataDialog = false },
             onDeleted = {
                 showDeleteDataDialog = false
-                deletedNotice = false
                 dataDeletedNotice = true
                 onDeleted()
             }
