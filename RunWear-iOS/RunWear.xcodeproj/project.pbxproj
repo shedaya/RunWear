@@ -149,6 +149,7 @@
 		G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000003 /* WearIveRunCollectionView.swift */; };
 		G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000004 /* RW26Phase2Tests.swift */; };
 		H10002000000000000000003 /* SimplePlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = H10001000000000000000002 /* SimplePlaceTests.swift */; };
+		J10002000000000000000003 /* StateTruthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = J10001000000000000000002 /* StateTruthTests.swift */; };
 		F10002000000000000000106 /* PersonalHeroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000106 /* PersonalHeroStore.swift */; };
 		F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
@@ -323,6 +324,7 @@
 		G10001000000000000000003 /* WearIveRunCollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunCollectionView.swift; sourceTree = "<group>"; };
 		G10001000000000000000004 /* RW26Phase2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26Phase2Tests.swift; sourceTree = "<group>"; };
 		H10001000000000000000002 /* SimplePlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimplePlaceTests.swift; sourceTree = "<group>"; };
+		J10001000000000000000002 /* StateTruthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateTruthTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -565,6 +567,7 @@
 				C10001000000000000000031 /* RW25NextGenHomeTests.swift */,
 				G10001000000000000000004 /* RW26Phase2Tests.swift */,
 				H10001000000000000000002 /* SimplePlaceTests.swift */,
+				J10001000000000000000002 /* StateTruthTests.swift */,
 				C10001000000000000000032 /* GreatVibesFontTests.swift */,
 				C1000100000000000000003B /* HeroFallbackGenderTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
@@ -878,6 +881,7 @@
 				G10002000000000000000002 /* RW26CollectionModels.swift in Sources */,
 				G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */,
 				H10002000000000000000003 /* SimplePlaceTests.swift in Sources */,
+				J10002000000000000000003 /* StateTruthTests.swift in Sources */,
 				C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */,
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
 				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,
