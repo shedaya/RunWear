@@ -144,10 +144,10 @@ export function drawBudgetFor(weather: string, bracket: string): number {
 // 22.2% → 40.3% (z = 2.34; snow 7.1% → 40.9% throttle-adjusted),
 // cost per usable $0.105 → $0.067, identity screen unharmed
 // (record: rw-mim-yield-round2-2026-11-03). The wording is the
-// experiment's verbatim, including its one documented deviation:
-// the headband is a "wide KNITTED headband", not fleece — "fleece"
-// is the gate parser's mid-layer token and would have moved the
-// expected classes. Every description was checked against
+// experiment's verbatim (as adopted), including its one documented
+// deviation: the headband was a "wide KNITTED headband", not fleece
+// — "fleece" is the gate parser's mid-layer token and would have
+// moved the expected classes. Every description was checked against
 // classesFromText: each still parses to the item's own class, so
 // expected garment classes are unchanged. VISOR was not exercised
 // by the experiment; its wording extends the cap's in the identical
@@ -155,38 +155,54 @@ export function drawBudgetFor(weather: string, bracket: string): number {
 // the only non-experiment wording in the maps. Round two's other
 // arms (G completeness close, H extended emphasis, I exclusion)
 // MATCHED the control and are NOT adopted.
+// RUNNING FORM (Sol's direction, 2026-11-03, after his bench
+// review: the headwear rendered as knit/fashion beanies, not
+// athletic gear): every prescribed garment is now named in its
+// RUNNING form throughout the prompt — subject sentence, HEAD_DESC /
+// HANDS_DESC, and outfit bullets ("running beanie", "running
+// neck gaiter", "running rain jacket", …). The arm-F attribute
+// descriptions survive around the qualified noun; the two "knitted"
+// descriptors do NOT — knit is the fashion material Sol flagged, so
+// the beanie is "a running beanie pulled down over the ears" and
+// the headband "a wide running headband covering the ears" (the
+// fleece trap is unchanged: "fleece" still never names a garment
+// outside FLEECE_PULLOVER itself). SUNSCREEN is the one unqualified
+// entry — a lotion, not a garment; it has no running form. Every
+// new string was re-checked against classesFromText over the full
+// canonical cell set plus a per-item sweep: expected garment
+// classes are unchanged for every cell (build record §19).
 // ---------------------------------------------------------------------
 const BULLET: Record<string, string> = {
-  TANK_TOP: 'Sleeveless tank top',
-  SHORT_SLEEVE: 'Short sleeve shirt',
-  LONG_SLEEVE_LIGHT: 'Light long sleeve shirt',
-  LONG_SLEEVE_THERMAL: 'Thermal long sleeve shirt',
-  QUARTER_ZIP: 'Quarter zip pullover',
-  FLEECE_PULLOVER: 'Fleece pullover',
-  HALF_ZIP_THERMAL: 'Thermal half zip pullover',
-  LIGHT_VEST: 'Light vest',
-  WINDBREAKER: 'Windbreaker jacket',
+  TANK_TOP: 'Sleeveless running tank top',
+  SHORT_SLEEVE: 'Running short sleeve shirt',
+  LONG_SLEEVE_LIGHT: 'Light running long sleeve shirt',
+  LONG_SLEEVE_THERMAL: 'Thermal running long sleeve shirt',
+  QUARTER_ZIP: 'Running quarter zip pullover',
+  FLEECE_PULLOVER: 'Running fleece pullover',
+  HALF_ZIP_THERMAL: 'Thermal running half zip pullover',
+  LIGHT_VEST: 'Light running vest',
+  WINDBREAKER: 'Running windbreaker jacket',
   LIGHT_JACKET: 'Light running jacket',
-  RAIN_JACKET: 'Waterproof rain jacket with the hood down',
-  INSULATED_JACKET: 'Insulated jacket',
+  RAIN_JACKET: 'Waterproof running rain jacket with the hood down',
+  INSULATED_JACKET: 'Insulated running jacket',
   SHORTS: 'Running shorts',
-  SHORT_SHORTS: 'Short shorts',
-  CAPRIS: 'Capris / 3/4 tights',
+  SHORT_SHORTS: 'Running short shorts',
+  CAPRIS: 'Running capris / 3/4 tights',
   LIGHT_TIGHTS: 'Light running tights',
-  THERMAL_TIGHTS: 'Thermal tights',
-  VISOR: 'Visor',
+  THERMAL_TIGHTS: 'Thermal running tights',
+  VISOR: 'Running visor',
   BASEBALL_CAP: 'Running cap',
-  HEADBAND: 'Ear warmer headband',
-  LIGHT_BEANIE: 'Light beanie',
-  THERMAL_BEANIE: 'Thermal beanie',
-  BALACLAVA: 'Balaclava',
-  LIGHT_GLOVES: 'Light gloves',
-  THERMAL_GLOVES: 'Thermal gloves',
-  MITTENS: 'Mittens',
-  NECK_GAITER: 'Neck gaiter',
-  SUNGLASSES: 'Sunglasses',
+  HEADBAND: 'Running headband',
+  LIGHT_BEANIE: 'Light running beanie',
+  THERMAL_BEANIE: 'Thermal running beanie',
+  BALACLAVA: 'Running balaclava',
+  LIGHT_GLOVES: 'Light running gloves',
+  THERMAL_GLOVES: 'Thermal running gloves',
+  MITTENS: 'Running mittens',
+  NECK_GAITER: 'Running neck gaiter',
+  SUNGLASSES: 'Running sunglasses',
   SUNSCREEN: 'Sunscreen',
-  REFLECTIVE_GEAR: 'Reflective gear'
+  REFLECTIVE_GEAR: 'Reflective running gear'
 }
 
 const SLOT_ORDER: Record<string, number> = {
@@ -261,23 +277,26 @@ const HANDS_KEYS: ReadonlySet<string> = new Set([
 ])
 
 // Descriptive expansion (round-two arm F, adopted 2026-11-03):
-// subject-sentence forms of the head/hands descriptions, verbatim
-// from the experiment driver (HEAD_DESC / HANDS_DESC there). The
+// subject-sentence forms of the head/hands descriptions, from the
+// experiment driver (HEAD_DESC / HANDS_DESC there), AS AMENDED by
+// Sol's running-form direction later the same day (see the header
+// block): the knit descriptors are replaced by the running form;
+// the remaining descriptions are the driver's verbatim. The
 // bullet form is the description with its article stripped and the
 // first letter capitalized (the driver's bulletForm()). Items with
 // no entry keep the plain arm-B phrasing.
 const HEAD_DESC: Record<string, string> = {
-  LIGHT_BEANIE: 'a knitted beanie pulled down over the ears',
-  THERMAL_BEANIE: 'a knitted beanie pulled down over the ears',
+  LIGHT_BEANIE: 'a running beanie pulled down over the ears',
+  THERMAL_BEANIE: 'a running beanie pulled down over the ears',
   BASEBALL_CAP: 'a running cap with the brim facing forward',
-  HEADBAND: 'a wide knitted headband covering the ears',
-  BALACLAVA: 'a balaclava covering the head and neck',
+  HEADBAND: 'a wide running headband covering the ears',
+  BALACLAVA: 'a running balaclava covering the head and neck',
   VISOR: 'a running visor with the brim facing forward'
 }
 const HANDS_DESC: Record<string, string> = {
   LIGHT_GLOVES: 'fitted running gloves with separate fingers',
   THERMAL_GLOVES: 'fitted running gloves with separate fingers',
-  MITTENS: 'thick insulated mittens with no separate fingers'
+  MITTENS: 'thick insulated running mittens with no separate fingers'
 }
 function bulletForm(desc: string): string {
   const bare = desc.replace(/^(a|an) /, '')
