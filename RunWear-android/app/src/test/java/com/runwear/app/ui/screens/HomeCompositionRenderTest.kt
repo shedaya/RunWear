@@ -167,7 +167,11 @@ abstract class HomeCompositionHarness {
         // A3: the location pill is on screen at rest, in the photo
         // zone's top area, in the SimplePlace form.
         val pill = findByText(root, "Aspen, CO")
-        assertTrue("[$label] location pill 'Aspen, CO' must be present at rest", pill != null)
+        val allTexts = nodes(root).flatMap { texts(it) }.distinct().take(60)
+        assertTrue(
+            "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts",
+            pill != null
+        )
         val rawPill = findByText(root, "Aspen, Colorado")
         assertTrue(
             "[$label] the pill must not carry the raw geocode string as its own node text",
