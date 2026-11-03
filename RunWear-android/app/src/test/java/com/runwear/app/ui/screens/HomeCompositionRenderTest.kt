@@ -80,17 +80,33 @@ abstract class HomeCompositionHarness {
     )
 
     protected fun settle(composeView: ComposeView) {
+        // Give the composition real constraints BEFORE settling:
+        // without a layout pass the lazy viewport composes nothing
+        // and the effect/animation clocks have no frame to ride.
+        val w = composeView.resources.displayMetrics.widthPixels
+        val h = composeView.resources.displayMetrics.heightPixels
+        val wSpec = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
+        val hSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+        composeView.measure(wSpec, hSpec)
+        composeView.layout(0, 0, w, h)
         val scheduler = Robolectric.getForegroundThreadScheduler()
         repeat(80) {
             scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
             shadowOf(Looper.getMainLooper()).idle()
+            // Re-layout each step so animated/visibility state that
+            // flipped during the step is placed before the next one.
+            composeView.measure(wSpec, hSpec)
+            composeView.layout(0, 0, w, h)
         }
+        scheduler.advanceToLastPostedRunnable()
         shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.SECONDS)
         shadowOf(Looper.getMainLooper()).idle()
         composeView.dispatchWindowFocusChanged(true)
         composeView.requestFocus()
         shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS)
         shadowOf(Looper.getMainLooper()).idle()
+        composeView.measure(wSpec, hSpec)
+        composeView.layout(0, 0, w, h)
     }
 
     protected fun drawAndSave(
@@ -107,6 +123,11 @@ abstract class HomeCompositionHarness {
         val hSpec = View.MeasureSpec.makeMeasureSpec(heightPx, View.MeasureSpec.EXACTLY)
         composeView.measure(wSpec, hSpec)
         composeView.layout(0, 0, widthPx, heightPx)
+        // Warm-up draw: the first pass records the render nodes for
+        // content whose visibility flipped during settle; the second
+        // rasterizes the settled frame.
+        val warm = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
+        composeView.draw(Canvas(warm))
         val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         composeView.draw(Canvas(bitmap))
         outDir.mkdirs()
