@@ -199,8 +199,17 @@ final class WS6PipelinesTests: XCTestCase {
 
     // MARK: - T-4 · no home share; collection share untouched
 
+    /// Source with `//` comment lines removed — the pin scans
+    /// CODE; the view's own comments legitimately document the
+    /// removal ("the toolbar ShareLink was removed by T-4").
+    private func codeOnly(_ source: String) -> String {
+        source.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+    }
+
     func testHomeToolbarCarriesNoShareLink_sourcePin() throws {
-        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        let view = codeOnly(try sourceFile("../RunWear/Views/WeatherOutfitView.swift"))
         XCTAssertFalse(view.contains("ShareLink"),
                        "the home view must carry no ShareLink (T-4)")
         XCTAssertFalse(view.contains("shareButton"),
@@ -303,12 +312,20 @@ final class WS6PipelinesTests: XCTestCase {
 
     // MARK: - F-1 · EXIF baked at decode (rotated inputs, real pixels)
 
+    /// A scale-1 renderer (a point is a pixel), so fixture
+    /// dimensions are exact — the default renderer format follows
+    /// the device scale and would resample every fixture.
+    private func testRenderer(size: CGSize) -> UIGraphicsImageRenderer {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format)
+    }
+
     /// A 200×100 landscape pixel buffer labelled .right — the
     /// exact shape a portrait front-camera still arrives in (raw
     /// landscape pixels, EXIF saying "rotate 90° to display").
     private func exifRotatedImage() -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 200, height: 100))
-        let base = renderer.image { ctx in
+        let base = testRenderer(size: CGSize(width: 200, height: 100)).image { ctx in
             UIColor(red: 0.9, green: 0.85, blue: 0.8, alpha: 1).setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: 200, height: 100))
         }
@@ -344,8 +361,7 @@ final class WS6PipelinesTests: XCTestCase {
     }
 
     func testUprightCapturePassesTheBakeUnchanged() {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 80))
-        let upright = renderer.image { ctx in
+        let upright = testRenderer(size: CGSize(width: 120, height: 80)).image { ctx in
             UIColor(white: 0.9, alpha: 1).setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: 120, height: 80))
         }
@@ -356,49 +372,64 @@ final class WS6PipelinesTests: XCTestCase {
     }
 
     func testRotatedClockwiseTurnsPixelsByTheNamedAmount() {
-        // Top half red, bottom half blue, 100×200 portrait.
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 100, height: 200))
-        let image = renderer.image { ctx in
+        // Four quadrant markers on a 100×200 portrait fixture:
+        // TL red, TR green, BL blue, BR yellow (UIKit space:
+        // y grows downward from the top).
+        let image = testRenderer(size: CGSize(width: 100, height: 200)).image { ctx in
             UIColor.red.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+            ctx.fill(CGRect(x: 0, y: 0, width: 50, height: 100))
+            UIColor.green.setFill()
+            ctx.fill(CGRect(x: 50, y: 0, width: 50, height: 100))
             UIColor.blue.setFill()
-            ctx.fill(CGRect(x: 0, y: 100, width: 100, height: 100))
+            ctx.fill(CGRect(x: 0, y: 100, width: 50, height: 100))
+            UIColor.yellow.setFill()
+            ctx.fill(CGRect(x: 50, y: 100, width: 50, height: 100))
         }
+        // A 90° CLOCKWISE turn (200×100): TL←BL, TR←TL, BL←BR,
+        // BR←TR — the top edge becomes the right edge.
         let turned = PhotoQualityChecker.rotatedClockwise(image, degrees: 90)
         XCTAssertEqual(turned.cgImage?.width, 200)
         XCTAssertEqual(turned.cgImage?.height, 100)
-        // A 90° clockwise turn moves the top half to the RIGHT.
-        XCTAssertEqual(pixelColor(turned, x: 150, y: 50), "red")
-        XCTAssertEqual(pixelColor(turned, x: 50, y: 50), "blue")
-        // 180°: the top half lands at the bottom.
+        XCTAssertEqual(pixelColor(turned, x: 50, y: 25), "blue")
+        XCTAssertEqual(pixelColor(turned, x: 150, y: 25), "red")
+        XCTAssertEqual(pixelColor(turned, x: 50, y: 75), "yellow")
+        XCTAssertEqual(pixelColor(turned, x: 150, y: 75), "green")
+        // 180° (100×200): TL←BR, TR←BL, BL←TR, BR←TL.
         let flipped = PhotoQualityChecker.rotatedClockwise(image, degrees: 180)
         XCTAssertEqual(flipped.cgImage?.width, 100)
         XCTAssertEqual(flipped.cgImage?.height, 200)
-        XCTAssertEqual(pixelColor(flipped, x: 50, y: 150), "red")
-        XCTAssertEqual(pixelColor(flipped, x: 50, y: 50), "blue")
+        XCTAssertEqual(pixelColor(flipped, x: 25, y: 50), "yellow")
+        XCTAssertEqual(pixelColor(flipped, x: 75, y: 50), "blue")
+        XCTAssertEqual(pixelColor(flipped, x: 25, y: 150), "green")
+        XCTAssertEqual(pixelColor(flipped, x: 75, y: 150), "red")
+        // 270° clockwise: TL←TR, TR←BR, BL←TL, BR←BL.
+        let turned270 = PhotoQualityChecker.rotatedClockwise(image, degrees: 270)
+        XCTAssertEqual(turned270.cgImage?.width, 200)
+        XCTAssertEqual(turned270.cgImage?.height, 100)
+        XCTAssertEqual(pixelColor(turned270, x: 50, y: 25), "green")
+        XCTAssertEqual(pixelColor(turned270, x: 150, y: 25), "yellow")
+        XCTAssertEqual(pixelColor(turned270, x: 50, y: 75), "red")
+        XCTAssertEqual(pixelColor(turned270, x: 150, y: 75), "blue")
     }
 
-    /// Sample one pixel by drawing the image into a bitmap
-    /// context whose byte order this test controls (RGBA), so the
-    /// reading never depends on the source image's storage order.
+    /// Sample one pixel by re-rendering the image through a
+    /// scale-1 UIKit renderer (the same stack that produced the
+    /// fixtures, so orientation and row conventions cancel) and
+    /// reading the rendered CGImage's RGBA bytes, row 0 = top.
     private func pixelColor(_ image: UIImage, x: Int, y: Int) -> String {
-        guard let cg = image.cgImage else { return "none" }
-        let width = cg.width, height = cg.height
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        guard let context = CGContext(
-            data: &pixels, width: width, height: height,
-            bitsPerComponent: 8, bytesPerRow: width * 4,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return "none" }
-        // CGContext origin is bottom-left; the image draws upright
-        // (orientation .up), so row 0 of the buffer is the BOTTOM.
-        context.draw(cg, in: CGRect(x: 0, y: 0, width: width, height: height))
-        let bufferY = height - 1 - y
-        let offset = bufferY * width * 4 + x * 4
-        let r = pixels[offset], g = pixels[offset + 1], b = pixels[offset + 2]
+        let rendered = testRenderer(size: image.size).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+        guard let cg = rendered.cgImage,
+              let provider = cg.dataProvider,
+              let data = provider.data else { return "none" }
+        let bytes = CFDataGetBytePtr(data)!
+        let offset = y * cg.bytesPerRow + x * 4
+        let r = bytes[offset], g = bytes[offset + 1], b = bytes[offset + 2]
         if r > 150 && g < 100 && b < 100 { return "red" }
+        if g > 150 && r < 100 && b < 100 { return "green" }
         if b > 150 && r < 100 && g < 100 { return "blue" }
+        if r > 150 && g > 150 && b < 100 { return "yellow" }
         return "r\(r)g\(g)b\(b)"
     }
 
