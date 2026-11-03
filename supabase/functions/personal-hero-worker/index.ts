@@ -28,6 +28,30 @@
 // head-band mask repaints the face and fails the identity re-screen
 // by construction — and Sol ruled it dropped, 2026-11-03 04:13 EST.)
 //
+// HEADWEAR EDIT PASS (added 2026-11-03, after the gate in the order
+// above): a draw that passed the identity screen WITH HEADROOM
+// (similarity >= 0.48) and failed the gate ONLY on headwear absence
+// gets exactly ONE instruction-following edit
+// (black-forest-labs/flux-kontext-pro) that adds the prescribed head
+// item in its production prompt wording and changes nothing else.
+// The edited image must re-pass the identity screen (>= 0.42) AND
+// the full prescription gate; only then is it the delivered photo
+// for that draw. Evidence: the headwear A/B proved the identity
+// conditioning is what suppresses headwear (presence 40% with the
+// reference vs 100% without), and the edit-pass bench test rescued
+// 15/19 eligible head-only failures (79%) at a median identity tax
+// of -0.093 — with every post-edit identity loss starting below
+// 0.48, which is why the headroom line exists. The edit is a
+// transformation OF the current draw: it consumes no extra draw
+// from the budget, runs at most once per draw, and is never applied
+// to an edited image. It is NOT the dropped inpaint stage above:
+// that stage repainted a masked band across the face and failed the
+// identity re-screen by construction (0/15); this is a whole-image
+// instruction edit whose output is re-screened and re-gated like
+// any other candidate. If either re-check fails, the draw counts as
+// failed with its ORIGINAL gate verdict and the budget continues;
+// the attempt and its outcome ride on the draw record (edit field).
+//
 // Epoch discipline (RW-16.30): jobs carry the photo-set epoch they
 // were enqueued under. A job whose epoch no longer matches the
 // profile's is superseded — failed closed, no spend, no delivery, no
@@ -95,6 +119,15 @@ const SOFT_TIME_BUDGET_MS = 100_000
 // must move with the screen's IDENTITY_THRESHOLD, or SFace scores
 // would silently be judged on buffalo_l's 0.40 line).
 const IDENTITY_DELIVERED_MIN = 0.42
+
+// Headwear edit pass (2026-11-03): the edit model + the headroom
+// line. A gate-failed draw is offered the edit only when its
+// identity similarity clears EDIT_MIN_SIMILARITY — the edit test
+// measured a median identity tax of -0.093 from editing, and every
+// post-edit identity loss started below 0.48, so a draw under the
+// line counts as failed without an edit attempt.
+export const EDIT_MIN_SIMILARITY = 0.48
+const EDIT_MODEL_SLUG = 'black-forest-labs/flux-kontext-pro'
 
 // Stale-claim recovery — unchanged from v23 (see the v23 header for
 // the full reasoning; thresholds and budgets carry over verbatim).
@@ -666,6 +699,71 @@ export function parseGateText(text: string): {
   }
 }
 
+// ---------------------------------------------------------------------
+// Headwear edit pass — trigger classification + instruction.
+//
+// The trigger mirrors the edit test's head-only classification
+// (rw-mim-headwear-edit-test-2026-11-03, whose ledger classified a
+// draw head-only when its gate failure list was exactly ["head"] and
+// the seen head was null): the verdict's failure list is exactly one
+// failure, of class 'head', and that failure is an ABSENCE —
+// headwear was prescribed (expected head non-null) and none was seen
+// (seen head null). Two neighbouring cases are deliberately NOT
+// eligible, the strictest reasonable reading: a form difference
+// never reaches here (ruling 7 makes it a note, so the verdict
+// passes), and headwear seen where none was prescribed also fails
+// with class 'head' but has seen non-null — that is an addition to
+// remove, not an absence to fill, and this pass only adds.
+// On top of the classification, the identity conditions: the draw
+// passed the screen (similarity >= IDENTITY_DELIVERED_MIN — implied
+// in the pipeline, where the gate only runs on delivered draws, and
+// stated here so the pure check is complete) AND clears the
+// headroom line EDIT_MIN_SIMILARITY (0.48 — below it the edit's
+// measured identity tax usually ends the draw, so it counts as
+// failed without an attempt).
+// ---------------------------------------------------------------------
+export type EditEligibility = { eligible: boolean, reason: string }
+
+export function headwearEditEligibility(args: {
+  similarity: number | null,
+  failures: GateFailure[],
+  seen: GarmentClasses,
+  expected: GarmentClasses
+}): EditEligibility {
+  const { similarity, failures, seen, expected } = args
+  if (similarity === null) return { eligible: false, reason: 'no_identity_similarity' }
+  if (similarity < IDENTITY_DELIVERED_MIN) {
+    return { eligible: false, reason: 'identity_below_delivered_line' }
+  }
+  if (similarity < EDIT_MIN_SIMILARITY) {
+    return { eligible: false, reason: 'identity_below_edit_headroom' }
+  }
+  if (failures.length !== 1) return { eligible: false, reason: 'not_head_only_failure' }
+  if (failures[0].cls !== 'head') return { eligible: false, reason: 'failure_not_headwear' }
+  if (expected.head === null) return { eligible: false, reason: 'no_headwear_prescribed' }
+  if (seen.head !== null) return { eligible: false, reason: 'headwear_present_not_absent' }
+  return { eligible: true, reason: 'head_only_absence_with_headroom' }
+}
+
+// The outfit key of the prescribed head item — the same selection
+// buildPrompt's emphasis makes — or null when none is prescribed.
+export function prescribedHeadKey(outfitItems: unknown): string | null {
+  if (!Array.isArray(outfitItems)) return null
+  const key = (outfitItems as unknown[]).find(
+    k => typeof k === 'string' && HEAD_KEYS.has(k))
+  return (key as string | undefined) ?? null
+}
+
+// The edit instruction, byte-identical in construction to the edit
+// test's: the prescribed head item in its exact production prompt
+// wording (the HEAD_DESC subject-sentence form buildPrompt uses),
+// then the change-nothing-else clause verbatim.
+export function buildHeadwearEditInstruction(headKey: string): string {
+  return `Add ${headPhrase(headKey)} onto the runner's head. ` +
+    'Change nothing else: same person, same face, same hair below the headwear, ' +
+    'same outfit, same pose, same background.'
+}
+
 class GateUnavailable extends Error {}
 
 // One paid gate read. Throws GateUnavailable when the stage cannot
@@ -916,6 +1014,36 @@ async function createPulidDraw(prompt: string, refDataUri: string): Promise<stri
   return created.id as string
 }
 
+// One headwear edit: black-forest-labs/flux-kontext-pro on the
+// official-model endpoint (the route the hero refill uses), input =
+// the draw image itself as a data URI. Returns the prediction id;
+// the output bytes come from predictionOutputBytes, unchanged. The
+// input shape is the edit test's exactly (aspect_ratio
+// 'match_input_image', output_format 'png' so the gate's decoder can
+// read the result).
+async function createHeadwearEdit(instruction: string, imageBytes: Uint8Array): Promise<string> {
+  const resp = await fetch(`https://api.replicate.com/v1/models/${EDIT_MODEL_SLUG}/predictions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${REPLICATE_API_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      input: {
+        prompt: instruction,
+        input_image: `data:image/png;base64,${bytesToB64(imageBytes)}`,
+        aspect_ratio: 'match_input_image',
+        output_format: 'png'
+      }
+    })
+  })
+  if (!resp.ok) {
+    throw new Error(`Kontext edit create failed: ${resp.status} ${await resp.text()}`)
+  }
+  const created = await resp.json()
+  return created.id as string
+}
+
 async function predictionOutputBytes(predictionId: string, maxWaitMs: number): Promise<Uint8Array> {
   const result = await pollPrediction(predictionId, maxWaitMs)
   if (result.status !== 'succeeded') {
@@ -1039,11 +1167,28 @@ async function markJob(id: string, patch: Record<string, unknown>) {
   if (error) console.error('[personal-hero-worker] markJob failed:', error)
 }
 
+// Headwear edit pass bookkeeping, recorded on the draw record (and
+// so in the job's gate_result and a delivered hero's gate detail)
+// the way scaffold serves are recorded on theirs: whether an edit
+// was attempted, the pre/post identity similarities, and the
+// post-edit gate verdict.
+export type EditRecord = {
+  model: string, prediction_id: string | null,
+  head_item: string, instruction: string,
+  pre_similarity: number | null, post_similarity: number | null,
+  trigger_failures: GateFailure[],
+  post_gate_pass: boolean | null, post_gate_cached?: boolean,
+  post_failures?: GateFailure[],
+  outcome: 'delivered' | 'identity_screen' | 'prescription_gate' | 'edit_error',
+  error?: string
+}
+
 type DrawRecord = {
   draw: number, prediction_id: string | null, image_hash: string | null,
   identity_similarity: number | null, stage: string,
   gate_pass?: boolean, gate_cached?: boolean,
-  failures?: GateFailure[], notes?: string[]
+  failures?: GateFailure[], notes?: string[],
+  edited?: boolean, edit?: EditRecord
 }
 
 type ScreenedDraw = {
@@ -1051,18 +1196,105 @@ type ScreenedDraw = {
   verdict: GateVerdict, gateCached: boolean, prompt: string
 }
 
+// The headwear edit pass for one gate-failed draw. Returns null
+// when the trigger is not met (the draw simply counts as failed).
+// When the trigger IS met, exactly one edit is attempted: its
+// outcome is recorded either way, and a deliverable is returned
+// only when the edited image re-passes BOTH the identity screen and
+// the full gate. A Replicate edit failure is recorded as outcome
+// 'edit_error' and the draw counts as failed — the edit is a rescue
+// attempt, not a pipeline stage the job depends on. The
+// re-verification's hard-dependency failures (identity screen /
+// gate unavailable) are NOT caught here: they throw and fail the
+// job closed with the named stage error, exactly as for an original
+// draw.
+async function attemptHeadwearEdit(
+  job: JobRow, prompt: string, bytes: Uint8Array, refBytes: Uint8Array,
+  screen: ScreenResult, verdict: GateVerdict
+): Promise<{ edit: EditRecord, deliverable?: ScreenedDraw } | null> {
+  const check = headwearEditEligibility({
+    similarity: screen.similarity, failures: verdict.failures,
+    seen: verdict.seen, expected: expectedClassesForPrompt(prompt)
+  })
+  if (!check.eligible) return null
+  const headKey = prescribedHeadKey(job.outfit_items)
+  if (!headKey) return null
+  const instruction = buildHeadwearEditInstruction(headKey)
+  const edit: EditRecord = {
+    model: EDIT_MODEL_SLUG, prediction_id: null,
+    head_item: headKey, instruction,
+    pre_similarity: screen.similarity, post_similarity: null,
+    trigger_failures: verdict.failures, post_gate_pass: null,
+    outcome: 'edit_error'
+  }
+  let editedBytes: Uint8Array
+  try {
+    edit.prediction_id = await createHeadwearEdit(instruction, bytes)
+    editedBytes = await predictionOutputBytes(edit.prediction_id, 180_000)
+  } catch (e) {
+    edit.error = (e as Error).message
+    console.log(`[personal-hero-worker] job ${job.id}: headwear edit failed: ${edit.error}`)
+    return { edit }
+  }
+  console.log(`[personal-hero-worker] job ${job.id}: headwear edit applied (${headKey}, prediction ${edit.prediction_id}); re-verifying`)
+  // Re-verification: the edited image is a new candidate — identity
+  // screen first (free, discards before the paid read), then the
+  // full prescription gate (its verdict is cached by the edited
+  // image's own hash, like any candidate's).
+  const screen2 = await callIdentityScreen(refBytes, editedBytes)
+  edit.post_similarity = screen2.similarity
+  if (!screen2.delivered) {
+    edit.outcome = 'identity_screen'
+    return { edit }
+  }
+  const editedHash = await sha256Hex(editedBytes)
+  const gate2 = await runGate(job, prompt, editedBytes, editedHash)
+  edit.post_gate_pass = gate2.verdict.pass
+  edit.post_gate_cached = gate2.cached
+  if (!gate2.verdict.pass) {
+    edit.outcome = 'prescription_gate'
+    edit.post_failures = gate2.verdict.failures
+    return { edit }
+  }
+  edit.outcome = 'delivered'
+  return {
+    edit,
+    deliverable: {
+      bytes: editedBytes, imageHash: editedHash, screen: screen2,
+      verdict: gate2.verdict, gateCached: gate2.cached, prompt
+    }
+  }
+}
+
 // Run one candidate through screen + gate (in that order — the screen
 // is free and discards before any paid call). Returns the terminal
 // stage for the draw and, when both stages pass, the deliverable.
+// A gate failure that meets the headwear-edit trigger gets its one
+// edit inside this call (see attemptHeadwearEdit): on a rescued draw
+// the returned verdict/screen/deliverable are the EDITED image's;
+// on an unrescued one the original verdict stands and the attempt
+// rides along in the edit field.
 async function screenAndGate(
   job: JobRow, prompt: string, bytes: Uint8Array, refBytes: Uint8Array
-): Promise<{ stage: string, screen: ScreenResult, deliverable?: ScreenedDraw, verdict?: GateVerdict, gateCached?: boolean }> {
+): Promise<{ stage: string, screen: ScreenResult, deliverable?: ScreenedDraw, verdict?: GateVerdict, gateCached?: boolean, edit?: EditRecord }> {
   const screen = await callIdentityScreen(refBytes, bytes)
   if (!screen.delivered) return { stage: 'identity_screen', screen }
   const imageHash = await sha256Hex(bytes)
   const { verdict, cached } = await runGate(job, prompt, bytes, imageHash)
   if (!verdict.pass) {
-    return { stage: 'prescription_gate', screen, verdict, gateCached: cached }
+    const edited = await attemptHeadwearEdit(job, prompt, bytes, refBytes, screen, verdict)
+    if (edited?.deliverable) {
+      return {
+        stage: 'delivered', screen: edited.deliverable.screen,
+        gateCached: edited.deliverable.gateCached,
+        verdict: edited.deliverable.verdict,
+        deliverable: edited.deliverable, edit: edited.edit
+      }
+    }
+    return {
+      stage: 'prescription_gate', screen, verdict, gateCached: cached,
+      ...(edited ? { edit: edited.edit } : {})
+    }
   }
   return {
     stage: 'delivered', screen, gateCached: cached, verdict,
@@ -1310,6 +1542,10 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       const outcome = await screenAndGate(job, candPrompt, bytes, refBytes)
       noteScreen(rec, outcome.screen)
       rec.stage = outcome.stage
+      if (outcome.edit) {
+        rec.edited = true
+        rec.edit = outcome.edit
+      }
       if (outcome.verdict) {
         rec.gate_pass = outcome.verdict.pass
         rec.gate_cached = outcome.gateCached

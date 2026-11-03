@@ -21,6 +21,8 @@ function assertStringIncludes(s: string, sub: string, msg?: string) {
 import {
   buildPrompt, classesFromText, expectedClassesForPrompt,
   evaluateGate, parseGateText, drawBudgetFor, selectAnchor,
+  headwearEditEligibility, prescribedHeadKey, buildHeadwearEditInstruction,
+  EDIT_MIN_SIMILARITY,
   type GarmentClasses
 } from "./index.ts"
 
@@ -443,6 +445,104 @@ Deno.test('no repair stage: a gate-failed draw performs no fill call and no repa
   assert(!source.includes('isAccessoryOnlyFailure'), 'no repair eligibility classifier remains')
   assert(!source.includes('/repair/'), 'no repair storage path remains')
   assert(!source.includes('repair_attempted'), 'no repair bookkeeping is read or written')
+})
+
+Deno.test('edit trigger: head-only absence with identity headroom is eligible', () => {
+  // The edit test's classification, produced by the real gate: a
+  // cold draw identical to its prescription except a bare head.
+  const exp = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'gloves' })
+  const seen = classes({ topBase: 'long', bottom: 'tights', head: null, hands: 'gloves' })
+  const v = evaluateGate('CLEAR', 'MIDDAY', exp, seen, okAnswers, 'clear', 'daylight')
+  assertEquals(v.pass, false)
+  assertEquals(v.failures.map(f => f.cls), ['head'])
+  const e = headwearEditEligibility({
+    similarity: 0.60, failures: v.failures, seen, expected: exp
+  })
+  assertEquals(e.eligible, true)
+})
+
+Deno.test('edit trigger: the 0.48 headroom line is a hard boundary', () => {
+  // The edit test's identity losses all started below 0.48; the
+  // line itself is included, anything under it is not — including
+  // draws that clear the 0.42 delivered line.
+  assertEquals(EDIT_MIN_SIMILARITY, 0.48)
+  const exp = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'gloves' })
+  const seen = classes({ topBase: 'long', bottom: 'tights', head: null, hands: 'gloves' })
+  const v = evaluateGate('CLEAR', 'MIDDAY', exp, seen, okAnswers, 'clear', 'daylight')
+  const at = (similarity: number | null) => headwearEditEligibility({
+    similarity, failures: v.failures, seen, expected: exp
+  })
+  assertEquals(at(0.48).eligible, true)
+  assertEquals(at(0.479).eligible, false)
+  assertEquals(at(0.479).reason, 'identity_below_edit_headroom')
+  assertEquals(at(0.45).eligible, false)
+  assertEquals(at(0.45).reason, 'identity_below_edit_headroom')
+  assertEquals(at(0.419).eligible, false)
+  assertEquals(at(0.419).reason, 'identity_below_delivered_line')
+  assertEquals(at(null).eligible, false)
+  assertEquals(at(null).reason, 'no_identity_similarity')
+})
+
+Deno.test('edit trigger: only a SOLE headwear-absence failure qualifies', () => {
+  const expCold = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'gloves' })
+  const elig = (failures: ReturnType<typeof evaluateGate>['failures'],
+    seen: GarmentClasses, expected: GarmentClasses) => headwearEditEligibility({
+    similarity: 0.60, failures, seen, expected
+  })
+  // Head absence PLUS any second failure: not head-only, no edit.
+  const seenTwo = classes({ topBase: 'long', bottom: 'tights', head: null, hands: null })
+  const vTwo = evaluateGate('CLEAR', 'MIDDAY', expCold, seenTwo, okAnswers, 'clear', 'daylight')
+  assertEquals(vTwo.failures.map(f => f.cls), ['head', 'hands'])
+  assertEquals(elig(vTwo.failures, seenTwo, expCold).eligible, false)
+  assertEquals(elig(vTwo.failures, seenTwo, expCold).reason, 'not_head_only_failure')
+  // A sole non-headwear failure (hands absence): no edit.
+  const seenHands = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: null })
+  const vHands = evaluateGate('CLEAR', 'MIDDAY', expCold, seenHands, okAnswers, 'clear', 'daylight')
+  assertEquals(vHands.failures.map(f => f.cls), ['hands'])
+  assertEquals(elig(vHands.failures, seenHands, expCold).eligible, false)
+  assertEquals(elig(vHands.failures, seenHands, expCold).reason, 'failure_not_headwear')
+  // Headwear seen where NONE was prescribed fails as 'head' but is
+  // an addition, not an absence: no edit (the strictest reading).
+  const expNone = classes({ topBase: 'short', bottom: 'shorts' })
+  const seenCap = classes({ topBase: 'short', bottom: 'shorts', head: 'cap' })
+  const vAdd = evaluateGate('CLEAR', 'MIDDAY', expNone, seenCap, okAnswers, 'clear', 'daylight')
+  assertEquals(vAdd.failures.map(f => f.cls), ['head'])
+  assertEquals(elig(vAdd.failures, seenCap, expNone).eligible, false)
+  assertEquals(elig(vAdd.failures, seenCap, expNone).reason, 'no_headwear_prescribed')
+  // A form difference is a ruling-7 note (verdict passes): no
+  // failure exists to trigger on.
+  const seenBala = classes({ topBase: 'long', bottom: 'tights', head: 'balaclava', hands: 'gloves' })
+  const vForm = evaluateGate('CLEAR', 'MIDDAY', expCold, seenBala, okAnswers, 'clear', 'daylight')
+  assertEquals(vForm.pass, true)
+  assertEquals(elig(vForm.failures, seenBala, expCold).eligible, false)
+})
+
+Deno.test('edit instruction: the prescribed head item in its exact production prompt wording', () => {
+  // Byte-compared against the edit test's constructed instructions
+  // (its head phrases are the production HEAD_DESC forms).
+  const tail = ' onto the runner\'s head. Change nothing else: same person, same face, ' +
+    'same hair below the headwear, same outfit, same pose, same background.'
+  assertEquals(buildHeadwearEditInstruction('LIGHT_BEANIE'),
+    'Add a running beanie pulled down over the ears' + tail)
+  assertEquals(buildHeadwearEditInstruction('THERMAL_BEANIE'),
+    'Add a running beanie pulled down over the ears' + tail)
+  assertEquals(buildHeadwearEditInstruction('BASEBALL_CAP'),
+    'Add a running cap with the brim facing forward' + tail)
+  assertEquals(buildHeadwearEditInstruction('HEADBAND'),
+    'Add a wide running headband covering the ears' + tail)
+  assertEquals(buildHeadwearEditInstruction('BALACLAVA'),
+    'Add a running balaclava covering the head and neck' + tail)
+  assertEquals(buildHeadwearEditInstruction('VISOR'),
+    'Add a running visor with the brim facing forward' + tail)
+})
+
+Deno.test('edit trigger: prescribed head key selection mirrors the prompt builder', () => {
+  assertEquals(prescribedHeadKey(['SHORT_SLEEVE', 'SHORTS', 'BASEBALL_CAP']), 'BASEBALL_CAP')
+  assertEquals(prescribedHeadKey(['THERMAL_BEANIE', 'LONG_SLEEVE_THERMAL', 'THERMAL_TIGHTS']), 'THERMAL_BEANIE')
+  assertEquals(prescribedHeadKey(['SHORT_SLEEVE', 'SHORTS', 'SUNGLASSES']), null)
+  assertEquals(prescribedHeadKey([]), null)
+  assertEquals(prescribedHeadKey(null), null)
+  assertEquals(prescribedHeadKey('BASEBALL_CAP'), null)
 })
 
 Deno.test('parse: enumeration text extracts answers + conditions', () => {
