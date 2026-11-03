@@ -1,0 +1,33 @@
+name: identity-screen-retag
+
+# One-off snapshot (RW-16.30 screen swap, 2026-11-03): preserve the
+# buffalo_l identity-screen image (F-1 build, currently :v1) under a
+# buffalo-specific tag BEFORE the YuNet+SFace build overwrites :v1.
+# Runs on THIS branch because GHCR scopes the GITHUB_TOKEN's package
+# write access to refs that have pushed the package before (a fresh
+# branch's token is denied at login — run 41674458718).
+# Source is pinned by digest, so the copy is exact.
+on:
+  push:
+    branches: [ops/identity-screen-image-2026-11-03]
+    paths: [.github/workflows/identity-screen-retag.yml]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  retag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: <redacted>
+      - name: Copy buffalo image digest to the buffalo-v1 tag
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/shedaya/runwear-identity-screen:buffalo-v1 \
+            ghcr.io/shedaya/runwear-identity-screen@sha256:022c2fd8a6781d94608cf79279aba641ebf6ab7640c280539ab1097224766d38
