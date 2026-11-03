@@ -115,21 +115,23 @@ abstract class HomeCompositionHarness {
     }
 
     /** The semantics root: ComposeView hosts its composition in a
-     * child AndroidComposeView, which is the ViewRootForTest. */
+     * child AndroidComposeView, which is the ViewRootForTest. A
+     * screen can host more than one compose view (an empty shell
+     * among them), so every candidate is collected and the LARGEST
+     * semantics tree wins — the screen's own tree. */
     protected fun rootNode(view: View): SemanticsNode {
-        if (view is androidx.compose.ui.platform.ViewRootForTest) {
-            return view.semanticsOwner.rootSemanticsNode
-        }
-        if (view is android.view.ViewGroup) {
-            for (i in 0 until view.childCount) {
-                try {
-                    return rootNode(view.getChildAt(i))
-                } catch (e: IllegalStateException) {
-                    // keep searching siblings
-                }
+        val candidates = mutableListOf<SemanticsNode>()
+        fun collect(v: View) {
+            if (v is androidx.compose.ui.platform.ViewRootForTest) {
+                candidates += v.semanticsOwner.rootSemanticsNode
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) collect(v.getChildAt(i))
             }
         }
-        throw IllegalStateException("no ViewRootForTest under $view")
+        collect(view)
+        return candidates.maxByOrNull { nodes(it).size }
+            ?: throw IllegalStateException("no ViewRootForTest under $view")
     }
 
     /** All semantics nodes in the tree, flattened. */
