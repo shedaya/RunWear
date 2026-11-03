@@ -457,6 +457,25 @@ export function expectedClassesForPrompt(prompt: string): GarmentClasses {
 //      (CONSTRUCTION_OK); positively-seen class mismatches still
 //      fail; bottom is judged at family grain (tights vs shorts),
 //      exact-class mismatch within the family is a note.
+// Amended by Sol's gate rulings (2026-11-03 ~10:14 CST):
+//   8. HANDS are verified as hand COVERAGE, not the named garment's
+//      form ("even mittens instead of gloves etc is OK") — the
+//      ruling-7 principle extended to hands: gloves seen for a
+//      mittens prescription (or the reverse) satisfies, noted; a
+//      BARE hand where handwear is prescribed still fails, and
+//      handwear seen where none is prescribed still fails (the
+//      pre-existing additions behavior, unchanged).
+//   9. BACKGROUND PEOPLE: an extra figure who is background and
+//      blurred is not a second subject ("if there's people in the
+//      background very blurred, I'm fine with that"). The
+//      enumeration read now counts only CLEAR SUBJECTS in
+//      PERSON_COUNT and reports background-only figures separately
+//      as BACKGROUND_PEOPLE; evaluateGate fails the person class
+//      only on the clear-subject count and records background-only
+//      figures as a note. Stored reads taken under the old prompt
+//      carry no BACKGROUND_PEOPLE field and keep the old counting
+//      (a stored count above 1 still fails) — the amendment is
+//      prompt-forward, never retroactive.
 // Amended by Sol's stringency ruling (2026-11-02 ~21:28 EST):
 //   6. SUNGLASSES OMISSION is never a failure (V1) — prescribed but
 //      not seen is recorded as a note. Sunglasses seen where NOT
@@ -484,7 +503,8 @@ const GARMENT_PROMPT =
   'quarter zip, shorts, short shorts, tights, leggings, cap, visor, headband, beanie, balaclava, gloves, ' +
   'sunglasses). If the runner\'s head or face is covered by a balaclava, or by a neck gaiter or buff ' +
   'pulled up over the face, list balaclava as the head item. Then answer these lines in exactly this format:\n' +
-  'PERSON_COUNT: <number of people in the photo>\n' +
+  'PERSON_COUNT: <number of people who are clear subjects of the photo — in the foreground or in focus. Do NOT count people who appear only in the background, out of focus or blurred>\n' +
+  'BACKGROUND_PEOPLE: <yes or no — yes if one or more additional people appear ONLY in the background, out of focus or blurred, and are not subjects of the photo>\n' +
   'ANATOMY_OK: <yes or no — no if the runner has extra, missing, or deformed limbs, hands, or fingers>\n' +
   'FACE_OK: <yes or no — no if the face is distorted, melted, or uncanny>\n' +
   'LOGOS_OR_TEXT: <yes or no — yes if any visible brand logo or text appears on the clothing>\n' +
@@ -520,6 +540,14 @@ export function evaluateGate(
   const pcMatch = pcRaw ? pcRaw.match(/\d+/) : null
   const pcN = pcMatch ? parseInt(pcMatch[0], 10) : null
   if (pcN !== 1) fails.push({ cls: 'person', message: `person_count=${JSON.stringify(pcRaw)}` })
+  // Background people (ruling 9 — Sol, 2026-11-03 ~10:14 CST): the
+  // enumeration counts clear subjects in PERSON_COUNT; additional
+  // figures who are background-only and blurred are reported as
+  // BACKGROUND_PEOPLE and are a note, never a failure. A second
+  // CLEAR subject still fails on the count above.
+  if (pcN === 1 && ans.background_people === 'yes') {
+    notes.push('additional people visible only as background figures, out of focus or blurred (ruling 9: not a failure)')
+  }
   if (ans.anatomy_ok !== 'yes') fails.push({ cls: 'anatomy', message: `anatomy_ok=${JSON.stringify(ans.anatomy_ok ?? null)}` })
   if (ans.face_ok !== 'yes') fails.push({ cls: 'face', message: `face_ok=${JSON.stringify(ans.face_ok ?? null)}` })
   if (ans.pose_ok !== 'yes') fails.push({ cls: 'pose', message: `pose_ok=${JSON.stringify(ans.pose_ok ?? null)} (ruling 4)` })
@@ -552,7 +580,15 @@ export function evaluateGate(
   } else if (seen.head !== exp.head) {
     fails.push({ cls: 'head', message: `head seen ${seen.head} != prompt ${exp.head}` })
   }
-  if (seen.hands !== exp.hands) {
+  // Handwear (ruling 8 — Sol, 2026-11-03 ~10:14 CST): coverage is
+  // what is verified, not the covering's form — the ruling-7
+  // principle extended to hands. Both non-null with different forms
+  // (gloves for mittens, mittens for gloves) = satisfied, noted.
+  // Absence (seen null vs prescribed) and unprescribed handwear
+  // (seen vs prompt null) keep the exact-match failure below.
+  if (exp.hands !== null && seen.hands !== null && seen.hands !== exp.hands) {
+    notes.push(`hands seen ${seen.hands} vs prompt ${exp.hands} — covered hands satisfy the handwear prescription (coverage ruling 2026-11-03)`)
+  } else if (seen.hands !== exp.hands) {
     fails.push({ cls: 'hands', message: `hands seen ${seen.hands} != prompt ${exp.hands}` })
   }
   // Sunglasses (ruling 6 — V1, Sol 2026-11-02 ~21:28 EST): omission
@@ -606,7 +642,8 @@ export function parseGateText(text: string): {
 } {
   const answers: Record<string, string | null> = {}
   const fields: Array<[string, string]> = [
-    ['PERSON_COUNT', 'person_count'], ['ANATOMY_OK', 'anatomy_ok'],
+    ['PERSON_COUNT', 'person_count'], ['BACKGROUND_PEOPLE', 'background_people'],
+    ['ANATOMY_OK', 'anatomy_ok'],
     ['FACE_OK', 'face_ok'], ['LOGOS_OR_TEXT', 'logos_or_text'],
     ['TWO_WATCHES', 'two_watches'], ['POSE_OK', 'pose_ok'],
     ['CONSTRUCTION_OK', 'construction_ok']

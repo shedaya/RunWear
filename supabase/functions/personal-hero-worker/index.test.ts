@@ -379,6 +379,55 @@ Deno.test('gate: ruling 7 (balaclava clarification) — a covered head satisfies
   assertEquals(parsed.seen.head, 'balaclava')
 })
 
+Deno.test('gate: ruling 8 — covered hands satisfy handwear in either form; absence and unprescribed handwear still fail', () => {
+  const exp = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'mittens' })
+  const gloves = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'gloves' })
+  const v = evaluateGate('CLEAR', 'MIDDAY', exp, gloves, okAnswers, 'clear', 'daylight')
+  assertEquals(v.pass, true)
+  assert(v.notes.some(n => n.includes('coverage ruling 2026-11-03')), 'form difference is recorded as a note')
+  // The reverse direction satisfies too — mittens for gloves.
+  const expGloves = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'gloves' })
+  const mittens = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'mittens' })
+  assertEquals(evaluateGate('CLEAR', 'MIDDAY', expGloves, mittens, okAnswers, 'clear', 'daylight').pass, true)
+  // Absence is not excused: bare hands where handwear is prescribed fail.
+  const bare = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: null })
+  const vBare = evaluateGate('CLEAR', 'MIDDAY', exp, bare, okAnswers, 'clear', 'daylight')
+  assertEquals(vBare.pass, false)
+  assert(vBare.failures.some(f => f.cls === 'hands'))
+  // Handwear seen where none is prescribed still fails (additions
+  // behavior unchanged by the coverage ruling).
+  const expNone = classes({ topBase: 'short', bottom: 'shorts' })
+  const covered = classes({ topBase: 'short', bottom: 'shorts', hands: 'gloves' })
+  const vUn = evaluateGate('CLEAR', 'MIDDAY', expNone, covered, okAnswers, 'clear', 'daylight')
+  assertEquals(vUn.pass, false)
+  assert(vUn.failures.some(f => f.cls === 'hands'))
+})
+
+Deno.test('gate: ruling 9 — blurred background people are a note; a second clear subject still fails', () => {
+  const exp = classes({ topBase: 'short', bottom: 'shorts', sunglasses: true })
+  const seen = classes({ topBase: 'short', bottom: 'shorts', sunglasses: true })
+  const bg = evaluateGate('CLEAR', 'MIDDAY', exp, seen,
+    { ...okAnswers, background_people: 'yes' }, 'clear', 'daylight')
+  assertEquals(bg.pass, true)
+  assert(bg.notes.some(n => n.includes('ruling 9')), 'background figures are recorded as a note')
+  assertEquals(bg.failures.length, 0)
+  // A second CLEAR subject still fails on the count, background flag or not.
+  const two = evaluateGate('CLEAR', 'MIDDAY', exp, seen,
+    { ...okAnswers, person_count: '2', background_people: 'yes' }, 'clear', 'daylight')
+  assertEquals(two.pass, false)
+  assert(two.failures.some(f => f.cls === 'person'))
+  // Stored reads under the old prompt carry no background field:
+  // an old count above 1 keeps failing (no retroactive change).
+  const legacy = evaluateGate('CLEAR', 'MIDDAY', exp, seen,
+    { ...okAnswers, person_count: '3' }, 'clear', 'daylight')
+  assertEquals(legacy.pass, false)
+  assert(legacy.failures.some(f => f.cls === 'person'))
+  // The enumeration read parses the new field.
+  const parsed = parseGateText(['PERSON_COUNT: 1', 'BACKGROUND_PEOPLE: yes'].join('\n'))
+  assertEquals(parsed.answers.background_people, 'yes')
+  assertEquals(parsed.answers.person_count, '1')
+})
+
 Deno.test('no repair stage: a gate-failed draw performs no fill call and no repair storage write (Sol ruling 2026-11-03)', () => {
   // The repair stage was dropped by Sol's ruling (2026-11-03 04:13
   // EST) after the persisting re-battery measured rescue at 0/15.
