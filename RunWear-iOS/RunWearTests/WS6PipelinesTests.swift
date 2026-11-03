@@ -371,11 +371,15 @@ final class WS6PipelinesTests: XCTestCase {
         XCTAssertEqual(baked.cgImage?.height, 80)
     }
 
-    func testRotatedClockwiseTurnsPixelsByTheNamedAmount() {
-        // Four quadrant markers on a 100×200 portrait fixture:
-        // TL red, TR green, BL blue, BR yellow (UIKit space:
-        // y grows downward from the top).
-        let image = testRenderer(size: CGSize(width: 100, height: 200)).image { ctx in
+    /// Four quadrant markers on a 100×200 portrait fixture:
+    /// TL red, TR green, BL blue, BR yellow (UIKit space: y grows
+    /// downward from the top). Each rotation claim below is its
+    /// OWN test method — deliberately: this workflow's log
+    /// formatter strips assertion values, so the per-method
+    /// pass/fail list is the diagnostic of record for which
+    /// quadrant landed where.
+    private func quadrantFixture() -> UIImage {
+        testRenderer(size: CGSize(width: 100, height: 200)).image { ctx in
             UIColor.red.setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: 50, height: 100))
             UIColor.green.setFill()
@@ -385,31 +389,74 @@ final class WS6PipelinesTests: XCTestCase {
             UIColor.yellow.setFill()
             ctx.fill(CGRect(x: 50, y: 100, width: 50, height: 100))
         }
-        // A 90° CLOCKWISE turn (200×100): TL←BL, TR←TL, BL←BR,
-        // BR←TR — the top edge becomes the right edge.
-        let turned = PhotoQualityChecker.rotatedClockwise(image, degrees: 90)
-        XCTAssertEqual(turned.cgImage?.width, 200)
-        XCTAssertEqual(turned.cgImage?.height, 100)
-        XCTAssertEqual(pixelColor(turned, x: 50, y: 25), "blue")
-        XCTAssertEqual(pixelColor(turned, x: 150, y: 25), "red")
-        XCTAssertEqual(pixelColor(turned, x: 50, y: 75), "yellow")
-        XCTAssertEqual(pixelColor(turned, x: 150, y: 75), "green")
-        // 180° (100×200): TL←BR, TR←BL, BL←TR, BR←TL.
-        let flipped = PhotoQualityChecker.rotatedClockwise(image, degrees: 180)
-        XCTAssertEqual(flipped.cgImage?.width, 100)
-        XCTAssertEqual(flipped.cgImage?.height, 200)
-        XCTAssertEqual(pixelColor(flipped, x: 25, y: 50), "yellow")
-        XCTAssertEqual(pixelColor(flipped, x: 75, y: 50), "blue")
-        XCTAssertEqual(pixelColor(flipped, x: 25, y: 150), "green")
-        XCTAssertEqual(pixelColor(flipped, x: 75, y: 150), "red")
-        // 270° clockwise: TL←TR, TR←BR, BL←TL, BR←BL.
+    }
+
+    func testRotatedClockwiseDimensionsSwapAndRestore() {
+        let image = quadrantFixture()
+        let turned90 = PhotoQualityChecker.rotatedClockwise(image, degrees: 90)
+        XCTAssertEqual(turned90.cgImage?.width, 200)
+        XCTAssertEqual(turned90.cgImage?.height, 100)
+        let turned180 = PhotoQualityChecker.rotatedClockwise(image, degrees: 180)
+        XCTAssertEqual(turned180.cgImage?.width, 100)
+        XCTAssertEqual(turned180.cgImage?.height, 200)
         let turned270 = PhotoQualityChecker.rotatedClockwise(image, degrees: 270)
         XCTAssertEqual(turned270.cgImage?.width, 200)
         XCTAssertEqual(turned270.cgImage?.height, 100)
-        XCTAssertEqual(pixelColor(turned270, x: 50, y: 25), "green")
-        XCTAssertEqual(pixelColor(turned270, x: 150, y: 25), "yellow")
-        XCTAssertEqual(pixelColor(turned270, x: 50, y: 75), "red")
-        XCTAssertEqual(pixelColor(turned270, x: 150, y: 75), "blue")
+    }
+
+    // A 90° CLOCKWISE turn: TL←BL, TR←TL, BL←BR, BR←TR — the
+    // top edge becomes the right edge.
+    func testTurn90TopLeftIsBlue() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 90)
+        XCTAssertEqual(pixelColor(turned, x: 50, y: 25), "blue")
+    }
+    func testTurn90TopRightIsRed() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 90)
+        XCTAssertEqual(pixelColor(turned, x: 150, y: 25), "red")
+    }
+    func testTurn90BottomLeftIsYellow() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 90)
+        XCTAssertEqual(pixelColor(turned, x: 50, y: 75), "yellow")
+    }
+    func testTurn90BottomRightIsGreen() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 90)
+        XCTAssertEqual(pixelColor(turned, x: 150, y: 75), "green")
+    }
+
+    // 180°: TL←BR, TR←BL, BL←TR, BR←TL.
+    func testTurn180TopLeftIsYellow() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 180)
+        XCTAssertEqual(pixelColor(turned, x: 25, y: 50), "yellow")
+    }
+    func testTurn180TopRightIsBlue() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 180)
+        XCTAssertEqual(pixelColor(turned, x: 75, y: 50), "blue")
+    }
+    func testTurn180BottomLeftIsGreen() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 180)
+        XCTAssertEqual(pixelColor(turned, x: 25, y: 150), "green")
+    }
+    func testTurn180BottomRightIsRed() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 180)
+        XCTAssertEqual(pixelColor(turned, x: 75, y: 150), "red")
+    }
+
+    // 270° clockwise: TL←TR, TR←BR, BL←TL, BR←BL.
+    func testTurn270TopLeftIsGreen() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 270)
+        XCTAssertEqual(pixelColor(turned, x: 50, y: 25), "green")
+    }
+    func testTurn270TopRightIsYellow() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 270)
+        XCTAssertEqual(pixelColor(turned, x: 150, y: 25), "yellow")
+    }
+    func testTurn270BottomLeftIsRed() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 270)
+        XCTAssertEqual(pixelColor(turned, x: 50, y: 75), "red")
+    }
+    func testTurn270BottomRightIsBlue() {
+        let turned = PhotoQualityChecker.rotatedClockwise(quadrantFixture(), degrees: 270)
+        XCTAssertEqual(pixelColor(turned, x: 150, y: 75), "blue")
     }
 
     /// Sample one pixel by re-rendering the image through a
