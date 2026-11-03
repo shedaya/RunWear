@@ -335,6 +335,9 @@ struct WearIveRunDayView: View {
     @State private var shareKind: ShareKind?
     @State private var posterImage: Image?
     @State private var kitImage: Image?
+    /// Garment renders prefetched as images — ImageRenderer does
+    /// not wait for AsyncImage, so the Kit Card renders from these.
+    @State private var kitThumbnails: [String: UIImage] = [:]
 
     private enum ShareKind: Identifiable {
         case poster, kit
@@ -392,6 +395,7 @@ struct WearIveRunDayView: View {
             shareSheet(for: kind)
         }
         .task {
+            kitThumbnails = await loadKitThumbnails()
             posterImage = await renderPoster()
             kitImage = await renderKitCard()
         }
@@ -429,10 +433,23 @@ struct WearIveRunDayView: View {
 
     @MainActor
     private func renderKitCard() async -> Image? {
-        let view = KitCardView(entry: entry, genderPreference: genderPreference)
+        let view = KitCardView(entry: entry, genderPreference: genderPreference, thumbnails: kitThumbnails)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 3
         return renderer.image.map { Image(uiImage: $0) }
+    }
+
+    private func loadKitThumbnails() async -> [String: UIImage] {
+        var result: [String: UIImage] = [:]
+        for key in entry.itemKeys {
+            guard let urlString = RunWearEngine.ClothingThumbnailService.shared
+                    .getThumbnailUrl(itemName: key, genderName: genderPreference.rawValue.uppercased()),
+                  let url = URL(string: urlString),
+                  let (data, _) = try? await URLSession.shared.data(from: url),
+                  let image = UIImage(data: data) else { continue }
+            result[key] = image
+        }
+        return result
     }
 
     private func loadHeroUIImage() async -> UIImage? {
@@ -542,6 +559,9 @@ struct MorningPosterView: View {
 struct KitCardView: View {
     let entry: WearIveRunEntry
     let genderPreference: GenderPreference
+    /// Prefetched garment renders by item key (the live view
+    /// passes these; previews may omit them).
+    var thumbnails: [String: UIImage] = [:]
 
     private func thumbnailURL(forKey key: String) -> URL? {
         RunWearEngine.ClothingThumbnailService.shared
@@ -561,17 +581,25 @@ struct KitCardView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(Array(zip(entry.itemNames, entry.itemKeys).enumerated()), id: \.offset) { _, pair in
                     VStack(spacing: 6) {
-                        AsyncImage(url: thumbnailURL(forKey: pair.1)) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().aspectRatio(contentMode: .fit)
-                            default:
-                                Rectangle()
-                                    .fill(Color(hex: "F5F1E8"))
-                                    .overlay(
-                                        Image(systemName: "tshirt")
-                                            .foregroundColor(Color(hex: "5F5B52"))
-                                    )
+                        Group {
+                            if let thumbnail = thumbnails[pair.1] {
+                                Image(uiImage: thumbnail)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                            } else {
+                                AsyncImage(url: thumbnailURL(forKey: pair.1)) { phase in
+                                    switch phase {
+                                    case .success(let image):
+                                        image.resizable().aspectRatio(contentMode: .fit)
+                                    default:
+                                        Rectangle()
+                                            .fill(Color(hex: "F5F1E8"))
+                                            .overlay(
+                                                Image(systemName: "tshirt")
+                                                    .foregroundColor(Color(hex: "5F5B52"))
+                                            )
+                                    }
+                                }
                             }
                         }
                         .frame(height: 90)
