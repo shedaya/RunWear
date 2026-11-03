@@ -296,6 +296,15 @@ class MainActivity : ComponentActivity() {
                             onUseStandardPhotos = {
                                 makeItMeViewModel.decideForkAsStock()
                                 onboardingJustCompleted = false
+                            },
+                            // WS-6 (fork Back): Back at the flow's
+                            // root exits the flow the same way the
+                            // upload flow's root exit does — as the
+                            // settled stock end-state — and NEVER
+                            // falls through to finish the activity.
+                            onBack = {
+                                makeItMeViewModel.decideForkAsStock()
+                                onboardingJustCompleted = false
                             }
                         )
                     }

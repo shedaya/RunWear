@@ -74,13 +74,41 @@ import com.runwear.app.ui.theme.RunWearColors
 // the top: it is the subject of the sentence.
 // ============================================================================
 
+/** What a system Back press does on the onboarding fork screen. */
+internal enum class ForkBackAction { EXIT_FLOW }
+
+/**
+ * WS-6 (BACKLOG open item from WS-5's Android lane): the fork's back
+ * policy, mirroring [UploadBackPolicy] — Back steps back within a
+ * flow and exits only at its root. The fork is a single screen and
+ * IS the Make It Me onboarding flow's root (its one step forward is
+ * the upload flow, whose own root-exit the fork's exit mirrors:
+ * leave as stock, the flow's settled end-state). Before this, the
+ * fork was a boolean overlay with NO BackHandler: system Back fell
+ * through to the activity and closed the app — the F-2 class on the
+ * one surface WS-5's conversion did not reach.
+ */
+internal object ForkBackPolicy {
+    fun actionFor(): ForkBackAction = ForkBackAction.EXIT_FLOW
+}
+
 @Composable
 fun MakeItMeForkScreen(
     heroImageUrl: String?,
     onUseMyPhotos: () -> Unit,
     onUseStandardPhotos: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** System Back at the flow's root (see [ForkBackPolicy]). */
+    onBack: () -> Unit = {}
 ) {
+    // The fork owns its Back press — it never falls through to the
+    // activity (which would close the app from onboarding's last
+    // step). Root exit only, per ForkBackPolicy.
+    androidx.activity.compose.BackHandler {
+        when (ForkBackPolicy.actionFor()) {
+            ForkBackAction.EXIT_FLOW -> onBack()
+        }
+    }
     Column(
         modifier = modifier
             .fillMaxSize()
