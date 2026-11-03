@@ -184,7 +184,10 @@ struct WeatherOutfitView: View {
                     comfortLevel: $viewModel.comfortLevel,
                     currentCombination: { viewModel.currentPersonalCombination }
                 )
-                .presentationDetents([.medium, .large])
+                // WS-5 (§1.3 Settings): full height only — no
+                // detents, no partial rest; the Form inside is
+                // the sheet's one scroll consumer.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showDatePicker) {
@@ -232,7 +235,11 @@ struct WeatherOutfitView: View {
                     contextLines: weatherContextLines,
                     isPresented: weatherDetailPresented
                 )
-                .presentationDetents([.medium, .large])
+                // WS-5 (§1.3): the detail content scrolls (its
+                // own ScrollView), so the sheet rests at .large
+                // only — never at a partial detent over scrolling
+                // content.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showLocationPicker) {
@@ -278,7 +285,11 @@ struct WeatherOutfitView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showFeedbackSheet) {
+            // WS-5 (§1.3): named detent — the feedback Form
+            // scrolls, so .large only.
             FeedbackSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         // Neutral THREE-door rating moment (frame 49): feedback
         // first, then the rating door, then not-now. Any door

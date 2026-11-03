@@ -477,8 +477,14 @@ private struct FirstLookView: View {
             .padding(.horizontal, 24)
             .padding(.top, 24)
         }
+        // WS-5 (§1.3): named detent — the paywall's content
+        // scrolls, so .large only. Dismissal (any path: swipe,
+        // purchase, restore) still completes onboarding via
+        // onDismiss, exactly as before.
         .sheet(isPresented: $showPremiumSheet, onDismiss: onComplete) {
             MakeItMeSubscriptionSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 

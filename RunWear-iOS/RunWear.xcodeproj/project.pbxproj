@@ -156,6 +156,10 @@
 		L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
 		L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
 		L10002000000000000000003 /* WearIveRunElementMachineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000002 /* WearIveRunElementMachineTests.swift */; };
+		W50002000000000000000001 /* SettingsInventory.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000001 /* SettingsInventory.swift */; };
+		W50002000000000000000002 /* SettingsInventory.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000001 /* SettingsInventory.swift */; };
+		W50002000000000000000003 /* SettingsInventoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000002 /* SettingsInventoryTests.swift */; };
+		W50002000000000000000004 /* SheetDisciplineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W50001000000000000000003 /* SheetDisciplineTests.swift */; };
 		F10002000000000000000106 /* PersonalHeroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000106 /* PersonalHeroStore.swift */; };
 		F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
@@ -335,6 +339,9 @@
 		K10001000000000000000002 /* HomeCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCompositionTests.swift; sourceTree = "<group>"; };
 		L10001000000000000000001 /* WearIveRunElementMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachine.swift; sourceTree = "<group>"; };
 		L10001000000000000000002 /* WearIveRunElementMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachineTests.swift; sourceTree = "<group>"; };
+		W50001000000000000000001 /* SettingsInventory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInventory.swift; sourceTree = "<group>"; };
+		W50001000000000000000002 /* SettingsInventoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsInventoryTests.swift; sourceTree = "<group>"; };
+		W50001000000000000000003 /* SheetDisciplineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetDisciplineTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -411,6 +418,7 @@
 				H10001000000000000000001 /* SimplePlace.swift */,
 				K10001000000000000000001 /* HomeHandoffGeometry.swift */,
 				L10001000000000000000001 /* WearIveRunElementMachine.swift */,
+				W50001000000000000000001 /* SettingsInventory.swift */,
 				F10001000000000000000101 /* PersonalHeroModels.swift */,
 			);
 			path = Models;
@@ -582,6 +590,8 @@
 				J10001000000000000000002 /* StateTruthTests.swift */,
 				K10001000000000000000002 /* HomeCompositionTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
+				W50001000000000000000002 /* SettingsInventoryTests.swift */,
+				W50001000000000000000003 /* SheetDisciplineTests.swift */,
 				C10001000000000000000032 /* GreatVibesFontTests.swift */,
 				C1000100000000000000003B /* HeroFallbackGenderTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
@@ -806,6 +816,7 @@
 				H10002000000000000000001 /* SimplePlace.swift in Sources */,
 				K10002000000000000000001 /* HomeHandoffGeometry.swift in Sources */,
 				L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */,
+				W50002000000000000000001 /* SettingsInventory.swift in Sources */,
 				G10002000000000000000001 /* RW26CollectionModels.swift in Sources */,
 				G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */,
 				G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */,
@@ -896,12 +907,15 @@
 				H10002000000000000000002 /* SimplePlace.swift in Sources */,
 				K10002000000000000000002 /* HomeHandoffGeometry.swift in Sources */,
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
+				W50002000000000000000002 /* SettingsInventory.swift in Sources */,
 				G10002000000000000000002 /* RW26CollectionModels.swift in Sources */,
 				G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */,
 				H10002000000000000000003 /* SimplePlaceTests.swift in Sources */,
 				J10002000000000000000003 /* StateTruthTests.swift in Sources */,
 				K10002000000000000000003 /* HomeCompositionTests.swift in Sources */,
 				L10002000000000000000003 /* WearIveRunElementMachineTests.swift in Sources */,
+				W50002000000000000000003 /* SettingsInventoryTests.swift in Sources */,
+				W50002000000000000000004 /* SheetDisciplineTests.swift in Sources */,
 				C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */,
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
 				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,

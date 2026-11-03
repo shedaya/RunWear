@@ -46,95 +46,35 @@ struct SettingsModal: View {
         return "\(short) (\(build))"
     }
 
+    /// WS-5 (D-14): the Form composes the SettingsInventory
+    /// registry — one section per entry, in registry order, in
+    /// EVERY configuration. The registry's `sectionsFor` is the
+    /// invariant: no section is gated on the feature flag or the
+    /// store's mode, so no shipped configuration can make a
+    /// section emit nothing (the pre-WS-5 form gated the whole
+    /// Make It Me section on MakeItMeAvailability, and the
+    /// Delete-my-data row lived inside that section — with the
+    /// flag OFF both silently vanished, the D-14 mechanism).
+    private var inventorySections: [SettingsSectionID] {
+        SettingsInventory.sectionsFor(
+            makeItMeEnabled: MakeItMeAvailability.isEnabled,
+            makeItMeMode: makeItMeMode
+        )
+    }
+
+    private var makeItMeMode: SettingsMakeItMeMode {
+        switch personalStore.mode {
+        case .stock: return .stock
+        case .free: return .free
+        case .subscribed: return .subscribed
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                // RW-25: native segmented appearance picker
-                // (System / Light / Dark) — Form idioms only.
-                Section("Appearance") {
-                    Picker("Appearance", selection: $appearancePreference) {
-                        ForEach(AppearancePreference.allCases) { preference in
-                            Text(preference.displayName).tag(preference)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                }
-
-                Section("Temperature Unit") {
-                    TemperatureUnitPicker(unit: $temperatureUnit)
-                }
-
-                Section("Fit Preference") {
-                    FitPreferencePicker(preference: $genderPreference)
-                }
-
-                Section("Body Temperature") {
-                    ComfortLevelControl(comfortLevel: $comfortLevel)
-                }
-
-                // RW-26: "Help improve the app" — copy and default
-                // IDENTICAL to Android's settings sheet (§8 Q1).
-                // WS-8 (D-25 iOS residue): this section's helper
-                // text renders in the design's secondary token pair
-                // (AppTheme.inkSecondary), NOT system .secondary —
-                // the system color composites to ≈3.3–3.4:1 on
-                // light grounds, below the 4.5:1 text floor; the
-                // token pair clears it in both modes (pinned in
-                // RW26Phase2Tests).
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle(isOn: $analyticsOptIn) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Help improve the app")
-                                    .font(.appSecondary.weight(.medium))
-                                Text("Count how the app is used")
-                                    .font(.appFootnote)
-                                    .foregroundColor(AppTheme.inkSecondary)
-                            }
-                        }
-                        Text("We count how the app is used — which features get used and where recommendations miss — and nothing else. No account, no advertising ID, and your location never leaves the phone more precisely than the city name. Turn this off and nothing is counted or sent.")
-                            .font(.appFootnote)
-                            .foregroundColor(AppTheme.inkSecondary)
-                        if !analyticsOptIn {
-                            Text("Off. Nothing is being counted.")
-                                .font(.appFootnote.weight(.medium))
-                        }
-                        Text("If the app crashes, it can send us the technical details so we can fix it. This happens only after a crash, and only with your permission here.")
-                            .font(.appFootnote)
-                            .foregroundColor(AppTheme.inkSecondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                // RW-14 "Make it me" (spec §3, states S1–S14).
-                // OFF (see MakeItMeAvailability): the section is not
-                // rendered at all, so every sheet and alert it could
-                // present (opt-in, my photos, subscription) is
-                // unreachable — there is no presenter left.
-                if MakeItMeAvailability.isEnabled {
-                    MakeItMeSettingsSection(
-                        presentation: makeItMePresentation,
-                        genderPreference: genderPreference,
-                        currentCombination: currentCombination
-                    )
-                }
-
-                // R-15: the always-available feedback + rating doors.
-                Section("Support") {
-                    Button {
-                        showFeedback = true
-                    } label: {
-                        Label("Send Feedback", systemImage: "envelope")
-                    }
-
-                    Link(destination: Self.reviewURL) {
-                        Label("Rate RunWear", systemImage: "star")
-                    }
-                }
-
-                Section("About") {
-                    LabeledContent("Version", value: appVersion)
+                ForEach(inventorySections) { section in
+                    inventorySection(section)
                 }
             }
             .navigationTitle("Settings")
@@ -144,8 +84,15 @@ struct SettingsModal: View {
                     Button("Done") { isPresented = false }
                 }
             }
+            // WS-5 (§1.3): every sheet on this surface rests at a
+            // NAMED detent. Both sheets below carry scrolling
+            // content (a Form; the Make It Me flows/photos/paywall
+            // ScrollViews), so both are .large only — no partial
+            // rest with a second scroll consumer.
             .sheet(isPresented: $showFeedback) {
                 FeedbackSheet()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             // RW-16.7: the ONE sheet slot + ONE alert slot for
             // the whole "Make it me" surface, keyed by the
@@ -154,6 +101,8 @@ struct SettingsModal: View {
             // dismiss-and-represent chain.
             .sheet(item: $makeItMePresentation.sheet) { sheet in
                 makeItMeSheetContent(sheet)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .alert(
                 makeItMeAlertTitle,
@@ -163,6 +112,132 @@ struct SettingsModal: View {
                 makeItMeAlertButtons(alert)
             } message: { alert in
                 Text(makeItMeAlertMessage(alert))
+            }
+        }
+    }
+
+    // MARK: - Inventory sections (WS-5)
+
+    /// One Form section per registry entry. Content is each
+    /// section's existing body, moved verbatim; the switch exists
+    /// so the Form's composition IS the registry — a section
+    /// cannot be dropped from the sheet without dropping it from
+    /// SettingsInventory, which the gate tests pin.
+    @ViewBuilder
+    private func inventorySection(_ section: SettingsSectionID) -> some View {
+        switch section {
+        case .appearance:
+            // RW-25: native segmented appearance picker
+            // (System / Light / Dark) — Form idioms only.
+            Section("Appearance") {
+                Picker("Appearance", selection: $appearancePreference) {
+                    ForEach(AppearancePreference.allCases) { preference in
+                        Text(preference.displayName).tag(preference)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+
+        case .temperatureUnit:
+            Section("Temperature Unit") {
+                TemperatureUnitPicker(unit: $temperatureUnit)
+            }
+
+        case .fitPreference:
+            Section("Fit Preference") {
+                FitPreferencePicker(preference: $genderPreference)
+            }
+
+        case .bodyTemperature:
+            Section("Body Temperature") {
+                ComfortLevelControl(comfortLevel: $comfortLevel)
+            }
+
+        case .helpImprove:
+            // RW-26: "Help improve the app" — copy and default
+            // IDENTICAL to Android's settings sheet (§8 Q1).
+            // WS-8 (D-25 iOS residue): this section's helper
+            // text renders in the design's secondary token pair
+            // (AppTheme.inkSecondary), NOT system .secondary —
+            // the system color composites to ≈3.3–3.4:1 on
+            // light grounds, below the 4.5:1 text floor; the
+            // token pair clears it in both modes (pinned in
+            // RW26Phase2Tests).
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Toggle(isOn: $analyticsOptIn) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Help improve the app")
+                                .font(.appSecondary.weight(.medium))
+                            Text("Count how the app is used")
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                    }
+                    Text("We count how the app is used — which features get used and where recommendations miss — and nothing else. No account, no advertising ID, and your location never leaves the phone more precisely than the city name. Turn this off and nothing is counted or sent.")
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
+                    if !analyticsOptIn {
+                        Text("Off. Nothing is being counted.")
+                            .font(.appFootnote.weight(.medium))
+                    }
+                    Text("If the app crashes, it can send us the technical details so we can fix it. This happens only after a crash, and only with your permission here.")
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+                .padding(.vertical, 4)
+            }
+
+        case .makeItMe:
+            // RW-14 "Make it me" (spec §3, states S1–S14),
+            // composed UNCONDITIONALLY (WS-5): with the flag OFF
+            // the section renders the plain not-started row
+            // (frame 36); the flag gates the feature's function
+            // behind the row, not the section's existence.
+            MakeItMeSettingsSection(
+                presentation: makeItMePresentation,
+                featureEnabled: MakeItMeAvailability.isEnabled,
+                genderPreference: genderPreference,
+                currentCombination: currentCombination
+            )
+
+        case .deleteMyData:
+            // WS-5 (D-14): Delete my data is its OWN section
+            // (RW-16.30 decision 5a: the account-level erasure,
+            // offered in every mode and every flag state — a
+            // stock-mode user still has an account). It used to
+            // be a row inside the Make It Me section, so it
+            // vanished whenever that section emitted nothing;
+            // now Settings hosts it directly, and its
+            // confirmation rides the same single alert slot.
+            Section {
+                Button(role: .destructive) {
+                    makeItMePresentation.alert = .confirmDeleteData
+                } label: {
+                    Text("Delete my data")
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+        case .support:
+            // R-15: the always-available feedback + rating doors.
+            Section("Support") {
+                Button {
+                    showFeedback = true
+                } label: {
+                    Label("Send Feedback", systemImage: "envelope")
+                }
+
+                Link(destination: Self.reviewURL) {
+                    Label("Rate RunWear", systemImage: "star")
+                }
+            }
+
+        case .about:
+            Section("About") {
+                LabeledContent("Version", value: appVersion)
             }
         }
     }

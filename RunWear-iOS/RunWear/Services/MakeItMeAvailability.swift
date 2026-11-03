@@ -15,9 +15,13 @@ import Foundation
 //     "personal layer is off (stock behavior)" state: pool heroes
 //     only, no personal section, no upsell card, no personal flag
 //     surface.
-//   * SettingsModal — the "Make it me" section is not rendered,
-//     so its sheets (opt-in, my photos, subscription) and alerts
-//     have no presenter and cannot be reached.
+//   * SettingsModal — the feature's FUNCTION is unreachable:
+//     the personal store is never wired, so no opt-in commit,
+//     generation, or billing can run. (WS-5/D-14: the Settings
+//     INVENTORY is a different matter — the Make It Me section
+//     still renders its plain not-started row with the flag OFF,
+//     and Delete-my-data is reachable on its own row; the flag
+//     gates what the rows DO, never whether the sections exist.)
 //   * Onboarding — the first-look fork is not shown; the first
 //     look completes onboarding through the stock door only.
 //

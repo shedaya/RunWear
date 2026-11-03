@@ -1,0 +1,174 @@
+import XCTest
+
+/// WS-5 (D-14) — Settings completeness as a TEST, not a review
+/// finding. The designed inventory (frames 35–39; notes §8H) must
+/// render in EVERY shipped configuration: both Make It Me flag
+/// states × all three coded modes. If a registered section ever
+/// emits nothing in a configuration, one of these tests fails.
+///
+/// The iOS half of the invariant the Android lane pins against
+/// the same registry concept (SettingsInventory.kt): same nine
+/// section families, each platform's own Form order.
+final class SettingsInventoryTests: XCTestCase {
+
+    func testTheRegistryIsTheDesignedInventoryInDesignedOrder() {
+        XCTAssertEqual(
+            SettingsInventory.sections,
+            [
+                .appearance,
+                .temperatureUnit,
+                .fitPreference,
+                .bodyTemperature,
+                .helpImprove,
+                .makeItMe,
+                .deleteMyData,
+                .support,
+                .about,
+            ]
+        )
+    }
+
+    func testEveryConfigurationRendersTheFullInventory() {
+        for enabled in [false, true] {
+            for mode in SettingsMakeItMeMode.allCases {
+                XCTAssertEqual(
+                    SettingsInventory.sectionsFor(makeItMeEnabled: enabled, makeItMeMode: mode),
+                    SettingsInventory.sections,
+                    "flag=\(enabled) mode=\(mode) must render the full inventory — no section emits nothing"
+                )
+            }
+        }
+    }
+
+    func testAppearanceIsFirstAndAboutIsLast() {
+        XCTAssertEqual(SettingsInventory.sections.first, .appearance)
+        XCTAssertEqual(SettingsInventory.sections.last, .about)
+    }
+
+    func testDeleteMyDataIsItsOwnSectionAfterMakeItMeAndBeforeSupport() {
+        let sections = SettingsInventory.sections
+        let delete = sections.firstIndex(of: .deleteMyData)!
+        XCTAssertGreaterThan(delete, sections.firstIndex(of: .makeItMe)!)
+        XCTAssertLessThan(delete, sections.firstIndex(of: .support)!)
+    }
+
+    // MARK: - The Make It Me section's rows (frames 35–37)
+
+    func testMakeItMeSectionPresentsRowsInEveryConfiguration() {
+        for enabled in [false, true] {
+            for mode in SettingsMakeItMeMode.allCases {
+                XCTAssertFalse(
+                    MakeItMeSettingsPresentation.rows(makeItMeEnabled: enabled, mode: mode).isEmpty,
+                    "flag=\(enabled) mode=\(mode) must present at least one row"
+                )
+            }
+        }
+    }
+
+    func testFlagOffPresentsExactlyThePlainNotStartedRow() {
+        for mode in SettingsMakeItMeMode.allCases {
+            XCTAssertEqual(
+                MakeItMeSettingsPresentation.rows(makeItMeEnabled: false, mode: mode),
+                [.notStarted],
+                "with the flag OFF every mode shows frame 36's plain not-started row"
+            )
+        }
+    }
+
+    func testEachEnabledModePresentsItsDesignedRows() {
+        XCTAssertEqual(
+            MakeItMeSettingsPresentation.rows(makeItMeEnabled: true, mode: .stock),
+            [.notStarted]
+        )
+        XCTAssertEqual(
+            MakeItMeSettingsPresentation.rows(makeItMeEnabled: true, mode: .free),
+            [.yourPhotos, .premium, .deletePhotos]
+        )
+        XCTAssertEqual(
+            MakeItMeSettingsPresentation.rows(makeItMeEnabled: true, mode: .subscribed),
+            [.yourPhotos, .manageSubscription, .deletePhotos]
+        )
+    }
+
+    func testRowTitlesAreTheShippedStrings() {
+        XCTAssertEqual(MakeItMeSettingsRow.notStarted.title, "See yourself in every outfit")
+        XCTAssertEqual(MakeItMeSettingsRow.yourPhotos.title, "Your photos")
+        XCTAssertEqual(MakeItMeSettingsRow.premium.title, "Premium")
+        XCTAssertEqual(MakeItMeSettingsRow.manageSubscription.title, "Manage subscription")
+        XCTAssertEqual(MakeItMeSettingsRow.deletePhotos.title, "Delete my photos")
+    }
+
+    // MARK: - Source pins (the Form IS the registry)
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    func testSettingsFormComposesTheRegistryInOrder_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(settings.contains("SettingsInventory.sectionsFor("),
+                      "the Form's sections must come from the registry")
+        XCTAssertTrue(settings.contains("ForEach(inventorySections)"),
+                      "the Form must iterate the registry, one section per entry")
+        // The section switch renders the registry in registry
+        // order — a reordered or dropped case is a dropped
+        // section on screen.
+        let cases = [
+            "case .appearance:", "case .temperatureUnit:", "case .fitPreference:",
+            "case .bodyTemperature:", "case .helpImprove:", "case .makeItMe:",
+            "case .deleteMyData:", "case .support:", "case .about:",
+        ]
+        var lastIndex = -1
+        for marker in cases {
+            let index = settings.range(of: marker)?.lowerBound.utf16Offset(in: settings)
+            XCTAssertNotNil(index, "SettingsModal must render the \(marker) section")
+            if let index {
+                XCTAssertGreaterThan(index, lastIndex, "\(marker) is out of registry order")
+                lastIndex = index
+            }
+        }
+    }
+
+    func testNoSectionIsGatedOnTheAvailabilityFlag_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertFalse(settings.contains("if MakeItMeAvailability.isEnabled"),
+                       "the flag may gate function, never a section's existence (D-14)")
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(section.contains("if featureEnabled"),
+                      "inside the section, the flag gates only the not-started row's door")
+    }
+
+    func testDeleteMyDataLivesInSettingsNotInTheMakeItMeSection_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(settings.contains("Text(\"Delete my data\")"),
+                      "Delete my data must be Settings' own section row")
+        XCTAssertTrue(settings.contains("makeItMePresentation.alert = .confirmDeleteData"),
+                      "its confirmation rides the surface's single alert slot")
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertFalse(section.contains("Text(\"Delete my data\")"),
+                       "the Make It Me section must not host Delete my data (the D-14 coupling)")
+        XCTAssertFalse(section.contains("confirmDeleteData"),
+                       "the Make It Me section must not own the data-delete alert")
+    }
+
+    func testAboutCarriesTheRealStoreVersion_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(settings.contains("LabeledContent(\"Version\", value: appVersion)"))
+        XCTAssertTrue(settings.contains("return \"\\(short) (\\(build))\""),
+                      "the About value is the store version in \"name (build)\" form")
+    }
+
+    func testSectionViewRendersItsRowsUnderTheModelTitles_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        for row in ["notStarted", "yourPhotos", "premium", "manageSubscription", "deletePhotos"] {
+            XCTAssertTrue(section.contains("MakeItMeSettingsRow.\(row).title"),
+                          "the section must render the \(row) row under the model's title")
+        }
+    }
+}

@@ -16,6 +16,15 @@ struct MakeItMeSettingsSection: View {
     /// presentation owner mid-flight, doubling and ghosting
     /// sheets and killing the opt-in commit (RW-16.9 §4/§6).
     @ObservedObject var presentation: MakeItMePresentationHost
+    /// WS-5 (D-14): the availability flag, consulted for FUNCTION
+    /// only. This section renders in every configuration — with
+    /// the flag OFF it carries the plain not-started row (frame
+    /// 36) as a static row; the opt-in door behind it is what the
+    /// flag keeps shut. (Pre-WS-5 the flag gated the section's
+    /// existence at the SettingsModal call site, and the whole
+    /// section — with the Delete-my-data row then hosted inside
+    /// it — emitted nothing in the shipped configuration.)
+    let featureEnabled: Bool
     /// The user's current fit preference, for the consent call.
     let genderPreference: GenderPreference
     /// The cell currently on the main screen, for photo-replacement
@@ -29,11 +38,27 @@ struct MakeItMeSettingsSection: View {
         Section {
             switch store.mode {
             case .stock:
-                settingsRow(
-                    title: "See yourself in every outfit",
-                    subtitle: "Make your outfit photos from your own photos.",
-                    action: { presentation.present(.optIn) }
-                )
+                // Frame 36's plain not-started row — present in
+                // every flag state (WS-5). With the feature ON it
+                // is the opt-in door; with it OFF the row renders
+                // statically (no chevron, no dead control): the
+                // inventory is visible, the function stays shut.
+                if featureEnabled {
+                    settingsRow(
+                        title: MakeItMeSettingsRow.notStarted.title,
+                        subtitle: "Make your outfit photos from your own photos.",
+                        action: { presentation.present(.optIn) }
+                    )
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(MakeItMeSettingsRow.notStarted.title)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("Make your outfit photos from your own photos.")
+                            .font(.system(size: 13))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+                }
             case .free, .subscribed:
                 VStack(alignment: .leading, spacing: 4) {
                     Text("You're in your photos.")
@@ -60,14 +85,14 @@ struct MakeItMeSettingsSection: View {
                 }
 
                 settingsRow(
-                    title: "Your photos",
+                    title: MakeItMeSettingsRow.yourPhotos.title,
                     subtitle: "View or replace",
                     action: { presentation.present(.photos) }
                 )
 
                 if store.mode == .subscribed {
                     settingsRow(
-                        title: "Manage subscription",
+                        title: MakeItMeSettingsRow.manageSubscription.title,
                         subtitle: nil,
                         action: { Task { await store.billing.showManageSubscriptions() } }
                     )
@@ -76,7 +101,7 @@ struct MakeItMeSettingsSection: View {
                     // the real meter above, this §9 line verbatim,
                     // one door. No price string (§9 price rule).
                     settingsRow(
-                        title: "Premium",
+                        title: MakeItMeSettingsRow.premium.title,
                         subtitle: "Made ahead, without limit — every outfit is ready when you open the app.",
                         action: { presentation.present(.subscription) }
                     )
@@ -85,23 +110,16 @@ struct MakeItMeSettingsSection: View {
                 Button(role: .destructive) {
                     presentation.alert = .confirmDelete
                 } label: {
-                    Text("Delete my photos")
+                    Text(MakeItMeSettingsRow.deletePhotos.title)
                         .font(.system(size: 16, weight: .medium))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
-            // Delete my data (RW-16.30 decision 5a): the account-level
-            // erasure, offered in EVERY mode — a stock-mode user still
-            // has an account, and the deletion must be reachable
-            // without opting in first.
-            Button(role: .destructive) {
-                presentation.alert = .confirmDeleteData
-            } label: {
-                Text("Delete my data")
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // WS-5 (D-14): Delete my data is NOT a row of this
+            // section anymore — SettingsModal hosts it as the
+            // inventory's own section, reachable whether or not
+            // this section's mode content renders.
         } header: {
             // RW-26 (notes §7.5): "Make It Me" is a script
             // wordmark wherever it appears as a title.
@@ -452,8 +470,12 @@ struct MakeItMeUpsellCard: View {
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardOnSheet))
         .padding(.horizontal, 16)
+        // WS-5 (§1.3): named detent — the paywall's content
+        // scrolls, so it rests at .large only.
         .sheet(isPresented: $showSubscriptionSheet) {
             MakeItMeSubscriptionSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 }

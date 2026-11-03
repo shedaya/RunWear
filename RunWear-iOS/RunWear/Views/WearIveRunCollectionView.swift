@@ -392,7 +392,14 @@ struct WearIveRunDayView: View {
         .navigationTitle(WearIveRunDateFormatting.dayLabel(entry.dayStart))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $shareKind) { kind in
+            // WS-5 (§1.3): named detent — this choice sheet was
+            // the one unnamed presentation on the surface; it
+            // now rests at .large like the other scrolling-free
+            // share door (its content does not scroll; .large
+            // names the detent it already defaulted to).
             shareSheet(for: kind)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .task {
             kitThumbnails = await loadKitThumbnails()
