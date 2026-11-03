@@ -35,17 +35,25 @@ enum WearIveRunMiniBarModel {
     /// The bar's state from today's entry: absent without one;
     /// "Added" on the day's first settle; "Update to" when a later
     /// settle changed the entry the session already narrated.
+    ///
+    /// WS-4: both payloads derive from the ENTRY, never from a
+    /// caller-assembled string — "Added" carries the entry's
+    /// place in its simple form (city + abbreviated region), and
+    /// "Update to" carries the entry's real payload, its first
+    /// kit item. (The pre-WS-4 iOS caller fed "Update to" a
+    /// "{n} items · {temp}" summary the entry never said; the
+    /// Android holder fed it the raw place + "Today" — D-08 on
+    /// both sides, different strings.)
     static func state(
         todaysEntry: WearIveRunEntry?,
         moment: String,
-        wasUpdatedThisSession: Bool,
-        updatePayload: String?
+        wasUpdatedThisSession: Bool
     ) -> WearIveRunState {
         guard let entry = todaysEntry else { return .preAdd }
-        if wasUpdatedThisSession, let updatePayload {
-            return .updated(payload: updatePayload)
+        if wasUpdatedThisSession {
+            return .updated(payload: entry.narrationPayload)
         }
-        return .added(place: entry.placeName, moment: moment)
+        return .added(place: entry.placeDisplayName, moment: moment)
     }
 }
 
@@ -68,9 +76,17 @@ enum WearIveRunNarration {
 
     /// The expanded bar's entry line (frame 3 anatomy):
     /// "{Place} · Today — {feels-like} feels like · {n} items".
+    /// The place is the simple form (WS-4). This line is the
+    /// entry's subtitle, NOT a second narration: it carries the
+    /// day form ("Today" — the collection's day label, by design
+    /// in frame 3) and the kit count, and it never carries the
+    /// narration's payload (place + "Now" on creation, the first
+    /// kit item on update), so the expanded card never prints
+    /// the narration's payload twice (the D-08 duplication).
+    /// The view renders it with NO line limit — it wraps.
     static func expandedLine(for entry: WearIveRunEntry, formattedFeelsLike: String) -> String {
         let items = entry.itemNames.count == 1 ? "1 item" : "\(entry.itemNames.count) items"
-        return "\(entry.placeName) · Today — \(formattedFeelsLike) feels like · \(items)"
+        return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(items)"
     }
 }
 
@@ -219,6 +235,11 @@ struct WearIveRunMiniBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 wordmarkView
                 if let line = WearIveRunNarration.line(for: state) {
+                    // One line BY DESIGN (frame 2): the line is
+                    // short by construction (WS-4) — wordmark +
+                    // verb + a simple place + "Now", or a single
+                    // kit item — so the limit never amputates a
+                    // raw geocode string at a comma (D-09).
                     narrationText(line)
                         .font(.appFootnote)
                         .lineLimit(1)
@@ -311,6 +332,10 @@ struct WearIveRunMiniBarView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     wordmarkView
                     if let entry {
+                        // No line limit, by design (WS-4): the
+                        // expanded subtitle wraps without limit —
+                        // a long simple place name wraps whole
+                        // rather than truncating.
                         Text(WearIveRunNarration.expandedLine(
                             for: entry,
                             formattedFeelsLike: formattedFeelsLike

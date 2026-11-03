@@ -133,7 +133,7 @@ struct WeatherOutfitView: View {
             // vocabulary, so the hook lands here on the confirmation
             // state itself.
             .sensoryFeedback(.impact(weight: .light), trigger: showFlagThanks)
-            .navigationTitle(viewModel.locationName)
+            .navigationTitle(viewModel.placeDisplayName)
             // The design record's date-as-subtitle needs
             // navigationSubtitle, which the current iOS SDK marks
             // unavailable on iPhone (it is a newer-platform API
@@ -522,7 +522,7 @@ struct WeatherOutfitView: View {
                     .tracking(0.5)
                     .foregroundColor(AppTheme.inkMuted)
                 Text(HomeHeaderCopy.locationLine(
-                    place: viewModel.locationName,
+                    place: viewModel.placeDisplayName,
                     moment: sheetMoment
                 ))
                 .font(.system(size: 15.5, weight: .semibold))
@@ -632,14 +632,15 @@ struct WeatherOutfitView: View {
     /// The mini bar dock: today's entry drives the bar — absent
     /// pre-entry, narrating once the day's first generation lands.
     @ViewBuilder private var miniBarDock: some View {
-        let todays = collectionModel.todaysEntry(placeName: viewModel.locationName)
+        let todays = collectionModel.todaysEntry(placeName: viewModel.placeDisplayName)
+        // WS-4: the state derives both narration payloads from
+        // the entry itself (simple place for "Added", first kit
+        // item for "Update to") — the view supplies no payload
+        // string of its own.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: todays,
             moment: sheetMoment,
-            wasUpdatedThisSession: collectionModel.todaysEntryWasUpdated,
-            updatePayload: todays.map {
-                "\($0.itemNames.count) items · \(viewModel.temperatureUnit.formatFromFahrenheit($0.feelsLikeF))"
-            }
+            wasUpdatedThisSession: collectionModel.todaysEntryWasUpdated
         )
         if state != .preAdd {
             WearIveRunMiniBarView(
@@ -652,7 +653,7 @@ struct WeatherOutfitView: View {
                 isAtEndOfScroll: isAtEndOfScroll,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
-                    collectionModel.removeToday(placeName: viewModel.locationName)
+                    collectionModel.removeToday(placeName: viewModel.placeDisplayName)
                 }
             )
         }
@@ -672,7 +673,7 @@ struct WeatherOutfitView: View {
             ?? weather.currentWeather.temperatureFahrenheit
         let entry = WearIveRunEntry(
             dayStart: Calendar.current.startOfDay(for: viewModel.selectedDate),
-            placeName: viewModel.locationName,
+            placeName: viewModel.placeDisplayName,
             feelsLikeF: feelsLikeF,
             actualF: actualF,
             condition: viewModel.currentCondition.shortDescription,
@@ -761,7 +762,7 @@ struct WeatherOutfitView: View {
     /// when the numbers on show belong to.
     private var weatherContextLines: [String] {
         [
-            viewModel.locationName,
+            viewModel.placeDisplayName,
             navDateString,
             "\(viewModel.temperatureUnit.format(viewModel.currentTemperature)) · Feels like \(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))",
             recommendation.temperatureBracket.description
@@ -810,7 +811,7 @@ struct WeatherOutfitView: View {
 
     private func heroSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
         HeroImageView(
-            locationName: viewModel.locationName,
+            locationName: viewModel.placeDisplayName,
             // Hero contract (Android/PWA): headline = raw feels-like,
             // sub-line = raw actual. (Was: headline = actual,
             // sub-line = comfort-adjusted feels-like.)

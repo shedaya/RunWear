@@ -185,10 +185,21 @@ struct LocationPickerSheet: View {
                     .compactMap { $0 }
                     .joined(separator: ", ")
 
+                // WS-4: the selection's name is derived through
+                // the SimplePlace model ONCE, here at geocode
+                // time — city + abbreviated region. The pre-WS-4
+                // code concatenated locality + administrativeArea
+                // verbatim, so a full region name ("New York,
+                // New York") became the saved place, the recents
+                // row, and every rendered line downstream.
+                let simple = SimplePlace(
+                    city: placemark.locality ?? placemark.name,
+                    region: placemark.administrativeArea
+                )
                 return LocationSearchResult(
                     name: name,
                     subtitle: subtitle,
-                    displayName: [name, placemark.administrativeArea].compactMap { $0 }.joined(separator: ", "),
+                    displayName: simple?.displayName ?? name,
                     coordinate: location.coordinate
                 )
             }

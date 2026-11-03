@@ -150,7 +150,7 @@ struct WearIveRunCollectionView: View {
                 .clipped()
                 .cornerRadius(10)
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.placeName)
+                Text(entry.placeDisplayName)
                     .font(.appItemName)
                     .foregroundColor(AppTheme.inkPrimary)
                 Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
@@ -362,7 +362,7 @@ struct WearIveRunDayView: View {
                 Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition)")
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
-                Text("Actual \(formatTemperature(entry.actualF)) · \(entry.placeName)")
+                Text("Actual \(formatTemperature(entry.actualF)) · \(entry.placeDisplayName)")
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkSecondary)
 
@@ -517,7 +517,7 @@ struct MorningPosterView: View {
                     Text("\(formatTemperature(entry.feelsLikeF)) · \(entry.condition)")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("\(entry.placeName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
+                    Text("\(entry.placeDisplayName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.85))
                     Text(entry.itemNames.prefix(4).joined(separator: " · "))
@@ -574,7 +574,7 @@ struct KitCardView: View {
             Text("Wear I've Run")
                 .font(.greatVibes(size: 26))
                 .foregroundColor(Color(hex: "17191C"))
-            Text("\(entry.placeName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
+            Text("\(entry.placeDisplayName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
                 .font(.system(size: 13))
                 .foregroundColor(Color(hex: "5F5B52"))
 

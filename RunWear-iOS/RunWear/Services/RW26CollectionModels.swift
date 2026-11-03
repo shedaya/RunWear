@@ -37,9 +37,39 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// Reference to the day's hero image (remote URL or asset name).
     let heroImageReference: String
 
-    /// Place identity: the trimmed, case-folded display name.
+    /// The entry's place as a SimplePlace (WS-4 / RC-4): the
+    /// stored string is parsed through the model, so an entry
+    /// recorded before the model existed (raw geocode string)
+    /// and one recorded after it (simple form) are the same
+    /// place with the same rendered name.
+    var simplePlace: SimplePlace? {
+        SimplePlace(rawDisplayName: placeName)
+    }
+
+    /// The ONLY form a rendered line may show for this entry's
+    /// place: city + abbreviated region. Falls back to the
+    /// trimmed stored string only when it carries no name at
+    /// all (unreachable for a recorded entry).
+    var placeDisplayName: String {
+        simplePlace?.displayName
+            ?? placeName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The narration's real payload for an update (WS-4): the
+    /// entry's first kit item — the design's pattern, and the
+    /// field Android's holder computed and never used (D-08).
+    /// Falls back to the condition when the entry carries no
+    /// items (a recorded entry always carries its kit).
+    var narrationPayload: String {
+        itemNames.first ?? condition
+    }
+
+    /// Place identity: the SimplePlace key — trimmed, case-folded,
+    /// and canonicalized, so "New York, New York" (legacy raw)
+    /// and "New York, NY" (simple) share one identity.
     var placeKey: String {
-        placeName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        simplePlace?.key
+            ?? placeName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     /// One entry per day per place: the identity is day + place.
@@ -198,7 +228,10 @@ enum WearIveRunCollection {
             let sorted = placeEntries.sorted { $0.dayStart > $1.dayStart }
             guard let first = sorted.first else { return nil }
             return WearIveRunChapter(
-                placeName: first.placeName,
+                // Chapter covers name the place in its simple
+                // form (WS-4) — never the cover entry's raw
+                // stored string.
+                placeName: first.placeDisplayName,
                 entries: sorted,
                 stays: stays(from: sorted, calendar: calendar)
             )
@@ -339,8 +372,13 @@ final class WearIveRunStore {
     /// Today's entry at the current place, if one exists — what
     /// the mini bar narrates.
     func todaysEntry(placeName: String, today: Date, calendar: Calendar = .current) -> WearIveRunEntry? {
-        entries.first {
-            $0.placeKey == placeName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        // Both sides canonicalize through SimplePlace (WS-4), so
+        // a caller holding the simple name matches an entry stored
+        // under the legacy raw string, and vice versa.
+        let probeKey = SimplePlace(rawDisplayName: placeName)?.key
+            ?? placeName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return entries.first {
+            $0.placeKey == probeKey
                 && calendar.isDate($0.dayStart, inSameDayAs: today)
         }
     }
@@ -371,8 +409,16 @@ enum RecentLocations {
     /// identity, capped. Selecting a place already in the list
     /// moves it to the front.
     static func recording(_ list: [RecentLocation], selection: RecentLocation) -> [RecentLocation] {
-        var result = list.filter { $0.id != selection.id }
-        result.insert(selection, at: 0)
+        // A recent's name is a rendered place line (WS-4): it is
+        // stored in the simple form, so a selection carrying a
+        // raw geocode string is normalized as it joins the list.
+        let normalized = RecentLocation(
+            name: SimplePlace(rawDisplayName: selection.name)?.displayName ?? selection.name,
+            latitude: selection.latitude,
+            longitude: selection.longitude
+        )
+        var result = list.filter { $0.id != normalized.id }
+        result.insert(normalized, at: 0)
         return Array(result.prefix(cap))
     }
 
@@ -421,8 +467,16 @@ final class RecentLocationsStore {
 enum HomeHeaderCopy {
     static let feelsLikeLabel = "Feels like"
 
+    /// The location line's place is the SimplePlace (WS-4): the
+    /// string overload routes through the model, so a raw geocode
+    /// string handed to this formatter still cannot reach the
+    /// rendered line.
     static func locationLine(place: String, moment: String) -> String {
-        "\(place) · \(moment)"
+        "\(SimplePlace(rawDisplayName: place)?.displayName ?? place) · \(moment)"
+    }
+
+    static func locationLine(place: SimplePlace, moment: String) -> String {
+        "\(place.displayName) · \(moment)"
     }
 
     /// "Actual 38°" — the formatted temperature (unit included) and

@@ -92,7 +92,7 @@ final class RW25NextGenHomeTests: XCTestCase {
         XCTAssertEqual(WearIveRunMiniBarModel.wordmark, "Wear I've Run")
         let noEntry = WearIveRunMiniBarModel.state(
             todaysEntry: nil, moment: "Now",
-            wasUpdatedThisSession: false, updatePayload: nil
+            wasUpdatedThisSession: false
         )
         XCTAssertEqual(noEntry, .preAdd)
         XCTAssertNil(WearIveRunNarration.line(for: noEntry))
@@ -105,16 +105,21 @@ final class RW25NextGenHomeTests: XCTestCase {
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: entry, moment: "Now",
-                wasUpdatedThisSession: false, updatePayload: nil
+                wasUpdatedThisSession: false
             ),
             .added(place: "New York", moment: "Now")
         )
+        // WS-4: the update payload is the entry's REAL payload —
+        // its first kit item — derived by the model from the
+        // entry. (This pin previously asserted a caller-supplied
+        // "5 items · 41°F" summary; that string was the iOS half
+        // of D-08 and the pin is superseded.)
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: entry, moment: "Now",
-                wasUpdatedThisSession: true, updatePayload: "5 items · 41°F"
+                wasUpdatedThisSession: true
             ),
-            .updated(payload: "5 items · 41°F")
+            .updated(payload: "Tee")
         )
     }
 

@@ -22,7 +22,13 @@ enum ManualLocationStore {
     static func save(_ saved: Saved, to defaults: UserDefaults = .standard) {
         defaults.set(saved.latitude, forKey: latitudeKey)
         defaults.set(saved.longitude, forKey: longitudeKey)
-        defaults.set(saved.name, forKey: nameKey)
+        // The persisted name is a rendered place line (WS-4): it
+        // is stored in the simple form, so a raw geocode string
+        // never survives a relaunch into the header.
+        defaults.set(
+            SimplePlace(rawDisplayName: saved.name)?.displayName ?? saved.name,
+            forKey: nameKey
+        )
     }
 
     static func load(from defaults: UserDefaults = .standard) -> Saved? {
@@ -78,6 +84,29 @@ class WeatherViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var locationName: String = "Loading..."
+
+    /// The current place as the app's ONE place value (WS-4 /
+    /// RC-4): derived once at geocode time (or at manual
+    /// selection) from the placemark's city + region, and the
+    /// source every place-bearing surface renders from via
+    /// `placeDisplayName`. Nil before the first geocode lands
+    /// and in the non-place states ("Loading...", "Current
+    /// Location"), which are labels, not places.
+    @Published private(set) var simplePlace: SimplePlace?
+
+    /// The rendered form of the current place: the SimplePlace's
+    /// display name when one is derived; otherwise the stored
+    /// string routed through the model (a direct assignment in a
+    /// test or a legacy restore still cannot put a raw geocode
+    /// string on a rendered line); otherwise the string itself
+    /// (the non-place labels above).
+    var placeDisplayName: String {
+        if let simplePlace { return simplePlace.displayName }
+        if let parsed = SimplePlace(rawDisplayName: locationName) {
+            return parsed.displayName
+        }
+        return locationName
+    }
 
     // Hero image state
     @Published var heroImageUrl: String?
@@ -209,7 +238,10 @@ class WeatherViewModel: ObservableObject {
         // back — the Android saved-location contract.
         if let saved = ManualLocationStore.load() {
             self.isUsingGPS = false
-            self.locationName = saved.name
+            // A pre-WS-4 persisted name may be a raw geocode
+            // string: it re-derives through the model at restore.
+            self.simplePlace = SimplePlace(rawDisplayName: saved.name)
+            self.locationName = self.simplePlace?.displayName ?? saved.name
             let location = CLLocation(latitude: saved.latitude, longitude: saved.longitude)
             self.currentLocation = location
             self.restoredManualLocation = location
@@ -257,7 +289,11 @@ class WeatherViewModel: ObservableObject {
 
     func setManualLocation(coordinate: CLLocationCoordinate2D, name: String) {
         isUsingGPS = false
-        locationName = name
+        // The manual selection is a geocode result too (WS-4):
+        // the name is derived through the model once, here, and
+        // only the simple form is kept or persisted.
+        simplePlace = SimplePlace(rawDisplayName: name)
+        locationName = simplePlace?.displayName ?? name
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         // Persist the choice (R-19): it survives relaunch and is
         // what the next launch restores.
@@ -265,7 +301,7 @@ class WeatherViewModel: ObservableObject {
             ManualLocationStore.Saved(
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                name: name
+                name: locationName
             )
         )
         restoredManualLocation = location
@@ -276,6 +312,9 @@ class WeatherViewModel: ObservableObject {
 
     func switchToGPS() {
         isUsingGPS = true
+        // The manual place no longer governs; the next GPS fix
+        // re-derives the SimplePlace at geocode time.
+        simplePlace = nil
         // Back to GPS: the saved manual location no longer governs
         // launch or refresh.
         ManualLocationStore.clear()
@@ -631,14 +670,29 @@ class WeatherViewModel: ObservableObject {
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
             if let placemark = placemarks.first {
-                let city = placemark.locality ?? ""
-                let state = placemark.administrativeArea ?? ""
-                locationName = [city, state].filter { !$0.isEmpty }.joined(separator: ", ")
-                if locationName.isEmpty {
+                // WS-4: the SimplePlace is derived ONCE, here, at
+                // geocode time — city + abbreviated region from
+                // the placemark's components. No surface ever
+                // sees the placemark, and no raw concatenation of
+                // its fields reaches a rendered line. (The
+                // pre-WS-4 code joined locality + administrativeArea
+                // verbatim, which is how "New York, New York"
+                // reached the header on Android; iOS happened to
+                // receive abbreviated regions from CLGeocoder for
+                // US places, which is luck, not a model.)
+                if let place = SimplePlace(
+                    city: placemark.locality,
+                    region: placemark.administrativeArea
+                ) {
+                    simplePlace = place
+                    locationName = place.displayName
+                } else {
+                    simplePlace = nil
                     locationName = "Current Location"
                 }
             }
         } catch {
+            simplePlace = nil
             locationName = "Current Location"
         }
     }
@@ -709,7 +763,7 @@ class WeatherViewModel: ObservableObject {
         var lines: [String] = [
             "🏃 RunWear Recommendation",
             "",
-            "📍 \(locationName)",
+            "📍 \(placeDisplayName)",
             "🌡️ Feels like \(Int(currentFeelsLike))°\(unit) (\(TemperatureBracket.from(temperature: rawFeelsLikeFahrenheit).description))",
             currentCondition.shortDescription,
             "",

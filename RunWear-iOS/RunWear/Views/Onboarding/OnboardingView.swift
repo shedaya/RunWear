@@ -483,7 +483,7 @@ private struct FirstLookView: View {
     }
 
     private var contextLine: String {
-        "\(previewVM.locationName) · \(previewVM.temperatureUnit.format(previewVM.currentFeelsLike))"
+        "\(previewVM.placeDisplayName) · \(previewVM.temperatureUnit.format(previewVM.currentFeelsLike))"
     }
 
     private var outfitLine: String {
