@@ -8,5 +8,9 @@
 	<string>RunWear uses the camera so you can take your own photo for Make it me outfit pictures.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIAppFonts</key>
+	<array>
+		<string>GreatVibes-Regular.ttf</string>
+	</array>
 </dict>
 </plist>

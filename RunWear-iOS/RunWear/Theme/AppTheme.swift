@@ -234,9 +234,11 @@ extension UIColor {
 //
 // Dynamic Type throughout: every text surface uses a semantic style from
 // this scale so the whole app tracks the user's text-size setting. SF Pro
-// is the system face — no custom font is bundled (the audit's typography
-// verdict: do NOT import Bebas Neue). Numeric values use tabular digits
-// via `.monospacedDigit()` at the call site.
+// is the system face for text — no custom text font is bundled (the
+// audit's typography verdict: do NOT import Bebas Neue). The one bundled
+// face is Great Vibes, for the script wordmarks only (see
+// `Font.greatVibes` below). Numeric values use tabular digits via
+// `.monospacedDigit()` at the call site.
 extension Font {
     /// Sheet headers (was fixed 24pt bold).
     static var appSheetTitle: Font { .title2.weight(.bold) }
@@ -254,6 +256,17 @@ extension Font {
     static var appEyebrow: Font { .caption.weight(.semibold) }
     /// Floating pill labels (was fixed 14–15pt medium).
     static var appPillLabel: Font { .subheadline.weight(.medium) }
+
+    /// Great Vibes script — the wordmark face (the RunWear logo,
+    /// "Wear I've Run", "Make It Me"). Brand lockups only, never body
+    /// text. Genuine bundled font (Google Fonts, SIL Open Font
+    /// License 1.1), registered via UIAppFonts in Info.plist; resolves
+    /// by its PostScript name "GreatVibes-Regular". Bundled 2026-11-02
+    /// (RW-25): provenance + verification in
+    /// release-prep/rw-greatvibes-bundling-2026-11-02.md.
+    static func greatVibes(size: CGFloat) -> Font {
+        .custom("GreatVibes-Regular", size: size)
+    }
 }
 
 extension Color {
