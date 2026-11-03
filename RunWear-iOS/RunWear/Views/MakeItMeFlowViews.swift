@@ -429,7 +429,9 @@ struct MakeItMeCaptureView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 22))
-                            .foregroundColor(AppTheme.primaryColor)
+                            // WS-8: dynamic pine pair, not the seed
+                            // alone (≈2.19:1 on the dark ground).
+                            .foregroundColor(AppTheme.pinePayload)
                         Text(MakeItMeCopy.saveConfirmed)
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)

@@ -38,20 +38,24 @@ struct MakeItMeSettingsSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("You're in your photos.")
                         .font(.system(size: 16, weight: .semibold))
+                    // WS-8 (D-25 residue class): the state/meter
+                    // lines render in the design's secondary token
+                    // pair (AppTheme.inkSecondary), not system
+                    // .secondary (≈3.3–3.4:1 on light grounds).
                     if store.mode == .subscribed {
                         // Frame 37: management only — this line is
                         // a state fact (§9), not a pitch.
                         Text("Your photo is ready before you open the app.")
                             .font(.system(size: 14))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                     } else if store.freeGenerationsUsed >= PersonalHeroStore.freeAllowance {
                         Text("All 5 free looks used")
                             .font(.system(size: 14))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                     } else {
                         Text("\(store.freeGenerationsUsed) of 5 free looks used")
                             .font(.system(size: 14))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
 
@@ -112,19 +116,24 @@ struct MakeItMeSettingsSection: View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
+                    // WS-8: the row's title/subtitle/chevron take
+                    // the design's two text tiers (inkPrimary /
+                    // inkSecondary) — the system .primary/.secondary
+                    // pair is an off-table third structure, and its
+                    // secondary side fails the light-mode floor.
                     Text(title)
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.primary)
+                        .foregroundColor(AppTheme.inkPrimary)
                     if let subtitle {
                         Text(subtitle)
                             .font(.system(size: 13))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.inkSecondary)
             }
             .contentShape(Rectangle())
         }

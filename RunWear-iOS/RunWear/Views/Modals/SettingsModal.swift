@@ -75,6 +75,13 @@ struct SettingsModal: View {
 
                 // RW-26: "Help improve the app" — copy and default
                 // IDENTICAL to Android's settings sheet (§8 Q1).
+                // WS-8 (D-25 iOS residue): this section's helper
+                // text renders in the design's secondary token pair
+                // (AppTheme.inkSecondary), NOT system .secondary —
+                // the system color composites to ≈3.3–3.4:1 on
+                // light grounds, below the 4.5:1 text floor; the
+                // token pair clears it in both modes (pinned in
+                // RW26Phase2Tests).
                 Section {
                     VStack(alignment: .leading, spacing: 10) {
                         Toggle(isOn: $analyticsOptIn) {
@@ -83,19 +90,19 @@ struct SettingsModal: View {
                                     .font(.appSecondary.weight(.medium))
                                 Text("Count how the app is used")
                                     .font(.appFootnote)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(AppTheme.inkSecondary)
                             }
                         }
                         Text("We count how the app is used — which features get used and where recommendations miss — and nothing else. No account, no advertising ID, and your location never leaves the phone more precisely than the city name. Turn this off and nothing is counted or sent.")
                             .font(.appFootnote)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                         if !analyticsOptIn {
                             Text("Off. Nothing is being counted.")
                                 .font(.appFootnote.weight(.medium))
                         }
                         Text("If the app crashes, it can send us the technical details so we can fix it. This happens only after a crash, and only with your permission here.")
                             .font(.appFootnote)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                     .padding(.vertical, 4)
                 }
@@ -369,15 +376,19 @@ struct FeedbackSheet: View {
                 }
 
                 // Frame 48: the what's-sent disclosure, before Send.
+                // WS-8: helper/disclosure text in the token pair
+                // (AppTheme.inkSecondary), not system .secondary —
+                // same D-25 residue class as the analytics section
+                // above.
                 Section("What We're Sending With This") {
                     ForEach(FeedbackPayloads.disclosureLines(bundle: bundle), id: \.self) { line in
                         Text(line)
                             .font(.appFootnote)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                     Text("Plus your message, exactly as written, under the category you picked. Nothing else — no location beyond what you type, no photos.")
                         .font(.appFootnote)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
 
                 if sent {
@@ -391,7 +402,7 @@ struct FeedbackSheet: View {
                     Section {
                         Text("That didn't send. Check your connection and try again — or email it instead.")
                             .font(.appFootnote)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(AppTheme.inkSecondary)
                         if let fallbackURL {
                             Button("Email it instead") {
                                 openURL(fallbackURL)

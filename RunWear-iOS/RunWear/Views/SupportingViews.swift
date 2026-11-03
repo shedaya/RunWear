@@ -51,9 +51,14 @@ struct LocationPermissionView: View {
 
     var body: some View {
         VStack(spacing: 24) {
+            // WS-8: the gate icon takes the dynamic pine pair
+            // (pinePayload) — seed pine alone is ≈2.19:1 on the
+            // dark ground, below the 3:1 non-text floor; the pair
+            // clears it in both modes. (The denied gate's icon
+            // already renders in a token, inkMuted.)
             Image(systemName: "location.circle.fill")
                 .font(.system(size: 80))
-                .foregroundColor(AppTheme.primaryColor)
+                .foregroundColor(AppTheme.pinePayload)
 
             // Headings on the dark gate background use textOnDark:
             // textPrimary (#212121) on darkBackground (#0A0A0A) is
@@ -164,12 +169,18 @@ struct LocationDeniedView: View {
 struct ErrorView: View {
     let message: String
     let onRetry: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 24) {
+            // WS-8: the warning icon takes the theme's orange
+            // accent pair — system .orange is ≈1.95:1 on the light
+            // ground (below even the 3:1 non-text floor); the pair
+            // is the same one the Make It Me flows' warningColor
+            // already uses, pinned ≥4.5:1 in both modes.
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 60))
-                .foregroundColor(.orange)
+                .foregroundColor(AppTheme.weatherAccentColor(.orange, isDark: colorScheme == .dark))
 
             // RW-26 (frame 47; §8 Q3): the honest headline — the
             // "Oops!"-era tone retires. The message below names

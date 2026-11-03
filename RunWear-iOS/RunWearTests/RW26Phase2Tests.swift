@@ -650,4 +650,128 @@ final class RW26Phase2Tests: XCTestCase {
         XCTAssertLessThan(contrast("FFFFFF", AppTheme.groundLightHex), 4.5,
                           "pre-fix white label on cream was 1.13:1")
     }
+
+    // MARK: - WS-8 token conformance (D-25 iOS residue)
+
+    /// Alpha-composites a 6-digit hex foreground at `alpha` over a
+    /// 6-digit hex background, returning the composite hex. Used to
+    /// reproduce system .secondary exactly: secondaryLabel is
+    /// rgba(60,60,67,0.6) in light mode and rgba(235,235,245,0.6)
+    /// in dark mode.
+    private func blend(_ fg: String, alpha: Double, over bg: String) -> String {
+        func channels(_ hex: String) -> [Double] {
+            let chars = Array(hex)
+            return (0..<3).map { Double(Int(String(chars[$0 * 2...$0 * 2 + 1]), radix: 16)!) }
+        }
+        let f = channels(fg), b = channels(bg)
+        let mixed = zip(f, b).map { Int(round(alpha * $0 + (1 - alpha) * $1)) }
+        return mixed.map { String(format: "%02X", $0) }.joined()
+    }
+
+    /// The defect WS-8 removes, pinned so it cannot regress
+    /// silently: system .secondary text composites to ≈3.3–3.4:1
+    /// on the light grounds — below the 4.5:1 text floor — while
+    /// passing in dark (≈5.9:1). This is the color the comfort
+    /// control's micro-labels and Settings' analytics helper text
+    /// rendered in before the fix.
+    func testWS8SystemSecondaryFailsTheLightFloor() {
+        for bg in [AppTheme.groundLightHex, AppTheme.sheetLightHex] {
+            let light = blend("3C3C43", alpha: 0.6, over: bg)
+            XCTAssertLessThan(contrast(light, bg), 4.5,
+                              "system .secondary light composite \(light) on \(bg)")
+        }
+        let dark = blend("EBEBF5", alpha: 0.6, over: AppTheme.sheetDarkHex)
+        XCTAssertGreaterThanOrEqual(contrast(dark, AppTheme.sheetDarkHex), 4.5,
+                                    "system .secondary dark composite passes — the defect is light-only")
+    }
+
+    /// The pair the changed surfaces now render in: the comfort
+    /// control's labels (current level + Runs Cold / Runs Warm),
+    /// Settings' analytics helper text, the feedback disclosure,
+    /// and the Make It Me settings rows all take
+    /// AppTheme.inkSecondary — #5F5B52 light / #B8AEA0 dark.
+    /// Asserted on the design grounds AND on the Form grounds the
+    /// Settings surfaces actually sit on (system grouped
+    /// backgrounds: white / #F2F2F7 light rows and ground,
+    /// black / #1C1C1E dark), at the 4.5:1 text floor, both modes.
+    func testWS8SecondaryTokenPairClearsTheFloorOnEveryGroundItSitsOn() {
+        for bg in [AppTheme.groundLightHex, AppTheme.sheetLightHex, "FFFFFF", "F2F2F7"] {
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.inkSecondaryLightHex, bg), 4.5,
+                "secondary token light on \(bg)")
+        }
+        for bg in [AppTheme.groundDarkHex, AppTheme.sheetDarkHex, AppTheme.cardDarkHex,
+                   "000000", "1C1C1E"] {
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.mutedDarkHex, bg), 4.5,
+                "secondary token dark (muted) on \(bg)")
+        }
+        // The settings rows' title tier on the same Form grounds.
+        for bg in ["FFFFFF", "F2F2F7"] {
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.inkLightHex, bg), 4.5, "ink light on \(bg)")
+        }
+        for bg in ["000000", "1C1C1E"] {
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.inkDarkHex, bg), 4.5, "ink dark on \(bg)")
+        }
+    }
+
+    /// The muted structure is exactly TWO tiers per mode, as the
+    /// design table (notes §1) defines: ink + secondary (light) /
+    /// ink + muted (dark). In AppTheme, inkSecondary and inkMuted
+    /// are both constructed from this single pair of hexes — there
+    /// is no third muted hex in the token layer, and after WS-8 no
+    /// UI-code text renders in the system .primary/.secondary pair
+    /// that acted as one (source sweep, gate report).
+    func testWS8MutedStructureIsTheDesignPair() {
+        XCTAssertEqual(AppTheme.inkSecondaryLightHex, "5F5B52")
+        XCTAssertEqual(AppTheme.mutedDarkHex, "B8AEA0")
+        // Both tiers clear the floor on their mode's grounds.
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.inkSecondaryLightHex, AppTheme.sheetLightHex), 4.5)
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.mutedDarkHex, AppTheme.sheetDarkHex), 4.5)
+    }
+
+    /// The refresh error banner is dark in BOTH modes (black@0.85
+    /// fill): its Retry label must be the dark pine accent, not the
+    /// seed. Accent ≥4.5:1 on every banner composite; the pre-fix
+    /// seed is pinned as failing (≈2.0:1).
+    func testWS8BannerRetryUsesDarkPineAccent() {
+        XCTAssertEqual(AppTheme.pineAccentDarkHex, "5CC79F")
+        for bg in [AppTheme.sheetLightHex, AppTheme.groundLightHex, AppTheme.sheetDarkHex] {
+            let bannerFill = blend("000000", alpha: 0.85, over: bg)
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.pineAccentDarkHex, bannerFill), 4.5,
+                "banner Retry accent on composite \(bannerFill)")
+            XCTAssertLessThan(
+                contrast("175E4C", bannerFill), 4.5,
+                "pre-fix seed pine on banner composite \(bannerFill)")
+        }
+    }
+
+    /// The error state's warning icon and the location gate's pine
+    /// icon: graphics, asserted at (and above) the 3:1 non-text
+    /// floor in both modes. The error icon takes the orange accent
+    /// pair (the Make It Me flows' warningColor pattern); system
+    /// .orange in light mode is pinned as the failing pre-fix value
+    /// (1.95:1). The gate icon takes pinePayload's pair.
+    func testWS8GateAndErrorIconsClearTheNonTextFloor() {
+        for bg in [AppTheme.groundLightHex, AppTheme.sheetLightHex] {
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.weatherAccentHex(.orange, isDark: false), bg), 3.0,
+                "warning icon light on \(bg)")
+            XCTAssertGreaterThanOrEqual(contrast("175E4C", bg), 3.0, "pine icon light on \(bg)")
+        }
+        for bg in [AppTheme.groundDarkHex, AppTheme.sheetDarkHex, AppTheme.cardDarkHex] {
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.weatherAccentHex(.orange, isDark: true), bg), 3.0,
+                "warning icon dark on \(bg)")
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.pineAccentDarkHex, bg), 3.0, "pine icon dark on \(bg)")
+        }
+        XCTAssertLessThan(contrast("FF9500", AppTheme.groundLightHex), 3.0,
+                          "pre-fix system orange icon on the light ground was 1.95:1")
+        XCTAssertLessThan(contrast("175E4C", AppTheme.sheetDarkHex), 3.0,
+                          "pre-fix seed pine icon on the dark sheet was 2.19:1")
+    }
 }
