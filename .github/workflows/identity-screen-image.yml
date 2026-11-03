@@ -9,6 +9,8 @@ on:
         default: "ops"
   repository_dispatch:
     types: [build-identity-screen-image]
+  push:
+    branches: [ops/identity-screen-image-2026-11-03]
 
 permissions:
   contents: read
