@@ -131,6 +131,47 @@ Deno.test('gate: rulings 4+5 — pose and construction are defect classes', () =
   assertEquals(cons.pass, false)
 })
 
+Deno.test('gate: ruling 6 (V1) — sunglasses omission is a note; unprescribed sunglasses still fail', () => {
+  const exp = classes({ topBase: 'short', bottom: 'shorts', sunglasses: true })
+  const omitted = classes({ topBase: 'short', bottom: 'shorts', sunglasses: false })
+  const v = evaluateGate('CLEAR', 'MIDDAY', exp, omitted, okAnswers, 'clear', 'daylight')
+  assertEquals(v.pass, true)
+  assert(v.notes.some(n => n.includes('V1 ruling')), 'omission is recorded as a note')
+  assertEquals(v.failures.length, 0)
+  // Omission-only scope: sunglasses seen where NOT prescribed still fail.
+  const expNone = classes({ topBase: 'short', bottom: 'shorts', sunglasses: false })
+  const worn = classes({ topBase: 'short', bottom: 'shorts', sunglasses: true })
+  const v2 = evaluateGate('CLEAR', 'MIDDAY', expNone, worn, okAnswers, 'clear', 'daylight')
+  assertEquals(v2.pass, false)
+  assert(v2.failures.some(f => f.cls === 'sunglasses'))
+})
+
+Deno.test('gate: ruling 7 (balaclava clarification) — a covered head satisfies headwear in any form; absence and unprescribed headwear still fail', () => {
+  const exp = classes({ topBase: 'long', bottom: 'tights', head: 'beanie', hands: 'gloves' })
+  const balaclava = classes({ topBase: 'long', bottom: 'tights', head: 'balaclava', hands: 'gloves' })
+  const v = evaluateGate('CLEAR', 'MIDDAY', exp, balaclava, okAnswers, 'clear', 'daylight')
+  assertEquals(v.pass, true)
+  assert(v.notes.some(n => n.includes('balaclava clarification')), 'form difference is recorded as a note')
+  // Any covering form satisfies — headband for a prescribed beanie.
+  const headband = classes({ topBase: 'long', bottom: 'tights', head: 'headband', hands: 'gloves' })
+  assertEquals(evaluateGate('CLEAR', 'MIDDAY', exp, headband, okAnswers, 'clear', 'daylight').pass, true)
+  // V2 was rejected: a bare head still fails where headwear is prescribed.
+  const bare = classes({ topBase: 'long', bottom: 'tights', head: null, hands: 'gloves' })
+  const vBare = evaluateGate('CLEAR', 'MIDDAY', exp, bare, okAnswers, 'clear', 'daylight')
+  assertEquals(vBare.pass, false)
+  assert(vBare.failures.some(f => f.cls === 'head'))
+  // Headwear seen where none is prescribed still fails — the
+  // clarification satisfies a requirement; it does not erase one.
+  const expNone = classes({ topBase: 'short', bottom: 'shorts' })
+  const covered = classes({ topBase: 'short', bottom: 'shorts', head: 'balaclava' })
+  const vUn = evaluateGate('CLEAR', 'MIDDAY', expNone, covered, okAnswers, 'clear', 'daylight')
+  assertEquals(vUn.pass, false)
+  assert(vUn.failures.some(f => f.cls === 'head'))
+  // The enumeration read encodes a face covering as the balaclava class.
+  const parsed = parseGateText(['Thermal tights', 'Balaclava', 'PERSON_COUNT: 1'].join('\n'))
+  assertEquals(parsed.seen.head, 'balaclava')
+})
+
 Deno.test('gate: accessory-only classification drives repair eligibility', () => {
   assert(isAccessoryOnlyFailure([{ cls: 'head', message: 'x' }, { cls: 'sunglasses', message: 'y' }]))
   assert(isAccessoryOnlyFailure([{ cls: 'hands', message: 'x' }]))

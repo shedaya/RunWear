@@ -303,7 +303,7 @@ export function expectedClassesForPrompt(prompt: string): GarmentClasses {
 
 // ---------------------------------------------------------------------
 // Prescription gate — the recalibrated gate of record. The vision
-// read is the lanes' instrument verbatim (GARMENT_PROMPT +
+// read is the lanes' instrument (GARMENT_PROMPT +
 // COHERENCE_ADDENDUM, claude-sonnet-5, image bounded to 1024 px tall
 // JPEG q85, max_tokens 900); the verdict logic is a line-for-line port
 // of adjudicate_compare.py's gate() implementing Sol's five
@@ -318,6 +318,22 @@ export function expectedClassesForPrompt(prompt: string): GarmentClasses {
 //      (CONSTRUCTION_OK); positively-seen class mismatches still
 //      fail; bottom is judged at family grain (tights vs shorts),
 //      exact-class mismatch within the family is a note.
+// Amended by Sol's stringency ruling (2026-11-02 ~21:28 EST):
+//   6. SUNGLASSES OMISSION is never a failure (V1) — prescribed but
+//      not seen is recorded as a note. Sunglasses seen where NOT
+//      prescribed still fail: the ruling is omission-only, and no
+//      other eyewear read changes.
+//   7. HEADWEAR is verified as head COVERAGE, not the named
+//      garment's form (Sol's balaclava clarification): any seen
+//      covering satisfies a headwear prescription and a form
+//      difference is a note; a bare head still fails (V2 headwear
+//      leniency was REJECTED — absence is not excused), and headwear
+//      seen where none is prescribed still fails. Face coverage
+//      itself is not a defect. GARMENT_PROMPT primes the read to
+//      list a balaclava — or a gaiter/buff pulled up over the face —
+//      as "balaclava": the one deliberate prompt divergence from the
+//      lanes' instrument, recorded here; it cannot change verdicts
+//      on stored enumeration reads.
 // LOGOS_OR_TEXT and TWO_WATCHES are recorded in the verdict detail
 // but are NOT failures — faithful to the instrument of record; the
 // divergence from the retired LLaVA gate (which failed logos) is
@@ -326,8 +342,9 @@ export function expectedClassesForPrompt(prompt: string): GarmentClasses {
 const GARMENT_PROMPT =
   'Look at this photo of a runner. List EVERY clothing item the runner is wearing, one per line, ' +
   'using simple names (for example: tank top, short sleeve shirt, long sleeve shirt, jacket, ' +
-  'quarter zip, shorts, short shorts, tights, leggings, cap, visor, headband, beanie, gloves, ' +
-  'sunglasses). Then answer these lines in exactly this format:\n' +
+  'quarter zip, shorts, short shorts, tights, leggings, cap, visor, headband, beanie, balaclava, gloves, ' +
+  'sunglasses). If the runner\'s head or face is covered by a balaclava, or by a neck gaiter or buff ' +
+  'pulled up over the face, list balaclava as the head item. Then answer these lines in exactly this format:\n' +
   'PERSON_COUNT: <number of people in the photo>\n' +
   'ANATOMY_OK: <yes or no — no if the runner has extra, missing, or deformed limbs, hands, or fingers>\n' +
   'FACE_OK: <yes or no — no if the face is distorted, melted, or uncanny>\n' +
@@ -392,14 +409,28 @@ export function evaluateGate(
   } else if (seen.bottom !== exp.bottom) {
     notes.push(`bottom exact class seen ${seen.bottom} vs prompt ${exp.bottom} (same family)`)
   }
-  if (seen.head !== exp.head) {
+  // Headwear (ruling 7 — Sol's balaclava clarification, 2026-11-02
+  // ~21:28 EST): coverage is what is verified, not the covering's
+  // form. Both non-null with different forms = satisfied, noted.
+  // Absence (seen null vs prescribed) and unprescribed headwear
+  // (seen vs prompt null) keep the exact-match failure below.
+  if (exp.head !== null && seen.head !== null && seen.head !== exp.head) {
+    notes.push(`head seen ${seen.head} vs prompt ${exp.head} — a covered head satisfies the headwear prescription (balaclava clarification 2026-11-02)`)
+  } else if (seen.head !== exp.head) {
     fails.push({ cls: 'head', message: `head seen ${seen.head} != prompt ${exp.head}` })
   }
   if (seen.hands !== exp.hands) {
     fails.push({ cls: 'hands', message: `hands seen ${seen.hands} != prompt ${exp.hands}` })
   }
+  // Sunglasses (ruling 6 — V1, Sol 2026-11-02 ~21:28 EST): omission
+  // (prescribed, not seen) is a note, never a failure. The reverse —
+  // seen where not prescribed — still fails, message unchanged.
   if (seen.sunglasses !== exp.sunglasses) {
-    fails.push({ cls: 'sunglasses', message: `sunglasses seen ${seen.sunglasses} != prompt ${exp.sunglasses}` })
+    if (exp.sunglasses && !seen.sunglasses) {
+      notes.push('sunglasses prescribed but not seen (V1 ruling 2026-11-02: omission is never a failure)')
+    } else {
+      fails.push({ cls: 'sunglasses', message: `sunglasses seen ${seen.sunglasses} != prompt ${exp.sunglasses}` })
+    }
   }
   if (seen.gaiter !== exp.gaiter) {
     notes.push(`gaiter seen ${seen.gaiter} vs prompt ${exp.gaiter} (ruling 1: not a failure)`)
