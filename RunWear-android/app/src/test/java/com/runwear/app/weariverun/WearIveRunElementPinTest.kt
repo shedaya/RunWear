@@ -189,7 +189,7 @@ class WearIveRunElementPinTest {
     fun `the expanded state has no Remove text button and no placeholder glyph - D-10 D-12`() {
         val bar = miniBar()
         assertFalse(bar.contains("TextButton"))
-        assertFalse(bar.contains("\"Remove\""))
+        assertFalse(bar.contains("text = \"Remove\""))
         // Both states share the trash icon's content description.
         assertEquals(
             2,

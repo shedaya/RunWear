@@ -74,6 +74,17 @@ abstract class WearElementHarness {
         dark: Boolean,
         content: @Composable () -> Unit
     ): Rendered {
+        // Pre-publish the palette the theme's SideEffect would
+        // publish: under Robolectric's paused looper the SideEffect →
+        // recomposition round does not reliably settle before the
+        // draw (the WS-1 harness limitation), and RunWearColors is a
+        // process-global token holder — without this, a render can
+        // read the palette a previous render in the class left
+        // behind. The theme below still composes with the same flag.
+        com.runwear.app.ui.theme.RunWearColors.setActivePalette(
+            if (dark) com.runwear.app.ui.theme.DarkPalette
+            else com.runwear.app.ui.theme.LightPalette
+        )
         val controller = Robolectric.buildActivity(ComponentActivity::class.java)
         val activity = controller.create().start().resume().visible().get()
         val composeView = ComposeView(activity)
