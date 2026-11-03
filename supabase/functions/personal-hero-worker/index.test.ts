@@ -18,10 +18,11 @@ function assertEquals(actual: unknown, expected: unknown, msg?: string) {
 function assertStringIncludes(s: string, sub: string, msg?: string) {
   if (!s.includes(sub)) throw new Error(msg ?? `assertStringIncludes: missing ${JSON.stringify(sub)}`)
 }
+import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts"
 import {
   buildPrompt, classesFromText, expectedClassesForPrompt,
   evaluateGate, parseGateText, drawBudgetFor, selectAnchor,
-  isAccessoryOnlyFailure, type GarmentClasses
+  isAccessoryOnlyFailure, buildRepairMask, type GarmentClasses
 } from "./index.ts"
 
 const baseJob = {
@@ -151,6 +152,15 @@ Deno.test('parse: enumeration text extracts answers + conditions', () => {
   assertEquals(parsed.seen.topBase, 'long')
   assertEquals(parsed.seen.bottom, 'tights')
   assertEquals(parsed.seen.head, 'beanie')
+})
+
+Deno.test('repair mask: 1-indexed bands render without throwing (battery regression)', async () => {
+  const png = await buildRepairMask(64, 96, ['head', 'hands', 'sunglasses'])
+  assert(png.length > 0)
+  const img = await Image.decode(png)
+  assertEquals([img.width, img.height], [64, 96])
+  assertEquals(img.getPixelAt(32, 5), 0xFFFFFFFF)   // head band is white
+  assertEquals(img.getPixelAt(32, 90), 0x000000FF)  // below the hands band stays black
 })
 
 Deno.test('anchor: first passing reference wins; failures are skipped, never blended', () => {

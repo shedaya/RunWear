@@ -695,7 +695,12 @@ async function createPulidDraw(prompt: string, refDataUri: string): Promise<stri
       input: {
         prompt,
         main_face_image: refDataUri,
-        width: 832, height: 1216, num_outputs: 1
+        width: 832, height: 1216, num_outputs: 1,
+        // PuLID's default output is WebP, which imagescript (the
+        // gate's decoder) cannot read — every draw would fail at the
+        // gate stage. PNG is decodable and matches the .png storage
+        // convention. Caught by the RW-16.30 battery, 2026-11-02.
+        output_format: 'png'
       }
     })
   })
@@ -748,7 +753,7 @@ async function fetchPredictionOutputBytes(predictionId: string): Promise<Uint8Ar
 // identity re-screened and re-gated before it can deliver; a repair
 // that moves the face or the outfit fails closed like any draw.
 // ---------------------------------------------------------------------
-async function buildRepairMask(
+export async function buildRepairMask(
   width: number, height: number, classes: string[]
 ): Promise<Uint8Array> {
   const mask = new Image(width, height)
@@ -756,8 +761,12 @@ async function buildRepairMask(
   const band = (x: number, y: number, w: number, h: number) => {
     const x0 = Math.max(0, Math.floor(x)), y0 = Math.max(0, Math.floor(y))
     const x1 = Math.min(width, Math.ceil(x + w)), y1 = Math.min(height, Math.ceil(y + h))
+    // imagescript pixels are 1-indexed: (0, 0) throws. Caught by the
+    // RW-16.30 battery — the 0-based loop made every repair attempt
+    // throw (contained by the caller's try/catch, so repair silently
+    // never happened).
     for (let yy = y0; yy < y1; yy++) {
-      for (let xx = x0; xx < x1; xx++) mask.setPixelAt(xx, yy, 0xFFFFFFFF)
+      for (let xx = x0; xx < x1; xx++) mask.setPixelAt(xx + 1, yy + 1, 0xFFFFFFFF)
     }
   }
   if (classes.includes('head')) band(0, 0, width, height * 0.30)
