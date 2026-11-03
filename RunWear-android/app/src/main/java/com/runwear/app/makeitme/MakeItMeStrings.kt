@@ -55,6 +55,11 @@ object MakeItMeStrings {
     // same checks, same strings, camera offered first.
     const val C3E_RETAKE_GUIDED = "Let's retake that one with the camera — face the light, keep your whole face inside the oval, and hold still."
     const val C3F_RETAKE_UPLOAD = "That photo can't be used. Retake with the camera, or choose a brighter photo that's just you, face forward."
+    // C3G added Nov 3, 2026 (WS-6, F-1): the roll gate's retake line —
+    // a photo whose face reads sideways beyond correction is retaken
+    // upright, never uploaded rotated (the server's `rotated` key is
+    // the same verdict one layer up).
+    const val C3G_REJECT_ROTATED = "This photo came out sideways. Retake it holding your phone upright, or pick a photo that's already upright."
 
     // G — First generation (spec §2.4). G3 (PROPOSAL P1) intentionally absent.
     // G4 was silence by spec — SUPERSEDED Nov 1, 2026 (RW-16.16, spec

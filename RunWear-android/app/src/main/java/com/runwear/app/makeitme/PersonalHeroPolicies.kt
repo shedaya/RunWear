@@ -237,7 +237,11 @@ enum class PhotoRejection {
     FACE_UNCLEAR,
     MULTIPLE_PEOPLE,
     TOO_DARK,
-    TOO_CLOSE
+    TOO_CLOSE,
+    /** WS-6 (F-1): the subject face's in-plane roll is beyond the
+     *  gate and was not a correctable quarter-turn — the photo is
+     *  sideways/tilted and must be retaken upright. */
+    ROTATED
 }
 
 /**
@@ -264,10 +268,20 @@ object PhotoQualityPolicy {
     fun decide(
         faceCount: Int,
         largestFaceWidthFraction: Float,
-        meanLuminance: Double
+        meanLuminance: Double,
+        subjectHeadRollDegrees: Float = 0f
     ): PhotoRejection? {
         if (faceCount == 0) return PhotoRejection.FACE_UNCLEAR
         if (faceCount > 1) return PhotoRejection.MULTIPLE_PEOPLE
+        // WS-6 (F-1): the roll gate sits right after the face-count
+        // checks — orientation is a framing defect of the one subject
+        // face, judged before exposure/framing-size. A photo reaching
+        // here with roll beyond the gate was not EXIF-correctable and
+        // not a clean quarter-turn (the checker corrects those), so
+        // it is rejected for retake, never waved through sideways.
+        if (!IntakeOrientation.rollWithinGate(subjectHeadRollDegrees)) {
+            return PhotoRejection.ROTATED
+        }
         if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
         if (largestFaceWidthFraction > MAX_FACE_WIDTH_FRACTION) return PhotoRejection.TOO_CLOSE
         return null
@@ -279,6 +293,7 @@ object PhotoQualityPolicy {
         PhotoRejection.MULTIPLE_PEOPLE -> MakeItMeStrings.C3B_REJECT_MULTIPLE
         PhotoRejection.TOO_DARK -> MakeItMeStrings.C3C_REJECT_TOO_DARK
         PhotoRejection.TOO_CLOSE -> MakeItMeStrings.C3D_REJECT_TOO_CLOSE
+        PhotoRejection.ROTATED -> MakeItMeStrings.C3G_REJECT_ROTATED
     }
 }
 

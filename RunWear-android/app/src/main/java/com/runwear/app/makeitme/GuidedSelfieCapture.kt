@@ -99,7 +99,10 @@ object GuidedSelfieChecks {
 
     fun allPassed(m: PhotoQualityChecker.Measurements?): Boolean =
         m != null && evaluate(m).all { it.passed } &&
-            PhotoQualityPolicy.decide(m.faceCount, m.largestFaceWidthFraction, m.meanLuminance) == null
+            PhotoQualityPolicy.decide(
+                m.faceCount, m.largestFaceWidthFraction, m.meanLuminance,
+                m.subjectHeadRollDegrees
+            ) == null
 
     /** The ONE coaching line, aimed at the first failing check. */
     fun coachingLine(m: PhotoQualityChecker.Measurements?): String {
@@ -108,6 +111,12 @@ object GuidedSelfieChecks {
         return when {
             !checks[0].passed -> "Move your face into the oval."
             !checks[1].passed -> "Just you in the frame — one face only."
+            // WS-6 (F-1): the roll gate coaches before size/framing —
+            // a sideways capture is retaken upright, never accepted.
+            // (Post-EXIF-decode this is residual-only: the camera's
+            // own captures arrive upright at the source.)
+            !IntakeOrientation.rollWithinGate(m.subjectHeadRollDegrees) ->
+                "Hold your phone upright — that one came out sideways."
             !checks[2].passed -> "Move a little closer — your face should fill the oval."
             !checks[3].passed -> "Face the camera straight on."
             !checks[4].passed -> "Find brighter light — face a window or a lamp."
