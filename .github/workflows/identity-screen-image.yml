@@ -29,6 +29,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Snapshot current v1 (buffalo_l F-1 build) to buffalo-v1 before any overwrite (one-off, RW-16.30 swap 2026-11-03)
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/shedaya/runwear-identity-screen:buffalo-v1 \
+            ghcr.io/shedaya/runwear-identity-screen@sha256:022c2fd8a6781d94608cf79279aba641ebf6ab7640c280539ab1097224766d38
       - uses: docker/build-push-action@v6
         with:
           context: services/identity-screen
