@@ -155,10 +155,13 @@ struct FallbackImageProvider {
     ///   - weather: Weather condition
     ///   - size: Image size (kept for compatibility; one bundled size)
     /// - Returns: file URL string of the bundled pool photo
-    func getImageURL(
+    /// The bundled asset NAME a fallback request resolves to, before
+    /// bundle-URL resolution. Internal (not private) so unit tests can
+    /// pin the resolution in a logic-test host, where Bundle.main is
+    /// the test runner and no app resources resolve.
+    func resolvedAssetName(
         temp: HeroTempBracket,
         weather: HeroWeatherCondition,
-        size: ImageSize = .iOS,
         gender: HeroGender? = nil
     ) -> String {
         // RW-26: with a (resolved) gender, never resolve to an asset
@@ -169,16 +172,23 @@ struct FallbackImageProvider {
         if let gender {
             for (bracket, condition) in orderedFallbackCells(temp: temp, weather: weather) {
                 if let name = assetNames[bracket]?[condition], assetSubjects[name] == gender {
-                    return bundledURLString(assetName: name)
-                        ?? bundledURLString(assetName: "mild_clear")
-                        ?? ""
+                    return name
                 }
             }
         }
-        let name = assetNames[temp]?[weather]
+        return assetNames[temp]?[weather]
             ?? assetNames[temp]?[.CLEAR]
             ?? assetNames[.MILD]?[.CLEAR]
             ?? "mild_clear"
+    }
+
+    func getImageURL(
+        temp: HeroTempBracket,
+        weather: HeroWeatherCondition,
+        size: ImageSize = .iOS,
+        gender: HeroGender? = nil
+    ) -> String {
+        let name = resolvedAssetName(temp: temp, weather: weather, gender: gender)
         return bundledURLString(assetName: name)
             ?? bundledURLString(assetName: "mild_clear")
             ?? ""

@@ -10,14 +10,19 @@ import XCTest
 /// Android: cool_clear and mild_clear; iOS shares the matrix and the
 /// mechanism). Diagnosis:
 /// release-prep/rw-gender-preference-diagnosis-2026-11-02.md.
-/// Mirror of Android's HeroFallbackGenderTest.
+/// Mirror of Android's HeroFallbackGenderTest. Assertions run on
+/// resolved asset NAMES (FallbackImageProvider.resolvedAssetName):
+/// this target is a logic-test host where Bundle.main is the test
+/// runner, so bundle-URL resolution returns nil there by design —
+/// the first CI round failed all six tests on empty URLs, including
+/// the ungendered legacy-chain case, which is how that artifact was
+/// identified.
 final class HeroFallbackGenderTests: XCTestCase {
 
     private let provider = FallbackImageProvider.shared
 
-    private func assetName(_ url: String) -> String {
-        let last = (url as NSString).lastPathComponent
-        return (last as NSString).deletingPathExtension
+    private func assetName(temp: HeroTempBracket, weather: HeroWeatherCondition, gender: HeroGender? = nil) -> String {
+        provider.resolvedAssetName(temp: temp, weather: weather, gender: gender)
     }
 
     /// The RW-20 provenance census: subject gender per bundled asset.
@@ -34,43 +39,34 @@ final class HeroFallbackGenderTests: XCTestCase {
         // Sol's flagged serve: requested MALE_CLEAR_MILD_NIGHT, served
         // the MILD×CLEAR fallback (a woman). MILD holds no male-subject
         // asset; the nearest matching one is WARM×CLEAR.
-        let url = provider.getImageURL(temp: .MILD, weather: .CLEAR, gender: .MALE)
-        XCTAssertEqual("warm_clear", assetName(url))
+        XCTAssertEqual("warm_clear", assetName(temp: .MILD, weather: .CLEAR, gender: .MALE))
     }
 
     func testFieldInstance1_maleCoolClearResolvesToCoolSnowNotCoolClear() {
         // The screenshot: Fit Preference Male, hero = cool_clear (a
         // woman in a pink long-sleeve). COOL's only male-subject asset
         // is its SNOW cell.
-        let url = provider.getImageURL(temp: .COOL, weather: .CLEAR, gender: .MALE)
-        XCTAssertEqual("cool_snow", assetName(url))
+        XCTAssertEqual("cool_snow", assetName(temp: .COOL, weather: .CLEAR, gender: .MALE))
     }
 
     func testFemaleWarmClearResolvesToWarmRainNotWarmClear() {
-        let url = provider.getImageURL(temp: .WARM, weather: .CLEAR, gender: .FEMALE)
-        XCTAssertEqual("warm_rain", assetName(url))
+        XCTAssertEqual("warm_rain", assetName(temp: .WARM, weather: .CLEAR, gender: .FEMALE))
     }
 
     func testMatchingExactCellUnchanged() {
-        XCTAssertEqual(
-            "mild_clear",
-            assetName(provider.getImageURL(temp: .MILD, weather: .CLEAR, gender: .FEMALE))
-        )
-        XCTAssertEqual(
-            "warm_clear",
-            assetName(provider.getImageURL(temp: .WARM, weather: .CLEAR, gender: .MALE))
-        )
+        XCTAssertEqual("mild_clear", assetName(temp: .MILD, weather: .CLEAR, gender: .FEMALE))
+        XCTAssertEqual("warm_clear", assetName(temp: .WARM, weather: .CLEAR, gender: .MALE))
     }
 
     func testEveryGenderedResolutionReturnsAMatchingSubject() {
         for bracket in HeroTempBracket.allCases {
             for condition in HeroWeatherCondition.allCases {
                 for gender in [HeroGender.MALE, .FEMALE] {
-                    let url = provider.getImageURL(temp: bracket, weather: condition, gender: gender)
+                    let name = assetName(temp: bracket, weather: condition, gender: gender)
                     XCTAssertEqual(
                         gender,
-                        expectedSubjects[assetName(url)],
-                        "wrong-gender subject for \(bracket)/\(condition)/\(gender): \(assetName(url))"
+                        expectedSubjects[name],
+                        "wrong-gender subject for \(bracket)/\(condition)/\(gender): \(name)"
                     )
                 }
             }
@@ -78,17 +74,8 @@ final class HeroFallbackGenderTests: XCTestCase {
     }
 
     func testUngenderedResolutionIsTheLegacyChain() {
-        XCTAssertEqual(
-            "mild_clear",
-            assetName(provider.getImageURL(temp: .MILD, weather: .CLEAR))
-        )
-        XCTAssertEqual(
-            "hot_clear",
-            assetName(provider.getImageURL(temp: .HOT, weather: .SNOW))
-        )
-        XCTAssertEqual(
-            "cool_clear",
-            assetName(provider.getImageURL(temp: .COOL, weather: .CLEAR))
-        )
+        XCTAssertEqual("mild_clear", assetName(temp: .MILD, weather: .CLEAR))
+        XCTAssertEqual("hot_clear", assetName(temp: .HOT, weather: .SNOW))
+        XCTAssertEqual("cool_clear", assetName(temp: .COOL, weather: .CLEAR))
     }
 }
