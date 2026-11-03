@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.core.content.FileProvider
 import java.io.File
@@ -78,7 +77,12 @@ class ShareCaptureHandle internal constructor(
         // captured outer scope or the compiler refuses the call.
         val contentScope = this
         layer.record { contentScope.drawContent() }
-        drawLayer(layer)
+        // The content ALSO draws normally for display. The layer is
+        // never drawn into a canvas — it exists only to be read back
+        // by captureBitmap(); drawing a RenderNode into a software
+        // canvas is illegal ("Software rendering doesn't support
+        // drawRenderNode"), while recording into one is not.
+        drawContent()
     }
 
     /** Rasterize the recorded content. Call after it has drawn. */
