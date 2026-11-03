@@ -97,6 +97,10 @@ class ShareArtifactsTest {
         assertTrue(artifacts.contains("Intent.EXTRA_STREAM"))
         assertTrue(artifacts.contains("Bitmap.CompressFormat.PNG"))
         assertTrue(artifacts.contains("FileProvider.getUriForFile"))
+        // The capture readback itself (GraphicsLayer.toImageBitmap —
+        // the device path; its Robolectric snapshot fallback is the
+        // library's own limitation, see ShareArtifactRenderTest).
+        assertTrue(artifacts.contains("toImageBitmap()"))
     }
 
     @Test
