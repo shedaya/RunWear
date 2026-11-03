@@ -177,6 +177,11 @@ enum AppTheme {
     /// Pine for payload text (mini-bar narration, accents): the seed
     /// in light mode, the brightened accent on Warm Charcoal.
     static let pinePayload = dynamicColor(lightHex: "175E4C", darkHex: pineAccentDarkHex)
+    /// The dark pine accent as a fixed color, for surfaces that are
+    /// dark in BOTH modes (e.g. the refresh error banner's black
+    /// fill): pine-as-text there must be the accent, never the seed
+    /// (the seed computes to ≈2:1 on near-black — the D-25 class).
+    static let pineAccentDark = Color(hex: pineAccentDarkHex)
 
     // MARK: - Weather pill legibility (RW-26, phase-1 flag closure)
     //

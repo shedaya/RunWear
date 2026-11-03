@@ -34,9 +34,18 @@ struct ComfortLevelControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // WS-8 (D-25 iOS residue): the comfort micro-labels —
+            // the current level's label here and the Runs Cold /
+            // Runs Warm end labels below — render in the design's
+            // secondary token pair (AppTheme.inkSecondary:
+            // #5F5B52 light / #B8AEA0 dark), NOT system .secondary.
+            // System .secondary composites to ≈3.3–3.4:1 on the
+            // light grounds, below the 4.5:1 text floor; the token
+            // pair clears it in both modes (6.00–6.54:1 light,
+            // 6.95–7.66:1 dark — pinned in RW26Phase2Tests).
             Text(comfortLevel.shortLabel)
                 .font(.appSecondary)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.inkSecondary)
 
             Slider(value: indexBinding, in: 0...4, step: 1) {
                 Text("Body Temperature")
@@ -51,7 +60,7 @@ struct ComfortLevelControl: View {
                 Text("Runs Warm")
             }
             .font(.appFootnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(AppTheme.inkSecondary)
         }
         .sensoryFeedback(.selection, trigger: comfortLevel)
     }

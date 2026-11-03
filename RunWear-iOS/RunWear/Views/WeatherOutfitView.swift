@@ -1048,7 +1048,11 @@ private struct RefreshErrorBanner: View {
 
             Button("Retry", action: onRetry)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(AppTheme.primaryColor)
+                // WS-8 (D-25 class): the banner's fill is near-black
+                // in both modes, so its pine text is the DARK pine
+                // accent (#5CC79F, ≈7.3:1 on the banner fill) — the
+                // seed pine (primaryColor) computes to ≈2.0:1 there.
+                .foregroundColor(AppTheme.pineAccentDark)
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
@@ -1231,7 +1235,10 @@ struct GenderToggle: View {
             }
         }
         .padding(4)
-        .background(Color(UIColor.secondarySystemBackground))
+        // WS-8: the token card fill for this (currently call-site-
+        // less, legacy) segmented container — the system
+        // secondarySystemBackground is an off-table ground.
+        .background(AppTheme.cardOnSheet)
         .cornerRadius(20)
     }
 }

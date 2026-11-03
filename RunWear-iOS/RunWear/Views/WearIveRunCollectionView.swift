@@ -478,7 +478,7 @@ struct MorningPosterView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                Color(hex: "16130F")
+                AppTheme.darkBackground
             }
 
             // The area scrim (notes §7.4): gray gradient
@@ -556,6 +556,11 @@ struct MorningPosterView: View {
 
 /// The kit artifact: the day's garments as the app's real renders
 /// (the engine's thumbnail map, by item key), on the sheet surface.
+/// WS-8: the artifact is fixed-light by design (frame 13), so its
+/// colors are AppTheme's STATIC light constants (textPrimary /
+/// textSecondary / backgroundColor / cardBackground / primaryColor)
+/// — never the dynamic pair, which would flip the rendered share
+/// image with the app's appearance.
 struct KitCardView: View {
     let entry: WearIveRunEntry
     let genderPreference: GenderPreference
@@ -573,10 +578,10 @@ struct KitCardView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Wear I've Run")
                 .font(.greatVibes(size: 26))
-                .foregroundColor(Color(hex: "17191C"))
+                .foregroundColor(AppTheme.textPrimary)
             Text("\(entry.placeName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
                 .font(.system(size: 13))
-                .foregroundColor(Color(hex: "5F5B52"))
+                .foregroundColor(AppTheme.textSecondary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(Array(zip(entry.itemNames, entry.itemKeys).enumerated()), id: \.offset) { _, pair in
@@ -593,10 +598,10 @@ struct KitCardView: View {
                                         image.resizable().aspectRatio(contentMode: .fit)
                                     default:
                                         Rectangle()
-                                            .fill(Color(hex: "F5F1E8"))
+                                            .fill(AppTheme.backgroundColor)
                                             .overlay(
                                                 Image(systemName: "tshirt")
-                                                    .foregroundColor(Color(hex: "5F5B52"))
+                                                    .foregroundColor(AppTheme.textSecondary)
                                             )
                                     }
                                 }
@@ -605,7 +610,7 @@ struct KitCardView: View {
                         .frame(height: 90)
                         Text(pair.0)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color(hex: "17191C"))
+                            .foregroundColor(AppTheme.textPrimary)
                             .multilineTextAlignment(.center)
                     }
                 }
@@ -613,10 +618,10 @@ struct KitCardView: View {
 
             Text("#RunAnyWear")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Color(hex: "175E4C"))
+                .foregroundColor(AppTheme.primaryColor)
         }
         .padding(20)
         .frame(width: 390)
-        .background(Color(hex: "FDFBF6"))
+        .background(AppTheme.cardBackground)
     }
 }
