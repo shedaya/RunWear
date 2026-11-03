@@ -455,10 +455,20 @@ struct WeatherOutfitView: View {
     private var heroWithScrollHandoff: some View {
         let progress = reduceMotion ? 0 : heroScrollProgress
         return heroSection()
-            .overlay(alignment: .top) { scriptLogo }
-            .scaleEffect(1 - 0.06 * progress)
-            .clipShape(RoundedRectangle(cornerRadius: 24 * progress))
-            .padding(.horizontal, 16 * progress)
+            // WS-1 (§1.1): the photo-zone chrome fades 1 → 0
+            // across the FIRST 40% of the handoff and is
+            // non-interactive from the moment the fade begins —
+            // it never slides, and it is fully present again at
+            // rest. (Before this fix the logo only rode the
+            // hero's scale transform and never faded at all.)
+            .overlay(alignment: .top) {
+                scriptLogo
+                    .opacity(HomeHandoffGeometry.chromeOpacity(progress: progress))
+                    .allowsHitTesting(HomeHandoffGeometry.chromeIsInteractive(progress: progress))
+            }
+            .scaleEffect(HomeHandoffGeometry.scale(progress: progress))
+            .clipShape(RoundedRectangle(cornerRadius: HomeHandoffGeometry.cornerRadius(progress: progress)))
+            .padding(.horizontal, HomeHandoffGeometry.horizontalInset(progress: progress))
     }
 
     /// RW-26 (notes §7.3): the script logo at the top of the main
@@ -475,9 +485,11 @@ struct WeatherOutfitView: View {
     }
 
     /// Scroll-offset -> handoff progress: full transition over the
-    /// first 220pt of scroll.
+    /// first 220pt of scroll (HomeHandoffGeometry.handoffRange).
+    /// Scroll-coupled 1:1 per §1.1 — a direct function of the
+    /// offset, no spring and no lag is applied to it.
     private func updateHeroScrollProgress(offset: CGFloat) {
-        heroScrollProgress = min(1, max(0, offset / 220))
+        heroScrollProgress = HomeHandoffGeometry.progress(forScrollOffset: offset)
     }
 
     /// The sheet surface for the stacked layouts: overlaps the
@@ -497,10 +509,16 @@ struct WeatherOutfitView: View {
             Spacer(minLength: 40)
         }
         .background {
-            UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(topLeading: 28, topTrailing: 28))
+            UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
+                topLeading: HomeHandoffGeometry.sheetCornerRadius,
+                topTrailing: HomeHandoffGeometry.sheetCornerRadius
+            ))
                 .fill(AppTheme.sheet)
         }
-        .padding(.top, -28)
+        // WS-1 (§1.1): the −28 overlap is a constant of the
+        // composition — layout geometry, not a moving part — so
+        // it is the same at rest and at every handoff position.
+        .padding(.top, -HomeHandoffGeometry.sheetOverlap)
         .zIndex(1)
     }
 

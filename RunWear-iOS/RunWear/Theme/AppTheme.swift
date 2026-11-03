@@ -109,7 +109,12 @@ enum AppTheme {
     }
 
     // MARK: - Animation Durations
-    static let crossfadeDuration: Double = 0.5
+    /// The hero photo crossfade (rebuild program Part 1, §1.1:
+    /// 300 ms; §1.0's standard crossfade band is 0.20–0.30 s).
+    /// WS-1 corrected this from 0.5 s — the emphasized band,
+    /// which §1.0 reserves for sheet travel and morphs, not for
+    /// a photo crossfade. Its only consumer is HeroImageView.
+    static let crossfadeDuration: Double = 0.3
     static let staggerDuration: Double = 0.4
     static let staggerDelay: Double = 0.05
     static let modalTransitionDuration: Double = 0.3

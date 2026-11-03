@@ -116,17 +116,32 @@ struct HeroImageView: View {
         // would swallow taps meant for the hero's own controls.
         // RW-25 inset: 40pt = the sheet's 28pt overlap onto the
         // hero's foot + a 12pt gap, so the chip clears the sheet's
-        // rounded top edge in the stacked layouts.
+        // rounded top edge in the stacked layouts. WS-1: the value
+        // is HomeHandoffGeometry.flagChipBottomInset — derived
+        // from the overlap constant, so the accessory zone is
+        // capped by construction and cannot drift from the sheet.
         .overlay(alignment: .bottomTrailing) {
             if let personalFlagTarget {
                 personalFlagChip(for: personalFlagTarget)
                     .padding(.trailing, 14)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, HomeHandoffGeometry.flagChipBottomInset)
             } else if let flagTarget {
                 flagChip(for: flagTarget)
                     .padding(.trailing, 14)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, HomeHandoffGeometry.flagChipBottomInset)
             }
+        }
+        // WS-1 (§1.1): the crossfade belongs to EACH incoming
+        // photo. When the hero URL changes, the fade state resets
+        // — the new photo starts hidden and fades in only when
+        // ITS OWN load completes (the .success phase below).
+        // Before this, the first photo's landed state carried
+        // over, so every later photo swapped in with no crossfade
+        // at all — and a still-loading photo could inherit the
+        // previous photo's "shown" state.
+        .onChange(of: aiImageUrl) { _, _ in
+            showAIImage = false
+            aiImageLoaded = false
         }
     }
 
@@ -183,8 +198,15 @@ struct HeroImageView: View {
     @ViewBuilder
     private func heroImageLayer(width: CGFloat, height: CGFloat) -> some View {
         ZStack {
-            // Always show fallback first (instant load)
-            AsyncImage(url: URL(string: fallbackImageUrl)) { phase in
+            // Always show fallback first (instant load). WS-1
+            // (§1.1): a fallback URL change (a new day / time /
+            // location settling on the fallback) crossfades like
+            // every other hero change — the AsyncImage transaction
+            // carries the §1.1 crossfade instead of a hard swap.
+            AsyncImage(
+                url: URL(string: fallbackImageUrl),
+                transaction: Transaction(animation: .easeInOut(duration: reduceMotion ? 0 : AppTheme.crossfadeDuration))
+            ) { phase in
                 switch phase {
                 case .success(let image):
                     HeroPhoto(image: image, width: width, height: height)
