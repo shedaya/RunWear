@@ -145,6 +145,24 @@ abstract class HomeCompositionHarness {
             ?: throw IllegalStateException("no ViewRootForTest under $view")
     }
 
+    /** The MERGED semantics root (clickable surfaces merge their
+     * descendants — and their Disabled state — into one node). */
+    protected fun mergedRootNode(view: View): SemanticsNode {
+        var found: SemanticsNode? = null
+        fun collect(v: View) {
+            if (found == null && v is androidx.compose.ui.platform.ViewRootForTest) {
+                found = v.semanticsOwner.rootSemanticsNode
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    if (found == null) collect(v.getChildAt(i))
+                }
+            }
+        }
+        collect(view.rootView)
+        return found ?: throw IllegalStateException("no ViewRootForTest under $view")
+    }
+
     /** All semantics nodes in the tree, flattened. */
     protected fun nodes(root: SemanticsNode): List<SemanticsNode> =
         listOf(root) + root.children.flatMap { nodes(it) }
@@ -186,8 +204,12 @@ abstract class HomeCompositionHarness {
                 (if (v is android.view.ViewGroup) (0 until v.childCount).joinToString("") {
                     hier(v.getChildAt(it), d + 1)
                 } else "")
+        fun tree(n: SemanticsNode, d: Int): String =
+            "  ".repeat(d) + "node bounds=${n.boundsInRoot} keys=" +
+                n.config.keys.joinToString(",") { it.name } + "\n" +
+                (if (d < 3) n.children.joinToString("") { tree(it, d + 1) } else "")
         val diag = "rootChildren=${root.children.size} rootBounds=${root.boundsInRoot} " +
-            "candidates=${nodes(root).size}\n" + hier(composeView, 0)
+            "candidates=${nodes(root).size}\n" + tree(root, 0) + hier(composeView, 0)
         assertTrue(
             "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts; $diag",
             pill != null
@@ -338,8 +360,11 @@ class HomeChromeHandoffTest : HomeCompositionHarness() {
         drawAndSave(activity, composeView, name, 390, 844)
         // The semantics tree is read by the caller after this
         // returns, so the activity is deliberately not destroyed
-        // here (the harness process is per-test-class).
-        return rootNode(composeView)
+        // here (the harness process is per-test-class). The chrome
+        // assertions read the MERGED tree: a clickable Surface
+        // merges its icon's content description and its own
+        // Disabled state into one node there.
+        return mergedRootNode(composeView)
     }
 
     @Test
