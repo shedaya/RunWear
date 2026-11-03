@@ -7,8 +7,14 @@ import UIKit
 // RunWear's first billing, in its own RevenueCat project (418e7aa5),
 // deliberately separate from JetGuide's. Entitlement identifier:
 // `make_it_me`. Offering: `default` (current), packages $rc_monthly
-// (rw_makeitme_monthly, $0.99) and $rc_annual (rw_makeitme_annual,
-// $9.99) — rw14-billing-setup-2026-10-31.md.
+// (rw_makeitme_monthly) and $rc_annual (rw_makeitme_annual)
+// — rw14-billing-setup-2026-10-31.md.
+//
+// Prices are NEVER hardcoded in this file or in the views
+// (RW-16.30 pricing experiment, Nov 2 2026): every price renders
+// from the fetched current offering, so a user assigned a variant
+// offering ($19.99/$29.99 annual experiment arms) sees that
+// offering's prices and never the control price.
 //
 // What this class owns: configuring the SDK against the Supabase
 // user's id (so the billing webhook can map entitlement events back
@@ -30,6 +36,20 @@ final class MakeItMeBilling: ObservableObject {
     @Published private(set) var isSubscribed = false
     @Published private(set) var monthlyPriceString: String?
     @Published private(set) var annualPriceString: String?
+    @Published private(set) var monthlyPriceAmount: Decimal?
+    @Published private(set) var annualPriceAmount: Decimal?
+
+    /// Paywall row labels, composed from the fetched offering only.
+    var monthlyRowLabel: String {
+        MakeItMePriceLabels.monthlyRowLabel(priceString: monthlyPriceString)
+    }
+    var annualRowLabel: String {
+        MakeItMePriceLabels.annualRowLabel(
+            annualPriceString: annualPriceString,
+            annual: annualPriceAmount,
+            monthly: monthlyPriceAmount
+        )
+    }
 
     /// Set by PersonalHeroStore: fires on every entitlement change so
     /// the store can kick the server-side matrix fill.
@@ -81,6 +101,8 @@ final class MakeItMeBilling: ObservableObject {
         annualPackage = current.annual
         monthlyPriceString = current.monthly?.storeProduct.localizedPriceString
         annualPriceString = current.annual?.storeProduct.localizedPriceString
+        monthlyPriceAmount = current.monthly?.storeProduct.price
+        annualPriceAmount = current.annual?.storeProduct.price
     }
 
     enum PurchaseOutcome {
@@ -130,3 +152,6 @@ final class MakeItMeBilling: ObservableObject {
         }
     }
 }
+
+// Paywall price labels live in MakeItMePriceLabels.swift
+// (dual-membered into the test target, like MakeItMeAvailability).

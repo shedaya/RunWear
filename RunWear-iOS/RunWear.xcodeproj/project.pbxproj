@@ -139,6 +139,8 @@
 		F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000104 /* PhotoQualityChecker.swift */; };
 		F10002000000000000000135 /* PhotoQualityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000104 /* PhotoQualityChecker.swift */; };
 		F10002000000000000000105 /* MakeItMeBilling.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000105 /* MakeItMeBilling.swift */; };
+		F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000138 /* MakeItMePriceLabels.swift */; };
+		F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000138 /* MakeItMePriceLabels.swift */; };
 		F10002000000000000000106 /* PersonalHeroStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000106 /* PersonalHeroStore.swift */; };
 		F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
 		F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000108 /* MakeItMeSettingsViews.swift */; };
@@ -305,6 +307,7 @@
 		F10001000000000000000109 /* ReferencePhotosLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReferencePhotosLoader.swift; sourceTree = "<group>"; };
 		F10001000000000000000104 /* PhotoQualityChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoQualityChecker.swift; sourceTree = "<group>"; };
 		F10001000000000000000105 /* MakeItMeBilling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeBilling.swift; sourceTree = "<group>"; };
+		F10001000000000000000138 /* MakeItMePriceLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePriceLabels.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -434,6 +437,7 @@
 				F10001000000000000000113 /* MakeItMeAvailability.swift */,
 				F10001000000000000000104 /* PhotoQualityChecker.swift */,
 				F10001000000000000000105 /* MakeItMeBilling.swift */,
+				F10001000000000000000138 /* MakeItMePriceLabels.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
 			);
 			path = Services;
@@ -758,6 +762,7 @@
 				F10002000000000000000136 /* MakeItMeAvailability.swift in Sources */,
 				F10002000000000000000104 /* PhotoQualityChecker.swift in Sources */,
 				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
+				F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */,
 				F10002000000000000000106 /* PersonalHeroStore.swift in Sources */,
 				F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */,
 				F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */,
@@ -841,6 +846,7 @@
 				C10002000000000000000035 /* ReferenceTileLoaderTests.swift in Sources */,
 				F10002000000000000000133 /* MakeItMePresentation.swift in Sources */,
 				F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */,
+				F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */,
 				C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */,
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
 				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,
