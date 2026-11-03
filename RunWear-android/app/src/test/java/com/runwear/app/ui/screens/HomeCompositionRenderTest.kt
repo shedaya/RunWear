@@ -144,7 +144,7 @@ abstract class HomeCompositionHarness {
         screenHeightDp: Int,
         label: String
     ) {
-        val root = composeView.semanticsOwner.rootSemanticsNode
+        val root = (composeView as androidx.compose.ui.platform.ViewRootForTest).semanticsOwner.rootSemanticsNode
 
         // A3: the location pill is on screen at rest, in the photo
         // zone's top area, in the SimplePlace form.
@@ -297,7 +297,7 @@ class HomeChromeHandoffTest : HomeCompositionHarness() {
         // The semantics tree is read by the caller after this
         // returns, so the activity is deliberately not destroyed
         // here (the harness process is per-test-class).
-        return composeView.semanticsOwner.rootSemanticsNode
+        return (composeView as androidx.compose.ui.platform.ViewRootForTest).semanticsOwner.rootSemanticsNode
     }
 
     @Test
