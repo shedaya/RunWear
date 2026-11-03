@@ -1291,6 +1291,8 @@ fun MakeItMeSettingsSection(
     if (!MakeItMeAvailability.settingsSectionVisible()) return
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deletedNotice by remember { mutableStateOf(false) }
+    var showDeleteDataDialog by remember { mutableStateOf(false) }
+    var dataDeletedNotice by remember { mutableStateOf(false) }
 
     Column {
         Text(
@@ -1304,6 +1306,15 @@ fun MakeItMeSettingsSection(
         if (deletedNotice && state.mode == MakeItMeMode.STOCK) {
             Text(
                 text = MakeItMeStrings.S14_POST_DELETE,
+                fontSize = 13.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+        }
+
+        if (dataDeletedNotice && state.mode == MakeItMeMode.STOCK) {
+            Text(
+                text = MakeItMeStrings.S25_POST_DELETE_DATA,
                 fontSize = 13.sp,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 10.dp)
@@ -1367,6 +1378,19 @@ fun MakeItMeSettingsSection(
                 )
             }
         }
+
+        // Delete my data (RW-16.30 decision 5a): the account-level
+        // erasure, offered in EVERY mode — a stock-mode user still
+        // has an account, and the deletion must be reachable without
+        // opting in first. Sits apart from the mode content so it
+        // never reads as part of the feature's state.
+        Spacer(Modifier.height(6.dp))
+        MakeItMeSettingsRow(
+            title = MakeItMeStrings.S20_DELETE_DATA_ROW,
+            sub = null,
+            destructive = true,
+            onClick = { showDeleteDataDialog = true }
+        )
     }
 
     if (showDeleteDialog) {
@@ -1376,6 +1400,19 @@ fun MakeItMeSettingsSection(
             onDeleted = {
                 showDeleteDialog = false
                 deletedNotice = true
+                onDeleted()
+            }
+        )
+    }
+
+    if (showDeleteDataDialog) {
+        MakeItMeDeleteDataDialog(
+            viewModel = viewModel,
+            onDismiss = { showDeleteDataDialog = false },
+            onDeleted = {
+                showDeleteDataDialog = false
+                deletedNotice = false
+                dataDeletedNotice = true
                 onDeleted()
             }
         )
@@ -1529,6 +1566,63 @@ fun FirstLookMoment(
         dismissButton = {
             TextButton(onClick = onSeePremium) {
                 Text(MakeItMeStrings.FIRST_LOOK_SECOND_DOOR, color = RunWearColors.TextSecondary)
+            }
+        }
+    )
+}
+
+// ===========================================================================
+// Delete-my-data confirmation (RW-16.30 decision 5a, strings S21–S24) —
+// the same destructive pattern as the photos dialog, one level up:
+// the safe action is the quiet button, the destructive one is labeled
+// with the act itself, and success is claimed only on the server's
+// receipt (the account_deleted confirmation), never optimistically.
+// ===========================================================================
+
+@Composable
+fun MakeItMeDeleteDataDialog(
+    viewModel: MakeItMeViewModel,
+    onDismiss: () -> Unit,
+    onDeleted: () -> Unit
+) {
+    var deleting by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = { if (!deleting) onDismiss() },
+        title = { Text(MakeItMeStrings.S21_DELETE_DATA_CONFIRM_TITLE) },
+        text = {
+            Column {
+                Text(MakeItMeStrings.S22_DELETE_DATA_CONFIRM_BODY)
+                if (failed) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = MakeItMeStrings.TRANSPORT_ERROR,
+                        color = Color(0xFFFF8A80)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !deleting,
+                onClick = {
+                    deleting = true
+                    failed = false
+                    viewModel.deleteData { ok ->
+                        deleting = false
+                        if (ok) onDeleted() else failed = true
+                    }
+                }
+            ) {
+                Text(
+                    MakeItMeStrings.S23_DELETE_DATA_CONFIRM,
+                    color = Color(0xFFFF8A80)
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !deleting, onClick = onDismiss) {
+                Text(MakeItMeStrings.S24_DELETE_DATA_KEEP)
             }
         }
     )

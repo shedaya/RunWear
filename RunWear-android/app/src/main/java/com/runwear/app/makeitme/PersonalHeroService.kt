@@ -385,6 +385,34 @@ class PersonalHeroService @Inject constructor(
         )
     }
 
+    data class DataDeleteOutcome(
+        val storageRemoved: Int,
+        val totalRowsRemoved: Int,
+        val accountDeleted: Boolean
+    )
+
+    /**
+     * Full account-data deletion (delete-my-data, RW-16.30 decision
+     * 5a): the photos sweep plus the webhook log and the account
+     * itself. The server reports a failed account deletion in the
+     * receipt (account_deleted = false) instead of failing the call;
+     * that maps to a null outcome here so callers claim nothing —
+     * the data is gone but the account is not, and the user's retry
+     * completes it.
+     */
+    suspend fun deleteMyData(): DataDeleteOutcome? {
+        val result = callFunction("delete-my-data", "{}")
+        val body = (result as? FunctionResult.Ok)?.body ?: return null
+        if (body["account_deleted"]?.jsonPrimitive?.booleanOrNull != true) return null
+        val rows = body["rows_removed"]?.jsonObject
+        val totalRows = rows?.values?.sumOf { it.jsonPrimitive.intOrNull ?: 0 } ?: 0
+        return DataDeleteOutcome(
+            storageRemoved = body["storage_objects_removed"]?.jsonPrimitive?.intOrNull ?: 0,
+            totalRowsRemoved = totalRows,
+            accountDeleted = true
+        )
+    }
+
     // ── Profile read (PostgREST, owner RLS) ────────────────────────────
 
     data class ProfileSnapshot(

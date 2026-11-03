@@ -364,10 +364,32 @@ class PersonalHeroRepository @Inject constructor(
      * has confirmed (spec §3).
      */
     suspend fun deleteEverything(): Boolean {
-        val outcome = service.deleteMyPhotos() ?: return false
-        // Local mirrors: the profile is gone server-side; clear all
-        // personal residue on this phone (spec S12: "from our server
-        // and this phone").
+        service.deleteMyPhotos() ?: return false
+        clearLocalPersonalState()
+        return true
+    }
+
+    /**
+     * Delete my data (RW-16.30 decision 5a): the full account
+     * deletion — server erasure via delete-my-data (photos, event
+     * logs, and the account itself), then the same local cleanup as
+     * the photos erasure. Returns true only when the SERVER's
+     * receipt confirms the account is deleted; a receipt without
+     * that confirmation (account_deleted = false) maps to false so
+     * the UI offers a retry instead of claiming the deletion.
+     */
+    suspend fun deleteAllData(): Boolean {
+        service.deleteMyData() ?: return false
+        clearLocalPersonalState()
+        return true
+    }
+
+    /**
+     * Local mirrors after a confirmed server erasure: the profile is
+     * gone server-side; clear all personal residue on this phone
+     * (spec S12: "from our server and this phone").
+     */
+    private suspend fun clearLocalPersonalState() {
         val raw = preferencesRepository.getString(KEY_REQUESTED_CELLS)
         raw?.split(",")?.filter { it.isNotBlank() }?.forEach { invalidateCell(it) }
         clearRequestedCells()
@@ -379,7 +401,6 @@ class PersonalHeroRepository @Inject constructor(
         // generated ones.
         service.clearSession()
         _state.value = PersonalState(forkDecided = _state.value.forkDecided, synced = true)
-        return true
     }
 
     // ── Upsell dismissal (spec §5.2) ───────────────────────────────────
