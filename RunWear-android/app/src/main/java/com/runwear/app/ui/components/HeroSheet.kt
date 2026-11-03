@@ -68,7 +68,7 @@ object HeroSheetFormat {
         isNowSelected: Boolean
     ): String {
         val moment = if (isNowSelected) "Now" else momentLabel(selectedDateTime, locationNow)
-        return "$locationName · $moment"
+        return "${simplePlaceName(locationName)} · $moment"
     }
 
     /** Legacy single-line eyebrow, retained for the split-pane header. */
@@ -79,8 +79,19 @@ object HeroSheetFormat {
         isNowSelected: Boolean
     ): String {
         val moment = if (isNowSelected) "NOW" else momentLabel(selectedDateTime, locationNow)
-        return "FEELS LIKE · $locationName · $moment".uppercase(Locale.US)
+        return "FEELS LIKE · ${simplePlaceName(locationName)} · $moment".uppercase(Locale.US)
     }
+
+    /**
+     * WS-4 (RC-4): the header's place is the SIMPLE form. State should
+     * already carry a [com.runwear.shared.domain.model.SimplePlace]
+     * display (derived once at geocode time); this render-boundary
+     * normalization guarantees a raw geocode string ("New York,
+     * New York") can never reach the line even from a legacy saved
+     * value. Idempotent for simple forms and sentinels alike.
+     */
+    fun simplePlaceName(locationName: String): String =
+        com.runwear.shared.domain.model.SimplePlace.fromRawDisplayString(locationName).display
 
     /** The non-NOW moment label, in DateTimePill's human formats. */
     fun momentLabel(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String {

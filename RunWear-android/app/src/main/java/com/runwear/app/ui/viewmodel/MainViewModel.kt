@@ -67,6 +67,14 @@ data class MainUiState(
     val hourlyForecast: List<HourlyForecast> = emptyList(),
     val locationName: String = "Getting location...",
     /**
+     * WS-4 (RC-4): the current place as a simple-place value, derived
+     * ONCE at geocode/selection time. [locationName] is always this
+     * value's display string ("New York, NY") once a place is known —
+     * never a raw geocode string. Null only before any place resolves
+     * (or for the "Your Location" fallback, which carries no region).
+     */
+    val simplePlace: com.runwear.shared.domain.model.SimplePlace? = null,
+    /**
      * The selected moment, ALWAYS expressed as a naive wall-clock time in the
      * SELECTED LOCATION's frame — never the phone's. When [isNowSelected] is
      * true this is kept equal to [locationNow] and the weather comes from the
@@ -320,11 +328,16 @@ class MainViewModel @Inject constructor(
                     lastGood.weather, lastGood.outfit, state.genderPreference,
                     frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(lastGood.weather, _uiState.value.comfortPreference)
                 )
+                // WS-4: a last-good snapshot may predate the simple-place
+                // model; normalize its name at this seam.
+                val seededPlace = com.runwear.shared.domain.model.SimplePlace
+                    .fromRawDisplayString(lastGood.locationName)
                 state.copy(
                     isLoading = false,
                     weather = lastGood.weather,
                     outfit = lastGood.outfit,
-                    locationName = lastGood.locationName,
+                    locationName = seededPlace.display,
+                    simplePlace = seededPlace,
                     heroImageUrl = seededHero.imageUrl,
                     heroImageRowId = null,
                     heroCombinationId = seededHero.combinationId
@@ -362,9 +375,14 @@ class MainViewModel @Inject constructor(
                 // GPS fix can be re-validated on foreground (see onForegrounded).
                 currentLat = savedLocation.latitude
                 currentLon = savedLocation.longitude
+                // WS-4: normalize a saved name that may predate the
+                // simple-place model ("New York, New York" on disk).
+                val savedPlace = com.runwear.shared.domain.model.SimplePlace
+                    .fromRawDisplayString(savedLocation.name)
                 _uiState.update {
                     it.copy(
-                        locationName = savedLocation.name,
+                        locationName = savedPlace.display,
+                        simplePlace = savedPlace,
                         locationSource = savedLocation.source,
                         hasLocationPermission = true, // Bypass permission check
                         isLoading = true
@@ -502,13 +520,21 @@ class MainViewModel @Inject constructor(
                         // User moved significantly: adopt the fresh fix.
                         currentLat = newLat
                         currentLon = newLon
-                        weatherRepository.reverseGeocode(newLat, newLon).fold(
-                            onSuccess = { name ->
-                                _uiState.update { it.copy(locationName = name, locationSource = "gps") }
-                                preferencesRepository.saveGPSLocation(newLat, newLon, name)
+                        weatherRepository.reverseGeocodePlace(newLat, newLon).fold(
+                            onSuccess = { place ->
+                                _uiState.update {
+                                    it.copy(locationName = place.display, simplePlace = place, locationSource = "gps")
+                                }
+                                preferencesRepository.saveGPSLocation(newLat, newLon, place.display)
                             },
                             onFailure = {
-                                _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
+                                _uiState.update {
+                                    it.copy(
+                                        locationName = "Your Location",
+                                        simplePlace = com.runwear.shared.domain.model.SimplePlace("Your Location"),
+                                        locationSource = "gps"
+                                    )
+                                }
                                 preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
                             }
                         )
@@ -579,9 +605,12 @@ class MainViewModel @Inject constructor(
                         // Use saved location silently instead of showing setup screen
                         currentLat = savedLocation.latitude
                         currentLon = savedLocation.longitude
+                        val savedPlace = com.runwear.shared.domain.model.SimplePlace
+                            .fromRawDisplayString(savedLocation.name)
                         _uiState.update {
                             it.copy(
-                                locationName = savedLocation.name,
+                                locationName = savedPlace.display,
+                                simplePlace = savedPlace,
                                 locationSource = savedLocation.source,
                                 isLoading = true
                             )
@@ -618,14 +647,22 @@ class MainViewModel @Inject constructor(
         _uiState.update { it.copy(locationSource = "gps") }
 
         viewModelScope.launch {
-            weatherRepository.reverseGeocode(lat, lon).fold(
-                onSuccess = { name ->
-                    _uiState.update { it.copy(locationName = name, locationSource = "gps") }
+            weatherRepository.reverseGeocodePlace(lat, lon).fold(
+                onSuccess = { place ->
+                    _uiState.update {
+                        it.copy(locationName = place.display, simplePlace = place, locationSource = "gps")
+                    }
                     // Save GPS location for next app launch
-                    preferencesRepository.saveGPSLocation(lat, lon, name)
+                    preferencesRepository.saveGPSLocation(lat, lon, place.display)
                 },
                 onFailure = {
-                    _uiState.update { it.copy(locationName = "Your Location", locationSource = "gps") }
+                    _uiState.update {
+                        it.copy(
+                            locationName = "Your Location",
+                            simplePlace = com.runwear.shared.domain.model.SimplePlace("Your Location"),
+                            locationSource = "gps"
+                        )
+                    }
                     preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
                 }
             )
@@ -1448,16 +1485,22 @@ class MainViewModel @Inject constructor(
             currentLat = location.latitude
             currentLon = location.longitude
 
+            // WS-4: the search result's place is already simple
+            // (derived at the search boundary); carry the value, and
+            // persist its display — never a raw geocode string.
+            val place = location.simplePlace
+
             // Persist manual location to DataStore
             preferencesRepository.saveManualLocation(
                 location.latitude,
                 location.longitude,
-                location.displayName
+                place.display
             )
 
             _uiState.update {
                 it.copy(
-                    locationName = location.displayName,
+                    locationName = place.display,
+                    simplePlace = place,
                     locationSource = "manual",
                     showLocationSetup = false,
                     hasLocationPermission = true // Bypass permission screen for manual location
@@ -1475,12 +1518,18 @@ class MainViewModel @Inject constructor(
             currentLat = lat
             currentLon = lon
 
+            // WS-4: normalize the picked name to the simple form at
+            // this seam (picker rows and recents may carry legacy raw
+            // strings); state and persistence carry the simple form.
+            val place = com.runwear.shared.domain.model.SimplePlace.fromRawDisplayString(name)
+
             // Persist manual location to DataStore
-            preferencesRepository.saveManualLocation(lat, lon, name)
+            preferencesRepository.saveManualLocation(lat, lon, place.display)
 
             _uiState.update {
                 it.copy(
-                    locationName = name,
+                    locationName = place.display,
+                    simplePlace = place,
                     locationSource = "manual",
                     showLocationSetup = false,
                     hasLocationPermission = true // Bypass permission screen for manual location

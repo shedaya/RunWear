@@ -24,7 +24,11 @@ data class LocationResult(
     val displayName: String,
     val detail: String = "",
     val isUSA: Boolean = false
-)
+) {
+    /** WS-4: this result as a simple place (its [displayName] is its display). */
+    val simplePlace: com.runwear.shared.domain.model.SimplePlace
+        get() = com.runwear.shared.domain.model.SimplePlace.fromRawDisplayString(displayName)
+}
 
 /**
  * The coarse-location rounding applied at the weather request boundary:
@@ -249,24 +253,39 @@ class WeatherRepository @Inject constructor(
             .take(5) // Limit to 5 results like PWA
     }
     
-    suspend fun reverseGeocode(latitude: Double, longitude: Double): Result<String> = runCatching {
+    /**
+     * WS-4 (RC-4): the reverse geocode, as a [SimplePlace] — the ONE
+     * derivation of the simple form (city + abbreviated region) from
+     * the geocoder's raw parts. Every place-bearing surface consumes
+     * this value's display string; the raw geocode string
+     * ("New York, New York") never leaves this boundary.
+     */
+    suspend fun reverseGeocodePlace(latitude: Double, longitude: Double): Result<com.runwear.shared.domain.model.SimplePlace> = runCatching {
         val response = nominatimApi.reverseGeocode(
             geocodeCoordinate(latitude),
             geocodeCoordinate(longitude)
         )
         val address = response.address
-        
-        val city = address?.city ?: address?.town ?: address?.village 
+
+        val city = address?.city ?: address?.town ?: address?.village
             ?: address?.municipality ?: address?.suburb ?: ""
         val state = address?.state ?: address?.region ?: ""
-        
+
         when {
-            city.isNotEmpty() && state.isNotEmpty() -> "$city, $state"
-            city.isNotEmpty() -> city
-            response.displayName != null -> response.displayName.split(",").take(2).joinToString(",").trim()
-            else -> "Your Location"
+            city.isNotEmpty() -> com.runwear.shared.domain.model.SimplePlace.fromGeocode(
+                city = city,
+                region = state.takeIf { it.isNotEmpty() },
+                countryCode = address?.countryCode
+            )
+            response.displayName != null -> com.runwear.shared.domain.model.SimplePlace
+                .fromRawDisplayString(response.displayName.split(",").take(2).joinToString(", "))
+            else -> com.runwear.shared.domain.model.SimplePlace("Your Location")
         }
     }
+
+    /** The simple place's display string (see [reverseGeocodePlace]). */
+    suspend fun reverseGeocode(latitude: Double, longitude: Double): Result<String> =
+        reverseGeocodePlace(latitude, longitude).mapCatching { it.display }
     
     /**
      * Parse an Open-Meteo local timestamp into the models' kotlinx

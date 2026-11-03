@@ -97,7 +97,10 @@ class RecentLocationsStore(private val context: Context) {
                 (0 until array.length()).map { i ->
                     val o = array.getJSONObject(i)
                     RecentLocation(
-                        name = o.getString("name"),
+                        // WS-4: recents render place names; normalize
+                        // legacy raw strings to the simple form on read.
+                        name = com.runwear.shared.domain.model.SimplePlace
+                            .fromRawDisplayString(o.getString("name")).display,
                         latitude = o.getDouble("lat"),
                         longitude = o.getDouble("lon")
                     )

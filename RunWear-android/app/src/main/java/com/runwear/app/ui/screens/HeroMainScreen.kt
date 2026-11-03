@@ -219,7 +219,14 @@ fun HeroMainScreen(
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
                     date = uiState.locationNow.toLocalDate(),
-                    place = uiState.locationName,
+                    // WS-4 (content seam only — the recording effect and
+                    // its drivers are WS-3's): the entry's place is the
+                    // SIMPLE form from the place model, so the
+                    // collection, its chapter covers, and the narration
+                    // can never carry a raw geocode string.
+                    place = uiState.simplePlace?.display
+                        ?: com.runwear.shared.domain.model.SimplePlace
+                            .fromRawDisplayString(uiState.locationName).display,
                     feelsLikeF = weather.feelsLikeInFahrenheit,
                     conditionLabel = weather.weatherCode.description,
                     isSnowing = weather.isSnowing,

@@ -20,12 +20,40 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /** One collection entry, as the expanded bar presents it. */
 data class WearIveRunEntry(
+    /** The SIMPLE place form ("New York, NY") — never a raw geocode string. */
     val place: String,
+    /** The narration day form ("Now" for today) — never the collection's "Today". */
     val timeLabel: String,
     /** The variable payload of an "Update to …" narration, if any. */
     val payload: String? = null,
-    val thumbnailUrl: String? = null
+    val thumbnailUrl: String? = null,
+    /** WS-4: the entry's settled feels-like, for the expanded subtitle. */
+    val feelsLikeF: Double? = null,
+    /** WS-4: the entry's kit size, for the expanded subtitle. */
+    val itemCount: Int = 0
 )
+
+/**
+ * WS-4 (D-08): the expanded card's subtitle. The design's expanded
+ * detail line (frame 3) carries the entry's numbers — feels-like and
+ * kit count. Place and day live in the narration directly above it;
+ * repeating them here was the duplication defect, so this line is
+ * built ONLY from the entry's weather/kit facts: it contains neither
+ * the place, nor the day form, nor the narration's payload (the
+ * first kit item). Pure — unit-tested.
+ */
+object WearIveRunSubtitle {
+
+    /** "41° feels like · 5 items" — null when the entry has no weather. */
+    fun detail(entry: WearIveRunEntry): String? {
+        val feels = entry.feelsLikeF ?: return null
+        val items = when (entry.itemCount) {
+            1 -> "1 item"
+            else -> "${entry.itemCount} items"
+        }
+        return "${feels.toInt()}° feels like · $items"
+    }
+}
 
 /**
  * A narration line with the character range of its payload — the part
@@ -160,16 +188,29 @@ class WearIveRunBarStateHolder {
             previous.date != next.date || previous.place != next.place
         val isUpdate = !isCreation && previous != next
         current = next
-        val dayForm = WearIveRunCollectionLogic.dayForm(next.date, today)
+        // WS-4 (D-08): narration content is built from the SIMPLE
+        // place, the narration day form ("Now", never the collection's
+        // "Today"), and — for updates — the entry's REAL payload, its
+        // first kit item. The place is normalized at this seam too, so
+        // no raw geocode string can reach the line from any source.
+        val simplePlace = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(next.place).display
+        val dayForm = WearIveRunCollectionLogic.narrationDayForm(next.date, today)
+        val firstItem = next.items.firstOrNull()?.takeIf { it.isNotBlank() }
         val narration = when {
-            isUpdate -> WearIveRunNarrationFormatter.update("${next.place}, $dayForm")
-            else -> WearIveRunNarrationFormatter.added(next.place, dayForm)
+            isUpdate && firstItem != null ->
+                WearIveRunNarrationFormatter.update(firstItem)
+            isUpdate ->
+                WearIveRunNarrationFormatter.update("$simplePlace, $dayForm")
+            else -> WearIveRunNarrationFormatter.added(simplePlace, dayForm)
         }
         val barEntry = WearIveRunEntry(
-            place = next.place,
+            place = simplePlace,
             timeLabel = dayForm,
-            payload = next.items.firstOrNull(),
-            thumbnailUrl = next.heroRef
+            payload = firstItem,
+            thumbnailUrl = next.heroRef,
+            feelsLikeF = next.feelsLikeF,
+            itemCount = next.items.size
         )
         _state.value = if (expanded) {
             WearIveRunBarState.Expanded(narration, barEntry)
@@ -184,16 +225,22 @@ class WearIveRunBarStateHolder {
     fun setExpanded(value: Boolean, today: java.time.LocalDate) {
         expanded = value
         val entry = current ?: return
-        val dayForm = WearIveRunCollectionLogic.dayForm(entry.date, today)
+        // WS-4: same content construction as onEntriesChanged —
+        // simple place, narration day form, real payload fields.
+        val simplePlace = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(entry.place).display
+        val dayForm = WearIveRunCollectionLogic.narrationDayForm(entry.date, today)
         val barEntry = WearIveRunEntry(
-            place = entry.place,
+            place = simplePlace,
             timeLabel = dayForm,
             payload = entry.items.firstOrNull(),
-            thumbnailUrl = entry.heroRef
+            thumbnailUrl = entry.heroRef,
+            feelsLikeF = entry.feelsLikeF,
+            itemCount = entry.items.size
         )
         val narration = (_state.value as? WearIveRunBarState.Mini)?.narration
             ?: (_state.value as? WearIveRunBarState.Expanded)?.narration
-            ?: WearIveRunNarrationFormatter.added(entry.place, dayForm)
+            ?: WearIveRunNarrationFormatter.added(simplePlace, dayForm)
         _state.value = if (value) {
             WearIveRunBarState.Expanded(narration, barEntry)
         } else {

@@ -213,8 +213,19 @@ object WearIveRunCollectionLogic {
         }
     }
 
-    /** The mini bar's day form: "Today" for today, else "MMM d". */
+    /** The collection's day form: "Today" for today, else "MMM d". */
     fun dayForm(date: LocalDate, today: LocalDate): String =
         if (date == today) "Today"
+        else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
+
+    /**
+     * WS-4 (D-08): the NARRATION's day form — "Now" for today, else
+     * "MMM d". The narration pattern of record reads "Added [Place,
+     * Now]"; the collection's "Today" belongs to collection surfaces
+     * (day titles, chapter rows), never to the narration line. The
+     * holder must use this form, not [dayForm].
+     */
+    fun narrationDayForm(date: LocalDate, today: LocalDate): String =
+        if (date == today) "Now"
         else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
 }

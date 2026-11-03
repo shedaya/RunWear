@@ -86,6 +86,10 @@ class WearIveRunPreAddStateTest {
         holder.onEntriesChanged(listOf(entry), today)
         assertTrue(holder.state.value is WearIveRunBarState.Mini)
         assertEquals(1, holder.cueCount.value)
+        // WS-4 (D-08): creation narration is the design's pattern —
+        // simple place + the narration day form "Now".
+        val created = (holder.state.value as WearIveRunBarState.Mini).narration
+        assertEquals("Added New York, Now", created.text)
         // Same settled version re-delivered: no second cue.
         holder.onEntriesChanged(listOf(entry), today)
         assertEquals(1, holder.cueCount.value)
@@ -93,6 +97,9 @@ class WearIveRunPreAddStateTest {
         holder.onEntriesChanged(listOf(entry.copy(items = listOf("Jacket"))), today)
         assertEquals(2, holder.cueCount.value)
         val narration = (holder.state.value as WearIveRunBarState.Mini).narration
-        assertEquals("Update to New York, Today", narration.text)
+        // WS-4 (D-08): the update payload is the entry's REAL payload —
+        // its first kit item — not "place, Today".
+        assertEquals("Update to Jacket", narration.text)
+        assertEquals("Jacket", narration.payload)
     }
 }

@@ -108,6 +108,33 @@ class HeroSheetFormatTest {
         )
         assertEquals("Feels like", HeroSheetFormat.FEELS_LIKE_LABEL)
     }
+
+    @Test
+    fun `location line renders the simple place - a raw geocode string cannot reach it`() {
+        // WS-4 (D-08): even if state handed the header the raw
+        // reverse-geocoded string, the rendered line is simple.
+        assertEquals(
+            "New York, NY · Now",
+            HeroSheetFormat.locationLine("New York, New York", now, now, isNowSelected = true)
+        )
+        assertEquals(
+            "Winston-Salem, NC · Now",
+            HeroSheetFormat.locationLine("Winston-Salem, North Carolina", now, now, isNowSelected = true)
+        )
+        assertEquals(
+            "Truth or Consequences, NM · Now",
+            HeroSheetFormat.locationLine("Truth or Consequences, New Mexico", now, now, isNowSelected = true)
+        )
+        // Already-simple input is idempotent.
+        assertEquals(
+            "New York, NY · Now",
+            HeroSheetFormat.locationLine("New York, NY", now, now, isNowSelected = true)
+        )
+        assertEquals(
+            "FEELS LIKE · NEW YORK, NY · NOW",
+            HeroSheetFormat.eyebrow("New York, New York", now, now, isNowSelected = true)
+        )
+    }
 }
 
 /**

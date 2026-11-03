@@ -82,7 +82,12 @@ class WearIveRunStore(private val context: Context) {
                     val items = o.optJSONArray("items") ?: JSONArray()
                     WearIveRunDayEntry(
                         date = LocalDate.parse(o.getString("date")),
-                        place = o.getString("place"),
+                        // WS-4: entries recorded before the simple-place
+                        // model carry raw geocode strings; normalize on
+                        // read so every downstream surface (narration,
+                        // chapter covers) renders the simple form.
+                        place = com.runwear.shared.domain.model.SimplePlace
+                            .fromRawDisplayString(o.getString("place")).display,
                         feelsLikeF = o.optDouble("feelsLikeF", 0.0),
                         conditionLabel = o.optString("condition"),
                         isSnowing = o.optBoolean("snowing"),

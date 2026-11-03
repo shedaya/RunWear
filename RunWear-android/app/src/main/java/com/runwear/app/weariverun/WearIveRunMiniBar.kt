@@ -182,14 +182,25 @@ private fun ExpandedBarContent(
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     WearIveRunWordmark()
-                    Text(
-                        text = "${state.entry.place} · ${state.entry.timeLabel}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = RunWearColors.TextSecondary,
-                        modifier = Modifier.padding(top = 2.dp)
-                    )
+                    // WS-4 (D-08): the subtitle is the entry's detail
+                    // line (feels-like · kit count) — place and day
+                    // live in the narration below and are NOT repeated
+                    // here (the duplication defect).
+                    WearIveRunSubtitle.detail(state.entry)?.let { subtitle ->
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    // WS-4 (D-09): the expanded narration wraps
+                    // without limit — no mid-phrase truncation. The
+                    // mini line stays one line, short by construction
+                    // (simple place / first kit item payloads).
                     NarrationText(
                         narration = state.narration,
+                        maxLines = Int.MAX_VALUE,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
@@ -239,7 +250,8 @@ private fun WearIveRunWordmark() {
 @Composable
 private fun NarrationText(
     narration: WearIveRunNarration,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    maxLines: Int = 1
 ) {
     val annotated = buildAnnotatedString {
         append(narration.text.substring(0, narration.payloadStart))
@@ -252,7 +264,7 @@ private fun NarrationText(
         text = annotated,
         style = MaterialTheme.typography.bodyMedium,
         color = RunWearColors.TextPrimary,
-        maxLines = 1,
+        maxLines = maxLines,
         modifier = modifier
     )
 }
