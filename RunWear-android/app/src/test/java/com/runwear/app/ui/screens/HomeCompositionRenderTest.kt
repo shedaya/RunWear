@@ -114,6 +114,24 @@ abstract class HomeCompositionHarness {
         }
     }
 
+    /** The semantics root: ComposeView hosts its composition in a
+     * child AndroidComposeView, which is the ViewRootForTest. */
+    protected fun rootNode(view: View): SemanticsNode {
+        if (view is androidx.compose.ui.platform.ViewRootForTest) {
+            return view.semanticsOwner.rootSemanticsNode
+        }
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                try {
+                    return rootNode(view.getChildAt(i))
+                } catch (e: IllegalStateException) {
+                    // keep searching siblings
+                }
+            }
+        }
+        throw IllegalStateException("no ViewRootForTest under $view")
+    }
+
     /** All semantics nodes in the tree, flattened. */
     protected fun nodes(root: SemanticsNode): List<SemanticsNode> =
         listOf(root) + root.children.flatMap { nodes(it) }
@@ -144,7 +162,7 @@ abstract class HomeCompositionHarness {
         screenHeightDp: Int,
         label: String
     ) {
-        val root = (composeView as androidx.compose.ui.platform.ViewRootForTest).semanticsOwner.rootSemanticsNode
+        val root = rootNode(composeView)
 
         // A3: the location pill is on screen at rest, in the photo
         // zone's top area, in the SimplePlace form.
@@ -297,7 +315,7 @@ class HomeChromeHandoffTest : HomeCompositionHarness() {
         // The semantics tree is read by the caller after this
         // returns, so the activity is deliberately not destroyed
         // here (the harness process is per-test-class).
-        return (composeView as androidx.compose.ui.platform.ViewRootForTest).semanticsOwner.rootSemanticsNode
+        return rootNode(composeView)
     }
 
     @Test
