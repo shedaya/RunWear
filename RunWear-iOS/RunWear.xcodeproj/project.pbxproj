@@ -151,6 +151,7 @@
 		F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000113 /* MakeItMeAvailability.swift */; };
 		C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */; };
 		C10002000000000000000039 /* HeroPointGrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000030 /* HeroPointGrainTests.swift */; };
+		C1000200000000000000003A /* HeroFallbackGenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000100000000000000003B /* HeroFallbackGenderTests.swift */; };
 		C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000027 /* MakeItMePresentationTests.swift */; };
 		C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000028 /* PhotoIntakeTests.swift */; };
 		F10002000000000000000130 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = F10003000000000000000102 /* RevenueCat */; };
@@ -309,6 +310,7 @@
 		C10001000000000000000028 /* PhotoIntakeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoIntakeTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeAvailabilityTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000030 /* HeroPointGrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPointGrainTests.swift; sourceTree = "<group>"; };
+		C1000100000000000000003B /* HeroFallbackGenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFallbackGenderTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -526,6 +528,7 @@
 				C10001000000000000000028 /* PhotoIntakeTests.swift */,
 				C10001000000000000000029 /* MakeItMeAvailabilityTests.swift */,
 				C10001000000000000000030 /* HeroPointGrainTests.swift */,
+				C1000100000000000000003B /* HeroFallbackGenderTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -828,6 +831,7 @@
 				C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */,
 				C10002000000000000000038 /* MakeItMeAvailabilityTests.swift in Sources */,
 				C10002000000000000000039 /* HeroPointGrainTests.swift in Sources */,
+				C1000200000000000000003A /* HeroFallbackGenderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
