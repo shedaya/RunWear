@@ -170,8 +170,15 @@ abstract class HomeCompositionHarness {
         // zone's top area, in the SimplePlace form.
         val pill = findByText(root, "Aspen, CO")
         val allTexts = nodes(root).flatMap { texts(it) }.distinct().take(60)
+        fun hier(v: View, d: Int): String =
+            "  ".repeat(d) + v.javaClass.simpleName + "\n" +
+                (if (v is android.view.ViewGroup) (0 until v.childCount).joinToString("") {
+                    hier(v.getChildAt(it), d + 1)
+                } else "")
+        val diag = "rootChildren=${root.children.size} rootBounds=${root.boundsInRoot} " +
+            "candidates=${nodes(root).size}\n" + hier(composeView, 0)
         assertTrue(
-            "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts",
+            "[$label] location pill 'Aspen, CO' must be present at rest; texts=$allTexts; $diag",
             pill != null
         )
         val rawPill = findByText(root, "Aspen, Colorado")
