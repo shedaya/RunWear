@@ -276,7 +276,7 @@ fun HeroSection(
             text = "RunWear",
             fontFamily = GreatVibesFontFamily,
             fontSize = 29.sp,
-            color = Color(0xFFF5F1EA),
+            color = com.runwear.app.ui.theme.PhotoInk,
             style = TextStyle(
                 shadow = Shadow(
                     color = Color.Black.copy(alpha = 0.45f),
@@ -341,7 +341,7 @@ fun HeroSection(
                 Text(
                     text = scaffoldBadge,
                     fontSize = 12.sp,
-                    color = Color(0xFFF5F1EA),
+                    color = com.runwear.app.ui.theme.PhotoInk,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }

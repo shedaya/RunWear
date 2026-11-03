@@ -192,7 +192,7 @@ fun FeedbackScreen(
             Text(
                 text = "Email if you want a reply. Otherwise this goes in anonymously.",
                 fontSize = 12.sp,
-                color = RunWearColors.TextMuted,
+                color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp)
             )
 
@@ -214,13 +214,13 @@ fun FeedbackScreen(
                     text = "What we're sending with this",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = RunWearColors.Primary,
+                    color = RunWearColors.PineAccent,
                     modifier = Modifier.weight(1f)
                 )
                 Icon(
                     imageVector = if (bundleExpanded) Icons.Outlined.KeyboardArrowUp else Icons.Outlined.KeyboardArrowDown,
                     contentDescription = if (bundleExpanded) "Hide the summary" else "Show the summary",
-                    tint = RunWearColors.Primary
+                    tint = RunWearColors.PineAccent
                 )
             }
             AnimatedVisibility(visible = bundleExpanded) {
@@ -237,7 +237,7 @@ fun FeedbackScreen(
                             Text(
                                 text = label,
                                 fontSize = 12.sp,
-                                color = RunWearColors.TextMuted,
+                                color = RunWearColors.TextSecondary,
                                 modifier = Modifier.weight(0.4f)
                             )
                             Text(
@@ -282,7 +282,7 @@ fun FeedbackScreen(
                 Text(
                     text = "Pick a category and write a sentence or two, and the button turns on.",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
@@ -294,17 +294,17 @@ fun FeedbackScreen(
 
 @Composable
 private fun feedbackFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = RunWearColors.Primary,
+    focusedBorderColor = RunWearColors.PineAccent,
     unfocusedBorderColor = RunWearColors.BgCardLight,
     focusedTextColor = RunWearColors.TextPrimary,
     unfocusedTextColor = RunWearColors.TextPrimary,
-    cursorColor = RunWearColors.Primary,
+    cursorColor = RunWearColors.PineAccent,
     focusedContainerColor = RunWearColors.Surface,
     unfocusedContainerColor = RunWearColors.Surface,
-    focusedLabelColor = RunWearColors.Primary,
-    unfocusedLabelColor = RunWearColors.TextMuted,
-    focusedPlaceholderColor = RunWearColors.TextMuted,
-    unfocusedPlaceholderColor = RunWearColors.TextMuted
+    focusedLabelColor = RunWearColors.PineAccent,
+    unfocusedLabelColor = RunWearColors.TextSecondary,
+    focusedPlaceholderColor = RunWearColors.TextSecondary,
+    unfocusedPlaceholderColor = RunWearColors.TextSecondary
 )
 
 private const val MIN_MESSAGE_CHARS = 10

@@ -32,8 +32,10 @@ import androidx.compose.ui.unit.sp
  * - padding: 10px 16px
  * - font-size: 14px, font-weight: 600
  */
-private val GlassBackground = Color.White.copy(alpha = 0.12f)
-private val GlassBorder = Color.White.copy(alpha = 0.15f)
+// WS-8: the glass values are the theme's glass tokens (white 12% /
+// white 15%) — read them from RunWearColors instead of re-declaring.
+private val GlassBackground get() = com.runwear.app.ui.theme.RunWearColors.GlassBackground
+private val GlassBorder get() = com.runwear.app.ui.theme.RunWearColors.GlassBorder
 
 /**
  * Glass morphism button with translucent background and subtle border.

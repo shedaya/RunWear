@@ -189,7 +189,7 @@ fun DatePickerSheet(
             Text(
                 text = "Days past the 7-day forecast are beyond the forecast — no weather is invented for them.",
                 fontSize = 12.sp,
-                color = RunWearColors.TextMuted,
+                color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center
             )
 
@@ -391,7 +391,7 @@ fun SettingsSheet(
                 Text(
                     text = "Match your device, or always light or dark",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
                 )
                 AppearanceSelector(
@@ -426,7 +426,7 @@ fun SettingsSheet(
                 Text(
                     text = "How do you typically feel when running?",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
                 )
                 ComfortSelector(
@@ -448,7 +448,7 @@ fun SettingsSheet(
                 Text(
                     text = "Tap to select, tap again to deselect",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
                 )
                 GenderToggleSettings(
@@ -494,14 +494,14 @@ fun SettingsSheet(
                     Text(
                         text = "Tell us what happened, in your own words.",
                         fontSize = 12.sp,
-                        color = RunWearColors.TextMuted,
+                        color = RunWearColors.TextSecondary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
                 Icon(
                     imageVector = Icons.Outlined.ChevronRight,
                     contentDescription = null,
-                    tint = RunWearColors.TextMuted
+                    tint = RunWearColors.TextSecondary
                 )
             }
 
@@ -521,7 +521,7 @@ fun SettingsSheet(
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = RunWearColors.Primary,
-                            uncheckedThumbColor = RunWearColors.TextMuted,
+                            uncheckedThumbColor = RunWearColors.TextSecondary,
                             uncheckedTrackColor = RunWearColors.BgCardLight
                         )
                     )
@@ -532,7 +532,7 @@ fun SettingsSheet(
                         "and your location never leaves the phone more precisely than the city " +
                         "name. Turn this off and nothing is counted or sent.",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 10.dp)
                 )
                 if (!analyticsOptIn) {
@@ -548,7 +548,7 @@ fun SettingsSheet(
                     text = "If the app crashes, it can send us the technical details so we can " +
                         "fix it. This happens only after a crash, and only with your permission here.",
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 10.dp)
                 )
             }
@@ -580,7 +580,7 @@ private fun SettingRow(
                 Text(
                     text = it,
                     fontSize = 12.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -617,7 +617,7 @@ private fun UnitToggle(
                 text = "°F",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (!isCelsius) Color.White else RunWearColors.TextMuted
+                color = if (!isCelsius) Color.White else RunWearColors.TextSecondary
             )
         }
 
@@ -634,7 +634,7 @@ private fun UnitToggle(
                 text = "°C",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isCelsius) Color.White else RunWearColors.TextMuted
+                color = if (isCelsius) Color.White else RunWearColors.TextSecondary
             )
         }
     }
@@ -893,7 +893,7 @@ fun LocationPickerSheet(
                     if (isSearching) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            color = RunWearColors.Primary,
+                            color = RunWearColors.PineAccent,
                             strokeWidth = 2.dp
                         )
                     }
@@ -902,7 +902,7 @@ fun LocationPickerSheet(
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = RunWearColors.Primary,
+                    focusedBorderColor = RunWearColors.PineAccent,
                     unfocusedBorderColor = RunWearColors.BgCardLight
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -951,7 +951,7 @@ fun LocationPickerSheet(
                                 Icon(
                                     Icons.Outlined.ChevronRight,
                                     contentDescription = null,
-                                    tint = RunWearColors.TextMuted
+                                    tint = RunWearColors.TextSecondary
                                 )
                             }
                         }
@@ -963,7 +963,7 @@ fun LocationPickerSheet(
                 Text(
                     text = "No locations found",
                     fontSize = 14.sp,
-                    color = RunWearColors.TextMuted
+                    color = RunWearColors.TextSecondary
                 )
             }
 
@@ -978,7 +978,7 @@ fun LocationPickerSheet(
                 Text(
                     text = "or",
                     fontSize = 13.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
                 HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
@@ -992,7 +992,7 @@ fun LocationPickerSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = if (isUsingGPS) Color(0x3300796B) else RunWearColors.BgCardLight,
+                color = if (isUsingGPS) RunWearColors.CategoryTop.copy(alpha = 0.2f) else RunWearColors.BgCardLight,
                 border = if (isUsingGPS) BorderStroke(2.dp, RunWearColors.Primary) else null
             ) {
                 Row(
@@ -1029,7 +1029,7 @@ fun LocationPickerSheet(
                                     text = "CURRENT",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = RunWearColors.Primary
+                                    color = RunWearColors.PineAccent
                                 )
                             }
                         }
@@ -1042,10 +1042,10 @@ fun LocationPickerSheet(
                     if (isUsingGPS) {
                         Box(
                             modifier = Modifier
-                                .background(Color(0x3300796B), RoundedCornerShape(4.dp))
+                                .background(RunWearColors.CategoryTop.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("✓", fontSize = 12.sp, color = RunWearColors.Primary)
+                            Text("✓", fontSize = 12.sp, color = RunWearColors.PineAccent)
                         }
                     }
                 }
@@ -1091,7 +1091,7 @@ fun LocationPickerSheet(
                         Icon(
                             Icons.Outlined.History,
                             contentDescription = null,
-                            tint = RunWearColors.TextMuted,
+                            tint = RunWearColors.TextSecondary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(10.dp))
@@ -1107,7 +1107,7 @@ fun LocationPickerSheet(
                                 text = "CURRENT",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = RunWearColors.Primary
+                                color = RunWearColors.PineAccent
                             )
                         }
                     }
@@ -1134,7 +1134,7 @@ fun LocationPickerSheet(
                             text = currentLocation,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = RunWearColors.Primary,
+                            color = RunWearColors.PineAccent,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -1255,7 +1255,7 @@ fun ShopAllSheet(
                     .fillMaxWidth()
                     .padding(top = 16.dp)
                     .background(
-                        Color.White.copy(alpha = 0.05f),
+                        RunWearColors.BgCard,
                         RoundedCornerShape(12.dp)
                     )
                     .padding(14.dp)
@@ -1268,7 +1268,7 @@ fun ShopAllSheet(
                         append("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
                     },
                     fontSize = 11.sp,
-                    color = RunWearColors.TextMuted,
+                    color = RunWearColors.TextSecondary,
                     lineHeight = 16.sp
                 )
             }
@@ -1387,7 +1387,7 @@ private fun ShopItemRow(
             Icon(
                 Icons.Outlined.ChevronRight,
                 contentDescription = null,
-                tint = RunWearColors.TextMuted,
+                tint = RunWearColors.TextSecondary,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -1482,7 +1482,7 @@ private fun WindDetail(weather: WeatherConditions) {
                 Icons.Outlined.Air,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
+                tint = RunWearColors.PineAccent
             )
             Spacer(Modifier.width(12.dp))
             Text(
@@ -1531,7 +1531,7 @@ private fun HumidityDetail(weather: WeatherConditions) {
                 Icons.Outlined.Thermostat,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
+                tint = RunWearColors.PineAccent
             )
             Spacer(Modifier.width(12.dp))
             Text(
@@ -1562,7 +1562,7 @@ private fun PrecipitationDetail(weather: WeatherConditions) {
                 Icons.Outlined.WaterDrop,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
+                tint = RunWearColors.PineAccent
             )
             Spacer(Modifier.width(12.dp))
             Text(
@@ -1618,7 +1618,7 @@ private fun UVDetail(weather: WeatherConditions) {
                 Icons.Outlined.WbSunny,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = RunWearColors.Primary
+                tint = RunWearColors.PineAccent
             )
             Spacer(Modifier.width(12.dp))
             Text(
@@ -1685,7 +1685,7 @@ private fun ModalDragHandle() {
                 .width(40.dp)
                 .height(4.dp)
                 .background(
-                    Color.White.copy(alpha = 0.3f),
+                    RunWearColors.TextSecondary.copy(alpha = 0.4f),
                     RoundedCornerShape(2.dp)
                 )
         )

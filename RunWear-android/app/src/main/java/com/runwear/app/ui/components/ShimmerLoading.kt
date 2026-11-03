@@ -212,7 +212,7 @@ fun BrandedLoadingScreen(
 
             Spacer(Modifier.height(28.dp))
 
-            CircularProgressIndicator(color = RunWearColors.Primary)
+            CircularProgressIndicator(color = RunWearColors.PineAccent)
 
             Spacer(Modifier.height(16.dp))
 
@@ -339,7 +339,7 @@ fun HomeSkeletonScreen(
         Text(
             text = statusText,
             fontSize = 13.sp,
-            color = RunWearColors.TextMuted,
+            color = RunWearColors.TextSecondary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )

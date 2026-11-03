@@ -1251,7 +1251,7 @@ private fun LazyListScope.outfitListItems(
             text = "Not what you'd wear? Tell us",
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1260,18 +1260,9 @@ private fun LazyListScope.outfitListItems(
         )
     }
 
-    // Version footer
-    item {
-        Text(
-            text = "v3.12",
-            style = MaterialTheme.typography.bodySmall,
-            color = RunWearColors.TextMuted.copy(alpha = 0.5f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            textAlign = TextAlign.Center
-        )
-    }
+    // WS-8 (D-26): the hardcoded "v3.12" PWA version footer is
+    // removed — no design frame carries it; the real version lives
+    // in Settings → About.
 }
 
 /**
@@ -1333,7 +1324,7 @@ private fun LazyGridScope.outfitGridItems(
             text = "Not what you'd wear? Tell us",
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
@@ -1342,18 +1333,7 @@ private fun LazyGridScope.outfitGridItems(
         )
     }
 
-    // Version footer
-    item(span = { GridItemSpan(maxLineSpan) }) {
-        Text(
-            text = "v3.12",
-            style = MaterialTheme.typography.bodySmall,
-            color = RunWearColors.TextMuted.copy(alpha = 0.5f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            textAlign = TextAlign.Center
-        )
-    }
+    // WS-8 (D-26): grid presentation carries no version footer either.
 }
 
 // ============================================================================
@@ -1513,7 +1493,7 @@ private fun HeroErrorScreen(
             Icon(
                 imageVector = Icons.Outlined.ErrorOutline,
                 contentDescription = null,
-                tint = RunWearColors.TempHot,
+                tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(64.dp)
             )
             Spacer(Modifier.height(16.dp))
@@ -1534,7 +1514,7 @@ private fun HeroErrorScreen(
             Text(
                 "Your saved outfits and your Wear I've Run collection are safe on this phone.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = RunWearColors.TextMuted,
+                color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))

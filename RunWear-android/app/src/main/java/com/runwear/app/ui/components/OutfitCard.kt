@@ -218,7 +218,7 @@ fun OutfitCard(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "Shop item",
-                tint = RunWearColors.TextMuted,
+                tint = RunWearColors.TextSecondary,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -329,8 +329,8 @@ fun TipsSection(
             .background(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color(0x2600796B),  // rgba(0, 121, 107, 0.15)
-                        Color(0x0D00796B)   // rgba(0, 121, 107, 0.05)
+                        RunWearColors.CategoryTop.copy(alpha = 0.15f),
+                        RunWearColors.CategoryTop.copy(alpha = 0.05f)
                     ),
                     start = Offset(0f, 0f),
                     end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
@@ -338,7 +338,7 @@ fun TipsSection(
             )
             .border(
                 width = 1.dp,
-                color = Color(0x3300796B),  // rgba(0, 121, 107, 0.2)
+                color = RunWearColors.CategoryTop.copy(alpha = 0.2f),
                 shape = RoundedCornerShape(16.dp)
             )
             .clickable { if (tips.size > 1) expanded = !expanded }
@@ -372,7 +372,7 @@ fun TipsSection(
                 style = TextStyle(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = RunWearColors.PrimaryLight,
+                    color = RunWearColors.PineAccent,
                     letterSpacing = 0.5.sp
                 )
             )
@@ -383,7 +383,7 @@ fun TipsSection(
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
                     contentDescription = if (expanded) "Show less" else "Show more",
-                    tint = RunWearColors.TextMuted,
+                    tint = RunWearColors.TextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
             }
