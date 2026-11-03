@@ -1,6 +1,7 @@
 package com.runwear.shared.data.repository
 
 import com.runwear.shared.domain.model.ComfortPreference
+import com.runwear.shared.domain.model.FallbackAssetProvenance
 import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.HeroImageResult
 import com.runwear.shared.domain.model.HeroPoolPolicy
@@ -622,7 +623,7 @@ class HeroImageRepository @Inject constructor() {
          * source row id, point-grain rung) for every bundled file,
          * from the staged bundle manifest. Mirror of the engine table.
          */
-        internal val FALLBACK_PROVENANCE: Map<String, com.runwear.shared.domain.model.FallbackAssetProvenance> = mapOf(
+        internal val FALLBACK_PROVENANCE: Map<String, FallbackAssetProvenance> = mapOf(
         "freezing_clear_female" to FallbackAssetProvenance("FEMALE_CLEAR_FREEZING_NIGHT_v4", "dc5b7be8-947c-462d-9cf5-d800e867363b", "T1"),
         "freezing_clear_male" to FallbackAssetProvenance("MALE_CLEAR_FREEZING_MIDDAY_v1", "616cdf4f-6dfb-4ca0-bc51-b045f1c32d57", "T3"),
         "freezing_cloudy_female" to FallbackAssetProvenance("FEMALE_CLOUDY_FREEZING_MIDDAY_v1177", "6fcb0994-ade3-4490-b8ca-60704b349490", "T3"),

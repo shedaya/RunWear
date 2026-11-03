@@ -88,10 +88,10 @@ object HeroServeTelemetry {
     fun emitForResult(result: HeroImageResult, combination: OutfitCombination?, trigger: String) {
         val url = result.imageUrl ?: return
         val isBundled = url.startsWith(BUNDLED_ASSET_PREFIX)
-        val source = when {
-            isBundled -> HeroServeSource.BUNDLED_FALLBACK
-            result.serveSource != null -> result.serveSource
-            else -> HeroServeSource.POOL
+        val source = if (isBundled) {
+            HeroServeSource.BUNDLED_FALLBACK
+        } else {
+            result.serveSource ?: HeroServeSource.POOL
         }
         emit(
             HeroServeRecord(
