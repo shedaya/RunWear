@@ -14,6 +14,7 @@
 		F10002000000000000000001 /* hero_fallback in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000001 /* hero_fallback */; };
 		F10002000000000000000002 /* hero_fallback in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000001 /* hero_fallback */; };
 		F10002000000000000000010 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
+		F10002000000000000000011 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
 		A1000007233456780000004 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
 		A1000009233456780000005 /* Weather.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000A233456780000005 /* Weather.swift */; };
 		A100000B233456780000006 /* Outfit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000C233456780000006 /* Outfit.swift */; };
@@ -697,6 +698,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E10002000000000000000015 /* engine_fixtures.json in Resources */,
+				F10002000000000000000011 /* GreatVibes-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
