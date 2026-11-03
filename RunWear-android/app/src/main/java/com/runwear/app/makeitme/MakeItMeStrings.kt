@@ -50,6 +50,11 @@ object MakeItMeStrings {
     const val C3B_REJECT_MULTIPLE = "This photo has more than one person in it. Pick one that's just you."
     const val C3C_REJECT_TOO_DARK = "This one is too dark to use. Try a photo in brighter light."
     const val C3D_REJECT_TOO_CLOSE = "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+    // C3E/C3F added Nov 2, 2026 (RW-26 guided-selfie follow-up): the
+    // retake prompts the guided capture and the upload door share —
+    // same checks, same strings, camera offered first.
+    const val C3E_RETAKE_GUIDED = "Let's retake that one with the camera — face the light, keep your whole face inside the oval, and hold still."
+    const val C3F_RETAKE_UPLOAD = "That photo can't be used. Retake with the camera, or choose a brighter photo that's just you, face forward."
 
     // G — First generation (spec §2.4). G3 (PROPOSAL P1) intentionally absent.
     // G4 was silence by spec — SUPERSEDED Nov 1, 2026 (RW-16.16, spec
@@ -76,7 +81,13 @@ object MakeItMeStrings {
     const val S2_STATE_A_ROW = "See yourself in every outfit"
     const val S2_STATE_A_SUB = "Make your outfit photos from your own photos."
     const val S3_STATUS = "You're in your photos."
-    const val S5_STATE_C_SUB = "Subscribed — your photo is ready for every outfit, instantly."
+    // RW-26 §H: subscribed = management only, NO sales copy — this is
+    // a state fact, not a benefit line.
+    const val S5_STATE_C_SUB = "Subscribed — your photo is ready before you open the app."
+    // RW-26 §9 (frame 35 settings line, verbatim): the two benefit
+    // CONCEPTS (readiness, no cap) in crafted language — the concept
+    // labels themselves never print.
+    const val S18_SETTINGS_PREMIUM_LINE = "Made ahead, without limit — every outfit is ready when you open the app."
     const val S6_PHOTOS_ROW = "Your photos"
     const val S6_PHOTOS_SUB = "View or replace"
     // S15–S17 added Oct 31, 2026 (RW-16.15 — spec §7 amended by dated
@@ -93,12 +104,16 @@ object MakeItMeStrings {
     const val S18_PHOTOS_LOAD_FAILED = "Couldn't load your photos"
     const val S19_TRY_AGAIN = "Try again"
     const val S7_REPLACE_NOTE = "Replacing your photos remakes today's look right away. Your other looks update as they're made again."
+    // RW-26 frame 38: the epoch rule in plain words, on the selfie
+    // management screen — a retake re-makes what's AHEAD and never
+    // rewrites the Wear I've Run collection behind it.
+    const val S20_EPOCH_RULE = "A new photo re-makes the looks ahead of you. It never changes the outfits already in your Wear I've Run collection."
     const val S8_STATE_B_SUBSCRIBE_ROW = "Every outfit, instantly"
     // Price-free by design (RW-16.30 pricing experiment, Nov 2 2026):
     // prices render ONLY from the fetched RevenueCat offering, so no
     // string in the paywall path may carry one — a user assigned a
     // $19.99/$29.99 experiment offering must never see the $9.99 price.
-    const val S8_STATE_B_SUBSCRIBE_SUB = "Subscribe, and your photo is ready before you open the app."
+    const val S8_STATE_B_SUBSCRIBE_SUB = S18_SETTINGS_PREMIUM_LINE
     const val S9_MANAGE_SUBSCRIPTION = "Manage subscription"
     const val S10_DELETE_ROW = "Delete my photos"
     const val S11_DELETE_CONFIRM_TITLE = "Delete your photos?"
@@ -117,7 +132,20 @@ object MakeItMeStrings {
     const val U1C_BODY = "You've seen yourself in 5 outfits. This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app."
     const val U1D_PRIMARY = "See myself in every outfit"
     const val U1E_NOT_NOW = "Not now"
-    const val U2A_SHEET_TITLE = "Every outfit, instantly."
+    // RW-26 frame 22: the paywall's title is the "Make It Me" SCRIPT
+    // wordmark (rendered in Great Vibes by the sheet); this string is
+    // its text. The highlighted card is "Premium" / "All of Make It
+    // Me." and the CTA carries NO price.
+    const val U2A_SHEET_TITLE = "Make It Me"
+    const val U2D_FREE_BAR = "Free plan · 5 looks included"
+    const val U2E_HOW_PREMIUM_WORKS = "How Premium works"
+    const val U2F_HOW_PREMIUM_WORKS_BODY = "Looks of you for every scenario. This week's weather is made first; the rest are made as you need them, and each one is banked for good once it's made."
+    const val U2G_CARD_TITLE = "Premium"
+    const val U2H_CARD_LINE = "All of Make It Me."
+    const val U2I_CTA = "Keep going with Premium"
+    /** Free-looks meter line (frame 22 verbatim pattern, real numbers). */
+    fun u2MeterLine(used: Int): String =
+        "$used of 5 used · Free looks never expire — and your first ones take about a minute to make."
     // Fallback row labels shown only until the current offering
     // resolves (the rows stay disabled until then). Price-free on
     // purpose — see S8 note above. Resolved rows are built by
@@ -162,6 +190,14 @@ object MakeItMeStrings {
         ).toInt()
     }
     const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions."
+
+    // RW-26 §9 frame 34: the first-look band — the recommended pair,
+    // verbatim. The concept labels ("immediate results"/"unlimited
+    // results") must NOT appear as copy anywhere.
+    const val FIRST_LOOK_BAND_READINESS = "Ready the moment you open the app — made ahead, never while you wait."
+    const val FIRST_LOOK_BAND_NO_CAP = "Every outfit, every day — no number to run out of."
+    const val FIRST_LOOK_PRIMARY = "See My Outfit"
+    const val FIRST_LOOK_SECOND_DOOR = "See Premium"
 
     /**
      * The consent-text version recorded with the backend on opt-in

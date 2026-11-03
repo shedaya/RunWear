@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.feedback.StartupTrace
 import com.runwear.app.ui.components.BrandedLoadingScreen
+import com.runwear.app.ui.components.HomeSkeletonScreen
 import com.runwear.app.ui.components.HeroSection
 import com.runwear.app.ui.components.HeroSheetBlock
 import com.runwear.app.ui.components.HeroSheetOverlap
@@ -599,11 +600,11 @@ Get your personalized running outfit at runwear.ai
             // load runs (the low-contrast shimmer read as a black screen),
             // the error screen only when a load actually failed with
             // nothing to show.
-            uiState.isLoading -> BrandedLoadingScreen(
+            uiState.isLoading -> HomeSkeletonScreen(
                 statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
             )
             uiState.error != null -> HeroErrorScreen(uiState.error, onRefresh)
-            else -> BrandedLoadingScreen(
+            else -> HomeSkeletonScreen(
                 statusText = loadingStatusText(uiState.hasLocationPermission, uiState.locationName)
             )
         }
@@ -993,6 +994,11 @@ private fun HeroSectionContent(
                 uiState.heroCandidates.size +
                 (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
             onRefreshHeroClick = onCycleHero,
+            scaffoldBadge = if (uiState.heroIsPersonal) {
+                com.runwear.app.makeitme.ScaffoldRenderPolicy.homeBadge(uiState.heroServeKind)
+            } else {
+                null
+            },
             modifier = modifier
         )
     }

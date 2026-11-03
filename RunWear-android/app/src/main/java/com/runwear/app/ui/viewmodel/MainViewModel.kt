@@ -143,7 +143,10 @@ data class MainUiState(
     val personalLookStatus: com.runwear.app.makeitme.PersonalLookStatus =
         com.runwear.app.makeitme.PersonalLookStatus.None,
     /** The 6th-new-cell subscription card should show (spec §5). */
-    val showMakeItMeUpsell: Boolean = false
+    val showMakeItMeUpsell: Boolean = false,
+    /** RW-26: how the personal hero was served (exact vs scaffold). */
+    val heroServeKind: com.runwear.app.makeitme.PersonalServeKind =
+        com.runwear.app.makeitme.PersonalServeKind.EXACT
 )
 
 data class LocationSearchState(
@@ -864,6 +867,7 @@ class MainViewModel @Inject constructor(
                         heroCandidates = chosen.candidates,
                         heroRequestedCombinationId = chosen.combinationId,
                         heroIsPersonal = true,
+                        heroServeKind = hit.serveKind,
                         personalHeroId = hit.heroId,
                         personalHeroImageUrl = hit.imageUrl,
                         personalLookStatus = status,
@@ -1044,6 +1048,7 @@ class MainViewModel @Inject constructor(
                         heroImageUrl = hit.imageUrl,
                         heroImageRowId = null,
                         heroIsPersonal = true,
+                        heroServeKind = hit.serveKind,
                         personalHeroId = hit.heroId,
                         personalHeroImageUrl = hit.imageUrl,
                         showMakeItMeUpsell = false

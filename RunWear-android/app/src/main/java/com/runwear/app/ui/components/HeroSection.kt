@@ -140,6 +140,8 @@ fun HeroSection(
      */
     showRefreshButton: Boolean = false,
     onRefreshHeroClick: () -> Unit = {},
+    /** RW-26: the scaffold serve's honest badge (null = no badge). */
+    scaffoldBadge: String? = null,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -321,6 +323,26 @@ fun HeroSection(
                     icon = Icons.Outlined.Settings,
                     onClick = onSettingsClick,
                     contentDescription = "Settings"
+                )
+            }
+        }
+
+        // 4b. RW-26: the scaffold badge — bottom-leading, factual
+        // only ("Your photo — made for close-by weather"); exact and
+        // stock serves carry no badge (§9 silence: no upsell, no meter).
+        if (heroImageUrl != null && scaffoldBadge != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, bottom = HeroSheetOverlap + 12.dp),
+                shape = RoundedCornerShape(100.dp),
+                color = Color.Black.copy(alpha = 0.45f)
+            ) {
+                Text(
+                    text = scaffoldBadge,
+                    fontSize = 12.sp,
+                    color = Color(0xFFF5F1EA),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
         }

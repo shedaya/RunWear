@@ -68,6 +68,42 @@ object PersonalLookStatusPolicy {
 }
 
 /**
+ * RW-26: HOW the personal hero on screen was served, under the
+ * convergence architecture (design §1, frames 19–21):
+ *
+ * - EXACT — the cell's own banked photo. No badge.
+ * - SCAFFOLD — the user's OWN banked photo carrying the exact
+ *   prescription under the nearest conditions, served immediately
+ *   while the exact photo generates in the background. It shows AT
+ *   ONCE with an honest badge — and the surface stays SILENT: no
+ *   upsell copy, no meter draped over home (§9).
+ * - STOCK_QUIET — a gate-failed cell serves stock quietly: the home
+ *   screen never badges it; the explanation lives one tap away in
+ *   the looks library (frame 21).
+ */
+enum class PersonalServeKind { EXACT, SCAFFOLD, STOCK_QUIET }
+
+object ScaffoldRenderPolicy {
+
+    fun kindFor(
+        status: PersonalLookStatus,
+        serveKindRaw: String?,
+        found: Boolean
+    ): PersonalServeKind = when {
+        status is PersonalLookStatus.Failed -> PersonalServeKind.STOCK_QUIET
+        found && serveKindRaw == "scaffold" -> PersonalServeKind.SCAFFOLD
+        else -> PersonalServeKind.EXACT
+    }
+
+    /** The home badge for a serve kind — factual only, never a pitch. */
+    fun homeBadge(kind: PersonalServeKind): String? = when (kind) {
+        PersonalServeKind.SCAFFOLD -> "Your photo — made for close-by weather"
+        PersonalServeKind.EXACT -> null
+        PersonalServeKind.STOCK_QUIET -> null
+    }
+}
+
+/**
  * The named cache trap (acceptance 16): a stored personalized image is
  * replaced server-side (matrix cell lands, replenishment variant rotates
  * in, flagged regeneration completes) and the cell's version marker bumps.

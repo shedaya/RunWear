@@ -202,17 +202,11 @@ fun BrandedLoadingScreen(
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Wordmark, same treatment as the onboarding header
+            // Wordmark: the RunWear script (RW-26).
             Text(
-                text = buildAnnotatedString {
-                    append("Run")
-                    withStyle(SpanStyle(color = RunWearColors.Primary)) {
-                        append("Wear")
-                    }
-                },
-                fontFamily = FontFamily.Default,
+                text = "RunWear",
+                fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
                 fontSize = 44.sp,
-                letterSpacing = 1.sp,
                 color = RunWearColors.TextPrimary
             )
 
@@ -303,5 +297,51 @@ fun OutfitListShimmer(
         repeat(itemCount) {
             OutfitCardShimmer()
         }
+    }
+}
+
+/**
+ * RW-26 (frame 46): the loading state is the HOME SCREEN'S OWN
+ * SKELETON — photo zone, sheet header stack, outfit cards — never a
+ * spinner over blank. The status line stays as a quiet caption at
+ * the sheet's foot so the wait still says what it is waiting for.
+ */
+@Composable
+fun HomeSkeletonScreen(
+    statusText: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxSize().background(RunWearColors.Background)) {
+        // Photo zone skeleton
+        Box(
+            modifier = Modifier.fillMaxWidth().height(340.dp)
+                .background(RunWearColors.BgCard)
+        ) {
+            Text(
+                text = "RunWear",
+                fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+                fontSize = 29.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp)
+            )
+        }
+        // Sheet skeleton: label, location line, hero numeral, pills.
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                .background(RunWearColors.Surface)
+                .padding(horizontal = 20.dp, vertical = 20.dp)
+        ) {
+            HeroShimmerPlaceholder(modifier = Modifier.height(190.dp))
+        }
+        OutfitListShimmer(itemCount = 3, modifier = Modifier.padding(top = 8.dp))
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = statusText,
+            fontSize = 13.sp,
+            color = RunWearColors.TextMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

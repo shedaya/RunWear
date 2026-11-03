@@ -29,6 +29,65 @@ object PhotoQualityChecker {
         val jpegBytes: ByteArray?
     )
 
+    /**
+     * RW-26: the raw measurements behind a check — what the guided
+     * capture's LIVE check chips read. Frontality is the face's
+     * head-turn (ML Kit headEulerAngleY, degrees; 0 = straight on).
+     */
+    data class Measurements(
+        val faceCount: Int,
+        val largestFaceWidthFraction: Float,
+        val meanLuminance: Double,
+        val maxAbsHeadTurnDegrees: Float
+    )
+
+    /** Measure one photo (same decode + ML Kit path as [check]). */
+    suspend fun measure(context: Context, uri: Uri): Measurements? =
+        withContext(Dispatchers.IO) {
+            val bitmap = decodeDownscaled(context, uri) ?: return@withContext null
+            try {
+                val luminance = meanLuminance(bitmap)
+                val faces = detectFacesDetailed(bitmap)
+                Measurements(
+                    faceCount = faces.size,
+                    largestFaceWidthFraction = faces.maxOfOrNull { it.widthFraction } ?: 0f,
+                    meanLuminance = luminance,
+                    maxAbsHeadTurnDegrees = faces.maxOfOrNull { kotlin.math.abs(it.headEulerY) } ?: 0f
+                )
+            } finally {
+                bitmap.recycle()
+            }
+        }
+
+    private data class FaceMeasure(val widthFraction: Float, val headEulerY: Float)
+
+    private suspend fun detectFacesDetailed(bitmap: Bitmap): List<FaceMeasure> {
+        val detector = FaceDetection.getClient(
+            FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .build()
+        )
+        return try {
+            suspendCancellableCoroutine { cont ->
+                detector.process(InputImage.fromBitmap(bitmap, 0))
+                    .addOnSuccessListener { faces ->
+                        cont.resume(
+                            faces.map { face ->
+                                FaceMeasure(
+                                    widthFraction = face.boundingBox.width().toFloat() /
+                                        bitmap.width.toFloat().coerceAtLeast(1f),
+                                    headEulerY = face.headEulerAngleY
+                                )
+                            }
+                        )
+                    }
+                    .addOnFailureListener { cont.resume(emptyList()) }
+            }
+        } finally {
+            detector.close()
+        }
+    }
+
     private const val MAX_DIMENSION_PX = 1280
     private const val LUMINANCE_SAMPLE_STEP = 12
 

@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 // ============================================================================
@@ -103,7 +105,17 @@ fun MakeItMeForkScreen(
 
         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(24.dp))
-            Text(
+                    // Frame 32: the fork introduces Make It Me under its
+        // script wordmark (third wordmark, design §7.5).
+        Text(
+            text = "Make It Me",
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 34.sp,
+            color = RunWearColors.TextPrimary,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+Text(
                 text = MakeItMeStrings.F1_HEADLINE,
                 fontFamily = FontFamily.Default,
                 fontSize = 30.sp,
@@ -259,6 +271,7 @@ fun MakeItMeUploadFlow(
     // the quality-check effect below treats a capture identically
     // to a library pick. There is one intake path, not two.
     var showSourceChoice by remember { mutableStateOf(false) }
+    var showGuidedCapture by remember { mutableStateOf(false) }
     var sourceNote by remember { mutableStateOf<String?>(null) }
     var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -439,16 +452,36 @@ fun MakeItMeUploadFlow(
                     lineHeight = 19.sp,
                     color = Color.White.copy(alpha = 0.6f)
                 )
-                Spacer(Modifier.height(8.dp))
-                // RW-16.14 guidance (Sol's ruling, Oct 31): a
-                // recommendation, shown where photos are chosen —
-                // never a requirement, never validated.
-                Text(
-                    text = MakeItMeStrings.C2D_FULL_BODY_GUIDANCE,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    color = Color.White.copy(alpha = 0.6f)
-                )
+                Spacer(Modifier.height(14.dp))
+                // RW-26: guided capture is THE primary door (the app
+                // dictates the selfie: overlay + live ML Kit chips);
+                // upload stays the secondary door below, judged by
+                // the identical checks. (The RW-16.14 full-body
+                // guidance display is retired by the Nov 2 intake
+                // ruling — no full-body slot; the C2D string remains
+                // in the deck for the record.)
+                Button(
+                    onClick = { showGuidedCapture = true },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                ) {
+                    Text("Take a guided selfie", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                }
+                if (showGuidedCapture) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { showGuidedCapture = false },
+                        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        GuidedSelfieCapture(
+                            onAccepted = { uri ->
+                                showGuidedCapture = false
+                                if (photos.none { it.uri == uri }) photos.add(PickedPhoto(uri))
+                            },
+                            onDismiss = { showGuidedCapture = false }
+                        )
+                    }
+                }
                 if (replace) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -612,12 +645,23 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
-                    picked.rejection != null -> Text(
-                        text = PhotoQualityPolicy.stringFor(picked.rejection!!),
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp,
-                        color = Color(0xFFFF8A80)
-                    )
+                    picked.rejection != null -> Column {
+                        Text(
+                            text = PhotoQualityPolicy.stringFor(picked.rejection!!),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = Color(0xFFFF8A80)
+                        )
+                        // RW-26: the upload door's retake prompt
+                        // (C3F) — camera offered first, same checks.
+                        Text(
+                            text = MakeItMeStrings.C3F_RETAKE_UPLOAD,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            color = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                     else -> Text(
                         text = "Looks good.",
                         fontSize = 13.sp,
@@ -842,6 +886,14 @@ fun MakeItMePhotosScreen(
                 lineHeight = 19.sp,
                 color = Color.White.copy(alpha = 0.6f)
             )
+            Spacer(Modifier.height(8.dp))
+            // Frame 38: the epoch rule in plain words.
+            Text(
+                text = MakeItMeStrings.S20_EPOCH_RULE,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = Color.White.copy(alpha = 0.6f)
+            )
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -1014,6 +1066,7 @@ fun MakeItMePaywallSheet(
     onPurchased: () -> Unit
 ) {
     val context = LocalContext.current
+    val mimState by viewModel.uiState.collectAsState()
     var monthly by remember { mutableStateOf<PackagePrice?>(null) }
     var annual by remember { mutableStateOf<PackagePrice?>(null) }
     var purchasing by remember { mutableStateOf(false) }
@@ -1062,25 +1115,102 @@ fun MakeItMePaywallSheet(
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 32.dp)
         ) {
+            // Frame 22: the "Make It Me" script title (third wordmark).
             Text(
                 text = MakeItMeStrings.U2A_SHEET_TITLE,
-                fontFamily = FontFamily.Default,
-                fontSize = 26.sp,
-                letterSpacing = 0.5.sp,
+                fontFamily = GreatVibesFontFamily,
+                fontSize = 34.sp,
                 color = RunWearColors.TextPrimary
+            )
+            Spacer(Modifier.height(12.dp))
+
+            // Free bar + the real meter ("2 of 5 used" pattern).
+            Text(
+                text = MakeItMeStrings.U2D_FREE_BAR,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = RunWearColors.TextSecondary
+            )
+            Text(
+                text = MakeItMeStrings.u2MeterLine(mimState.freeGenerationsUsed),
+                fontSize = 13.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp)
             )
             Spacer(Modifier.height(16.dp))
 
+            // How Premium works — convergence copy (frame 22 verbatim).
+            Text(
+                text = MakeItMeStrings.U2E_HOW_PREMIUM_WORKS,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+            Text(
+                text = MakeItMeStrings.U2F_HOW_PREMIUM_WORKS_BODY,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Spacer(Modifier.height(16.dp))
+
+            // The ONE highlighted card: "Premium" / "All of Make It
+            // Me." Its price slot is the ONLY price on the card and it
+            // renders from the fetched Offering (parameterized —
+            // design §6); the CTA carries no price. No Founding /
+            // Limited-time / struck-through elements anywhere.
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = RunWearColors.BgCard,
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, RunWearColors.Primary),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = MakeItMeStrings.U2G_CARD_TITLE,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Text(
+                        text = MakeItMeStrings.U2H_CARD_LINE,
+                        fontSize = 14.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    Text(
+                        text = annual?.label ?: MakeItMeStrings.U2B_ANNUAL,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = RunWearColors.TextPrimary,
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Button(
+                        onClick = { buy(annual) },
+                        enabled = annual != null && !purchasing,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                    ) {
+                        Text(
+                            MakeItMeStrings.U2I_CTA,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+
+            // The monthly product, as a quiet row (price from the
+            // same Offering object, never a literal).
             PaywallPriceRow(
                 label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY,
                 enabled = monthly != null && !purchasing,
                 onClick = { buy(monthly) }
-            )
-            Spacer(Modifier.height(10.dp))
-            PaywallPriceRow(
-                label = annual?.label ?: MakeItMeStrings.U2B_ANNUAL,
-                enabled = annual != null && !purchasing,
-                onClick = { buy(annual) }
             )
 
             if (purchasing) {
@@ -1335,6 +1465,69 @@ fun MakeItMeDeleteDialog(
         dismissButton = {
             TextButton(enabled = !deleting, onClick = onDismiss) {
                 Text(MakeItMeStrings.S13_KEEP)
+            }
+        }
+    )
+}
+
+// ============================================================================
+// First-look moment (frame 34) — onboarding's end, on the fork's
+// success path. The onboarding look counts as look 1 of 5. The ONE
+// soft Premium ask lives here: the primary button returns to the
+// outfit ("See My Outfit"); "See Premium" is the quiet second door.
+// Shown once, never a modal again. The band carries the §9 pair
+// verbatim; NO price appears anywhere in onboarding.
+// ============================================================================
+
+@Composable
+fun FirstLookMoment(
+    onSeeOutfit: () -> Unit,
+    onSeePremium: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onSeeOutfit,
+        containerColor = RunWearColors.Surface,
+        title = {
+            Text(
+                text = "Your first look is you.",
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = MakeItMeStrings.FIRST_LOOK_BAND_READINESS,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 20.sp,
+                    color = RunWearColors.TextPrimary
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = MakeItMeStrings.FIRST_LOOK_BAND_NO_CAP,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 20.sp,
+                    color = RunWearColors.TextPrimary
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "That was look 1 of your 5 free looks.",
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextSecondary
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onSeeOutfit) {
+                Text(MakeItMeStrings.FIRST_LOOK_PRIMARY, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onSeePremium) {
+                Text(MakeItMeStrings.FIRST_LOOK_SECOND_DOOR, color = RunWearColors.TextSecondary)
             }
         }
     )

@@ -85,6 +85,25 @@ internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference):
 // DATE PICKER SHEET - PWA v2.9 Style
 // ============================================================================
 
+/**
+ * RW-26 (§8-I): the forecast-horizon rule for day browsing. The
+ * forecast fetch covers [HORIZON_DAYS] days; days past it are NAMED
+ * beyond-forecast and are not selectable — no weather is invented
+ * for them (the Android equivalent of RW-23's iOS future-day flag).
+ * Pure — unit-tested.
+ */
+object ForecastHorizonPolicy {
+    const val HORIZON_DAYS = 7
+    const val BROWSE_DAYS = 14
+    const val BEYOND_LABEL = "Beyond forecast"
+
+    fun isBeyondHorizon(dayOffset: Int): Boolean = dayOffset >= HORIZON_DAYS
+
+    /** The cell's sublabel: the date inside the horizon, the name past it. */
+    fun cellSublabel(dayOffset: Int, dateLabel: String): String =
+        if (isBeyondHorizon(dayOffset)) BEYOND_LABEL else dateLabel
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DatePickerSheet(
@@ -95,7 +114,7 @@ fun DatePickerSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
-    val days = (0..6).map { today.plusDays(it.toLong()) }
+    val days = (0 until ForecastHorizonPolicy.BROWSE_DAYS).map { today.plusDays(it.toLong()) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -125,16 +144,21 @@ fun DatePickerSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 days.forEach { date ->
-                    val isSelected = date == selectedDate
+                    val dayOffset = (date.toEpochDay() - today.toEpochDay()).toInt()
+                    val beyondHorizon = ForecastHorizonPolicy.isBeyondHorizon(dayOffset)
+                    val isSelected = date == selectedDate && !beyondHorizon
                     val label = when {
                         date == today -> "Today"
                         date == today.plusDays(1) -> "Tomorrow"
                         else -> date.format(DateTimeFormatter.ofPattern("EEE"))
                     }
-                    val sublabel = date.format(DateTimeFormatter.ofPattern("MMM d"))
+                    val sublabel = ForecastHorizonPolicy.cellSublabel(
+                        dayOffset,
+                        date.format(DateTimeFormatter.ofPattern("MMM d"))
+                    )
 
                     Surface(
-                        onClick = { onSelectDate(date) },
+                        onClick = { if (!beyondHorizon) onSelectDate(date) },
                         shape = RoundedCornerShape(12.dp),
                         color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
                     ) {
@@ -157,6 +181,15 @@ fun DatePickerSheet(
                     }
                 }
             }
+
+            Spacer(Modifier.height(16.dp))
+
+            Text(
+                text = "Days past the 7-day forecast are beyond the forecast — no weather is invented for them.",
+                fontSize = 12.sp,
+                color = RunWearColors.TextMuted,
+                textAlign = TextAlign.Center
+            )
 
             Spacer(Modifier.height(32.dp))
         }
@@ -344,21 +377,8 @@ fun SettingsSheet(
                 modifier = Modifier.padding(bottom = 24.dp)
             )
 
-            // Temperature Unit - PWA v2.9 toggle style
-            SettingRow(
-                label = "Temperature Unit",
-                sublabel = "Display temperature in"
-            ) {
-                UnitToggle(
-                    isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
-                    onToggle = { onToggleUnit() }
-                )
-            }
-
-            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
-
-            // Appearance (RW-25) — System follows the device; Light /
-            // Dark pin the app theme.
+            // Appearance FIRST (RW-26 §H) — System follows the device;
+            // Light / Dark pin the app theme.
             Column {
                 Text(
                     text = "Appearance",
@@ -375,6 +395,19 @@ fun SettingsSheet(
                 AppearanceSelector(
                     selected = appearancePreference,
                     onSelect = onSetAppearancePreference
+                )
+            }
+
+            HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+
+            // Temperature Unit - PWA v2.9 toggle style
+            SettingRow(
+                label = "Temperature Unit",
+                sublabel = "Display temperature in"
+            ) {
+                UnitToggle(
+                    isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
+                    onToggle = { onToggleUnit() }
                 )
             }
 

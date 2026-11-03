@@ -102,6 +102,10 @@ class MainActivity : ComponentActivity() {
                 // answer (spec §2.5), so this never re-asks.
                 var onboardingJustCompleted by remember { mutableStateOf(false) }
                 var showForkUpload by remember { mutableStateOf(false) }
+                // Frame 34: the first-look moment, shown ONCE at
+                // onboarding's end (fork success path only).
+                var showFirstLookMoment by remember { mutableStateOf(false) }
+                var showFirstLookPaywall by remember { mutableStateOf(false) }
 
                 // Feedback system (spec §1): the screen opens from Settings
                 // (no pre-selected category) or from the outfit list
@@ -298,12 +302,31 @@ class MainActivity : ComponentActivity() {
                                 showForkUpload = false
                                 onboardingJustCompleted = false
                                 viewModel.refreshHeroAfterPersonalChange()
+                                showFirstLookMoment = true
                             },
                             onExitAsStock = {
                                 showForkUpload = false
                                 onboardingJustCompleted = false
                                 makeItMeViewModel.decideForkAsStock()
                             }
+                        )
+                    }
+
+                    // Frame 34 first-look moment (once; never a modal again).
+                    if (showFirstLookMoment) {
+                        com.runwear.app.makeitme.FirstLookMoment(
+                            onSeeOutfit = { showFirstLookMoment = false },
+                            onSeePremium = {
+                                showFirstLookMoment = false
+                                showFirstLookPaywall = true
+                            }
+                        )
+                    }
+                    if (showFirstLookPaywall) {
+                        com.runwear.app.makeitme.MakeItMePaywallSheet(
+                            viewModel = makeItMeViewModel,
+                            onDismiss = { showFirstLookPaywall = false },
+                            onPurchased = { showFirstLookPaywall = false }
                         )
                     }
 

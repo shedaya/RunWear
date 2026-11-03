@@ -261,7 +261,15 @@ class PersonalHeroService @Inject constructor(
         /** RW-16.16: the server's per-cell look state (v5+ payloads). */
         val lookState: String? = null,
         /** RW-16.16: the failure reason CLASS for a failed look. */
-        val lookReason: String? = null
+        val lookReason: String? = null,
+        /**
+         * RW-26: the convergence serve kind the server reports —
+         * "exact" for the cell's own banked photo, "scaffold" when
+         * the serve is the user's OWN banked photo carrying the
+         * exact prescription under the nearest conditions while the
+         * exact photo generates. Absent on older payloads.
+         */
+        val serveKind: String? = null
     )
 
     suspend fun getPersonalHero(combinationId: String): HeroLookup? {
@@ -276,7 +284,9 @@ class PersonalHeroService @Inject constructor(
             version = body["version"]?.jsonPrimitive?.intOrNull,
             heroId = body["hero_id"]?.jsonPrimitive?.contentOrNull,
             lookState = body["look_state"]?.jsonPrimitive?.contentOrNull,
-            lookReason = body["look_reason"]?.jsonPrimitive?.contentOrNull
+            lookReason = body["look_reason"]?.jsonPrimitive?.contentOrNull,
+            serveKind = body["serve_kind"]?.jsonPrimitive?.contentOrNull
+                ?: if (body["scaffold"]?.jsonPrimitive?.booleanOrNull == true) "scaffold" else null
         )
     }
 

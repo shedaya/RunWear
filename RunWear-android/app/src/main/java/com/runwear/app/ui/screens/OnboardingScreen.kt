@@ -140,17 +140,12 @@ fun OnboardingScreen(
                 ) {
                     Spacer(Modifier.height(48.dp))
 
-                    // Logo: "Run**Wear**" (Wear in accent color), Bebas Neue display font
+                    // RW-26: the RunWear script logo (genuine Great
+                    // Vibes) — the brand signature, as on home.
                     Text(
-                        text = buildAnnotatedString {
-                            append("Run")
-                            withStyle(SpanStyle(color = RunWearColors.Primary)) {
-                                append("Wear")
-                            }
-                        },
-                        fontFamily = FontFamily.Default,
+                        text = "RunWear",
+                        fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
                         fontSize = 52.sp,
-                        letterSpacing = 1.5.sp,
                         color = RunWearColors.TextPrimary
                     )
 
@@ -158,7 +153,7 @@ fun OnboardingScreen(
 
                     // Title: "Welcome! 👋" (matches web PWA verbatim)
                     Text(
-                        text = "Welcome! 👋",
+                        text = "Welcome!",
                         fontFamily = FontFamily.Default,
                         fontSize = 30.sp,
                         letterSpacing = 0.5.sp,
@@ -175,6 +170,17 @@ fun OnboardingScreen(
                         textAlign = TextAlign.Center,
                         lineHeight = 20.sp,
                         modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Frame 28 welcome truth: the free tier, named once.
+                    Text(
+                        text = "Your first 5 looks are free.",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = RunWearColors.TextPrimary,
+                        textAlign = TextAlign.Center
                     )
 
                     Spacer(Modifier.height(18.dp))
@@ -238,7 +244,7 @@ fun OnboardingScreen(
                             sublabel = "We'll adjust outfit recommendations"
                         ) {
                             GlassSegmentedControl(
-                                options = listOf("🥶 Get cold", "Neither", "Overheat 🥵"),
+                                options = listOf("Get cold", "Neither", "Overheat"),
                                 selectedIndex = when (comfortPreference) {
                                     ComfortPreference.RUNS_VERY_COLD,
                                     ComfortPreference.RUNS_COLD -> 0
@@ -295,6 +301,21 @@ fun OnboardingScreen(
                             lineHeight = 20.sp,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
+
+                        Spacer(Modifier.height(12.dp))
+
+                        // Frame 30: the coded honest privacy copy
+                        // lives IN the location step itself (the same
+                        // PermissionCopy line the permission screen
+                        // carries — one text, both surfaces).
+                        Text(
+                            text = com.runwear.app.ui.screens.PermissionCopy.LOCATION_PRIVACY_LINE,
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.55f),
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
                     }
 
                     Spacer(Modifier.height(24.dp))
@@ -334,7 +355,7 @@ fun OnboardingScreen(
                                 shape = RoundedCornerShape(18.dp)
                             ) {
                                 Text(
-                                    "Let's Go! 🏃",
+                                    "Let's Go!",
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 16.sp
                                 )

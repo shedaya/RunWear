@@ -132,7 +132,9 @@ class PersonalHeroRepository @Inject constructor(
         val imageUrl: String,
         val version: Int,
         /** The backend hero row id — what a personal flag addresses. */
-        val heroId: String? = null
+        val heroId: String? = null,
+        /** RW-26: exact vs scaffold serve (see [ScaffoldRenderPolicy]). */
+        val serveKind: PersonalServeKind = PersonalServeKind.EXACT
     )
 
     /**
@@ -212,7 +214,18 @@ class PersonalHeroRepository @Inject constructor(
                         )
                     )
                 }
-                PersonalHeroHit(decision.imageUrl, decision.version, decision.heroId)
+                PersonalHeroHit(
+                    decision.imageUrl, decision.version, decision.heroId,
+                    serveKind = ScaffoldRenderPolicy.kindFor(
+                        status = PersonalLookStatusPolicy.fromServer(
+                            found = lookup.found,
+                            lookState = lookup.lookState,
+                            lookReason = lookup.lookReason
+                        ),
+                        serveKindRaw = lookup.serveKind,
+                        found = lookup.found
+                    )
+                )
             }
             PersonalHeroCachePolicy.Decision.NoPersonalHero -> null
         }
