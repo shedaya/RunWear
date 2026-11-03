@@ -3,10 +3,15 @@ package com.runwear.app.makeitme
 /**
  * The Make It Me availability gate for THIS build.
  *
- * OFF for the 1.2.12 production build (Sol's ruling, Nov 2, 2026:
- * "off for both submissions, til it actually works"). The
- * feature's code, its backend, and the entitlement plumbing are
- * all untouched — instead, every entry point consults this gate:
+ * ON in this flag-on TEST build only (branch
+ * test/rw-mim-flag-on-android-2026-11-03, 1.2.16 / vc31, Play
+ * internal testing): the server pipeline went live Nov 3, 2026
+ * and Sol commissioned flag-on test builds to exercise it. The
+ * phase-2 train and every store build keep the gate OFF (Sol's
+ * ruling, Nov 2, 2026: "off for both submissions, til it
+ * actually works"). The feature's code, its backend, and the
+ * entitlement plumbing are all untouched — instead, every entry
+ * point consults this gate:
  *
  * - the hero resolution never engages the personal layer, so
  *   pool heroes only ([personalLayerEngages]);
@@ -23,12 +28,14 @@ package com.runwear.app.makeitme
  * The feature's policy objects (cache, upsell rules, look
  * status) are NOT gated — they keep their ON semantics and their
  * tests keep asserting them. Re-enabling the feature is flipping
- * [ENABLED], plus revisiting MakeItMeOffBuildPinTest, which pins
- * the gate shut for this build.
+ * [ENABLED], plus revisiting the build pin test: the train pins
+ * the gate shut with MakeItMeOffBuildPinTest; this test branch
+ * replaces it with MakeItMeOnBuildPinTest, pinning the gate open
+ * so the flip is a deliberate, tested act here too.
  */
 object MakeItMeAvailability {
 
-    const val ENABLED: Boolean = false
+    const val ENABLED: Boolean = true
 
     /**
      * The personal hero layer may engage only when the feature is
