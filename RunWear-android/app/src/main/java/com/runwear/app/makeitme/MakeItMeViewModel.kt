@@ -168,6 +168,12 @@ class MakeItMeViewModel @Inject constructor(
         viewModelScope.launch { onResult(repository.deleteEverything()) }
     }
 
+    /** "Delete my data" — completes only when the server's receipt
+     * confirms the account itself is deleted. */
+    fun deleteData(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch { onResult(repository.deleteAllData()) }
+    }
+
     // ── Subscription ───────────────────────────────────────────────────
 
     fun purchase(activity: Activity, packageToPurchase: Package, onResult: (BillingManager.PurchaseOutcome) -> Unit) {

@@ -107,6 +107,19 @@ object MakeItMeStrings {
     const val S13_KEEP = "Keep my photos"
     const val S14_POST_DELETE = "Your photos and pictures are deleted."
 
+    // S20–S25 added Nov 2, 2026 (RW-16.30, privacy decision 5a):
+    // Delete my data — the full account deletion, one step beyond
+    // S10–S14's photos-only erasure. The body keeps S12's scope
+    // discipline (server + phone, what goes, no undo) and adds the
+    // two facts the photos copy doesn't carry: the account itself
+    // goes, and deleting data does NOT cancel a store subscription.
+    const val S20_DELETE_DATA_ROW = "Delete my data"
+    const val S21_DELETE_DATA_CONFIRM_TITLE = "Delete all your data?"
+    const val S22_DELETE_DATA_CONFIRM_BODY = "Everything RunWear holds for you will be deleted from our server and this phone: your photos, every picture made from them, and your account itself. This can't be undone. Deleting your data does not cancel a subscription — you can manage that from your store account."
+    const val S23_DELETE_DATA_CONFIRM = "Delete my data"
+    const val S24_DELETE_DATA_KEEP = "Keep my data"
+    const val S25_POST_DELETE_DATA = "Your data and account are deleted."
+
     /** S4 — free-tier sub-status with the user's real count. */
     fun s4FreeUsed(used: Int): String =
         if (used >= 5) "All 5 free looks used" else "$used of 5 free looks used"
