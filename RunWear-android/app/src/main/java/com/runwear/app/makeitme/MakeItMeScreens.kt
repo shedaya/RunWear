@@ -57,11 +57,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 // ============================================================================
@@ -105,7 +105,7 @@ fun MakeItMeForkScreen(
             Spacer(Modifier.height(24.dp))
             Text(
                 text = MakeItMeStrings.F1_HEADLINE,
-                fontFamily = BebasNeueFontFamily,
+                fontFamily = FontFamily.Default,
                 fontSize = 30.sp,
                 letterSpacing = 0.5.sp,
                 color = RunWearColors.TextPrimary
@@ -349,7 +349,7 @@ fun MakeItMeUploadFlow(
             UploadStep.CONSENT -> {
                 Text(
                     text = MakeItMeStrings.C1A_CONSENT_TITLE,
-                    fontFamily = BebasNeueFontFamily,
+                    fontFamily = FontFamily.Default,
                     fontSize = 28.sp,
                     letterSpacing = 0.5.sp,
                     color = RunWearColors.TextPrimary
@@ -427,7 +427,7 @@ fun MakeItMeUploadFlow(
             UploadStep.PHOTOS, UploadStep.SUBMITTING -> {
                 Text(
                     text = MakeItMeStrings.C2A_CAPTURE_TITLE,
-                    fontFamily = BebasNeueFontFamily,
+                    fontFamily = FontFamily.Default,
                     fontSize = 28.sp,
                     letterSpacing = 0.5.sp,
                     color = RunWearColors.TextPrimary
@@ -794,7 +794,7 @@ fun MakeItMePhotosScreen(
         }
         Text(
             text = MakeItMeStrings.S6_PHOTOS_ROW,
-            fontFamily = BebasNeueFontFamily,
+            fontFamily = FontFamily.Default,
             fontSize = 28.sp,
             letterSpacing = 0.5.sp,
             color = RunWearColors.TextPrimary
@@ -961,7 +961,7 @@ fun MakeItMeUpsellCard(
         Spacer(Modifier.height(6.dp))
         Text(
             text = MakeItMeStrings.U1B_HEADLINE,
-            fontFamily = BebasNeueFontFamily,
+            fontFamily = FontFamily.Default,
             fontSize = 24.sp,
             letterSpacing = 0.5.sp,
             color = RunWearColors.TextPrimary
@@ -1064,7 +1064,7 @@ fun MakeItMePaywallSheet(
         ) {
             Text(
                 text = MakeItMeStrings.U2A_SHEET_TITLE,
-                fontFamily = BebasNeueFontFamily,
+                fontFamily = FontFamily.Default,
                 fontSize = 26.sp,
                 letterSpacing = 0.5.sp,
                 color = RunWearColors.TextPrimary

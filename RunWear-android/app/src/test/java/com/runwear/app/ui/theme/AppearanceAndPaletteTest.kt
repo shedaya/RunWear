@@ -52,26 +52,28 @@ class PalettePinsTest {
     }
 
     @Test
-    fun `dark palette keeps the legacy surfaces with the raised muted floor`() {
-        assertEquals(Color(0xFF0A0A0A), DarkPalette.Background)
-        assertEquals(Color(0xFF1A1A1A), DarkPalette.Surface)
-        assertEquals(Color(0xFF1A1A1A), DarkPalette.BgCard)
-        assertEquals(Color(0xFF262626), DarkPalette.SurfaceElevated)
-        assertEquals(Color(0xFFFFFFFF), DarkPalette.TextPrimary)
-        assertEquals(Color(0xFFB3B3B3), DarkPalette.TextSecondary)
-        // RW-25 contrast floor: #737373 -> #9A9A9A
-        assertEquals(Color(0xFF9A9A9A), DarkPalette.TextMuted)
+    fun `dark palette is the RW-26 Warm Charcoal token set`() {
+        assertEquals(Color(0xFF16130F), DarkPalette.Background)
+        assertEquals(Color(0xFF211D17), DarkPalette.Surface)
+        // Card token is DISTINCT from the sheet (RW-25 flag closure).
+        assertEquals(Color(0xFF2A251E), DarkPalette.BgCard)
+        assertEquals(Color(0xFF2A251E), DarkPalette.SurfaceElevated)
+        assertEquals(Color(0xFFF5F1EA), DarkPalette.TextPrimary)
+        assertEquals(Color(0xFFB8AEA0), DarkPalette.TextSecondary)
+        assertEquals(Color(0xFF9C9484), DarkPalette.TextMuted)
+        assertEquals(Color(0xFF2A251E), DarkPalette.MiniBarContainer)
     }
 
     @Test
-    fun `light palette pins`() {
-        assertEquals(Color(0xFFF5F5F5), LightPalette.Background)
-        assertEquals(Color(0xFFFFFFFF), LightPalette.Surface)
-        assertEquals(Color(0xFFFFFFFF), LightPalette.SurfaceElevated)
-        assertEquals(Color(0xFFF5F5F5), LightPalette.BgCard)
+    fun `light palette is the RW-26 cream token set`() {
+        assertEquals(Color(0xFFF5F1E8), LightPalette.Background)
+        assertEquals(Color(0xFFFDFBF6), LightPalette.Surface)
+        assertEquals(Color(0xFFFDFBF6), LightPalette.SurfaceElevated)
+        assertEquals(Color(0xFFFDFBF6), LightPalette.BgCard)
         assertEquals(Color(0xFF17191C), LightPalette.TextPrimary)
-        assertEquals(Color(0xFF5A6068), LightPalette.TextSecondary)
-        assertEquals(Color(0xFF6B7280), LightPalette.TextMuted)
+        assertEquals(Color(0xFF5F5B52), LightPalette.TextSecondary)
+        assertEquals(Color(0xFF6E6A5E), LightPalette.TextMuted)
+        assertEquals(Color(0xFFFDFBF6), LightPalette.MiniBarContainer)
     }
 
     @Test

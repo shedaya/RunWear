@@ -85,7 +85,10 @@ import com.runwear.app.ui.components.TipsSection
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.weariverun.WearIveRunBarState
 import com.runwear.app.weariverun.WearIveRunBarStateHolder
+import com.runwear.app.weariverun.WearIveRunCollectionScreen
+import com.runwear.app.weariverun.WearIveRunDayEntry
 import com.runwear.app.weariverun.WearIveRunMiniBar
+import com.runwear.app.weariverun.WearIveRunStore
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
@@ -187,13 +190,73 @@ fun HeroMainScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val screenScope = rememberCoroutineScope()
 
-    // RW-25: "Wear I've Run" mini bar dock state. The collection
-    // feature is not built anywhere yet, so the holder only ever
-    // yields PreAdd and the dock at the root renders nothing.
+    // RW-26: "Wear I've Run" — the collection is built. The store
+    // persists entries (one per day per place, last settled version);
+    // the holder derives the mini bar's state from them. Entries are
+    // created automatically when a generation for TODAY settles
+    // (the outfit + weather on screen), never backfilled.
+    val wearIveRunStore = remember { WearIveRunStore(context.applicationContext) }
     val wearIveRunHolder = remember { WearIveRunBarStateHolder() }
     val wearIveRunState by wearIveRunHolder.state.collectAsState()
+    val wearIveRunCue by wearIveRunHolder.cueCount.collectAsState()
+    val wearIveRunEntries by wearIveRunStore.entriesFlow.collectAsState(initial = emptyList())
+    var showWearIveRunCollection by remember { mutableStateOf(false) }
+    val wearHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    LaunchedEffect(wearIveRunEntries) {
+        wearIveRunHolder.onEntriesChanged(
+            wearIveRunEntries,
+            uiState.locationNow.toLocalDate()
+        )
+    }
+
+    // Record the day's settled version at generation time.
+    LaunchedEffect(uiState.outfit, uiState.weather, uiState.locationName, uiState.heroImageUrl) {
+        val outfit = uiState.outfit
+        val weather = uiState.weather
+        if (outfit != null && weather != null && uiState.isNowSelected) {
+            wearIveRunStore.recordSettled(
+                WearIveRunDayEntry(
+                    date = uiState.locationNow.toLocalDate(),
+                    place = uiState.locationName,
+                    feelsLikeF = weather.feelsLikeInFahrenheit,
+                    conditionLabel = weather.weatherCode.description,
+                    isSnowing = weather.isSnowing,
+                    isRaining = weather.isRaining,
+                    items = outfit.allItems.map { it.displayName },
+                    heroRef = uiState.heroImageUrl
+                )
+            )
+        }
+    }
+
+    // Creation/update cue: ONE gentle pulse (the expansion) + a soft
+    // haptic, then quiet — the bar collapses back after a few seconds.
+    LaunchedEffect(wearIveRunCue) {
+        if (wearIveRunCue > 0) {
+            wearHaptic.performHapticFeedback(
+                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+            )
+            wearIveRunHolder.setExpanded(true, uiState.locationNow.toLocalDate())
+            kotlinx.coroutines.delay(3000)
+            wearIveRunHolder.setExpanded(false, uiState.locationNow.toLocalDate())
+        }
+    }
 
     val listState = rememberLazyListState()
+    // RW-26: reaching the end of the scroll expands the mini bar.
+    val wearAtEndOfScroll by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - 1
+        }
+    }
+    LaunchedEffect(wearAtEndOfScroll) {
+        if (wearAtEndOfScroll && wearIveRunState != WearIveRunBarState.PreAdd) {
+            wearIveRunHolder.setExpanded(true, uiState.locationNow.toLocalDate())
+        }
+    }
     // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
     // listState so a fold/unfold posture change doesn't reset scroll).
     val gridState = rememberLazyGridState()
@@ -561,13 +624,33 @@ Get your personalized running outfit at runwear.ai
         if (wearIveRunState != WearIveRunBarState.PreAdd) {
             WearIveRunMiniBar(
                 state = wearIveRunState,
-                onExpandClick = {},
-                onCollapseClick = {},
-                onRemoveClick = {},
+                onExpandClick = { showWearIveRunCollection = true },
+                onCollapseClick = {
+                    wearIveRunHolder.setExpanded(false, uiState.locationNow.toLocalDate())
+                },
+                onRemoveClick = {
+                    // Trash: removes TODAY's entry, one tap, NO
+                    // confirmation; the bar leaves the dock until a
+                    // later generation re-creates the entry.
+                    val entry = wearIveRunHolder.currentEntry()
+                    if (entry != null) {
+                        screenScope.launch {
+                            wearIveRunStore.remove(entry.date, entry.place)
+                        }
+                    }
+                },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 88.dp)
+            )
+        }
+
+        if (showWearIveRunCollection) {
+            WearIveRunCollectionScreen(
+                entries = wearIveRunEntries,
+                today = uiState.locationNow.toLocalDate(),
+                onDismiss = { showWearIveRunCollection = false }
             )
         }
     }
@@ -695,11 +778,42 @@ Get your personalized running outfit at runwear.ai
     }
 
     // Location Picker
+    // RW-26 Section E: recents (actually-selected places only).
+    val recentLocationsStore = remember { RecentLocationsStore(context.applicationContext) }
+    val recentLocations by recentLocationsStore.recentsFlow.collectAsState(initial = emptyList())
+    var lastRemovedRecent by remember { mutableStateOf<Pair<RecentLocation, Int>?>(null) }
+
     if (showLocationPicker) {
         LocationPickerSheet(
             currentLocation = uiState.locationName,
             onSearch = onLocationSearch,
+            recents = recentLocations,
+            onRemoveRecent = { recent ->
+                val index = recentLocations.indexOf(recent)
+                lastRemovedRecent = recent to index
+                screenScope.launch {
+                    recentLocationsStore.setAll(
+                        RecentLocationsLogic.remove(recentLocations, recent.name)
+                    )
+                }
+            },
+            onUndoRemoveRecent = {
+                val removed = lastRemovedRecent
+                if (removed != null) {
+                    screenScope.launch {
+                        recentLocationsStore.setAll(
+                            RecentLocationsLogic.restore(
+                                recentLocations, removed.first, removed.second
+                            )
+                        )
+                    }
+                    lastRemovedRecent = null
+                }
+            },
             onSelectLocation = { lat, lon, name ->
+                screenScope.launch {
+                    recentLocationsStore.record(RecentLocation(name, lat, lon))
+                }
                 onLocationSelect(lat, lon, name)
                 showLocationPicker = false
             },
@@ -1398,7 +1512,7 @@ private fun HeroErrorScreen(
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                "Oops!",
+                "Couldn't load your weather",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
                 color = RunWearColors.TextPrimary
@@ -1408,6 +1522,13 @@ private fun HeroErrorScreen(
                 error,
                 style = MaterialTheme.typography.bodyLarge,
                 color = RunWearColors.TextSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Your saved outfits and your Wear I've Run collection are safe on this phone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = RunWearColors.TextMuted,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(24.dp))

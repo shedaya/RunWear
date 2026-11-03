@@ -52,13 +52,26 @@ import kotlin.math.roundToInt
  */
 object HeroSheetFormat {
 
+    /** RW-26 settled header stack, step (i): the small label. */
+    const val FEELS_LIKE_LABEL = "Feels like"
+
     /**
-     * The sheet eyebrow: "FEELS LIKE · {LOCATION} · {MOMENT}".
-     * LOCATION is the location name exactly as the photo's location
-     * pill shows it; MOMENT is "NOW" while the now state is selected,
-     * otherwise the selected moment in the same human format the
-     * DateTimePill renders ("Tomorrow, 7:00 AM", "Fri, Nov 6, 7:00 AM").
+     * RW-26 settled header stack, step (ii): the location line
+     * "{Place} · {Moment}" in sentence case (15.5sp semibold in the
+     * composable). MOMENT is "Now" while the now state is selected,
+     * otherwise the selected moment in DateTimePill's human format.
      */
+    fun locationLine(
+        locationName: String,
+        selectedDateTime: LocalDateTime,
+        locationNow: LocalDateTime,
+        isNowSelected: Boolean
+    ): String {
+        val moment = if (isNowSelected) "Now" else momentLabel(selectedDateTime, locationNow)
+        return "$locationName · $moment"
+    }
+
+    /** Legacy single-line eyebrow, retained for the split-pane header. */
     fun eyebrow(
         locationName: String,
         selectedDateTime: LocalDateTime,
@@ -81,21 +94,13 @@ object HeroSheetFormat {
     }
 
     /**
-     * The caption under the hero number:
-     * "Actual: {x}°{unit} · {condition} · Wind {speed} · Humidity {pct}%"
-     * composed from the same [WeatherConditions] fields WeatherPillsRow
-     * reads, in the pills' own formats (whole-number wind with the
-     * unit the pill shows, humidity as the raw percentage).
+     * RW-26 (design §7 amendment 1): the line under the hero number
+     * carries the ACTUAL temperature only — "Actual NN°" and nothing
+     * else. Condition/wind/humidity live in the weather strip below;
+     * duplicating them here was the contradiction class §2 fixed.
      */
     fun caption(weather: WeatherConditions): String {
-        val unitSymbol = if (weather.isCelsius) "°C" else "°F"
-        val windUnit = if (weather.isCelsius) "km/h" else "mph"
-        return listOf(
-            "Actual: ${weather.temperature.toInt()}$unitSymbol",
-            weather.weatherCode.description,
-            "Wind ${weather.windSpeed.toInt()} $windUnit",
-            "Humidity ${weather.humidity}%"
-        ).joinToString(" · ")
+        return "Actual ${weather.temperature.toInt()}°"
     }
 }
 
@@ -166,18 +171,33 @@ fun HeroSheetBlock(
             .padding(horizontal = 20.dp)
             .padding(top = 20.dp, bottom = 12.dp)
     ) {
-        // (a) Eyebrow
+        // (a) RW-26 settled header stack: (i) "Feels like" small
+        // uppercase label, (ii) the location line "{Place} · {Moment}"
+        // at 15.5sp semibold sentence case — distinct pieces, never
+        // one undifferentiated eyebrow block (design §7 amendment 2).
         Text(
-            text = HeroSheetFormat.eyebrow(
+            text = HeroSheetFormat.FEELS_LIKE_LABEL.uppercase(Locale.US),
+            style = MaterialTheme.typography.labelMedium,
+            letterSpacing = 1.sp,
+            color = RunWearColors.TextSecondary,
+            maxLines = 1
+        )
+        Text(
+            text = HeroSheetFormat.locationLine(
                 locationName = locationName,
                 selectedDateTime = selectedDateTime,
                 locationNow = locationNow,
                 isNowSelected = isNowSelected
             ),
-            style = MaterialTheme.typography.labelMedium,
-            letterSpacing = 1.sp,
-            color = RunWearColors.TextSecondary,
-            maxLines = 1
+            style = TextStyle(
+                fontFamily = FontFamily.Default,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.5.sp,
+                lineHeight = 20.sp
+            ),
+            color = RunWearColors.TextPrimary,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 2.dp)
         )
 
         Spacer(Modifier.height(8.dp))

@@ -79,23 +79,34 @@ class HeroSheetFormatTest {
     }
 
     @Test
-    fun `caption composes actual, condition, wind and humidity in Fahrenheit`() {
+    fun `caption carries the actual temperature only (RW-26 section 7 amendment 1)`() {
         assertEquals(
-            "Actual: 42°F · Clear sky · Wind 5 mph · Humidity 31%",
+            "Actual 42°",
             HeroSheetFormat.caption(
                 weather(temperature = 42.0, feelsLike = 33.0, humidity = 31, windSpeed = 5.0, isCelsius = false)
+            )
+        )
+        assertEquals(
+            "Actual 6°",
+            HeroSheetFormat.caption(
+                weather(temperature = 6.0, feelsLike = 4.0, humidity = 40, windSpeed = 12.0, isCelsius = true)
             )
         )
     }
 
     @Test
-    fun `caption composes in Celsius units`() {
+    fun `location line is place dot moment in sentence case`() {
         assertEquals(
-            "Actual: 6°C · Clear sky · Wind 12 km/h · Humidity 40%",
-            HeroSheetFormat.caption(
-                weather(temperature = 6.0, feelsLike = 4.0, humidity = 40, windSpeed = 12.0, isCelsius = true)
+            "New York · Now",
+            HeroSheetFormat.locationLine("New York", now, now, isNowSelected = true)
+        )
+        assertEquals(
+            "New York · Tomorrow, 7:00 AM",
+            HeroSheetFormat.locationLine(
+                "New York", LocalDateTime.of(2026, 11, 3, 7, 0), now, isNowSelected = false
             )
         )
+        assertEquals("Feels like", HeroSheetFormat.FEELS_LIKE_LABEL)
     }
 }
 

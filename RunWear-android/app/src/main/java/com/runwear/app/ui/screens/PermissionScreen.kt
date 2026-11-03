@@ -19,11 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 /**
@@ -88,7 +88,7 @@ fun PermissionScreen(
 
             Text(
                 text = "Location Needed",
-                fontFamily = BebasNeueFontFamily,
+                fontFamily = FontFamily.Default,
                 fontSize = 28.sp,
                 letterSpacing = 0.48.sp,
                 color = RunWearColors.TextPrimary

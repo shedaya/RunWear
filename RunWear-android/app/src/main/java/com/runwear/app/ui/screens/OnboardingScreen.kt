@@ -39,12 +39,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
@@ -148,7 +148,7 @@ fun OnboardingScreen(
                                 append("Wear")
                             }
                         },
-                        fontFamily = BebasNeueFontFamily,
+                        fontFamily = FontFamily.Default,
                         fontSize = 52.sp,
                         letterSpacing = 1.5.sp,
                         color = RunWearColors.TextPrimary
@@ -159,7 +159,7 @@ fun OnboardingScreen(
                     // Title: "Welcome! 👋" (matches web PWA verbatim)
                     Text(
                         text = "Welcome! 👋",
-                        fontFamily = BebasNeueFontFamily,
+                        fontFamily = FontFamily.Default,
                         fontSize = 30.sp,
                         letterSpacing = 0.5.sp,
                         color = RunWearColors.TextPrimary
@@ -279,7 +279,7 @@ fun OnboardingScreen(
 
                         Text(
                             text = "Set Your Location",
-                            fontFamily = BebasNeueFontFamily,
+                            fontFamily = FontFamily.Default,
                             fontSize = 26.sp,
                             letterSpacing = 0.5.sp,
                             color = RunWearColors.TextPrimary

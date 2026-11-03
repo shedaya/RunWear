@@ -210,8 +210,12 @@ enum class PhotoRejection {
  * Inputs are measured by [PhotoQualityChecker] (ML Kit face detection +
  * a bitmap luminance sample); the decision itself is pure.
  *
- * Order matters: darkness is judged first because a too-dark photo also
- * yields "no face found", and the honest reason is the darkness (C3c).
+ * RW-26 F7 harmonization: the check order is ONE order on both
+ * platforms — face-count first (none -> FACE_UNCLEAR, more than one ->
+ * MULTIPLE_PEOPLE), then darkness, then too-close. Android previously
+ * judged darkness before face count; iOS judged count before darkness;
+ * both now use this order. PhotoIntakePolicy defines routing only (no
+ * check order), so the harmonized order lives here.
  */
 object PhotoQualityPolicy {
 
@@ -226,9 +230,9 @@ object PhotoQualityPolicy {
         largestFaceWidthFraction: Float,
         meanLuminance: Double
     ): PhotoRejection? {
-        if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
         if (faceCount == 0) return PhotoRejection.FACE_UNCLEAR
         if (faceCount > 1) return PhotoRejection.MULTIPLE_PEOPLE
+        if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
         if (largestFaceWidthFraction > MAX_FACE_WIDTH_FRACTION) return PhotoRejection.TOO_CLOSE
         return null
     }

@@ -56,7 +56,10 @@ data class RunWearPalette(
     val TextMuted: Color,
     val GlassBackground: Color,
     val GlassBorder: Color,
-    val GlassBackgroundHover: Color
+    val GlassBackgroundHover: Color,
+    /** RW-26: the mini bar's container tint base (sheet in light,
+     * card in dark); the bar applies the policy alpha over it. */
+    val MiniBarContainer: Color
 )
 
 // Pine seed (RW-25 rebrand): replaces the legacy teal primary family in
@@ -98,20 +101,22 @@ val DarkPalette = RunWearPalette(
     TempMild = TempMildHex,
     TempWarm = TempWarmHex,
     TempHot = TempHotHex,
-    // Surface Colors (dark theme base) - PWA v2.7 values, unchanged
-    Background = Color(0xFF0A0A0A),
-    Surface = Color(0xFF1A1A1A),
-    BgCard = Color(0xFF1A1A1A),
-    SurfaceElevated = Color(0xFF262626),
-    BgCardLight = Color(0xFF262626),
-    TextPrimary = Color(0xFFFFFFFF),
-    TextSecondary = Color(0xFFB3B3B3),
-    // RW-25 contrast floor: raised from #737373, which failed AA on the
-    // dark surfaces it is actually read on.
-    TextMuted = Color(0xFF9A9A9A),
+    // RW-26 consolidated tokens (Warm Charcoal): warmth lives in the
+    // neutrals only — pine, temperature hexes and data ink unchanged.
+    // Card (#2A251E) is DISTINCT from sheet (#211D17): outfit cards sit
+    // visibly on the sheet (closes the RW-25 phase-1 flag).
+    Background = Color(0xFF16130F),
+    Surface = Color(0xFF211D17),
+    BgCard = Color(0xFF2A251E),
+    SurfaceElevated = Color(0xFF2A251E),
+    BgCardLight = Color(0xFF2A251E),
+    TextPrimary = Color(0xFFF5F1EA),
+    TextSecondary = Color(0xFFB8AEA0),
+    TextMuted = Color(0xFF9C9484),
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
-    GlassBackgroundHover = GlassBackgroundHoverHex
+    GlassBackgroundHover = GlassBackgroundHoverHex,
+    MiniBarContainer = Color(0xFF2A251E)
 )
 
 val LightPalette = RunWearPalette(
@@ -130,17 +135,20 @@ val LightPalette = RunWearPalette(
     TempMild = TempMildHex,
     TempWarm = TempWarmHex,
     TempHot = TempHotHex,
-    Background = Color(0xFFF5F5F5),
-    Surface = Color(0xFFFFFFFF),
-    BgCard = Color(0xFFF5F5F5),
-    SurfaceElevated = Color(0xFFFFFFFF),
-    BgCardLight = Color(0xFFF5F5F5),
+    // RW-26 consolidated tokens (cream pair): ground #F5F1E8,
+    // sheet/cards #FDFBF6, ink #17191C (never brown), secondary #5F5B52.
+    Background = Color(0xFFF5F1E8),
+    Surface = Color(0xFFFDFBF6),
+    BgCard = Color(0xFFFDFBF6),
+    SurfaceElevated = Color(0xFFFDFBF6),
+    BgCardLight = Color(0xFFFDFBF6),
     TextPrimary = Color(0xFF17191C),
-    TextSecondary = Color(0xFF5A6068),
-    TextMuted = Color(0xFF6B7280),
+    TextSecondary = Color(0xFF5F5B52),
+    TextMuted = Color(0xFF6E6A5E),
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
-    GlassBackgroundHover = GlassBackgroundHoverHex
+    GlassBackgroundHover = GlassBackgroundHoverHex,
+    MiniBarContainer = Color(0xFFFDFBF6)
 )
 
 /**
@@ -192,6 +200,7 @@ object RunWearColors {
     val GlassBackground: Color get() = activePalette.GlassBackground
     val GlassBorder: Color get() = activePalette.GlassBorder
     val GlassBackgroundHover: Color get() = activePalette.GlassBackgroundHover
+    val MiniBarContainer: Color get() = activePalette.MiniBarContainer
 }
 
 // Legacy color aliases for backward compatibility with existing code
@@ -302,7 +311,7 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = DarkPalette.SurfaceElevated,
     onSurfaceVariant = DarkPalette.TextSecondary,
     outline = DarkPalette.TextMuted,
-    outlineVariant = Color(0xFF3D3D3D),
+    outlineVariant = Color(0xFF3A342A),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
@@ -329,7 +338,7 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = LightPalette.BgCard,
     onSurfaceVariant = LightPalette.TextSecondary,
     outline = LightPalette.TextMuted,
-    outlineVariant = Color(0xFFD8D8D8),
+    outlineVariant = Color(0xFFDAD3C4),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),

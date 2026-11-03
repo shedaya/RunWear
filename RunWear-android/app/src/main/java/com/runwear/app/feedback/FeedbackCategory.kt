@@ -13,3 +13,22 @@ enum class FeedbackCategory(val label: String, val id: String, val isNegative: B
     IDEA("Idea", "idea", false),
     OTHER("Other", "other", false)
 }
+
+/**
+ * RW-18 (RW-26 client half): categories for AUTOMATED submissions —
+ * safe-boot diagnostics and crash capture. These are NOT human
+ * feedback categories and never appear in the human feedback picker;
+ * they exist so automated filings stop landing in the human
+ * `something_wrong` stream. Category ids are IDENTICAL across
+ * platforms (the iOS lane uses the same two ids).
+ */
+enum class AutomatedReportCategory(val id: String) {
+    DIAGNOSTICS("diagnostics"),
+    CRASH_REPORT("crash_report")
+}
+
+/** Routing rule (RW-18): which category id a submission files under. */
+object FeedbackRouting {
+    fun humanCategoryId(category: FeedbackCategory): String = category.id
+    fun automatedCategoryId(category: AutomatedReportCategory): String = category.id
+}

@@ -258,10 +258,21 @@ class PersonalHeroPoliciesTest {
     // ── Photo quality policy (spec §2.3) ────────────────────────────
 
     @Test
-    fun `dark photo rejected before face checks`() {
+    fun `face count is judged before darkness (RW-26 F7 harmonized order)`() {
+        // A dark photo with NO face reads as face-unclear first on BOTH
+        // platforms now; darkness is judged only once exactly one face
+        // is present.
+        assertEquals(
+            PhotoRejection.FACE_UNCLEAR,
+            PhotoQualityPolicy.decide(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
+        )
+        assertEquals(
+            PhotoRejection.MULTIPLE_PEOPLE,
+            PhotoQualityPolicy.decide(faceCount = 2, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
+        )
         assertEquals(
             PhotoRejection.TOO_DARK,
-            PhotoQualityPolicy.decide(faceCount = 0, largestFaceWidthFraction = 0f, meanLuminance = 0.05)
+            PhotoQualityPolicy.decide(faceCount = 1, largestFaceWidthFraction = 0.35f, meanLuminance = 0.05)
         )
     }
 

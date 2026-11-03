@@ -7,6 +7,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.MyLocation
@@ -747,7 +752,7 @@ private fun GenderToggleSettings(
 // LOCATION PICKER SHEET - PWA v2.9 Style with GPS + Manual options
 // ============================================================================
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LocationPickerSheet(
     currentLocation: String,
@@ -757,11 +762,19 @@ fun LocationPickerSheet(
     searchResults: List<LocationResult> = emptyList(),
     isSearching: Boolean = false,
     isUsingGPS: Boolean = false,
-    onUseCurrentLocation: () -> Unit = {}
+    onUseCurrentLocation: () -> Unit = {},
+    /** RW-26 Section E: actually-selected places, most-recent-first. */
+    recents: List<RecentLocation> = emptyList(),
+    onRemoveRecent: (RecentLocation) -> Unit = {},
+    onUndoRemoveRecent: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    // RW-26: long-press raises the M3 contextual bar over a recent.
+    var contextRecent by remember { mutableStateOf<RecentLocation?>(null) }
+    val recentSnackbar = remember { SnackbarHostState() }
+    val recentScope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -776,6 +789,53 @@ fun LocationPickerSheet(
                 .imePadding()
                 .padding(horizontal = 24.dp)
         ) {
+            if (contextRecent != null) {
+                // M3 contextual bar (Android removal treatment, frame 24).
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(RunWearColors.BgCard, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = contextRecent!!.name,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = RunWearColors.TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = {
+                        val removed = contextRecent!!
+                        contextRecent = null
+                        onRemoveRecent(removed)
+                        recentScope.launch {
+                            val result = recentSnackbar.showSnackbar(
+                                message = "Removed ${removed.name}",
+                                actionLabel = "Undo"
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                onUndoRemoveRecent()
+                            }
+                        }
+                    }) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "Remove ${contextRecent!!.name}",
+                            tint = RunWearColors.TextPrimary
+                        )
+                    }
+                    IconButton(onClick = { contextRecent = null }) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = "Cancel",
+                            tint = RunWearColors.TextSecondary
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
             Text(
                 text = "SET LOCATION",
                 style = MaterialTheme.typography.titleLarge,
@@ -921,12 +981,23 @@ fun LocationPickerSheet(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Use Current Location",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = RunWearColors.TextPrimary
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Current location",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = RunWearColors.TextPrimary
+                            )
+                            if (isUsingGPS) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "CURRENT",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RunWearColors.Primary
+                                )
+                            }
+                        }
                         Text(
                             text = if (isUsingGPS) "GPS location enabled" else "Requires location permission",
                             fontSize = 12.sp,
@@ -944,6 +1015,72 @@ fun LocationPickerSheet(
                     }
                 }
             }
+
+            // RW-26 Section E: RECENT LOCATIONS — section ABSENT on
+            // first run, with a quiet hint card where it will live.
+            Spacer(Modifier.height(16.dp))
+            if (recents.isEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = RunWearColors.BgCard
+                ) {
+                    Text(
+                        text = "Places you pick will be kept here, so you can jump back to them.",
+                        fontSize = 13.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            } else {
+                Text(
+                    text = "RECENT LOCATIONS",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = RunWearColors.TextSecondary,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                recents.forEach { recent ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    onSelectLocation(recent.latitude, recent.longitude, recent.name)
+                                },
+                                onLongClick = { contextRecent = recent }
+                            )
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Outlined.History,
+                            contentDescription = null,
+                            tint = RunWearColors.TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = recent.name,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (recent.name == currentLocation && !isUsingGPS) {
+                            Text(
+                                text = "CURRENT",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = RunWearColors.Primary
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = RunWearColors.BgCardLight)
+                }
+            }
+
+            SnackbarHost(hostState = recentSnackbar)
 
             // Currently using indicator
             if (currentLocation.isNotEmpty() && !isUsingGPS) {

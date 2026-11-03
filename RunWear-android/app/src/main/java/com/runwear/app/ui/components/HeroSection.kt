@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +41,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -47,8 +51,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.runwear.app.feedback.StartupTrace
+import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.getTemperatureColor
 import com.runwear.app.ui.theme.getTemperatureFallbackGradient
@@ -259,6 +265,27 @@ fun HeroSection(
                         )
                     )
                 )
+        )
+
+        // 3b. RW-26: the RunWear script logo — genuine Great Vibes,
+        // warm-white #F5F1EA, ~29sp, centered at the top of home as
+        // photo-zone chrome (a brand mark, not data; design §7.3).
+        Text(
+            text = "RunWear",
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 29.sp,
+            color = Color(0xFFF5F1EA),
+            style = TextStyle(
+                shadow = Shadow(
+                    color = Color.Black.copy(alpha = 0.45f),
+                    offset = Offset(0f, 2f),
+                    blurRadius = 8f
+                )
+            ),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 10.dp)
         )
 
         // 4. Top Controls (Location + Share + Settings) — glass chrome,

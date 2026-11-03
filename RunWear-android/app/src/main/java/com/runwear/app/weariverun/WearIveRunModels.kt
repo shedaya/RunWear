@@ -97,8 +97,8 @@ object WearIveRunNarrationFormatter {
 /**
  * The bar's translucency rule (Sol, RW-25 amendment, binding):
  *
- * - MINI state: the background is TRANSLUCENT — sheet surface at ~78%
- *   alpha in dark, ~85% in light (the stronger light tint keeps the
+ * - MINI state: the background is TRANSLUCENT — sheet surface at ~82%
+ *   alpha in dark (over the card tint), ~85% in light (the stronger light tint keeps the
  *   line holding over light content).
  * - FULL EXPRESSION (expanded / end-of-scroll-expanded / cue moment):
  *   the background is FULLY OPAQUE sheet surface.
@@ -109,7 +109,7 @@ object WearIveRunNarrationFormatter {
  */
 object WearIveRunMiniBarPolicy {
 
-    const val MINI_ALPHA_DARK = 0.78f
+    const val MINI_ALPHA_DARK = 0.82f
     const val MINI_ALPHA_LIGHT = 0.85f
     const val FULL_ALPHA = 1.0f
 
@@ -125,13 +125,79 @@ object WearIveRunMiniBarPolicy {
 }
 
 /**
- * The bar's state holder for this build. The collection is not built,
- * so the holder is created holding [WearIveRunBarState.PreAdd] and
- * exposes no way to leave it — the dock consequently renders nothing.
- * When the collection lands, this holder is where its states get fed.
+ * RW-26: the bar's state holder, now driven by the real collection.
+ * It starts at [WearIveRunBarState.PreAdd] (absent before the first
+ * entry exists) and thereafter reflects the current entry — today's
+ * when there is one, else the most recent. A creation or a same-day
+ * replacement (the day's last settled version changing) increments
+ * [cueCount] exactly once: the dock answers with one gentle pulse +
+ * soft haptic and an expansion, then goes quiet.
  */
 class WearIveRunBarStateHolder {
 
     private val _state = MutableStateFlow<WearIveRunBarState>(WearIveRunBarState.PreAdd)
     val state: StateFlow<WearIveRunBarState> = _state.asStateFlow()
+
+    private val _cueCount = MutableStateFlow(0)
+    val cueCount: StateFlow<Int> = _cueCount.asStateFlow()
+
+    private var expanded = false
+    private var current: WearIveRunDayEntry? = null
+
+    /** The entry the bar currently presents (today's, else latest). */
+    fun currentEntry(): WearIveRunDayEntry? = current
+
+    fun onEntriesChanged(entries: List<WearIveRunDayEntry>, today: java.time.LocalDate) {
+        val next = entries.firstOrNull { it.date == today }
+            ?: entries.maxByOrNull { it.date }
+        if (next == null) {
+            current = null
+            _state.value = WearIveRunBarState.PreAdd
+            return
+        }
+        val previous = current
+        val isCreation = previous == null ||
+            previous.date != next.date || previous.place != next.place
+        val isUpdate = !isCreation && previous != next
+        current = next
+        val dayForm = WearIveRunCollectionLogic.dayForm(next.date, today)
+        val narration = when {
+            isUpdate -> WearIveRunNarrationFormatter.update("${next.place}, $dayForm")
+            else -> WearIveRunNarrationFormatter.added(next.place, dayForm)
+        }
+        val barEntry = WearIveRunEntry(
+            place = next.place,
+            timeLabel = dayForm,
+            payload = next.items.firstOrNull(),
+            thumbnailUrl = next.heroRef
+        )
+        _state.value = if (expanded) {
+            WearIveRunBarState.Expanded(narration, barEntry)
+        } else {
+            WearIveRunBarState.Mini(narration, barEntry)
+        }
+        if (isCreation || isUpdate) {
+            _cueCount.value = _cueCount.value + 1
+        }
+    }
+
+    fun setExpanded(value: Boolean, today: java.time.LocalDate) {
+        expanded = value
+        val entry = current ?: return
+        val dayForm = WearIveRunCollectionLogic.dayForm(entry.date, today)
+        val barEntry = WearIveRunEntry(
+            place = entry.place,
+            timeLabel = dayForm,
+            payload = entry.items.firstOrNull(),
+            thumbnailUrl = entry.heroRef
+        )
+        val narration = (_state.value as? WearIveRunBarState.Mini)?.narration
+            ?: (_state.value as? WearIveRunBarState.Expanded)?.narration
+            ?: WearIveRunNarrationFormatter.added(entry.place, dayForm)
+        _state.value = if (value) {
+            WearIveRunBarState.Expanded(narration, barEntry)
+        } else {
+            WearIveRunBarState.Mini(narration, barEntry)
+        }
+    }
 }

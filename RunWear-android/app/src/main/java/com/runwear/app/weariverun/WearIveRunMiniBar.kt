@@ -1,6 +1,7 @@
 package com.runwear.app.weariverun
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,12 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 /**
@@ -86,11 +87,14 @@ private fun MiniBarContent(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().clickable { onExpandClick() },
         shape = RoundedCornerShape(20.dp),
         // Translucent sheet surface (policy alpha); content below is
         // drawn at full opacity by construction.
-        color = RunWearColors.Surface.copy(
+        // RW-26 tints: light rgba(253,251,246,.85), dark
+        // rgba(42,37,30,.82) — the MiniBarContainer token at the
+        // policy alpha; text/icons stay 100%.
+        color = RunWearColors.MiniBarContainer.copy(
             alpha = WearIveRunMiniBarPolicy.backgroundAlpha(
                 isFullExpression = false,
                 darkTheme = darkTheme
@@ -214,17 +218,16 @@ private fun ExpandedBarContent(
 }
 
 /**
- * The wordmark. The settled design calls for Great Vibes; there is no
- * Great Vibes asset in res/font (only Bebas Neue ships), so this uses
- * the platform cursive fallback — bundling the genuine Great Vibes
- * font is a flagged RW-25 follow-up. This element is the bar's one
- * justified custom rendering.
+ * The wordmark in the genuine Great Vibes (bundled RW-25 as
+ * res/font/greatvibes_regular.ttf; the RW-26 phase-2 swap replaces
+ * the phase-1 FontFamily.Cursive fallback call site). This element
+ * is the bar's one justified custom rendering.
  */
 @Composable
 private fun WearIveRunWordmark() {
     Text(
         text = WearIveRunNarrationFormatter.WORDMARK,
-        fontFamily = FontFamily.Cursive,
+        fontFamily = GreatVibesFontFamily,
         fontSize = 19.sp,
         fontWeight = FontWeight.Normal,
         color = RunWearColors.TextPrimary,

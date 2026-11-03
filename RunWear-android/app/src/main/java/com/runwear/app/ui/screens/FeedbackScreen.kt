@@ -41,12 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.feedback.FeedbackBundleFactory
 import com.runwear.app.feedback.FeedbackCategory
-import com.runwear.app.ui.theme.BebasNeueFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
 /**
@@ -90,7 +90,7 @@ fun FeedbackScreen(
             }
             Text(
                 text = "SEND FEEDBACK",
-                fontFamily = BebasNeueFontFamily,
+                fontFamily = FontFamily.Default,
                 fontSize = 24.sp,
                 letterSpacing = 0.48.sp,
                 color = RunWearColors.TextPrimary
