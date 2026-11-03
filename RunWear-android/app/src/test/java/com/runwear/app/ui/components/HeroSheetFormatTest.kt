@@ -80,7 +80,8 @@ class HeroSheetFormatTest {
     fun `caption carries the actual temperature only (RW-26 section 7 amendment 1)`() {
         // WS-2: the stored value is canonical °F (42°F); the caption
         // projects it through the render-time unit — the SAME stored
-        // weather reads 42° under °F and 6° under °C.
+        // weather reads 42° under °F and 5° under °C (42°F = 5.55°C,
+        // truncated by the codebase's display convention).
         assertEquals(
             "Actual 42°",
             HeroSheetFormat.caption(
@@ -89,7 +90,7 @@ class HeroSheetFormatTest {
             )
         )
         assertEquals(
-            "Actual 6°",
+            "Actual 5°",
             HeroSheetFormat.caption(
                 weather(temperature = 42.0, feelsLike = 33.0, humidity = 31, windSpeed = 5.0),
                 com.runwear.shared.domain.model.TemperatureUnit.CELSIUS
