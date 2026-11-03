@@ -94,7 +94,11 @@ object MakeItMeStrings {
     const val S19_TRY_AGAIN = "Try again"
     const val S7_REPLACE_NOTE = "Replacing your photos remakes today's look right away. Your other looks update as they're made again."
     const val S8_STATE_B_SUBSCRIBE_ROW = "Every outfit, instantly"
-    const val S8_STATE_B_SUBSCRIBE_SUB = "Subscribe, and your photo is ready before you open the app. $0.99/month."
+    // Price-free by design (RW-16.30 pricing experiment, Nov 2 2026):
+    // prices render ONLY from the fetched RevenueCat offering, so no
+    // string in the paywall path may carry one — a user assigned a
+    // $19.99/$29.99 experiment offering must never see the $9.99 price.
+    const val S8_STATE_B_SUBSCRIBE_SUB = "Subscribe, and your photo is ready before you open the app."
     const val S9_MANAGE_SUBSCRIPTION = "Manage subscription"
     const val S10_DELETE_ROW = "Delete my photos"
     const val S11_DELETE_CONFIRM_TITLE = "Delete your photos?"
@@ -111,11 +115,52 @@ object MakeItMeStrings {
     const val U1A_EYEBROW = "MAKE IT ME"
     const val U1B_HEADLINE = "This outfit isn't you — yet."
     const val U1C_BODY = "You've seen yourself in 5 outfits. This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app."
-    const val U1D_PRIMARY = "See myself in every outfit — $0.99/month"
+    const val U1D_PRIMARY = "See myself in every outfit"
     const val U1E_NOT_NOW = "Not now"
     const val U2A_SHEET_TITLE = "Every outfit, instantly."
-    const val U2B_MONTHLY = "$0.99 / month"
-    const val U2B_ANNUAL = "$9.99 / year — about 16% less than paying monthly"
+    // Fallback row labels shown only until the current offering
+    // resolves (the rows stay disabled until then). Price-free on
+    // purpose — see S8 note above. Resolved rows are built by
+    // [monthlyRowLabel] / [annualRowLabel] from the offering's own
+    // formatted prices.
+    const val U2B_MONTHLY = "Monthly"
+    const val U2B_ANNUAL = "Annual"
+
+    /** U2 monthly row, from the offering's formatted price. */
+    fun monthlyRowLabel(monthlyFormatted: String): String = "$monthlyFormatted / month"
+
+    /**
+     * U2 annual row, from the offering's formatted price. The
+     * "less than paying monthly" suffix is COMPUTED from the two
+     * fetched amounts and appears only when the annual price really
+     * is lower than twelve monthly payments — at the base prices
+     * ($0.99/mo, $9.99/yr) it reproduces the original "about 16%"
+     * copy; at the $19.99/$29.99 experiment arms it correctly
+     * disappears instead of making a false claim.
+     */
+    fun annualRowLabel(
+        annualFormatted: String,
+        annualAmountMicros: Long,
+        monthlyAmountMicros: Long?
+    ): String {
+        val pct = annualSavingsPercent(annualAmountMicros, monthlyAmountMicros)
+        return if (pct != null) {
+            "$annualFormatted / year — about $pct% less than paying monthly"
+        } else {
+            "$annualFormatted / year"
+        }
+    }
+
+    /** Whole-percent saving of annual vs 12 × monthly, or null when
+     *  annual is not cheaper (or monthly is unknown). */
+    fun annualSavingsPercent(annualAmountMicros: Long, monthlyAmountMicros: Long?): Int? {
+        if (monthlyAmountMicros == null || monthlyAmountMicros <= 0L) return null
+        val monthlyYearMicros = monthlyAmountMicros * 12L
+        if (annualAmountMicros >= monthlyYearMicros) return null
+        return Math.round(
+            (1.0 - annualAmountMicros.toDouble() / monthlyYearMicros.toDouble()) * 100.0
+        ).toInt()
+    }
     const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions."
 
     /**
