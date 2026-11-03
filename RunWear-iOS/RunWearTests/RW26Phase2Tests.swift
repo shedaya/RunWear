@@ -468,4 +468,118 @@ final class RW26Phase2Tests: XCTestCase {
         XCTAssertEqual(dark.firstFailure, .wellLit)
         XCTAssertEqual(dark.coachingLine, "Face a window or a brighter light.")
     }
+
+    // MARK: - Dual-mode conversion (forced-dark surfaces follow the appearance)
+
+    /// WCAG relative luminance of a 6-digit hex color.
+    private func luminance(_ hex: String) -> Double {
+        let chars = Array(hex)
+        func channel(_ i: Int) -> Double {
+            let v = Double(Int(String(chars[i...i + 1]), radix: 16)!) / 255
+            return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4)
+    }
+
+    private func contrast(_ fg: String, _ bg: String) -> Double {
+        let a = luminance(fg), b = luminance(bg)
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+
+    /// Every text pairing the converted surfaces (weather detail,
+    /// the Make It Me flows, Your Photos, the first-look host)
+    /// render: ink and secondary text on each mode's grounds, the
+    /// white label on the pine CTA fill, and the pine payload
+    /// text pair. All must clear the 4.5:1 text floor in BOTH
+    /// modes — computed from the pinned hexes, not asserted.
+    func testDualModeTextPairingsClearTheFloor() {
+        // Light mode.
+        for bg in [AppTheme.groundLightHex, AppTheme.sheetLightHex] {
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.inkLightHex, bg), 4.5, "ink on \(bg)")
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.inkSecondaryLightHex, bg), 4.5, "secondary on \(bg)")
+            XCTAssertGreaterThanOrEqual(contrast("175E4C", bg), 4.5, "pine payload text on \(bg)")
+        }
+        // Dark mode (the card hex is the third dark ground: tiles
+        // and the upsell card sit on it).
+        for bg in [AppTheme.groundDarkHex, AppTheme.sheetDarkHex, AppTheme.cardDarkHex] {
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.inkDarkHex, bg), 4.5, "ink on \(bg)")
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.mutedDarkHex, bg), 4.5, "muted on \(bg)")
+            XCTAssertGreaterThanOrEqual(contrast(AppTheme.pineAccentDarkHex, bg), 4.5, "pine payload text on \(bg)")
+        }
+        // The pine CTA fill carries a white label in both modes.
+        XCTAssertGreaterThanOrEqual(contrast("FFFFFF", "175E4C"), 4.5, "white label on pine")
+    }
+
+    func testWeatherAccentHexPairs() {
+        // Dark side: the system-color hexes the surfaces shipped
+        // with — the dark rendering is unchanged by the conversion.
+        XCTAssertEqual(AppTheme.weatherAccentHex(.green, isDark: true), "30D158")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.yellow, isDark: true), "FFD60A")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.orange, isDark: true), "FF9F0A")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.red, isDark: true), "FF453A")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.purple, isDark: true), "BF5AF2")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.gray, isDark: true), "98989F")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.blue, isDark: true), "0A84FF")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.cyan, isDark: true), "64D2FF")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.indigo, isDark: true), "5E5CE6")
+        // Light side: deepened until text-legible on cream.
+        XCTAssertEqual(AppTheme.weatherAccentHex(.green, isDark: false), "1E7D32")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.yellow, isDark: false), "806000")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.orange, isDark: false), "A34A08")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.red, isDark: false), "B91C1C")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.purple, isDark: false), "7C3AED")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.gray, isDark: false), AppTheme.inkSecondaryLightHex)
+        XCTAssertEqual(AppTheme.weatherAccentHex(.blue, isDark: false), "1D4ED8")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.cyan, isDark: false), "0E7490")
+        XCTAssertEqual(AppTheme.weatherAccentHex(.indigo, isDark: false), "4338CA")
+    }
+
+    /// The UV band accents double as body text (the band label in
+    /// the weather detail), so both sides of each pair clear the
+    /// 4.5:1 text floor on both grounds of their mode.
+    func testWeatherAccentTextContrast() {
+        let textAccents: [AppTheme.WeatherAccent] = [.green, .yellow, .orange, .red, .purple]
+        for accent in textAccents {
+            for bg in [AppTheme.groundLightHex, AppTheme.sheetLightHex] {
+                let hex = AppTheme.weatherAccentHex(accent, isDark: false)
+                XCTAssertGreaterThanOrEqual(contrast(hex, bg), 4.5, "\(accent) light on \(bg)")
+            }
+            for bg in [AppTheme.groundDarkHex, AppTheme.sheetDarkHex] {
+                let hex = AppTheme.weatherAccentHex(accent, isDark: true)
+                XCTAssertGreaterThanOrEqual(contrast(hex, bg), 4.5, "\(accent) dark on \(bg)")
+            }
+        }
+    }
+
+    /// The icon-only accents: the light side clears the text
+    /// floor anyway; the dark side clears it too except indigo,
+    /// which is never text — it pins at the 3:1 non-text floor
+    /// so the shipped dark rendering stays byte-identical.
+    func testWeatherAccentIconContrast() {
+        for accent in [AppTheme.WeatherAccent.gray, .blue, .cyan] {
+            for bg in [AppTheme.groundLightHex, AppTheme.sheetLightHex] {
+                let hex = AppTheme.weatherAccentHex(accent, isDark: false)
+                XCTAssertGreaterThanOrEqual(contrast(hex, bg), 4.5, "\(accent) light on \(bg)")
+            }
+            for bg in [AppTheme.groundDarkHex, AppTheme.sheetDarkHex] {
+                let hex = AppTheme.weatherAccentHex(accent, isDark: true)
+                XCTAssertGreaterThanOrEqual(contrast(hex, bg), 4.5, "\(accent) dark on \(bg)")
+            }
+        }
+        XCTAssertGreaterThanOrEqual(
+            contrast(AppTheme.weatherAccentHex(.indigo, isDark: false), AppTheme.groundLightHex), 4.5)
+        for bg in [AppTheme.groundDarkHex, AppTheme.sheetDarkHex] {
+            XCTAssertGreaterThanOrEqual(
+                contrast(AppTheme.weatherAccentHex(.indigo, isDark: true), bg), 3.0, "indigo dark graphic on \(bg)")
+        }
+        // The warning orange also carries the Make It Me flows'
+        // rejection and failure lines — text in both modes.
+        for (isDark, bgs) in [(false, [AppTheme.groundLightHex, AppTheme.sheetLightHex]),
+                              (true, [AppTheme.groundDarkHex, AppTheme.sheetDarkHex])] {
+            for bg in bgs {
+                let hex = AppTheme.weatherAccentHex(.orange, isDark: isDark)
+                XCTAssertGreaterThanOrEqual(contrast(hex, bg), 4.5, "warning orange on \(bg)")
+            }
+        }
+    }
 }

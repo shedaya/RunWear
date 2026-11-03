@@ -89,6 +89,7 @@ struct WeatherDetailSheet: View {
     @Binding var isPresented: Bool
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedKind: WeatherMetricKind
     @State private var showMetricInspector = false
 
@@ -109,6 +110,12 @@ struct WeatherDetailSheet: View {
         self._selectedKind = State(initialValue: detailType.kind)
     }
 
+    /// Dual-mode conversion: the sheet follows the app's
+    /// appearance (system + the in-app override, which arrives
+    /// here through the colorScheme environment). Semantic hues
+    /// resolve through AppTheme's accent pair for this scheme.
+    private var isDark: Bool { colorScheme == .dark }
+
     /// The metric all the content below renders — the existing
     /// content builders switch on this, unchanged.
     private var detailType: WeatherDetailType {
@@ -128,7 +135,7 @@ struct WeatherDetailSheet: View {
                 pickerLayout
             }
         }
-        .background(AppTheme.darkBackground.ignoresSafeArea())
+        .background(AppTheme.background.ignoresSafeArea())
     }
 
     private var pickerLayout: some View {
@@ -179,7 +186,7 @@ struct WeatherDetailSheet: View {
                         Text(line)
                             .font(.appSecondary)
                             .monospacedDigit()
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 } header: {
                     Text("Context")
@@ -188,15 +195,15 @@ struct WeatherDetailSheet: View {
                     ForEach(allDetails, id: \.kind) { detail in
                         HStack(spacing: 10) {
                             Image(systemName: detail.icon)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(AppTheme.inkSecondary)
                             Text(detail.title)
                                 .font(.appSecondary)
-                                .foregroundColor(.white)
+                                .foregroundColor(AppTheme.inkPrimary)
                             Spacer()
                             Text(detail.summaryValue)
                                 .font(.appSecondary)
                                 .monospacedDigit()
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(AppTheme.inkSecondary)
                         }
                         .tag(detail.kind)
                     }
@@ -253,7 +260,7 @@ struct WeatherDetailSheet: View {
             }
             .padding(20)
         }
-        .background(AppTheme.darkBackground.ignoresSafeArea())
+        .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle(detailType.title)
         .inspectorColumnWidth(min: 260, ideal: 320, max: 380)
     }
@@ -268,7 +275,7 @@ struct WeatherDetailSheet: View {
 
             Text(detailType.title)
                 .font(.appSheetTitle)
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
         }
     }
 
@@ -294,11 +301,11 @@ struct WeatherDetailSheet: View {
         VStack(spacing: 8) {
             Text(condition.rawValue)
                 .font(.largeTitle.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text(conditionDescription(condition))
                 .font(.appSecondary)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
         }
     }
@@ -310,19 +317,19 @@ struct WeatherDetailSheet: View {
                     Text("\(Int(round(speed)))")
                         .font(.largeTitle.weight(.semibold))
                         .monospacedDigit()
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                     Text("mph")
                         .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
 
                 VStack(spacing: 4) {
                     Text(direction)
                         .font(.largeTitle.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                     Text("direction")
                         .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
 
                 if gusts > speed {
@@ -330,17 +337,17 @@ struct WeatherDetailSheet: View {
                         Text("\(Int(round(gusts)))")
                             .font(.largeTitle.weight(.semibold))
                             .monospacedDigit()
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkPrimary)
                         Text("gusts")
                             .font(.appFootnote)
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
             }
 
             Text(windDescription(speed: speed))
                 .font(.appSecondary)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
         }
     }
@@ -350,11 +357,11 @@ struct WeatherDetailSheet: View {
             Text("\(percentage)%")
                 .font(.system(size: bigValueSize, weight: .semibold))
                 .monospacedDigit()
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text(humidityDescription(percentage))
                 .font(.appSecondary)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
         }
     }
@@ -364,11 +371,11 @@ struct WeatherDetailSheet: View {
             Text("\(percentage)%")
                 .font(.system(size: bigValueSize, weight: .semibold))
                 .monospacedDigit()
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text("Chance of precipitation")
                 .font(.appSecondary)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 
@@ -377,7 +384,7 @@ struct WeatherDetailSheet: View {
             Text(String(format: "%.1f", value))
                 .font(.system(size: bigValueSize, weight: .semibold))
                 .monospacedDigit()
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
 
             Text(uvDescription(value))
                 .font(.body.weight(.medium))
@@ -391,11 +398,11 @@ struct WeatherDetailSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Running Tip")
                 .font(.appEyebrow)
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppTheme.inkSecondary)
 
             Text(runningTip)
                 .font(.appSecondary)
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(AppTheme.inkPrimary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -403,42 +410,47 @@ struct WeatherDetailSheet: View {
         // advice is dense text and stays on the flat fill.
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(AppTheme.cardFillOnDark)
+                .fill(AppTheme.cardFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(AppTheme.cardStrokeOnDark, lineWidth: 1)
+                .stroke(AppTheme.cardStroke, lineWidth: 1)
         )
     }
 
     // MARK: - Helper Properties
 
+    /// Semantic hues resolve through AppTheme's accent pair: the
+    /// dark side is the system-color rendering this sheet shipped
+    /// with; the light side is the deepened pair (the UV band
+    /// label below is body text and clears 4.5:1 on the cream
+    /// grounds — see AppTheme's accent note).
     private var iconColor: Color {
         switch detailType {
         case .condition(let condition):
             switch condition {
-            case .clear: return .yellow
-            case .partlyCloudy, .cloudy: return .gray
-            case .foggy: return .gray
-            case .drizzle, .rain: return .blue
-            case .snow: return .cyan
-            case .thunderstorm: return .purple
-            case .unknown: return .white
+            case .clear: return AppTheme.weatherAccentColor(.yellow, isDark: isDark)
+            case .partlyCloudy, .cloudy: return AppTheme.weatherAccentColor(.gray, isDark: isDark)
+            case .foggy: return AppTheme.weatherAccentColor(.gray, isDark: isDark)
+            case .drizzle, .rain: return AppTheme.weatherAccentColor(.blue, isDark: isDark)
+            case .snow: return AppTheme.weatherAccentColor(.cyan, isDark: isDark)
+            case .thunderstorm: return AppTheme.weatherAccentColor(.purple, isDark: isDark)
+            case .unknown: return AppTheme.inkPrimary
             }
-        case .wind: return .cyan
-        case .humidity: return .blue
-        case .precipitation: return .indigo
+        case .wind: return AppTheme.weatherAccentColor(.cyan, isDark: isDark)
+        case .humidity: return AppTheme.weatherAccentColor(.blue, isDark: isDark)
+        case .precipitation: return AppTheme.weatherAccentColor(.indigo, isDark: isDark)
         case .uvIndex(let value): return uvColor(value)
         }
     }
 
     private func uvColor(_ value: Double) -> Color {
         switch value {
-        case ..<3: return .green
-        case 3..<6: return .yellow
-        case 6..<8: return .orange
-        case 8..<11: return .red
-        default: return .purple
+        case ..<3: return AppTheme.weatherAccentColor(.green, isDark: isDark)
+        case 3..<6: return AppTheme.weatherAccentColor(.yellow, isDark: isDark)
+        case 6..<8: return AppTheme.weatherAccentColor(.orange, isDark: isDark)
+        case 8..<11: return AppTheme.weatherAccentColor(.red, isDark: isDark)
+        default: return AppTheme.weatherAccentColor(.purple, isDark: isDark)
         }
     }
 

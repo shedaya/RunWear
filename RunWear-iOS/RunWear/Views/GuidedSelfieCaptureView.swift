@@ -125,20 +125,28 @@ struct GuidedSelfieCaptureView: View {
         )
     }
 
+    /// The permission-denied state is the one surface in this
+    /// view with NO video feed under it — a palette surface, so it
+    /// follows the app's appearance like the rest of the flow.
+    /// (The camera stack's chrome sits over the live feed itself —
+    /// photography, not palette — and keeps the frames 15–16
+    /// treatment in both modes.)
     private var deniedState: some View {
         VStack(spacing: 16) {
             Image(systemName: "camera.slash")
                 .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppTheme.inkSecondary)
             Text("Camera access is off. You can turn it on in Settings — or pick a photo from your library instead.")
                 .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.85))
+                .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
             Button("Not now") { onCancel() }
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.background.ignoresSafeArea())
     }
 }
 

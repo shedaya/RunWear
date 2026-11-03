@@ -13,8 +13,11 @@ enum AppTheme {
     // MARK: - Background Colors
     // RW-26 (consolidated design, notes §1): the cream + Warm Charcoal
     // pair replaces the phase-1 neutral pair. These legacy constants
-    // carry the same values as the dynamic tokens below so forced-dark
-    // surfaces (onboarding, location picker, photos) warm up too.
+    // carry the same values as the dynamic tokens below so the
+    // surfaces that still pin the dark ground (onboarding's
+    // preferences phase, the location picker, Shop) warm up too.
+    // Weather detail, the Make It Me flows, and Your Photos moved
+    // to the dynamic pair in the dual-mode conversion.
     static let backgroundColor = Color(hex: "F5F1E8")
     static let darkBackground = Color(hex: "16130F")
     static let cardBackground = Color(hex: "FDFBF6")
@@ -187,6 +190,57 @@ enum AppTheme {
     // on #211D17 ≈ 16.7:1). Glass itself is unchanged.
     static func weatherPillContentHex(isDark: Bool) -> String {
         isDark ? "FFFFFF" : inkLightHex
+    }
+
+    // MARK: - Semantic accents (dual-mode conversion of the forced-dark surfaces)
+    //
+    // WeatherDetailSheet, the Make It Me flows, and Your Photos
+    // were the last white-on-dark surfaces: their palettes named
+    // SwiftUI's system hues directly, which are tuned per
+    // appearance by the OS only when the color is used as a
+    // dynamic color — as fixed foregrounds on the old forced-dark
+    // ground they read as the dark variants in BOTH modes. The
+    // conversion gives every semantic hue an explicit pair: the
+    // dark side keeps the exact system-color hex the surfaces
+    // ship today (rendering on Warm Charcoal is unchanged); the
+    // light side is deepened until it clears 4.5:1 on BOTH light
+    // grounds (cream #F5F1E8 and sheet #FDFBF6), because the UV
+    // band label is body text, not decoration — the same
+    // legibility standard the WeatherPill fix pinned. The one
+    // exception is dark indigo (#5E5CE6, 3.31:1 on the dark
+    // sheet): it is a graphic-only icon hue, never text, and
+    // keeping it preserves the shipped dark rendering exactly;
+    // its light pair clears 4.5:1 like the rest. Ratios are
+    // computed and pinned in RW26Phase2Tests.
+    enum WeatherAccent: CaseIterable {
+        case green, yellow, orange, red, purple, gray, blue, cyan, indigo
+    }
+
+    static func weatherAccentHex(_ accent: WeatherAccent, isDark: Bool) -> String {
+        switch (accent, isDark) {
+        case (.green, true): return "30D158"
+        case (.green, false): return "1E7D32"
+        case (.yellow, true): return "FFD60A"
+        case (.yellow, false): return "806000"
+        case (.orange, true): return "FF9F0A"
+        case (.orange, false): return "A34A08"
+        case (.red, true): return "FF453A"
+        case (.red, false): return "B91C1C"
+        case (.purple, true): return "BF5AF2"
+        case (.purple, false): return "7C3AED"
+        case (.gray, true): return "98989F"
+        case (.gray, false): return inkSecondaryLightHex
+        case (.blue, true): return "0A84FF"
+        case (.blue, false): return "1D4ED8"
+        case (.cyan, true): return "64D2FF"
+        case (.cyan, false): return "0E7490"
+        case (.indigo, true): return "5E5CE6"
+        case (.indigo, false): return "4338CA"
+        }
+    }
+
+    static func weatherAccentColor(_ accent: WeatherAccent, isDark: Bool) -> Color {
+        Color(hex: weatherAccentHex(accent, isDark: isDark))
     }
     /// The script logo's warm white over photography (both modes).
     static let warmWhite = Color(hex: warmWhiteHex)

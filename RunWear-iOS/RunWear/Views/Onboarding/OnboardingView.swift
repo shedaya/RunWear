@@ -280,7 +280,12 @@ private struct FirstLookView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.darkBackground.ignoresSafeArea()
+            // Dual-mode conversion: the first-look surface hosts
+            // the Make It Me fork, so it follows the app's
+            // appearance with the rest of the flow. (Onboarding's
+            // preferences phase above keeps its own ground — a
+            // separate surface, unchanged here.)
+            AppTheme.background.ignoresSafeArea()
 
             if showFirstLookMoment {
                 firstLookMomentView
@@ -375,7 +380,7 @@ private struct FirstLookView: View {
                         case .success(let image):
                             image.resizable().aspectRatio(contentMode: .fill)
                         default:
-                            Color.white.opacity(0.05)
+                            AppTheme.cardOnSheet
                         }
                     }
                     .frame(height: 180)
@@ -384,10 +389,10 @@ private struct FirstLookView: View {
 
                     Text(contextLine)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                     Text(outfitLine)
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
                 }
 
@@ -420,7 +425,7 @@ private struct FirstLookView: View {
                     case .success(let image):
                         image.resizable().aspectRatio(contentMode: .fill)
                     default:
-                        Color.white.opacity(0.05)
+                        AppTheme.cardOnSheet
                     }
                 }
                 .frame(height: 220)
@@ -429,24 +434,24 @@ private struct FirstLookView: View {
 
                 Text(contextLine)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 Text("That's look 1 of your 5 free looks.")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 // The §9 band — the recommended pair, verbatim.
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Ready the moment you open the app — made ahead, never while you wait.")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                     Text("Every outfit, every day — no number to run out of.")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
 
                 Button(action: onComplete) {
                     Text("See My Outfit")
@@ -464,7 +469,7 @@ private struct FirstLookView: View {
                 } label: {
                     Text("See Premium")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                 }
@@ -514,51 +519,51 @@ private struct FirstLookView: View {
             if let error = previewVM.errorMessage {
                 Text(error)
                     .font(.appSecondary)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
                 Button("Try Again") {
                     started = false
                     start()
                 }
                 .font(.appButtonLabel)
-                .foregroundColor(AppTheme.primaryColor)
+                .foregroundColor(AppTheme.pinePayload)
             } else if locationService.authorizationStatus == .notDetermined && !manualChoice {
                 // The user reached the fork without ever tapping a
                 // location door on the preferences screen — ask here,
                 // in context, with the same two doors.
                 Text("One more thing — where are you running?")
                     .font(.appSectionTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
                 Button("Use My Location") {
                     locationService.requestPermission()
                 }
                 .font(.appButtonLabel)
-                .foregroundColor(AppTheme.primaryColor)
+                .foregroundColor(AppTheme.pinePayload)
                 Button("Set a City Instead") {
                     showLocationPicker = true
                 }
                 .font(.appButtonLabel)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppTheme.inkPrimary)
             } else if locationService.authorizationStatus == .denied ||
                       locationService.authorizationStatus == .restricted {
                 Text("Location is off — set a city to see your first recommendation.")
                     .font(.appSecondary)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
                 Button("Set a City Instead") {
                     showLocationPicker = true
                 }
                 .font(.appButtonLabel)
-                .foregroundColor(AppTheme.primaryColor)
+                .foregroundColor(AppTheme.pinePayload)
             } else {
                 ProgressView()
-                    .tint(.white)
+                    .tint(AppTheme.inkPrimary)
                 // DEVIATION-COPY (no deck entry): the wait line for
                 // the first recommendation load.
                 Text("Getting your first recommendation…")
                     .font(.appSecondary)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
             }
             Spacer()
         }

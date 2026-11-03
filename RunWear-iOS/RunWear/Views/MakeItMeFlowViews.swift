@@ -32,7 +32,7 @@ struct MakeItMeForkView: View {
                         case .success(let image):
                             image.resizable().aspectRatio(contentMode: .fill)
                         default:
-                            Color.white.opacity(0.05)
+                            AppTheme.cardOnSheet
                         }
                     }
                     .frame(height: 180)
@@ -41,21 +41,21 @@ struct MakeItMeForkView: View {
 
                     Text(previewContextLine)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                     Text(previewOutfitLine)
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
                 }
 
                 Text("See yourself in every outfit.")
                     .font(.system(size: 26, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
 
                 Text("That's a model in your outfit photo. It could be you — in this morning's weather, on a road like yours, wearing exactly what RunWear recommends.")
                     .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
 
                 // Option A — customize
@@ -64,10 +64,10 @@ struct MakeItMeForkView: View {
                     // feature under its script wordmark.
                     Text("Make It Me")
                         .font(.greatVibes(size: 25))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                     Text("Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at. Your first 5 looks are free.")
                         .font(.system(size: 15))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                     Button(action: onCustomize) {
                         Text("Use my photos")
                             .font(.system(size: 17, weight: .semibold))
@@ -78,31 +78,31 @@ struct MakeItMeForkView: View {
                     }
                 }
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.08)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
 
                 // Option B — stock (a complete, respected choice)
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Use the standard photos")
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                     Text("Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make it me any time in Settings.")
                         .font(.system(size: 15))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                     Button(action: onStock) {
                         Text("Use standard photos")
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.12)))
+                            .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.cardOnSheet))
                     }
                 }
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.04)))
+                .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
 
                 Text("Either way, your recommendations don't change — only the photo does.")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
             }
             .padding(24)
@@ -153,7 +153,7 @@ struct MakeItMeOptInFlow: View {
 
     var body: some View {
         ZStack {
-            AppTheme.darkBackground.ignoresSafeArea()
+            AppTheme.background.ignoresSafeArea()
             switch effectiveStep {
             case .consent:
                 consentStep
@@ -187,7 +187,7 @@ struct MakeItMeOptInFlow: View {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Before you add photos")
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
 
                 VStack(alignment: .leading, spacing: 14) {
                     Text("RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.")
@@ -196,7 +196,7 @@ struct MakeItMeOptInFlow: View {
                     Text("You can delete your photos and every picture made from them at any time: Settings → Make it me → Delete my photos. Deleting is permanent and takes effect right away.")
                 }
                 .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(AppTheme.inkPrimary)
 
                 // Attestation (C1c) — no attestation, no picker.
                 Button {
@@ -205,10 +205,10 @@ struct MakeItMeOptInFlow: View {
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: attested ? "checkmark.square.fill" : "square")
                             .font(.system(size: 22))
-                            .foregroundColor(attested ? AppTheme.primaryColor : .white.opacity(0.6))
+                            .foregroundColor(attested ? AppTheme.primaryColor : AppTheme.inkSecondary)
                         Text("These photos are of me, and I am 18 or older.")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkPrimary)
                             .multilineTextAlignment(.leading)
                     }
                 }
@@ -218,18 +218,18 @@ struct MakeItMeOptInFlow: View {
                 } label: {
                     Text("Continue")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(attested ? .white : AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(RoundedRectangle(cornerRadius: 14)
-                            .fill(attested ? AppTheme.primaryColor : Color.white.opacity(0.15)))
+                            .fill(attested ? AppTheme.primaryColor : AppTheme.cardFill))
                 }
                 .disabled(!attested)
 
                 Button(action: onCancel) {
                     Text("Not now")
                         .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                 }
@@ -269,6 +269,8 @@ struct MakeItMeCaptureView: View {
     let onConfirm: ([Data]) -> Void
     let onCancel: () -> Void
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var photos: [PickedPhoto] = []
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showPicker = false
@@ -295,28 +297,35 @@ struct MakeItMeCaptureView: View {
         !acceptedJPEGs.isEmpty && !committing && (isReplace ? attested : true)
     }
 
+    /// Rejection / failure lines: the system orange this view
+    /// shipped with is a dark-tuned hue (≈2.3:1 on the cream
+    /// ground) — text resolves through the theme's accent pair.
+    private var warningColor: Color {
+        AppTheme.weatherAccentColor(.orange, isDark: colorScheme == .dark)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Add 1 to 3 photos of you")
                     .font(.system(size: 24, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(AppTheme.inkPrimary)
 
                 Text("Front-facing works best: head and shoulders or half body, good light, no sunglasses. The outfit needs a body to land on.")
                     .font(.system(size: 15))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 // RW-16.14 guidance (Sol's ruling, Oct 31): a
                 // recommendation, in the flow where photos are
                 // chosen — never a requirement, never validated.
                 Text(MakeItMeCopy.fullBodyGuidance)
                     .font(.system(size: 15))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 if isReplace {
                     Text("Replacing your photos remakes today's look right away. Your other looks update as they're made again.")
                         .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
 
                     // Replace re-runs the attestation (§3).
                     Button {
@@ -325,10 +334,10 @@ struct MakeItMeCaptureView: View {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: attested ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 22))
-                                .foregroundColor(attested ? AppTheme.primaryColor : .white.opacity(0.6))
+                                .foregroundColor(attested ? AppTheme.primaryColor : AppTheme.inkSecondary)
                             Text("These photos are of me, and I am 18 or older.")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(AppTheme.inkPrimary)
                                 .multilineTextAlignment(.leading)
                         }
                     }
@@ -347,18 +356,18 @@ struct MakeItMeCaptureView: View {
                             case .checking:
                                 Text("Checking this photo…")
                                     .font(.system(size: 14))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(AppTheme.inkSecondary)
                             case .accepted:
                                 Text("This one works.")
                                     .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.white.opacity(0.8))
+                                    .foregroundColor(AppTheme.inkPrimary)
                             case .rejected(let rejection):
                                 // C3: the specific reason, under the
                                 // photo, in the flow — never
                                 // uploaded-and-prayed-over.
                                 Text(rejection.specString)
                                     .font(.system(size: 14))
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(warningColor)
                             }
                         }
                         Spacer()
@@ -366,12 +375,12 @@ struct MakeItMeCaptureView: View {
                             photos.removeAll { $0.id == photo.id }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.white.opacity(0.5))
+                                .foregroundColor(AppTheme.inkSecondary)
                                 .font(.system(size: 20))
                         }
                     }
                     .padding(10)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.05)))
+                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.cardFill))
                 }
 
                 if photos.count < 3 {
@@ -383,24 +392,24 @@ struct MakeItMeCaptureView: View {
                             Text(photos.isEmpty ? "Add photos" : "Add another photo")
                         }
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.1)))
+                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.cardFill))
                     }
                 }
 
                 if let intakeNote {
                     Text(intakeNote)
                         .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(AppTheme.inkSecondary)
                 }
 
                 if let errorLine {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(errorLine)
                             .font(.system(size: 14))
-                            .foregroundColor(.orange)
+                            .foregroundColor(warningColor)
                         // RW-15: the server's actual message, when
                         // it sent one — smaller and secondary under
                         // the deck line, so a refusal can be quoted
@@ -408,7 +417,7 @@ struct MakeItMeCaptureView: View {
                         if let errorDetail {
                             Text(errorDetail)
                                 .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(AppTheme.inkSecondary)
                         }
                     }
                 }
@@ -423,7 +432,7 @@ struct MakeItMeCaptureView: View {
                             .foregroundColor(AppTheme.primaryColor)
                         Text(MakeItMeCopy.saveConfirmed)
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkPrimary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -436,18 +445,18 @@ struct MakeItMeCaptureView: View {
                             Text(isReplace ? "Save photos" : "Make my first look")
                         }
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(canConfirm ? .white : AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(RoundedRectangle(cornerRadius: 14)
-                            .fill(canConfirm ? AppTheme.primaryColor : Color.white.opacity(0.15)))
+                            .fill(canConfirm ? AppTheme.primaryColor : AppTheme.cardFill))
                     }
                     .disabled(!canConfirm)
 
                     Button(action: onCancel) {
                         Text("Cancel")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(AppTheme.inkSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                     }
@@ -524,7 +533,7 @@ struct MakeItMeCaptureView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
         } else {
-            Color.white.opacity(0.1)
+            AppTheme.cardOnSheet
         }
     }
 

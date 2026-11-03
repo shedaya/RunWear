@@ -140,12 +140,12 @@ struct MakeItMePhotosView: View {
 
     var body: some View {
         ZStack {
-            AppTheme.darkBackground.ignoresSafeArea()
+            AppTheme.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Your photos")
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.inkPrimary)
 
                     switch loader.state {
                     case .loaded(let imageURLs):
@@ -160,27 +160,27 @@ struct MakeItMePhotosView: View {
                     case .empty:
                         Text("No photos on the server.")
                             .font(.system(size: 15))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(AppTheme.inkSecondary)
                     case .failed(let message):
                         VStack(alignment: .leading, spacing: 12) {
                             Text(message)
                                 .font(.system(size: 15))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(AppTheme.inkPrimary)
                             Button {
                                 Task { await loader.load() }
                             } label: {
                                 Text("Try again")
                                     .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(AppTheme.inkPrimary)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 10)
-                                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.1)))
+                                    .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardFill))
                             }
                         }
                     case .idle, .loading:
                         Text("Loading…")
                             .font(.system(size: 15))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
 
                     // Frame 38: the epoch rule, in plain words —
@@ -188,15 +188,15 @@ struct MakeItMePhotosView: View {
                     // rewrites the collection behind it.
                     Text("This is the photo your looks are made from. If you retake it, the looks ahead are re-made from the new photo — the days already in your collection stay as they are.")
                         .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(AppTheme.inkSecondary)
 
                     Button(action: onReplace) {
                         Text("Replace photos")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(Color.white.opacity(0.1)))
+                            .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.cardFill))
                     }
                 }
                 .padding(24)
@@ -232,25 +232,25 @@ private struct ReferencePhotoTileView: View {
                     tileLoader.retry()
                 } label: {
                     ZStack {
-                        Color.white.opacity(0.08)
+                        AppTheme.cardFill
                         VStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle")
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(AppTheme.inkSecondary)
                             Text("Tap to retry")
                                 .font(.system(size: 10))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(AppTheme.inkSecondary)
                         }
                     }
                 }
             case .idle, .loading:
                 ZStack {
-                    Color.white.opacity(0.08)
+                    AppTheme.cardFill
                     VStack(spacing: 4) {
                         ProgressView()
-                            .tint(.white)
+                            .tint(AppTheme.inkSecondary)
                         Text("Loading…")
                             .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(AppTheme.inkSecondary)
                     }
                 }
             }
@@ -272,6 +272,7 @@ private struct ReferencePhotoTileView: View {
 struct MakeItMeSubscriptionSheet: View {
     @EnvironmentObject var store: PersonalHeroStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @State private var purchasing = false
     @State private var unavailableLine: String?
 
@@ -363,7 +364,7 @@ struct MakeItMeSubscriptionSheet: View {
                     if let unavailableLine {
                         Text(unavailableLine)
                             .font(.system(size: 14))
-                            .foregroundColor(.orange)
+                            .foregroundColor(AppTheme.weatherAccentColor(.orange, isDark: colorScheme == .dark))
                     }
 
                     Button {
@@ -412,13 +413,13 @@ struct MakeItMeUpsellCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("MAKE IT ME")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(AppTheme.inkSecondary)
             Text("This outfit isn't you — yet.")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.inkPrimary)
             Text("You've seen yourself in 5 outfits. This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app.")
                 .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(AppTheme.inkSecondary)
             Button {
                 showSubscriptionSheet = true
             } label: {
@@ -434,13 +435,13 @@ struct MakeItMeUpsellCard: View {
             } label: {
                 Text("Not now")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(AppTheme.inkSecondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardOnSheet))
         .padding(.horizontal, 16)
         .sheet(isPresented: $showSubscriptionSheet) {
             MakeItMeSubscriptionSheet()
