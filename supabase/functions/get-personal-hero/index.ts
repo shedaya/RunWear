@@ -51,10 +51,11 @@
 // a SCAFFOLD — the user's own banked photo carrying the exact
 // prescription (same outfit_signature) under the nearest conditions
 // (time/light distance first, then weather condition) — and queues
-// the exact cell's background generation (kind 'fill', priority 15);
-// the serve is logged in personal_scaffold_events. With no own
-// scaffold, the response is found:false with look_state 'making'
-// (the exact photo generates on demand) — never the stock hero.
+// the exact cell's background generation (kind 'subscriber_fill',
+// priority 15); the serve is logged in personal_scaffold_events.
+// With no own scaffold, the response is found:false with
+// look_state 'making' (the exact photo generates on demand) —
+// never the stock hero.
 // Payload additions on a scaffold serve: { scaffold: true,
 // scaffold_combination_id, converging }. Free users are unchanged.
 //
@@ -465,7 +466,11 @@ serve(async (req) => {
                 temp_bracket: parts[2], time_of_day: parts[3],
                 outfit_signature: signature,
                 outfit_items: outfitItems,
-                kind: 'fill',
+                // 'subscriber_fill': the jobs kind CHECK predates
+                // convergence; a background exact-cell fill IS a
+                // subscriber fill (no allowance charge; counts as a
+                // look job in the state derivation).
+                kind: 'subscriber_fill',
                 priority: PRIORITY_CONVERGENCE,
                 epoch,
                 status: 'QUEUED'
