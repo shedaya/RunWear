@@ -10,9 +10,15 @@ What this creates (idempotently — safe to re-run; existing pieces are
 found by reference name / product id and reused):
   1. Subscription group, reference name "Make It Me"
   2. Group localization (en-US): name "Make It Me"
-  3. Two auto-renewable subscriptions in the group, level 1:
-       rw_makeitme_monthly  ONE_MONTH  $0.99
-       rw_makeitme_annual   ONE_YEAR   $9.99
+  3. Auto-renewable subscriptions in the group, level 1:
+       rw_makeitme_monthly      ONE_MONTH  $0.99
+       rw_makeitme_annual       ONE_YEAR   $9.99   (control)
+       rw_makeitme_annual_1999  ONE_YEAR   $19.99  (pricing experiment arm)
+       rw_makeitme_annual_2999  ONE_YEAR   $29.99  (pricing experiment arm)
+     The two experiment arms were added Nov 2, 2026 for the
+     RevenueCat pricing experiment (Sol's ruling): separate products
+     at each price point, mapped to variant offerings in RevenueCat;
+     the control product's price is never edited.
   4. Subscription localization (en-US) for each
   5. US (USA) price for each, from the subscription's own price points
 
@@ -45,6 +51,10 @@ PRODUCTS = [
      "productId": "rw_makeitme_monthly", "period": "ONE_MONTH", "price": 0.99},
     {"key": "annual", "name": "Make It Me Annual",
      "productId": "rw_makeitme_annual", "period": "ONE_YEAR", "price": 9.99},
+    {"key": "annual1999", "name": "Make It Me Annual 19.99",
+     "productId": "rw_makeitme_annual_1999", "period": "ONE_YEAR", "price": 19.99},
+    {"key": "annual2999", "name": "Make It Me Annual 29.99",
+     "productId": "rw_makeitme_annual_2999", "period": "ONE_YEAR", "price": 29.99},
 ]
 
 
