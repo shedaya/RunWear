@@ -1,20 +1,21 @@
 // Supabase Edge Function: start-personal-fill (RW-14, 2026-10-31;
-// RW-16.30 launch-set extension, 2026-11-02)
+// RW-16.30 launch-set extension + convergence amendment, 2026-11-02)
 //
-// Subscriber initial fill: enqueues the LAUNCH CELL SET for an
-// ENTITLED user — the full canonical request space (weather x
-// bracket x daypart, minus the verified-unreachable WARM/HOT SNOW
-// cells = 88 cells), each at the engine's canonical outfit for its
-// representative frame, banked IN ADVANCE (the original Make It Me
-// architecture: a paid/trial user's set exists before they ask).
+// Subscriber fill under the CONVERGENCE model (Sol's architecture
+// amendment, 2026-11-02 ~19:31 EST, restoring his original
+// scaffolding design): the per-user bank is NOT pre-generated in
+// full. This function enqueues ONLY the forecast-imminent cells —
+// the combination_ids the client names from its 7-day forecast in
+// the request body ("priority_cells"), intersected with the launch
+// cell set (weather x bracket x daypart minus the unreachable
+// WARM/HOT SNOW cells = 88 cells) — in the client's forecast order.
+// Every other cell converges on first open: get-personal-hero
+// serves the user's own same-prescription photo as a scaffold and
+// queues the exact photo in the background; once generated it is
+// banked for the selfie epoch and served forever after. A scaffold
+// is never a stock photo for an entitled user (RW-16.20).
 // Cells that already have a verified hero or an active job are
-// skipped, so re-calling is harmless.
-//
-// Priority order (the worker drains lowest-first):
-//   5  forecast cells — combination_ids the client names from its
-//      7-day forecast in the request body ("priority_cells");
-//   10 the 20 core cells (the pre-RW-16.30 matrix);
-//   15 the remaining launch cells.
+// skipped, so re-calling is harmless (e.g. a forecast refresh).
 // Jobs are stamped with the user's current photo-set epoch
 // (personal_profiles.photo_epoch); a photo change supersedes
 // unprocessed prior-epoch jobs in the worker, never another user's.
@@ -32,8 +33,6 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const PRIORITY_FORECAST = 5
-const PRIORITY_CORE_FILL = 10
-const PRIORITY_EXTENDED_FILL = 15
 
 // The pre-RW-16.30 core matrix (20 cells) keeps the established
 // priority; the launch-set extension drains behind it.
@@ -248,53 +247,67 @@ serve(async (req) => {
       return jsonResponse({ error: 'references_required' }, 403)
     }
 
-    // Forecast priority: combination_ids the client names from its
-    // 7-day forecast drain first. Unknown ids are ignored (the set
+    // CONVERGENCE (Sol's architecture amendment, 2026-11-02 ~19:31
+    // EST): the bank is NOT pre-generated in full. This fill enqueues
+    // ONLY the forecast-imminent cells the client names from its
+    // 7-day forecast, in the client's order; every other cell
+    // converges on first open via get-personal-hero's scaffold +
+    // background exact generation. Unknown ids are ignored (the set
     // intersection below), so a stale client cannot inject cells.
-    const forecastCells = new Set(
-      Array.isArray(body.priority_cells)
-        ? (body.priority_cells as unknown[]).filter(
-            (x): x is string => typeof x === 'string')
-        : [])
+    const forecastOrder = Array.isArray(body.priority_cells)
+      ? (body.priority_cells as unknown[]).filter(
+          (x): x is string => typeof x === 'string')
+      : []
 
     const cells = matrixCells(profile.gender as string)
-    const combinationIds = cells.map(c => c.combination_id as string)
+    const cellByCombination = new Map(
+      cells.map(c => [c.combination_id as string, c]))
     const epoch = (profile.photo_epoch as number | undefined) ?? 0
+
+    const wanted = forecastOrder
+      .map(id => cellByCombination.get(id))
+      .filter((c): c is NonNullable<typeof c> => c !== undefined)
+    const wantedIds = wanted.map(c => c.combination_id as string)
 
     const { data: existingHeroes } = await sb
       .from('personal_heroes')
       .select('combination_id')
       .eq('user_id', userId)
-      .in('combination_id', combinationIds)
+      .in('combination_id', wantedIds)
     const haveHero = new Set((existingHeroes ?? []).map(r => r.combination_id as string))
 
     const { data: activeJobs } = await sb
       .from('personal_generation_jobs')
       .select('combination_id')
       .eq('user_id', userId)
-      .in('combination_id', combinationIds)
+      .in('combination_id', wantedIds)
       .in('status', ['QUEUED', 'PROCESSING'])
     const haveJob = new Set((activeJobs ?? []).map(r => r.combination_id as string))
 
-    const rows = cells
-      .filter(c => !haveHero.has(c.combination_id as string) && !haveJob.has(c.combination_id as string))
-      .map(c => {
-        const { core, ...cell } = c
-        return {
+    // Sequential single-row inserts, in forecast order: the worker
+    // claims by (priority, requested_at) and a multi-row insert
+    // stamps one transaction timestamp on every row, which would
+    // scramble the forecast order.
+    let enqueued = 0
+    for (const c of wanted) {
+      const combinationId = c.combination_id as string
+      if (haveHero.has(combinationId) || haveJob.has(combinationId)) continue
+      const { core: _core, ...cell } = c
+      const { error: insertError } = await sb
+        .from('personal_generation_jobs')
+        .insert({
           ...cell,
           user_id: userId,
           kind: 'subscriber_fill',
-          priority: forecastCells.has(c.combination_id as string)
-            ? PRIORITY_FORECAST
-            : core ? PRIORITY_CORE_FILL : PRIORITY_EXTENDED_FILL,
+          priority: PRIORITY_FORECAST,
           epoch,
           status: 'QUEUED'
-        }
-      })
-
-    if (rows.length > 0) {
-      const { error: insertError } = await sb.from('personal_generation_jobs').insert(rows)
+        })
       if (insertError) throw insertError
+      enqueued++
+    }
+
+    if (enqueued > 0) {
       const kick = fetch(`${SUPABASE_URL}/functions/v1/personal-hero-worker`, {
         method: 'POST',
         headers: {
@@ -310,10 +323,11 @@ serve(async (req) => {
     return jsonResponse({
       ok: true,
       user_id: userId,
+      model: 'convergence',
       matrix_cells: cells.length,
       epoch,
-      enqueued: rows.length,
-      enqueued_forecast: rows.filter(r => r.priority === PRIORITY_FORECAST).length,
+      enqueued,
+      enqueued_forecast: enqueued,
       skipped_existing_hero: haveHero.size,
       skipped_active_job: haveJob.size
     })

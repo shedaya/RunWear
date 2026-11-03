@@ -468,7 +468,7 @@ class GateUnavailable extends Error {}
 // caller fails the job closed with the named stage error. A malformed
 // model response is a gate ERROR in the lanes' sense (verdict
 // 'error'), also thrown: nothing ungated is ever stored.
-async function callGateModel(imageJpegB64: string): Promise<string> {
+export async function callGateModel(imageJpegB64: string): Promise<string> {
   if (!ANTHROPIC_API_KEY) {
     throw new GateUnavailable('gate_unavailable: ANTHROPIC_API_KEY is not configured')
   }
@@ -635,7 +635,7 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 // The gate's working image: <=1024 px tall JPEG q85, exactly the
 // lanes' enumerate_photo preprocessing.
-async function gateImageB64(imageBytes: Uint8Array): Promise<string> {
+export async function gateImageB64(imageBytes: Uint8Array): Promise<string> {
   const img = await Image.decode(imageBytes)
   const bounded = img.height > 1024
     ? img.resize(Math.max(1, Math.round(img.width * 1024 / img.height)), 1024)

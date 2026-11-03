@@ -27,6 +27,9 @@
 --    (RW-16.20: the fallback must be counted and visible, never
 --    silent). Written by the worker when a fill/on-demand job for an
 --    entitled user exhausts its draw budget without a delivery.
+--  * Scaffold events. personal_scaffold_events logs every
+--    convergence scaffold serve (requested cell, served cell) —
+--    the amendment's headline diagnostic.
 --  * Intake quality. personal_reference_photos.quality stores the
 --    intake-policy verdict for the photo (face detected, normalized
 --    face height, yaw, verdict, retake key) written by
@@ -116,6 +119,22 @@ comment on table public.personal_fallback_events is
     'RW-16.30: one row per entitled-user cell whose personal bank missed and fell back to stock serving, with the pipeline reason. The RW-16.20 defect counter — it must never be silent.';
 
 -- ---------------------------------------------------------------------
+-- Scaffold diagnostics (convergence amendment, 2026-11-02)
+-- ---------------------------------------------------------------------
+create table if not exists public.personal_scaffold_events (
+    id                       uuid primary key default gen_random_uuid(),
+    user_id                  uuid not null references auth.users (id) on delete cascade,
+    requested_combination_id text not null,
+    served_combination_id    text not null,
+    hero_id                  uuid,
+    created_at               timestamptz not null default now()
+);
+create index if not exists personal_scaffold_events_user_idx
+    on public.personal_scaffold_events (user_id, created_at desc);
+comment on table public.personal_scaffold_events is
+    'RW-16.30 convergence: one row per scaffold serve — the user''s own same-prescription photo served for an unconverged cell while the exact photo generates. Scaffold rate is a headline battery metric.';
+
+-- ---------------------------------------------------------------------
 -- Intake quality on reference photos
 -- ---------------------------------------------------------------------
 alter table public.personal_reference_photos
@@ -128,8 +147,9 @@ comment on column public.personal_reference_photos.quality is
 -- RLS: the two new tables are service-role only (no client policies,
 -- matching the jobs/heroes write discipline).
 -- ---------------------------------------------------------------------
-alter table public.personal_gate_verdicts   enable row level security;
-alter table public.personal_fallback_events enable row level security;
+alter table public.personal_gate_verdicts    enable row level security;
+alter table public.personal_fallback_events  enable row level security;
+alter table public.personal_scaffold_events  enable row level security;
 
 -- ---------------------------------------------------------------------
 -- claim_free_delivery — atomic delivery-time free-allowance claim.

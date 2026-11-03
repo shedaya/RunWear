@@ -46,6 +46,18 @@
 // untouched: state is computed AFTER the partition and any swap
 // materialization, from the final regen_status / serving set.
 //
+// RW-16.30 CONVERGENCE (Sol's architecture amendment, 2026-11-02
+// ~19:31 EST): on a miss for an ENTITLED user, this function serves
+// a SCAFFOLD — the user's own banked photo carrying the exact
+// prescription (same outfit_signature) under the nearest conditions
+// (time/light distance first, then weather condition) — and queues
+// the exact cell's background generation (kind 'fill', priority 15);
+// the serve is logged in personal_scaffold_events. With no own
+// scaffold, the response is found:false with look_state 'making'
+// (the exact photo generates on demand) — never the stock hero.
+// Payload additions on a scaffold serve: { scaffold: true,
+// scaffold_combination_id, converging }. Free users are unchanged.
+//
 // Side effect (replenishment hook, entitled users only): when a hero is
 // served and the cell holds fewer than VARIANT_CAP verified variants,
 // enqueue up to 2 replenishment candidate jobs for the cell — deduped
@@ -84,7 +96,31 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const VARIANT_CAP = 3
 const REPLENISH_CANDIDATES = 2
 const PRIORITY_REPLENISHMENT = 30
+const PRIORITY_CONVERGENCE = 15
 const SIGNED_URL_TTL_SECONDS = 3600
+
+// --- RW-16.30 convergence: scaffold condition distance ---
+// A scaffold may differ from the requested cell ONLY on condition
+// axes: time/light first, then weather condition (Sol's amendment,
+// 2026-11-02). Prescription (outfit_signature) and gender must match
+// exactly — the candidate query enforces both; this ranking orders
+// what remains.
+const TOD_ORDER = ['DAWN', 'MIDDAY', 'DUSK', 'NIGHT']
+function todDistance(a: string, b: string): number {
+  const ia = TOD_ORDER.indexOf(a), ib = TOD_ORDER.indexOf(b)
+  if (ia < 0 || ib < 0) return 99
+  const d = Math.abs(ia - ib)
+  return Math.min(d, TOD_ORDER.length - d)
+}
+const WEATHER_DISTANCE: Record<string, Record<string, number>> = {
+  CLEAR: { CLEAR: 0, CLOUDY: 1, RAIN: 3, SNOW: 3 },
+  CLOUDY: { CLEAR: 1, CLOUDY: 0, RAIN: 2, SNOW: 2 },
+  RAIN: { CLEAR: 3, CLOUDY: 2, RAIN: 0, SNOW: 2 },
+  SNOW: { CLEAR: 3, CLOUDY: 2, RAIN: 2, SNOW: 0 }
+}
+function weatherDistance(a: string, b: string): number {
+  return WEATHER_DISTANCE[a]?.[b] ?? 99
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -363,6 +399,131 @@ serve(async (req) => {
     }
 
     if (serving.length === 0) {
+      // --- RW-16.30 CONVERGENCE: scaffold serve (entitled only) ---
+      // A first open of an unconverged cell must never serve a stock
+      // stranger to an entitled user (RW-16.20). Serve the user's OWN
+      // banked photo carrying the EXACT prescription (same
+      // outfit_signature) under the nearest conditions, queue the
+      // exact cell's generation in the background, and log the
+      // scaffold serve. With no own scaffold, the cell generates on
+      // demand (look_state 'making') rather than serving stock.
+      // Free users keep the plain miss (stock is the free tier's
+      // standing experience until they spend a look through the
+      // request action).
+      const { data: profile } = await sb
+        .from('personal_profiles')
+        .select('entitled, photo_epoch')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (profile?.entitled === true && regenStatus !== 'failed') {
+        const parts = combinationId.split('_')
+        const signature = parts[4]
+        const epoch = (profile.photo_epoch as number | undefined) ?? 0
+        const { data: candidates } = await sb
+          .from('personal_heroes')
+          .select('id, storage_path, variant, outfit_items, combination_id')
+          .eq('user_id', userId)
+          .eq('outfit_signature', signature)
+          .eq('epoch', epoch)
+          .neq('combination_id', combinationId)
+        const ranked = (candidates ?? [])
+          .filter(c => (c.combination_id as string).split('_')[0] === parts[0])
+          .sort((a, b) => {
+            const pa = (a.combination_id as string).split('_')
+            const pb = (b.combination_id as string).split('_')
+            const tod = todDistance(pa[3], parts[3]) - todDistance(pb[3], parts[3])
+            if (tod !== 0) return tod
+            return weatherDistance(pa[1], parts[1]) - weatherDistance(pb[1], parts[1])
+          })
+        const scaffold = ranked[0]
+
+        // Ensure the exact cell is converging: an active job, or
+        // enqueue one now. The prescription comes from the scaffold
+        // (identical signature = identical item set), a prior job
+        // for this cell, or the client's own outfit_items in the
+        // request body — never invented server-side.
+        const hasActiveJob = cellJobs.some(j =>
+          (j.status === 'QUEUED' || j.status === 'PROCESSING') &&
+          j.kind !== 'replenishment')
+        let converging = hasActiveJob
+        if (!hasActiveJob) {
+          const bodyItems = Array.isArray(body.outfit_items)
+            ? (body.outfit_items as unknown[]).filter(
+                (x): x is string => typeof x === 'string').slice(0, 12)
+            : []
+          const outfitItems =
+            (scaffold?.outfit_items as string[] | undefined) ??
+            (cellJobs[0]?.outfit_items as string[] | undefined) ??
+            (bodyItems.length > 0 ? bodyItems : undefined)
+          if (outfitItems && outfitItems.length > 0) {
+            const { error: enqueueError } = await sb
+              .from('personal_generation_jobs')
+              .insert({
+                user_id: userId,
+                combination_id: combinationId,
+                gender: parts[0], weather: parts[1],
+                temp_bracket: parts[2], time_of_day: parts[3],
+                outfit_signature: signature,
+                outfit_items: outfitItems,
+                kind: 'fill',
+                priority: PRIORITY_CONVERGENCE,
+                epoch,
+                status: 'QUEUED'
+              })
+            if (!enqueueError) {
+              converging = true
+              kickWorker()
+            } else {
+              console.error('[get-personal-hero] convergence enqueue failed:', enqueueError)
+            }
+          }
+        }
+
+        if (scaffold) {
+          const { data: signed, error: signError } = await sb.storage
+            .from('personal-heroes')
+            .createSignedUrl(scaffold.storage_path as string, SIGNED_URL_TTL_SECONDS)
+          if (!signError && signed) {
+            // Diagnostics: every scaffold serve is logged (best
+            // effort — a logging failure never blocks the serve).
+            const { error: logError } = await sb
+              .from('personal_scaffold_events')
+              .insert({
+                user_id: userId,
+                requested_combination_id: combinationId,
+                served_combination_id: scaffold.combination_id,
+                hero_id: scaffold.id
+              })
+            if (logError) {
+              console.error('[get-personal-hero] scaffold event log failed:', logError)
+            }
+            return jsonResponse({
+              found: true,
+              scaffold: true,
+              scaffold_combination_id: scaffold.combination_id,
+              combination_id: combinationId,
+              hero_id: scaffold.id,
+              variant: scaffold.variant,
+              image_url: signed.signedUrl,
+              version,
+              regen_status: regenStatus,
+              regeneration_queued: regenerationQueued,
+              converging,
+              look_state: 'ready', look_reason: null
+            })
+          }
+        }
+        if (converging) {
+          // No scaffold: the exact photo generates on demand; the
+          // client renders the making state, not the stock hero.
+          return jsonResponse({
+            found: false, combination_id: combinationId, version,
+            regen_status: regenStatus, regeneration_queued: regenerationQueued,
+            converging: true,
+            look_state: 'making', look_reason: null
+          })
+        }
+      }
       return jsonResponse({
         found: false, combination_id: combinationId, version,
         regen_status: regenStatus, regeneration_queued: regenerationQueued,
