@@ -60,7 +60,9 @@ class PalettePinsTest {
         assertEquals(Color(0xFF2A251E), DarkPalette.SurfaceElevated)
         assertEquals(Color(0xFFF5F1EA), DarkPalette.TextPrimary)
         assertEquals(Color(0xFFB8AEA0), DarkPalette.TextSecondary)
-        assertEquals(Color(0xFF9C9484), DarkPalette.TextMuted)
+        // WS-8: the design's dark pine accent is the dark PineAccent;
+        // the third muted tier (TextMuted #9C9484) is deleted.
+        assertEquals(Color(0xFF5CC79F), DarkPalette.PineAccent)
         assertEquals(Color(0xFF2A251E), DarkPalette.MiniBarContainer)
     }
 
@@ -72,8 +74,26 @@ class PalettePinsTest {
         assertEquals(Color(0xFFFDFBF6), LightPalette.BgCard)
         assertEquals(Color(0xFF17191C), LightPalette.TextPrimary)
         assertEquals(Color(0xFF5F5B52), LightPalette.TextSecondary)
-        assertEquals(Color(0xFF6E6A5E), LightPalette.TextMuted)
+        // WS-8: light keeps the seed pine as its PineAccent.
+        assertEquals(Color(0xFF175E4C), LightPalette.PineAccent)
         assertEquals(Color(0xFFFDFBF6), LightPalette.MiniBarContainer)
+    }
+
+    @Test
+    fun `category colors - light set in light palette, brightened set in dark`() {
+        // Light set (unchanged): the glyph colors of record.
+        assertEquals(Color(0xFF00796B), LightPalette.CategoryTop)
+        assertEquals(Color(0xFF1565C0), LightPalette.CategoryBottom)
+        assertEquals(Color(0xFF2E7D32), LightPalette.CategoryHead)
+        assertEquals(Color(0xFF5E35B1), LightPalette.CategoryHands)
+        assertEquals(Color(0xFFE65100), LightPalette.CategoryAccessories)
+        // WS-8 dark variants: the light set is 1.90–3.27:1 on the
+        // charcoal card; these clear the 3:1 non-text floor there.
+        assertEquals(Color(0xFF26A69A), DarkPalette.CategoryTop)
+        assertEquals(Color(0xFF42A5F5), DarkPalette.CategoryBottom)
+        assertEquals(Color(0xFF66BB6A), DarkPalette.CategoryHead)
+        assertEquals(Color(0xFF9575CD), DarkPalette.CategoryHands)
+        assertEquals(Color(0xFFFF7043), DarkPalette.CategoryAccessories)
     }
 
     @Test

@@ -118,7 +118,7 @@ private fun MiniBarContent(
                 Icon(
                     imageVector = Icons.Outlined.ExpandLess,
                     contentDescription = "Expand Wear I've Run",
-                    tint = RunWearColors.TextMuted,
+                    tint = RunWearColors.TextSecondary,
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -126,7 +126,7 @@ private fun MiniBarContent(
                 Icon(
                     imageVector = Icons.Outlined.Delete,
                     contentDescription = "Remove from Wear I've Run",
-                    tint = RunWearColors.TextMuted,
+                    tint = RunWearColors.TextSecondary,
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -174,7 +174,7 @@ private fun ExpandedBarContent(
                         Icon(
                             imageVector = Icons.Outlined.Image,
                             contentDescription = null,
-                            tint = RunWearColors.TextMuted,
+                            tint = RunWearColors.TextSecondary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -208,7 +208,7 @@ private fun ExpandedBarContent(
                     Icon(
                         imageVector = Icons.Outlined.ExpandMore,
                         contentDescription = "Collapse Wear I've Run",
-                        tint = RunWearColors.TextMuted,
+                        tint = RunWearColors.TextSecondary,
                         modifier = Modifier.size(14.dp)
                     )
                 }
@@ -219,7 +219,7 @@ private fun ExpandedBarContent(
                 TextButton(onClick = onRemoveClick) {
                     Text(
                         text = "Remove",
-                        color = RunWearColors.TextMuted,
+                        color = RunWearColors.TextSecondary,
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -255,7 +255,7 @@ private fun NarrationText(
 ) {
     val annotated = buildAnnotatedString {
         append(narration.text.substring(0, narration.payloadStart))
-        withStyle(SpanStyle(color = RunWearColors.Primary, fontWeight = FontWeight.Medium)) {
+        withStyle(SpanStyle(color = RunWearColors.PineAccent, fontWeight = FontWeight.Medium)) {
             append(narration.payload)
         }
         append(narration.text.substring(narration.payloadEnd))

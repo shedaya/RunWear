@@ -81,7 +81,7 @@ fun PermissionScreen(
                 imageVector = Icons.Outlined.LocationOn,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = RunWearColors.Primary
+                tint = RunWearColors.PineAccent
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -187,7 +187,7 @@ fun PermissionScreen(
             Text(
                 text = PermissionCopy.LOCATION_PRIVACY_LINE,
                 fontSize = 12.sp,
-                color = RunWearColors.TextMuted,
+                color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center,
                 lineHeight = 16.sp
             )
@@ -205,7 +205,7 @@ private fun GpsHelpStep(number: Int, text: String) {
             text = "$number",
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             modifier = Modifier.padding(end = 10.dp, top = 1.dp)
         )
         Text(

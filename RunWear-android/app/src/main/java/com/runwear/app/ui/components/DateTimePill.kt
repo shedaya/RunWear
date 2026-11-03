@@ -97,7 +97,7 @@ fun DateTimePill(
     val glassActiveSection = Color.White.copy(alpha = 0.15f)
     // Teal accent for "Now" shortcut
     val tealAccent = RunWearColors.Primary.copy(alpha = 0.25f)
-    val tealText = Color(0xFF4DB6AC)
+    val tealText = com.runwear.app.ui.theme.PineAccentOnDark
 
     // RW-25 flat-on-sheet tokens: tonal fill from the M3 scheme, ink
     // from the palette, the "Now" accent in the pine family.
@@ -106,7 +106,7 @@ fun DateTimePill(
     val primaryInk = if (onSheet) RunWearColors.TextPrimary else Color.White
     val secondaryInk = if (onSheet) RunWearColors.TextSecondary else Color.White.copy(alpha = 0.7f)
     val dividerColor = if (onSheet) {
-        RunWearColors.TextMuted.copy(alpha = 0.3f)
+        RunWearColors.TextSecondary.copy(alpha = 0.3f)
     } else {
         Color.White.copy(alpha = 0.2f)
     }
@@ -115,7 +115,7 @@ fun DateTimePill(
     } else {
         tealAccent
     }
-    val nowAccentText = if (onSheet) RunWearColors.PrimaryLight else tealText
+    val nowAccentText = if (onSheet) RunWearColors.PineAccent else tealText
 
     Surface(
         modifier = modifier,

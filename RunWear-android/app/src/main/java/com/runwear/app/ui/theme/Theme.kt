@@ -53,7 +53,17 @@ data class RunWearPalette(
     val BgCardLight: Color,
     val TextPrimary: Color,
     val TextSecondary: Color,
-    val TextMuted: Color,
+    /**
+     * WS-8 (RC-8): pine as TEXT. The design table's pine pair — light
+     * themes read the seed pine #175E4C on cream (7.41:1 on sheet);
+     * dark themes read the design's dark accent #5CC79F (8.08:1 on the
+     * charcoal sheet), because the seed pine is only 2.19:1 there.
+     * [Primary] stays the seed in both themes for FILLS (buttons,
+     * selected segments, switch tracks — white on it is 7.66:1);
+     * anything that renders pine as text or as a foreground glyph on a
+     * theme ground must read this token instead.
+     */
+    val PineAccent: Color,
     val GlassBackground: Color,
     val GlassBorder: Color,
     val GlassBackgroundHover: Color,
@@ -69,6 +79,28 @@ private val PinePrimary = Color(0xFF175E4C)
 private val PinePrimaryLight = Color(0xFF2E7D64)
 private val PinePrimaryDark = Color(0xFF0E3D30)
 private val PinePrimaryGlow = Color(0x4D175E4C) // pine at 30% alpha
+
+/**
+ * WS-8: the design's dark pine accent (#5CC79F, notes §1) — the dark
+ * theme's [RunWearPalette.PineAccent], and the pine for surfaces that
+ * are dark in BOTH themes (the guided-capture camera surface).
+ */
+val PineAccentOnDark = Color(0xFF5CC79F)
+
+/**
+ * WS-8: warm white #F5F1EA — the design's ink for photography and
+ * other always-dark surfaces (script logo and scaffold badge over the
+ * hero photo, the Morning Poster's lockup and footer over its scrim).
+ * Same value as the dark palette's TextPrimary; named separately
+ * because these surfaces do not follow the app theme.
+ */
+val PhotoInk = Color(0xFFF5F1EA)
+
+/**
+ * WS-8: the Morning Poster's area-scrim base, rgba(35,35,39) — the
+ * design §7.4 scrim color (alpha is applied at the call site).
+ */
+val PosterScrim = Color(0xFF232327)
 
 // Temperature bracket colors — the newer Android set, kept exactly.
 private val TempFreezingHex = Color(0xFF8B5CF6) // Purple - <20°F
@@ -89,12 +121,15 @@ val DarkPalette = RunWearPalette(
     PrimaryLight = PinePrimaryLight,
     PrimaryDark = PinePrimaryDark,
     PrimaryGlow = PinePrimaryGlow,
-    // Category Colors (for outfit items) - WCAG AA compliant on white backgrounds
-    CategoryTop = Color(0xFF00796B),
-    CategoryBottom = Color(0xFF1565C0),
-    CategoryHead = Color(0xFF2E7D32),
-    CategoryHands = Color(0xFF5E35B1),
-    CategoryAccessories = Color(0xFFE65100),
+    // Category Colors (for outfit items) — WS-8: brightened dark
+    // variants. The light set computes to 1.90–3.27:1 on the charcoal
+    // card, below the 3:1 non-text floor for the category glyphs; this
+    // set clears 3:1 on card and sheet (pinned by TokenContrastTest).
+    CategoryTop = Color(0xFF26A69A),
+    CategoryBottom = Color(0xFF42A5F5),
+    CategoryHead = Color(0xFF66BB6A),
+    CategoryHands = Color(0xFF9575CD),
+    CategoryAccessories = Color(0xFFFF7043),
     TempFreezing = TempFreezingHex,
     TempCold = TempColdHex,
     TempCool = TempCoolHex,
@@ -112,7 +147,7 @@ val DarkPalette = RunWearPalette(
     BgCardLight = Color(0xFF2A251E),
     TextPrimary = Color(0xFFF5F1EA),
     TextSecondary = Color(0xFFB8AEA0),
-    TextMuted = Color(0xFF9C9484),
+    PineAccent = PineAccentOnDark,
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
     GlassBackgroundHover = GlassBackgroundHoverHex,
@@ -144,7 +179,7 @@ val LightPalette = RunWearPalette(
     BgCardLight = Color(0xFFFDFBF6),
     TextPrimary = Color(0xFF17191C),
     TextSecondary = Color(0xFF5F5B52),
-    TextMuted = Color(0xFF6E6A5E),
+    PineAccent = PinePrimary,
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
     GlassBackgroundHover = GlassBackgroundHoverHex,
@@ -195,7 +230,7 @@ object RunWearColors {
 
     val TextPrimary: Color get() = activePalette.TextPrimary
     val TextSecondary: Color get() = activePalette.TextSecondary
-    val TextMuted: Color get() = activePalette.TextMuted
+    val PineAccent: Color get() = activePalette.PineAccent
 
     val GlassBackground: Color get() = activePalette.GlassBackground
     val GlassBorder: Color get() = activePalette.GlassBorder
@@ -203,20 +238,10 @@ object RunWearColors {
     val MiniBarContainer: Color get() = activePalette.MiniBarContainer
 }
 
-// Legacy color aliases for backward compatibility with existing code
-val NeoMint = DarkPalette.Primary
-val ElectricCoral = Color(0xFFFF6B6B)
-val PrimaryOrange = Color(0xFFFF6B35)
-val PrimaryOrangeDark = Color(0xFFE55A2B)
-val SecondaryBlue = Color(0xFF4A90D9)
-
-// Legacy temperature colors (kept for backward compatibility)
-val TempHot = Color(0xFFFF5722)
-val TempWarm = Color(0xFFFF9800)
-val TempMild = Color(0xFF4CAF50)
-val TempCool = Color(0xFF2196F3)
-val TempCold = Color(0xFF3F51B5)
-val TempFreezing = Color(0xFF9C27B0)
+// WS-8 (RC-8): the pre-RW-25 legacy alias colors (NeoMint,
+// ElectricCoral, PrimaryOrange, SecondaryBlue, the legacy Temp* set)
+// and the deprecated getTempColor() are deleted — none were in the
+// design token table, and no built call site read them.
 
 // Font family - use system default (Roboto on Android)
 // Plus Jakarta Sans would require custom font files
@@ -291,15 +316,15 @@ fun getTemperatureFallbackGradient(tempFahrenheit: Double): Color {
 // MATERIAL 3 COLOR SCHEMES — roles rebuilt from the palettes (RW-25)
 // ============================================================================
 
-private val DarkColorScheme = darkColorScheme(
+internal val DarkColorScheme = darkColorScheme(
     primary = DarkPalette.Primary,
     onPrimary = Color.White,
     primaryContainer = DarkPalette.PrimaryDark,
-    onPrimaryContainer = DarkPalette.PrimaryLight,
-    secondary = DarkPalette.PrimaryLight,
-    onSecondary = Color.White,
+    onPrimaryContainer = DarkPalette.PineAccent,
+    secondary = DarkPalette.PineAccent,
+    onSecondary = Color.Black,
     secondaryContainer = DarkPalette.PrimaryDark,
-    onSecondaryContainer = DarkPalette.PrimaryLight,
+    onSecondaryContainer = DarkPalette.PineAccent,
     tertiary = DarkPalette.TempWarm,
     onTertiary = Color.Black,
     tertiaryContainer = Color(0xFF5F3D00),
@@ -310,7 +335,7 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = DarkPalette.TextPrimary,
     surfaceVariant = DarkPalette.SurfaceElevated,
     onSurfaceVariant = DarkPalette.TextSecondary,
-    outline = DarkPalette.TextMuted,
+    outline = DarkPalette.TextSecondary,
     outlineVariant = Color(0xFF3A342A),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
@@ -318,12 +343,12 @@ private val DarkColorScheme = darkColorScheme(
     onErrorContainer = Color(0xFFFFDAD6)
 )
 
-private val LightColorScheme = lightColorScheme(
+internal val LightColorScheme = lightColorScheme(
     primary = LightPalette.Primary,
     onPrimary = Color.White,
     primaryContainer = LightPalette.PrimaryLight,
     onPrimaryContainer = Color.White,
-    secondary = LightPalette.PrimaryLight,
+    secondary = LightPalette.Primary,
     onSecondary = Color.White,
     secondaryContainer = LightPalette.BgCard,
     onSecondaryContainer = LightPalette.PrimaryDark,
@@ -337,7 +362,7 @@ private val LightColorScheme = lightColorScheme(
     onSurface = LightPalette.TextPrimary,
     surfaceVariant = LightPalette.BgCard,
     onSurfaceVariant = LightPalette.TextSecondary,
-    outline = LightPalette.TextMuted,
+    outline = LightPalette.TextSecondary,
     outlineVariant = Color(0xFFDAD3C4),
     error = Color(0xFFB3261E),
     onError = Color.White,
@@ -374,24 +399,4 @@ fun RunWearTheme(
         typography = Typography,
         content = content
     )
-}
-
-// ============================================================================
-// LEGACY HELPER FUNCTIONS (for backward compatibility)
-// ============================================================================
-
-/**
- * Legacy temperature color function
- * @deprecated Use getTemperatureColor() instead
- */
-@Deprecated("Use getTemperatureColor()", ReplaceWith("getTemperatureColor(tempFahrenheit)"))
-fun getTempColor(tempF: Double): Color = when {
-    tempF >= 85 -> Color(0xFFD32F2F)
-    tempF >= 75 -> Color(0xFFD32F2F)
-    tempF >= 65 -> Color(0xFFE65100)
-    tempF >= 55 -> Color(0xFF00796B)
-    tempF >= 45 -> Color(0xFF0277BD)
-    tempF >= 35 -> Color(0xFF1565C0)
-    tempF >= 25 -> Color(0xFF283593)
-    else -> Color(0xFF4A148C)
 }

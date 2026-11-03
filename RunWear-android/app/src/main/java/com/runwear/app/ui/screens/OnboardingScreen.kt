@@ -37,12 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.RunWearColors
@@ -55,24 +52,26 @@ import com.runwear.shared.domain.model.TemperatureUnit
  * 1. Preferences (temperature unit, fit preference, body temperature comfort)
  * 2. Location (use current location or set manually)
  *
- * Presentation (1.2.0 redesign): the main screen's design language
- * (HeroMainScreen) brought to first run —
- * - full-bleed dark backdrop: a deep teal-tinted vertical gradient with a
- *   soft radial brand glow behind the header, echoing the hero's scrims
- *   (first run cannot depend on the network hero pool, so the backdrop is
- *   the hero's own no-image treatment rather than a photo);
- * - each question lives in a frosted-glass card (white 7% fill, white 12%
- *   hairline border, 24dp radius) like the hero's glass pills, with the
- *   SettingsSheet label hierarchy inside (title, muted sublabel, control);
- * - segmented controls are glass tracks (white 8% fill) whose selected
- *   segment is the solid Primary teal, as on the main screen;
- * - wordmark and titles stay Bebas Neue, sized up toward the hero's scale;
- * - actions stay pinned at the bottom over a fade-to-background scrim:
- *   56dp primary, glass secondary.
+ * Presentation (WS-8, RC-8 — D-24): every surface is built from the
+ * design token table in BOTH appearances. The pre-WS-8 presentation
+ * hardcoded a dark-backdrop treatment — white text at fixed alphas
+ * (0.55–0.75) over a gradient that faded into the THEME background —
+ * which computed to ≈1.07–1.10:1 on the cream ground in light mode,
+ * and the theme-ink headings computed to 1.91:1 over the gradient's
+ * dark-teal top. The rebuilt presentation:
+ * - the ground is the theme Background token, flat;
+ * - each question lives in a card on the Surface token with a
+ *   hairline in the secondary ink, carrying the SettingsSheet label
+ *   hierarchy (title in TextPrimary, sublabel in TextSecondary);
+ * - segmented controls are tracks on the Background token whose
+ *   selected segment is the solid Primary pine with white text and
+ *   whose unselected labels read TextSecondary — the same treatment
+ *   as the Settings GenderToggle;
+ * - no hardcoded white-at-alpha text exists anywhere in this file.
  *
- * Behavior is unchanged from the previous design: same questions, same
- * options, same defaults, same toggle semantics, same persisted values,
- * and all copy matches the web PWA verbatim.
+ * Behavior is unchanged: same questions, same options, same defaults,
+ * same toggle semantics, same persisted values, and all copy matches
+ * the web PWA verbatim.
  */
 @Composable
 fun OnboardingScreen(
@@ -87,39 +86,11 @@ fun OnboardingScreen(
     // Two-step flow matching web PWA: preferences first, then location
     var showLocationStep by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        // Full-bleed backdrop: deep teal dusk at the top fading into the
-        // app background, with a soft brand glow behind the header — the
-        // hero screen's scrim treatment, no photo required.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF0B2E29),
-                            RunWearColors.Background,
-                            RunWearColors.Background
-                        ),
-                        startY = 0f,
-                        endY = 1400f
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(420.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            RunWearColors.Primary.copy(alpha = 0.30f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(RunWearColors.Background)
+    ) {
         // Centered max-width column on large screens (main screen MEDIUM pattern)
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -166,7 +137,7 @@ fun OnboardingScreen(
                     Text(
                         text = "Let's prepare your perfect run. You can always change these later.",
                         fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = RunWearColors.TextSecondary,
                         textAlign = TextAlign.Center,
                         lineHeight = 20.sp,
                         modifier = Modifier.padding(horizontal = 8.dp)
@@ -198,11 +169,11 @@ fun OnboardingScreen(
                         // ========================================
                         // STEP 1: Preferences (web PWA copy verbatim)
                         // ========================================
-                        GlassPreferenceSection(
+                        PreferenceSection(
                             title = "Temperature",
                             sublabel = "How do you measure the weather?"
                         ) {
-                            GlassSegmentedControl(
+                            TokenSegmentedControl(
                                 options = listOf("°F", "°C"),
                                 selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
                                 onSelect = { index ->
@@ -213,11 +184,11 @@ fun OnboardingScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        GlassPreferenceSection(
+                        PreferenceSection(
                             title = "Fit Preference",
                             sublabel = "We'll tailor product recommendations"
                         ) {
-                            GlassSegmentedControl(
+                            TokenSegmentedControl(
                                 options = listOf("Male", "Female"),
                                 selectedIndex = when (genderPreference) {
                                     GenderPreference.MALE -> 0
@@ -239,11 +210,11 @@ fun OnboardingScreen(
 
                         Spacer(Modifier.height(16.dp))
 
-                        GlassPreferenceSection(
+                        PreferenceSection(
                             title = "Do you get cold easily or overheat quickly?",
                             sublabel = "We'll adjust outfit recommendations"
                         ) {
-                            GlassSegmentedControl(
+                            TokenSegmentedControl(
                                 options = listOf("Get cold", "Neither", "Overheat"),
                                 selectedIndex = when (comfortPreference) {
                                     ComfortPreference.RUNS_VERY_COLD,
@@ -269,14 +240,14 @@ fun OnboardingScreen(
                             modifier = Modifier
                                 .size(76.dp)
                                 .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.08f))
-                                .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape),
+                                .background(RunWearColors.BgCard)
+                                .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.LocationOn,
                                 contentDescription = null,
-                                tint = RunWearColors.PrimaryLight,
+                                tint = RunWearColors.PineAccent,
                                 modifier = Modifier.size(36.dp)
                             )
                         }
@@ -296,7 +267,7 @@ fun OnboardingScreen(
                         Text(
                             text = "We need your location to get accurate weather for your run",
                             fontSize = 14.sp,
-                            color = Color.White.copy(alpha = 0.65f),
+                            color = RunWearColors.TextSecondary,
                             textAlign = TextAlign.Center,
                             lineHeight = 20.sp,
                             modifier = Modifier.padding(horizontal = 8.dp)
@@ -311,7 +282,7 @@ fun OnboardingScreen(
                         Text(
                             text = com.runwear.app.ui.screens.PermissionCopy.LOCATION_PRIVACY_LINE,
                             fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.55f),
+                            color = RunWearColors.TextSecondary,
                             textAlign = TextAlign.Center,
                             lineHeight = 18.sp,
                             modifier = Modifier.padding(horizontal = 8.dp)
@@ -322,7 +293,7 @@ fun OnboardingScreen(
                 }
 
                 // Pinned actions over a fade-to-background scrim, so the
-                // scroll content never fights the buttons (hero treatment).
+                // scroll content never fights the buttons.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -395,10 +366,10 @@ fun OnboardingScreen(
                                     .height(56.dp),
                                 shape = RoundedCornerShape(18.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color.White.copy(alpha = 0.07f),
+                                    containerColor = RunWearColors.BgCard,
                                     contentColor = RunWearColors.TextPrimary
                                 ),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                                border = BorderStroke(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f))
                             ) {
                                 Text(
                                     "Set Location Manually",
@@ -414,7 +385,7 @@ fun OnboardingScreen(
     }
 }
 
-/** One step-indicator dot: a teal pill for the current step, a faint dot otherwise. */
+/** One step-indicator dot: a pine pill for the current step, a faint dot otherwise. */
 @Composable
 private fun StepDot(active: Boolean) {
     Box(
@@ -423,19 +394,18 @@ private fun StepDot(active: Boolean) {
             .height(7.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(
-                if (active) RunWearColors.Primary else Color.White.copy(alpha = 0.25f)
+                if (active) RunWearColors.Primary else RunWearColors.TextSecondary.copy(alpha = 0.35f)
             )
     )
 }
 
 /**
- * Preference question block in a frosted-glass card — the hero's glass
- * treatment (white 7% fill, white 12% hairline, 24dp radius) carrying the
- * SettingsSheet hierarchy: 16sp SemiBold label, 13sp muted sublabel 2dp
- * below, control 14dp below that.
+ * Preference question block on the Surface token card — the
+ * SettingsSheet label hierarchy: 16sp SemiBold label in TextPrimary,
+ * 13sp sublabel in TextSecondary 2dp below, control 14dp below that.
  */
 @Composable
-private fun GlassPreferenceSection(
+private fun PreferenceSection(
     title: String,
     sublabel: String? = null,
     content: @Composable () -> Unit
@@ -444,8 +414,8 @@ private fun GlassPreferenceSection(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+            .background(RunWearColors.Surface)
+            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
@@ -458,7 +428,7 @@ private fun GlassPreferenceSection(
             Text(
                 text = it,
                 fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.55f),
+                color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
@@ -469,15 +439,15 @@ private fun GlassPreferenceSection(
 }
 
 /**
- * The one segmented control used by every onboarding question, in glass:
- * a white 8% track with a hairline border; equal-width segments; the
- * selected segment is the solid Primary teal with white SemiBold text
- * (the main screen's selected-chip treatment), unselected segments are
- * transparent with white 75% text. Selection semantics are the caller's,
- * unchanged.
+ * The one segmented control used by every onboarding question, on
+ * tokens: a Background-token track with a secondary-ink hairline;
+ * equal-width segments; the selected segment is the solid Primary
+ * pine with white SemiBold text, unselected segments are transparent
+ * with TextSecondary text (the Settings GenderToggle treatment).
+ * Selection semantics are the caller's, unchanged.
  */
 @Composable
-private fun GlassSegmentedControl(
+private fun TokenSegmentedControl(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit
@@ -486,8 +456,8 @@ private fun GlassSegmentedControl(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(16.dp))
+            .background(RunWearColors.Background)
+            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -506,7 +476,7 @@ private fun GlassSegmentedControl(
                     text = label,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f),
+                    color = if (isSelected) Color.White else RunWearColors.TextSecondary,
                     textAlign = TextAlign.Center,
                     maxLines = 1
                 )

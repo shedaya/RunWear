@@ -40,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -92,7 +93,7 @@ fun MakeItMeForkScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(300.dp)
-                .background(Color.White.copy(alpha = 0.05f))
+                .background(RunWearColors.BgCard)
         ) {
             if (heroImageUrl != null) {
                 AsyncImage(
@@ -128,7 +129,7 @@ Text(
                 text = MakeItMeStrings.F2_LEAD,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
-                color = Color.White.copy(alpha = 0.65f)
+                color = RunWearColors.TextSecondary
             )
 
             Spacer(Modifier.height(24.dp))
@@ -157,7 +158,7 @@ Text(
             Text(
                 text = MakeItMeStrings.F9_FOOTER,
                 fontSize = 13.sp,
-                color = Color.White.copy(alpha = 0.5f)
+                color = RunWearColors.TextSecondary
             )
             Spacer(Modifier.height(32.dp))
         }
@@ -176,8 +177,8 @@ private fun ForkOptionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+            .background(RunWearColors.BgCard)
+            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
@@ -190,7 +191,7 @@ private fun ForkOptionCard(
             text = body,
             fontSize = 13.sp,
             lineHeight = 18.sp,
-            color = Color.White.copy(alpha = 0.6f),
+            color = RunWearColors.TextSecondary,
             modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(Modifier.height(14.dp))
@@ -204,7 +205,7 @@ private fun ForkOptionCard(
                 ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
             } else {
                 ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.07f),
+                    containerColor = RunWearColors.BgCard,
                     contentColor = RunWearColors.TextPrimary
                 )
             }
@@ -354,7 +355,7 @@ fun MakeItMeUploadFlow(
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.7f)
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
@@ -373,7 +374,7 @@ fun MakeItMeUploadFlow(
                     text = MakeItMeStrings.C1B_CONSENT_BODY,
                     fontSize = 14.sp,
                     lineHeight = 21.sp,
-                    color = Color.White.copy(alpha = 0.75f)
+                    color = RunWearColors.TextSecondary
                 )
                 Spacer(Modifier.height(20.dp))
                 Row(
@@ -392,7 +393,7 @@ fun MakeItMeUploadFlow(
                 }
                 errorText?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(text = it, fontSize = 13.sp, color = Color(0xFFFF8A80))
+                    Text(text = it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(24.dp))
                 Button(
@@ -434,7 +435,7 @@ fun MakeItMeUploadFlow(
                     onClick = onExitAsStock,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(MakeItMeStrings.C1E_NOT_NOW, color = Color.White.copy(alpha = 0.7f))
+                    Text(MakeItMeStrings.C1E_NOT_NOW, color = RunWearColors.TextSecondary)
                 }
             }
 
@@ -451,7 +452,7 @@ fun MakeItMeUploadFlow(
                     text = MakeItMeStrings.C2B_CAPTURE_GUIDANCE,
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
-                    color = Color.White.copy(alpha = 0.6f)
+                    color = RunWearColors.TextSecondary
                 )
                 Spacer(Modifier.height(14.dp))
                 // RW-26: guided capture is THE primary door (the app
@@ -489,7 +490,7 @@ fun MakeItMeUploadFlow(
                         text = MakeItMeStrings.S7_REPLACE_NOTE,
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = RunWearColors.TextSecondary
                     )
                 }
                 Spacer(Modifier.height(18.dp))
@@ -510,7 +511,7 @@ fun MakeItMeUploadFlow(
                             .height(50.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.07f),
+                            containerColor = RunWearColors.BgCard,
                             contentColor = RunWearColors.TextPrimary
                         )
                     ) {
@@ -520,7 +521,7 @@ fun MakeItMeUploadFlow(
 
                 sourceNote?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(text = it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.65f))
+                    Text(text = it, fontSize = 13.sp, color = RunWearColors.TextSecondary)
                 }
                 if (showSourceChoice) {
                     AlertDialog(
@@ -551,7 +552,7 @@ fun MakeItMeUploadFlow(
                 val anyChecking = photos.any { it.checking }
                 errorText?.let {
                     Spacer(Modifier.height(8.dp))
-                    Text(text = it, fontSize = 13.sp, color = Color(0xFFFF8A80))
+                    Text(text = it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
                 }
                 Spacer(Modifier.height(20.dp))
                 Button(
@@ -608,7 +609,7 @@ fun MakeItMeUploadFlow(
                     Icon(
                         imageVector = Icons.Outlined.CheckCircle,
                         contentDescription = null,
-                        tint = RunWearColors.Primary,
+                        tint = RunWearColors.PineAccent,
                         modifier = Modifier.size(44.dp)
                     )
                     Spacer(Modifier.height(12.dp))
@@ -636,13 +637,13 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                 modifier = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.06f))
+                    .background(RunWearColors.BgCard)
             )
             Spacer(Modifier.width(12.dp))
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     picked.checking -> CircularProgressIndicator(
-                        color = RunWearColors.Primary,
+                        color = RunWearColors.PineAccent,
                         modifier = Modifier.size(20.dp),
                         strokeWidth = 2.dp
                     )
@@ -651,7 +652,7 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                             text = PhotoQualityPolicy.stringFor(picked.rejection!!),
                             fontSize = 13.sp,
                             lineHeight = 18.sp,
-                            color = Color(0xFFFF8A80)
+                            color = MaterialTheme.colorScheme.error
                         )
                         // RW-26: the upload door's retake prompt
                         // (C3F) — camera offered first, same checks.
@@ -659,14 +660,14 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                             text = MakeItMeStrings.C3F_RETAKE_UPLOAD,
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
-                            color = Color.White.copy(alpha = 0.6f),
+                            color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                     else -> Text(
                         text = "Looks good.",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = RunWearColors.TextSecondary
                     )
                 }
             }
@@ -674,7 +675,7 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Remove photo",
-                    tint = Color.White.copy(alpha = 0.6f)
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
@@ -699,7 +700,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
         modifier = Modifier
             .size(96.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .background(RunWearColors.BgCard)
     ) {
         if (phase != ReferenceTilePhase.FAILED) {
             AsyncImage(
@@ -717,7 +718,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 CircularProgressIndicator(
-                    color = RunWearColors.Primary,
+                    color = RunWearColors.PineAccent,
                     modifier = Modifier.size(18.dp),
                     strokeWidth = 2.dp
                 )
@@ -725,7 +726,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 Text(
                     text = MakeItMeStrings.S15_PHOTO_LOADING,
                     fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.65f)
+                    color = RunWearColors.TextSecondary
                 )
             }
             ReferenceTilePhase.FAILED -> Column(
@@ -739,7 +740,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 Icon(
                     imageVector = Icons.Outlined.Refresh,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
+                    tint = RunWearColors.TextSecondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.height(4.dp))
@@ -748,7 +749,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                     fontSize = 11.sp,
                     lineHeight = 14.sp,
                     textAlign = TextAlign.Center,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = RunWearColors.TextSecondary
                 )
                 Text(
                     text = MakeItMeStrings.S17_PHOTO_RETRY,
@@ -774,7 +775,7 @@ private fun PhotosLoadError(onRetry: () -> Unit) {
         Text(
             text = MakeItMeStrings.S18_PHOTOS_LOAD_FAILED,
             fontSize = 14.sp,
-            color = Color(0xFFFF8A80)
+            color = MaterialTheme.colorScheme.error
         )
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onRetry) {
@@ -833,7 +834,7 @@ fun MakeItMePhotosScreen(
                 Icon(
                     imageVector = Icons.Outlined.Close,
                     contentDescription = "Close",
-                    tint = Color.White.copy(alpha = 0.7f)
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
@@ -850,12 +851,12 @@ fun MakeItMePhotosScreen(
                 onRetry = { loadToken++ }
             )
             !loaded -> Column {
-                CircularProgressIndicator(color = RunWearColors.Primary)
+                CircularProgressIndicator(color = RunWearColors.PineAccent)
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = MakeItMeStrings.S15_PHOTO_LOADING,
                     fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.65f)
+                    color = RunWearColors.TextSecondary
                 )
             }
             // A completed load with nothing to show is a failed
@@ -885,7 +886,7 @@ fun MakeItMePhotosScreen(
                 text = MakeItMeStrings.S7_REPLACE_NOTE,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
-                color = Color.White.copy(alpha = 0.6f)
+                color = RunWearColors.TextSecondary
             )
             Spacer(Modifier.height(8.dp))
             // Frame 38: the epoch rule in plain words.
@@ -893,7 +894,7 @@ fun MakeItMePhotosScreen(
                 text = MakeItMeStrings.S20_EPOCH_RULE,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
-                color = Color.White.copy(alpha = 0.6f)
+                color = RunWearColors.TextSecondary
             )
             }
         }
@@ -929,7 +930,7 @@ fun MakeItMeProgressLine(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         CircularProgressIndicator(
-            color = RunWearColors.Primary,
+            color = RunWearColors.PineAccent,
             modifier = Modifier.size(16.dp),
             strokeWidth = 2.dp
         )
@@ -944,7 +945,7 @@ fun MakeItMeProgressLine(modifier: Modifier = Modifier) {
             Text(
                 text = MakeItMeStrings.G2_PROGRESS_SUB,
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.55f)
+                color = RunWearColors.TextSecondary
             )
         }
     }
@@ -1000,8 +1001,8 @@ fun MakeItMeUpsellCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.07f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(24.dp))
+            .background(RunWearColors.BgCard)
+            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
@@ -1009,7 +1010,7 @@ fun MakeItMeUpsellCard(
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.2.sp,
-            color = RunWearColors.PrimaryLight
+            color = RunWearColors.PineAccent
         )
         Spacer(Modifier.height(6.dp))
         Text(
@@ -1024,7 +1025,7 @@ fun MakeItMeUpsellCard(
             text = MakeItMeStrings.U1C_BODY,
             fontSize = 13.sp,
             lineHeight = 19.sp,
-            color = Color.White.copy(alpha = 0.65f)
+            color = RunWearColors.TextSecondary
         )
         Spacer(Modifier.height(14.dp))
         Button(
@@ -1045,7 +1046,7 @@ fun MakeItMeUpsellCard(
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(MakeItMeStrings.U1E_NOT_NOW, color = Color.White.copy(alpha = 0.7f))
+            Text(MakeItMeStrings.U1E_NOT_NOW, color = RunWearColors.TextSecondary)
         }
     }
 }
@@ -1218,7 +1219,7 @@ fun MakeItMePaywallSheet(
                 Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(
-                        color = RunWearColors.Primary,
+                        color = RunWearColors.PineAccent,
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp
                     )
@@ -1226,13 +1227,13 @@ fun MakeItMePaywallSheet(
                     Text(
                         text = "Completing your purchase…",
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.65f)
+                        color = RunWearColors.TextSecondary
                     )
                 }
             }
             purchaseError?.let {
                 Spacer(Modifier.height(10.dp))
-                Text(text = it, fontSize = 13.sp, color = Color(0xFFFF8A80))
+                Text(text = it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
             }
 
             Spacer(Modifier.height(16.dp))
@@ -1240,7 +1241,7 @@ fun MakeItMePaywallSheet(
                 text = MakeItMeStrings.U2C_FINE_PRINT,
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
-                color = Color.White.copy(alpha = 0.55f)
+                color = RunWearColors.TextSecondary
             )
         }
     }
@@ -1258,7 +1259,7 @@ private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit
             .height(52.dp),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.White.copy(alpha = 0.08f),
+            containerColor = RunWearColors.BgCard,
             contentColor = RunWearColors.TextPrimary
         )
     ) {
@@ -1347,7 +1348,7 @@ fun MakeItMeSettingsSection(
                         MakeItMeStrings.s4FreeUsed(state.freeGenerationsUsed)
                     },
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
                 )
                 MakeItMeSettingsRow(
@@ -1439,13 +1440,13 @@ private fun MakeItMeSettingsRow(
                 text = title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (destructive) Color(0xFFFF8A80) else RunWearColors.TextPrimary
+                color = if (destructive) MaterialTheme.colorScheme.error else RunWearColors.TextPrimary
             )
             sub?.let {
                 Text(
                     text = it,
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
@@ -1477,7 +1478,7 @@ fun MakeItMeDeleteDialog(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = MakeItMeStrings.TRANSPORT_ERROR,
-                        color = Color(0xFFFF8A80)
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -1496,7 +1497,7 @@ fun MakeItMeDeleteDialog(
             ) {
                 Text(
                     MakeItMeStrings.S13_DELETE_CONFIRM,
-                    color = Color(0xFFFF8A80)
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         },
@@ -1597,7 +1598,7 @@ fun MakeItMeDeleteDataDialog(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = MakeItMeStrings.TRANSPORT_ERROR,
-                        color = Color(0xFFFF8A80)
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -1616,7 +1617,7 @@ fun MakeItMeDeleteDataDialog(
             ) {
                 Text(
                     MakeItMeStrings.S23_DELETE_DATA_CONFIRM,
-                    color = Color(0xFFFF8A80)
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         },

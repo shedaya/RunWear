@@ -343,7 +343,7 @@ private fun DayRow(entry: WearIveRunDayEntry, today: LocalDate, onShare: () -> U
             )
         }
         IconButton(onClick = onShare) {
-            Icon(Icons.Outlined.Share, "Share this day", tint = RunWearColors.TextMuted)
+            Icon(Icons.Outlined.Share, "Share this day", tint = RunWearColors.TextSecondary)
         }
     }
 }
@@ -455,8 +455,8 @@ fun MorningPoster(entry: WearIveRunDayEntry, modifier: Modifier = Modifier) {
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF232327).copy(alpha = 0.62f),
-                            Color(0xFF232327).copy(alpha = 0.31f),
+                            com.runwear.app.ui.theme.PosterScrim.copy(alpha = 0.62f),
+                            com.runwear.app.ui.theme.PosterScrim.copy(alpha = 0.31f),
                             Color.Transparent
                         )
                     )
@@ -468,12 +468,12 @@ fun MorningPoster(entry: WearIveRunDayEntry, modifier: Modifier = Modifier) {
                 text = "RunWear",
                 fontFamily = GreatVibesFontFamily,
                 fontSize = 37.sp,
-                color = Color(0xFFF5F1EA)
+                color = com.runwear.app.ui.theme.PhotoInk
             )
             Text(
                 text = "#RunAnyWear",
                 style = MaterialTheme.typography.labelLarge,
-                color = Color(0xFFF5F1EA)
+                color = com.runwear.app.ui.theme.PhotoInk
             )
         }
         Column(
@@ -488,18 +488,18 @@ fun MorningPoster(entry: WearIveRunDayEntry, modifier: Modifier = Modifier) {
             Text(
                 text = "${entry.feelsLikeF.toInt()}° · ${entry.conditionLabel} · ${entry.place}",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color(0xFFF5F1EA)
+                color = com.runwear.app.ui.theme.PhotoInk
             )
             Text(
                 text = entry.items.take(4).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFF5F1EA)
+                color = com.runwear.app.ui.theme.PhotoInk
             )
             Text(
                 text = WearIveRunNarrationFormatter.WORDMARK,
                 fontFamily = GreatVibesFontFamily,
                 fontSize = 24.sp,
-                color = Color(0xFFF5F1EA),
+                color = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.padding(top = 6.dp)
             )
         }
@@ -542,7 +542,7 @@ fun KitCard(entry: WearIveRunDayEntry, modifier: Modifier = Modifier) {
             Text(
                 text = "#RunAnyWear",
                 style = MaterialTheme.typography.labelLarge,
-                color = RunWearColors.Primary
+                color = RunWearColors.PineAccent
             )
         }
     }

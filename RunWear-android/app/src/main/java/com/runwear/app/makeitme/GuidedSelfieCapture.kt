@@ -163,7 +163,7 @@ fun GuidedSelfieCapture(
     val checks = GuidedSelfieChecks.evaluate(measurements)
     val passed = GuidedSelfieChecks.allPassed(measurements)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF16130F))) {
+    Box(modifier = Modifier.fillMaxSize().background(com.runwear.app.ui.theme.DarkPalette.Background)) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -177,7 +177,7 @@ fun GuidedSelfieCapture(
                 text = "Make It Me",
                 fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
                 fontSize = 30.sp,
-                color = Color(0xFFF5F1EA)
+                color = com.runwear.app.ui.theme.PhotoInk
             )
             Spacer(Modifier.height(16.dp))
 
@@ -186,7 +186,7 @@ fun GuidedSelfieCapture(
                 modifier = Modifier.size(240.dp).clip(CircleShape)
                     .border(
                         3.dp,
-                        if (passed) RunWearColors.Primary else Color.White.copy(alpha = 0.7f),
+                        if (passed) com.runwear.app.ui.theme.PineAccentOnDark else Color.White.copy(alpha = 0.7f),
                         CircleShape
                     )
                     .background(Color.White.copy(alpha = 0.06f)),
@@ -223,7 +223,7 @@ fun GuidedSelfieCapture(
                                     },
                                     contentDescription = null,
                                     tint = if (check.passed) {
-                                        RunWearColors.Primary
+                                        com.runwear.app.ui.theme.PineAccentOnDark
                                     } else {
                                         Color.White.copy(alpha = 0.5f)
                                     },
@@ -233,7 +233,7 @@ fun GuidedSelfieCapture(
                                     text = check.label,
                                     fontSize = 12.sp,
                                     color = if (check.passed) {
-                                        Color(0xFFF5F1EA)
+                                        com.runwear.app.ui.theme.PhotoInk
                                     } else {
                                         Color.White.copy(alpha = 0.6f)
                                     },
@@ -249,7 +249,7 @@ fun GuidedSelfieCapture(
                 text = GuidedSelfieChecks.coachingLine(measurements),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFFF5F1EA)
+                color = com.runwear.app.ui.theme.PhotoInk
             )
             if (capturedUri != null && !passed) {
                 Spacer(Modifier.height(6.dp))
