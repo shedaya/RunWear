@@ -127,7 +127,7 @@ class HeroFallbackImagesTest {
 
     @Test
     fun `legacy view - 21 cells, each the census subject's paired file, both copies agree`() {
-        assertEquals(21, legacy.size)
+        assertEquals(6, legacy.size)
         assertEquals(21, legacy.values.sumOf { it.size })
         assertFalse(legacy.getValue(TempBracket.FREEZING).containsKey(HeroWeatherCondition.RAIN))
         for ((bracket, cells) in legacy) {
