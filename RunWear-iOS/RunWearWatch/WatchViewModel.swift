@@ -175,10 +175,15 @@ class WatchViewModel: NSObject, ObservableObject {
         let weatherCondition = HeroWeatherCondition.from(weatherCode: weatherCode)
 
         // Set fallback immediately for zero-lag
+        // WS-6 (D-20, watch): the pre-paint fallback is resolved WITH
+        // the user's fit preference — the same deterministic mapping
+        // the phone passes (GenderPreference.fallbackHeroGender);
+        // unisex passes nil and keeps the legacy chain.
         fallbackImageUrl = fallbackProvider.getImageURL(
             temp: currentTempBracket,
             weather: weatherCondition,
-            size: .watchOS
+            size: .watchOS,
+            gender: genderPreference.fallbackHeroGender
         )
 
         // Fetch AI hero image — with the loaded recommendation, so the

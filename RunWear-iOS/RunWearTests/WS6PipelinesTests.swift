@@ -19,10 +19,10 @@ import UIKit
 ///
 /// The watch view model's copy of the fallback call lives in the
 /// WATCH target (RunWearWatch/WatchViewModel.swift, a Sources
-/// member of "RunWear Watch" — verified against the project file);
-/// WS-6's boundary forbids editing that target, so it is excluded
-/// from the source pin below and reported in the gate report as a
-/// stopped sub-item, not silently absorbed.
+/// member of "RunWear Watch" — verified against the project file).
+/// The WS-6 lane stopped at that target boundary; the coordinator
+/// then lifted it for the one mirrored line, which is pinned by
+/// testWatchFallbackCallSiteIsGendered_sourcePin below.
 final class WS6PipelinesTests: XCTestCase {
 
     private func sourceFile(_ relativePath: String) throws -> String {
@@ -195,6 +195,17 @@ final class WS6PipelinesTests: XCTestCase {
 
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
         assertEveryFallbackCallIsGendered(hero, file: "HeroImageView.swift")
+    }
+
+    /// D-20 on the watch target: the register's third call site —
+    /// the watch view model's pre-paint fallback. The WS-6 lane
+    /// stopped at the watch-target boundary; the coordinator lifted
+    /// it for this one mirrored line, and this pin keeps it wired.
+    func testWatchFallbackCallSiteIsGendered_sourcePin() throws {
+        let watch = try sourceFile("../RunWearWatch/WatchViewModel.swift")
+        assertEveryFallbackCallIsGendered(watch, file: "WatchViewModel.swift")
+        XCTAssertTrue(watch.contains("gender: genderPreference.fallbackHeroGender"),
+                      "the watch pre-paint fallback must pass the fit preference")
     }
 
     // MARK: - T-4 · no home share; collection share untouched
