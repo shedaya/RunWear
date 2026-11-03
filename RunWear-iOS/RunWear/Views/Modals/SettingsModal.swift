@@ -187,6 +187,9 @@ struct SettingsModal: View {
         case .confirmDelete: return "Delete your photos?"
         case .deletedConfirmation: return "Your photos and pictures are deleted."
         case .deleteFailed: return "Your photos could not be deleted. Please try again."
+        case .confirmDeleteData: return "Delete all your data?"
+        case .dataDeletedConfirmation: return "Your data and account are deleted."
+        case .deleteDataFailed: return "Your data could not be deleted. Please try again."
         case .commitFailed(let failure): return LocalizedStringKey(failure.line)
         case nil: return ""
         }
@@ -196,12 +199,18 @@ struct SettingsModal: View {
         switch alert {
         case .confirmDelete:
             return "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make it me turns off. This can't be undone."
+        case .confirmDeleteData:
+            // RW-16.30 decision 5a: S12's scope discipline, extended
+            // to the account itself, plus the one money fact the
+            // photos copy doesn't carry — deleting data does not
+            // cancel a store subscription.
+            return "Everything RunWear holds for you will be deleted from our server and this phone: your photos, every picture made from them, and your account itself. This can't be undone. Deleting your data does not cancel a subscription — you can manage that from your store account."
         case .commitFailed(let failure):
             // The orphaned-commit failure (RW-16.9): the line is
             // the alert's title; the server's detail, when it
             // sent one, is the message.
             return failure.detail ?? "Please try again."
-        case .deletedConfirmation, .deleteFailed:
+        case .deletedConfirmation, .deleteFailed, .dataDeletedConfirmation, .deleteDataFailed:
             return ""
         }
     }
@@ -214,7 +223,12 @@ struct SettingsModal: View {
                 Task { await performDeleteMyPhotos() }
             }
             Button("Keep my photos", role: .cancel) {}
-        case .deletedConfirmation, .deleteFailed, .commitFailed:
+        case .confirmDeleteData:
+            Button("Delete my data", role: .destructive) {
+                Task { await performDeleteMyData() }
+            }
+            Button("Keep my data", role: .cancel) {}
+        case .deletedConfirmation, .deleteFailed, .dataDeletedConfirmation, .deleteDataFailed, .commitFailed:
             Button("OK", role: .cancel) {}
         }
     }
@@ -229,6 +243,20 @@ struct SettingsModal: View {
             makeItMePresentation.alert = .deletedConfirmation
         } catch {
             makeItMePresentation.alert = .deleteFailed
+        }
+    }
+
+    /// Delete my data (RW-16.30 decision 5a): the same confirmation
+    /// discipline as the photos delete — the end-state copy shows
+    /// only when the server's receipt confirmed the account itself
+    /// is deleted (deleteMyData throws otherwise).
+    private func performDeleteMyData() async {
+        do {
+            try await personalStore.deleteAllData()
+            ReferencePhotoImageCache.shared.removeAll()
+            makeItMePresentation.alert = .dataDeletedConfirmation
+        } catch {
+            makeItMePresentation.alert = .deleteDataFailed
         }
     }
 }

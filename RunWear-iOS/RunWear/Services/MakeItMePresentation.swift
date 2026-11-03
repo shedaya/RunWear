@@ -49,6 +49,11 @@ enum MakeItMeAlert: Identifiable, Equatable {
     case confirmDelete
     case deletedConfirmation
     case deleteFailed
+    /// Delete my data (RW-16.30 decision 5a): the account-level
+    /// erasure, one step beyond confirmDelete's photos-only scope.
+    case confirmDeleteData
+    case dataDeletedConfirmation
+    case deleteDataFailed
     /// A commit that failed after its sheet had gone away —
     /// the failure the old structure swallowed whole.
     case commitFailed(CommitFailurePresentation)
@@ -58,6 +63,9 @@ enum MakeItMeAlert: Identifiable, Equatable {
         case .confirmDelete: return "confirmDelete"
         case .deletedConfirmation: return "deletedConfirmation"
         case .deleteFailed: return "deleteFailed"
+        case .confirmDeleteData: return "confirmDeleteData"
+        case .dataDeletedConfirmation: return "dataDeletedConfirmation"
+        case .deleteDataFailed: return "deleteDataFailed"
         case .commitFailed: return "commitFailed"
         }
     }

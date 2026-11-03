@@ -190,3 +190,23 @@ final class MakeItMePriceLabelTests: XCTestCase {
         )
     }
 }
+
+/// RW-16.30 (privacy decision 5a) — the Delete my data alerts are
+/// distinct presentation states from the photos-only delete: the
+/// account-level confirmation, its confirmed end state, and its
+/// failure must never alias the photos flow's alerts (the end-state
+/// copy claims different things — account deleted, not just photos).
+final class DeleteMyDataAlertTests: XCTestCase {
+
+    func testDeleteDataAlertsHaveDistinctStableIds() {
+        XCTAssertEqual(MakeItMeAlert.confirmDeleteData.id, "confirmDeleteData")
+        XCTAssertEqual(MakeItMeAlert.dataDeletedConfirmation.id, "dataDeletedConfirmation")
+        XCTAssertEqual(MakeItMeAlert.deleteDataFailed.id, "deleteDataFailed")
+    }
+
+    func testDeleteDataAlertsAreNotThePhotosAlerts() {
+        XCTAssertNotEqual(MakeItMeAlert.confirmDeleteData, .confirmDelete)
+        XCTAssertNotEqual(MakeItMeAlert.dataDeletedConfirmation, .deletedConfirmation)
+        XCTAssertNotEqual(MakeItMeAlert.deleteDataFailed, .deleteFailed)
+    }
+}

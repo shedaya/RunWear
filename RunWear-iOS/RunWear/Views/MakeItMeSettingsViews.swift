@@ -81,6 +81,18 @@ struct MakeItMeSettingsSection: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+
+            // Delete my data (RW-16.30 decision 5a): the account-level
+            // erasure, offered in EVERY mode — a stock-mode user still
+            // has an account, and the deletion must be reachable
+            // without opting in first.
+            Button(role: .destructive) {
+                presentation.alert = .confirmDeleteData
+            } label: {
+                Text("Delete my data")
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         } header: {
             Text("Make it me")
         }
