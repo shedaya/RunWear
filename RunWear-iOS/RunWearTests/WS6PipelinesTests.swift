@@ -462,7 +462,14 @@ final class WS6PipelinesTests: XCTestCase {
     /// Sample one pixel by re-rendering the image through a
     /// scale-1 UIKit renderer (the same stack that produced the
     /// fixtures, so orientation and row conventions cancel) and
-    /// reading the rendered CGImage's RGBA bytes, row 0 = top.
+    /// reading the rendered CGImage's bytes, row 0 = top. The
+    /// byte order is read from the image's own bitmapInfo — the
+    /// renderer stores BGRA (order32Little), and assuming RGBA
+    /// swaps red and blue and loses yellow entirely (the run-106
+    /// diagnostic: the green quadrant, the one color identical
+    /// under both orders, landed exactly where clockwise rotation
+    /// puts it in all three turns, proving the production turn
+    /// correct and this sampler's channel order wrong).
     private func pixelColor(_ image: UIImage, x: Int, y: Int) -> String {
         let rendered = testRenderer(size: image.size).image { _ in
             image.draw(in: CGRect(origin: .zero, size: image.size))
@@ -472,7 +479,10 @@ final class WS6PipelinesTests: XCTestCase {
               let data = provider.data else { return "none" }
         let bytes = CFDataGetBytePtr(data)!
         let offset = y * cg.bytesPerRow + x * 4
-        let r = bytes[offset], g = bytes[offset + 1], b = bytes[offset + 2]
+        let bgra = cg.bitmapInfo.contains(.byteOrder32Little)
+        let r = bgra ? bytes[offset + 2] : bytes[offset]
+        let g = bytes[offset + 1]
+        let b = bgra ? bytes[offset] : bytes[offset + 2]
         if r > 150 && g < 100 && b < 100 { return "red" }
         if g > 150 && r < 100 && b < 100 { return "green" }
         if b > 150 && r < 100 && g < 100 { return "blue" }
