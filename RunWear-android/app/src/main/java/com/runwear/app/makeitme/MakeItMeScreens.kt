@@ -998,9 +998,12 @@ fun MakeItMeUpsellCard(
 }
 
 // ============================================================================
-// Subscription sheet (spec §5.3, strings U2). Prices come from the
-// RevenueCat offering when it resolves; the spec strings are the
-// fallback so the sheet is never blank.
+// Subscription sheet (spec §5.3, strings U2). Every price renders
+// from the fetched current RevenueCat offering — the experiment
+// requirement (RW-16.30, Nov 2 2026): a user assigned a variant
+// offering sees that variant's prices, never a hardcoded one. The
+// U2B fallback labels are price-free plan names shown only until
+// the offering resolves (rows stay disabled until then).
 // ============================================================================
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1018,11 +1021,19 @@ fun MakeItMePaywallSheet(
 
     LaunchedEffect(Unit) {
         val offering = viewModel.offering()
+        val monthlyMicros = offering?.monthly?.product?.price?.amountMicros
         monthly = offering?.monthly?.let {
-            PackagePrice(it, it.product.price.formatted + " / month")
+            PackagePrice(it, MakeItMeStrings.monthlyRowLabel(it.product.price.formatted))
         }
         annual = offering?.annual?.let {
-            PackagePrice(it, it.product.price.formatted + " / year — about 16% less than paying monthly")
+            PackagePrice(
+                it,
+                MakeItMeStrings.annualRowLabel(
+                    annualFormatted = it.product.price.formatted,
+                    annualAmountMicros = it.product.price.amountMicros,
+                    monthlyAmountMicros = monthlyMicros
+                )
+            )
         }
     }
 
