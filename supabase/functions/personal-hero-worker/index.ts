@@ -166,11 +166,23 @@ export function drawBudgetFor(weather: string, bracket: string): number {
 // the beanie is "a running beanie pulled down over the ears" and
 // the headband "a wide running headband covering the ears" (the
 // fleece trap is unchanged: "fleece" still never names a garment
-// outside FLEECE_PULLOVER itself). SUNSCREEN is the one unqualified
-// entry — a lotion, not a garment; it has no running form. Every
-// new string was re-checked against classesFromText over the full
-// canonical cell set plus a per-item sweep: expected garment
-// classes are unchanged for every cell (build record §19).
+// outside FLEECE_PULLOVER itself). Every new string was re-checked
+// against classesFromText over the full canonical cell set plus a
+// per-item sweep: expected garment classes are unchanged for every
+// cell (build record §19).
+// SUNSCREEN (Sol's ruling, 2026-11-03, later the same day —
+// "Don't need to mention sunscreen in a prompt!"): SUNSCREEN is
+// not named ANYWHERE in the prompt. It is advice for the runner,
+// not something a picture can show. The v31 pass had left it as
+// the one unqualified bullet; Sol overruled the exception. The
+// PRESCRIPTION is untouched — the engine still prescribes
+// sunscreen and the app's outfit list still shows it; only the
+// image-generation prompt drops it (buildPrompt filters the item
+// out, and the BULLET map carries no entry for it). The gate is
+// unaffected: GarmentClasses has no sunscreen dimension and
+// classesFromText maps no token from the word, so expected
+// classes and verdicts are unchanged — verified by the
+// invariance sweep + 97-tuple calibration (build record §20).
 // ---------------------------------------------------------------------
 const BULLET: Record<string, string> = {
   TANK_TOP: 'Sleeveless running tank top',
@@ -201,7 +213,6 @@ const BULLET: Record<string, string> = {
   MITTENS: 'Running mittens',
   NECK_GAITER: 'Running neck gaiter',
   SUNGLASSES: 'Running sunglasses',
-  SUNSCREEN: 'Sunscreen',
   REFLECTIVE_GEAR: 'Reflective running gear'
 }
 
@@ -321,7 +332,11 @@ export function buildPrompt(job: {
   gender: string, weather: string, temp_bracket: string, time_of_day: string,
   outfit_items: unknown
 }): string {
+  // SUNSCREEN never reaches the prompt (Sol's ruling, 2026-11-03):
+  // it stays in the prescription and in the app's outfit list, but
+  // a picture cannot show it, so no prompt surface names it.
   const items = [...(job.outfit_items as string[])]
+    .filter(k => k !== 'SUNSCREEN')
     .sort((a, b) => (SLOT_ORDER[a] ?? 9) - (SLOT_ORDER[b] ?? 9))
   // Emphasis (arm B): the prescribed head + hands bullets move to
   // the front of the outfit list and are named in the subject

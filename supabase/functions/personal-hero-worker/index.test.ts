@@ -188,9 +188,9 @@ Deno.test('prompt: running form — every garment is named as running gear; no k
   // Sol's bench review: the headwear rendered as knit/fashion
   // beanies, not athletic gear. Every prescribable garment must be
   // named in its running form somewhere in its outfit bullet, and
-  // the word "knitted" must never appear. SUNSCREEN is the single
-  // documented exception — a lotion, not a garment; it has no
-  // running form (build record §19).
+  // the word "knitted" must never appear. SUNSCREEN is no longer an
+  // exception of any kind: it is not named in the prompt at all
+  // (Sol's later ruling the same day — see the dedicated pin below).
   const ALL_ITEMS = [
     'TANK_TOP', 'SHORT_SLEEVE', 'LONG_SLEEVE_LIGHT', 'LONG_SLEEVE_THERMAL',
     'QUARTER_ZIP', 'FLEECE_PULLOVER', 'HALF_ZIP_THERMAL', 'LIGHT_VEST',
@@ -208,9 +208,51 @@ Deno.test('prompt: running form — every garment is named as running gear; no k
     const seg = p.split('OUTFIT:\n')[1].split('\n\n')[0].toLowerCase()
     assert(!p.toLowerCase().includes('knitted'), `${k}: knit wording is gone`)
     if (k === 'SUNSCREEN') {
-      assertEquals(seg, '- sunscreen')
+      assert(!p.toLowerCase().includes('sunscreen'), 'sunscreen is never named in a prompt (Sol ruling 2026-11-03)')
     } else {
       assert(seg.includes('running'), `${k}: bullet names the running form (${seg})`)
+    }
+  }
+})
+
+Deno.test('prompt: sunscreen appears in NO prompt for any cell that prescribes it (Sol ruling 2026-11-03)', () => {
+  // "Don't need to mention sunscreen in a prompt!" — sunscreen is
+  // advice for the runner, not something a picture can show. The
+  // prescription still carries it (the app's outfit list shows
+  // it); buildPrompt must drop it from every surface. The prompt
+  // for a job WITH sunscreen is byte-identical to the same job
+  // without it, and the gate's expected classes do not move.
+  const jobs: Array<{ items: string[], weather: string, bracket: string }> = [
+    { items: ['SUNSCREEN'], weather: 'CLEAR', bracket: 'WARM' },
+    { items: ['SHORT_SLEEVE', 'SHORTS', 'SUNGLASSES', 'SUNSCREEN'], weather: 'CLEAR', bracket: 'WARM' },
+    { items: ['TANK_TOP', 'SHORT_SHORTS', 'VISOR', 'SUNSCREEN'], weather: 'CLEAR', bracket: 'HOT' },
+    { items: ['SHORT_SLEEVE', 'SHORTS', 'BASEBALL_CAP', 'SUNSCREEN', 'REFLECTIVE_GEAR'], weather: 'CLOUDY', bracket: 'MILD' },
+    {
+      items: ['TANK_TOP', 'SHORT_SLEEVE', 'LONG_SLEEVE_LIGHT', 'LONG_SLEEVE_THERMAL',
+        'QUARTER_ZIP', 'FLEECE_PULLOVER', 'HALF_ZIP_THERMAL', 'LIGHT_VEST',
+        'WINDBREAKER', 'LIGHT_JACKET', 'RAIN_JACKET', 'INSULATED_JACKET',
+        'SHORTS', 'SHORT_SHORTS', 'CAPRIS', 'LIGHT_TIGHTS', 'THERMAL_TIGHTS',
+        'VISOR', 'BASEBALL_CAP', 'HEADBAND', 'LIGHT_BEANIE', 'THERMAL_BEANIE',
+        'BALACLAVA', 'LIGHT_GLOVES', 'THERMAL_GLOVES', 'MITTENS',
+        'NECK_GAITER', 'SUNGLASSES', 'SUNSCREEN', 'REFLECTIVE_GEAR'],
+      weather: 'CLEAR', bracket: 'HOT'
+    }
+  ]
+  for (const j of jobs) {
+    for (const gender of ['MALE', 'FEMALE']) {
+      const withS = buildPrompt({
+        gender, weather: j.weather, temp_bracket: j.bracket,
+        time_of_day: 'MIDDAY', outfit_items: j.items
+      })
+      const without = buildPrompt({
+        gender, weather: j.weather, temp_bracket: j.bracket,
+        time_of_day: 'MIDDAY', outfit_items: j.items.filter(k => k !== 'SUNSCREEN')
+      })
+      assert(!withS.toLowerCase().includes('sunscreen'),
+        `sunscreen named in prompt for [${j.items.join(',')}] (${gender})`)
+      assertEquals(withS, without, `prompt changes beyond sunscreen removal for [${j.items.join(',')}] (${gender})`)
+      assertEquals(expectedClassesForPrompt(withS), expectedClassesForPrompt(without),
+        `expected classes move for [${j.items.join(',')}] (${gender})`)
     }
   }
 })
