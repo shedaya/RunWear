@@ -195,6 +195,74 @@ enum HeroPointGrainPolicy {
     }
 }
 
+// MARK: - Serve-source taxonomy (WS-7 / RW-26(c))
+
+/// WS-7 / RW-26(c): the layer that served a hero paint. The wire
+/// names are the serve-source vocabulary of record — identical to
+/// Android's HeroServeSource: pool / bundled-fallback / personal /
+/// scaffold.
+enum HeroServeSource: String, Equatable {
+    case pool = "pool"
+    case bundledFallback = "bundled-fallback"
+    case personal = "personal"
+    case scaffold = "scaffold"
+
+    var wire: String { rawValue }
+}
+
+/// WS-7 / D-22: point-grain standing for one bundled fallback asset —
+/// the precomputed prescription verdict the pool obeys, recorded per
+/// slot in the staged RW-26 bundle manifest
+/// (release-prep/rw26-fallback-bundle-2026-11-03/MANIFEST.md). `rung`
+/// is the manifest's rung: T1 = strict rung 1 (every garment class
+/// legible and exact at the cell's cold-end point prescription);
+/// T3 = recalibrated rung 1 (every legible class exact incl. head and
+/// hands; base unperceived under a present shell — Sol's Nov 2 gate
+/// rulings 2 + 5). A bundled serve carries this record, so it is
+/// auditable exactly like a pool serve and never exempt from the
+/// outfit rules by construction. Mirror of Android's
+/// FallbackAssetProvenance.
+struct FallbackAssetProvenance: Equatable {
+    let combinationId: String
+    let sourceRowId: String
+    let rung: String
+}
+
+/// WS-7 / RW-26(c): one hero serve-source record — the attributable
+/// record emitted at serve time for every hero paint. `summary()` is
+/// the single-line form the diagnostics channel carries, in the same
+/// key order and spelling as Android's HeroServeRecord.summary().
+struct HeroServeRecord: Equatable {
+    let source: HeroServeSource
+    var requestedCombinationId: String? = nil
+    var servedCombinationId: String? = nil
+    var imageRowId: String? = nil
+    var tempBracket: HeroTempBracket? = nil
+    var weatherCondition: HeroWeatherCondition? = nil
+    var gender: GenderPreference? = nil
+    var fallbackAssetFile: String? = nil
+    var fallbackProvenance: FallbackAssetProvenance? = nil
+    var trigger: String? = nil
+
+    func summary() -> String {
+        var parts: [String] = ["hero_serve source=\(source.wire)"]
+        if let tempBracket { parts.append("bracket=\(tempBracket.rawValue)") }
+        if let weatherCondition { parts.append("weather=\(weatherCondition.rawValue)") }
+        if let gender { parts.append("gender=\(gender.rawValue.uppercased())") }
+        if let requestedCombinationId { parts.append("requested=\(requestedCombinationId)") }
+        if let servedCombinationId { parts.append("served=\(servedCombinationId)") }
+        if let imageRowId { parts.append("row=\(imageRowId)") }
+        if let fallbackAssetFile { parts.append("asset=\(fallbackAssetFile)") }
+        if let fallbackProvenance {
+            parts.append("provenance_combination=\(fallbackProvenance.combinationId)")
+            parts.append("provenance_row=\(fallbackProvenance.sourceRowId)")
+            parts.append("rung=\(fallbackProvenance.rung)")
+        }
+        if let trigger { parts.append("trigger=\(trigger)") }
+        return parts.joined(separator: " ")
+    }
+}
+
 /// Result of hero image lookup with fallback information
 struct HeroImageResult {
     let imageUrl: String
@@ -210,6 +278,20 @@ struct HeroImageResult {
     let imageRowId: String?
     let isFromFallback: Bool
     let fallbackLevel: Int // 0 = exact match, 1-7 = cascade level, 8 = Unsplash
+    /// WS-7 / RW-26(c): which layer served this hero — recorded on
+    /// the result so every paint can emit its serve-source record
+    /// (D-18's attribution fix). Nil only for synthetic results that
+    /// never reached a serving layer.
+    var serveSource: HeroServeSource? = nil
+    /// WS-7 / D-22: for a bundled-fallback serve, the manifest
+    /// provenance of the exact asset served (its pool source
+    /// combination + row and its point-grain rung verdict). Nil for
+    /// pool and personal serves, whose identity rides in `imageRowId`
+    /// / `combinationId`.
+    var fallbackProvenance: FallbackAssetProvenance? = nil
+    /// WS-7: the bundled asset file base name served (no extension),
+    /// for a bundled serve.
+    var fallbackAssetFile: String? = nil
 
     /// Creates a result from an exact or cascade match
     static func fromMatch(
@@ -222,7 +304,8 @@ struct HeroImageResult {
             combinationId: image.combinationId,
             imageRowId: image.id,
             isFromFallback: fallbackLevel > 0,
-            fallbackLevel: fallbackLevel
+            fallbackLevel: fallbackLevel,
+            serveSource: .pool
         )
     }
 
@@ -235,6 +318,29 @@ struct HeroImageResult {
             imageRowId: nil,
             isFromFallback: true,
             fallbackLevel: 8
+        )
+    }
+
+    /// WS-7: creates a result for a bundled-fallback serve (cascade
+    /// level 8's successor — the bundled matrix, not Unsplash). The
+    /// result carries its serve source, the asset file served, and
+    /// that asset's manifest provenance (D-22), so the paint layer
+    /// can emit the serve record without re-deriving any of it.
+    static func fromBundledFallback(
+        url: String,
+        assetFile: String,
+        provenance: FallbackAssetProvenance?
+    ) -> HeroImageResult {
+        HeroImageResult(
+            imageUrl: url,
+            thumbnailUrl: nil,
+            combinationId: nil,
+            imageRowId: nil,
+            isFromFallback: true,
+            fallbackLevel: 8,
+            serveSource: .bundledFallback,
+            fallbackProvenance: provenance,
+            fallbackAssetFile: assetFile
         )
     }
 }

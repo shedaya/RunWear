@@ -526,12 +526,72 @@ class WeatherViewModel: ObservableObject {
             heroServedCombinationId = nil
         }
 
+        // WS-7 / RW-26(c): the bundled asset the screen will paint
+        // if the pool missed — the pre-paint fallback URL above is
+        // the paint in that case (the cascade's own level-8 result
+        // is not what renders), so the serve record names THIS
+        // asset. (The fallback URL is still resolved ungendered
+        // here — wiring the gender argument at this call site is
+        // WS-6's D-20 work; the record describes the paint as it
+        // actually happens, and will carry the gendered asset with
+        // no telemetry change once WS-6 lands.)
+        let paintedBundledAsset: String? = result.fallbackLevel < 8
+            ? nil
+            : fallbackImageUrl.map { FallbackImageProvider.assetFile(fromURLString: $0) }
+
         // RW-14: the personal layer runs after the pool paints, on
         // the same keying frame (prepareHeroFrame), so the
         // personalized photo is keyed to the outfit on screen.
-        await applyPersonalHero(frame: frame)
+        let personalServed = await applyPersonalHero(frame: frame)
+
+        // WS-7 / RW-26(c): record the serve that is actually on
+        // screen (D-18's attribution fix). A personal serve records
+        // itself inside applyPersonalHero; every other resolution
+        // records exactly one record here — pool, or the bundled
+        // fallback that paints on a pool miss.
+        if !personalServed {
+            if result.fallbackLevel < 8 {
+                HeroServeTelemetry.emitForResult(
+                    result,
+                    requestedCombinationId: heroRequestedCombinationId,
+                    bracket: tempBracket,
+                    weather: weatherCondition,
+                    gender: genderPreference,
+                    trigger: "pool-cascade"
+                )
+            } else if let paintedBundledAsset {
+                recordHeroServe(
+                    HeroServeRecord(
+                        source: .bundledFallback,
+                        requestedCombinationId: heroRequestedCombinationId,
+                        tempBracket: tempBracket,
+                        weatherCondition: weatherCondition,
+                        gender: genderPreference,
+                        fallbackAssetFile: paintedBundledAsset,
+                        fallbackProvenance: FallbackImageProvider.provenance(forAssetName: paintedBundledAsset),
+                        trigger: "bundled-fallback"
+                    )
+                )
+            }
+        }
 
         isHeroImageLoading = false
+    }
+
+    /// WS-7 / RW-26(c): record one hero serve. Every record rides
+    /// the HeroServe channel (HeroServeTelemetry); a
+    /// BUNDLED-FALLBACK serve additionally files remotely under the
+    /// automated `diagnostics` category (HeroServeDiagnostics) —
+    /// the bundled serve is the one serve with no server-side
+    /// trace, and D-18 is the failure that closes. Filing is
+    /// fire-and-forget; failures are dropped, never queued (a stale
+    /// serve report would misattribute). Mirror of Android's
+    /// MainViewModel.recordHeroServe.
+    private func recordHeroServe(_ record: HeroServeRecord) {
+        HeroServeTelemetry.emit(record)
+        if record.source == .bundledFallback {
+            HeroServeDiagnostics.file(record: record)
+        }
     }
 
     /// RW-14: consults the personal serving path for the current
@@ -543,14 +603,23 @@ class WeatherViewModel: ObservableObject {
     /// failed (with retry) — so a cell the gate never delivers
     /// keeps the pool photo AND says so. Not opted in (or no store
     /// wired): no-op beyond clearing the cell marker.
-    private func applyPersonalHero(frame: (feelsLikeF: Double, weatherCode: Int, hour: Int)) async {
+    ///
+    /// WS-7: returns whether a personal photo is the paint NOW —
+    /// the caller records the pool/bundled serve only when it is
+    /// not, so each paint carries exactly one serve record. A
+    /// personal paint records itself here (personal, or scaffold
+    /// when the server's look state for the cell is still making —
+    /// the PersonalServePolicy distinction); a swap-in that lands
+    /// later records its own personal serve when it paints.
+    @discardableResult
+    private func applyPersonalHero(frame: (feelsLikeF: Double, weatherCode: Int, hour: Int)) async -> Bool {
         guard let store = personalStore, store.isOptedIn,
               let recommendation else {
             currentPersonalCombination = nil
             currentPersonalHeroId = nil
             personalAwaitTask?.cancel()
             personalAwaitTask = nil
-            return
+            return false
         }
         let combo = PersonalCombination.make(
             genderPreference: genderPreference,
@@ -569,6 +638,24 @@ class WeatherViewModel: ObservableObject {
             heroImageRowId = nil
             heroServedCombinationId = combo.combinationId
             currentPersonalHeroId = store.personalHeroId(for: combo)
+            // WS-7: this paint is a personal serve — or a scaffold
+            // serve when the exact look is still making and the
+            // photo on screen is the user's own banked photo for
+            // nearest conditions (PersonalServePolicy's rule, read
+            // off the concrete store's folded look state).
+            let lookState = (store as? PersonalHeroStore)?.lookStates[combo.combinationId] ?? .none
+            recordHeroServe(
+                HeroServeRecord(
+                    source: lookState == .making ? .scaffold : .personal,
+                    requestedCombinationId: heroRequestedCombinationId,
+                    servedCombinationId: combo.combinationId,
+                    tempBracket: HeroTempBracket.from(feelsLikeTemperature: frame.feelsLikeF),
+                    weatherCondition: HeroWeatherCondition.from(weatherCode: frame.weatherCode),
+                    gender: genderPreference,
+                    trigger: "personal-overlay"
+                )
+            )
+            return true
         } else {
             personalAwaitTask = Task { [weak self] in
                 guard let landedURL = await store.awaitHero(for: combo) else { return }
@@ -579,7 +666,19 @@ class WeatherViewModel: ObservableObject {
                 self.heroImageRowId = nil
                 self.heroServedCombinationId = combo.combinationId
                 self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
+                // WS-7: the swap-in is a new paint — a personal
+                // serve (the landed look is ready by definition).
+                self.recordHeroServe(
+                    HeroServeRecord(
+                        source: .personal,
+                        requestedCombinationId: self.heroRequestedCombinationId,
+                        servedCombinationId: combo.combinationId,
+                        gender: self.genderPreference,
+                        trigger: "personal-overlay"
+                    )
+                )
             }
+            return false
         }
     }
 
