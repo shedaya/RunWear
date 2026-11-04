@@ -108,7 +108,13 @@ class PosterThumbnailGeometryTest {
         var found: SemanticsNode? = null
         fun collect(v: View) {
             if (found == null && v is androidx.compose.ui.platform.ViewRootForTest) {
-                found = v.semanticsOwner.rootSemanticsNode
+                // The UNMERGED root: the chooser card's clickable
+                // merges descendant semantics into one node, which
+                // would attribute the whole card's bounds to every
+                // text inside it (run 41918046077's failure read
+                // exactly that). Layout bounds live on the unmerged
+                // tree.
+                found = v.semanticsOwner.unmergedRootSemanticsNode
             }
             if (v is android.view.ViewGroup) {
                 for (i in 0 until v.childCount) {

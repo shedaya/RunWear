@@ -65,6 +65,7 @@ import com.runwear.shared.domain.service.ClothingThumbnailService
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -667,7 +668,7 @@ internal object ArtifactThumbnailGeometry {
 
     /** The on-screen height of an artifact [naturalHeightPx] tall at [scale]. */
     fun scaledHeightPx(naturalHeightPx: Int, scale: Float): Int =
-        (naturalHeightPx * scale).toInt()
+        (naturalHeightPx * scale).roundToInt()
 }
 
 /**
