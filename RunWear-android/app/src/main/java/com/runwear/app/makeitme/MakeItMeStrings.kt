@@ -14,7 +14,12 @@ object MakeItMeStrings {
     const val F1_HEADLINE = "See yourself in every outfit."
     const val F2_LEAD = "That's a model in your outfit photo. It could be you — in this morning's weather, on a road like yours, wearing exactly what RunWear recommends."
     const val F3_OPTION_A_TITLE = "Make it me"
-    const val F4_OPTION_A_BODY = "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at. Your first 5 looks are free."
+    // F4 amended 2026-11-03 (coordinator ruling, RW-27 WS-10 fix):
+    // the trailing free-looks promise sentence is REMOVED. The
+    // frozen final design package carries that sentence only on
+    // frame 28's promise row (and a paywall proof row); frame 32's
+    // fork carries none — this matches the design and iOS verbatim.
+    const val F4_OPTION_A_BODY = "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at."
     const val F5_OPTION_A_BUTTON = "Use my photos"
     const val F6_OPTION_B_TITLE = "Use the standard photos"
     const val F7_OPTION_B_BODY = "Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make it me any time in Settings."

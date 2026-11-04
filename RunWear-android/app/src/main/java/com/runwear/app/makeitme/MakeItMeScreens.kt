@@ -1676,22 +1676,22 @@ fun FirstLookMoment(
     // primary door, never traps the user at onboarding's end.
     androidx.activity.compose.BackHandler { onSeeOutfit() }
 
-    // §1.4 reveal sequence: the photo crossfades in (600 ms), the
-    // summary band settles 120 ms after the photo lands, and the
-    // ONE success haptic fires as the band settles (§1.7 — first
-    // look ready = success, once). Neither button moves or pulses.
+    // §1.4 reveal sequence: the photo crossfades in (400 ms), the
+    // ONE success haptic fires as the photo lands (§1.7 — first
+    // look ready = success, once), and the summary band settles
+    // 120 ms after the photo lands. Neither button moves or
+    // pulses.
     var revealed by remember { mutableStateOf(false) }
     var bandSettled by remember { mutableStateOf(false) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(Unit) {
         revealed = true
-        delay(
-            OnboardingMotion.FIRST_LOOK_BAND_AT_MS.toLong()
-        )
-        bandSettled = true
+        delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
         haptic.performHapticFeedback(
             androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
         )
+        delay(OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS.toLong())
+        bandSettled = true
     }
 
     Column(
@@ -1730,7 +1730,7 @@ fun FirstLookMoment(
 
         // The look itself — the designed skeleton (a box of the
         // outfit's own shape on the card token) until the photo is
-        // known, then the 600 ms crossfade (§1.4: never a
+        // known, then the 400 ms crossfade (§1.4: never a
         // placeholder flash, never a broken-image frame).
         Box(
             modifier = Modifier

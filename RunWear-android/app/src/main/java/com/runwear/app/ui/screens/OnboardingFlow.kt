@@ -143,17 +143,24 @@ object OnboardingSequence {
  * Motion constants for onboarding (Part 1 §1.4): Android steps
  * advance with the M3 shared-axis horizontal slide + fade
  * (300 ms, emphasized easing); the first-look reveal is the photo
- * crossfade (600 ms), then the summary band settles 120 ms after
- * the photo lands, and the ONE success haptic fires (§1.7 — first
- * look ready = success, once; consent accept is SILENT).
+ * crossfade (400 ms — §1.4 is the spec of record; coordinator
+ * ruling 2026-11-03 superseded the WS-10 lane assignment's
+ * 600 ms), the ONE success haptic fires as the photo lands
+ * (§1.7 — first look ready = success, once), and the summary
+ * band settles 120 ms after the photo lands (consent accept is
+ * SILENT).
  */
 object OnboardingMotion {
     const val STEP_TRANSITION_MS = 300
-    const val FIRST_LOOK_PHOTO_CROSSFADE_MS = 600
+    const val FIRST_LOOK_PHOTO_CROSSFADE_MS = 400
     const val FIRST_LOOK_BAND_SETTLE_MS = 300
     const val FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS = 120
 
-    /** Total delay from reveal start until the band settles + haptic. */
+    /** When the ONE success haptic fires: as the photo lands,
+     *  at crossfade completion (§1.4/§1.7; iOS parity). */
+    const val FIRST_LOOK_HAPTIC_AT_MS = FIRST_LOOK_PHOTO_CROSSFADE_MS
+
+    /** Total delay from reveal start until the band settles. */
     const val FIRST_LOOK_BAND_AT_MS =
         FIRST_LOOK_PHOTO_CROSSFADE_MS + FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS
 

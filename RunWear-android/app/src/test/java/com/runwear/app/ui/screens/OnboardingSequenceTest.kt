@@ -30,7 +30,13 @@ import org.junit.Test
  *    gates capture structurally; consent accept is silent, and
  *    the first-look reveal carries the file's ONE haptic;
  *  - §1.4 motion constants: shared-axis 300 ms step transitions,
- *    the 600 ms photo crossfade, the band at +120 ms after it;
+ *    the 400 ms photo crossfade (§1.4 spec of record — coordinator
+ *    ruling 2026-11-03), the success haptic as the photo lands,
+ *    the band at +120 ms after it;
+ *  - the fork (frame 32) carries NO free-looks promise sentence —
+ *    it lives in frame 28's promise row only (coordinator ruling
+ *    2026-11-03 reversing the earlier keep; frame 34's count line
+ *    is design-mandated and stays);
  *  - A4: no shipped surface renders the WeatherCode emoji or the
  *    location picker's "✓" text glyph; the designed vector
  *    iconography stands in both places, for every condition.
@@ -167,6 +173,40 @@ class OnboardingSequenceTest {
     }
 
     @Test
+    fun `fork - the free-looks sentence is removed from frame 32, promise row only`() {
+        // Coordinator ruling 2026-11-03 (reversing the earlier
+        // keep): the frozen final design package carries the
+        // promise sentence on frame 28's promise row (and a paywall
+        // proof row) — frame 32's fork carries none, and neither
+        // does iOS. The fork body is the design/iOS string verbatim,
+        // ending at "looking at."
+        assertEquals(
+            "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at.",
+            MakeItMeStrings.F4_OPTION_A_BODY
+        )
+        assertFalse(
+            MakeItMeStrings.F4_OPTION_A_BODY.contains(OnboardingCopy.FREE_LOOKS_PROMISE)
+        )
+        // No string in the Make It Me deck carries the promise
+        // sentence at all — its only onboarding home is frame 28's
+        // promise row (OnboardingCopy, pinned above).
+        val deck = sourceFile(
+            "app/src/main/java/com/runwear/app/makeitme/MakeItMeStrings.kt"
+        ).readText()
+        assertEquals(
+            "the promise sentence must not appear in the Make It Me deck",
+            0,
+            occurrences(deck, OnboardingCopy.FREE_LOOKS_PROMISE)
+        )
+        // Frame 34's accounting line is design-mandated and stays,
+        // character for character.
+        assertEquals(
+            "That was look 1 of your 5 free looks — 4 remain, whenever you want them.",
+            MakeItMeStrings.FIRST_LOOK_COUNT_LINE
+        )
+    }
+
+    @Test
     fun `no price string appears anywhere in onboarding copy - the section-9 rule`() {
         val pricePattern = Regex("\\$\\s?\\d")
         val copy = listOf(
@@ -265,11 +305,18 @@ class OnboardingSequenceTest {
     // ── §1.4 motion + the first-look reveal ─────────────────────
 
     @Test
-    fun `motion constants - shared-axis steps, 600ms crossfade, band at plus 120ms`() {
+    fun `motion constants - shared-axis steps, 400ms crossfade, haptic at landing, band at plus 120ms`() {
         assertEquals(300, OnboardingMotion.STEP_TRANSITION_MS)
-        assertEquals(600, OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS)
+        assertEquals(400, OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS)
         assertEquals(120, OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS)
-        assertEquals(720, OnboardingMotion.FIRST_LOOK_BAND_AT_MS)
+        assertEquals(520, OnboardingMotion.FIRST_LOOK_BAND_AT_MS)
+        // The ONE success haptic fires as the photo lands — at
+        // crossfade completion, NOT with the band (§1.4/§1.7).
+        assertEquals(400, OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS)
+        assertEquals(
+            OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS,
+            OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS
+        )
         // Both step hosts animate with the shared spec.
         assertTrue(onboardingScreen().contains("AnimatedContent("))
         assertTrue(onboardingScreen().contains("OnboardingMotion.STEP_TRANSITION_MS"))
@@ -285,7 +332,16 @@ class OnboardingSequenceTest {
         val mim = makeItMeScreens()
         val moment = region(mim, "fun FirstLookMoment(", "fun MakeItMeDeleteDataDialog(")
         assertTrue(moment.contains("OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS"))
-        assertTrue(moment.contains("OnboardingMotion.FIRST_LOOK_BAND_AT_MS"))
+        assertTrue(moment.contains("OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS"))
+        assertTrue(moment.contains("OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS"))
+        // The reveal's order is pinned in source: the haptic delay
+        // (photo landing) precedes the haptic call, which precedes
+        // the band settling (+120 ms later).
+        val hapticDelayAt = moment.indexOf("OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS")
+        val hapticCallAt = moment.indexOf("performHapticFeedback")
+        val bandSettleAt = moment.lastIndexOf("bandSettled = true")
+        assertTrue(hapticDelayAt in 0 until hapticCallAt)
+        assertTrue(hapticCallAt in 0 until bandSettleAt)
         assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_BAND_READINESS"))
         assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_COUNT_LINE"))
         assertFalse(
