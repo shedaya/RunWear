@@ -239,6 +239,57 @@ object WearIveRunElementMachine {
     }
 }
 
+/**
+ * GEN-2 (W-11): the update narration is computed from the DIFF
+ * between the previous settled entry and the new one — it names an
+ * item that ACTUALLY changed, never an unchanged one. (The walkthrough
+ * case: the kit changed Light Tights -> Running Shorts while Light
+ * Long Sleeve stayed, and the bar still read "Update to Light Long
+ * Sleeve" — the old code named the entry's first item, changed or
+ * not.) Pure — unit-tested.
+ *
+ * The payload, in priority order:
+ * - the first ADDED item (an item present in the new kit that was
+ *   not in the old, in new-kit order) — a substitution names the
+ *   item that arrived, not the one that stayed or the one that left;
+ * - else, for a pure reorder, the first item whose position changed;
+ * - else, for a pure removal, the new kit's lead item — the settled
+ *   kit the update lands on (there is no arrived item to name);
+ * - null when the kits are identical (weather/hero/condition-only
+ *   landings announce nothing — the abolished-drivers rule), or when
+ *   the new kit is empty (the holder falls back to the settled
+ *   place reading, as before).
+ */
+object WearIveRunUpdateNarration {
+
+    /** The changed item an "Update to […]" line should name, if any. */
+    fun changedPayload(
+        previous: WearIveRunDayEntry,
+        next: WearIveRunDayEntry
+    ): String? {
+        if (previous.items == next.items) return null
+        // Multiset difference: items in the new kit beyond the old
+        // kit's occurrences of them, in new-kit order.
+        val unmatched = previous.items.toMutableList()
+        val added = next.items.filter { !unmatched.remove(it) }
+        if (added.isNotEmpty()) return added.first()
+        // Pure reorder: the first item that moved.
+        val moved = next.items.firstOrNull {
+            previous.items.indexOf(it) != next.items.indexOf(it)
+        }
+        if (moved != null) return moved
+        // Pure removal: the update lands on the new kit as it stands.
+        return next.items.firstOrNull()
+    }
+
+    /** The full "Update to […]" narration for an entry update. */
+    fun narration(
+        previous: WearIveRunDayEntry,
+        next: WearIveRunDayEntry
+    ): WearIveRunNarration? =
+        changedPayload(previous, next)?.let { WearIveRunNarrationFormatter.update(it) }
+}
+
 /** Pure narration composition for the bar's one line. */
 object WearIveRunNarrationFormatter {
 
@@ -562,16 +613,20 @@ class WearIveRunBarStateHolder {
             }
             else -> {
                 // Same day + place, a new version of the entry. Only
-                // a KIT change is an update the element announces —
-                // the narration's payload is the first kit item, so a
-                // kit change is the update. Everything else (hero
-                // reference, feels-like, condition) is an async
-                // landing: content updates in place, state does not
-                // move, the cue does not re-fire.
+                // a KIT change is an update the element announces.
+                // Everything else (hero reference, feels-like,
+                // condition) is an async landing: content updates in
+                // place, state does not move, the cue does not re-fire.
+                // GEN-2 (W-11): the announced payload is computed
+                // from the DIFF between the two versions — it names
+                // the item that actually changed (see
+                // [WearIveRunUpdateNarration]), never the unchanged
+                // first item the old code named.
                 val kitChanged = previous.items != next.items
                 current = next
                 if (kitChanged) {
-                    narration = updateNarration(next)
+                    narration = WearIveRunUpdateNarration.narration(previous, next)
+                        ?: updateNarration(next)
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )

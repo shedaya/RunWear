@@ -279,20 +279,71 @@ class WearIveRunElementSweepTest : WearElementHarness() {
         // Dark mode: the card tint (#2A251E) differs from the sheet
         // surface (#211D17), so the slot is pixel-distinguishable.
         // thumbnailUrl = null (no photo decoded yet): the centre of
-        // the 56dp slot at (16+28)dp must be the pure card tint —
-        // the old build drew a broken-image glyph there (D-12).
+        // the 56dp slot must be the pure card tint — the old build
+        // drew a broken-image glyph there (D-12). GEN-2 morph
+        // geometry: the slot sits in the expanded section below the
+        // anchor row — x = 16dp start padding + 28dp (half the slot),
+        // y = 16dp top padding (full expression) + 48dp anchor row
+        // (the 48dp control hit areas) + 8dp section gap + 28dp.
         val r = render("ws3-expanded-dark-nophoto", dark = true) {
             WearIveRunMiniBar(
                 state = WearIveRunBarState.Expanded(narration, entry),
                 onExpandClick = {}, onCollapseClick = {}, onRemoveClick = {}
             )
         }
-        val centre = (44 * r.density).toInt()
-        val px = r.bitmap.getPixel(centre, centre)
+        val cx = (44 * r.density).toInt()
+        val cy = (100 * r.density).toInt()
+        val px = r.bitmap.getPixel(cx, cy)
         assertEquals(
             "thumbnail slot centre must be the plain card tint, no glyph",
             0xFF2A251E.toInt(), px
         )
+    }
+
+    @Test
+    fun expandedCarriesTheExplicitViewCollectionAffordance() {
+        // W-1 (a): the EXPANDED card carries a labeled, visible
+        // control into the full collection — and tapping it opens
+        // the collection without expanding or collapsing anything.
+        var collections = 0
+        var expands = 0
+        var collapses = 0
+        val r = render("gen2-expanded-view-collection", dark = false) {
+            WearIveRunMiniBar(
+                state = WearIveRunBarState.Expanded(narration, entry),
+                onExpandClick = { expands++ },
+                onCollapseClick = { collapses++ },
+                onRemoveClick = {},
+                onOpenCollection = { collections++ }
+            )
+        }
+        val all = texts(r.root)
+        assertTrue(
+            "expanded state must label the collection doorway",
+            all.any { it == "View collection" }
+        )
+        assertTrue(
+            "the doorway carries its full description",
+            all.contains("View the full Wear I've Run collection")
+        )
+        clickByDescription(r.root, "View the full Wear I've Run collection")
+        assertEquals(1, collections)
+        assertEquals(0, expands)
+        assertEquals(0, collapses)
+        // The MINI state must NOT carry the doorway (it belongs to
+        // the expanded expression).
+        val mini = render("gen2-mini-no-doorway", dark = false) {
+            WearIveRunMiniBar(
+                state = WearIveRunBarState.Mini(narration, entry),
+                onExpandClick = {}, onCollapseClick = {}, onRemoveClick = {},
+                onOpenCollection = { collections++ }
+            )
+        }
+        // (The morph keeps the section in the tree at zero height /
+        // zero alpha in MINI; the visible-state assertion is the
+        // EXPANDED one above — MINI's rest height is the anchor row
+        // alone, pinned by the motion tests' geometry.)
+        assertTrue(texts(mini.root).any { it.contains("Added New York, NY, Now") })
     }
 }
 

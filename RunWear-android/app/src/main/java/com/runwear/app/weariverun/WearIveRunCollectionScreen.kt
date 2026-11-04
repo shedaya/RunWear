@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -32,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -150,7 +155,16 @@ fun WearIveRunCollectionScreen(
                                         color = RunWearColors.TextSecondary
                                     )
                                     Spacer(Modifier.height(6.dp))
-                                    DayCard(entry = todayEntry, today = today, onShare = { shareEntry = todayEntry })
+                                    DayCard(
+                                        entry = todayEntry,
+                                        today = today,
+                                        onShare = { shareEntry = todayEntry },
+                                        // W-10: the pinned TODAY card names
+                                        // its place and shows its photo,
+                                        // like the chapter cards below it.
+                                        place = todayEntry.place,
+                                        thumbnailRef = todayEntry.heroRef
+                                    )
                                 }
                             }
                         }
@@ -158,7 +172,8 @@ fun WearIveRunCollectionScreen(
                             if (ch.days.isNotEmpty()) {
                                 ChapterCover(
                                     chapter = ch,
-                                    onClick = { openChapter = ch.place }
+                                    onClick = { openChapter = ch.place },
+                                    onShare = { shareEntry = it }
                                 )
                             }
                         }
@@ -221,9 +236,10 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ChapterCover(
+internal fun ChapterCover(
     chapter: WearIveRunCollectionLogic.Chapter,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onShare: (WearIveRunDayEntry) -> Unit = {}
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -257,6 +273,29 @@ private fun ChapterCover(
                     style = MaterialTheme.typography.bodySmall,
                     color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            // W-1 (b) — Sol's narration (2:38–3:04, circling the blank
+            // right side of a chapter row): "there should be two
+            // buttons over here — one is a kind of a view and one is
+            // a share." The view button opens the chapter (the row's
+            // own tap does too); the share button opens the share
+            // flow for the chapter's most recent day (its cover).
+            IconButton(onClick = onClick) {
+                Icon(
+                    Icons.Outlined.Visibility,
+                    contentDescription = "View ${chapter.place} chapter",
+                    tint = RunWearColors.TextSecondary
+                )
+            }
+            IconButton(
+                onClick = { chapter.cover?.let { onShare(it) } },
+                enabled = chapter.cover != null
+            ) {
+                Icon(
+                    Icons.Outlined.Share,
+                    contentDescription = "Share a day from ${chapter.place}",
+                    tint = RunWearColors.TextSecondary
                 )
             }
         }
@@ -371,9 +410,44 @@ private fun DayRow(entry: WearIveRunDayEntry, today: LocalDate, onShare: () -> U
 }
 
 @Composable
-private fun DayCard(entry: WearIveRunDayEntry, today: LocalDate, onShare: () -> Unit) {
+internal fun DayCard(
+    entry: WearIveRunDayEntry,
+    today: LocalDate,
+    onShare: () -> Unit,
+    /** W-10: when set (the pinned TODAY card), the card names its
+     * place and shows its photo thumbnail, like the chapter cards. */
+    place: String? = null,
+    thumbnailRef: String? = null
+) {
     Surface(shape = RoundedCornerShape(14.dp), color = RunWearColors.BgCard) {
         Column(modifier = Modifier.padding(12.dp)) {
+            if (place != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
+                            .background(RunWearColors.Surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (thumbnailRef != null) {
+                            AsyncImage(
+                                model = thumbnailRef,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = place,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = RunWearColors.TextPrimary
+                    )
+                }
+            }
             DayRow(entry = entry, today = today, onShare = onShare)
             if (entry.items.isNotEmpty()) {
                 Text(
@@ -423,49 +497,45 @@ private fun ShareChoiceSheet(
         ) {
             val chosen = artifact
             if (chosen == null) {
-                Text(
-                    text = "Share this day",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = RunWearColors.TextPrimary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Text(
-                    text = "Choose the card for ${entry.place} — ${dayTitle(entry, LocalDate.now())}.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Text(
-                    text = "Morning Poster",
-                    fontSize = 16.sp,
-                    color = RunWearColors.TextPrimary,
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { artifact = ShareArtifactKind.MORNING_POSTER }
-                        .padding(vertical = 14.dp)
-                )
-                Text(
-                    text = "Kit Card",
-                    fontSize = 16.sp,
-                    color = RunWearColors.TextPrimary,
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { artifact = ShareArtifactKind.KIT_CARD }
-                        .padding(vertical = 14.dp)
-                )
-                Text(
-                    text = "Cancel",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.fillMaxWidth()
-                        .clickable { onDismiss() }
-                        .padding(vertical = 14.dp)
+                ShareChooserStage(
+                    entry = entry,
+                    gender = gender,
+                    onChoose = { artifact = it },
+                    onCancel = onDismiss
                 )
             } else {
+                // W-9: while the chosen card renders (its photo
+                // decoding can take seconds), the preview stage shows
+                // a visible progress state — never a blank wait.
+                var previewReady by remember(chosen) { mutableStateOf(false) }
+                if (!previewReady) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = RunWearColors.PineAccent
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "Rendering ${chosenLabel(chosen)}…",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = RunWearColors.TextSecondary
+                        )
+                    }
+                }
                 Box(modifier = capture.recordModifier()) {
                     when (chosen) {
-                        ShareArtifactKind.MORNING_POSTER -> MorningPoster(entry = entry)
-                        ShareArtifactKind.KIT_CARD -> KitCard(entry = entry, gender = gender)
+                        ShareArtifactKind.MORNING_POSTER -> MorningPoster(
+                            entry = entry,
+                            onRendered = { previewReady = true }
+                        )
+                        ShareArtifactKind.KIT_CARD -> KitCard(
+                            entry = entry,
+                            gender = gender,
+                            onRendered = { previewReady = true }
+                        )
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -489,6 +559,148 @@ private fun ShareChoiceSheet(
     }
 }
 
+private fun chosenLabel(kind: ShareArtifactKind): String = when (kind) {
+    ShareArtifactKind.MORNING_POSTER -> "Morning Poster"
+    ShareArtifactKind.KIT_CARD -> "Kit Card"
+}
+
+/**
+ * W-9: the share chooser's first stage — the settled design (frames
+ * 11–14, and Sol's narration at 3:05–3:25: "We were supposed to show
+ * thumbnails of what the morning poster looks like and what the kit
+ * card looks like"). Each choice is the ACTUAL rendered artifact,
+ * composed live and scaled into a thumbnail — not a bare text row.
+ * Tapping a thumbnail selects that card. While either thumbnail is
+ * still rendering, a visible progress row stands in place of the
+ * ~15 s of nothing the walkthrough recorded.
+ */
+@Composable
+internal fun ShareChooserStage(
+    entry: WearIveRunDayEntry,
+    gender: GenderPreference,
+    onChoose: (ShareArtifactKind) -> Unit,
+    onCancel: () -> Unit
+) {
+    var posterReady by remember(entry) { mutableStateOf(false) }
+    var kitReady by remember(entry) { mutableStateOf(false) }
+    Text(
+        text = "Share this day",
+        fontSize = 18.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = RunWearColors.TextPrimary,
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+    Text(
+        text = "Choose the card for ${entry.place} — ${dayTitle(entry, LocalDate.now())}.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = RunWearColors.TextSecondary,
+        modifier = Modifier.padding(bottom = 12.dp)
+    )
+    if (!posterReady || !kitReady) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = RunWearColors.PineAccent
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = "Rendering previews…",
+                style = MaterialTheme.typography.bodyMedium,
+                color = RunWearColors.TextSecondary
+            )
+        }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        ShareThumbnailChoice(
+            kind = ShareArtifactKind.MORNING_POSTER,
+            entry = entry,
+            gender = gender,
+            onReady = { posterReady = true },
+            modifier = Modifier.weight(1f)
+        ) { onChoose(ShareArtifactKind.MORNING_POSTER) }
+        ShareThumbnailChoice(
+            kind = ShareArtifactKind.KIT_CARD,
+            entry = entry,
+            gender = gender,
+            onReady = { kitReady = true },
+            modifier = Modifier.weight(1f)
+        ) { onChoose(ShareArtifactKind.KIT_CARD) }
+    }
+    Text(
+        text = "Cancel",
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Medium,
+        color = RunWearColors.TextSecondary,
+        modifier = Modifier.fillMaxWidth()
+            .clickable { onCancel() }
+            .padding(vertical = 14.dp)
+    )
+}
+
+/** One chooser thumbnail: the real artifact, scaled to fit its card. */
+@Composable
+private fun ShareThumbnailChoice(
+    kind: ShareArtifactKind,
+    entry: WearIveRunDayEntry,
+    gender: GenderPreference,
+    onReady: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(RunWearColors.BgCard)
+            .clickable { onClick() }
+            .semantics { contentDescription = "${chosenLabel(kind)} thumbnail" }
+            .padding(8.dp)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(150.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(RunWearColors.Surface)
+        ) {
+            // The artifact composed at its natural width and scaled
+            // from the top-left into the thumbnail frame.
+            Box(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = 0.42f
+                        scaleY = 0.42f
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
+                    }
+                    .width(340.dp)
+            ) {
+                when (kind) {
+                    ShareArtifactKind.MORNING_POSTER -> MorningPoster(
+                        entry = entry,
+                        modifier = Modifier.width(340.dp),
+                        onRendered = onReady
+                    )
+                    ShareArtifactKind.KIT_CARD -> KitCard(
+                        entry = entry,
+                        modifier = Modifier.width(340.dp),
+                        gender = gender,
+                        onRendered = onReady
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = chosenLabel(kind),
+            fontSize = 16.sp,
+            color = RunWearColors.TextPrimary
+        )
+    }
+}
+
 /**
  * The Morning Poster artifact (frame 12): hero image, the script
  * "RunWear" lockup with #RunAnyWear directly under it, a dedicated
@@ -497,7 +709,17 @@ private fun ShareChoiceSheet(
  * in the UI sans, and the "Wear I've Run" script at the foot.
  */
 @Composable
-fun MorningPoster(entry: WearIveRunDayEntry, modifier: Modifier = Modifier) {
+fun MorningPoster(
+    entry: WearIveRunDayEntry,
+    modifier: Modifier = Modifier,
+    /** W-9: fires once the artifact has rendered (its hero photo
+     * decoded, or immediately when the entry carries no photo) — the
+     * share surfaces show a progress state until it fires. */
+    onRendered: (() -> Unit)? = null
+) {
+    if (entry.heroRef == null) {
+        LaunchedEffect(entry) { onRendered?.invoke() }
+    }
     Box(
         modifier = modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(16.dp))
             .background(RunWearColors.Background)
@@ -507,6 +729,11 @@ fun MorningPoster(entry: WearIveRunDayEntry, modifier: Modifier = Modifier) {
                 model = entry.heroRef,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                onState = { painterState ->
+                    if (painterState is coil.compose.AsyncImagePainter.State.Success) {
+                        onRendered?.invoke()
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -583,8 +810,21 @@ internal fun clothingItemForDisplayName(displayName: String): ClothingItem? =
 fun KitCard(
     entry: WearIveRunDayEntry,
     modifier: Modifier = Modifier,
-    gender: GenderPreference = GenderPreference.UNISEX
+    gender: GenderPreference = GenderPreference.UNISEX,
+    /** W-9: fires once the card has rendered (its first garment
+     * render decoded, or immediately when no item resolves to a
+     * render) — the share surfaces show progress until it fires. */
+    onRendered: (() -> Unit)? = null
 ) {
+    val anyRender = entry.items.any { itemName ->
+        clothingItemForDisplayName(itemName)?.let {
+            ClothingThumbnailService.getThumbnailAssetUri(it, gender)
+        } != null
+    }
+    if (!anyRender) {
+        LaunchedEffect(entry) { onRendered?.invoke() }
+    }
+    var renderReported by remember(entry) { mutableStateOf(false) }
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -616,6 +856,14 @@ fun KitCard(
                             model = renderUri,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
+                            onState = { painterState ->
+                                if (!renderReported &&
+                                    painterState is coil.compose.AsyncImagePainter.State.Success
+                                ) {
+                                    renderReported = true
+                                    onRendered?.invoke()
+                                }
+                            },
                             modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
                         )
                         Spacer(Modifier.width(10.dp))

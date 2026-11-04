@@ -142,8 +142,10 @@ class HapticMapPinTest {
         val miniBar = source("weariverun/WearIveRunMiniBar.kt")
         assertTrue(miniBar.contains("HapticSpec.CUE_TICK"))
         assertTrue(
-            "both element states' trash buttons fire the light tick",
-            miniBar.split("HapticSpec.LIGHT_TICK").size - 1 >= 2
+            // GEN-2: the morph's single shared trash control serves
+            // both states, so one call site carries the tick for both.
+            "the element's shared trash control fires the light tick",
+            miniBar.split("HapticSpec.LIGHT_TICK").size - 1 >= 1
         )
         assertTrue(
             "the first-look reveal fires the confirm-class effect",

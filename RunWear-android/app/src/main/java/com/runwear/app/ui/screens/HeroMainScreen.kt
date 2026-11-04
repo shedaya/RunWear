@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -54,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -94,6 +96,7 @@ import com.runwear.app.weariverun.WearIveRunCollectionScreen
 import com.runwear.app.weariverun.WearIveRunDayEntry
 import com.runwear.app.weariverun.WearIveRunMiniBar
 import com.runwear.app.weariverun.WearIveRunStore
+import com.runwear.app.weariverun.WearTransitionDriver
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
@@ -292,6 +295,13 @@ fun HeroMainScreen(
     }
 
     val listState = rememberLazyListState()
+    // GEN-2 (motion decision §4/§5): the morph's driver for the next
+    // tap/scroll transition (cue and collapse are intrinsic to the
+    // target state and need no host driver), and whether a morph is
+    // currently in flight (reported by the element itself) — the
+    // scroll rules below latch on it.
+    var wearTransitionDriver by remember { mutableStateOf(WearTransitionDriver.TAP) }
+    var wearMorphInFlight by remember { mutableStateOf(false) }
     // WS-3: end-of-scroll, SYMMETRIC (D-07's latch retired). The
     // proximity zone is computed from the list's own layout info:
     // NEAR = the last item is visible and its end is within 8 dp of
@@ -326,12 +336,23 @@ fun HeroMainScreen(
             }
         }
     }
+    // GEN-2 (motion decision §5): while a morph is in flight the
+    // scroll driver LATCHES — no zone edge dispatches, so a user
+    // hovering at the boundary gets one move, not a breathing card
+    // (§5.3), and during tap/cue transitions the list's offset is
+    // frozen: no scroll event moves the element mid-flight (§5.1;
+    // the dock is in the layout flow below the scroll area, so its
+    // growth alone never writes the list's offset either). When the
+    // flight ends, the CURRENT zone is re-read on the next emission
+    // and edges dispatch from the latched position.
     LaunchedEffect(listState) {
         var wasNearEnd = false
-        snapshotFlow { wearEndZone }.collect { zone ->
+        snapshotFlow { wearEndZone to wearMorphInFlight }.collect { (zone, inFlight) ->
+            if (inFlight) return@collect // latched (§5.3) / frozen (§5.1)
             when {
                 zone == WearEndZone.NEAR && !wasNearEnd -> {
                     wasNearEnd = true
+                    wearTransitionDriver = WearTransitionDriver.SCROLL
                     wearIveRunHolder.onEvent(WearIveRunElementEvent.SCROLL_ARRIVED_AT_END)
                 }
                 zone == WearEndZone.BEYOND && wasNearEnd -> {
@@ -340,6 +361,23 @@ fun HeroMainScreen(
                 }
                 zone == WearEndZone.BEYOND -> wasNearEnd = false
             }
+        }
+    }
+    // GEN-2 (motion decision §5.2): end-anchored growth is 1:1 —
+    // while a SCROLL-driven expansion is in flight at the end, the
+    // list scrolls by exactly the dock's growth, so the last row
+    // stays stationary relative to the card's top edge. (Collapse on
+    // departure is the mirror: the same delta, reversed sign, runs
+    // through the COLLAPSE driver, not this seam.)
+    var wearDockHeightPx by remember { mutableIntStateOf(0) }
+    var wearPrevDockHeightPx by remember { mutableIntStateOf(0) }
+    LaunchedEffect(wearDockHeightPx) {
+        val delta = wearDockHeightPx - wearPrevDockHeightPx
+        wearPrevDockHeightPx = wearDockHeightPx
+        if (delta != 0 && wearMorphInFlight &&
+            wearTransitionDriver == WearTransitionDriver.SCROLL
+        ) {
+            listState.scrollBy(delta.toFloat())
         }
     }
     // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
@@ -680,7 +718,14 @@ fun HeroMainScreen(
                         state = wearIveRunState,
                         cueSequence = wearCueSequence,
                         dimmed = wearAnySheetUp,
+                        transitionDriver = wearTransitionDriver,
+                        onTransitionRunningChanged = { wearMorphInFlight = it },
                         onExpandClick = {
+                            // A tap expansion: the TAP driver (spring
+                            // 0.92/400, no overshoot) — set before the
+                            // event so the element picks it up with
+                            // the state change.
+                            wearTransitionDriver = WearTransitionDriver.TAP
                             wearIveRunHolder.onEvent(WearIveRunElementEvent.TAP_BODY)
                         },
                         onCollapseClick = {
@@ -705,6 +750,7 @@ fun HeroMainScreen(
                             .padding(horizontal = 16.dp)
                             .padding(top = 8.dp, bottom = 8.dp)
                             .navigationBarsPadding()
+                            .onSizeChanged { wearDockHeightPx = it.height }
                     )
                 }
                 }
