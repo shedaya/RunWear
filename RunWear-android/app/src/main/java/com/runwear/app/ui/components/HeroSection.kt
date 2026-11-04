@@ -514,6 +514,22 @@ fun HeroSection(
         // 3. Bounded TOP gradient only — for chrome legibility. The
         // pre-RW-25 6-stop scrim's bottom stops existed to seat the
         // on-photo text block; that text lives on the sheet now.
+        // GEN-3 DESIGN DELTA (Sol's mockup review, Nov 4 — FIRM):
+        // the centered script wordmark got lost on light heroes.
+        // The treatment is the design system's EXISTING scrim
+        // language at the Morning Poster's top-scrim strength: the
+        // poster's stop alphas (0.62 / 0.31, WearIveRunCollection
+        // Screen's lockup scrim) on this scrim's black, same device,
+        // same stop positions, same 200dp seat (it also seats the
+        // location/settings row). The wordmark's own text shadow
+        // (below) is unchanged. Measured on the lightest bundled
+        // heroes' wordmark zones (top-center band): PhotoInk
+        // contrast at the wordmark's depth rises from ~2.8 to ~3.5
+        // area-averaged (worst: cold_snow_male.webp 2.78 → 3.44;
+        // also checked cold_snow_female, freezing_cloudy_male,
+        // pg_male_long_o1_tights_cap_none,
+        // pg_female_long_o1_tights_headband_gloves, cool_rain_male)
+        // — before the shadow's glyph-local darkening is counted.
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -522,8 +538,8 @@ fun HeroSection(
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.00f to Color.Black.copy(alpha = 0.55f),
-                            0.55f to Color.Black.copy(alpha = 0.25f),
+                            0.00f to Color.Black.copy(alpha = 0.62f),
+                            0.55f to Color.Black.copy(alpha = 0.31f),
                             1.00f to Color.Transparent
                         )
                     )
