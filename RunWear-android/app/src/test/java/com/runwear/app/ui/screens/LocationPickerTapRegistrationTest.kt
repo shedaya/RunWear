@@ -99,7 +99,13 @@ class LocationPickerTapRegistrationTest {
         val hSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
         val scheduler = Robolectric.getForegroundThreadScheduler()
         repeat(times) {
-            scheduler.advanceBy(50, TimeUnit.MILLISECONDS)
+            // Same pump as ShareRenderStabilityTest (proven to drive
+            // composition + state changes in this harness family):
+            // flush runs every pending scheduler task regardless of
+            // its vsync schedule — advanceBy+idle alone left a
+            // post-swap recomposition un-run in run 41924215271.
+            Robolectric.flushForegroundThreadScheduler()
+            scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
             shadowOf(Looper.getMainLooper()).idle()
             view.measure(wSpec, hSpec)
             view.layout(0, 0, w, h)
