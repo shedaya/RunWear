@@ -818,6 +818,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func state(of model: WearIveRunCollectionModel) -> WearIveRunState {
         WearIveRunMiniBarModel.state(
             todaysEntry: model.sessionEntry(),
