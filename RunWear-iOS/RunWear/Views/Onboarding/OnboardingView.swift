@@ -512,7 +512,14 @@ private struct FirstLookView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(AppTheme.inkSecondary)
 
-                Text("That's look 1 of your 5 free looks.")
+                // Frame 34's own lines, as designed: the moment
+                // stated, then the honest meter (look 1 of 5,
+                // §8 Q5 — 4 remain, whenever the user wants them).
+                Text("You're in the photo now.")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppTheme.inkPrimary)
+
+                Text("That was look 1 of your 5 free looks — 4 remain, whenever you want them.")
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.inkSecondary)
 
