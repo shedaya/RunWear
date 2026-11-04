@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.runwear.app.ui.components.conditionIcon
 import com.runwear.app.ui.components.getCategoryIconRes
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.shared.data.repository.LocationResult
@@ -1171,7 +1173,15 @@ fun LocationPickerSheet(
                                 .background(RunWearColors.CategoryTop.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text("✓", fontSize = 12.sp, color = RunWearColors.PineAccent)
+                            // WS-10 (A4 residue): the selection
+                            // check is designed iconography — a
+                            // vector, not the "✓" text glyph.
+                            Icon(
+                                imageVector = Icons.Outlined.Check,
+                                contentDescription = null,
+                                tint = RunWearColors.PineAccent,
+                                modifier = Modifier.size(12.dp)
+                            )
                         }
                     }
                 }
@@ -1585,7 +1595,15 @@ fun WeatherDetailSheet(
 private fun WeatherConditionDetail(weather: WeatherConditions, unit: TemperatureUnit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = weather.weatherCode.icon, fontSize = 40.sp)
+            // WS-10 (A4 residue): the condition's designed vector
+            // icon at the detail rows' own size (cf. WindDetail's
+            // 40 dp Air icon) — not the WeatherCode emoji at 40sp.
+            Icon(
+                imageVector = weather.weatherCode.conditionIcon(),
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = RunWearColors.PineAccent
+            )
             Spacer(Modifier.width(12.dp))
             Text(
                 text = weather.weatherCode.description,

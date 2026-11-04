@@ -36,7 +36,10 @@ import com.runwear.shared.domain.model.WeatherConditions
  * PWA v2.9 Weather Pills Row
  *
  * Weather pills displayed in hero section (all tappable for detail popups):
- * 1. Condition - weather emoji only
+ * 1. Condition - condition vector icon + the condition's word
+ *    (WS-10/A4: the design's strip treatment, frames 1–5; the
+ *    pre-WS-10 pill rendered the WeatherCode emoji string, which
+ *    the approved design does not have)
  * 2. Wind - wind icon + speed (e.g., "12 mph")
  * 3. Humidity - thermostat icon + percentage (NOT water drop per PWA v2.7)
  * 4. Precipitation - water drop icon + probability (ONLY shown if > 0%)
@@ -85,11 +88,14 @@ fun WeatherConditionsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Condition pill (emoji only)
-        WeatherPillEmoji(
-            emoji = weather.weatherCode.icon,
+        // Condition pill — the designed strip treatment: the
+        // condition's vector icon + its word, like every other pill.
+        WeatherPill(
+            icon = weather.weatherCode.conditionIcon(),
+            text = weather.weatherCode.description,
             onClick = { onPillClick("condition") },
-            background = pillBackground
+            background = pillBackground,
+            ink = pillInk
         )
 
         // Wind pill
@@ -152,31 +158,6 @@ fun WeatherPillsRow(
         onSheet = onSheet,
         temperatureUnit = temperatureUnit
     )
-}
-
-/**
- * Weather pill with emoji only (for condition).
- */
-@Composable
-private fun WeatherPillEmoji(
-    emoji: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    background: Color = Color.White.copy(alpha = 0.1f)
-) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(100.dp))
-            .background(background)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = emoji,
-            style = TextStyle(fontSize = 16.sp)
-        )
-    }
 }
 
 /**

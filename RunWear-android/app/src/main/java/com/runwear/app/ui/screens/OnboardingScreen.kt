@@ -1,5 +1,13 @@
 package com.runwear.app.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,10 +30,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,7 +47,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -48,30 +59,30 @@ import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.TemperatureUnit
 
 /**
- * Onboarding / welcome flow - two steps matching web PWA:
- * 1. Preferences (temperature unit, fit preference, body temperature comfort)
- * 2. Location (use current location or set manually)
+ * Onboarding — the design's sequence (frames 28–31, notes §§8G/9),
+ * rebuilt by WS-10 (A1, T-2/R-2, A2):
+ *
+ *   PROMISE (frame 28) → PREFERENCES (frame 29) → LOCATION
+ *   (frames 30/31) → [host: first recommendation] → fork (32) →
+ *   consent (33) → capture → first look (34).
+ *
+ * The steps are the pure [OnboardingSequence] model's in-screen
+ * steps; copy is [OnboardingCopy] verbatim. A1: the free-looks
+ * promise appears ONLY on the promise step — it is not in the
+ * header, not on the setup form. A2: the promise step's headline
+ * is Sol's pick, "Run, weather or not.", character for character.
+ *
+ * Motion (Part 1 §1.4): steps advance with the M3 shared-axis
+ * horizontal slide + fade (300 ms, emphasized easing), Back the
+ * exact reverse; preference selections fire the selection haptic
+ * once per tap (§1.7). The system permission prompt itself is the
+ * OS's own, unskinned.
  *
  * Presentation (WS-8, RC-8 — D-24): every surface is built from the
- * design token table in BOTH appearances. The pre-WS-8 presentation
- * hardcoded a dark-backdrop treatment — white text at fixed alphas
- * (0.55–0.75) over a gradient that faded into the THEME background —
- * which computed to ≈1.07–1.10:1 on the cream ground in light mode,
- * and the theme-ink headings computed to 1.91:1 over the gradient's
- * dark-teal top. The rebuilt presentation:
- * - the ground is the theme Background token, flat;
- * - each question lives in a card on the Surface token with a
- *   hairline in the secondary ink, carrying the SettingsSheet label
- *   hierarchy (title in TextPrimary, sublabel in TextSecondary);
- * - segmented controls are tracks on the Background token whose
- *   selected segment is the solid Primary pine with white text and
- *   whose unselected labels read TextSecondary — the same treatment
- *   as the Settings GenderToggle;
- * - no hardcoded white-at-alpha text exists anywhere in this file.
- *
- * Behavior is unchanged: same questions, same options, same defaults,
- * same toggle semantics, same persisted values, and all copy matches
- * the web PWA verbatim.
+ * design token table in BOTH appearances — theme Background ground,
+ * question cards on the Surface token, segmented controls whose
+ * selected segment is the solid Primary pine; no hardcoded
+ * white-at-alpha text anywhere in this file.
  */
 @Composable
 fun OnboardingScreen(
@@ -83,320 +94,495 @@ fun OnboardingScreen(
     var temperatureUnit by remember { mutableStateOf(TemperatureUnit.FAHRENHEIT) }
     var genderPreference by remember { mutableStateOf(GenderPreference.UNISEX) } // Neither selected
     var comfortPreference by remember { mutableStateOf(ComfortPreference.NEUTRAL) }
-    // Two-step flow matching web PWA: preferences first, then location
-    var showLocationStep by remember { mutableStateOf(false) }
+    // The current step — the sequence's in-screen steps only; the
+    // fork/consent/capture/first-look steps are hosted downstream.
+    var step by remember { mutableStateOf(OnboardingStep.PROMISE) }
+
+    // System Back steps back through the sequence (§1.4: Back is
+    // the exact reverse) — at the promise step it is the root and
+    // Back keeps its system meaning.
+    BackHandler(enabled = step != OnboardingStep.PROMISE) {
+        OnboardingSequence.inScreenPrevious(step)?.let { step = it }
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
-        // Centered max-width column on large screens (main screen MEDIUM pattern)
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.TopCenter
         ) {
-            Column(
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    val forward = targetState.ordinal > initialState.ordinal
+                    val easing = OnboardingMotion.EmphasizedEasing
+                    val duration = OnboardingMotion.STEP_TRANSITION_MS
+                    (slideInHorizontally(
+                        animationSpec = tween(duration, easing = easing)
+                    ) { width -> if (forward) width else -width } +
+                        fadeIn(animationSpec = tween(duration, easing = easing)))
+                        .togetherWith(
+                            slideOutHorizontally(
+                                animationSpec = tween(duration, easing = easing)
+                            ) { width -> if (forward) -width else width } +
+                                fadeOut(animationSpec = tween(duration, easing = easing))
+                        )
+                },
+                label = "onboardingStep",
                 modifier = Modifier
                     .widthIn(max = 600.dp)
                     .fillMaxHeight()
-            ) {
-                // Scrollable content: header + current step's questions
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Spacer(Modifier.height(48.dp))
-
-                    // RW-26: the RunWear script logo (genuine Great
-                    // Vibes) — the brand signature, as on home.
-                    Text(
-                        text = "RunWear",
-                        fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-                        fontSize = 52.sp,
-                        color = RunWearColors.TextPrimary
+            ) { currentStep ->
+                when (currentStep) {
+                    OnboardingStep.PROMISE -> PromiseStep(
+                        onGetStarted = { step = OnboardingStep.PREFERENCES }
                     )
-
-                    Spacer(Modifier.height(22.dp))
-
-                    // Title: "Welcome! 👋" (matches web PWA verbatim)
-                    Text(
-                        text = "Welcome!",
-                        fontFamily = FontFamily.Default,
-                        fontSize = 30.sp,
-                        letterSpacing = 0.5.sp,
-                        color = RunWearColors.TextPrimary
+                    OnboardingStep.PREFERENCES -> PreferencesStep(
+                        temperatureUnit = temperatureUnit,
+                        genderPreference = genderPreference,
+                        comfortPreference = comfortPreference,
+                        onTemperatureUnitChange = { temperatureUnit = it },
+                        onGenderPreferenceChange = { genderPreference = it },
+                        onComfortPreferenceChange = { comfortPreference = it },
+                        onBack = { step = OnboardingStep.PROMISE },
+                        onContinue = { step = OnboardingStep.LOCATION }
                     )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // Subtitle (matches web PWA verbatim)
-                    Text(
-                        text = "Let's prepare your perfect run. You can always change these later.",
-                        fontSize = 14.sp,
-                        color = RunWearColors.TextSecondary,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp)
+                    OnboardingStep.LOCATION -> LocationStep(
+                        onBack = { step = OnboardingStep.PREFERENCES },
+                        onUseMyLocation = {
+                            onRequestLocationPermission()
+                            onComplete(temperatureUnit, genderPreference, comfortPreference)
+                        },
+                        onSetCityInstead = {
+                            onComplete(temperatureUnit, genderPreference, comfortPreference)
+                        }
                     )
-
-                    Spacer(Modifier.height(10.dp))
-
-                    // Frame 28 welcome truth: the free tier, named once.
-                    Text(
-                        text = "Your first 5 looks are free.",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = RunWearColors.TextPrimary,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(Modifier.height(18.dp))
-
-                    // Step indicator: the flow has exactly two steps; the
-                    // dots only mirror showLocationStep, nothing new.
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        StepDot(active = !showLocationStep)
-                        StepDot(active = showLocationStep)
-                    }
-
-                    Spacer(Modifier.height(30.dp))
-
-                    if (!showLocationStep) {
-                        // ========================================
-                        // STEP 1: Preferences (web PWA copy verbatim)
-                        // ========================================
-                        PreferenceSection(
-                            title = "Temperature",
-                            sublabel = "How do you measure the weather?"
-                        ) {
-                            TokenSegmentedControl(
-                                options = listOf("°F", "°C"),
-                                selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
-                                onSelect = { index ->
-                                    temperatureUnit = if (index == 0) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
-                                }
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        PreferenceSection(
-                            title = "Fit Preference",
-                            sublabel = "We'll tailor product recommendations"
-                        ) {
-                            TokenSegmentedControl(
-                                options = listOf("Male", "Female"),
-                                selectedIndex = when (genderPreference) {
-                                    GenderPreference.MALE -> 0
-                                    GenderPreference.FEMALE -> 1
-                                    GenderPreference.UNISEX -> -1 // Neither selected
-                                },
-                                onSelect = { index ->
-                                    val tapped = if (index == 0) GenderPreference.MALE else GenderPreference.FEMALE
-                                    // Toggle behavior (same as Settings GenderToggle):
-                                    // tapping the selected option deselects it
-                                    genderPreference = if (genderPreference == tapped) {
-                                        GenderPreference.UNISEX
-                                    } else {
-                                        tapped
-                                    }
-                                }
-                            )
-                        }
-
-                        Spacer(Modifier.height(16.dp))
-
-                        PreferenceSection(
-                            title = "Do you get cold easily or overheat quickly?",
-                            sublabel = "We'll adjust outfit recommendations"
-                        ) {
-                            TokenSegmentedControl(
-                                options = listOf("Get cold", "Neither", "Overheat"),
-                                selectedIndex = when (comfortPreference) {
-                                    ComfortPreference.RUNS_VERY_COLD,
-                                    ComfortPreference.RUNS_COLD -> 0
-                                    ComfortPreference.NEUTRAL -> 1
-                                    ComfortPreference.RUNS_WARM,
-                                    ComfortPreference.RUNS_VERY_WARM -> 2
-                                },
-                                onSelect = { index ->
-                                    comfortPreference = when (index) {
-                                        0 -> ComfortPreference.RUNS_COLD
-                                        2 -> ComfortPreference.RUNS_WARM
-                                        else -> ComfortPreference.NEUTRAL
-                                    }
-                                }
-                            )
-                        }
-                    } else {
-                        // ========================================
-                        // STEP 2: Location (web PWA second step)
-                        // ========================================
-                        Box(
-                            modifier = Modifier
-                                .size(76.dp)
-                                .clip(CircleShape)
-                                .background(RunWearColors.BgCard)
-                                .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = RunWearColors.PineAccent,
-                                modifier = Modifier.size(36.dp)
-                            )
-                        }
-
-                        Spacer(Modifier.height(20.dp))
-
-                        Text(
-                            text = "Set Your Location",
-                            fontFamily = FontFamily.Default,
-                            fontSize = 26.sp,
-                            letterSpacing = 0.5.sp,
-                            color = RunWearColors.TextPrimary
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-
-                        Text(
-                            text = "We need your location to get accurate weather for your run",
-                            fontSize = 14.sp,
-                            color = RunWearColors.TextSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 20.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-
-                        Spacer(Modifier.height(12.dp))
-
-                        // Frame 30: the coded honest privacy copy
-                        // lives IN the location step itself (the same
-                        // PermissionCopy line the permission screen
-                        // carries — one text, both surfaces).
-                        Text(
-                            text = com.runwear.app.ui.screens.PermissionCopy.LOCATION_PRIVACY_LINE,
-                            fontSize = 12.sp,
-                            color = RunWearColors.TextSecondary,
-                            textAlign = TextAlign.Center,
-                            lineHeight = 18.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(24.dp))
-                }
-
-                // Pinned actions over a fade-to-background scrim, so the
-                // scroll content never fights the buttons.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    RunWearColors.Background.copy(alpha = 0.92f),
-                                    RunWearColors.Background
-                                )
-                            )
-                        )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 16.dp, bottom = 20.dp)
-                    ) {
-                        if (!showLocationStep) {
-                            // "Let's Go! 🏃" CTA (matches web PWA verbatim)
-                            Button(
-                                onClick = { showLocationStep = true },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = RunWearColors.Primary
-                                ),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Text(
-                                    "Let's Go!",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    onRequestLocationPermission()
-                                    onComplete(temperatureUnit, genderPreference, comfortPreference)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = RunWearColors.Primary
-                                ),
-                                shape = RoundedCornerShape(18.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.LocationOn,
-                                    contentDescription = null,
-                                    modifier = Modifier.padding(end = 8.dp)
-                                )
-                                Text(
-                                    "Use Current Location",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                            }
-
-                            Spacer(Modifier.height(12.dp))
-
-                            Button(
-                                onClick = { onComplete(temperatureUnit, genderPreference, comfortPreference) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(56.dp),
-                                shape = RoundedCornerShape(18.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = RunWearColors.BgCard,
-                                    contentColor = RunWearColors.TextPrimary
-                                ),
-                                border = BorderStroke(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f))
-                            ) {
-                                Text(
-                                    "Set Location Manually",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    }
+                    // Hosted downstream of this screen (fork, consent,
+                    // capture, first look) — never presented here.
+                    else -> Unit
                 }
             }
         }
     }
 }
 
-/** One step-indicator dot: a pine pill for the current step, a faint dot otherwise. */
+/**
+ * Frame 28 — the standalone promise screen (T-2 ruling: adopted in
+ * the Android sequence). Script logo, the headline (A2), one
+ * promise per row, nothing to decide yet. The free-looks promise
+ * (A1) lives on THIS screen only. No price appears (design §9).
+ */
 @Composable
-private fun StepDot(active: Boolean) {
-    Box(
-        modifier = Modifier
-            .width(if (active) 20.dp else 7.dp)
-            .height(7.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(
-                if (active) RunWearColors.Primary else RunWearColors.TextSecondary.copy(alpha = 0.35f)
+private fun PromiseStep(onGetStarted: () -> Unit) {
+    StepScaffold(
+        actions = {
+            Button(
+                onClick = onGetStarted,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.Primary
+                ),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text(
+                    OnboardingCopy.PROMISE_CTA,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = OnboardingCopy.PROMISE_FOOTER,
+                fontSize = 13.sp,
+                color = RunWearColors.TextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
+        }
+    ) {
+        Spacer(Modifier.height(48.dp))
+
+        // The RunWear script logo (genuine Great Vibes) — the brand
+        // signature, as on home.
+        Text(
+            text = "RunWear",
+            fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+            fontSize = 52.sp,
+            color = RunWearColors.TextPrimary
+        )
+
+        Spacer(Modifier.height(22.dp))
+
+        // A2: the welcome headline — Sol's pick, character for
+        // character. Static text (Part 1 §1.4).
+        Text(
+            text = OnboardingCopy.HEADLINE,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = RunWearColors.TextPrimary,
+            textAlign = TextAlign.Center,
+            lineHeight = 36.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(36.dp))
+
+        // One promise per row (frame 28).
+        PromiseRow(
+            title = OnboardingCopy.PROMISE_1_TITLE,
+            body = OnboardingCopy.PROMISE_1_BODY
+        )
+        Spacer(Modifier.height(24.dp))
+        PromiseRow(
+            title = OnboardingCopy.PROMISE_2_TITLE,
+            body = OnboardingCopy.PROMISE_2_BODY
+        )
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** One frame-28 promise row: the claim, then what it means. */
+@Composable
+private fun PromiseRow(title: String, body: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            fontSize = 17.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = RunWearColors.TextPrimary
+        )
+        Text(
+            text = body,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = RunWearColors.TextSecondary,
+            modifier = Modifier.padding(top = 3.dp)
+        )
+    }
+}
+
+/**
+ * Frame 29 — setup, step 1 of 2 (Android expression): the three
+ * coded decisions as segmented controls on theme tokens. NO
+ * free-looks promise, no Make It Me vocabulary — the feature has
+ * not been introduced yet (A1).
+ */
+@Composable
+private fun PreferencesStep(
+    temperatureUnit: TemperatureUnit,
+    genderPreference: GenderPreference,
+    comfortPreference: ComfortPreference,
+    onTemperatureUnitChange: (TemperatureUnit) -> Unit,
+    onGenderPreferenceChange: (GenderPreference) -> Unit,
+    onComfortPreferenceChange: (ComfortPreference) -> Unit,
+    onBack: () -> Unit,
+    onContinue: () -> Unit
+) {
+    StepScaffold(
+        actions = {
+            Button(
+                onClick = onContinue,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.Primary
+                ),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Text(
+                    OnboardingCopy.SETUP_CTA,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+        }
+    ) {
+        Spacer(Modifier.height(16.dp))
+        StepHeader(
+            label = OnboardingCopy.SETUP_STEP_LABEL,
+            title = OnboardingCopy.SETUP_TITLE,
+            sub = OnboardingCopy.SETUP_SUB,
+            onBack = onBack
+        )
+        Spacer(Modifier.height(24.dp))
+
+        PreferenceSection(
+            title = OnboardingCopy.TEMP_TITLE,
+            sublabel = OnboardingCopy.TEMP_SUB
+        ) {
+            TokenSegmentedControl(
+                options = listOf("°F", "°C"),
+                selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
+                onSelect = { index ->
+                    onTemperatureUnitChange(
+                        if (index == 0) TemperatureUnit.FAHRENHEIT else TemperatureUnit.CELSIUS
+                    )
+                }
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        PreferenceSection(
+            title = OnboardingCopy.FIT_TITLE,
+            sublabel = OnboardingCopy.FIT_SUB
+        ) {
+            TokenSegmentedControl(
+                options = listOf("Male", "Female"),
+                selectedIndex = when (genderPreference) {
+                    GenderPreference.MALE -> 0
+                    GenderPreference.FEMALE -> 1
+                    GenderPreference.UNISEX -> -1 // Neither selected
+                },
+                onSelect = { index ->
+                    val tapped = if (index == 0) GenderPreference.MALE else GenderPreference.FEMALE
+                    // Toggle behavior (same as Settings GenderToggle):
+                    // tapping the selected option deselects it
+                    onGenderPreferenceChange(
+                        if (genderPreference == tapped) GenderPreference.UNISEX else tapped
+                    )
+                }
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        PreferenceSection(
+            title = OnboardingCopy.BODY_TITLE,
+            sublabel = OnboardingCopy.BODY_SUB
+        ) {
+            TokenSegmentedControl(
+                options = listOf("Get cold", "Neither", "Overheat"),
+                selectedIndex = when (comfortPreference) {
+                    ComfortPreference.RUNS_VERY_COLD,
+                    ComfortPreference.RUNS_COLD -> 0
+                    ComfortPreference.NEUTRAL -> 1
+                    ComfortPreference.RUNS_WARM,
+                    ComfortPreference.RUNS_VERY_WARM -> 2
+                },
+                onSelect = { index ->
+                    onComfortPreferenceChange(
+                        when (index) {
+                            0 -> ComfortPreference.RUNS_COLD
+                            2 -> ComfortPreference.RUNS_WARM
+                            else -> ComfortPreference.NEUTRAL
+                        }
+                    )
+                }
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * Frames 30/31 — the location step, step 2 of 2: the coded honest
+ * privacy copy lives IN the step itself (the same PermissionCopy
+ * line the permission screen carries — one text, both surfaces).
+ * "Use My Location" fires the system prompt; "Set a City Instead"
+ * is a full door, not a fallback.
+ */
+@Composable
+private fun LocationStep(
+    onBack: () -> Unit,
+    onUseMyLocation: () -> Unit,
+    onSetCityInstead: () -> Unit
+) {
+    StepScaffold(
+        actions = {
+            Button(
+                onClick = onUseMyLocation,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.Primary
+                ),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    OnboardingCopy.LOCATION_CTA_PRIMARY,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onSetCityInstead,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = RunWearColors.BgCard,
+                    contentColor = RunWearColors.TextPrimary
+                ),
+                border = BorderStroke(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f))
+            ) {
+                Text(
+                    OnboardingCopy.LOCATION_CTA_SECONDARY,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+        }
+    ) {
+        Spacer(Modifier.height(16.dp))
+        StepHeader(
+            label = OnboardingCopy.LOCATION_STEP_LABEL,
+            title = OnboardingCopy.LOCATION_TITLE,
+            sub = null,
+            onBack = onBack
+        )
+        Spacer(Modifier.height(24.dp))
+
+        Box(
+            modifier = Modifier
+                .size(76.dp)
+                .clip(CircleShape)
+                .background(RunWearColors.BgCard)
+                .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.LocationOn,
+                contentDescription = null,
+                tint = RunWearColors.PineAccent,
+                modifier = Modifier.size(36.dp)
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            text = OnboardingCopy.LOCATION_BODY,
+            fontSize = 14.sp,
+            color = RunWearColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = PermissionCopy.LOCATION_PRIVACY_LINE,
+            fontSize = 12.sp,
+            color = RunWearColors.TextSecondary,
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * The shared step layout: a scrollable content column (horizontally
+ * centered children) over a pinned action bar on a fade-to-background
+ * scrim, so scroll content never fights the buttons.
+ */
+@Composable
+private fun StepScaffold(
+    actions: @Composable () -> Unit,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            content()
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            RunWearColors.Background.copy(alpha = 0.92f),
+                            RunWearColors.Background
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(top = 16.dp, bottom = 20.dp)
+            ) {
+                actions()
+            }
+        }
+    }
+}
+
+/** A step's header row: Back chevron + step label, title, sublabel. */
+@Composable
+private fun StepHeader(
+    label: String,
+    title: String,
+    sub: String?,
+    onBack: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "Back",
+                tint = RunWearColors.TextSecondary
+            )
+        }
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = RunWearColors.TextSecondary
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = title,
+        fontSize = 26.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = RunWearColors.TextPrimary,
+        modifier = Modifier.fillMaxWidth()
     )
+    sub?.let {
+        Text(
+            text = it,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = RunWearColors.TextSecondary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+        )
+    }
 }
 
 /**
@@ -444,7 +630,8 @@ private fun PreferenceSection(
  * equal-width segments; the selected segment is the solid Primary
  * pine with white SemiBold text, unselected segments are transparent
  * with TextSecondary text (the Settings GenderToggle treatment).
- * Selection semantics are the caller's, unchanged.
+ * Selection semantics are the caller's, unchanged. A selection fires
+ * the §1.7 selection haptic — once per tap.
  */
 @Composable
 private fun TokenSegmentedControl(
@@ -452,6 +639,7 @@ private fun TokenSegmentedControl(
     selectedIndex: Int,
     onSelect: (Int) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -468,7 +656,10 @@ private fun TokenSegmentedControl(
                     .weight(1f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
-                    .clickable { onSelect(index) }
+                    .clickable {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onSelect(index)
+                    }
                     .padding(horizontal = 4.dp, vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {

@@ -331,6 +331,14 @@ class MainActivity : ComponentActivity() {
                     // Frame 34 first-look moment (once; never a modal again).
                     if (showFirstLookMoment) {
                         com.runwear.app.makeitme.FirstLookMoment(
+                            photoUrl = uiState.personalHeroImageUrl ?: uiState.heroImageUrl,
+                            simplePlace = uiState.simplePlace?.city,
+                            weatherLine = uiState.weather?.let { weather ->
+                                val items = uiState.outfit?.allItems?.size ?: 0
+                                "${uiState.temperatureUnit.formatTemperature(weather.feelsLike)} " +
+                                    "feels like · ${weather.weatherCode.description}" +
+                                    if (items > 0) " · $items items" else ""
+                            },
                             onSeeOutfit = { showFirstLookMoment = false },
                             onSeePremium = {
                                 showFirstLookMoment = false

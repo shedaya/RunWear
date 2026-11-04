@@ -216,6 +216,22 @@ object MakeItMeStrings {
     const val FIRST_LOOK_BAND_NO_CAP = "Every outfit, every day — no number to run out of."
     const val FIRST_LOOK_PRIMARY = "See My Outfit"
     const val FIRST_LOOK_SECOND_DOOR = "See Premium"
+    // WS-10 (frame 34 verbatim): the band's header, the moment's
+    // headline, and the honest count line — the onboarding look is
+    // look 1 of 5 (design §8 Q5 ruling), stated in the frame's own
+    // words, never as a surprise later.
+    const val FIRST_LOOK_BAND_HEADER = "With Premium"
+    const val FIRST_LOOK_HEADLINE = "You're in the photo now."
+    const val FIRST_LOOK_COUNT_LINE =
+        "That was look 1 of your 5 free looks — 4 remain, whenever you want them."
+
+    /** Frame 34's heading: "Your first look · Today, New York". */
+    fun firstLookHeading(simplePlace: String?): String =
+        if (simplePlace.isNullOrBlank()) {
+            "Your first look · Today"
+        } else {
+            "Your first look · Today, $simplePlace"
+        }
 
     /**
      * The consent-text version recorded with the backend on opt-in

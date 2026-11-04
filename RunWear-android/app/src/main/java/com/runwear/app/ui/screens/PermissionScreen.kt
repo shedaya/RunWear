@@ -87,7 +87,7 @@ fun PermissionScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "Location Needed",
+                text = "Location needed",
                 fontFamily = FontFamily.Default,
                 fontSize = 28.sp,
                 letterSpacing = 0.48.sp,

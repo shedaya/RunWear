@@ -25,24 +25,27 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * WS-8 rendered evidence for the D-24 rebuild: genuine renders of the
- * production [OnboardingScreen] (step 1 — the preferences step whose
- * helper text, unselected segment labels, and sublabels computed to
- * ≈1.07–1.10:1 before the rebuild) in BOTH appearances, following the
+ * WS-10 rendered evidence (A5 discipline — BOTH modes): genuine
+ * renders of the production [OnboardingScreen]'s FIRST step — the
+ * frame-28 promise screen the T-2 ruling adopted into the Android
+ * sequence (script logo, the A2 headline, the two promise rows,
+ * "Get Started") — in light AND dark, following the
  * [HeroMainScreenRenderTest] harness pattern (Robolectric native
  * graphics; this VM has no emulator).
  *
  * Assertions: the frame renders (opaque-pixel census) and the pixel
  * at the top-left corner is exactly the palette's Background token —
- * the token ground is what the rebuilt surfaces actually paint, in
- * light and in dark. PNGs land in build/render-out-ws8/ for the
- * device-walkthrough comparison (WS-9); the location step shares the
- * same tokens and its pairings are certified by TokenContrastTest.
+ * the token ground is what the surfaces actually paint, in both
+ * modes. PNGs land in build/render-out-ws10/ for the WS-9 /
+ * design-conformance walkthrough. The setup and location steps
+ * share the same tokens, scaffolding, and type (their copy and
+ * order are pinned by OnboardingSequenceTest); the pre-WS-10 WS-8
+ * renders of the old setup-first screen are superseded by these.
  */
 abstract class OnboardingShotHarness {
 
     private val outDir: File =
-        File(System.getProperty("ws8ShotsDir") ?: "build/render-out-ws8")
+        File(System.getProperty("ws10ShotsDir") ?: "build/render-out-ws10")
 
     protected fun shoot(name: String, darkTheme: Boolean) {
         // RunWearTheme publishes the palette to the RunWearColors
@@ -115,7 +118,7 @@ abstract class OnboardingShotHarness {
 @Config(application = Application::class, sdk = [35], qualifiers = "w390dp-h844dp-xhdpi")
 class OnboardingLightRenderTest : OnboardingShotHarness() {
     @Test
-    fun onboardingStep1Light() = shoot("onboarding-step1-light", darkTheme = false)
+    fun onboardingPromiseLight() = shoot("onboarding-promise-light", darkTheme = false)
 }
 
 @RunWith(RobolectricTestRunner::class)
@@ -123,5 +126,5 @@ class OnboardingLightRenderTest : OnboardingShotHarness() {
 @Config(application = Application::class, sdk = [35], qualifiers = "w390dp-h844dp-xhdpi")
 class OnboardingDarkRenderTest : OnboardingShotHarness() {
     @Test
-    fun onboardingStep1Dark() = shoot("onboarding-step1-dark", darkTheme = true)
+    fun onboardingPromiseDark() = shoot("onboarding-promise-dark", darkTheme = true)
 }

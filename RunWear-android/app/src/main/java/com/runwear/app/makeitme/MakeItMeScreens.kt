@@ -8,6 +8,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -421,7 +422,33 @@ fun MakeItMeUploadFlow(
             }
         }
 
-        when (step) {
+        // WS-10 (§1.4): the flow's steps advance with the same M3
+        // shared-axis horizontal slide + fade as onboarding's own
+        // steps — consent → capture is a step transition, not a cut.
+        androidx.compose.animation.AnimatedContent(
+            targetState = step,
+            transitionSpec = {
+                val forward = targetState.ordinal > initialState.ordinal
+                val easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                val duration = com.runwear.app.ui.screens.OnboardingMotion.STEP_TRANSITION_MS
+                (androidx.compose.animation.slideInHorizontally(
+                    animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                ) { width -> if (forward) width else -width } +
+                    androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                    ))
+                    .togetherWith(
+                        androidx.compose.animation.slideOutHorizontally(
+                            animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                        ) { width -> if (forward) -width else width } +
+                            androidx.compose.animation.fadeOut(
+                                animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
+                            )
+                    )
+            },
+            label = "makeItMeUploadStep"
+        ) { animatedStep ->
+        when (animatedStep) {
             UploadStep.CONSENT -> {
                 Text(
                     text = MakeItMeStrings.C1A_CONSENT_TITLE,
@@ -682,6 +709,7 @@ fun MakeItMeUploadFlow(
                     )
                 }
             }
+        }
         }
         Spacer(Modifier.height(32.dp))
     }
@@ -1637,56 +1665,200 @@ fun MakeItMeDeleteDialog(
 
 @Composable
 fun FirstLookMoment(
+    photoUrl: String?,
+    simplePlace: String?,
+    weatherLine: String?,
     onSeeOutfit: () -> Unit,
     onSeePremium: () -> Unit
 ) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onSeeOutfit,
-        containerColor = RunWearColors.Surface,
-        title = {
+    // Dismissing the ask IS continuing (design §9) — Back takes the
+    // primary door, never traps the user at onboarding's end.
+    androidx.activity.compose.BackHandler { onSeeOutfit() }
+
+    // §1.4 reveal sequence: the photo crossfades in (600 ms), the
+    // summary band settles 120 ms after the photo lands, and the
+    // ONE success haptic fires as the band settles (§1.7 — first
+    // look ready = success, once). Neither button moves or pulses.
+    var revealed by remember { mutableStateOf(false) }
+    var bandSettled by remember { mutableStateOf(false) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    LaunchedEffect(Unit) {
+        revealed = true
+        delay(
+            com.runwear.app.ui.screens.OnboardingMotion.FIRST_LOOK_BAND_AT_MS.toLong()
+        )
+        bandSettled = true
+        haptic.performHapticFeedback(
+            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(RunWearColors.Background)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Spacer(Modifier.height(24.dp))
+            // Frame 34: the "Make It Me" script wordmark heads the moment.
             Text(
-                text = "Your first look is you.",
-                fontSize = 19.sp,
+                text = "Make It Me",
+                fontFamily = GreatVibesFontFamily,
+                fontSize = 34.sp,
+                color = RunWearColors.TextPrimary
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = MakeItMeStrings.firstLookHeading(simplePlace),
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = RunWearColors.TextPrimary
             )
-        },
-        text = {
-            Column {
+            weatherLine?.let {
                 Text(
-                    text = MakeItMeStrings.FIRST_LOOK_BAND_READINESS,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 20.sp,
-                    color = RunWearColors.TextPrimary
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = MakeItMeStrings.FIRST_LOOK_BAND_NO_CAP,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 20.sp,
-                    color = RunWearColors.TextPrimary
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "That was look 1 of your 5 free looks.",
+                    text = it,
                     fontSize = 13.sp,
+                    color = RunWearColors.TextSecondary,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // The look itself — the designed skeleton (a box of the
+        // outfit's own shape on the card token) until the photo is
+        // known, then the 600 ms crossfade (§1.4: never a
+        // placeholder flash, never a broken-image frame).
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(340.dp)
+                .background(RunWearColors.BgCard)
+        ) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = revealed && photoUrl != null,
+                enter = androidx.compose.animation.fadeIn(
+                    animationSpec = androidx.compose.animation.core.tween(
+                        com.runwear.app.ui.screens.OnboardingMotion
+                            .FIRST_LOOK_PHOTO_CROSSFADE_MS,
+                        easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                    )
+                )
+            ) {
+                AsyncImage(
+                    model = photoUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = MakeItMeStrings.FIRST_LOOK_HEADLINE,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold,
+                lineHeight = 25.sp,
+                color = RunWearColors.TextPrimary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = MakeItMeStrings.FIRST_LOOK_COUNT_LINE,
+                fontSize = 13.sp,
+                lineHeight = 19.sp,
+                color = RunWearColors.TextSecondary
+            )
+
+            // The summary band — the ONE soft ask (§9's pair,
+            // verbatim). It slides up and settles after the photo;
+            // the primary button below never moves during the reveal.
+            androidx.compose.animation.AnimatedVisibility(
+                visible = bandSettled,
+                enter = androidx.compose.animation.slideInVertically(
+                    animationSpec = androidx.compose.animation.core.tween(
+                        com.runwear.app.ui.screens.OnboardingMotion
+                            .FIRST_LOOK_BAND_SETTLE_MS,
+                        easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                    )
+                ) { height -> height / 2 } +
+                    androidx.compose.animation.fadeIn(
+                        animationSpec = androidx.compose.animation.core.tween(
+                            com.runwear.app.ui.screens.OnboardingMotion
+                                .FIRST_LOOK_BAND_SETTLE_MS,
+                            easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                        )
+                    )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(top = 18.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(RunWearColors.BgCard)
+                        .border(
+                            1.dp,
+                            RunWearColors.TextSecondary.copy(alpha = 0.3f),
+                            RoundedCornerShape(24.dp)
+                        )
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                ) {
+                    Text(
+                        text = MakeItMeStrings.FIRST_LOOK_BAND_HEADER,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.2.sp,
+                        color = RunWearColors.PineAccent
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = MakeItMeStrings.FIRST_LOOK_BAND_READINESS,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 20.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = MakeItMeStrings.FIRST_LOOK_BAND_NO_CAP,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 20.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onSeeOutfit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+            ) {
+                Text(
+                    MakeItMeStrings.FIRST_LOOK_PRIMARY,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
+                )
+            }
+            TextButton(
+                onClick = onSeePremium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    MakeItMeStrings.FIRST_LOOK_SECOND_DOOR,
                     color = RunWearColors.TextSecondary
                 )
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onSeeOutfit) {
-                Text(MakeItMeStrings.FIRST_LOOK_PRIMARY, fontWeight = FontWeight.SemiBold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onSeePremium) {
-                Text(MakeItMeStrings.FIRST_LOOK_SECOND_DOOR, color = RunWearColors.TextSecondary)
-            }
+            Spacer(Modifier.height(32.dp))
         }
-    )
+    }
 }
 
 // ===========================================================================
