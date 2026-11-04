@@ -141,11 +141,15 @@ object HeroScrollHandoff {
  */
 object HeroMotionTokens {
     /** Hero photo crossfade IN — begins only once the incoming
-     * image has fully decoded (see HeroSection's painter gating). */
-    const val HERO_CROSSFADE_IN_MS = 600
+     * image has fully decoded (see HeroSection's painter gating).
+     * WS-9 fix (P-1): motion spec §1.1 sets this crossfade at
+     * 300 ms — the same value iOS ships (AppTheme crossfadeDuration
+     * 0.3) — and the scaffold → exact swap rides this same crossfade. */
+    const val HERO_CROSSFADE_IN_MS = 300
 
-    /** Hero photo crossfade OUT (the outgoing layer's fade). */
-    const val HERO_CROSSFADE_OUT_MS = 250
+    /** Hero photo crossfade OUT (the outgoing layer's fade) — also
+     * §1.1's 300 ms (WS-9 fix, P-1). */
+    const val HERO_CROSSFADE_OUT_MS = 300
 
     /** Day/time strip selection settle (micro transition). */
     const val DAY_STRIP_SETTLE_MS = 120
@@ -392,8 +396,8 @@ fun HeroSection(
                     // has fully decoded. The painter's alpha stays 0
                     // until its state is Success — no placeholder, no
                     // broken-image glyph, no half-decoded frame is
-                    // ever painted. In: 600 ms; out (on swap away):
-                    // 250 ms; a person change CUTS per
+                    // ever painted. In: 300 ms; out (on swap away):
+                    // 300 ms (§1.1; WS-9 fix P-1); a person change CUTS per
                     // HeroTransitionPolicy. The crop anchor is the
                     // parallax bias (top at rest — D-23 geometry);
                     // there is NO extra 1.1× zoom (the pre-WS-1 zoom

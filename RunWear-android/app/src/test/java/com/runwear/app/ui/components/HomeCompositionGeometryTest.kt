@@ -134,8 +134,11 @@ class HomeCompositionGeometryTest {
 
     @Test
     fun `motion tokens are the spec values`() {
-        assertEquals(600, HeroMotionTokens.HERO_CROSSFADE_IN_MS)
-        assertEquals(250, HeroMotionTokens.HERO_CROSSFADE_OUT_MS)
+        // WS-9 fix (P-1): §1.1's crossfade is 300 ms in BOTH
+        // directions (iOS ships 0.3 s); the pre-fix 600/250 pair was
+        // the divergence WS-9 graded medium.
+        assertEquals(300, HeroMotionTokens.HERO_CROSSFADE_IN_MS)
+        assertEquals(300, HeroMotionTokens.HERO_CROSSFADE_OUT_MS)
         assertEquals(120, HeroMotionTokens.DAY_STRIP_SETTLE_MS)
     }
 }
