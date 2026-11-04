@@ -92,3 +92,120 @@ enum FirstLookReveal {
     /// Exactly one success haptic per reveal (§1.7).
     static let successHapticCount = 1
 }
+
+// MARK: - Frame-34 presentation (GEN-2 I2 · W-16/W-18)
+//
+// The first-look moment's state, resolved from the SERVER's word
+// and the ONE free-looks counter — never from the screen's own
+// assumptions. The defect (2026-11-04 walkthrough, W-16): the
+// moment appeared already captioned "You're in the photo now."
+// with its free-look debit announced, while the photo in the card
+// was still the fork's STOCK photo; ~35 s later the view model's
+// live hero URL mutated underneath it and the generated photo
+// hard-cut in with no state change. Sol's correction: a processing
+// notice existed but sat at the screen's FOOTER — the working
+// state belongs ON the photo, where the user is looking.
+//
+// The phases, and what each may claim:
+//  * making — the personal look is not the photo on screen yet.
+//    The photo area carries the working treatment and the
+//    processing copy ON the photo. NO caption, NO meter: nothing
+//    about a delivered look may be stated, and no debit is
+//    presented as final — the server charges only on delivery.
+//  * ready — the generated photo IS the photo on screen. Only
+//    now the caption claims it, and the meter renders from the
+//    shared counter (FreeLooksMeter's source): the same
+//    `freeGenerationsUsed` Settings reads, re-read from the
+//    server profile when the look landed. Until that re-read
+//    lands (counter still 0 on a free account), the meter waits
+//    rather than printing a number the server hasn't confirmed.
+//  * failed — the server reported the look failed. The failure
+//    line stands; no caption, no meter (nothing was charged).
+
+enum FirstLookPhase: Equatable {
+    case making
+    case ready
+    case failed
+}
+
+struct FirstLookPresentation: Equatable {
+    let phase: FirstLookPhase
+    /// The processing title rendered ON the photo (making only) —
+    /// the spec §7 G1 progress line, on the surface the user is
+    /// looking at instead of the screen's footer.
+    let photoOverlayTitle: String?
+    /// The processing detail rendered ON the photo under the
+    /// title (making only) — the §7 G2 line, verbatim.
+    let photoOverlayDetail: String?
+    /// The claim line under the photo (ready only).
+    let caption: String?
+    /// The free-look meter under the caption (ready only, and
+    /// only once the shared counter confirms the delivery).
+    let meterLine: String?
+    /// The failure line (failed only).
+    let failureLine: String?
+    /// Whether the §9 Premium band + soft ask may show: the ask
+    /// follows the look — it is presented only once the first
+    /// look exists (ready), never while it is still being made.
+    var showsPremiumBand: Bool { phase == .ready }
+
+    static func resolve(
+        lookState: PersonalLookState,
+        personalPhotoDisplayed: Bool,
+        freeGenerationsUsed: Int,
+        freeAllowance: Int,
+        isSubscribed: Bool
+    ) -> FirstLookPresentation {
+        // A verified personal photo on screen IS the ready state,
+        // whatever else is in flight for the cell.
+        if personalPhotoDisplayed {
+            return FirstLookPresentation(
+                phase: .ready,
+                photoOverlayTitle: nil,
+                photoOverlayDetail: nil,
+                caption: MakeItMeCopy.firstLookReadyCaption,
+                meterLine: readyMeterLine(
+                    used: freeGenerationsUsed,
+                    allowance: freeAllowance,
+                    isSubscribed: isSubscribed
+                ),
+                failureLine: nil
+            )
+        }
+        if case .failed = lookState {
+            return FirstLookPresentation(
+                phase: .failed,
+                photoOverlayTitle: nil,
+                photoOverlayDetail: nil,
+                caption: nil,
+                meterLine: nil,
+                failureLine: MakeItMeCopy.firstLookFailed
+            )
+        }
+        return FirstLookPresentation(
+            phase: .making,
+            photoOverlayTitle: MakeItMeCopy.progressTitle,
+            photoOverlayDetail: MakeItMeCopy.progressSubline,
+            caption: nil,
+            meterLine: nil,
+            failureLine: nil
+        )
+    }
+
+    /// The ready meter, composed from the SAME counter Settings
+    /// renders (W-18's one source of truth). A subscribed user has
+    /// no free-look accounting to state. A free user whose counter
+    /// has not yet confirmed the delivery (still 0 — the store
+    /// re-reads the profile when the look lands, and that read may
+    /// still be in flight) gets NO meter rather than a number
+    /// that contradicts Settings.
+    private static func readyMeterLine(used: Int, allowance: Int, isSubscribed: Bool) -> String? {
+        guard !isSubscribed, used > 0 else { return nil }
+        let counted = min(used, allowance)
+        let remaining = allowance - counted
+        if remaining > 0 {
+            return "That was look \(counted) of your \(allowance) free looks — \(remaining) remain, whenever you want them."
+        }
+        return "That was look \(counted) of your \(allowance) free looks."
+    }
+}
