@@ -83,10 +83,12 @@ class SettingsInventoryTest {
             listOf(MakeItMeStrings.S2_STATE_A_ROW),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.STOCK)
         )
+        // Gen-3 WS-D: photos group, then the Premium offer card,
+        // then the destructive row last (both active modes).
         assertEquals(
             listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.S8_STATE_B_SUBSCRIBE_ROW,
+                MakeItMeStrings.U2G_CARD_TITLE,
                 MakeItMeStrings.S10_DELETE_ROW
             ),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.FREE)
@@ -94,7 +96,7 @@ class SettingsInventoryTest {
         assertEquals(
             listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                MakeItMeStrings.U2G_CARD_TITLE,
                 MakeItMeStrings.S10_DELETE_ROW
             ),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.SUBSCRIBED)

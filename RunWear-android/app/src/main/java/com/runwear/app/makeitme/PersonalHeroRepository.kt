@@ -37,7 +37,16 @@ class PersonalHeroRepository @Inject constructor(
         val referenceCount: Int = 0,
         val forkDecided: Boolean = false,
         /** True once the profile has been read from (or written to) the server. */
-        val synced: Boolean = false
+        val synced: Boolean = false,
+        /**
+         * Gen-3 X-9: true while ANY cell's look is in flight, from
+         * the same per-cell status truth the hero renders
+         * ([lastKnownStatus]). This is the input the gen-2 meter
+         * lacked: the delivered counter alone can never describe
+         * an in-flight look. Updated by [noteLookStatus] and
+         * [cellLookFor] — every path that learns a look's status.
+         */
+        val anyLookMaking: Boolean = false
     )
 
     private val _state = MutableStateFlow(PersonalState())
@@ -154,6 +163,9 @@ class PersonalHeroRepository @Inject constructor(
      *  upload flow's accepted generation request). */
     fun noteLookStatus(combinationId: String, status: PersonalLookStatus) {
         lastKnownStatus[combinationId] = status
+        _state.value = _state.value.copy(
+            anyLookMaking = lastKnownStatus.values.any { it == PersonalLookStatus.Making }
+        )
     }
 
     suspend fun cellLookFor(combinationId: String): CellLook {
@@ -171,7 +183,7 @@ class PersonalHeroRepository @Inject constructor(
             lookState = lookup.lookState,
             lookReason = lookup.lookReason
         )
-        lastKnownStatus[combinationId] = status
+        noteLookStatus(combinationId, status)
         val hit = resolveHit(combinationId, lookup)
         return CellLook(hit, status)
     }
@@ -343,7 +355,14 @@ class PersonalHeroRepository @Inject constructor(
         val outcome = service.requestGeneration(combinationId, outfitItems)
         when (outcome) {
             is PersonalHeroService.RequestOutcome.Queued,
-            is PersonalHeroService.RequestOutcome.AlreadyQueued,
+            is PersonalHeroService.RequestOutcome.AlreadyQueued -> {
+                markCellRequested(combinationId)
+                // Gen-3 X-9: an accepted request IS an in-flight
+                // look, from this moment — every caller (intake,
+                // home auto-request, retry) now feeds the meter's
+                // in-flight input, not just the intake flow.
+                noteLookStatus(combinationId, PersonalLookStatus.Making)
+            }
             is PersonalHeroService.RequestOutcome.AlreadyAvailable ->
                 markCellRequested(combinationId)
             else -> Unit

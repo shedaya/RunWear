@@ -571,7 +571,7 @@ fun SettingsSheetContent(
                     SettingsDivider()
                 }
                 SettingsSectionId.MAKE_IT_ME -> item(key = section.name) {
-                    // RW-14 "Make it me" section (spec §3) — between
+                    // RW-14 "Make It Me" section (spec §3) — between
                     // Fit Preference and Support. WS-5 (D-14):
                     // composed UNCONDITIONALLY — the section itself
                     // decides what its state shows (with the flag

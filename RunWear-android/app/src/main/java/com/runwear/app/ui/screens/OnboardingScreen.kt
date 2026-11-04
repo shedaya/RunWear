@@ -242,6 +242,13 @@ private fun PromiseStep(onGetStarted: () -> Unit) {
             title = OnboardingCopy.PROMISE_2_TITLE,
             body = OnboardingCopy.PROMISE_2_BODY
         )
+        Spacer(Modifier.height(24.dp))
+        // Gen-3 WS-E: the third feature point, in the same
+        // composition as the two above it.
+        PromiseRow(
+            title = OnboardingCopy.PROMISE_3_TITLE,
+            body = OnboardingCopy.PROMISE_3_BODY
+        )
 
         Spacer(Modifier.height(24.dp))
     }

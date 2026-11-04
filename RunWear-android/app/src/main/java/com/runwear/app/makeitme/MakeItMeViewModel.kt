@@ -20,6 +20,8 @@ data class MakeItMeUiState(
     val mode: MakeItMeMode = MakeItMeMode.STOCK,
     val personalizationOn: Boolean = false,
     val freeGenerationsUsed: Int = 0,
+    /** Gen-3 X-9: any look currently generating (the meter seam's in-flight input). */
+    val anyLookMaking: Boolean = false,
     val referenceCount: Int = 0,
     val forkDecided: Boolean = false,
     /** RevenueCat-side entitlement (drives the subscribed UI state). */
@@ -30,7 +32,7 @@ data class MakeItMeUiState(
 )
 
 /**
- * RW-14 "Make it me" UI logic: merges the personal backend state
+ * RW-14 "Make It Me" UI logic: merges the personal backend state
  * ([PersonalHeroRepository]) with the RevenueCat entitlement
  * ([BillingManager]) into the spec's three modes, and runs the flow
  * actions (consent, upload, first look, replace, delete, purchase).
@@ -55,6 +57,7 @@ class MakeItMeViewModel @Inject constructor(
             },
             personalizationOn = personal.personalizationOn,
             freeGenerationsUsed = personal.freeGenerationsUsed,
+            anyLookMaking = personal.anyLookMaking,
             referenceCount = personal.referenceCount,
             forkDecided = personal.forkDecided,
             rcEntitled = rcActive,
