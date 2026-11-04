@@ -45,6 +45,9 @@ struct WeatherOutfitView: View {
     // Hero-flag confirmation toast (the snackbar equivalent):
     // shown briefly after the user flags the hero photo.
     @State private var showFlagThanks = false
+    /// GEN-3 (WS-A(2)): the hero pill's free-look state opens the
+    /// Premium paywall from the hero.
+    @State private var showHeroPillPaywall = false
 
     // R-15 rating moment: this view exists only when a recommendation
     // is on screen, so appearing here IS the proven-value signal. The
@@ -309,6 +312,14 @@ struct WeatherOutfitView: View {
             // WS-5 (§1.3): named detent — the feedback Form
             // scrolls, so .large only.
             FeedbackSheet()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showHeroPillPaywall) {
+            // GEN-3 (WS-A(2)): the hero pill's "Get unlimited" door
+            // — the same Premium paywall the upsell card and the
+            // first-look band open, at the same named detent.
+            MakeItMeSubscriptionSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -726,9 +737,12 @@ struct WeatherOutfitView: View {
             condition: viewModel.currentCondition.shortDescription,
             itemNames: recommendation.allItems.map(\.name),
             itemKeys: recommendation.allItems.map(\.key),
-            heroImageReference: viewModel.heroImageUrl
-                ?? viewModel.fallbackImageUrl
-                ?? defaultFallbackUrl
+            // GEN-3 (WS-A(1) / X-10): the entry's photo is fed by
+            // the SAME always-available resolution as the hero —
+            // one unresolved photo must never starve the mini-bar
+            // thumbnail, the TODAY card, the chapter row and the
+            // Morning Poster thumbnail at once.
+            heroImageReference: viewModel.alwaysAvailableHeroReference() ?? ""
         )
         collectionModel.recordSettled(entry)
     }
@@ -858,21 +872,24 @@ struct WeatherOutfitView: View {
 
     @ViewBuilder
     private func heroSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
-        // WS-1 (§1.1 first paint): until the hero serve RESOLVES,
-        // the photo zone paints the designed skeleton — never the
-        // bundled fallback "for now" and silently replaced (the
-        // D-18/D-20 paint pattern §1.1 specifies out). The view
-        // model sets fallbackImageUrl BEFORE the pool cascade
-        // resolves, so the unresolved state is "no hero yet, and
-        // either still loading or no fallback has even been
-        // computed". A pool miss settles (loading ends) with the
-        // fallback as the FINAL image and paints it then. Later
-        // reloads keep the on-screen photo (the previous hero URL
-        // survives a reload) and crossfade per §1.1. The fallback
-        // that settles is resolved with the user's fit preference
-        // (WS-6, D-20).
-        if viewModel.heroImageUrl == nil
-            && (viewModel.isHeroImageLoading || viewModel.fallbackImageUrl == nil) {
+        // GEN-3 (WS-A(1) + WS-B) SUPERSEDES the WS-1 §1.1 skeleton
+        // gate below it in history: the bundled fallback is a FINAL
+        // truthful serve, not a "for now" paint — the view model
+        // commits the new cell's gated fallback in the same write
+        // that drops the old cell's photo (the atomic commit), so
+        // the fallback paints from the FIRST frame of the new cell,
+        // while the pool cascade and any personal generation run.
+        // A settled empty band is the X-3 defect, on every surface.
+        // The skeleton survives for exactly two states: (1) the
+        // resolved hero does not belong to the place on the label
+        // (a place switch in flight — X-7: the previous place's
+        // photo must never paint under the new name), and (2) the
+        // very first resolution, before any fallback has been
+        // committed for this place at all.
+        if !viewModel.heroBelongsToDisplayedPlace {
+            heroSkeleton(heightMode: heightMode)
+        } else if viewModel.heroImageUrl == nil
+            && viewModel.fallbackImageUrl == nil {
             heroSkeleton(heightMode: heightMode)
         } else {
             heroImageView(heightMode: heightMode)
@@ -914,7 +931,11 @@ struct WeatherOutfitView: View {
             date: viewModel.selectedDate,
             hour: viewModel.selectedHour,
             tempBracket: viewModel.currentTempBracket,
-            fallbackImageUrl: viewModel.fallbackImageUrl ?? defaultFallbackUrl,
+            // GEN-3: an uncommitted fallback is an EMPTY url (the
+            // designed gradient), never an unrelated bracket's
+            // stock photo — the pre-GEN-3 MILD×CLEAR default could
+            // paint a shorts photo over a COOL outfit.
+            fallbackImageUrl: viewModel.fallbackImageUrl ?? "",
             aiImageUrl: viewModel.heroImageUrl,
             onSettingsTapped: { showSettings = true },
             // No onShareTapped: the hero's top controls are off
@@ -935,6 +956,10 @@ struct WeatherOutfitView: View {
                 viewModel.flagCurrentPersonalHero(reason: reason)
                 withAnimation { showFlagThanks = true }
             },
+            // GEN-3 (WS-A(2)): the hero pill, derived from the
+            // REQUESTED cell's facts only (see heroPillState).
+            pillState: heroPillState,
+            onPillGetUnlimited: { showHeroPillPaywall = true },
             heightMode: heightMode,
             // The navigation container carries the chrome now:
             // location is the title, Settings/Share are toolbar
@@ -943,16 +968,25 @@ struct WeatherOutfitView: View {
         )
     }
 
-    private var defaultFallbackUrl: String {
-        // WS-6 (D-20): this default paints the hero whenever the
-        // view model has no fallback of its own yet, so it resolves
-        // with the user's fit preference like every other painting
-        // call site — no painting path uses the ungendered chain.
-        FallbackImageProvider.shared.getImageURL(
-            temp: .MILD,
-            weather: .CLEAR,
-            size: .iOS,
-            gender: viewModel.genderPreference.fallbackHeroGender
+    /// GEN-3 (WS-A(2) / WS-B, census X-2): the hero pill's state,
+    /// derived ONLY from the cell this screen is keyed on — the
+    /// view model's current personal combination (the cell the
+    /// last hero resolution was requested for, at the place on the
+    /// label) and THAT cell's server look state. A generation in
+    /// flight for any other cell cannot light this pill, and this
+    /// cell's generation lights it here on the hero — not only on
+    /// the first-look screen, and not in the scroll content under
+    /// the photo (X-8). No current cell (not opted in / stock
+    /// mode) hides the pill.
+    private var heroPillState: HeroPillState {
+        guard let cell = viewModel.currentPersonalCombination else { return .hidden }
+        return HeroPill.resolve(
+            optedIn: personalStore.isOptedIn,
+            lookState: personalStore.lookStates[cell.combinationId] ?? .none,
+            personalPhotoDisplayed: viewModel.currentPersonalHeroId != nil,
+            isSubscribed: personalStore.mode == .subscribed,
+            freeGenerationsUsed: personalStore.freeGenerationsUsed,
+            freeAllowance: PersonalHeroStore.freeAllowance
         )
     }
 
@@ -995,9 +1029,9 @@ struct WeatherOutfitView: View {
     // MARK: - RW-14 Personal Section
 
     /// The "Make it me" surfaces on the run screen, in spec order:
-    /// the generation progress line while the SERVER reports this
-    /// cell's look as making (spec §5 G1/G2 — quiet text under the
-    /// hero, never a spinner over the photo), the failed line with
+    /// (GEN-3: the making/scaffold states moved ONTO the hero as
+    /// the one hero pill — see heroPillState; this section keeps)
+    /// the failed line with
     /// its retry when the server reports the look as failed (spec
     /// §7 G5/G6, RW-16.16), and the free-tier upsell card when this
     /// cell is the one that exhausted the allowance (spec §6 U1).
@@ -1010,40 +1044,19 @@ struct WeatherOutfitView: View {
         if let cell = viewModel.currentPersonalCombination {
             switch personalStore.lookStates[cell.combinationId] ?? .none {
             case .making:
-                // RW-26 scaffold policy (§9 silence — informational
-                // only, no upsell, no meter): when a personal photo
-                // is already on screen while this cell makes, that
-                // photo is the user's own banked scaffold, and it
-                // carries the honest badge instead of a spinner.
-                if PersonalServePolicy.presentation(
-                    hasPersonalPhoto: viewModel.currentPersonalHeroId != nil,
-                    lookState: .making
-                ) == .scaffold(badge: PersonalServePolicy.scaffoldBadge) {
-                    Text(PersonalServePolicy.scaffoldBadge)
-                        .font(.appFootnote)
-                        .foregroundColor(AppTheme.inkSecondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.horizontal, 16)
-                } else {
-                    VStack(spacing: 4) {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .tint(AppTheme.inkSecondary)
-                            // Spec §7 G1, verbatim.
-                            Text(MakeItMeCopy.progressTitle)
-                                .font(.appSecondary.weight(.semibold))
-                                .foregroundColor(AppTheme.inkPrimary)
-                        }
-                        // Spec §7 G2, verbatim (as amended Nov 1, 2026).
-                        Text(MakeItMeCopy.progressSubline)
-                            .font(.appFootnote)
-                            .foregroundColor(AppTheme.inkSecondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.horizontal, 16)
-                }
+                // GEN-3 (WS-A(2)): the making state — and the
+                // scaffold treatment while a banked photo is on
+                // screen — now live ON the photo as the ONE hero
+                // pill (HeroPill: "Making this you…" / "Your photo
+                // — made for close-by weather"). The pre-GEN-3 lines
+                // here (the G1/G2 progress block and the scaffold
+                // badge text) sat in the scroll content under the
+                // hero — census X-8's wrong-place defect — and are
+                // folded into the pill; nothing renders here, so
+                // the state has exactly one surface. (G1/G2 copy
+                // still renders on the first-look screen's photo
+                // via the W-16 seam.)
+                EmptyView()
             case .failed:
                 // Spec §7 G5/G6 (RW-16.16): the durable failed line
                 // and its user-initiated retry. The retry goes

@@ -724,6 +724,89 @@ enum FreeLooksMeter {
     }
 }
 
+// MARK: - The hero pill (GEN-3 WS-A(2) / WS-B, 2026-11-04)
+//
+// ONE pill at the bottom of the hero image, state-driven — the
+// home expression of the same truth the first-look screen's W-16
+// seam resolves (FirstLookPresentation): the working state lives
+// ON the photo, and a delivered-look claim appears only when the
+// generated photo is actually displayed. The walkthrough defects
+// this closes: the generating state sat in the scroll content
+// under the hero (census X-8) and appeared for a later place's
+// cell while the requested place showed nothing (X-2); the
+// scaffold treatment was a separate text line under the hero.
+//
+// The state is derived ONLY from the REQUESTED cell's facts: the
+// caller passes the look state of the cell the screen is keyed on
+// (WeatherViewModel.currentPersonalCombination — the cell
+// loadHeroImage resolved for the place on the label), never a
+// global or another cell's state. The four visible states:
+//  (a) making — a personal photo is being generated for this
+//      cell and none is on screen yet: "Making this you…" over
+//      the fallback photo (which stays up — WS-A(1)).
+//  (b) scaffold — the user's own banked photo for close-by
+//      weather is on screen while the exact look makes:
+//      "Your photo — made for close-by weather". This folds the
+//      PersonalServePolicy scaffold treatment into the pill.
+//  (c) freeLook — the exact personal photo IS displayed, free
+//      tier: the look count from the ONE shared counter
+//      (FreeLooksMeter's source) + "Get unlimited", which opens
+//      the Premium paywall. Like the W-16/W-18 meter, the count
+//      waits for the counter to confirm the delivery (used > 0)
+//      rather than printing an unverified number.
+//  (d) premium — the exact personal photo is displayed and the
+//      user is subscribed: Premium status.
+// A failed look renders NO pill: the standard photo serves
+// quietly and the failure line + retry live in the personal
+// section, as before. Not opted in renders no pill.
+enum HeroPillState: Equatable {
+    case hidden
+    case making
+    case scaffold
+    case freeLook(used: Int, allowance: Int)
+    case premium
+}
+
+enum HeroPill {
+    static let makingLabel = "Making this you…"
+    static let scaffoldLabel = "Your photo — made for close-by weather"
+    static let premiumLabel = "Premium"
+    static let getUnlimitedLabel = "Get unlimited"
+
+    /// The count half of the free-look pill, in the deck's "1 of 5"
+    /// form, clamped to the allowance like the W-18 meter.
+    static func freeLookCountLabel(used: Int, allowance: Int) -> String {
+        "\(min(used, allowance)) of \(allowance)"
+    }
+
+    static func resolve(
+        optedIn: Bool,
+        lookState: PersonalLookState,
+        personalPhotoDisplayed: Bool,
+        isSubscribed: Bool,
+        freeGenerationsUsed: Int,
+        freeAllowance: Int
+    ) -> HeroPillState {
+        guard optedIn else { return .hidden }
+        if personalPhotoDisplayed {
+            // A personal photo is on screen while this cell's exact
+            // look is still making: by the convergence architecture
+            // that photo is the banked scaffold (PersonalServePolicy).
+            if lookState == .making { return .scaffold }
+            if isSubscribed { return .premium }
+            // The exact photo is displayed: the count may show
+            // only once the shared counter confirms the delivery
+            // (W-18) — until then the pill waits, hidden.
+            guard freeGenerationsUsed > 0 else { return .hidden }
+            return .freeLook(used: freeGenerationsUsed, allowance: freeAllowance)
+        }
+        // No personal photo on screen: the pill speaks only while
+        // THIS cell's look is making (over the fallback photo).
+        if lookState == .making { return .making }
+        return .hidden
+    }
+}
+
 // MARK: - Upsell eligibility (spec §5)
 //
 // The 6th-cell card shows only when ALL of these hold: the user is on

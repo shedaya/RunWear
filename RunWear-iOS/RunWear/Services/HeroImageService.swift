@@ -117,9 +117,35 @@ actor HeroImageService {
             }
         }
 
-        // Level 8: Bundled fallback — RW-26: resolved gender-aware, so
-        // the last-resort photo's subject matches the combination's
-        // (already UNISEX-resolved) gender.
+        // Level 8: Bundled fallback — GEN-3 (WS-A(1)): with an
+        // outfit, the terminus is the POINT-GRAIN GATED bundled
+        // resolution (FallbackImageProvider.gatedAssetName — the
+        // same gate the pool obeys, over the adjudicated garment
+        // census of the 44 bundled assets). When no bundled asset
+        // matches the prescription there is NO truthful bundled
+        // photo for it: the result carries an empty URL and the
+        // painting layer resolves its own gated fallback (the
+        // phone view model paints the gated asset it resolved at
+        // commit; the designed gradient is the terminus, never a
+        // garment-mismatched photo — the W-4 defect). Without an
+        // outfit there is no prescription to judge against, so the
+        // legacy bracket resolution stands (RW-26: gender-aware).
+        if let outfit {
+            if let gated = fallbackProvider.getGatedFallbackResult(
+                temp: combination.temp,
+                weather: combination.weather,
+                isWatch: isWatch,
+                gender: combination.gender,
+                outfit: outfit
+            ) {
+                return gated
+            }
+            return HeroImageResult.fromBundledFallback(
+                url: "",
+                assetFile: "",
+                provenance: nil
+            )
+        }
         return fallbackProvider.getFallbackResult(
             temp: combination.temp,
             weather: combination.weather,
