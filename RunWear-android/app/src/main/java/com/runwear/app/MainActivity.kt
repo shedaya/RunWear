@@ -55,6 +55,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // GEN-3 (WS-C): a fresh-task creation starts a new
+        // Wear I've Run session (see WearIveRunSession's operational
+        // definition). Configuration-change recreation carries a
+        // non-null savedInstanceState and keeps the session.
+        if (savedInstanceState == null) {
+            com.runwear.app.weariverun.WearIveRunSession.beginNewSession()
+        }
+
         // Safe-boot diagnostic (1.1.3): first line after super.onCreate,
         // before setContent — entry into the Activity half of startup.
         // The startup watchdog arms here: if the process is still alive

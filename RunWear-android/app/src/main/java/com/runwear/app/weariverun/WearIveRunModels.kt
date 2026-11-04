@@ -421,11 +421,12 @@ class WearIveRunBarStateHolder {
      * first generation lands (the rollover rule, §1.2 task table). */
     private var awaitingTodaysGeneration = false
 
-    /** The (date, place) trashed in this session for today: while it
-     * stands, an entries list without today's entry must NOT fall
-     * back to an older entry and resurrect the element. Its
-     * re-appearance in the list IS its re-creation. */
-    private var trashedTodayKey: Pair<java.time.LocalDate, String>? = null
+    /** GEN-3: the identity (session key, or legacy (date, place)
+     * key) trashed for today: while it stands, an entries list
+     * without today's entry must NOT fall back to an older entry
+     * and resurrect the element. Its re-appearance in the list IS
+     * its re-creation. */
+    private var trashedTodayIdentity: String? = null
 
     /** The entry the element currently presents (today's, else latest). */
     fun currentEntry(): WearIveRunDayEntry? = current
@@ -495,7 +496,7 @@ class WearIveRunBarStateHolder {
         if (event == WearIveRunElementEvent.TRASH) {
             val entry = current
             if (entry != null && entry.date == knownDay) {
-                trashedTodayKey = entry.date to entry.place
+                trashedTodayIdentity = WearIveRunCollectionLogic.identityOf(entry)
             }
             kind = WearIveRunElementMachine.transition(kind, event)
             if (kind == WearIveRunElementKind.ABSENT) {
@@ -516,9 +517,21 @@ class WearIveRunBarStateHolder {
         kind = WearIveRunElementMachine.transition(kind, WearIveRunElementEvent.DAY_ROLLOVER)
         current = null
         narration = null
-        trashedTodayKey = null
+        trashedTodayIdentity = null
         awaitingTodaysGeneration = true
         emit()
+    }
+
+    /** GEN-3 (WS-C): the "Update to {place}, {day}" narration for a
+     * within-session change whose kit did not change — a place (or
+     * day) move in the same session is an UPDATE of the session's
+     * one entry, never a new "Added …" (census X-4). */
+    private fun updatePlaceNarration(entry: WearIveRunDayEntry): WearIveRunNarration {
+        val simplePlace = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(entry.place).display
+        return WearIveRunNarrationFormatter.update(
+            "$simplePlace, ${WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)}"
+        )
     }
 
     fun onEntriesChanged(entries: List<WearIveRunDayEntry>, today: java.time.LocalDate) {
@@ -528,12 +541,33 @@ class WearIveRunBarStateHolder {
         }
         knownDay = today
 
-        val todays = entries.firstOrNull { it.date == today }
+        // GEN-3 (X-5): today's entry is THE latest settled version
+        // for today (shared logic with the collection's pinned
+        // TODAY card) — never the first/alphabetical row, so the
+        // mini bar can never announce a place home has moved past.
+        val todays = WearIveRunCollectionLogic.todaysEntry(entries, today)
 
         // Trash suppression: today's entry is gone by the user's own
         // tap — never fall back to an older entry behind their back.
-        val trashed = trashedTodayKey
-        if (trashed != null && trashed.first == today) {
+        val trashed = trashedTodayIdentity
+        if (trashed != null) {
+            val back = entries.firstOrNull {
+                WearIveRunCollectionLogic.identityOf(it) == trashed
+            }
+            if (back != null && back.date == today) {
+                // It is back in the list: a later generation
+                // re-created it — the creation cue fires for the
+                // re-creation.
+                trashedTodayIdentity = null
+                current = back
+                narration = addedNarration(back)
+                kind = WearIveRunElementMachine.transition(
+                    WearIveRunElementKind.ABSENT, WearIveRunElementEvent.GENERATION_LANDED
+                )
+                _cueSequence.value = _cueSequence.value + 1
+                emit()
+                return
+            }
             if (todays == null) {
                 current = null
                 narration = null
@@ -541,17 +575,10 @@ class WearIveRunBarStateHolder {
                 emit()
                 return
             }
-            // It is back in the list: a later generation re-created
-            // it — the creation cue fires for the re-creation.
-            trashedTodayKey = null
-            current = todays
-            narration = addedNarration(todays)
-            kind = WearIveRunElementMachine.transition(
-                WearIveRunElementKind.ABSENT, WearIveRunElementEvent.GENERATION_LANDED
-            )
-            _cueSequence.value = _cueSequence.value + 1
-            emit()
-            return
+            // Today's latest is a DIFFERENT identity (a new
+            // session's entry): the trash marker has done its job;
+            // clear it and present normally below.
+            trashedTodayIdentity = null
         }
 
         if (awaitingTodaysGeneration && todays == null) {
@@ -597,13 +624,37 @@ class WearIveRunBarStateHolder {
                 // a landing. Nothing moves, nothing re-fires.
                 return
             }
-            previous.date != next.date || previous.place != next.place -> {
-                // A different day/place is now the presented entry.
-                // For today that is a creation; for an older entry it
-                // is a content swap at rest.
+            WearIveRunCollectionLogic.sameIdentity(previous, next) -> {
+                // GEN-3 (WS-C): the SAME entry (same session — or
+                // the same legacy (date, place)) in a new settled
+                // version. The entry updates IN PLACE; it is never a
+                // new "Added …". Announced updates:
+                // - a KIT change (GEN-2 W-11: the narration payload
+                //   is computed from the DIFF — it names the item
+                //   that actually changed, never an unchanged one);
+                // - a PLACE (or day) change within the session with
+                //   an unchanged kit — census X-4: this narrates as
+                //   an update too ("Update to {place}, Now"), and
+                //   the presented entry follows the latest commit,
+                //   so the mini bar never announces a place home
+                //   has already moved past.
+                // Everything else (hero reference, feels-like,
+                // condition) is an async landing: content updates in
+                // place, state does not move, the cue does not
+                // re-fire (the abolished-drivers rule).
+                val kitChanged = previous.items != next.items
+                val placeChanged = previous.place != next.place ||
+                    previous.date != next.date
                 current = next
-                narration = addedNarration(next)
-                if (next.date == today) {
+                if (kitChanged) {
+                    narration = WearIveRunUpdateNarration.narration(previous, next)
+                        ?: updateNarration(next)
+                    kind = WearIveRunElementMachine.transition(
+                        kind, WearIveRunElementEvent.GENERATION_LANDED
+                    )
+                    _cueSequence.value = _cueSequence.value + 1
+                } else if (placeChanged) {
+                    narration = updatePlaceNarration(next)
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )
@@ -612,21 +663,14 @@ class WearIveRunBarStateHolder {
                 emit()
             }
             else -> {
-                // Same day + place, a new version of the entry. Only
-                // a KIT change is an update the element announces.
-                // Everything else (hero reference, feels-like,
-                // condition) is an async landing: content updates in
-                // place, state does not move, the cue does not re-fire.
-                // GEN-2 (W-11): the announced payload is computed
-                // from the DIFF between the two versions — it names
-                // the item that actually changed (see
-                // [WearIveRunUpdateNarration]), never the unchanged
-                // first item the old code named.
-                val kitChanged = previous.items != next.items
+                // A DIFFERENT entry is now the presented one (a new
+                // session's entry, a different legacy (date, place),
+                // or today arriving over an older doorway entry).
+                // For today that is a creation; for an older entry
+                // it is a content swap at rest.
                 current = next
-                if (kitChanged) {
-                    narration = WearIveRunUpdateNarration.narration(previous, next)
-                        ?: updateNarration(next)
+                narration = addedNarration(next)
+                if (next.date == today) {
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )

@@ -55,6 +55,17 @@ class WearIveRunStore(private val context: Context) {
         }
     }
 
+    /** GEN-3: remove an entry by identity — a session entry by its
+     * sessionId (its place/date may have moved within the session),
+     * a legacy entry by (date, place). */
+    suspend fun removeByIdentity(entry: WearIveRunDayEntry) {
+        context.wearIveRunDataStore.edit { prefs ->
+            val current = decode(prefs[Keys.ENTRIES_JSON])
+            prefs[Keys.ENTRIES_JSON] =
+                encode(WearIveRunCollectionLogic.removeByIdentity(current, entry))
+        }
+    }
+
     companion object {
         fun encode(entries: List<WearIveRunDayEntry>): String {
             val array = JSONArray()
@@ -62,6 +73,8 @@ class WearIveRunStore(private val context: Context) {
                 array.put(JSONObject().apply {
                     put("date", e.date.toString())
                     put("place", e.place)
+                    put("sessionId", e.sessionId)
+                    put("settledAtMillis", e.settledAtMillis)
                     put("feelsLikeF", e.feelsLikeF)
                     put("condition", e.conditionLabel)
                     put("snowing", e.isSnowing)
@@ -82,6 +95,13 @@ class WearIveRunStore(private val context: Context) {
                     val items = o.optJSONArray("items") ?: JSONArray()
                     WearIveRunDayEntry(
                         date = LocalDate.parse(o.getString("date")),
+                        // GEN-3: entries written before the session
+                        // rule have no sessionId/settledAtMillis —
+                        // they decode as legacy (blank / 0) and keep
+                        // their (date, place) identity. No migration
+                        // wipe: history decodes exactly as stored.
+                        sessionId = o.optString("sessionId"),
+                        settledAtMillis = o.optLong("settledAtMillis", 0L),
                         // WS-4: entries recorded before the simple-place
                         // model carry raw geocode strings; normalize on
                         // read so every downstream surface (narration,

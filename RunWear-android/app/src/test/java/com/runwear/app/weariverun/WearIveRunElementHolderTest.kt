@@ -201,16 +201,27 @@ class WearIveRunElementHolderTest {
     }
 
     @Test
-    fun `a generation for a new place today is a creation cue`() {
+    fun `a generation for a new place in the same session is an update, not a creation`() {
+        // GEN-3 (WS-C, census X-4): this test previously pinned the
+        // defect — a new place today narrated "Added …". Under the
+        // session rule the session's ONE entry updates in place and
+        // the narration is an update.
         val holder = WearIveRunBarStateHolder()
-        holder.onEntriesChanged(listOf(entry()), today)
+        holder.onEntriesChanged(
+            listOf(entry().copy(sessionId = "session-1", settledAtMillis = 1L)), today
+        )
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
-        // The user changed location; the new place's first generation
-        // for today settles — a creation for that place.
-        holder.onEntriesChanged(listOf(entry(place = "Kansas City, Missouri")), today)
+        holder.onEntriesChanged(
+            listOf(
+                entry(place = "Kansas City, Missouri")
+                    .copy(sessionId = "session-1", settledAtMillis = 2L)
+            ),
+            today
+        )
         assertEquals(WearIveRunElementKind.CUE, kind(holder))
         assertEquals(2, holder.cueSequence.value)
-        assertEquals("Added Kansas City, MO, Now", present(holder).narration.text)
+        assertEquals("Update to Kansas City, MO, Now", present(holder).narration.text)
+        assertEquals("Kansas City, MO", present(holder).entry.place)
     }
 
     @Test

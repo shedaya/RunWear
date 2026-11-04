@@ -85,11 +85,25 @@ fun WearIveRunCollectionScreen(
     var openChapter by remember { mutableStateOf<String?>(null) }
     var shareEntry by remember { mutableStateOf<WearIveRunDayEntry?>(null) }
 
-    val chapters = remember(entries, filter) {
-        WearIveRunCollectionLogic.chapters(entries, filter)
-    }
+    // GEN-3 (X-5): the pinned TODAY card IS today's latest settled
+    // entry — the same shared resolution the mini bar's holder
+    // uses (never an alphabetical place pick, which froze the card
+    // on the day's first place). The chapter list below excludes
+    // that very entry, so the pinned card never duplicates a
+    // chapter directly beneath it; a chapter for its place still
+    // shows when the place holds OTHER entries.
     val todayEntry = remember(entries) {
-        entries.filter { it.date == today }.maxByOrNull { it.place }
+        WearIveRunCollectionLogic.todaysEntry(entries, today)
+    }
+    val listChapters = remember(entries, filter, todayEntry) {
+        val rest = if (todayEntry != null) {
+            entries.filterNot {
+                WearIveRunCollectionLogic.sameIdentity(it, todayEntry)
+            }
+        } else {
+            entries
+        }
+        WearIveRunCollectionLogic.chapters(rest, filter)
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -131,7 +145,7 @@ fun WearIveRunCollectionScreen(
 
                 FilterRow(filter = filter, onFilter = { filter = it })
 
-                val chapter = chapters.firstOrNull { it.place == openChapter }
+                val chapter = listChapters.firstOrNull { it.place == openChapter }
                 if (chapter != null) {
                     ChapterDetail(
                         chapter = chapter,
@@ -168,7 +182,7 @@ fun WearIveRunCollectionScreen(
                                 }
                             }
                         }
-                        items(chapters, key = { it.place }) { ch ->
+                        items(listChapters, key = { it.place }) { ch ->
                             if (ch.days.isNotEmpty()) {
                                 ChapterCover(
                                     chapter = ch,
@@ -227,7 +241,7 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Your first outfit of the day adds itself here — one entry a day, for each place you run.",
+                text = "Your first outfit of a session adds itself here — one entry per session, kept as its last settled version.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary
             )
