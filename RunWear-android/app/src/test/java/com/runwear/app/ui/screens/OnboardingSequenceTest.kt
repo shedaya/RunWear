@@ -207,6 +207,31 @@ class OnboardingSequenceTest {
     }
 
     @Test
+    fun `fork - the lead is frame 32's sub-headline verbatim`() {
+        // WS-9 fix, item 6 (coordinator ruling 2026-11-03): the
+        // RW-14 deck lead paragraph diverged from frame 32 — the
+        // frozen design package carries the sub-headline in the
+        // lead slot, and the iOS WS-9 fix lane installed it
+        // verbatim. Android now matches, character for character;
+        // the retired deck lead must not return anywhere in the deck.
+        assertEquals(
+            "Your recommendations, with you in the photo.",
+            MakeItMeStrings.F2_LEAD
+        )
+        val deck = sourceFile(
+            "app/src/main/java/com/runwear/app/makeitme/MakeItMeStrings.kt"
+        ).readText()
+        assertEquals(
+            "the retired RW-14 deck lead must not appear in the deck",
+            0,
+            occurrences(deck, "That's a model in your outfit photo")
+        )
+        // And the fork surface renders the deck lead (the pin is on
+        // the rendered slot, not just the string's existence).
+        assertTrue(makeItMeScreens().contains("MakeItMeStrings.F2_LEAD"))
+    }
+
+    @Test
     fun `no price string appears anywhere in onboarding copy - the section-9 rule`() {
         val pricePattern = Regex("\\$\\s?\\d")
         val copy = listOf(
@@ -368,7 +393,9 @@ class OnboardingSequenceTest {
         // TokenSegmentedControl is the file's last composable.
         val control = screen.substring(screen.indexOf("private fun TokenSegmentedControl"))
         assertTrue(control.contains("performHapticFeedback"))
-        assertTrue(screen.contains("HapticFeedbackType.TextHandleMove"))
+        // WS-9 fix (P-2): the effect is named by the §1.7 map
+        // (HapticSpec.SELECTION — the selection-class tick).
+        assertTrue(screen.contains("HapticSpec.SELECTION"))
     }
 
     // ── A4 residue — emoji / glyph sweep pins ───────────────────

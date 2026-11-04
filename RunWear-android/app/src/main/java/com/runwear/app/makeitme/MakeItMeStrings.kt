@@ -12,7 +12,14 @@ object MakeItMeStrings {
 
     // F — Onboarding fork (spec §2.2)
     const val F1_HEADLINE = "See yourself in every outfit."
-    const val F2_LEAD = "That's a model in your outfit photo. It could be you — in this morning's weather, on a road like yours, wearing exactly what RunWear recommends."
+    // F2 amended 2026-11-03 (coordinator ruling, RW-27 WS-9 fix):
+    // the RW-14 deck lead paragraph is REPLACED by frame 32's
+    // sub-headline, verbatim from the frozen final design package —
+    // the line the design carries in this slot. The iOS WS-9 fix
+    // lane made the identical swap; the fork now leads with the
+    // headline, this line, the two choices and the closing line —
+    // nothing else (and no free-looks promise sentence: see F4).
+    const val F2_LEAD = "Your recommendations, with you in the photo."
     const val F3_OPTION_A_TITLE = "Make it me"
     // F4 amended 2026-11-03 (coordinator ruling, RW-27 WS-10 fix):
     // the trailing free-looks promise sentence is REMOVED. The
