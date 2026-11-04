@@ -82,19 +82,28 @@ object MakeItMeStrings {
     // and a 2–4 minute backend norm — the line no longer promises a
     // number the system misses.
     // GEN-3 A-HERO (WS-A(2)): the ONE hero pill's copy. MAKING is
-    // Sol's Nov 4 wording for the on-photo generating state; the
-    // scaffold line is the RW-26 badge's, folded into the pill
-    // (ScaffoldRenderPolicy.homeBadge remains its source — this
-    // constant is the pill's fallback if that policy ever returns
-    // null); GET_UNLIMITED is the free tier's paywall door.
+    // Sol's Nov 4 wording for the on-photo generating state;
+    // GET_UNLIMITED is the free tier's paywall door.
+    // GEN-3 DESIGN DELTA (Sol's mockup review, Nov 4 — FINAL mocked
+    // states, superseding the A-HERO wording): states (b)(c)(d)
+    // carry the Make It Me script mark; (b) SCAFFOLD is the script
+    // mark + "Your photo" — NOTHING MORE (the "made for close-by
+    // weather" line is OUT, Sol found it confusing;
+    // ScaffoldRenderPolicy.homeBadge carries the same shortened
+    // line, this constant is the pill's fallback if that policy
+    // ever returns null); (c) the free-tier count reads
+    // "N of 5 looks" per the approved mock.
     const val HERO_PILL_MAKING = "Making this you…"
-    const val HERO_PILL_SCAFFOLD = "Your photo — made for close-by weather"
+    const val HERO_PILL_SCAFFOLD = "Your photo"
     const val HERO_PILL_PREMIUM = "Premium"
     const val HERO_PILL_GET_UNLIMITED = "Get unlimited"
 
-    /** The pill's free-tier look count: "1 of 5" (real server count). */
+    /** The script mark the pill carries in states (b)(c)(d). */
+    const val HERO_PILL_SCRIPT_MARK = "Make It Me"
+
+    /** The pill's free-tier look count: "1 of 5 looks" (real server count). */
     fun heroPillLookCount(freeGenerationsUsed: Int): String =
-        "$freeGenerationsUsed of 5"
+        "$freeGenerationsUsed of 5 looks"
 
     const val G1_PROGRESS = "Making this outfit yours…"
     // GEN-3 A-HERO (X-8 copy audit): the pre-fix line promised "the

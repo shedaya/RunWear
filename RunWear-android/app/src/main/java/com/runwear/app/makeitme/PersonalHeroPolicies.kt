@@ -95,9 +95,12 @@ object ScaffoldRenderPolicy {
         else -> PersonalServeKind.EXACT
     }
 
-    /** The home badge for a serve kind — factual only, never a pitch. */
+    /** The home badge for a serve kind — factual only, never a pitch.
+     * GEN-3 DESIGN DELTA (Sol, Nov 4): the scaffold line is
+     * "Your photo" — nothing more; the "made for close-by weather"
+     * explanation is OUT (Sol found it confusing). */
     fun homeBadge(kind: PersonalServeKind): String? = when (kind) {
-        PersonalServeKind.SCAFFOLD -> "Your photo — made for close-by weather"
+        PersonalServeKind.SCAFFOLD -> "Your photo"
         PersonalServeKind.EXACT -> null
         PersonalServeKind.STOCK_QUIET -> null
     }

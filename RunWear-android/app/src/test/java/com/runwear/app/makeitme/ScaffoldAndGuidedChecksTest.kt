@@ -15,7 +15,7 @@ class ScaffoldRenderPolicyTest {
             PersonalLookStatus.Making, serveKindRaw = "scaffold", found = true
         )
         assertEquals(PersonalServeKind.SCAFFOLD, kind)
-        assertEquals("Your photo — made for close-by weather", ScaffoldRenderPolicy.homeBadge(kind))
+        assertEquals("Your photo", ScaffoldRenderPolicy.homeBadge(kind))
         val exact = ScaffoldRenderPolicy.kindFor(
             PersonalLookStatus.Ready, serveKindRaw = "exact", found = true
         )

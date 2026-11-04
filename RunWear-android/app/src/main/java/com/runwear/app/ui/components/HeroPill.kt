@@ -34,15 +34,17 @@ import com.runwear.app.makeitme.ScaffoldRenderPolicy
  *  (a) MAKING — a personal photo is generating for the cell in view:
  *      "Making this you…" with a spinner, over the fallback photo
  *      (WS-A(1) guarantees a photo is under it wherever one is
- *      servable).
+ *      servable). UNCHANGED by the Nov 4 design delta (approved as
+ *      excellent).
  *  (b) SCAFFOLD — the user's own banked photo served for close-by
- *      weather: the existing honest badge line, folded into this
- *      component (ScaffoldRenderPolicy.homeBadge).
+ *      weather: the Make It Me script mark + "Your photo" — NOTHING
+ *      MORE (GEN-3 DESIGN DELTA, Sol's Nov 4 mockup review: the
+ *      "made for close-by weather" line is OUT, found confusing).
  *  (c) EXACT_FREE — the exact personal photo is displayed, free
- *      tier: the look count ("1 of 5") plus a "Get unlimited" action
- *      that opens the Premium paywall.
+ *      tier: the script mark + the look count ("1 of 5 looks") plus
+ *      a "Get unlimited" action that opens the Premium paywall.
  *  (d) PREMIUM — the exact personal photo is displayed, subscribed:
- *      the pill carries Premium status.
+ *      the script mark + "Premium" + a lock glyph.
  *
  * A stock serve carries NO pill (the design's §9 silence stands),
  * and neither does a failed look (its durable line + retry live in
@@ -55,7 +57,11 @@ data class HeroPillContent(
     val text: String,
     /** The tappable trailing action (EXACT_FREE's "Get unlimited"). */
     val actionText: String? = null,
-    val showSpinner: Boolean = false
+    val showSpinner: Boolean = false,
+    /** GEN-3 DESIGN DELTA: the Make It Me script mark leads states (b)(c)(d). */
+    val showScriptMark: Boolean = false,
+    /** GEN-3 DESIGN DELTA: the lock glyph trails the PREMIUM state. */
+    val showLock: Boolean = false
 )
 
 object HeroPillPolicy {
@@ -81,23 +87,27 @@ object HeroPillPolicy {
         }
         if (!heroIsPersonal) return null
         return when (serveKind) {
-            // (b) Scaffold serve: the folded-in RW-26 badge.
+            // (b) Scaffold serve: script mark + "Your photo", nothing more.
             PersonalServeKind.SCAFFOLD -> HeroPillContent(
                 kind = HeroPillKind.SCAFFOLD,
                 text = ScaffoldRenderPolicy.homeBadge(PersonalServeKind.SCAFFOLD)
-                    ?: MakeItMeStrings.HERO_PILL_SCAFFOLD
+                    ?: MakeItMeStrings.HERO_PILL_SCAFFOLD,
+                showScriptMark = true
             )
             PersonalServeKind.EXACT -> when (mode) {
-                // (d) Subscribed: Premium status.
+                // (d) Subscribed: script mark + Premium status + lock glyph.
                 MakeItMeMode.SUBSCRIBED -> HeroPillContent(
                     kind = HeroPillKind.PREMIUM,
-                    text = MakeItMeStrings.HERO_PILL_PREMIUM
+                    text = MakeItMeStrings.HERO_PILL_PREMIUM,
+                    showScriptMark = true,
+                    showLock = true
                 )
-                // (c) Free tier: the real look count + the door.
+                // (c) Free tier: script mark + the real look count + the door.
                 MakeItMeMode.FREE -> HeroPillContent(
                     kind = HeroPillKind.EXACT_FREE,
                     text = MakeItMeStrings.heroPillLookCount(freeGenerationsUsed),
-                    actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED
+                    actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED,
+                    showScriptMark = true
                 )
                 MakeItMeMode.STOCK -> null
             }
@@ -110,7 +120,9 @@ object HeroPillPolicy {
 /**
  * The pill's rendering: the same quiet dark-translucent capsule the
  * scaffold badge used (black 45%, PhotoInk text), extended with the
- * optional spinner and the optional trailing action.
+ * optional spinner, the optional Make It Me script mark (Great
+ * Vibes, states (b)(c)(d) per the Nov 4 design delta), the optional
+ * trailing action, and the PREMIUM lock glyph.
  */
 @Composable
 fun HeroPill(
@@ -135,11 +147,29 @@ fun HeroPill(
                 )
                 Spacer(Modifier.width(6.dp))
             }
+            if (content.showScriptMark) {
+                Text(
+                    text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
+                    fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+                    fontSize = 15.sp,
+                    color = com.runwear.app.ui.theme.PhotoInk
+                )
+                Spacer(Modifier.width(7.dp))
+            }
             Text(
                 text = content.text,
                 fontSize = 12.sp,
                 color = com.runwear.app.ui.theme.PhotoInk
             )
+            if (content.showLock) {
+                Spacer(Modifier.width(5.dp))
+                androidx.compose.material3.Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = com.runwear.app.ui.theme.PhotoInk,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
             if (content.actionText != null) {
                 Spacer(Modifier.width(8.dp))
                 Text(

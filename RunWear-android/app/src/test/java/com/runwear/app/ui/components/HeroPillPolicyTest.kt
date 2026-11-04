@@ -32,6 +32,10 @@ class HeroPillPolicyTest {
         assertEquals(MakeItMeStrings.HERO_PILL_MAKING, pill?.text)
         assertTrue(pill?.showSpinner == true)
         assertNull(pill?.actionText)
+        // The Nov 4 design delta leaves (a) untouched: no script
+        // mark, no lock in the generating state.
+        assertTrue(pill?.showScriptMark == false)
+        assertTrue(pill?.showLock == false)
     }
 
     @Test
@@ -50,7 +54,10 @@ class HeroPillPolicyTest {
     }
 
     @Test
-    fun `a scaffold serve carries the folded-in scaffold badge line`() {
+    fun `a scaffold serve carries the script mark and Your photo - nothing more`() {
+        // GEN-3 DESIGN DELTA (Sol, Nov 4): state (b) is the script
+        // mark + "Your photo" — the "made for close-by weather"
+        // line is OUT.
         val pill = HeroPillPolicy.resolve(
             lookStatus = PersonalLookStatus.Ready,
             serveKind = PersonalServeKind.SCAFFOLD,
@@ -59,7 +66,10 @@ class HeroPillPolicyTest {
             freeGenerationsUsed = 1
         )
         assertEquals(HeroPillKind.SCAFFOLD, pill?.kind)
+        assertEquals("Your photo", pill?.text)
         assertEquals(MakeItMeStrings.HERO_PILL_SCAFFOLD, pill?.text)
+        assertTrue(pill?.showScriptMark == true)
+        assertTrue(pill?.showLock == false)
         assertNull(pill?.actionText)
     }
 
@@ -73,8 +83,12 @@ class HeroPillPolicyTest {
             freeGenerationsUsed = 1
         )
         assertEquals(HeroPillKind.EXACT_FREE, pill?.kind)
-        assertEquals("1 of 5", pill?.text)
+        // GEN-3 DESIGN DELTA (Sol, Nov 4): "looks" wording per the
+        // approved mock, and the script mark leads the state.
+        assertEquals("1 of 5 looks", pill?.text)
         assertEquals(MakeItMeStrings.HERO_PILL_GET_UNLIMITED, pill?.actionText)
+        assertTrue(pill?.showScriptMark == true)
+        assertTrue(pill?.showLock == false)
     }
 
     @Test
@@ -89,6 +103,9 @@ class HeroPillPolicyTest {
         assertEquals(HeroPillKind.PREMIUM, pill?.kind)
         assertEquals(MakeItMeStrings.HERO_PILL_PREMIUM, pill?.text)
         assertNull(pill?.actionText)
+        // GEN-3 DESIGN DELTA (Sol, Nov 4): script mark + lock glyph.
+        assertTrue(pill?.showScriptMark == true)
+        assertTrue(pill?.showLock == true)
     }
 
     @Test
@@ -149,7 +166,7 @@ class HeroPillPolicyTest {
             freeGenerationsUsed = 1
         )
         assertEquals(HeroPillKind.EXACT_FREE, landing?.kind)
-        assertEquals("1 of 5", landing?.text)
+        assertEquals("1 of 5 looks", landing?.text)
     }
 
     @Test
