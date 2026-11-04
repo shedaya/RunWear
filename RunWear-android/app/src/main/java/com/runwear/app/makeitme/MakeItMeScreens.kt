@@ -341,6 +341,38 @@ fun MakeItMeUploadFlow(
     onExitAsStock: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    MakeItMeUploadFlow(
+        recordConsent = { g, onResult -> viewModel.recordConsent(g, onResult) },
+        submitPhotos = { photos, rep, cell, onResult ->
+            viewModel.submitPhotos(photos, rep, cell, onResult)
+        },
+        gender = gender,
+        replace = replace,
+        todaysCell = todaysCell,
+        onFinished = onFinished,
+        onExitAsStock = onExitAsStock,
+        modifier = modifier
+    )
+}
+
+/**
+ * GEN-2 A1 (W-2): the upload flow's implementation, with its two
+ * view-model calls carried as function seams so the gate can drive
+ * the REAL flow (consent -> photos, Back between them) in tests
+ * without a network or a RevenueCat init. Production callers use
+ * the view-model overload above; behavior is identical.
+ */
+@Composable
+internal fun MakeItMeUploadFlow(
+    recordConsent: (String, (Boolean) -> Unit) -> Unit,
+    submitPhotos: (List<ByteArray>, Boolean, Pair<String, List<String>>?, (Boolean) -> Unit) -> Unit,
+    gender: String,
+    replace: Boolean,
+    todaysCell: Pair<String, List<String>>?,
+    onFinished: () -> Unit,
+    onExitAsStock: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     var step by remember { mutableStateOf(UploadStep.CONSENT) }
     // WS-5 (F-2): system Back is the flow's own — step back, then
@@ -475,6 +507,23 @@ fun MakeItMeUploadFlow(
             }
         }
 
+        // GEN-2 A1 (W-2, P0) — THE OVERLAP MECHANISM, diagnosed:
+        // AnimatedContent's transition layout places EVERY root
+        // child of its content lambda at the same origin (it is a
+        // single-content transition container, like the onboarding
+        // host, whose branches each emit ONE root composable).
+        // This flow's branches emitted their whole layout as
+        // top-level siblings — title, body, attestation row,
+        // Continue, Not now — so every element was placed on top
+        // of the first: the title rendered over the first
+        // paragraph, the attestation was buried under both, and
+        // Continue sat underneath the text stack, unreachable.
+        // That is the garbled, dead-end consent sheet Sol recorded
+        // on Nov 4 in both modes. The fix is structural: each
+        // branch now emits exactly ONE root — a Column carrying
+        // the step's layout — so the transition container stacks
+        // steps, never the elements within a step.
+        //
         // WS-10 (§1.4): the flow's steps advance with the same M3
         // shared-axis horizontal slide + fade as onboarding's own
         // steps — consent → capture is a step transition, not a cut.
@@ -503,6 +552,7 @@ fun MakeItMeUploadFlow(
         ) { animatedStep ->
         when (animatedStep) {
             UploadStep.CONSENT -> {
+              Column {
                 Text(
                     text = MakeItMeStrings.C1A_CONSENT_TITLE,
                     fontFamily = FontFamily.Default,
@@ -541,7 +591,7 @@ fun MakeItMeUploadFlow(
                     onClick = {
                         working = true
                         errorText = null
-                        viewModel.recordConsent(gender) { ok ->
+                        recordConsent(gender) { ok ->
                             working = false
                             if (ok) {
                                 step = UploadStep.PHOTOS
@@ -578,9 +628,11 @@ fun MakeItMeUploadFlow(
                 ) {
                     Text(MakeItMeStrings.C1E_NOT_NOW, color = RunWearColors.TextSecondary)
                 }
+              }
             }
 
             UploadStep.PHOTOS, UploadStep.SUBMITTING -> {
+              Column {
                 Text(
                     text = MakeItMeStrings.C2A_CAPTURE_TITLE,
                     fontFamily = FontFamily.Default,
@@ -700,10 +752,8 @@ fun MakeItMeUploadFlow(
                     onClick = {
                         step = UploadStep.SUBMITTING
                         errorText = null
-                        viewModel.submitPhotos(
-                            photos = accepted.map { it.jpegBytes!! },
-                            replace = replace,
-                            todaysCell = todaysCell
+                        submitPhotos(
+                            accepted.map { it.jpegBytes!! }, replace, todaysCell
                         ) { ok ->
                             if (ok) {
                                 // RW-16.15: confirm the save on
@@ -739,6 +789,7 @@ fun MakeItMeUploadFlow(
                 }
             }
 
+              }
             UploadStep.SAVED -> {
                 // RW-16.15 save confirmation (spec C2J): the
                 // explicit "it saved," held for the beat by the
@@ -937,6 +988,27 @@ fun MakeItMePhotosScreen(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    MakeItMePhotosScreen(
+        loadReferenceUrls = { onResult -> viewModel.loadReferenceUrls(onResult) },
+        onReplaceClick = onReplaceClick,
+        onDismiss = onDismiss,
+        modifier = modifier
+    )
+}
+
+/**
+ * GEN-2 A1 (F-2): the Your Photos implementation, with its one
+ * view-model call carried as a function seam so the gate can host
+ * the REAL screen in its production Dialog pattern in tests
+ * without a network. Production callers use the overload above.
+ */
+@Composable
+internal fun MakeItMePhotosScreen(
+    loadReferenceUrls: ((List<String>) -> Unit) -> Unit,
+    onReplaceClick: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     var urls by remember { mutableStateOf<List<String>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
     // RW-16.15: bumping the token re-runs the load — the tile retry
@@ -951,7 +1023,7 @@ fun MakeItMePhotosScreen(
     var loadFailed by remember { mutableStateOf(false) }
     LaunchedEffect(loadToken) {
         loadFailed = false
-        viewModel.loadReferenceUrls { result ->
+        loadReferenceUrls { result ->
             urls = result
             loaded = true
         }
