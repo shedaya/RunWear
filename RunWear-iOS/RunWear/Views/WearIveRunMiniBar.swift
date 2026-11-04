@@ -151,6 +151,13 @@ final class WearIveRunCollectionModel: ObservableObject {
         store.todaysEntry(placeName: placeName, today: today)
     }
 
+    /// The dock's entry (W-15): today's entry by date, whichever
+    /// place it was recorded at — the entry the element presents
+    /// and narrates, independent of the place being viewed.
+    func todaysEntry(today: Date = Date()) -> WearIveRunEntry? {
+        store.todaysEntry(today: today)
+    }
+
     /// Record the day's settled version. The store always takes
     /// the settle (the saved entry is the day's LAST settled
     /// version); what the classification decides is only whether
@@ -194,6 +201,168 @@ final class WearIveRunCollectionModel: ObservableObject {
     }
 }
 
+// MARK: - Morph mathematics (motion decision, 2026-11-04)
+//
+// The MINI ⇄ EXPANDED transition is ONE continuous morph: a
+// single `expansionProgress` (0 = MINI, 1 = EXPANDED) drives
+// height, corner radius, background tint opacity, and expanded
+// content opacity together — there are no per-property
+// animations to desynchronize (decision §2, guardrail §7.6).
+// The background is the settled iOS treatment: the tint layer
+// over `.regularMaterial`; the morph animates the TINT layer's
+// opacity (85% light / 82% dark → 1.00) and never the material's
+// blur. The pure functions here are what the unit tests pin;
+// the view only feeds them the one progress value.
+//
+// Driver springs (decision §4, iOS column):
+// - cue entry: .spring(response 0.46, dampingFraction 0.80) —
+//   ≈1.5% overshoot, the ONLY overshoot in the app, inside the
+//   ≤3% / ≤3 pt cap by construction; the pulse + soft haptic
+//   fire at the SETTLE (first frame progress reaches 1.00),
+//   never at the driver;
+// - tap: .spring(response 0.42, dampingFraction 0.92) — no
+//   visible overshoot;
+// - end-of-scroll: the .smooth case — critically damped,
+//   response ≈0.34 (expressed as the equivalent spring, since
+//   SwiftUI's .smooth preset takes no response parameter);
+// - collapse: .spring(response 0.34, dampingFraction 1.0).
+// No bouncy or snappy presets anywhere on this element.
+// Duration gates (decision §4): cue ≤500 ms, tap ≤450 ms,
+// scroll ≤340 ms, collapse ≤320 ms. Reduced Motion replaces
+// the morph with a ≤150 ms crossfade: no overshoot, no pulse,
+// haptic retained, chevron swaps at the midpoint.
+
+enum WearIveRunMorphDriver: Equatable {
+    case cue
+    case tap
+    case scroll
+    case collapse
+    case reducedMotion
+}
+
+enum WearIveRunMorph {
+    /// Spring response per driver (decision §4).
+    static func springResponse(for driver: WearIveRunMorphDriver) -> Double {
+        switch driver {
+        case .cue: return 0.46
+        case .tap: return 0.42
+        case .scroll, .collapse: return 0.34
+        case .reducedMotion: return 0
+        }
+    }
+
+    /// Spring damping per driver. Overshoot exists ONLY where
+    /// damping < 1 with intent — the cue, and only the cue
+    /// (tap's 0.92 is the decision's "hair of liveliness" with
+    /// no visible settle past target).
+    static func springDampingFraction(for driver: WearIveRunMorphDriver) -> Double {
+        switch driver {
+        case .cue: return 0.80
+        case .tap: return 0.92
+        case .scroll, .collapse: return 1.0
+        case .reducedMotion: return 1.0
+        }
+    }
+
+    /// The one driver permitted any overshoot (decision §3).
+    static func permitsOvershoot(_ driver: WearIveRunMorphDriver) -> Bool {
+        driver == .cue
+    }
+
+    /// Duration gates, seconds (decision §4): a transition
+    /// still visibly moving outside its window is a defect.
+    static func durationGateSeconds(for driver: WearIveRunMorphDriver) -> Double {
+        switch driver {
+        case .cue: return 0.50
+        case .tap: return 0.45
+        case .scroll: return 0.34
+        case .collapse: return 0.32
+        case .reducedMotion: return 0.15
+        }
+    }
+
+    /// The Reduced Motion crossfade's length (≤150 ms, §6).
+    static let reducedMotionDurationSeconds: Double = 0.15
+
+    /// The animation a driver runs, built from the pinned
+    /// constants above — one animation of the one progress
+    /// value, never separate per-property animations.
+    static func animation(for driver: WearIveRunMorphDriver) -> Animation {
+        switch driver {
+        case .reducedMotion:
+            return .easeInOut(duration: reducedMotionDurationSeconds)
+        case .cue, .tap, .scroll, .collapse:
+            return .spring(
+                response: springResponse(for: driver),
+                dampingFraction: springDampingFraction(for: driver)
+            )
+        }
+    }
+
+    private static func clamped(_ progress: Double) -> Double {
+        min(1, max(0, progress))
+    }
+
+    /// Background tint opacity: the MINI tint (85% light /
+    /// 82% dark, the BackgroundPolicy values) → 1.00, linear
+    /// in progress, clamped at 1.00 — so the cue's overshoot
+    /// expresses itself in height alone, never in opacity.
+    static func tintOpacity(progress: Double, isDark: Bool) -> Double {
+        let mini = isDark ? 0.82 : 0.85
+        return mini + (1 - mini) * clamped(progress)
+    }
+
+    /// Corner radius tokens. The iOS dock is a full-width strip
+    /// in BOTH states (it hosts in the safe-area inset, not as a
+    /// floating card), so its radius token is 0 at both ends and
+    /// the interpolation is constant — the decision's stated
+    /// constant case ("linear in progress; constant if the
+    /// tokens are equal"). The function still derives the
+    /// radius from the one progress value, so a future token
+    /// change animates with the same morph.
+    static let miniCornerRadius: Double = 0
+    static let expandedCornerRadius: Double = 0
+    static func cornerRadius(progress: Double) -> Double {
+        miniCornerRadius + (expandedCornerRadius - miniCornerRadius) * clamped(progress)
+    }
+
+    /// Height: linear in progress between the two MEASURED
+    /// content heights (never hardcoded in the view).
+    static func height(mini: Double, expanded: Double, progress: Double) -> Double {
+        mini + (expanded - mini) * clamped(progress)
+    }
+
+    /// Expanded-only content opacity: windowed — ramps over
+    /// progress 0.45 → 1.00 on expansion (and, by the same
+    /// function in reverse, out over 1.00 → 0.55 of the collapse
+    /// travel), so the closing card never displays compressed
+    /// text and the lines are fully in before the settle.
+    static func expandedContentOpacity(progress: Double) -> Double {
+        clamped((clamped(progress) - 0.45) / 0.55)
+    }
+
+    /// Expanded-only content drift: ≤4 pt upward as it fades
+    /// in (translate +4 → 0 across the opacity window).
+    static func expandedContentOffset(progress: Double) -> Double {
+        4 * (1 - expandedContentOpacity(progress: progress))
+    }
+
+    /// The chevron's rotation: ONE glyph rotating 180° with
+    /// progress — continuous, no icon swap. Under Reduced
+    /// Motion there is no rotation: the caller swaps the
+    /// glyph's orientation at the crossfade midpoint, which
+    /// this function expresses as the settled orientation for
+    /// the target state (`settledFullExpression`).
+    static func chevronRotationDegrees(
+        progress: Double,
+        reduceMotion: Bool,
+        settledFullExpression: Bool
+    ) -> Double {
+        if reduceMotion { return settledFullExpression ? 180 : 0 }
+        return 180 * clamped(progress)
+    }
+}
+
 // MARK: - View
 
 struct WearIveRunMiniBarView: View {
@@ -233,56 +402,312 @@ struct WearIveRunMiniBarView: View {
     @State private var cueTimerGeneration = 0
     /// Guards the compose-time reconciliation so it runs once.
     @State private var didReconcileInitialState = false
+    /// THE morph value (motion decision §2): 0 = MINI,
+    /// 1 = EXPANDED/CUE. Every visual property of the bar is a
+    /// pure function of this one value via `WearIveRunMorph`.
+    @State private var expansionProgress: Double = 0
+    /// Measured natural heights of the mini and full-expression
+    /// contents (the morph's height endpoints — measured, never
+    /// hardcoded, decision §2).
+    @State private var miniHeight: Double = 0
+    @State private var expandedHeight: Double = 0
+    /// Generation of the in-flight morph: bumped on every new
+    /// driver, so a superseded animation's completion can never
+    /// fire a stale settle, latch release, or trash.
+    @State private var morphGeneration = 0
+    /// The morph generation whose completion owes the cue's
+    /// pulse + soft haptic — they fire at the SETTLE, not at
+    /// the driver (decision §2 / guardrail §7.8). Nil when no
+    /// settle is owed; cancelled with the cue timer if the user
+    /// touches the element first.
+    @State private var pendingCueSettleGeneration: Int?
+    /// Scroll-latch (§5.3): the generation of an in-flight
+    /// scroll-driven transition. While it stands, the opposite
+    /// scroll edge is QUEUED, not started — one move per
+    /// threshold crossing, never a breathing card.
+    @State private var scrollLatchGeneration: Int?
+    @State private var queuedScrollEvent: WearIveRunElementEvent?
+    /// Trash collapse (§1.2, unchanged): 1 → 0 over 250 ms,
+    /// height shrinking while fading; the entry is deleted only
+    /// when the collapse completes, so the dock's space is
+    /// released in the same animation.
+    @State private var trashScale: Double = 1
+    /// Reduced Motion chevron: flipped at the crossfade
+    /// midpoint instead of rotating (§6).
+    @State private var reducedChevronFull = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if state != .preAdd {
-            Group {
-                switch machine.state {
-                case .mini:
-                    miniBar
-                case .expanded, .cue:
-                    expandedBar
-                case .absent:
-                    // The parent stops composing the dock when the
-                    // entry goes away; an in-flight trash lands
-                    // here for its collapse animation.
-                    EmptyView()
+            morphBar
+                .scaleEffect(reduceMotion ? 1 : pulseScale)
+                .shadow(
+                    color: AppTheme.pinePayload.opacity(isPulsing && !reduceMotion ? 0.35 : 0),
+                    radius: 12
+                )
+                .offset(y: reduceMotion ? 0 : riseOffset)
+                // D-11: the element dims with the home backdrop while
+                // any sheet is up, and does not answer touches through
+                // the backdrop.
+                .opacity(WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet))
+                .allowsHitTesting(WearIveRunElementDimming.isInteractive(sheetPresented: isDimmedBySheet))
+                // §1.7: the cue's soft haptic and the trash's light
+                // haptic are the ONLY sounds this surface makes.
+                // Expand/collapse and scrolling are silent.
+                .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
+                .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
+                .onAppear { reconcileInitialState() }
+                .onChange(of: cueCount) { oldValue, newValue in
+                    guard newValue > oldValue else { return }
+                    // A cue-worthy landing: creation when the machine
+                    // holds no entry, a user-caused update otherwise.
+                    send(machine.state == .absent ? .entryCreated : .userCausedUpdate)
                 }
-            }
-            .scaleEffect(reduceMotion ? 1 : pulseScale)
-            .shadow(
-                color: AppTheme.pinePayload.opacity(isPulsing && !reduceMotion ? 0.35 : 0),
-                radius: 12
-            )
-            .offset(y: reduceMotion ? 0 : riseOffset)
-            .animation(.smooth, value: machine.state)
-            // D-11: the element dims with the home backdrop while
-            // any sheet is up, and does not answer touches through
-            // the backdrop.
-            .opacity(WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet))
-            .allowsHitTesting(WearIveRunElementDimming.isInteractive(sheetPresented: isDimmedBySheet))
-            // §1.7: the cue's soft haptic and the trash's light
-            // haptic are the ONLY sounds this surface makes.
-            // Expand/collapse and scrolling are silent.
-            .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
-            .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
-            .onAppear { reconcileInitialState() }
-            .onChange(of: cueCount) { oldValue, newValue in
-                guard newValue > oldValue else { return }
-                // A cue-worthy landing: creation when the machine
-                // holds no entry, a user-caused update otherwise.
-                send(machine.state == .absent ? .entryCreated : .userCausedUpdate)
-            }
-            .onChange(of: isAtEndOfScroll) { _, atEnd in
-                // BOTH edges — the symmetric rule that retires the
-                // latch. In CUE and ABSENT these are machine
-                // no-ops by table, so a scroll can never disturb
-                // a cue.
-                send(atEnd ? .scrolledToEnd : .scrolledAwayFromEnd)
+                .onChange(of: isAtEndOfScroll) { _, atEnd in
+                    // BOTH edges — the symmetric rule that retires the
+                    // latch. In CUE and ABSENT these are machine
+                    // no-ops by table, so a scroll can never disturb
+                    // a cue.
+                    send(atEnd ? .scrolledToEnd : .scrolledAwayFromEnd)
+                }
+                .onChange(of: isDimmedBySheet) { _, dimmed in
+                    // §5.4: a sheet presenting mid-transition wins —
+                    // the morph finishes instantly to its target
+                    // state underneath the dim.
+                    if dimmed { finishMorphInstantly() }
+                }
+        }
+    }
+
+    // MARK: The morph bar (one view, one progress value)
+
+    /// The dock's single rendered form. Two hidden measurers
+    /// (the mini content and the full-expression content, at
+    /// natural size) supply the height endpoints; the visible
+    /// content is the union anatomy — the header (wordmark +
+    /// narration + controls) is present in both states and
+    /// never moves or fades, and the expanded-only block below
+    /// it fades/drifts on the windowed ramp. The container's
+    /// height, background tint opacity, and corner radius are
+    /// all functions of `expansionProgress`.
+    private var morphBar: some View {
+        let targetHeight: Double? = (miniHeight > 0 && expandedHeight > 0)
+            ? WearIveRunMorph.height(
+                mini: miniHeight, expanded: expandedHeight,
+                progress: expansionProgress
+              ) * trashScale
+            : nil
+        let visible = machine.state != .absent || trashScale < 1
+        return ZStack(alignment: .top) {
+            // Measurers: natural-size copies, never painted,
+            // never hit-tested. They exist so the morph's height
+            // endpoints are the contents' own measured heights
+            // at the user's current type size.
+            morphContent(showsExpandedBlock: false, progress: 0)
+                .fixedSize(horizontal: false, vertical: true)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .onGeometryChange(for: Double.self) { proxy in
+                    proxy.size.height
+                } action: { _, height in
+                    if height > 0 { miniHeight = height }
+                }
+            morphContent(showsExpandedBlock: true, progress: 1)
+                .fixedSize(horizontal: false, vertical: true)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .onGeometryChange(for: Double.self) { proxy in
+                    proxy.size.height
+                } action: { _, height in
+                    if height > 0 { expandedHeight = height }
+                }
+            if visible {
+                morphContent(showsExpandedBlock: true, progress: expansionProgress)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .opacity(trashScale)
             }
         }
+        .frame(height: visible ? targetHeight.map { CGFloat($0) } : 0)
+        .background {
+            // The tint layer over .regularMaterial: the morph
+            // animates the TINT's opacity (progress-driven);
+            // the material itself is never animated (decision
+            // §4 — no blur animation).
+            ZStack {
+                Rectangle().fill(.regularMaterial)
+                Rectangle().fill(AppTheme.sheet.opacity(
+                    WearIveRunMorph.tintOpacity(
+                        progress: expansionProgress,
+                        isDark: colorScheme == .dark
+                    )
+                ))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: expansionProgress)))
+    }
+
+    /// The bar's content at a given morph progress. The mini
+    /// measurer omits the expanded block from its LAYOUT (an
+    /// opacity-0 block would still measure at full height and
+    /// collapse the morph's travel to zero); the visible
+    /// content always carries the block, clipped by the
+    /// container's progress-driven height.
+    @ViewBuilder
+    private func morphContent(showsExpandedBlock: Bool, progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            headerRow
+            if showsExpandedBlock {
+                expandedBlock(progress: progress)
+            }
+        }
+    }
+
+    /// The continuity anchor (decision §2): wordmark, narration,
+    /// and both controls — present in both states, never moving,
+    /// never fading, never scaling. The narration is the SAME
+    /// line in both states, so no mid-morph text swap is needed.
+    private var headerRow: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                wordmarkView
+                if let line = WearIveRunNarration.line(for: state) {
+                    // One line BY DESIGN (frame 2): the line is
+                    // short by construction (WS-4) — wordmark +
+                    // verb + a simple place + "Now", or a single
+                    // kit item — so the limit never amputates a
+                    // raw geocode string at a comma (D-09).
+                    narrationText(line)
+                        .font(.appFootnote)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            barControls
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture { send(.tapMiniBarBody) }
+    }
+
+    /// The expanded-only block: the entry's thumbnail + its
+    /// frame-3 line, and the explicit jump into the full
+    /// collection (W-1: the expanded card must SHOW the way in —
+    /// a labelled door with a chevron, not a bare card tap).
+    /// It fades in on the windowed ramp (progress 0.45 → 1.00)
+    /// with a ≤4 pt upward drift; on collapse it is gone before
+    /// the card has visibly shrunk. The thumbnail renders ONLY
+    /// once its image has decoded — no placeholder graphic and
+    /// no broken-image frame ever paints (D-12).
+    private func expandedBlock(progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                AsyncImage(url: entry.flatMap { URL(string: $0.heroImageReference) }) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .clipped()
+                .cornerRadius(10)
+
+                if let entry {
+                    // No line limit, by design (WS-4): the
+                    // expanded subtitle wraps without limit —
+                    // a long simple place name wraps whole
+                    // rather than truncating.
+                    Text(WearIveRunNarration.expandedLine(
+                        for: entry,
+                        formattedFeelsLike: formattedFeelsLike
+                    ))
+                    .font(.appFootnote)
+                    .foregroundColor(AppTheme.inkSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            Button(action: onOpenCollection) {
+                HStack(spacing: 6) {
+                    Text("Open the collection")
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(AppTheme.pinePayload)
+                    Image(systemName: "chevron.right")
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(AppTheme.pinePayload)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open the full Wear I've Run collection")
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
+        .opacity(WearIveRunMorph.expandedContentOpacity(progress: progress))
+        .offset(y: WearIveRunMorph.expandedContentOffset(progress: progress))
+    }
+
+    /// The wordmark in the genuine Great Vibes (RW-26: the Snell
+    /// Roundhand fallback call site is retired — the font is
+    /// bundled and `Font.greatVibes` resolves it).
+    private var wordmarkView: some View {
+        Text(WearIveRunMiniBarModel.wordmark)
+            .font(.greatVibes(size: 20))
+            .foregroundColor(AppTheme.inkPrimary)
+    }
+
+    /// Two tiny grayed controls at the right end: the toggle and
+    /// trash. The SAME two controls, with the same semantics, in
+    /// MINI, EXPANDED, and CUE (D-10). The toggle is ONE chevron
+    /// glyph that ROTATES 180° with the morph's progress
+    /// (decision §2) — no icon swap, no pop; under Reduced
+    /// Motion it swaps orientation at the crossfade midpoint.
+    /// Trash is present in both states, constant, unanimated.
+    private var barControls: some View {
+        HStack(spacing: 4) {
+            Button {
+                send(.tapToggleControl)
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkMuted)
+                    .rotationEffect(.degrees(WearIveRunMorph.chevronRotationDegrees(
+                        progress: expansionProgress,
+                        reduceMotion: reduceMotion,
+                        settledFullExpression: reducedChevronFull
+                    )))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(machine.toggleIsExpand ? "Expand" : "Collapse")
+            Button {
+                send(.tapTrash)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkMuted)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove today's entry")
+        }
+    }
+
+    private func narrationText(_ line: String) -> Text {
+        if case .updated(let payload) = state {
+            return Text("Update to ").foregroundColor(AppTheme.inkSecondary)
+                + Text(payload).foregroundColor(AppTheme.pinePayload)
+        }
+        if case .added(let place, let moment) = state {
+            // The payload "{Place}, {Moment}" carries the pine.
+            return Text("Added ").foregroundColor(AppTheme.inkSecondary)
+                + Text("\(place), \(moment)").foregroundColor(AppTheme.pinePayload)
+        }
+        return Text(line).foregroundColor(AppTheme.inkSecondary)
     }
 
     // MARK: Machine plumbing
@@ -299,30 +724,203 @@ struct WearIveRunMiniBarView: View {
         }
     }
 
-    /// Feed one event to the machine and execute its effects
-    /// exactly once.
-    private func send(_ event: WearIveRunElementEvent) {
-        let wasInCue = machine.state == .cue
-        let effects = machine.send(event)
-        if machine.state == .cue && !wasInCue {
-            // Entering CUE: rise 12 pt into place (§1.2, `.smooth`).
-            riseOffset = WearIveRunElementMachine.cueRisePoints
-            withAnimation(.smooth) { riseOffset = 0 }
+    /// Which driver a transition runs under (decision §3's
+    /// table), from the event and the state it lands in.
+    private func morphDriver(
+        for event: WearIveRunElementEvent,
+        landingIn newState: WearIveRunElementState
+    ) -> WearIveRunMorphDriver {
+        if reduceMotion { return .reducedMotion }
+        switch (event, newState) {
+        case (.entryCreated, .cue), (.userCausedUpdate, .cue):
+            return .cue
+        case (.scrolledToEnd, .expanded):
+            return .scroll
+        case (.tapMiniBarBody, .expanded), (.tapToggleControl, .expanded):
+            return .tap
+        default:
+            // cueTimedOut, the toggle/scroll collapses, rollover.
+            return .collapse
         }
+    }
+
+    /// Feed one event to the machine and execute its effects
+    /// exactly once. Presentation transitions run the morph:
+    /// the machine decides the TARGET state; this function
+    /// animates the one progress value toward it under the
+    /// driver's spring.
+    private func send(_ event: WearIveRunElementEvent) {
+        // Scroll latch (§5.3): while a scroll-driven morph is
+        // in flight, the opposite edge queues — it may start
+        // only after the in-flight transition completes and
+        // the threshold has been crossed (the queued event IS
+        // that crossing).
+        if (event == .scrolledToEnd || event == .scrolledAwayFromEnd),
+           scrollLatchGeneration != nil {
+            queuedScrollEvent = event
+            return
+        }
+        let wasInCue = machine.state == .cue
+        let previousState = machine.state
+        let effects = machine.send(event)
+        let enteringCue = machine.state == .cue && !wasInCue
+        var deleteAfterCollapse = false
         for effect in effects {
             switch effect {
             case .fireCuePulseAndSoftHaptic:
-                cueHapticNonce += 1
-                runCuePulse()
+                // NOT fired here: the pulse + soft haptic belong
+                // to the morph's SETTLE (decision §2). They are
+                // scheduled in `animateMorph` and fire when the
+                // progress first reaches its target — or never,
+                // if the user touches the element first (the
+                // touch's send cancels the pending settle below).
+                break
             case .startCueTimer:
                 startCueTimer()
             case .cancelCueTimer:
                 cueTimerGeneration += 1
+                pendingCueSettleGeneration = nil
             case .deleteTodaysEntry:
-                onTrash()
+                deleteAfterCollapse = true
             case .fireTrashHaptic:
                 trashHapticNonce += 1
             }
+        }
+        if deleteAfterCollapse {
+            performTrashCollapse()
+            return
+        }
+        if machine.state != previousState {
+            // Any non-cue transition supersedes a pending cue
+            // settle (a touch during the cue cancels its pulse
+            // and haptic with its timer, decision §2).
+            if !enteringCue && machine.state != .cue {
+                pendingCueSettleGeneration = nil
+            }
+            animateMorph(
+                driver: morphDriver(for: event, landingIn: machine.state),
+                enteringCue: enteringCue,
+                scrollDriven: event == .scrolledToEnd || event == .scrolledAwayFromEnd
+            )
+        } else if enteringCue {
+            // Already at full expression re-cueing (timer
+            // restarted by the machine): the settle is now.
+            fireCueSettle()
+        }
+    }
+
+    /// Animate the ONE progress value to the machine state's
+    /// target under the driver's animation. Interruptible by
+    /// construction: a new driver bumps `morphGeneration` and
+    /// retargets from the CURRENT progress; the superseded
+    /// animation's completion is generation-guarded and does
+    /// nothing.
+    private func animateMorph(
+        driver: WearIveRunMorphDriver,
+        enteringCue: Bool,
+        scrollDriven: Bool
+    ) {
+        morphGeneration += 1
+        let generation = morphGeneration
+        let target: Double = machine.isFullExpression ? 1 : 0
+        if !scrollDriven {
+            // A non-scroll driver supersedes an in-flight scroll
+            // morph: its latch and any queued edge are stale —
+            // the user's newest intent owns the element now.
+            scrollLatchGeneration = nil
+            queuedScrollEvent = nil
+        }
+        if scrollDriven { scrollLatchGeneration = generation }
+        if enteringCue {
+            pendingCueSettleGeneration = generation
+            // The cue's 12 pt rise folds into the same gesture
+            // (decision §2): the offset starts at 12 and the
+            // same animation carries it to 0.
+            if !reduceMotion { riseOffset = WearIveRunElementMachine.cueRisePoints }
+        }
+        if reduceMotion {
+            // §6: the chevron swaps at the crossfade midpoint.
+            let full = target == 1
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + WearIveRunMorph.reducedMotionDurationSeconds / 2
+            ) {
+                guard generation == morphGeneration else { return }
+                reducedChevronFull = full
+            }
+        } else {
+            reducedChevronFull = target == 1
+        }
+        let settle = {
+            guard generation == self.morphGeneration else { return }
+            if self.scrollLatchGeneration == generation {
+                self.scrollLatchGeneration = nil
+                if let queued = self.queuedScrollEvent {
+                    self.queuedScrollEvent = nil
+                    self.send(queued)
+                }
+            }
+            if self.pendingCueSettleGeneration == generation {
+                self.pendingCueSettleGeneration = nil
+                self.fireCueSettle()
+            }
+        }
+        if expansionProgress == target && riseOffset == 0 {
+            // No travel (e.g. EXPANDED → CUE re-presentation at
+            // full height): the settle is immediate.
+            settle()
+            return
+        }
+        withAnimation(WearIveRunMorph.animation(for: driver)) {
+            expansionProgress = target
+            riseOffset = 0
+        } completion: {
+            settle()
+        }
+    }
+
+    /// A sheet presenting mid-transition wins (§5.4): the morph
+    /// finishes instantly to its target underneath the dim —
+    /// nothing animates visibly behind a sheet. A pending cue
+    /// settle owed by the interrupted animation is honoured
+    /// (the settle has, by this act, been reached).
+    private func finishMorphInstantly() {
+        let target: Double = machine.isFullExpression ? 1 : 0
+        guard expansionProgress != target else { return }
+        morphGeneration += 1
+        scrollLatchGeneration = nil
+        queuedScrollEvent = nil
+        expansionProgress = target
+        riseOffset = 0
+        reducedChevronFull = target == 1
+        if pendingCueSettleGeneration != nil {
+            pendingCueSettleGeneration = nil
+            fireCueSettle()
+        }
+    }
+
+    /// The cue's settle moment: fire the ONE pulse and the ONE
+    /// soft haptic (§1.7), together, exactly here — the first
+    /// frame the morph reaches full expression.
+    private func fireCueSettle() {
+        cueHapticNonce += 1
+        runCuePulse()
+    }
+
+    /// Trash (§1.2, unchanged by the motion decision): the
+    /// element collapses its height while fading over 250 ms;
+    /// the entry is deleted at the collapse's end, releasing
+    /// the dock's space in the same animation.
+    private func performTrashCollapse() {
+        morphGeneration += 1
+        let generation = morphGeneration
+        pendingCueSettleGeneration = nil
+        scrollLatchGeneration = nil
+        queuedScrollEvent = nil
+        withAnimation(.easeInOut(duration: WearIveRunElementMachine.trashCollapseSeconds)) {
+            trashScale = 0
+        } completion: {
+            guard generation == self.morphGeneration else { return }
+            self.onTrash()
         }
     }
 
@@ -359,152 +957,5 @@ struct WearIveRunMiniBarView: View {
             guard generation == cueTimerGeneration else { return }
             send(.cueTimedOut)
         }
-    }
-
-    // MARK: Subviews
-
-    /// The wordmark in the genuine Great Vibes (RW-26: the Snell
-    /// Roundhand fallback call site is retired — the font is
-    /// bundled and `Font.greatVibes` resolves it).
-    private var wordmarkView: some View {
-        Text(WearIveRunMiniBarModel.wordmark)
-            .font(.greatVibes(size: 20))
-            .foregroundColor(AppTheme.inkPrimary)
-    }
-
-    private var miniBar: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                wordmarkView
-                if let line = WearIveRunNarration.line(for: state) {
-                    // One line BY DESIGN (frame 2): the line is
-                    // short by construction (WS-4) — wordmark +
-                    // verb + a simple place + "Now", or a single
-                    // kit item — so the limit never amputates a
-                    // raw geocode string at a comma (D-09).
-                    narrationText(line)
-                        .font(.appFootnote)
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            barControls
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background { miniBackground }
-        .contentShape(Rectangle())
-        .onTapGesture { send(.tapMiniBarBody) }
-    }
-
-    /// Two tiny grayed controls at the right end: the toggle and
-    /// trash. The SAME two controls, with the same semantics, in
-    /// MINI, EXPANDED, and CUE (D-10): the toggle's glyph flips
-    /// with the machine's `toggleIsExpand`; trash always deletes.
-    private var barControls: some View {
-        HStack(spacing: 4) {
-            Button {
-                send(.tapToggleControl)
-            } label: {
-                Image(systemName: machine.toggleIsExpand
-                      ? "arrow.up.left.and.arrow.down.right"
-                      : "arrow.down.right.and.arrow.up.left")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.inkMuted)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(machine.toggleIsExpand ? "Expand" : "Collapse")
-            Button {
-                send(.tapTrash)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.inkMuted)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Remove today's entry")
-        }
-    }
-
-    private func narrationText(_ line: String) -> Text {
-        if case .updated(let payload) = state {
-            return Text("Update to ").foregroundColor(AppTheme.inkSecondary)
-                + Text(payload).foregroundColor(AppTheme.pinePayload)
-        }
-        if case .added(let place, let moment) = state {
-            // The payload "{Place}, {Moment}" carries the pine.
-            return Text("Added ").foregroundColor(AppTheme.inkSecondary)
-                + Text("\(place), \(moment)").foregroundColor(AppTheme.pinePayload)
-        }
-        return Text(line).foregroundColor(AppTheme.inkSecondary)
-    }
-
-    @ViewBuilder private var miniBackground: some View {
-        let style = WearIveRunBackgroundPolicy.style(
-            for: machine.state,
-            isDark: colorScheme == .dark
-        )
-        switch style {
-        case .translucentMaterial(let sheetOpacity):
-            ZStack {
-                Rectangle().fill(.regularMaterial)
-                Rectangle().fill(AppTheme.sheet.opacity(sheetOpacity))
-            }
-        case .opaqueSheet:
-            Rectangle().fill(AppTheme.sheet)
-        }
-    }
-
-    /// The full expression: opaque, the entry's thumbnail + data,
-    /// a door into the collection, and the same grayed controls.
-    /// Its text content is present from frame one; the thumbnail
-    /// renders ONLY once its image has decoded — no placeholder
-    /// graphic and no broken-image frame ever paints (D-12, the
-    /// §1.1 decode rule applied to the entry).
-    private var expandedBar: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                AsyncImage(url: entry.flatMap { URL(string: $0.heroImageReference) }) { phase in
-                    if case .success(let image) = phase {
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } else {
-                        Color.clear
-                    }
-                }
-                .frame(width: 56, height: 56)
-                .clipped()
-                .cornerRadius(10)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    wordmarkView
-                    if let entry {
-                        // No line limit, by design (WS-4): the
-                        // expanded subtitle wraps without limit —
-                        // a long simple place name wraps whole
-                        // rather than truncating.
-                        Text(WearIveRunNarration.expandedLine(
-                            for: entry,
-                            formattedFeelsLike: formattedFeelsLike
-                        ))
-                        .font(.appFootnote)
-                        .foregroundColor(AppTheme.inkSecondary)
-                    }
-                }
-                Spacer(minLength: 0)
-                barControls
-            }
-            Button(action: onOpenCollection) {
-                Text("Open the collection")
-                    .font(.appFootnote.weight(.semibold))
-                    .foregroundColor(AppTheme.pinePayload)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(16)
-        .background(AppTheme.sheet)
     }
 }

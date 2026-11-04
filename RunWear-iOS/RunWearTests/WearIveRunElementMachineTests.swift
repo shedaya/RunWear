@@ -512,3 +512,245 @@ final class WearIveRunElementMachineTests: XCTestCase {
                       "the dock must consume the seam for dimming (WS-5 owns the sheets)")
     }
 }
+
+// MARK: - W-15 regression + morph pins (GEN-2 lane I1, 2026-11-04)
+//
+// W-15: "Wear I've Run" never surfaced on iOS. The mechanism
+// these tests pin against regression, in plain language:
+// home appears MID-FETCH — the view model publishes weather
+// and a recommendation before its reverse geocode returns —
+// so the only recording triggers the home view had (appear,
+// item change) always fired while the place was still the
+// placeholder label "Loading...". The day's entry was filed
+// under that non-place (or, where an earlier session had left
+// a real entry, under its own place), and the dock then
+// looked today's entry up BY THE VIEWED PLACE — a lookup no
+// placeholder-filed entry can ever match, and no entry at a
+// different place can match either. Result: the state stayed
+// .preAdd, the dock was never composed, and the element's
+// state machine sat in ABSENT downstream of a lookup that
+// could not succeed. Android records from an effect keyed on
+// (outfit, weather, locationName, heroImageUrl) and presents
+// today's entry BY DATE. These tests pin the iOS chain to
+// the same shape: place-gated recording, re-offer on place
+// resolution, date-only presentation, settled narration.
+final class WearIveRunW15FixTests: XCTestCase {
+
+    private func entry(
+        place: String = "Kansas City, MO",
+        day: Date = Date(timeIntervalSince1970: 1_762_560_000)
+    ) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: day,
+            placeName: place,
+            feelsLikeF: 45,
+            actualF: 49,
+            condition: "Cloudy",
+            itemNames: ["Light Long Sleeve", "Light Tights"],
+            itemKeys: ["light-long-sleeve", "light-tights"],
+            heroImageReference: "hero-kc"
+        )
+    }
+
+    // MARK: (a) Creation — the place gate
+
+    func testRecordingRequiresAResolvedPlace() {
+        // No SimplePlace yet (GPS first load, geocode in
+        // flight): the recording must be refused — an entry
+        // filed under "Loading..." is an entry lost.
+        XCTAssertNil(WearIveRunHomePresentation.eligiblePlace(nil))
+        // A resolved place admits exactly its simple form.
+        XCTAssertEqual(
+            WearIveRunHomePresentation.eligiblePlace(
+                SimplePlace(city: "Kansas City", region: "Missouri")
+            ),
+            "Kansas City, MO"
+        )
+        XCTAssertEqual(
+            WearIveRunHomePresentation.eligiblePlace(
+                SimplePlace(city: "New York", region: "New York")
+            ),
+            "New York, NY"
+        )
+    }
+
+    // MARK: (a)+(b) First resolution creates; the dock presents by date
+
+    @MainActor
+    func testFirstResolutionCreatesEntryAndElementPresentsIt() {
+        let defaults = UserDefaults(suiteName: "w15-tests-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store)
+        let e = entry()
+
+        // Before the first resolution: nothing exists, no cue,
+        // and the dock's state is .preAdd — the element absent.
+        XCTAssertNil(model.todaysEntry(today: e.dayStart))
+        XCTAssertEqual(model.cueCount, 0)
+        XCTAssertEqual(
+            WearIveRunMiniBarModel.state(
+                todaysEntry: model.todaysEntry(today: e.dayStart),
+                moment: "Now", wasUpdatedThisSession: false
+            ),
+            .preAdd
+        )
+
+        // The first generation settles under its resolved place.
+        model.recordSettled(e)
+        XCTAssertEqual(model.cueCount, 1, "creation is the cue-worthy landing")
+
+        // The dock presents it BY DATE: it is found even though
+        // the place the user is now viewing is a different one —
+        // the pre-fix place-keyed lookup (kept on the store)
+        // demonstrably cannot find it from the viewed place.
+        XCTAssertEqual(model.todaysEntry(today: e.dayStart), e)
+        XCTAssertNil(store.todaysEntry(placeName: "New York, NY", today: e.dayStart))
+
+        // Element presence given the entry, with the settled
+        // narration — Android's first-frame line for this flow.
+        let state = WearIveRunMiniBarModel.state(
+            todaysEntry: model.todaysEntry(today: e.dayStart),
+            moment: "Now", wasUpdatedThisSession: model.todaysEntryWasUpdated
+        )
+        XCTAssertEqual(state, .added(place: "Kansas City, MO", moment: "Now"))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: state),
+            "Added Kansas City, MO, Now"
+        )
+    }
+
+    func testStorePresentsTodaysEntryByDateAlone() {
+        let defaults = UserDefaults(suiteName: "w15-tests-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let today = Date(timeIntervalSince1970: 1_762_560_000)
+        let yesterday = today.addingTimeInterval(-86_400)
+        store.record(entry(place: "New York, NY", day: yesterday))
+        XCTAssertNil(store.todaysEntry(today: today),
+                     "yesterday's entry never presents as today's")
+        store.record(entry(day: today))
+        XCTAssertEqual(store.todaysEntry(today: today)?.placeName, "Kansas City, MO")
+    }
+
+    // MARK: Home wiring — source pins
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    func testHomeReoffersRecordingWhenThePlaceResolves_sourcePin() throws {
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        // The re-offer triggers, mirroring Android's keyed effect.
+        XCTAssertTrue(home.contains(".onChange(of: viewModel.placeDisplayName)"),
+                      "the recording must be re-offered when the geocode lands")
+        XCTAssertTrue(home.contains(".onChange(of: viewModel.heroImageUrl)"))
+        XCTAssertTrue(home.contains(".onChange(of: viewModel.selectedWeatherSnapshot?.feelsLikeFahrenheit)"))
+        // The placeholder gate, at the recording itself.
+        XCTAssertTrue(home.contains("WearIveRunHomePresentation.eligiblePlace(viewModel.simplePlace)"),
+                      "recording must refuse an unresolved (placeholder) place")
+        // The dock is date-keyed, never viewed-place-keyed.
+        XCTAssertTrue(home.contains("collectionModel.todaysEntry()"),
+                      "the dock must present today's entry by date")
+        XCTAssertFalse(home.contains("todaysEntry(placeName: viewModel.placeDisplayName)"),
+                       "the viewed-place lookup was the W-15 presentation defect")
+    }
+
+    // MARK: Morph mathematics (motion decision, 2026-11-04)
+
+    func testMorphTintOpacityEndpointsAndMidpoint() {
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 0, isDark: false), 0.85, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 0, isDark: true), 0.82, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 1, isDark: false), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 1, isDark: true), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 0.5, isDark: false), 0.925, accuracy: 0.0001)
+        // The cue's overshoot can never push opacity past solid.
+        XCTAssertEqual(WearIveRunMorph.tintOpacity(progress: 1.03, isDark: false), 1.0, accuracy: 0.0001)
+    }
+
+    func testMorphHeightAndContentWindow() {
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 148, progress: 0), 56, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 148, progress: 1), 148, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.height(mini: 56, expanded: 148, progress: 0.5), 102, accuracy: 0.0001)
+        // Expanded-only content: out until 0.45, fully in at the
+        // settle, half-way at the window's middle; drift +4 → 0.
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 0), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 0.45), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 0.725), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOpacity(progress: 1), 1, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOffset(progress: 0), 4, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedContentOffset(progress: 1), 0, accuracy: 0.0001)
+        // Radius tokens are equal in the iOS strip expression:
+        // the interpolation is the decision's constant case.
+        XCTAssertEqual(
+            WearIveRunMorph.cornerRadius(progress: 0.5),
+            WearIveRunMorph.miniCornerRadius, accuracy: 0.0001
+        )
+    }
+
+    func testMorphChevronRotation() {
+        // Continuous 180° rotation with progress (no swap).
+        XCTAssertEqual(
+            WearIveRunMorph.chevronRotationDegrees(progress: 0, reduceMotion: false, settledFullExpression: false),
+            0, accuracy: 0.0001)
+        XCTAssertEqual(
+            WearIveRunMorph.chevronRotationDegrees(progress: 0.5, reduceMotion: false, settledFullExpression: false),
+            90, accuracy: 0.0001)
+        XCTAssertEqual(
+            WearIveRunMorph.chevronRotationDegrees(progress: 1, reduceMotion: false, settledFullExpression: true),
+            180, accuracy: 0.0001)
+        // Reduced Motion: no rotation — the settled orientation
+        // for the target state (swapped at the midpoint by the
+        // view), whatever the progress value says.
+        XCTAssertEqual(
+            WearIveRunMorph.chevronRotationDegrees(progress: 0.5, reduceMotion: true, settledFullExpression: false),
+            0, accuracy: 0.0001)
+        XCTAssertEqual(
+            WearIveRunMorph.chevronRotationDegrees(progress: 0.5, reduceMotion: true, settledFullExpression: true),
+            180, accuracy: 0.0001)
+    }
+
+    func testMorphDriverSpringsAndGates() {
+        // The decision's iOS spring table, exactly.
+        XCTAssertEqual(WearIveRunMorph.springResponse(for: .cue), 0.46, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springDampingFraction(for: .cue), 0.80, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springResponse(for: .tap), 0.42, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springDampingFraction(for: .tap), 0.92, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springResponse(for: .scroll), 0.34, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springDampingFraction(for: .scroll), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springResponse(for: .collapse), 0.34, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.springDampingFraction(for: .collapse), 1.0, accuracy: 0.0001)
+        // Overshoot on the cue ONLY.
+        XCTAssertTrue(WearIveRunMorph.permitsOvershoot(.cue))
+        for driver in [WearIveRunMorphDriver.tap, .scroll, .collapse, .reducedMotion] {
+            XCTAssertFalse(WearIveRunMorph.permitsOvershoot(driver), "\(driver)")
+        }
+        // Duration gates.
+        XCTAssertEqual(WearIveRunMorph.durationGateSeconds(for: .cue), 0.50, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.durationGateSeconds(for: .tap), 0.45, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.durationGateSeconds(for: .scroll), 0.34, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.durationGateSeconds(for: .collapse), 0.32, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.reducedMotionDurationSeconds, 0.15, accuracy: 0.0001)
+    }
+
+    func testMorphViewWiring_sourcePin() throws {
+        let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(view.contains("expansionProgress"),
+                      "the morph must be driven by the one progress value")
+        XCTAssertTrue(view.contains("WearIveRunMorph.animation(for: driver)"),
+                      "transitions must run the driver's pinned animation")
+        XCTAssertTrue(view.contains("WearIveRunMorph.tintOpacity"),
+                      "the tint layer's opacity — never the material's blur — is what animates")
+        XCTAssertFalse(view.contains(".bouncy"), "the bouncy preset overshoots past the cap")
+        XCTAssertFalse(view.contains(".snappy"), "the snappy preset is not in the decision's table")
+        // The cue's pulse/haptic fire at the settle, not the driver.
+        XCTAssertTrue(view.contains("pendingCueSettleGeneration"))
+        XCTAssertTrue(view.contains("fireCueSettle()"))
+        // The W-1 jump-in affordance is explicit on the expanded card.
+        XCTAssertTrue(view.contains("Open the full Wear I've Run collection"))
+    }
+}
