@@ -194,9 +194,9 @@ final class Gen2I3OnboardingTests: XCTestCase {
     // MARK: - W-22 · fit choices shown directly on the step
 
     func testInlineFitOptionsAreTheThreeChoicesInOrder() {
-        XCTAssertEqual(FitPreferenceInlinePicker.options.map { $0.value },
+        XCTAssertEqual(GenderPreference.fitOptions.map { $0.value },
                        [.male, .female, .unisex])
-        XCTAssertEqual(FitPreferenceInlinePicker.options.map { $0.label },
+        XCTAssertEqual(GenderPreference.fitOptions.map { $0.label },
                        ["Men's", "Women's", "No preference"])
     }
 

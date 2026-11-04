@@ -12,20 +12,6 @@ import AVFoundation
 
 // MARK: - The fork (spec §2.2, strings F1–F9)
 
-/// W-23 (GEN-2): the fork's location caption, composed ONLY from
-/// a known place. The fork used to render the view model's
-/// in-flight placeholder name verbatim, so for a few hundred
-/// milliseconds the caption slot read "Loading… · 45°F" over a
-/// blank photo area. The rule: no known place, no caption — the
-/// photo area's loading treatment carries the wait instead, and
-/// no raw placeholder string ever reaches the caption slot.
-enum ForkContextLine {
-    static func make(placeDisplayName: String, isPlaceKnown: Bool, feelsLike: String) -> String? {
-        guard isPlaceKnown else { return nil }
-        return "\(placeDisplayName) · \(feelsLike)"
-    }
-}
-
 struct MakeItMeForkView: View {
     /// The first recommendation the user just saw — the photo in it
     /// is the subject of the fork's sentence.

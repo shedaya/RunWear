@@ -118,16 +118,9 @@ struct FitPreferencePicker: View {
 struct FitPreferenceInlinePicker: View {
     @Binding var preference: GenderPreference
 
-    /// The step's three choices, in menu order.
-    static let options: [(value: GenderPreference, label: String)] = [
-        (.male, "Men's"),
-        (.female, "Women's"),
-        (.unisex, "No preference")
-    ]
-
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(Self.options.enumerated()), id: \.offset) { index, option in
+            ForEach(Array(GenderPreference.fitOptions.enumerated()), id: \.offset) { index, option in
                 Button {
                     preference = option.value
                 } label: {
@@ -150,7 +143,7 @@ struct FitPreferenceInlinePicker: View {
                 .accessibilityLabel(option.label)
                 .accessibilityAddTraits(preference == option.value ? [.isSelected] : [])
 
-                if index < Self.options.count - 1 {
+                if index < GenderPreference.fitOptions.count - 1 {
                     Divider()
                         .padding(.leading, 16)
                 }

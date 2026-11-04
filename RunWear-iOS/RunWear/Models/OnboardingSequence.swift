@@ -76,6 +76,25 @@ enum OnboardingCopy {
     static let welcomeFooter = "Free forever · Premium is optional"
 }
 
+// MARK: - Fork caption composition (W-23)
+
+/// The Make It Me fork's location caption, composed ONLY from a
+/// known place. The fork used to render the view model's
+/// in-flight placeholder name verbatim, so for a few hundred
+/// milliseconds the caption slot carried that placeholder over a
+/// blank photo area. The rule: no known place, no caption — the
+/// photo area's loading treatment carries the wait instead, and
+/// no raw placeholder string ever reaches the caption slot.
+/// (Lives here, with the rest of onboarding's composition, so
+/// the test target — which does not compile the flow views —
+/// can pin the rule functionally.)
+enum ForkContextLine {
+    static func make(placeDisplayName: String, isPlaceKnown: Bool, feelsLike: String) -> String? {
+        guard isPlaceKnown else { return nil }
+        return "\(placeDisplayName) · \(feelsLike)"
+    }
+}
+
 // MARK: - First-look reveal timing (§1.4, spec of record)
 //
 // The frame-34 reveal, as numbers the view and the tests share:

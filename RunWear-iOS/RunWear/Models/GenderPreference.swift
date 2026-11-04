@@ -1,5 +1,12 @@
 import Foundation
 
+/// One selectable fit-preference choice: the preference value and
+/// the label the selection surfaces render for it (W-22).
+struct FitPreferenceOption: Equatable {
+    let value: GenderPreference
+    let label: String
+}
+
 /// Gender Preference for clothing search personalization
 ///
 /// Prepends "men's" or "women's" to search terms for more relevant results.
@@ -49,6 +56,18 @@ enum GenderPreference: String, Codable, CaseIterable {
     func buildSearchTerm(_ baseTerm: String) -> String {
         return "\(searchPrefix)\(baseTerm)"
     }
+
+    /// W-22 (GEN-2): the fit preference's three choices, in the
+    /// order every selection surface presents them — the single
+    /// list the onboarding step's inline picker
+    /// (FitPreferenceInlinePicker) renders directly on screen.
+    /// (A model value, not view state, so the test target can pin
+    /// the choices without compiling the controls.)
+    static let fitOptions: [FitPreferenceOption] = [
+        FitPreferenceOption(value: .male, label: "Men's"),
+        FitPreferenceOption(value: .female, label: "Women's"),
+        FitPreferenceOption(value: .unisex, label: "No preference")
+    ]
 
     /// WS-6 (D-20): the DETERMINISTIC hero gender the bundled
     /// fallback paints with. Unlike `forHeroImage()` — whose
