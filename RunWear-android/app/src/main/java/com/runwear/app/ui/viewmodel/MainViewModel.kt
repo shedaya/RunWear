@@ -1067,9 +1067,10 @@ class MainViewModel @Inject constructor(
         // serve record when it resolved; this is the remote filing).
         // GEN-2 A2: a null URL is a resolved NO-photo (the garment
         // gate exhausted) — nothing was served, nothing is filed.
-        if (chosen.imageUrl != null &&
+        val chosenUrl = chosen.imageUrl
+        if (chosenUrl != null &&
             (chosen.serveSource == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK ||
-                chosen.imageUrl.startsWith("file:///android_asset/hero_fallback/"))
+                chosenUrl.startsWith("file:///android_asset/hero_fallback/"))
         ) {
             recordHeroServeDiagnosticsOnly(chosen)
         }
