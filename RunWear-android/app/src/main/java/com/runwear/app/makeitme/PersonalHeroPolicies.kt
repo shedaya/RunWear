@@ -104,6 +104,111 @@ object ScaffoldRenderPolicy {
 }
 
 /**
+ * GEN-3 (Y-1 parity, iOS census 2026-11-04): the REFERENCE-EPOCH
+ * guard at the personal serving seam.
+ *
+ * The defect (observed on iOS, mechanism platform-universal): a user
+ * uploads a new reference photo and commissions his first look; the
+ * server answers with a BANKED photo generated from a SUPERSEDED
+ * reference set (in the iOS recording, another person's photo from
+ * an earlier version's references), and the client presents it as
+ * the finished result of the look just commissioned. Retention of
+ * the bank is Sol's settled ruling — SERVING a superseded-epoch
+ * photo as the user's current representation is the defect.
+ *
+ * The Android bank lookup is NOT epoch-keyed: get-personal-hero is
+ * keyed by combination_id alone, and its payload (found, image_url,
+ * version, hero_id, look_state, serve_kind) carries no reference
+ * epoch, no generation timestamp, and no provenance for which
+ * reference set produced the hero. The reference storage paths are
+ * deterministic ({uid}/refs/ref-N.jpg, upserted in place), so the
+ * path set cannot key an epoch either. The guard therefore works
+ * from what the client itself knows:
+ *
+ *  - EPOCH: a counter the client increments every time IT registers
+ *    a reference set (uploadAndRegisterReferences). Registering new
+ *    references is the epoch boundary; nothing else moves it (place
+ *    switches, relaunches, and reinstalls with the references
+ *    untouched do not — the bank belongs to the only epoch such a
+ *    device knows, which is what lets a returning user be served
+ *    his own existing photo for the home cell).
+ *  - ACCEPTED RECORD: per cell, the hero (id + version) this client
+ *    last accepted as a serve, and the epoch it accepted it under
+ *    (the versioned cell cache carries it).
+ *  - WITNESS: per cell, whether a generation lifecycle was observed
+ *    in the current epoch — a request the server QUEUED (not
+ *    "already available"), or a look state of MAKING read in this
+ *    epoch — before the hit appeared. A delivery through a witnessed
+ *    lifecycle was generated from the current reference set by
+ *    construction.
+ *
+ * The rules, in order:
+ *  1. The hit IS the accepted hero and it was accepted under the
+ *     current epoch → serve (the standing current-epoch photo).
+ *  2. The hit IS the accepted hero but was accepted under an OLDER
+ *     epoch → BLOCK. That is the provably superseded photo itself:
+ *     the same banked image, carried over the boundary.
+ *  3. The hit is a DIFFERENT hero (or the cell has no accepted
+ *     record):
+ *     a. a generation lifecycle was witnessed for the cell in the
+ *        current epoch → serve, and accept it under this epoch;
+ *     b. no epoch boundary has ever been recorded on this device
+ *        (current epoch 0) → serve, and accept it — the bank can
+ *        only belong to the one epoch this device knows;
+ *     c. otherwise → BLOCK. An unproven hit in a post-boundary
+ *        epoch may be exactly the superseded bank photo this device
+ *        never accepted (the Y-1 shape: fresh install, new selfie
+ *        registered, server answers "already available" with the
+ *        old set's photo). It becomes servable only via (a): a real
+ *        generation from the current set, witnessed. While blocked,
+ *        the truthful stock photo serves and no finished claim is
+ *        made — the look stays MAKING from the user's seat.
+ *
+ * A blocked hit never writes the cell cache: the accepted record of
+ * the old epoch remains the baseline that proves supersession.
+ * (The durable fix is server-side — get-personal-hero should not
+ * return superseded-epoch heroes as the current representation, or
+ * should expose the hero's reference epoch; this guard enforces the
+ * invariant from the client until then.)
+ */
+object ReferenceEpochPolicy {
+
+    /** Identity of one banked hero for supersession purposes: its
+     * version, plus its row id when both sides know one (a cached
+     * entry persisted before hero ids were recorded re-derives its
+     * id on the next serve and must still match itself). */
+    fun isSameHero(
+        hitHeroId: String?,
+        hitVersion: Int,
+        acceptedHeroId: String?,
+        acceptedVersion: Int
+    ): Boolean =
+        hitVersion == acceptedVersion &&
+            (hitHeroId == acceptedHeroId || hitHeroId == null || acceptedHeroId == null)
+
+    fun mayServe(
+        hitHeroId: String?,
+        hitVersion: Int,
+        acceptedHeroId: String?,
+        acceptedVersion: Int?,
+        acceptedEpoch: Int?,
+        currentEpoch: Int,
+        generationWitnessedThisEpoch: Boolean
+    ): Boolean {
+        if (acceptedVersion != null &&
+            isSameHero(hitHeroId, hitVersion, acceptedHeroId, acceptedVersion)
+        ) {
+            // Rules 1–2: the standing photo serves only under the
+            // epoch it was accepted in.
+            return (acceptedEpoch ?: 0) == currentEpoch
+        }
+        // Rule 3: a hero this client has not accepted before.
+        if (generationWitnessedThisEpoch) return true
+        return currentEpoch == 0
+    }
+}
+
+/**
  * The named cache trap (acceptance 16): a stored personalized image is
  * replaced server-side (matrix cell lands, replenishment variant rotates
  * in, flagged regeneration completes) and the cell's version marker bumps.
@@ -130,7 +235,16 @@ object PersonalHeroCachePolicy {
          * persisted before RW-16.27 (they re-derive it on the next
          * fresh serve).
          */
-        val heroId: String? = null
+        val heroId: String? = null,
+        /**
+         * GEN-3 (Y-1): the reference epoch this entry was ACCEPTED
+         * under ([ReferenceEpochPolicy]). Entries persisted before
+         * the guard existed parse as epoch 0 — the epoch of a device
+         * that has never recorded a boundary — and become
+         * superseded the moment a boundary is recorded, exactly
+         * like any other pre-boundary acceptance.
+         */
+        val epoch: Int = 0
     )
 
     sealed interface Decision {

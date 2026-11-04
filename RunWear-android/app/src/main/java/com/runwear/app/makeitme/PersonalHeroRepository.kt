@@ -122,8 +122,47 @@ class PersonalHeroRepository @Inject constructor(
         val registered = service.registerReferences(paths)
         if (registered) {
             _state.value = _state.value.copy(referenceCount = paths.size)
+            // GEN-3 (Y-1): registering a reference set IS the epoch
+            // boundary. Every hero accepted under earlier epochs is
+            // superseded from this moment (ReferenceEpochPolicy rule
+            // 2), and no generation has been witnessed in the new
+            // epoch yet. The accepted records themselves are kept —
+            // they are the baseline that proves supersession.
+            advanceReferenceEpoch()
         }
         return registered
+    }
+
+    // ── Reference epoch (GEN-3, Y-1) ───────────────────────────────
+
+    /** The current reference epoch: 0 until this device records its
+     * first reference registration (see [ReferenceEpochPolicy]). */
+    private suspend fun currentReferenceEpoch(): Int =
+        preferencesRepository.getString(KEY_REF_EPOCH)?.toIntOrNull() ?: 0
+
+    private suspend fun advanceReferenceEpoch() {
+        val next = currentReferenceEpoch() + 1
+        preferencesRepository.setString(KEY_REF_EPOCH, next.toString())
+        preferencesRepository.setString(KEY_EPOCH_WITNESSED, "$next|")
+    }
+
+    /** Cells whose generation lifecycle has been witnessed in
+     * [epoch] (a queued request, or a MAKING look state read). */
+    private suspend fun witnessedCells(epoch: Int): Set<String> {
+        val raw = preferencesRepository.getString(KEY_EPOCH_WITNESSED) ?: return emptySet()
+        val parts = raw.split("|", limit = 2)
+        if (parts.size != 2 || parts[0].toIntOrNull() != epoch) return emptySet()
+        return parts[1].split(",").filter { it.isNotBlank() }.toSet()
+    }
+
+    private suspend fun markGenerationWitnessed(combinationId: String) {
+        val epoch = currentReferenceEpoch()
+        val cells = witnessedCells(epoch).toMutableSet()
+        if (cells.add(combinationId)) {
+            preferencesRepository.setString(
+                KEY_EPOCH_WITNESSED, "$epoch|" + cells.joinToString(",")
+            )
+        }
     }
 
     // ── Serving ────────────────────────────────────────────────────────
@@ -172,6 +211,12 @@ class PersonalHeroRepository @Inject constructor(
             lookReason = lookup.lookReason
         )
         lastKnownStatus[combinationId] = status
+        // GEN-3 (Y-1): a MAKING read in this epoch witnesses the
+        // cell's generation lifecycle — a hit that lands after it
+        // was generated from the current reference set.
+        if (status == PersonalLookStatus.Making) {
+            markGenerationWitnessed(combinationId)
+        }
         val hit = resolveHit(combinationId, lookup)
         return CellLook(hit, status)
     }
@@ -200,9 +245,31 @@ class PersonalHeroRepository @Inject constructor(
         )
         return when (decision) {
             is PersonalHeroCachePolicy.Decision.Serve -> {
+                // GEN-3 (Y-1): the reference-epoch guard — the last
+                // check before a banked photo may serve as the user.
+                // A blocked hit returns NO hit (the truthful stock
+                // photo serves; the look's status is untouched, so a
+                // commissioned look reads MAKING, never finished) and
+                // writes NOTHING: the accepted record stays as the
+                // supersession baseline.
+                val epoch = currentReferenceEpoch()
+                if (!ReferenceEpochPolicy.mayServe(
+                        hitHeroId = decision.heroId,
+                        hitVersion = decision.version,
+                        acceptedHeroId = cached?.heroId,
+                        acceptedVersion = cached?.version,
+                        acceptedEpoch = cached?.epoch,
+                        currentEpoch = epoch,
+                        generationWitnessedThisEpoch =
+                            combinationId in witnessedCells(epoch)
+                    )
+                ) {
+                    return null
+                }
                 if (cached == null || cached.version != decision.version ||
                     cached.imageUrl != decision.imageUrl ||
-                    cached.heroId != decision.heroId
+                    cached.heroId != decision.heroId ||
+                    cached.epoch != epoch
                 ) {
                     writeCachedEntry(
                         combinationId,
@@ -210,7 +277,8 @@ class PersonalHeroRepository @Inject constructor(
                             version = decision.version,
                             imageUrl = decision.imageUrl,
                             fetchedAtMs = System.currentTimeMillis(),
-                            heroId = decision.heroId
+                            heroId = decision.heroId,
+                            epoch = epoch
                         )
                     )
                 }
@@ -233,19 +301,30 @@ class PersonalHeroRepository @Inject constructor(
 
     private suspend fun readCachedEntry(combinationId: String): PersonalHeroCachePolicy.CachedEntry? {
         val raw = preferencesRepository.getString(cellCacheKey(combinationId)) ?: return null
-        // RW-16.27 format: version|fetchedAt|heroId|imageUrl. Entries
-        // persisted before RW-16.27 have three parts and no hero id —
-        // they parse with heroId null and re-derive it on the next
-        // fresh serve (a flag needs the id, so a stale entry can
-        // delay — never misdirect — a flag).
-        val parts = raw.split("|", limit = 4)
+        // GEN-3 format: version|fetchedAt|heroId|imageUrl|epoch.
+        // RW-16.27 entries have four parts and no epoch — they parse
+        // as epoch 0 (accepted before any boundary this device
+        // recorded). Entries persisted before RW-16.27 have three
+        // parts and no hero id — they parse with heroId null and
+        // re-derive it on the next fresh serve (a flag needs the id,
+        // so a stale entry can delay — never misdirect — a flag).
+        // In the 5-part form the URL is rejoined from the middle so
+        // the epoch always reads from the last field.
+        val parts = raw.split("|")
         val version = parts.getOrNull(0)?.toIntOrNull() ?: return null
         val fetchedAt = parts.getOrNull(1)?.toLongOrNull() ?: return null
-        return when (parts.size) {
-            4 -> PersonalHeroCachePolicy.CachedEntry(
+        return when {
+            parts.size >= 5 -> PersonalHeroCachePolicy.CachedEntry(
+                version,
+                parts.subList(3, parts.size - 1).joinToString("|"),
+                fetchedAt,
+                heroId = parts[2].takeIf { it.isNotBlank() },
+                epoch = parts.last().toIntOrNull() ?: 0
+            )
+            parts.size == 4 -> PersonalHeroCachePolicy.CachedEntry(
                 version, parts[3], fetchedAt, heroId = parts[2].takeIf { it.isNotBlank() }
             )
-            3 -> PersonalHeroCachePolicy.CachedEntry(version, parts[2], fetchedAt)
+            parts.size == 3 -> PersonalHeroCachePolicy.CachedEntry(version, parts[2], fetchedAt)
             else -> null
         }
     }
@@ -256,7 +335,7 @@ class PersonalHeroRepository @Inject constructor(
     ) {
         preferencesRepository.setString(
             cellCacheKey(combinationId),
-            "${entry.version}|${entry.fetchedAtMs}|${entry.heroId ?: ""}|${entry.imageUrl}"
+            "${entry.version}|${entry.fetchedAtMs}|${entry.heroId ?: ""}|${entry.imageUrl}|${entry.epoch}"
         )
     }
 
@@ -348,6 +427,16 @@ class PersonalHeroRepository @Inject constructor(
                 markCellRequested(combinationId)
             else -> Unit
         }
+        // GEN-3 (Y-1): a QUEUED generation is a witnessed lifecycle
+        // in the current epoch — its delivery was made from the
+        // current reference set. "Already available" is NOT a
+        // witness: it is precisely the answer that carried the
+        // superseded bank photo in the Y-1 recording.
+        if (outcome is PersonalHeroService.RequestOutcome.Queued ||
+            outcome is PersonalHeroService.RequestOutcome.AlreadyQueued
+        ) {
+            markGenerationWitnessed(combinationId)
+        }
         return outcome
     }
 
@@ -421,6 +510,9 @@ class PersonalHeroRepository @Inject constructor(
     companion object {
         private val KEY_FORK_DECIDED = stringPreferencesKey("mim_fork_decided")
         private val KEY_REQUESTED_CELLS = stringPreferencesKey("mim_requested_cells")
+        /** GEN-3 (Y-1): the reference-epoch counter + witness set. */
+        private val KEY_REF_EPOCH = stringPreferencesKey("mim_ref_epoch")
+        private val KEY_EPOCH_WITNESSED = stringPreferencesKey("mim_epoch_witnessed_cells")
         private val KEY_UPSELL_DISMISSED_AT = stringPreferencesKey("mim_upsell_dismissed_at")
         private val KEY_UPSELL_DISMISSED_CELL = stringPreferencesKey("mim_upsell_dismissed_cell")
     }

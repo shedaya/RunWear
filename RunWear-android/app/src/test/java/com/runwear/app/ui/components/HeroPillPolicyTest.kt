@@ -125,6 +125,34 @@ class HeroPillPolicyTest {
     }
 
     @Test
+    fun `Y-6 - the pill marks the personal photo in the very frame it lands`() {
+        // The iOS defect: Sol's own photo crossfaded in silently,
+        // unmarked — a user who blinked missed the only moment his
+        // photo arrived. The landing write flips heroIsPersonal and
+        // the status together, so the pill derivation must move from
+        // MAKING to the marked state with no unmarked frame between:
+        // the frame before landing carries the making pill, the
+        // landing frame itself carries the count.
+        val before = HeroPillPolicy.resolve(
+            lookStatus = PersonalLookStatus.Making,
+            serveKind = PersonalServeKind.EXACT,
+            heroIsPersonal = false,
+            mode = MakeItMeMode.FREE,
+            freeGenerationsUsed = 0
+        )
+        assertEquals(HeroPillKind.MAKING, before?.kind)
+        val landing = HeroPillPolicy.resolve(
+            lookStatus = PersonalLookStatus.Ready,
+            serveKind = PersonalServeKind.EXACT,
+            heroIsPersonal = true,
+            mode = MakeItMeMode.FREE,
+            freeGenerationsUsed = 1
+        )
+        assertEquals(HeroPillKind.EXACT_FREE, landing?.kind)
+        assertEquals("1 of 5", landing?.text)
+    }
+
+    @Test
     fun `a failed look carries no pill - its durable line lives in the sheet`() {
         assertNull(
             HeroPillPolicy.resolve(
