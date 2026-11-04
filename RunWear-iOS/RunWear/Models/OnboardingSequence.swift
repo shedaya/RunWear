@@ -66,6 +66,14 @@ enum OnboardingCopy {
     /// Frame 34's meter ("look 1 of your 5 free looks") is
     /// accounting copy, not this promise, and is not governed here.
     static let freeLooksPromise = "Your first 5 looks are free."
+
+    /// W-21 (GEN-2 walkthrough, 2026-11-04): frame 28's quiet
+    /// footer, verbatim. Sol struck the previous line ("Free to
+    /// start · Set up in under a minute") on both platforms: the
+    /// app is free forever and Premium is the optional paid part,
+    /// so "free to start" misstates the model. This wording is
+    /// flagged for Sol's walkthrough verdict — do not vary it.
+    static let welcomeFooter = "Free forever · Premium is optional"
 }
 
 // MARK: - First-look reveal timing (§1.4, spec of record)

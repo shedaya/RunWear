@@ -659,6 +659,16 @@ enum SelfieCheck: String, CaseIterable, Equatable {
         }
     }
 
+    /// W-20 (GEN-2): the capture chips' row layout — two rows of
+    /// two. A single row of four forced every chip into a quarter
+    /// of the screen width, and three of the four labels truncated
+    /// mid-word at default type ("Face fills…", "Facing th…",
+    /// "Light loo…"). Two per row, each chip sizes to its full
+    /// label. Order is the checks' coaching order, row-major.
+    static var captureChipRows: [[SelfieCheck]] {
+        [[.faceFound, .faceLargeEnough], [.faceFrontal, .wellLit]]
+    }
+
     /// The one coaching line for this check's failure.
     var coachingLine: String {
         switch self {

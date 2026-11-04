@@ -13,6 +13,12 @@ class LocationService: NSObject, ObservableObject {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
+        // W-19 (GEN-2): seed the published status from the manager
+        // itself. The default (.notDetermined) otherwise misreports
+        // an already-granted permission until the first delegate
+        // callback lands, and onboarding's location step branched
+        // on that stale value.
+        authorizationStatus = locationManager.authorizationStatus
     }
 
     func requestPermission() {

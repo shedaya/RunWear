@@ -12,11 +12,27 @@ import AVFoundation
 
 // MARK: - The fork (spec §2.2, strings F1–F9)
 
+/// W-23 (GEN-2): the fork's location caption, composed ONLY from
+/// a known place. The fork used to render the view model's
+/// in-flight placeholder name verbatim, so for a few hundred
+/// milliseconds the caption slot read "Loading… · 45°F" over a
+/// blank photo area. The rule: no known place, no caption — the
+/// photo area's loading treatment carries the wait instead, and
+/// no raw placeholder string ever reaches the caption slot.
+enum ForkContextLine {
+    static func make(placeDisplayName: String, isPlaceKnown: Bool, feelsLike: String) -> String? {
+        guard isPlaceKnown else { return nil }
+        return "\(placeDisplayName) · \(feelsLike)"
+    }
+}
+
 struct MakeItMeForkView: View {
     /// The first recommendation the user just saw — the photo in it
     /// is the subject of the fork's sentence.
     let previewHeroURL: String?
-    let previewContextLine: String
+    /// The location caption — nil while the place is not known yet
+    /// (W-23): the slot renders nothing instead of a placeholder.
+    let previewContextLine: String?
     let previewOutfitLine: String
     let onCustomize: () -> Void
     let onStock: () -> Void
@@ -27,21 +43,36 @@ struct MakeItMeForkView: View {
                 // The first recommendation stays visible above the
                 // choice (§2.2).
                 VStack(spacing: 8) {
-                    AsyncImage(url: previewHeroURL.flatMap(URL.init(string:))) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        default:
-                            AppTheme.cardOnSheet
+                    // W-17 (GEN-2, fork half): the photo renders
+                    // through HeroPhoto — the home hero's
+                    // top-anchored cover crop — not a bare
+                    // center-anchored .fill, which cropped the
+                    // runner at the neck on this card. The head
+                    // sits at the top of every pool portrait, so
+                    // the top anchor keeps it in full. (This card
+                    // only; the home hero is untouched.)
+                    // W-23: while the photo loads, the area is a
+                    // designed placeholder (card fill, photo glyph,
+                    // spinner) — never a blank cream slab.
+                    GeometryReader { geometry in
+                        AsyncImage(url: previewHeroURL.flatMap(URL.init(string:))) { phase in
+                            switch phase {
+                            case .success(let image):
+                                HeroPhoto(image: image, width: geometry.size.width, height: 180)
+                            default:
+                                forkPhotoPlaceholder
+                            }
                         }
                     }
                     .frame(height: 180)
                     .clipped()
                     .cornerRadius(16)
 
-                    Text(previewContextLine)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(AppTheme.inkSecondary)
+                    if let previewContextLine {
+                        Text(previewContextLine)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
                     Text(previewOutfitLine)
                         .font(.system(size: 13))
                         .foregroundColor(AppTheme.inkSecondary)
@@ -119,6 +150,24 @@ struct MakeItMeForkView: View {
             }
             .padding(24)
         }
+    }
+
+    /// W-23: the fork photo area while its image is in flight —
+    /// the card's own fill, a photo glyph and a spinner, at the
+    /// card's full height. A designed loading treatment, not the
+    /// blank cream slab the bare AsyncImage fallback painted.
+    private var forkPhotoPlaceholder: some View {
+        ZStack {
+            AppTheme.cardOnSheet
+            VStack(spacing: 10) {
+                Image(systemName: "photo")
+                    .font(.system(size: 28))
+                    .foregroundColor(AppTheme.inkSecondary)
+                ProgressView()
+                    .tint(AppTheme.inkSecondary)
+            }
+        }
+        .frame(height: 180)
     }
 }
 

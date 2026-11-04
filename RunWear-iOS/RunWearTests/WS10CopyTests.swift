@@ -100,7 +100,7 @@ final class WS10CopyTests: XCTestCase {
         // exactly once in onboarding (its own pushed screen), and
         // the old single scrolling form (and its header) is gone.
         XCTAssertEqual(occurrences(onboarding, "TemperatureUnitPicker(unit:"), 1)
-        XCTAssertEqual(occurrences(onboarding, "FitPreferencePicker(preference:"), 1)
+        XCTAssertEqual(occurrences(onboarding, "FitPreferenceInlinePicker(preference:"), 1)
         XCTAssertEqual(occurrences(onboarding, "ComfortLevelControl(comfortLevel:"), 1)
         XCTAssertFalse(onboarding.contains("preferencesBody"),
                        "the one-screen preferences form is retired")
@@ -122,8 +122,10 @@ final class WS10CopyTests: XCTestCase {
                       "promise row 1, as designed")
         XCTAssertTrue(onboarding.contains("\"See yourself in every outfit\""),
                       "promise row 2, as designed")
-        XCTAssertTrue(onboarding.contains("\"Free to start · Set up in under a minute\""),
-                      "frame 28's quiet footer")
+        XCTAssertTrue(onboarding.contains("Text(OnboardingCopy.welcomeFooter)"),
+                      "frame 28's quiet footer renders the decided line (W-21)")
+        XCTAssertFalse(onboarding.contains("Free to start"),
+                       "the struck footer wording is gone (W-21)")
         XCTAssertTrue(onboarding.contains("path.append(.temperature)"),
                       "Get Started pushes the first setup question")
     }

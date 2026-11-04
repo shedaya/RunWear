@@ -29,6 +29,18 @@ struct OnboardingView: View {
 
     @StateObject private var locationService = LocationService()
 
+    /// W-19 (GEN-2): "Use My Location" no longer advances the flow
+    /// in the same tap that requests permission (see the location
+    /// step). While the system prompt is outstanding the step
+    /// stays on screen in its designed layout with this pending
+    /// state driving its loading row; the flow advances only when
+    /// the authorization actually resolves.
+    @State private var locationPermissionPending = false
+    /// Set when the permission resolves (or already stands) denied
+    /// or restricted: the step stays put and says so, and "Set a
+    /// City Instead" remains the working door.
+    @State private var locationPermissionDenied = false
+
     /// The first-look phase (fork → consent → first look) begins
     /// only after the setup's last step saves the preference
     /// profile — preferences first, always.
@@ -76,7 +88,11 @@ struct OnboardingView: View {
                             title: "Fit Preference",
                             question: "Whose fit should the outfits follow?"
                         ) {
-                            FitPreferencePicker(preference: $genderPreference)
+                            // W-22: the fit step shows its three
+                            // choices directly (inline grouped
+                            // list), not behind a collapsed menu —
+                            // see FitPreferenceInlinePicker.
+                            FitPreferenceInlinePicker(preference: $genderPreference)
                             // WS-9 fix: a debug-style reassurance
                             // line that used to sit under this picker
                             // is removed — no design frame carries
@@ -158,7 +174,7 @@ struct OnboardingView: View {
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.primaryColor)
 
-            Text("Free to start · Set up in under a minute")
+            Text(OnboardingCopy.welcomeFooter)
                 .font(.appFootnote)
                 .foregroundStyle(AppTheme.inkSecondary)
                 .padding(.top, 12)
@@ -262,9 +278,7 @@ struct OnboardingView: View {
                     .foregroundStyle(AppTheme.inkSecondary)
 
                 Button {
-                    locationChoice = .gps
-                    locationService.requestPermission()
-                    beginFirstLook()
+                    useMyLocationTapped()
                 } label: {
                     Text("Use My Location")
                         .font(.appButtonLabel)
@@ -273,6 +287,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.primaryColor)
+                .disabled(locationPermissionPending)
 
                 Button {
                     locationChoice = .manual
@@ -285,12 +300,95 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.bordered)
                 .tint(AppTheme.inkPrimary)
+                .disabled(locationPermissionPending)
+
+                // W-19: the wait lives INSIDE the designed step —
+                // spinner + copy under the intact title, privacy
+                // copy and button chrome. The step is never
+                // replaced by a bare fallback while the permission
+                // (and then the first fix) resolves.
+                if locationPermissionPending {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .tint(AppTheme.inkPrimary)
+                        Text("Finding your location…")
+                            .font(.appSecondary)
+                            .foregroundStyle(AppTheme.inkSecondary)
+                    }
+                    .padding(.top, 4)
+                }
+
+                if locationPermissionDenied {
+                    Text("Location is off — set a city instead, or turn location on for RunWear in Settings.")
+                        .font(.appSecondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.top, 32)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(AppTheme.background.ignoresSafeArea())
+        // If the user backed out while a request was outstanding
+        // and returns after it resolved elsewhere, settle the
+        // pending state on re-entry instead of stranding the step
+        // with its doors disabled.
+        .onAppear {
+            guard locationPermissionPending else { return }
+            switch locationService.authorizationStatus {
+            case .authorizedWhenInUse, .authorizedAlways:
+                locationPermissionPending = false
+                beginFirstLook()
+            case .denied, .restricted:
+                locationPermissionPending = false
+                locationPermissionDenied = true
+            default:
+                break
+            }
+        }
+        // W-19: the flow advances only when the authorization
+        // RESOLVES. The system prompt presents over this intact
+        // step; a grant hands off to the first-look phase (whose
+        // own spinner carries the fetch), a denial keeps the user
+        // here with the city door working.
+        .onChange(of: locationService.authorizationStatus) { _, status in
+            guard locationPermissionPending else { return }
+            switch status {
+            case .authorizedWhenInUse, .authorizedAlways:
+                locationPermissionPending = false
+                beginFirstLook()
+            case .denied, .restricted:
+                locationPermissionPending = false
+                locationPermissionDenied = true
+            default:
+                break
+            }
+        }
+    }
+
+    /// "Use My Location" (W-19): request the permission and STAY
+    /// on the step. The pre-fix tap called beginFirstLook() in the
+    /// same action as requestPermission(), tearing the
+    /// NavigationStack (and this step's styled layout) down before
+    /// the system prompt could present over it — the first-look
+    /// host's notDetermined branch then rendered the step's title
+    /// and two plain-text buttons with no chrome, no privacy copy
+    /// and no spinner for ~3.5 s. Now: an already-granted
+    /// permission advances at once; a denied one says so here;
+    /// an undecided one raises the prompt over this step and the
+    /// authorization change (above) advances the flow.
+    private func useMyLocationTapped() {
+        locationChoice = .gps
+        locationPermissionDenied = false
+        switch locationService.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            beginFirstLook()
+        case .denied, .restricted:
+            locationPermissionDenied = true
+        default:
+            locationPermissionPending = true
+            locationService.requestPermission()
+        }
     }
 
     // MARK: - Completion of setup
@@ -371,7 +469,7 @@ private struct FirstLookView: View {
                 if MakeItMeAvailability.isEnabled {
                     MakeItMeForkView(
                         previewHeroURL: previewVM.heroImageUrl ?? previewVM.fallbackImageUrl,
-                        previewContextLine: contextLine,
+                        previewContextLine: forkContextLine,
                         previewOutfitLine: outfitLine,
                         onCustomize: { showOptIn = true },
                         onStock: onComplete
@@ -640,6 +738,21 @@ private struct FirstLookView: View {
         "\(previewVM.placeDisplayName) · \(previewVM.temperatureUnit.format(previewVM.currentFeelsLike))"
     }
 
+    /// W-23: the fork's caption — the context line ONLY once the
+    /// place is actually known (a SimplePlace has been derived).
+    /// Before the geocode lands, placeDisplayName is the view
+    /// model's in-flight placeholder ("Loading..."), and the fork
+    /// flashed exactly that in the caption slot; now the slot
+    /// stays empty and the fork photo area's placeholder carries
+    /// the wait.
+    private var forkContextLine: String? {
+        ForkContextLine.make(
+            placeDisplayName: previewVM.placeDisplayName,
+            isPlaceKnown: previewVM.simplePlace != nil,
+            feelsLike: previewVM.temperatureUnit.format(previewVM.currentFeelsLike)
+        )
+    }
+
     private var outfitLine: String {
         previewVM.recommendation?.allItems.map(\.name).joined(separator: " · ") ?? ""
     }
@@ -682,23 +795,48 @@ private struct FirstLookView: View {
                 .font(.appButtonLabel)
                 .foregroundColor(AppTheme.pinePayload)
             } else if locationService.authorizationStatus == .notDetermined && !manualChoice {
-                // The user reached the fork without ever tapping a
-                // location door on the preferences screen — ask here,
-                // in context, with the same two doors.
+                // W-19: this branch used to render the step's
+                // title plus two PLAIN-TEXT buttons — no chrome,
+                // no privacy copy, no spinner — and it is what the
+                // user actually saw for ~3.5 s, because the
+                // location step advanced here in the same tap that
+                // requested permission. The location step now
+                // stays intact until the authorization resolves,
+                // so this branch is a defensive fallback only; it
+                // renders the same designed treatment (styled
+                // doors, spinner + copy while a request is in
+                // flight) rather than the stripped layout.
                 Text("One more thing — where are you running?")
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
-                Button("Use My Location") {
+                Button {
                     locationService.requestPermission()
+                } label: {
+                    Text("Use My Location")
+                        .font(.appButtonLabel)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
-                .font(.appButtonLabel)
-                .foregroundColor(AppTheme.pinePayload)
-                Button("Set a City Instead") {
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.primaryColor)
+                Button {
                     showLocationPicker = true
+                } label: {
+                    Text("Set a City Instead")
+                        .font(.appButtonLabel)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
-                .font(.appButtonLabel)
-                .foregroundColor(AppTheme.inkPrimary)
+                .buttonStyle(.bordered)
+                .tint(AppTheme.inkPrimary)
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .tint(AppTheme.inkPrimary)
+                    Text("Finding your location…")
+                        .font(.appSecondary)
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
             } else if locationService.authorizationStatus == .denied ||
                       locationService.authorizationStatus == .restricted {
                 Text("Location is off — set a city to see your first recommendation.")

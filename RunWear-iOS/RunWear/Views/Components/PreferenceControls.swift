@@ -102,3 +102,62 @@ struct FitPreferencePicker: View {
         .sensoryFeedback(.selection, trigger: preference)
     }
 }
+
+// MARK: Fit Preference — inline (onboarding)
+
+/// W-22 (GEN-2 walkthrough, 2026-11-04): the onboarding Fit
+/// Preference step's selection, rendered INLINE. The step's only
+/// choice used to be the collapsed menu above on an otherwise
+/// empty screen — the three options existed only inside the
+/// opened menu. Per Sol's ruling, a one-question step with three
+/// short options shows them directly: a grouped list of the three
+/// choices with the current selection checkmarked (the native
+/// iOS inline-selection expression), no dropdown to open.
+/// Settings keeps the menu-style FitPreferencePicker — its Form
+/// rows are the menu's designed context there.
+struct FitPreferenceInlinePicker: View {
+    @Binding var preference: GenderPreference
+
+    /// The step's three choices, in menu order.
+    static let options: [(value: GenderPreference, label: String)] = [
+        (.male, "Men's"),
+        (.female, "Women's"),
+        (.unisex, "No preference")
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(Self.options.enumerated()), id: \.offset) { index, option in
+                Button {
+                    preference = option.value
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(option.label)
+                            .font(.appSecondary)
+                            .foregroundStyle(AppTheme.inkPrimary)
+                        Spacer()
+                        if preference == option.value {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppTheme.pinePayload)
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, 16)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(option.label)
+                .accessibilityAddTraits(preference == option.value ? [.isSelected] : [])
+
+                if index < Self.options.count - 1 {
+                    Divider()
+                        .padding(.leading, 16)
+                }
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.cardFill))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.cardStroke, lineWidth: 1))
+        .sensoryFeedback(.selection, trigger: preference)
+    }
+}
