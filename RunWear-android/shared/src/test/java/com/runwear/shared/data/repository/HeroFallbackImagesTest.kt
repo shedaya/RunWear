@@ -88,12 +88,19 @@ class HeroFallbackImagesTest {
     }
 
     @Test
-    fun `assets directory holds exactly the 44 paired files - the RW-20 set is retired`() {
+    fun `assets directory holds exactly the 44 paired files plus the point-grain set - the RW-20 set is retired`() {
         val dir = assetFile(paired.values.first().values.first()).parentFile
         val names = dir.listFiles()?.filter { it.extension == "webp" }?.map { it.name }?.toSet() ?: emptySet()
         val expected = paired.values.flatMap { it.values }.map { it.substringAfterLast('/') }.toSet()
-        assertEquals(44, names.size)
-        assertEquals(expected, names)
+        // GEN-3 A-HERO (WS-A(1)): the directory additionally holds the
+        // 10 point-grain assets (the pg_* files, keyed by gate
+        // signature in HeroImageSelector's point-grain tables) — the
+        // pinned total is 44 paired + 10 point-grain, nothing else.
+        val pointGrain = HeroImageSelector.pointGrainGarmentsTable().keys
+            .map { "$it.webp" }.toSet()
+        assertEquals(10, pointGrain.size)
+        assertEquals(54, names.size)
+        assertEquals(expected + pointGrain, names)
         // None of the 21 legacy ungendered names survives (D-21: the
         // set that shipped the 5 re-adjudication-rejected sources).
         for (legacyName in listOf(
