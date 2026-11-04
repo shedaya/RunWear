@@ -108,7 +108,7 @@ struct WeatherOutfitView: View {
             }
             // RW-25: the "Wear I've Run" mini bar dock — attached
             // to the home scroll's container; renders only when the
-            // state is not .preAdd (never, in this build).
+            // state is not .preAdd (today's entry exists).
             .safeAreaInset(edge: .bottom) {
                 miniBarDock
             }
@@ -263,6 +263,35 @@ struct WeatherOutfitView: View {
         // now, outfit change) updates today's entry — the saved
         // entry is the day's last settled version.
         .onChange(of: recommendation.allItems.map(\.id)) { _, _ in
+            recordTodaysEntry()
+        }
+        // W-15 (the creation half): this view first appears
+        // mid-fetch — weather + recommendation publish BEFORE
+        // the reverse geocode lands — so the onAppear recording
+        // is always offered while the place is still the
+        // placeholder label, and the guard in recordTodaysEntry
+        // rightly refuses it. The recording MUST be re-offered
+        // when the real place resolves: this change is that
+        // re-offer, the exact mirror of Android's recording
+        // effect keyed on (outfit, weather, locationName,
+        // heroImageUrl). The hero landing is likewise a silent
+        // re-offer (the entry's thumbnail settles to the served
+        // hero; the classifier keeps it cue-free).
+        .onChange(of: viewModel.placeDisplayName) { _, _ in
+            recordTodaysEntry()
+        }
+        .onChange(of: viewModel.heroImageUrl) { _, _ in
+            recordTodaysEntry()
+        }
+        // And when a fetch's weather settles (the snapshot's
+        // feels-like is the entry's headline number): a manual
+        // place switch names the new place BEFORE its weather
+        // lands, so the place trigger alone could file the old
+        // place's numbers under the new name. This trigger
+        // re-offers the recording with the settled numbers —
+        // a weather-only settle, which the collection model
+        // records silently and never cues on.
+        .onChange(of: viewModel.selectedWeatherSnapshot?.feelsLikeFahrenheit) { _, _ in
             recordTodaysEntry()
         }
         .sheet(isPresented: $showCollection) {
@@ -627,7 +656,15 @@ struct WeatherOutfitView: View {
     /// The mini bar dock: today's entry drives the bar — absent
     /// pre-entry, narrating once the day's first generation lands.
     @ViewBuilder private var miniBarDock: some View {
-        let todays = collectionModel.todaysEntry(placeName: viewModel.placeDisplayName)
+        // W-15 (the presentation half): the dock presents
+        // TODAY'S entry by date — the entry's own place is what
+        // the narration names, so the element survives the user
+        // browsing another place (Android: "Added Kansas City,
+        // MO, Now" still docked while viewing New York). The
+        // pre-fix place-keyed lookup against the VIEWED place
+        // returned nil for the placeholder-filed entry forever,
+        // and for any entry whose place differed from the view.
+        let todays = collectionModel.todaysEntry()
         // WS-4: the state derives both narration payloads from
         // the entry itself (simple place for "Added", first kit
         // item for "Update to") — the view supplies no payload
@@ -649,7 +686,13 @@ struct WeatherOutfitView: View {
                 isDimmedBySheet: anyHomeSheetPresented,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
-                    collectionModel.removeToday(placeName: viewModel.placeDisplayName)
+                    // Trash deletes the PRESENTED entry (its own
+                    // day + place), not an entry at the viewed
+                    // place — the two differ once the user has
+                    // browsed elsewhere.
+                    if let todays {
+                        collectionModel.removeToday(placeName: todays.placeName, today: todays.dayStart)
+                    }
                 }
             )
         }
@@ -662,6 +705,14 @@ struct WeatherOutfitView: View {
     /// records — browsing another day or hour never writes.
     private func recordTodaysEntry() {
         guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
+        // W-15: never record under a placeholder. Until the
+        // reverse geocode (or a manual selection) derives a
+        // SimplePlace, `placeDisplayName` is a non-place label
+        // ("Loading..." on a GPS first load) — an entry filed
+        // under it could never be found again. The place-change
+        // trigger above re-offers the recording the moment the
+        // real place lands, so refusing here loses nothing.
+        guard let placeName = WearIveRunHomePresentation.eligiblePlace(viewModel.simplePlace) else { return }
         let snapshot = viewModel.selectedWeatherSnapshot
         let feelsLikeF = snapshot?.feelsLikeFahrenheit
             ?? (weather.currentWeather.temperatureFahrenheit)
@@ -669,7 +720,7 @@ struct WeatherOutfitView: View {
             ?? weather.currentWeather.temperatureFahrenheit
         let entry = WearIveRunEntry(
             dayStart: Calendar.current.startOfDay(for: viewModel.selectedDate),
-            placeName: viewModel.placeDisplayName,
+            placeName: placeName,
             feelsLikeF: feelsLikeF,
             actualF: actualF,
             condition: viewModel.currentCondition.shortDescription,

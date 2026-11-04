@@ -369,6 +369,19 @@ final class WearIveRunStore {
         save(WearIveRunCollection.removing(entries, dayStart: dayStart, placeName: placeName))
     }
 
+    /// Today's entry, whichever place it was recorded at — what
+    /// the home dock presents (W-15). The dock's entry is the
+    /// day's entry, not an entry at the place currently being
+    /// VIEWED: Android's holder selects today's entry by date
+    /// alone, and its narration keeps naming the recorded place
+    /// after the user browses elsewhere ("Added Kansas City, MO,
+    /// Now" while viewing New York). The place-keyed lookup
+    /// below survives for callers that genuinely need it (the
+    /// store's own tests, chapter arithmetic).
+    func todaysEntry(today: Date, calendar: Calendar = .current) -> WearIveRunEntry? {
+        WearIveRunHomePresentation.todaysEntry(from: entries, today: today, calendar: calendar)
+    }
+
     /// Today's entry at the current place, if one exists — what
     /// the mini bar narrates.
     func todaysEntry(placeName: String, today: Date, calendar: Calendar = .current) -> WearIveRunEntry? {
@@ -386,6 +399,48 @@ final class WearIveRunStore {
     private func save(_ entries: [WearIveRunEntry]) {
         guard let data = try? JSONEncoder().encode(entries) else { return }
         defaults.set(data, forKey: key)
+    }
+}
+
+// MARK: - Home recording & presentation seam (W-15)
+//
+// The W-15 mechanism, pinned as pure functions so the home
+// view's wiring is a thin call into tested code:
+//
+// (a) CREATION. Home appears mid-fetch: `WeatherViewModel`
+// publishes weather + recommendation BEFORE its reverse
+// geocode lands, so the home view's first appearance always
+// precedes the real place on a GPS first load. A recording
+// made at that moment is filed under the placeholder label
+// ("Loading...", or "Current Location" when geocoding fails)
+// — a non-place. `eligiblePlace` therefore admits ONLY a
+// resolved `SimplePlace`: no resolved place, no entry. The
+// home view re-offers the recording when the place resolves
+// (its `placeDisplayName` change), exactly as Android's
+// recording effect is keyed on the location name.
+//
+// (b) PRESENTATION. The dock presents TODAY'S entry by date,
+// never by the currently viewed place — the place-keyed
+// lookup was the second half of W-15: even a correctly filed
+// entry vanished the moment the viewed place differed from
+// the recorded place, and the placeholder-filed entry could
+// never match any real place at all.
+enum WearIveRunHomePresentation {
+    /// The place an entry may be recorded under: the resolved
+    /// simple place's display name, or nil while the place is
+    /// still a placeholder label (no `SimplePlace` derived yet).
+    static func eligiblePlace(_ simplePlace: SimplePlace?) -> String? {
+        simplePlace?.displayName
+    }
+
+    /// Today's entry by DATE alone (see the store's note): the
+    /// first entry whose day is today, whichever place it names.
+    static func todaysEntry(
+        from entries: [WearIveRunEntry],
+        today: Date,
+        calendar: Calendar = .current
+    ) -> WearIveRunEntry? {
+        entries.first { calendar.isDate($0.dayStart, inSameDayAs: today) }
     }
 }
 
