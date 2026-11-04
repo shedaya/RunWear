@@ -222,9 +222,9 @@ final class WS10CopyTests: XCTestCase {
     // MARK: - Frame 34 · the reveal (§1.4 numbers, one haptic)
 
     func testFirstLookRevealTiming() {
-        XCTAssertEqual(FirstLookReveal.photoCrossfadeSeconds, 0.6, accuracy: 0.0001)
+        XCTAssertEqual(FirstLookReveal.photoCrossfadeSeconds, 0.4, accuracy: 0.0001)
         XCTAssertEqual(FirstLookReveal.bandDelayAfterPhotoSeconds, 0.12, accuracy: 0.0001)
-        XCTAssertEqual(FirstLookReveal.bandStartSeconds, 0.72, accuracy: 0.0001,
+        XCTAssertEqual(FirstLookReveal.bandStartSeconds, 0.52, accuracy: 0.0001,
                        "the band starts 120 ms AFTER the photo lands, not with it")
         XCTAssertEqual(FirstLookReveal.successHapticCount, 1,
                        "exactly one success haptic per reveal (§1.7)")

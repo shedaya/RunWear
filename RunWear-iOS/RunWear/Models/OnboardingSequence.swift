@@ -68,19 +68,20 @@ enum OnboardingCopy {
     static let freeLooksPromise = "Your first 5 looks are free."
 }
 
-// MARK: - First-look reveal timing (§1.4, WS-10 lane values)
+// MARK: - First-look reveal timing (§1.4, spec of record)
 //
 // The frame-34 reveal, as numbers the view and the tests share:
-// the photo crossfades in, the success haptic fires ONCE as the
-// photo lands, and the §9 summary band slides up 120 ms after the
-// photo lands. (Program §1.4's text names a 400 ms crossfade; the
-// WS-10 lane assignment specifies 600 ms — the lane value is what
-// is built here, and the discrepancy is recorded in the lane's
-// gate report.) Consent acceptance carries NO haptic (§1.7: the
-// table is the complete list, and consent is not in it).
+// the photo crossfades in (400 ms), the success haptic fires ONCE
+// as the photo lands (at crossfade completion), and the §9
+// summary band slides up 120 ms after the photo lands (0.52 s
+// from reveal start). Program §1.4 is the spec of record for the
+// 400 ms crossfade (coordinator ruling, 2026-11-03, superseding
+// the WS-10 lane assignment's 600 ms). Consent acceptance
+// carries NO haptic (§1.7: the table is the complete list, and
+// consent is not in it).
 
 enum FirstLookReveal {
-    static let photoCrossfadeSeconds = 0.6
+    static let photoCrossfadeSeconds = 0.4
     static let bandDelayAfterPhotoSeconds = 0.12
 
     /// When the summary band starts, measured from reveal start.
