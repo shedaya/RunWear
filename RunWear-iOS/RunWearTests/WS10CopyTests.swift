@@ -305,6 +305,88 @@ final class WS10CopyTests: XCTestCase {
                       "shareText must stay consumerless in code (comments aside): \(consumers)")
     }
 
+    // MARK: - WS-9 fix · frame 34 completeness, fork body, fit-step line
+
+    func testFirstLookBandHeaderIsTheDesignedString() {
+        XCTAssertEqual(MakeItMeCopy.firstLookBandHeader, "With Premium",
+                       "frame 34's band header, verbatim (Android: FIRST_LOOK_BAND_HEADER)")
+    }
+
+    func testFirstLookHeadingAndWeatherLineComposition() {
+        // The heading: city only, "Today" when no place is known —
+        // Android's firstLookHeading pattern, character for
+        // character (design frame 34: "Your first look · Today,
+        // New York").
+        XCTAssertEqual(MakeItMeCopy.firstLookHeading(city: "New York"),
+                       "Your first look · Today, New York")
+        XCTAssertEqual(MakeItMeCopy.firstLookHeading(city: nil), "Your first look · Today")
+        XCTAssertEqual(MakeItMeCopy.firstLookHeading(city: ""), "Your first look · Today")
+        // The weather line: feels-like + condition, items counted
+        // only when the outfit has any (design frame 34: "41°
+        // feels like · Cloudy · 5 items").
+        XCTAssertEqual(
+            MakeItMeCopy.firstLookWeatherLine(feelsLike: "41°F", condition: "Cloudy", itemCount: 5),
+            "41°F feels like · Cloudy · 5 items")
+        XCTAssertEqual(
+            MakeItMeCopy.firstLookWeatherLine(feelsLike: "41°F", condition: "Cloudy", itemCount: 0),
+            "41°F feels like · Cloudy")
+    }
+
+    func testFrame34MomentCarriesTheDesignedElements_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        // Scope every assertion to the frame-34 surface itself.
+        let start = try XCTUnwrap(onboarding.range(of: "private var firstLookMomentView"))
+        let end = try XCTUnwrap(onboarding.range(of: "private func startFirstLookReveal"))
+        let moment = String(onboarding[start.lowerBound..<end.lowerBound])
+
+        XCTAssertTrue(moment.contains("Text(\"Make It Me\")"),
+                      "the moment carries its designed script header (WS-9: it was missing)")
+        XCTAssertTrue(moment.contains(".greatVibes(size: 34)"),
+                      "the script header at Android's 34 pt Great Vibes")
+        XCTAssertTrue(moment.contains("MakeItMeCopy.firstLookHeading(city: previewVM.simplePlace?.city)"),
+                      "the heading composes from the simple place's city")
+        XCTAssertTrue(moment.contains("MakeItMeCopy.firstLookWeatherLine("),
+                      "the weather line is the frame's second context line")
+        XCTAssertFalse(moment.contains("Text(contextLine)"),
+                       "the RW-14 single computed line is retired on frame 34 (it remains on the fork preview and the flag-off ready view)")
+        XCTAssertTrue(moment.contains("MakeItMeCopy.firstLookBandHeader"),
+                      "the band carries its designed header (WS-9: it was missing)")
+
+        // Placement, mirroring Android's FirstLookMoment: script
+        // header → heading → weather line → photo → band header →
+        // primary door.
+        func position(of needle: String) throws -> String.Index {
+            try XCTUnwrap(moment.range(of: needle), "\(needle) missing from the moment").lowerBound
+        }
+        let script = try position(of: "Text(\"Make It Me\")")
+        let heading = try position(of: "MakeItMeCopy.firstLookHeading(")
+        let weather = try position(of: "MakeItMeCopy.firstLookWeatherLine(")
+        let photo = try position(of: "AsyncImage(url: (previewVM.heroImageUrl")
+        let bandHeader = try position(of: "MakeItMeCopy.firstLookBandHeader")
+        let door = try position(of: "Text(\"See My Outfit\")")
+        XCTAssertTrue(script < heading && heading < weather && weather < photo
+                      && photo < bandHeader && bandHeader < door,
+                      "frame 34's element order must match the design/Android composition")
+    }
+
+    func testForkBodyIsFrame32sSubHeadline_sourcePin() throws {
+        let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        XCTAssertTrue(flow.contains("Text(\"Your recommendations, with you in the photo.\")"),
+                      "the fork's body paragraph is frame 32's sub-headline, verbatim")
+        XCTAssertFalse(flow.contains("That's a model in your outfit photo"),
+                       "the RW-14 deck lead is retired from the fork (WS-9)")
+        XCTAssertFalse(flow.contains("on a road like yours"),
+                       "no fragment of the retired deck lead survives")
+    }
+
+    func testFitStepCarriesNoUnintroducedReassuranceLine_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertFalse(onboarding.contains("No preference selected"),
+                       "the removed fit-step line stays removed (WS-9)")
+        XCTAssertFalse(onboarding.contains("showing unisex options"),
+                       "vocabulary no frame introduces appears nowhere in onboarding")
+    }
+
     func testLocationPickerUsesDesignedIconographyNotTextGlyphs() throws {
         // A4's picker item, iOS side: the location picker's
         // selection/current markers are SF Symbol iconography —

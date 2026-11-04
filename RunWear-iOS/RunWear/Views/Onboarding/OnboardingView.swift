@@ -498,6 +498,32 @@ private struct FirstLookView: View {
     private var firstLookMomentView: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Frame 34's header stack (WS-9 fix — design frame
+                // 34 and Android's FirstLookMoment carry all three):
+                // the "Make It Me" script wordmark heads the moment,
+                // then the heading and its weather line — the
+                // frame's two-line context composition, replacing
+                // the RW-14 single computed line ("{place} ·
+                // {feels-like}") this surface used to carry under
+                // the photo. That computed line remains only where
+                // it belongs: the fork preview and the flag-off
+                // ready view.
+                VStack(spacing: 6) {
+                    Text("Make It Me")
+                        .font(.greatVibes(size: 34))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Text(MakeItMeCopy.firstLookHeading(city: previewVM.simplePlace?.city))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Text(MakeItMeCopy.firstLookWeatherLine(
+                        feelsLike: previewVM.temperatureUnit.format(previewVM.currentFeelsLike),
+                        condition: previewVM.currentCondition.rawValue,
+                        itemCount: previewVM.recommendation?.allItems.count ?? 0
+                    ))
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+
                 AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
                     switch phase {
                     case .success(let image):
@@ -512,10 +538,6 @@ private struct FirstLookView: View {
                 // §1.4 reveal: the photo crossfades in (it never
                 // pops, and it is never replaced mid-view).
                 .opacity(firstLookPhotoRevealed ? 1 : 0)
-
-                Text(contextLine)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppTheme.inkSecondary)
 
                 // Frame 34's own lines, as designed: the moment
                 // stated, then the honest meter (look 1 of 5,
@@ -533,6 +555,14 @@ private struct FirstLookView: View {
                 // (FirstLookReveal.bandStartSeconds from reveal
                 // start), never with or ahead of the photo.
                 VStack(alignment: .leading, spacing: 8) {
+                    // WS-9 fix: the band's designed header (frame
+                    // 34; Android's FIRST_LOOK_BAND_HEADER) — the
+                    // eyebrow that attributes the pair below to
+                    // Premium, at Android's size, tracking and pine.
+                    Text(MakeItMeCopy.firstLookBandHeader)
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundColor(AppTheme.pinePayload)
                     Text("Ready the moment you open the app — made ahead, never while you wait.")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.inkPrimary)

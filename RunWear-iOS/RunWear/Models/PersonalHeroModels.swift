@@ -886,6 +886,34 @@ enum PhotoQualityVerdict {
 // runners in frame fail the existing multiple-people check (C3b),
 // so the guidance must not steer anyone into that rejection.
 enum MakeItMeCopy {
+    /// Frame 34 (WS-9 fix): the first-look band's header, verbatim
+    /// from the frozen design package — Android ships the identical
+    /// string (MakeItMeStrings.FIRST_LOOK_BAND_HEADER). The band
+    /// header names what the §9 pair below it belongs to; without
+    /// it the two benefit lines float unattributed.
+    static let firstLookBandHeader = "With Premium"
+
+    /// Frame 34's heading (design frame 34 + Android's
+    /// firstLookHeading, verbatim pattern): "Your first look ·
+    /// Today, {city}" — the CITY only, never the region; with no
+    /// known place the line ends at "Today".
+    static func firstLookHeading(city: String?) -> String {
+        guard let city, !city.isEmpty else { return "Your first look · Today" }
+        return "Your first look · Today, \(city)"
+    }
+
+    /// Frame 34's weather line (design frame 34 + Android's
+    /// weatherLine composition): "{feels-like} feels like ·
+    /// {condition}", plus " · {n} items" when the outfit has items.
+    /// Together with the heading this is the frame's two-line
+    /// context composition — the RW-14 single computed line
+    /// ("{place} · {feels-like}") is not frame 34's treatment.
+    static func firstLookWeatherLine(feelsLike: String, condition: String, itemCount: Int) -> String {
+        var line = "\(feelsLike) feels like · \(condition)"
+        if itemCount > 0 { line += " · \(itemCount) items" }
+        return line
+    }
+
     static let fullBodyGuidance = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
     /// RW-16.15 (spec C2j, both platforms verbatim): the save
     /// confirmation the flow shows after a successful commit,
