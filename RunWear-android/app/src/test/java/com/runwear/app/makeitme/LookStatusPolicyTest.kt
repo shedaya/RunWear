@@ -113,9 +113,21 @@ class LookStatusPolicyTest {
     fun `progress sub-line no longer promises ten seconds`() {
         assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("10 seconds"))
         assertEquals(
-            "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done.",
+            "This usually takes a few minutes. Your recommendation is ready either way.",
             MakeItMeStrings.G2_PROGRESS_SUB
         )
+    }
+
+    @Test
+    fun `progress sub-line makes no photo claim - GEN-3 X-8 copy audit`() {
+        // The pre-GEN-3 line ended "— the standard photo stays up
+        // until yours is done": a claim that was false in exactly
+        // the frames the gen-2 walkthrough recorded (no photo up at
+        // all). The generating state now lives on the hero photo
+        // itself (the WS-A(2) pill), and the sub-line promises only
+        // what is always true — the recommendation is ready.
+        assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("photo"))
+        assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("stays up"))
     }
 
     @Test
