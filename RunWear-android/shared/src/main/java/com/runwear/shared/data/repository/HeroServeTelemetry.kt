@@ -1,5 +1,6 @@
 package com.runwear.shared.data.repository
 
+import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.model.HeroImageResult
 import com.runwear.shared.domain.model.HeroServeRecord
 import com.runwear.shared.domain.model.HeroServeSource
@@ -120,6 +121,40 @@ object HeroServeTelemetry {
             )
         )
     }
+
+    /**
+     * WS-9 fix (telemetry-test authenticity): build the serve record
+     * for a PERSONAL-layer serve — the one place the personal vs
+     * scaffold classification is made. MainViewModel's two personal
+     * serve sites (the resolve-time overlay and the poll delivery)
+     * both build their record here and emit it through [emit] (via
+     * the view model's recordHeroServe), so a test that drives this
+     * factory + [emit] consumes a record the production code
+     * produced — the pre-fix test hand-built its records and proved
+     * only that the channel stores what it is handed.
+     *
+     * [isScaffold] is the serve kind the personal layer reported:
+     * a scaffold serve is the user's OWN banked photo carrying the
+     * prescription under the nearest conditions (the convergence
+     * scaffold); anything else is the exact personal photo.
+     */
+    fun personalServeRecord(
+        isScaffold: Boolean,
+        requestedCombinationId: String,
+        servedCombinationId: String? = null,
+        gender: GenderPreference?,
+        trigger: String
+    ): HeroServeRecord = HeroServeRecord(
+        source = if (isScaffold) {
+            HeroServeSource.SCAFFOLD
+        } else {
+            HeroServeSource.PERSONAL
+        },
+        requestedCombinationId = requestedCombinationId,
+        servedCombinationId = servedCombinationId,
+        gender = gender,
+        trigger = trigger
+    )
 
     private const val MAX_HISTORY = 64
     private const val BUNDLED_ASSET_PREFIX = "file:///android_asset/hero_fallback/"

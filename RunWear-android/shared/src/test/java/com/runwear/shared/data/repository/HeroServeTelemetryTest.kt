@@ -24,8 +24,24 @@ import java.util.concurrent.CopyOnWriteArrayList
  * bundled-fallback / personal / scaffold — with the cell, gender, and
  * served combination where applicable, and (for a bundled serve) the
  * asset file + manifest provenance. These tests pin that each serve
- * kind emits its record through [HeroServeTelemetry], the channel the
- * repository resolves through and the view model paints through.
+ * kind's record is classified and emitted through [HeroServeTelemetry],
+ * the channel the repository resolves through and the view model
+ * paints through.
+ *
+ * WS-9 fix (test authenticity — what these tests do and do NOT
+ * prove): the pool/bundled cases drive [HeroServeTelemetry.emitForResult],
+ * the production classification HeroImageRepository calls at serve
+ * time (its getHeroImage emission sites); the personal/scaffold case
+ * drives [HeroServeTelemetry.personalServeRecord] + [emit], the
+ * production construction both of MainViewModel's personal serve
+ * sites (resolve-time overlay, poll delivery) build and emit through.
+ * The serve PATHS themselves are not driven: the repository performs
+ * live Supabase network I/O by design, and the view model's personal
+ * layer is compile-time gated OFF in this build
+ * (MakeItMeAvailability) behind concrete network repositories — so
+ * the claim of this suite is the classification, construction, and
+ * emission of the records, verified against the seams production
+ * calls, not an end-to-end serve.
  */
 class HeroServeTelemetryTest {
 
@@ -129,29 +145,60 @@ class HeroServeTelemetryTest {
     }
 
     @Test
-    fun `personal and scaffold serves emit their records`() {
+    fun `personal and scaffold serves emit the records the production seam builds`() {
+        // WS-9 fix: these records are BUILT by the production seam
+        // (HeroServeTelemetry.personalServeRecord) — the same factory
+        // MainViewModel's overlay and poll-delivery sites call — not
+        // hand-built here. The assertions consume what production
+        // produced: classification (exact → PERSONAL, scaffold →
+        // SCAFFOLD), identity, gender, and trigger.
         HeroServeTelemetry.emit(
-            HeroServeRecord(
-                source = HeroServeSource.PERSONAL,
+            HeroServeTelemetry.personalServeRecord(
+                isScaffold = false,
                 requestedCombinationId = combination.id,
+                servedCombinationId = "MALE_CLEAR_COOL_MIDDAY_ffff0000",
                 gender = GenderPreference.MALE,
                 trigger = "personal-overlay"
             )
         )
         HeroServeTelemetry.emit(
-            HeroServeRecord(
-                source = HeroServeSource.SCAFFOLD,
+            HeroServeTelemetry.personalServeRecord(
+                isScaffold = true,
                 requestedCombinationId = combination.id,
+                servedCombinationId = "MALE_CLEAR_COOL_MIDDAY_ffff0000",
                 gender = GenderPreference.MALE,
                 trigger = "personal-overlay"
             )
         )
-        assertEquals(2, captured.size)
+        // The poll-delivery site builds its record through the same
+        // seam, keyed on the cell (no served combination).
+        HeroServeTelemetry.emit(
+            HeroServeTelemetry.personalServeRecord(
+                isScaffold = true,
+                requestedCombinationId = combination.id,
+                gender = GenderPreference.MALE,
+                trigger = "personal-poll-delivery"
+            )
+        )
+        assertEquals(3, captured.size)
         assertEquals(HeroServeSource.PERSONAL, captured[0].source)
         assertEquals("personal", captured[0].source.wire)
+        assertEquals(combination.id, captured[0].requestedCombinationId)
+        assertEquals(
+            "MALE_CLEAR_COOL_MIDDAY_ffff0000",
+            captured[0].servedCombinationId
+        )
+        assertEquals(GenderPreference.MALE, captured[0].gender)
+        assertEquals("personal-overlay", captured[0].trigger)
+        assertTrue(captured[0].summary().contains("source=personal"))
         assertEquals(HeroServeSource.SCAFFOLD, captured[1].source)
         assertEquals("scaffold", captured[1].source.wire)
-        // History retains both, in order — the after-the-fact channel.
+        assertEquals("personal-overlay", captured[1].trigger)
+        assertTrue(captured[1].summary().contains("source=scaffold"))
+        assertEquals(HeroServeSource.SCAFFOLD, captured[2].source)
+        assertEquals("personal-poll-delivery", captured[2].trigger)
+        assertEquals(null, captured[2].servedCombinationId)
+        // History retains all three, in order — the after-the-fact channel.
         assertEquals(captured.toList(), HeroServeTelemetry.recent())
     }
 

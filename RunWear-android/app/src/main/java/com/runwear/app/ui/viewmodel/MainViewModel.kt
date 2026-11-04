@@ -935,12 +935,13 @@ class MainViewModel @Inject constructor(
                     else -> look.status
                 }
                 recordHeroServe(
-                    com.runwear.shared.domain.model.HeroServeRecord(
-                        source = if (hit.serveKind == com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD) {
-                            com.runwear.shared.domain.model.HeroServeSource.SCAFFOLD
-                        } else {
-                            com.runwear.shared.domain.model.HeroServeSource.PERSONAL
-                        },
+                    // WS-9 fix: the record is built by the shared
+                    // production seam (HeroServeTelemetry) — the
+                    // personal/scaffold classification lives there,
+                    // once, for both serve sites.
+                    HeroServeTelemetry.personalServeRecord(
+                        isScaffold = hit.serveKind ==
+                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
                         requestedCombinationId = chosen.combinationId,
                         servedCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
                         gender = gender,
@@ -1179,12 +1180,11 @@ class MainViewModel @Inject constructor(
             val hit = look.hit
             if (hit != null && _uiState.value.heroImageUrl != hit.imageUrl) {
                 recordHeroServe(
-                    com.runwear.shared.domain.model.HeroServeRecord(
-                        source = if (hit.serveKind == com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD) {
-                            com.runwear.shared.domain.model.HeroServeSource.SCAFFOLD
-                        } else {
-                            com.runwear.shared.domain.model.HeroServeSource.PERSONAL
-                        },
+                    // WS-9 fix: built by the shared production seam
+                    // (see the overlay site in resolveHeroImage).
+                    HeroServeTelemetry.personalServeRecord(
+                        isScaffold = hit.serveKind ==
+                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
                         requestedCombinationId = cell,
                         gender = _uiState.value.genderPreference,
                         trigger = "personal-poll-delivery"
