@@ -481,3 +481,62 @@ object SessionGuardPolicy {
         }
     }
 }
+
+/**
+ * Gen-3 WS-D/X-9 (Nov 4, 2026): THE single meter seam for Android.
+ *
+ * Diagnosis of why gen-2's W-18 discipline did not hold on Android:
+ * W-18's "one counter, one spelling seam" (a shared FreeLooksMeter)
+ * was implemented on iOS only — no such type existed in the Android
+ * codebase. Android Settings composed its meter directly from
+ * `PersonalState.freeGenerationsUsed`, a server mirror that (a) the
+ * server increments ONLY when a look is DELIVERED, and (b) the
+ * client re-read only at ViewModel init / explicit refresh — never
+ * when Settings opened, and never with any in-flight input. The
+ * repository DID learn about in-flight looks (noteLookStatus /
+ * cellLookFor → lastKnownStatus), but that map was private,
+ * per-cell, and never surfaced to Settings, so while a generation
+ * was visibly in flight the Settings block could only print the
+ * settled delivered count ("0 of 5 free looks used") — a number
+ * that is true of deliveries and false as a description of the
+ * user's state at that moment. A re-read patch on the same seam
+ * cannot fix this: re-reading the same delivered-only counter at
+ * the charge moment still yields 0 while the first look is making.
+ * The fix is a different input, not a fresher read of the old one:
+ * this seam composes the status block from BOTH the delivered
+ * count AND the repository's any-look-making state (now exposed
+ * on PersonalState), so the block can never present a settled
+ * number while the flow says a look is in flight.
+ */
+object FreeLooksMeter {
+
+    /** The status block's lines, composed as ONE block: status
+     *  line first, meter line second. Subscribed users carry no
+     *  meter — their settled subscribed line stands instead. */
+    fun block(deliveredUsed: Int, lookMaking: Boolean, subscribed: Boolean): List<String> =
+        if (subscribed) {
+            listOf(MakeItMeStrings.S3_STATUS, MakeItMeStrings.S5_STATE_C_SUB)
+        } else {
+            listOf(statusLine(lookMaking), meterLine(deliveredUsed, lookMaking))
+        }
+
+    fun statusLine(lookMaking: Boolean): String =
+        if (lookMaking) MakeItMeStrings.S26_MAKING_STATUS else MakeItMeStrings.S3_STATUS
+
+    /**
+     * The meter line: the DELIVERED count, and — while a look is
+     * generating — the in-flight look stated as pending in the
+     * same line, so the number can never read as settled truth
+     * the flow contradicts.
+     */
+    fun meterLine(deliveredUsed: Int, lookMaking: Boolean): String {
+        val base = MakeItMeStrings.s4FreeUsed(deliveredUsed)
+        return if (lookMaking) "$base · 1 look is being made" else base
+    }
+
+    /** The paywall's meter line, from the same seam and inputs. */
+    fun paywallLine(deliveredUsed: Int, lookMaking: Boolean): String {
+        val base = MakeItMeStrings.u2MeterLine(deliveredUsed)
+        return if (lookMaking) "$base One look is being made right now." else base
+    }
+}

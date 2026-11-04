@@ -1,7 +1,7 @@
 package com.runwear.app.makeitme
 
 /**
- * RW-14 "Make it me" copy deck — spec §7 of
+ * RW-14 "Make It Me" copy deck — spec §7 of
  * ~/workspace/release-prep/marketing/runwear-rw14-ux-identity-spec-2026-10-31.md,
  * verbatim. Strings are NOT edited silently: copy changes amend the spec's
  * §7 by dated note first (spec rule). PROPOSAL strings (P1's first-swap
@@ -20,7 +20,7 @@ object MakeItMeStrings {
     // headline, this line, the two choices and the closing line —
     // nothing else (and no free-looks promise sentence: see F4).
     const val F2_LEAD = "Your recommendations, with you in the photo."
-    const val F3_OPTION_A_TITLE = "Make it me"
+    const val F3_OPTION_A_TITLE = "Make It Me"
     // F4 amended 2026-11-03 (coordinator ruling, RW-27 WS-10 fix):
     // the trailing free-looks promise sentence is REMOVED. The
     // frozen final design package carries that sentence only on
@@ -29,13 +29,13 @@ object MakeItMeStrings {
     const val F4_OPTION_A_BODY = "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at."
     const val F5_OPTION_A_BUTTON = "Use my photos"
     const val F6_OPTION_B_TITLE = "Use the standard photos"
-    const val F7_OPTION_B_BODY = "Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make it me any time in Settings."
+    const val F7_OPTION_B_BODY = "Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make It Me any time in Settings."
     const val F8_OPTION_B_BUTTON = "Use standard photos"
     const val F9_FOOTER = "Either way, your recommendations don't change — only the photo does."
 
     // C — Consent, attestation, capture (spec §2.3)
     const val C1A_CONSENT_TITLE = "Before you add photos"
-    const val C1B_CONSENT_BODY = "RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.\n\nYour photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.\n\nPictures made from your photos are kept only for you, so your outfits are ready when you open the app.\n\nYou can delete your photos and every picture made from them at any time: Settings → Make it me → Delete my photos. Deleting is permanent and takes effect right away."
+    const val C1B_CONSENT_BODY = "RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.\n\nYour photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.\n\nPictures made from your photos are kept only for you, so your outfits are ready when you open the app.\n\nYou can delete your photos and every picture made from them at any time: Settings → Make It Me → Delete my photos. Deleting is permanent and takes effect right away."
     const val C1C_ATTESTATION = "These photos are of me, and I am 18 or older."
     const val C1D_CONTINUE = "Continue"
     const val C1E_NOT_NOW = "Not now"
@@ -94,10 +94,19 @@ object MakeItMeStrings {
     const val G6_RETRY = "Try again"
 
     // S — Settings (spec §3)
-    const val S1_SECTION_HEADER = "Make it me"
+    const val S1_SECTION_HEADER = "Make It Me"
     const val S2_STATE_A_ROW = "See yourself in every outfit"
     const val S2_STATE_A_SUB = "Make your outfit photos from your own photos."
     const val S3_STATUS = "You're in your photos."
+    // Gen-3 WS-D/X-9 (Nov 4, 2026): the status block's in-flight
+    // line — while any look is generating, the block carries this
+    // line instead of presenting the delivered count as settled.
+    const val S26_MAKING_STATUS = "Making your look…"
+    // Gen-3 WS-D: the Settings Premium offer card's CTA — a real
+    // button that opens the paywall.
+    const val S27_GET_PREMIUM = "Get Premium"
+    // Gen-3 WS-D: the offer card's subscribed state line.
+    const val S28_SUBSCRIBED_STATE = "You're subscribed."
     // RW-26 §H: subscribed = management only, NO sales copy — this is
     // a state fact, not a benefit line.
     const val S5_STATE_C_SUB = "Subscribed — your photo is ready before you open the app."
@@ -134,7 +143,7 @@ object MakeItMeStrings {
     const val S9_MANAGE_SUBSCRIPTION = "Manage subscription"
     const val S10_DELETE_ROW = "Delete my photos"
     const val S11_DELETE_CONFIRM_TITLE = "Delete your photos?"
-    const val S12_DELETE_CONFIRM_BODY = "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make it me turns off. This can't be undone."
+    const val S12_DELETE_CONFIRM_BODY = "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make It Me turns off. This can't be undone."
     const val S13_DELETE_CONFIRM = "Delete my photos"
     const val S13_KEEP = "Keep my photos"
     const val S14_POST_DELETE = "Your photos and pictures are deleted."
@@ -188,37 +197,73 @@ object MakeItMeStrings {
     fun monthlyRowLabel(monthlyFormatted: String): String = "$monthlyFormatted / month"
 
     /**
-     * U2 annual row, from the offering's formatted price. The
-     * "less than paying monthly" suffix is COMPUTED from the two
-     * fetched amounts and appears only when the annual price really
-     * is lower than twelve monthly payments — at the base prices
-     * ($0.99/mo, $9.99/yr) it reproduces the original "about 16%"
-     * copy; at the $19.99/$29.99 experiment arms it correctly
-     * disappears instead of making a false claim.
+     * U2 annual row, from the offering's formatted price. Gen-3
+     * WS-F (Nov 4, 2026): the "about N% less than paying monthly"
+     * comparison is REMOVED — the annual value is now framed by
+     * the per-run fine print ([perRunLine]) instead, with its
+     * basis stated. The row itself is just the fetched price + term.
      */
     fun annualRowLabel(
         annualFormatted: String,
         annualAmountMicros: Long,
         monthlyAmountMicros: Long?
-    ): String {
-        val pct = annualSavingsPercent(annualAmountMicros, monthlyAmountMicros)
-        return if (pct != null) {
-            "$annualFormatted / year — about $pct% less than paying monthly"
-        } else {
-            "$annualFormatted / year"
-        }
-    }
+    ): String = "$annualFormatted / year"
 
-    /** Whole-percent saving of annual vs 12 × monthly, or null when
-     *  annual is not cheaper (or monthly is unknown). */
-    fun annualSavingsPercent(annualAmountMicros: Long, monthlyAmountMicros: Long?): Int? {
-        if (monthlyAmountMicros == null || monthlyAmountMicros <= 0L) return null
-        val monthlyYearMicros = monthlyAmountMicros * 12L
-        if (annualAmountMicros >= monthlyYearMicros) return null
-        return Math.round(
-            (1.0 - annualAmountMicros.toDouble() / monthlyYearMicros.toDouble()) * 100.0
-        ).toInt()
-    }
+    /** Runs per year behind the per-run framing: 4.5 runs/week × 52. */
+    const val RUNS_PER_YEAR_BASIS = 4.5 * 52.0
+
+    /**
+     * Whole cents per run DERIVED from the displayed product's
+     * annual price: annual cents ÷ (4.5 × 52) runs, rounded to the
+     * nearest cent. Control $9.99 → 4¢; test arms $19.99 → 9¢ and
+     * $29.99 → 13¢. Never a hardcoded figure.
+     */
+    fun perRunCents(annualAmountMicros: Long): Int =
+        Math.round((annualAmountMicros / 10_000.0) / RUNS_PER_YEAR_BASIS).toInt()
+
+    /** The WS-F per-run line, with its basis stated in the line. */
+    fun perRunLine(annualFormatted: String, annualAmountMicros: Long): String =
+        "At four to five runs a week, $annualFormatted/year works out to only about ${perRunCents(annualAmountMicros)}¢ per run."
+
+    /** The paywall fine print: the per-run framing + the settled U2C text. */
+    fun finePrint(annualFormatted: String, annualAmountMicros: Long): String =
+        "${perRunLine(annualFormatted, annualAmountMicros)} ${U2C_FINE_PRINT}"
+
+    /**
+     * Gen-3 WS-D: the Settings Premium offer card's content, built
+     * from the fetched offering — the card is a legible offer:
+     * the name "Premium", the parameterized price with term, the
+     * settled two-benefit line, and a real CTA. For a subscriber
+     * the card shows the subscribed state instead of the offer
+     * (no price, no CTA).
+     */
+    data class PremiumOfferCardContent(
+        val title: String,
+        val priceLine: String?,
+        val benefitLine: String,
+        val ctaLabel: String?,
+        val subscribed: Boolean
+    )
+
+    fun premiumOfferCard(annualFormatted: String?, subscribed: Boolean): PremiumOfferCardContent =
+        if (subscribed) {
+            PremiumOfferCardContent(
+                title = U2G_CARD_TITLE,
+                priceLine = null,
+                benefitLine = S28_SUBSCRIBED_STATE,
+                ctaLabel = null,
+                subscribed = true
+            )
+        } else {
+            PremiumOfferCardContent(
+                title = U2G_CARD_TITLE,
+                priceLine = annualFormatted?.let { "$it / year" },
+                benefitLine = S18_SETTINGS_PREMIUM_LINE,
+                ctaLabel = S27_GET_PREMIUM,
+                subscribed = false
+            )
+        }
+
     const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions."
 
     // RW-26 §9 frame 34: the first-look band — the recommended pair,

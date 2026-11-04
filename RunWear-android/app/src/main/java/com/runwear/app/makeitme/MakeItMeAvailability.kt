@@ -20,7 +20,7 @@ package com.runwear.app.makeitme
  *   generation requests ([generationRequestAllowed]; cellLookFor
  *   is gated on [ENABLED] directly);
  * - no RevenueCat purchase can start ([purchaseAllowed]);
- * - the Settings "Make it me" section does not render
+ * - the Settings "Make It Me" section does not render
  *   ([settingsSectionVisible]);
  * - the onboarding fork never comes due and the flow / photos /
  *   paywall / personal-flag sheets never open (the hosts consult
@@ -51,6 +51,6 @@ object MakeItMeAvailability {
     /** Personal-generation requests may fire only when the feature is available. */
     fun generationRequestAllowed(): Boolean = ENABLED
 
-    /** The Settings "Make it me" section renders only when the feature is available. */
+    /** The Settings "Make It Me" section renders only when the feature is available. */
     fun settingsSectionVisible(): Boolean = ENABLED
 }

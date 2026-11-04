@@ -149,7 +149,7 @@ fun HeroMainScreen(
     /** Hero refresh: cycle to the cell's next approved image (no flag). */
     onCycleHero: () -> Unit = {},
     onItemTapped: (ClothingItem) -> Unit = {},
-    // ── RW-14 "Make it me" ─────────────────────────────────────────────
+    // ── RW-14 "Make It Me" ─────────────────────────────────────────────
     makeItMeViewModel: com.runwear.app.makeitme.MakeItMeViewModel? = null,
     makeItMeState: com.runwear.app.makeitme.MakeItMeUiState =
         com.runwear.app.makeitme.MakeItMeUiState(),

@@ -39,6 +39,11 @@ object OnboardingCopy {
     const val PROMISE_2_TITLE = "See yourself in every outfit"
     const val PROMISE_2_BODY =
         "Make It Me puts you in the photos. Your first 5 looks are free."
+    // Gen-3 WS-E (Nov 4, 2026): the third feature point, under the
+    // existing two — headline and line verbatim from the lane spec.
+    const val PROMISE_3_TITLE = "Remember every run"
+    const val PROMISE_3_BODY =
+        "Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
     const val PROMISE_CTA = "Get Started"
     // W-21 (Sol, Nov 4 walkthrough): the app is free forever —
     // premium features are the upsell — so the footer states the

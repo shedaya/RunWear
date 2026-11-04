@@ -12,9 +12,9 @@ import org.junit.Test
  *  1. No string constant in the paywall path carries a price — a user
  *     assigned a $19.99/$29.99 experiment offering can never be shown
  *     the $9.99 control price by a fallback or a CTA.
- *  2. The annual row's "less than paying monthly" suffix is computed
- *     from the fetched amounts: present and correct at the base
- *     prices, absent whenever it would be false.
+ *  2. Gen-3 WS-F: the annual row carries NO monthly comparison at
+ *     any arm; the annual value is framed by per-run fine print
+ *     DERIVED from the fetched annual amount (basis stated).
  */
 class MakeItMePriceLabelTest {
 
@@ -42,41 +42,43 @@ class MakeItMePriceLabelTest {
     }
 
     @Test
-    fun `base prices reproduce the original annual copy`() {
-        // $0.99/mo vs $9.99/yr: 1 - 9.99/11.88 = 15.9% -> "about 16%".
+    fun `annual row carries no monthly comparison at any arm - WS-F`() {
+        // Gen-3 WS-F: the "about 16% less than paying monthly" line
+        // is removed at every price point.
+        for ((formatted, annual) in listOf(
+            "$9.99" to micros(9.99), "$19.99" to micros(19.99), "$29.99" to micros(29.99)
+        )) {
+            val label = MakeItMeStrings.annualRowLabel(formatted, annual, micros(0.99))
+            assertEquals("$formatted / year", label)
+            assertFalse(label.contains("less than paying monthly"))
+        }
+    }
+
+    @Test
+    fun `per-run figure is derived from the annual price at all three arms - WS-F`() {
+        // annual cents / (4.5 x 52 = 234 runs), rounded honestly.
+        assertEquals(4, MakeItMeStrings.perRunCents(micros(9.99)))
+        assertEquals(9, MakeItMeStrings.perRunCents(micros(19.99)))
+        assertEquals(13, MakeItMeStrings.perRunCents(micros(29.99)))
         assertEquals(
-            16,
-            MakeItMeStrings.annualSavingsPercent(micros(9.99), micros(0.99))
+            "At four to five runs a week, $9.99/year works out to only about 4¢ per run.",
+            MakeItMeStrings.perRunLine("$9.99", micros(9.99))
         )
         assertEquals(
-            "$9.99 / year — about 16% less than paying monthly",
-            MakeItMeStrings.annualRowLabel("$9.99", micros(9.99), micros(0.99))
+            "At four to five runs a week, $19.99/year works out to only about 9¢ per run.",
+            MakeItMeStrings.perRunLine("$19.99", micros(19.99))
+        )
+        assertEquals(
+            "At four to five runs a week, $29.99/year works out to only about 13¢ per run.",
+            MakeItMeStrings.perRunLine("$29.99", micros(29.99))
         )
     }
 
     @Test
-    fun `experiment arms drop the savings claim instead of lying`() {
-        // $19.99 and $29.99 annuals cost MORE than 12 x $0.99 monthly;
-        // the suffix must disappear, the fetched price must remain.
-        assertNull(MakeItMeStrings.annualSavingsPercent(micros(19.99), micros(0.99)))
-        assertNull(MakeItMeStrings.annualSavingsPercent(micros(29.99), micros(0.99)))
-        assertEquals(
-            "$19.99 / year",
-            MakeItMeStrings.annualRowLabel("$19.99", micros(19.99), micros(0.99))
-        )
-        assertEquals(
-            "$29.99 / year",
-            MakeItMeStrings.annualRowLabel("$29.99", micros(29.99), micros(0.99))
-        )
-    }
-
-    @Test
-    fun `unknown monthly price yields no savings claim`() {
-        assertNull(MakeItMeStrings.annualSavingsPercent(micros(9.99), null))
-        assertNull(MakeItMeStrings.annualSavingsPercent(micros(9.99), 0L))
-        assertEquals(
-            "$9.99 / year",
-            MakeItMeStrings.annualRowLabel("$9.99", micros(9.99), null)
-        )
+    fun `fine print leads with the derived per-run line and keeps the settled text`() {
+        val fp = MakeItMeStrings.finePrint("$9.99", micros(9.99))
+        assertTrue(fp.startsWith("At four to five runs a week, $9.99/year works out to only about 4¢ per run."))
+        assertTrue(fp.contains(MakeItMeStrings.U2C_FINE_PRINT))
+        assertFalse(fp.contains("less than paying monthly"))
     }
 }

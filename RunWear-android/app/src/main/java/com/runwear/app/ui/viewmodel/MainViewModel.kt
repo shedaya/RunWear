@@ -125,7 +125,7 @@ data class MainUiState(
      * to — the cell key under which the day's refresh choice persists.
      */
     val heroRequestedCombinationId: String? = null,
-    // ── RW-14 "Make it me" ─────────────────────────────────────────────
+    // ── RW-14 "Make It Me" ─────────────────────────────────────────────
     /** True when the hero on screen is the user's verified personal hero. */
     val heroIsPersonal: Boolean = false,
     /**

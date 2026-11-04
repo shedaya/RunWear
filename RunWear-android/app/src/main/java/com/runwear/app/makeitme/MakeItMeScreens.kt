@@ -1301,7 +1301,9 @@ fun MakeItMePaywallSheet(
                     annualFormatted = it.product.price.formatted,
                     annualAmountMicros = it.product.price.amountMicros,
                     monthlyAmountMicros = monthlyMicros
-                )
+                ),
+                formatted = it.product.price.formatted,
+                amountMicros = it.product.price.amountMicros
             )
         }
     }
@@ -1353,7 +1355,7 @@ fun MakeItMePaywallSheet(
                 color = RunWearColors.TextSecondary
             )
             Text(
-                text = MakeItMeStrings.u2MeterLine(mimState.freeGenerationsUsed),
+                text = FreeLooksMeter.paywallLine(mimState.freeGenerationsUsed, mimState.anyLookMaking),
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 2.dp)
@@ -1457,7 +1459,13 @@ fun MakeItMePaywallSheet(
 
             Spacer(Modifier.height(16.dp))
             Text(
-                text = MakeItMeStrings.U2C_FINE_PRINT,
+                // WS-F: the per-run framing is DERIVED from the
+                // displayed annual product (basis stated in the
+                // line); until the offering resolves, the settled
+                // fine print stands alone.
+                text = annual?.let {
+                    MakeItMeStrings.finePrint(it.formatted, it.amountMicros)
+                } ?: MakeItMeStrings.U2C_FINE_PRINT,
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
                 color = RunWearColors.TextSecondary
@@ -1466,7 +1474,12 @@ fun MakeItMePaywallSheet(
     }
 }
 
-private class PackagePrice(val pkg: com.revenuecat.purchases.Package, val label: String)
+private class PackagePrice(
+    val pkg: com.revenuecat.purchases.Package,
+    val label: String,
+    val formatted: String = "",
+    val amountMicros: Long = 0L
+)
 
 @Composable
 private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit) {
@@ -1511,14 +1524,17 @@ object MakeItMeSettingsPresentation {
             listOf(MakeItMeStrings.S2_STATE_A_ROW)
         } else when (mode) {
             MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S2_STATE_A_ROW)
+            // Gen-3 WS-D: status group (not a row title — composed
+            // from FreeLooksMeter), then Your photos, then the
+            // Premium offer card, then the destructive row last.
             MakeItMeMode.FREE -> listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.S8_STATE_B_SUBSCRIBE_ROW,
+                MakeItMeStrings.U2G_CARD_TITLE,
                 MakeItMeStrings.S10_DELETE_ROW
             )
             MakeItMeMode.SUBSCRIBED -> listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                MakeItMeStrings.U2G_CARD_TITLE,
                 MakeItMeStrings.S10_DELETE_ROW
             )
         }
@@ -1536,6 +1552,25 @@ fun MakeItMeSettingsSection(
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var deletedNotice by remember { mutableStateOf(false) }
+
+    // Gen-3 WS-D/X-9: Settings re-reads the profile on open (the
+    // gen-2 Android section never did — its only reads were at
+    // ViewModel init). The re-read refreshes the DELIVERED count;
+    // truthfulness while a look is in flight comes from the
+    // anyLookMaking input composed through FreeLooksMeter below,
+    // not from this re-read.
+    LaunchedEffect(Unit) {
+        if (MakeItMeAvailability.ENABLED) viewModel?.refresh()
+    }
+
+    // The offer card's price, from the fetched store offering —
+    // parameterized, never a literal (design §6).
+    var offerAnnualFormatted by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.mode) {
+        if (state.mode == MakeItMeMode.FREE && viewModel != null) {
+            offerAnnualFormatted = viewModel.offering()?.annual?.product?.price?.formatted
+        }
+    }
 
     Column {
         Text(
@@ -1585,42 +1620,122 @@ fun MakeItMeSettingsSection(
             }
 
             MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> {
-                Text(
-                    text = MakeItMeStrings.S3_STATUS,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = RunWearColors.TextPrimary
-                )
-                Text(
-                    text = if (state.mode == MakeItMeMode.SUBSCRIBED) {
-                        MakeItMeStrings.S5_STATE_C_SUB
-                    } else {
-                        MakeItMeStrings.s4FreeUsed(state.freeGenerationsUsed)
-                    },
-                    fontSize = 12.sp,
-                    color = RunWearColors.TextSecondary,
-                    modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
-                )
+                val subscribed = state.mode == MakeItMeMode.SUBSCRIBED
+
+                // ── Status group (WS-D group 2): status line +
+                // free-look meter composed as ONE block from the
+                // single FreeLooksMeter seam — the block can never
+                // contradict the flow state at the same moment.
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = RunWearColors.BgCard,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        val block = FreeLooksMeter.block(
+                            deliveredUsed = state.freeGenerationsUsed,
+                            lookMaking = state.anyLookMaking,
+                            subscribed = subscribed
+                        )
+                        Text(
+                            text = block[0],
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = block[1],
+                            fontSize = 12.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+
+                // ── Your photos group (WS-D group 3).
                 MakeItMeSettingsRow(
                     title = MakeItMeStrings.S6_PHOTOS_ROW,
                     sub = MakeItMeStrings.S6_PHOTOS_SUB,
                     onClick = onPhotosClick
                 )
-                Spacer(Modifier.height(6.dp))
-                if (state.mode == MakeItMeMode.FREE) {
-                    MakeItMeSettingsRow(
-                        title = MakeItMeStrings.S8_STATE_B_SUBSCRIBE_ROW,
-                        sub = MakeItMeStrings.S8_STATE_B_SUBSCRIBE_SUB,
-                        onClick = onSubscribeClick
-                    )
-                } else {
-                    MakeItMeSettingsRow(
-                        title = MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
-                        sub = null,
-                        onClick = onManageSubscriptionClick
-                    )
+                Spacer(Modifier.height(14.dp))
+
+                // ── Premium offer card (WS-D group 4): a legible
+                // offer — the name "Premium", the parameterized
+                // price with term, the settled two-benefit line,
+                // and a real button opening the paywall. A
+                // subscriber sees the subscribed state instead.
+                val card = MakeItMeStrings.premiumOfferCard(
+                    annualFormatted = offerAnnualFormatted,
+                    subscribed = subscribed
+                )
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = RunWearColors.BgCard,
+                    border = androidx.compose.foundation.BorderStroke(1.5.dp, RunWearColors.Primary),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = card.title,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = RunWearColors.TextPrimary
+                        )
+                        Text(
+                            text = card.benefitLine,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                        if (subscribed) {
+                            Spacer(Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = onManageSubscriptionClick,
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Text(
+                                    MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        } else {
+                            card.priceLine?.let {
+                                Text(
+                                    text = it,
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = RunWearColors.TextPrimary,
+                                    modifier = Modifier.padding(top = 10.dp)
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = onSubscribeClick,
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                            ) {
+                                Text(
+                                    card.ctaLabel ?: MakeItMeStrings.S27_GET_PREMIUM,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp,
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
                 }
-                Spacer(Modifier.height(6.dp))
+
+                // ── Destructive group (WS-D group 5): last and
+                // visually separated from the offer, so no mis-tap
+                // travels between them. Delete my data follows as
+                // its own Settings section below.
+                Spacer(Modifier.height(22.dp))
                 MakeItMeSettingsRow(
                     title = MakeItMeStrings.S10_DELETE_ROW,
                     sub = null,
