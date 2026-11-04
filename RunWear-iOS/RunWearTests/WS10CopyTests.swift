@@ -504,6 +504,7 @@ final class FirstLookHonestyTests: XCTestCase {
         let p = FirstLookPresentation.resolve(
             lookState: .ready,
             personalPhotoDisplayed: true,
+            personalImageLoaded: true,
             freeGenerationsUsed: used,
             freeAllowance: PersonalHeroStoreAllowance.value,
             isSubscribed: false
@@ -529,6 +530,7 @@ final class FirstLookHonestyTests: XCTestCase {
         let p = FirstLookPresentation.resolve(
             lookState: .ready,
             personalPhotoDisplayed: true,
+            personalImageLoaded: true,
             freeGenerationsUsed: 0,
             freeAllowance: 5,
             isSubscribed: false
@@ -540,29 +542,38 @@ final class FirstLookHonestyTests: XCTestCase {
 
     func testReadyPhaseMeterCountsDownFromTheSharedCounter() {
         let last = FirstLookPresentation.resolve(
-            lookState: .ready, personalPhotoDisplayed: true,
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
             freeGenerationsUsed: 5, freeAllowance: 5, isSubscribed: false)
         XCTAssertEqual(last.meterLine, "That was look 5 of your 5 free looks.")
         XCTAssertEqual(FreeLooksMeter.settingsLine(used: 5, allowance: 5), "All 5 free looks used")
 
         let subscribed = FirstLookPresentation.resolve(
-            lookState: .ready, personalPhotoDisplayed: true,
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
             freeGenerationsUsed: 3, freeAllowance: 5, isSubscribed: true)
         XCTAssertNil(subscribed.meterLine, "a subscribed user has no free-look accounting to state")
     }
 
     func testDisplayedPersonalPhotoWinsOverAnInFlightRegenState() {
-        // A personal photo on screen IS the ready state even if
-        // the cell also reports a regeneration in flight.
+        // GEN-3 SUPERSESSION (Y-1): this test's GEN-2 form pinned
+        // "a displayed personal photo IS the ready state even if
+        // the cell reports making" — and that rule is precisely
+        // what presented a superseded-epoch banked photo as the
+        // finished first look in the 2026-11-04 iOS walkthrough
+        // (claim + "look 3" over another person's photo while the
+        // commissioned generation was still in flight). The rule
+        // is reversed: while the server calls the look making, a
+        // displayed photo is a placeholder — no claim, no meter.
         let p = FirstLookPresentation.resolve(
             lookState: .making,
             personalPhotoDisplayed: true,
+            personalImageLoaded: true,
             freeGenerationsUsed: 2,
             freeAllowance: 5,
             isSubscribed: false
         )
-        XCTAssertEqual(p.phase, .ready)
-        XCTAssertEqual(p.meterLine, "That was look 2 of your 5 free looks — 3 remain, whenever you want them.")
+        XCTAssertEqual(p.phase, .making)
+        XCTAssertNil(p.caption, "the finished claim never renders while the server says the look is still making")
+        XCTAssertNil(p.meterLine, "no debit is presented before the delivery the server confirms")
     }
 
     // MARK: - W-16/W-17/W-18 · wiring pins

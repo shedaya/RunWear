@@ -319,4 +319,128 @@ final class Gen3HeroServingTests: XCTestCase {
         XCTAssertTrue(vm.contains("heroOwnerPlaceKey = placeDisplayName"),
                       "the atomic commit must move hero place ownership in the same write as the fallback")
     }
+
+    // MARK: - Y-1/Y-2 · the reference-epoch serving rule
+
+    private func epochLookup(
+        found: Bool = true,
+        lookState: String? = "ready",
+        regenStatus: String?
+    ) -> PersonalHeroLookup {
+        PersonalHeroLookup(
+            found: found,
+            combinationId: "FEMALE__CLEAR__COOL__MIDDAY__sig",
+            heroId: "hero-1",
+            variant: 1,
+            imageUrl: "https://signed.example/hero.png",
+            version: 3,
+            replenishmentQueued: 0,
+            lookState: lookState,
+            lookReason: nil,
+            regenStatus: regenStatus
+        )
+    }
+
+    func testPriorEpochHeroesNeverServeAsPersonal() {
+        // The Y-1 payload shape: found hero + regeneration cycle
+        // outstanding. Whatever the look state says, that hero was
+        // generated from a superseded reference set.
+        for status in ["pending", "failed"] {
+            let lookup = epochLookup(regenStatus: status)
+            XCTAssertTrue(PersonalEpochPolicy.servesPriorEpoch(lookup), status)
+            XCTAssertFalse(PersonalEpochPolicy.mayServeAsPersonal(lookup),
+                           "a \(status)-cycle hero must never paint as the user's photo")
+            XCTAssertFalse(PersonalEpochPolicy.isDelivery(lookup),
+                           "a \(status)-cycle hero is never the commissioned look's delivery")
+        }
+    }
+
+    func testCurrentEpochHeroServesAndDelivers() {
+        for status in ["current", nil] as [String?] {
+            let lookup = epochLookup(regenStatus: status)
+            XCTAssertFalse(PersonalEpochPolicy.servesPriorEpoch(lookup))
+            XCTAssertTrue(PersonalEpochPolicy.mayServeAsPersonal(lookup))
+            XCTAssertTrue(PersonalEpochPolicy.isDelivery(lookup),
+                          "a current-epoch hero the server reports ready IS the delivery")
+        }
+        // Current epoch but still making: servable as the cell's
+        // photo layer state, not a delivery.
+        let making = epochLookup(lookState: "making", regenStatus: "current")
+        XCTAssertTrue(PersonalEpochPolicy.mayServeAsPersonal(making))
+        XCTAssertFalse(PersonalEpochPolicy.isDelivery(making))
+    }
+
+    func testLookupDecodesRegenStatus() throws {
+        let json = """
+        {"found": true, "combination_id": "X", "hero_id": "h", "variant": 1,
+         "image_url": "https://signed.example/h.png", "version": 2,
+         "replenishment_queued": 0, "look_state": "making",
+         "look_reason": null, "regen_status": "pending"}
+        """
+        let lookup = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(json.utf8))
+        XCTAssertEqual(lookup.regenStatus, "pending",
+                       "the client must decode the server's regen_status — before GEN-3 it was dropped on the floor")
+    }
+
+    func testFirstLookClaimRequiresServerReadyAndLoadedPixels() {
+        // (c) claim never precedes photo: URL set, pixels not yet
+        // loaded → still the making presentation.
+        let notLoaded = FirstLookPresentation.resolve(
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: false,
+            freeGenerationsUsed: 1, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(notLoaded.phase, .making)
+        XCTAssertNil(notLoaded.caption)
+        XCTAssertNil(notLoaded.meterLine)
+        // (a)/(b): the server still calls the look making → no
+        // claim even with a loaded photo displayed.
+        let stillMaking = FirstLookPresentation.resolve(
+            lookState: .making, personalPhotoDisplayed: true, personalImageLoaded: true,
+            freeGenerationsUsed: 1, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(stillMaking.phase, .making)
+        XCTAssertNil(stillMaking.caption)
+        // All three hold → the claim is earned.
+        let delivered = FirstLookPresentation.resolve(
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
+            freeGenerationsUsed: 1, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(delivered.phase, .ready)
+        XCTAssertEqual(delivered.caption, "You're in the photo now.")
+        XCTAssertEqual(delivered.meterLine, "That was look 1 of your 5 free looks — 4 remain, whenever you want them.")
+    }
+
+    func testReturnHomeServesTheCurrentEpochPersonalPhoto() {
+        // Y-2's return-home rule at the cache seam the hero
+        // resolution reads: once a current-epoch hero for the home
+        // cell has resolved, re-entering the cell serves THAT
+        // photo instantly (freshURL), never a stock substitute.
+        var cache = PersonalCellCache()
+        let now = Date()
+        let home = epochLookup(regenStatus: "current")
+        XCTAssertTrue(PersonalEpochPolicy.mayServeAsPersonal(home))
+        XCTAssertEqual(cache.resolve(lookup: home, now: now),
+                       .show("https://signed.example/hero.png"))
+        XCTAssertEqual(cache.freshURL(for: home.combinationId, now: now),
+                       "https://signed.example/hero.png",
+                       "returning home must serve the personal photo that exists for the home cell")
+        XCTAssertEqual(cache.heroId(for: home.combinationId), "hero-1")
+        // And a prior-epoch payload for the same cell is refused
+        // by the policy the store consults before resolving.
+        XCTAssertFalse(PersonalEpochPolicy.mayServeAsPersonal(epochLookup(regenStatus: "pending")))
+    }
+
+    func testEpochGuardIsWiredThroughTheStore_sourcePin() throws {
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("PersonalEpochPolicy.servesPriorEpoch(lookup)"),
+                      "every store serve path must consult the epoch policy")
+        XCTAssertTrue(store.contains("PersonalEpochPolicy.isDelivery(lookup)"),
+                      "the poll may land only on a delivery, never on a keep-serving prior hero")
+        XCTAssertGreaterThanOrEqual(
+            store.components(separatedBy: "cache.removeAll()").count - 1, 3,
+            "a new reference epoch (opt-in, replace, delete) must drop the superseded epoch's cache")
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertTrue(models.contains("case regenStatus = \"regen_status\""),
+                      "the lookup DTO must decode regen_status")
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("personalAppliedForThisCell"),
+                      "a same-cell reload must not republish the pool URL over an applied personal photo (Y-1 invariant (d))")
+    }
 }

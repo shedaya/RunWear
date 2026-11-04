@@ -179,13 +179,26 @@ struct FirstLookPresentation: Equatable {
     static func resolve(
         lookState: PersonalLookState,
         personalPhotoDisplayed: Bool,
+        personalImageLoaded: Bool = false,
         freeGenerationsUsed: Int,
         freeAllowance: Int,
         isSubscribed: Bool
     ) -> FirstLookPresentation {
-        // A verified personal photo on screen IS the ready state,
-        // whatever else is in flight for the cell.
-        if personalPhotoDisplayed {
+        // GEN-3 (Y-1 invariants (c)/(d)): ready is claimed only
+        // when ALL THREE hold — the server reports the look ready,
+        // the delivered personal photo is the photo addressed on
+        // screen, AND that photo's image has actually loaded. The
+        // GEN-2 seam declared ready from the photo's URL presence
+        // alone: the claim and the meter rendered over the card's
+        // still-empty image phase, a pool photo occupied the card
+        // under the claim for a beat, and then the served photo
+        // hard-cut in — and because the store landed on any found
+        // hero, the "delivered" photo was a banked photo from a
+        // superseded reference epoch. A displayed photo the server
+        // still calls making (or whose pixels have not arrived)
+        // keeps the making presentation: claim never precedes
+        // photo.
+        if personalPhotoDisplayed && lookState == .ready && personalImageLoaded {
             return FirstLookPresentation(
                 phase: .ready,
                 photoOverlayTitle: nil,
