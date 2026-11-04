@@ -66,6 +66,33 @@ enum OnboardingCopy {
     /// Frame 34's meter ("look 1 of your 5 free looks") is
     /// accounting copy, not this promise, and is not governed here.
     static let freeLooksPromise = "Your first 5 looks are free."
+
+    /// W-21 (GEN-2 walkthrough, 2026-11-04): frame 28's quiet
+    /// footer, verbatim. Sol struck the previous line ("Free to
+    /// start · Set up in under a minute") on both platforms: the
+    /// app is free forever and Premium is the optional paid part,
+    /// so "free to start" misstates the model. This wording is
+    /// flagged for Sol's walkthrough verdict — do not vary it.
+    static let welcomeFooter = "Free forever · Premium is optional"
+}
+
+// MARK: - Fork caption composition (W-23)
+
+/// The Make It Me fork's location caption, composed ONLY from a
+/// known place. The fork used to render the view model's
+/// in-flight placeholder name verbatim, so for a few hundred
+/// milliseconds the caption slot carried that placeholder over a
+/// blank photo area. The rule: no known place, no caption — the
+/// photo area's loading treatment carries the wait instead, and
+/// no raw placeholder string ever reaches the caption slot.
+/// (Lives here, with the rest of onboarding's composition, so
+/// the test target — which does not compile the flow views —
+/// can pin the rule functionally.)
+enum ForkContextLine {
+    static func make(placeDisplayName: String, isPlaceKnown: Bool, feelsLike: String) -> String? {
+        guard isPlaceKnown else { return nil }
+        return "\(placeDisplayName) · \(feelsLike)"
+    }
 }
 
 // MARK: - First-look reveal timing (§1.4, spec of record)

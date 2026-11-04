@@ -67,10 +67,18 @@ struct GuidedSelfieCaptureView: View {
                     .frame(width: 250, height: 330)
                     .padding(.top, 26)
 
-                // Live check chips.
-                HStack(spacing: 8) {
-                    ForEach(SelfieCheck.allCases, id: \.rawValue) { check in
-                        chip(for: check)
+                // Live check chips — W-20: two rows of two
+                // (SelfieCheck.captureChipRows), so every chip
+                // sizes to its FULL label at default type. The
+                // single row of four truncated three labels
+                // mid-word.
+                VStack(spacing: 8) {
+                    ForEach(Array(SelfieCheck.captureChipRows.enumerated()), id: \.offset) { _, row in
+                        HStack(spacing: 8) {
+                            ForEach(row, id: \.rawValue) { check in
+                                chip(for: check)
+                            }
+                        }
                     }
                 }
                 .padding(.top, 18)
@@ -116,6 +124,7 @@ struct GuidedSelfieCaptureView: View {
             Text(check.passedLabel)
                 .font(.system(size: 11, weight: .medium))
                 .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .foregroundColor(.white)
         .padding(.horizontal, 8)
