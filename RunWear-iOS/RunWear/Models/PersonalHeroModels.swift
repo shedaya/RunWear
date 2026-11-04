@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-// MARK: - RW-14 "Make it me" — pure model layer
+// MARK: - RW-14 "Make It Me" — pure model layer
 //
 // Foundation-only on purpose: this file is compiled into BOTH the app
 // target and the RunWearTests target (the test target's established
@@ -721,6 +721,47 @@ enum FreeLooksMeter {
     /// number, second spelling site).
     static func subscriptionLine(used: Int, allowance: Int) -> String {
         "\(used) of \(allowance) used · Free looks never expire — and your first ones take about a minute to make."
+    }
+
+    // MARK: In-flight truthfulness (GEN-3 · X-9)
+    //
+    // The gen-2 seam counts only DELIVERED looks — correct, because
+    // the server charges on delivery — but Settings composed its
+    // block from that counter ALONE. While a look was generating
+    // (requested, visibly "making" on the hero), Settings printed
+    // the settled line ("0 of 5 free looks used" before the first
+    // delivery) with nothing marking the in-flight look, so the
+    // block contradicted the flow at the same moment (census X-9:
+    // the Android observation, noted there as "exactly as on iOS
+    // this morning"; frame 34 already refuses to print a meter at
+    // all while making — Settings had no equivalent discipline).
+    // The fix keeps the delivered count as the meter AND carries
+    // the in-flight look in the same status block as a pending
+    // line, so the block as a whole can never read as settled
+    // while a generation is running.
+
+    /// How many looks are in flight right now: cells the server
+    /// last reported as MAKING, unioned with cells holding a
+    /// user-initiated pending request (a cell in both counts once).
+    static func inFlightCount(
+        lookStates: [String: PersonalLookState],
+        userInitiatedPending: Set<String>
+    ) -> Int {
+        var cells = Set(lookStates.filter { $0.value.isMaking }.keys)
+        cells.formUnion(userInitiatedPending)
+        return cells.count
+    }
+
+    /// The status block's pending line, or nil when nothing is in
+    /// flight (the block then carries the settled meter alone,
+    /// which is true). One look reads as the singular making line
+    /// the flow itself shows; more read as a count.
+    static func settingsPendingLine(inFlight: Int) -> String? {
+        switch inFlight {
+        case ...0: return nil
+        case 1: return "Making your look…"
+        default: return "Making \(inFlight) looks…"
+        }
     }
 }
 

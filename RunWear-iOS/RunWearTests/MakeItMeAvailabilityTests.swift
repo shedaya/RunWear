@@ -1,6 +1,6 @@
 import XCTest
 
-/// "Make it me" posture pin. The store line carried the feature OFF
+/// "Make It Me" posture pin. The store line carried the feature OFF
 /// (Sol's ruling, 2026-11-02, "til it actually works"). This release
 /// branch (release/rw27-flag-on-ios-2026-11-03) carries it ON for the
 /// RW-27 release build against the now-live pipeline (Sol's release
@@ -22,7 +22,7 @@ final class MakeItMeAvailabilityTests: XCTestCase {
     func testFlagOnReleaseBuildHasMakeItMeOn() {
         XCTAssertTrue(
             MakeItMeAvailability.isEnabled,
-            "This release branch carries \"Make it me\" ON (Sol's RW-27 "
+            "This release branch carries \"Make It Me\" ON (Sol's RW-27 "
                 + "release ruling, 2026-11-03) — the constant and this pin "
                 + "were flipped together, deliberately, for the release build."
         )

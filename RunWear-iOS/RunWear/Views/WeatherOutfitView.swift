@@ -1060,7 +1060,7 @@ struct WeatherOutfitView: View {
 
     // MARK: - RW-14 Personal Section
 
-    /// The "Make it me" surfaces on the run screen, in spec order:
+    /// The "Make It Me" surfaces on the run screen, in spec order:
     /// (GEN-3: the making/scaffold states moved ONTO the hero as
     /// the one hero pill — see heroPillState; this section keeps)
     /// the failed line with
@@ -1369,8 +1369,8 @@ struct TemperatureBracketBadge: View {
 // anywhere in the app (full-tree search: definitions only), and
 // its GenderOption rendered GenderPreference.displayIcon — the
 // 🚹/🚺/○ text glyphs no frame of the approved design carries.
-// The live fit control is FitPreferencePicker (plain text labels,
-// shared by Settings and Onboarding). Nothing rendered the pair,
+// The live fit control is FitPreferenceInlinePicker (plain text
+// labels, shared by Settings and Onboarding). Nothing rendered the pair,
 // so nothing changes on screen.
 
 #Preview {

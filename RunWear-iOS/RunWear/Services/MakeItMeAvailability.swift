@@ -1,8 +1,8 @@
 import Foundation
 
-// MARK: - "Make it me" availability gate (Sol's ruling, 2026-11-02)
+// MARK: - "Make It Me" availability gate (Sol's ruling, 2026-11-02)
 //
-// The App Store resubmission ships with "Make it me" OFF — Sol's
+// The App Store resubmission ships with "Make It Me" OFF — Sol's
 // ruling for both store submissions: off "til it actually works."
 // The Android production candidate carries the same posture. This
 // constant is the ONE gate every entry point consults:

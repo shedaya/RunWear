@@ -104,7 +104,7 @@ struct ContentView: View {
         .onAppear {
             // RW-14: wire the personal-hero store into the view model
             // (it consults the store on every hero resolution).
-            // "Make it me" OFF (see MakeItMeAvailability): never wire
+            // "Make It Me" OFF (see MakeItMeAvailability): never wire
             // it — a nil personalStore is the view model's documented
             // personal-layer-off state, so heroes resolve pool-only.
             if MakeItMeAvailability.isEnabled {

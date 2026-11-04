@@ -1,6 +1,6 @@
 import XCTest
 
-/// RW-14 "Make it me" — pins for the pure personal-hero model layer
+/// RW-14 "Make It Me" — pins for the pure personal-hero model layer
 /// (PersonalHeroModels.swift, compiled into this target directly,
 /// the established pattern). The combination-id vectors are the
 /// backend contract's own worked examples

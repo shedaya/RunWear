@@ -29,8 +29,8 @@ enum GenderPreference: String, Codable, CaseIterable {
     // GenderToggle/GenderOption pair (no call sites anywhere in
     // the app — verified by full-tree search), and no frame of
     // the approved design carries emoji or text-glyph picker
-    // markers: the live fit picker (FitPreferencePicker) renders
-    // plain text labels. Removal, not redesign — nothing rendered
+    // markers: the live fit picker (FitPreferenceInlinePicker)
+    // renders plain text labels. Removal, not redesign — nothing rendered
     // it, so nothing changes on screen.
 
     /// Text display label (not icons)

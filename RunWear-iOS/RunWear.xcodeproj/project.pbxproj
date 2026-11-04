@@ -132,7 +132,7 @@
 		E10002000000000000000015 /* engine_fixtures.json in Resources */ = {isa = PBXBuildFile; fileRef = E10001000000000000000004 /* engine_fixtures.json */; };
 		D1000001233456780000001 /* RunWear Watch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = B1000000233456780000000 /* RunWear Watch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 
-		/* RW-14 "Make it me" — added 2026-10-31 */
+		/* RW-14 "Make It Me" — added 2026-10-31 */
 		F10002000000000000000101 /* PersonalHeroModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000101 /* PersonalHeroModels.swift */; };
 		F10002000000000000000102 /* SupabaseAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000102 /* SupabaseAuthService.swift */; };
 		F10002000000000000000103 /* PersonalHeroAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000103 /* PersonalHeroAPI.swift */; };
@@ -330,7 +330,7 @@
 		E10001000000000000000003 /* EngineFixtureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineFixtureTests.swift; sourceTree = "<group>"; };
 		E10001000000000000000004 /* engine_fixtures.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = engine_fixtures.json; sourceTree = "<group>"; };
 
-		/* RW-14 "Make it me" — added 2026-10-31 */
+		/* RW-14 "Make It Me" — added 2026-10-31 */
 		F10001000000000000000101 /* PersonalHeroModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroModels.swift; sourceTree = "<group>"; };
 		F10001000000000000000102 /* SupabaseAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuthService.swift; sourceTree = "<group>"; };
 		F10001000000000000000103 /* PersonalHeroAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroAPI.swift; sourceTree = "<group>"; };
@@ -1106,7 +1106,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RunWear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.weather";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RunWear needs your location to provide weather-based outfit recommendations for your area.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make it me outfit pictures.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make It Me outfit pictures.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -1144,7 +1144,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RunWear;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.weather";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RunWear needs your location to provide weather-based outfit recommendations for your area.";
-				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make it me outfit pictures.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RunWear uses the camera so you can take your own photo for Make It Me outfit pictures.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

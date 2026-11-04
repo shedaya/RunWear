@@ -157,6 +157,13 @@ struct OnboardingView: View {
                     title: "See yourself in every outfit",
                     detail: "Make It Me puts you in the photos. \(OnboardingCopy.freeLooksPromise)"
                 )
+                // GEN-3 (WS-E): the third feature point — the
+                // collection the first two points produce.
+                promiseRow(
+                    icon: "rectangle.stack",
+                    title: "Remember every run",
+                    detail: "Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 52)
@@ -522,7 +529,7 @@ private struct FirstLookView: View {
                         onStock: onComplete
                     )
                 } else {
-                    // "Make it me" OFF (see MakeItMeAvailability):
+                    // "Make It Me" OFF (see MakeItMeAvailability):
                     // no fork, no opt-in — the first look is shown
                     // as itself and the only door completes
                     // onboarding, exactly the fork's stock door.
@@ -594,7 +601,7 @@ private struct FirstLookView: View {
         }
     }
 
-    /// The first look with "Make it me" off: the same preview the
+    /// The first look with "Make It Me" off: the same preview the
     /// fork shows (the recommendation's photo, context and outfit),
     /// with no pitch and a single Continue door into the app.
     private var firstLookReadyView: some View {
@@ -937,7 +944,7 @@ private struct FirstLookView: View {
     private func start() {
         guard !started else { return }
         started = true
-        // "Make it me" OFF (see MakeItMeAvailability): the preview
+        // "Make It Me" OFF (see MakeItMeAvailability): the preview
         // view model is never wired to the personal store either.
         if MakeItMeAvailability.isEnabled {
             previewVM.personalStore = store
