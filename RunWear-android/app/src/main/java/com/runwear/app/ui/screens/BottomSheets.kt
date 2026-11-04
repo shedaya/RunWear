@@ -405,7 +405,12 @@ fun SettingsSheet(
             onMakeItMePhotosClick = onMakeItMePhotosClick,
             onMakeItMeSubscribeClick = onMakeItMeSubscribeClick,
             onMakeItMeManageSubscriptionClick = onMakeItMeManageSubscriptionClick,
-            onMakeItMeDeleted = onMakeItMeDeleted
+            onMakeItMeDeleted = onMakeItMeDeleted,
+            // GEN-2 A1 (W-8): the content is WEIGHT-bounded inside
+            // the sheet's own column (this call site is the
+            // ModalBottomSheet content's ColumnScope) — see the
+            // content's doc for the clipping mechanism this ends.
+            modifier = Modifier.weight(1f)
         )
     }
 }
@@ -427,6 +432,25 @@ fun SettingsSheet(
  * carries the plain not-started row with the feature flag OFF),
  * Delete-my-data is its own section after it, and About closes the
  * sheet, matching iOS's inventory.
+ *
+ * GEN-2 A1 (W-8) — why About was clipped and could never scroll
+ * into view: the sheet's column stacks the drag handle ABOVE this
+ * content, but the LazyColumn below was measured against the
+ * column's FULL height constraint (a Column measures unweighted
+ * children at the full incoming max height, it does not subtract
+ * its siblings). The list's viewport therefore extended past the
+ * sheet's bottom edge by the handle (and any inset stacked with
+ * it): at max scroll the list aligns its end — bottom padding
+ * first, then About — with that off-screen viewport bottom, so
+ * the last rows stay permanently below the visible edge no
+ * matter how far the user scrolls (Sol's Nov 4 recording: the
+ * "About" header as a half-height sliver, eight arrows drawn at
+ * it). The fix is the Stage-1 sheet discipline's anchor rule
+ * applied to the one scroll consumer: [SettingsSheet] passes a
+ * weight-bounded [modifier], so the viewport is exactly the space
+ * remaining in the sheet's bounded column and its bottom IS the
+ * sheet's bottom. The bottom content padding (32 dp) is then
+ * honest end-of-list space, fully reachable at max scroll.
  */
 @Composable
 fun SettingsSheetContent(
@@ -448,14 +472,15 @@ fun SettingsSheetContent(
     onMakeItMePhotosClick: () -> Unit = {},
     onMakeItMeSubscribeClick: () -> Unit = {},
     onMakeItMeManageSubscriptionClick: () -> Unit = {},
-    onMakeItMeDeleted: () -> Unit = {}
+    onMakeItMeDeleted: () -> Unit = {},
+    modifier: Modifier = Modifier
 ) {
     val sections = SettingsInventory.sectionsFor(
         makeItMeEnabled = com.runwear.app.makeitme.MakeItMeAvailability.ENABLED,
         makeItMeMode = makeItMeState.mode
     )
     LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 32.dp)
     ) {
         item(key = "settings-title") {

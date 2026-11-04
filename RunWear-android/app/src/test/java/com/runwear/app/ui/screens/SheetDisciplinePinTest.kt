@@ -193,7 +193,11 @@ class SheetDisciplinePinTest {
         val mim = makeItMeScreens()
         val flowAt = mim.indexOf("fun MakeItMeUploadFlow(")
         assertTrue(flowAt >= 0)
-        val flowHead = mim.substring(flowAt, flowAt + 2500)
+        // GEN-2 A1: the window grew — the flow now opens with the
+        // view-model delegating overload and the seam-carrying core
+        // overload before the handler; the pin's intent is unchanged
+        // (the handler and its policy sit at the flow's head).
+        val flowHead = mim.substring(flowAt, flowAt + 6000)
         assertTrue(flowHead.contains("androidx.activity.compose.BackHandler"))
         assertTrue(flowHead.contains("UploadBackPolicy.actionFor(step)"))
         assertTrue(flowHead.contains("UploadBackAction.STEP_BACK_TO_CONSENT"))
@@ -208,6 +212,37 @@ class SheetDisciplinePinTest {
         )
         assertEquals(UploadBackAction.STAY, UploadBackPolicy.actionFor(UploadStep.SUBMITTING))
         assertEquals(UploadBackAction.STAY, UploadBackPolicy.actionFor(UploadStep.SAVED))
+    }
+
+    // ── GEN-2 A1 (W-2 + W-8) ─────────────────────────────────────
+
+    @Test
+    fun `each upload-flow step emits exactly one root - a Column (the W-2 overlap fix)`() {
+        val mim = makeItMeScreens().replace(Regex("\\s+"), " ")
+        assertTrue(
+            "the CONSENT branch must wrap its layout in a single Column root inside AnimatedContent",
+            mim.contains("UploadStep.CONSENT -> { Column {")
+        )
+        assertTrue(
+            "the PHOTOS branch must wrap its layout in a single Column root inside AnimatedContent",
+            mim.contains("UploadStep.SUBMITTING -> { Column {")
+        )
+    }
+
+    @Test
+    fun `settings content is weight-bounded inside the sheet column (the W-8 fix)`() {
+        val sheets = bottomSheets()
+        assertTrue(
+            "SettingsSheet must pass Modifier.weight(1f) so the list viewport ends at the sheet's bottom edge",
+            sheets.contains("modifier = Modifier.weight(1f)")
+        )
+        val contentStart = sheets.indexOf("fun SettingsSheetContent(")
+        assertTrue(contentStart >= 0)
+        val content = sheets.substring(contentStart)
+        assertTrue(
+            "the passed modifier must reach the LazyColumn (the sheet's one scroll consumer)",
+            content.contains("modifier = modifier.fillMaxWidth(),")
+        )
     }
 
     @Test
