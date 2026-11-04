@@ -27,7 +27,7 @@ struct SettingsModal: View {
     /// RW-25: appearance preference — the same AppStorage key the
     /// app root resolves, so this picker and RunWearApp never drift.
     @AppStorage("appearancePreference") private var appearancePreference: AppearancePreference = .system
-    /// RW-16.7: the single owner of every "Make it me"
+    /// RW-16.7: the single owner of every "Make It Me"
     /// presentation on this surface — sheets, alerts, and the
     /// opt-in commit driver. Owned HERE, at the level whose own
     /// structure never branches on store state, so no profile
@@ -95,7 +95,7 @@ struct SettingsModal: View {
                     .presentationDragIndicator(.visible)
             }
             // RW-16.7: the ONE sheet slot + ONE alert slot for
-            // the whole "Make it me" surface, keyed by the
+            // the whole "Make It Me" surface, keyed by the
             // host's enums. Photos → Replace is a content swap
             // inside this single presentation, never a
             // dismiss-and-represent chain.
@@ -190,7 +190,7 @@ struct SettingsModal: View {
             }
 
         case .makeItMe:
-            // RW-14 "Make it me" (spec §3, states S1–S14),
+            // RW-14 "Make It Me" (spec §3, states S1–S14),
             // composed UNCONDITIONALLY (WS-5): with the flag OFF
             // the section renders the plain not-started row
             // (frame 36); the flag gates the feature's function
@@ -242,7 +242,7 @@ struct SettingsModal: View {
         }
     }
 
-    // MARK: - "Make it me" presentation content (RW-16.7)
+    // MARK: - "Make It Me" presentation content (RW-16.7)
 
     @ViewBuilder
     private func makeItMeSheetContent(_ sheet: MakeItMeSheet) -> some View {
@@ -311,7 +311,7 @@ struct SettingsModal: View {
     private func makeItMeAlertMessage(_ alert: MakeItMeAlert) -> String {
         switch alert {
         case .confirmDelete:
-            return "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make it me turns off. This can't be undone."
+            return "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make It Me turns off. This can't be undone."
         case .confirmDeleteData:
             // RW-16.30 decision 5a: S12's scope discipline, extended
             // to the account itself, plus the one money fact the

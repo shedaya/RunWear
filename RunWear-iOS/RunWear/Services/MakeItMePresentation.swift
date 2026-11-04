@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-// MARK: - RW-16.7 — "Make it me" presentation ownership
+// MARK: - RW-16.7 — "Make It Me" presentation ownership
 //
 // The defect (field-verified on 1.0 (12), recording 16:38–16:41
 // EDT): MakeItMeSettingsSection carried four .sheet modifiers

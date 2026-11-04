@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-// MARK: - RW-14 "Make it me" — feature store
+// MARK: - RW-14 "Make It Me" — feature store
 //
 // The one state machine for personalization: stock / free /
 // subscribed, the free-allowance count, the versioned cell cache,
@@ -79,6 +79,19 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     var isOptedIn: Bool { mode != .stock }
     var freeRemaining: Int { max(0, Self.freeAllowance - freeGenerationsUsed) }
+
+    /// GEN-3 (X-9): looks in flight right now, from the same state
+    /// the hero renders (the server's folded look states, plus
+    /// user-initiated pending requests). The Settings status block
+    /// reads this alongside the delivered counter so it can carry
+    /// an in-flight look as pending instead of printing a settled
+    /// meter the flow contradicts.
+    var looksInFlight: Int {
+        FreeLooksMeter.inFlightCount(
+            lookStates: lookStates,
+            userInitiatedPending: userInitiatedPending
+        )
+    }
 
     /// RW-16.16: fold one get-personal-hero payload into the
     /// per-cell look state the hero renders. Called on every lookup

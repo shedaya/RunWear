@@ -173,7 +173,7 @@ class WeatherViewModel: ObservableObject {
 
     // MARK: - RW-14 personal hero layer
 
-    /// The "Make it me" store, wired by the hosting view (ContentView
+    /// The "Make It Me" store, wired by the hosting view (ContentView
     /// owns both objects), typed as the PersonalHeroResolving
     /// contract so this file compiles in the test target without the
     /// store's dependency stack. Weak: the store lives in the view

@@ -994,7 +994,7 @@ struct WeatherOutfitView: View {
 
     // MARK: - RW-14 Personal Section
 
-    /// The "Make it me" surfaces on the run screen, in spec order:
+    /// The "Make It Me" surfaces on the run screen, in spec order:
     /// the generation progress line while the SERVER reports this
     /// cell's look as making (spec §5 G1/G2 — quiet text under the
     /// hero, never a spinner over the photo), the failed line with

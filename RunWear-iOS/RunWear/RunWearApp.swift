@@ -6,7 +6,7 @@ struct RunWearApp: App {
     /// RW-25: appearance preference (System / Light / Dark), shared
     /// with the Settings picker via the same AppStorage key.
     @AppStorage("appearancePreference") private var appearancePreference: AppearancePreference = .system
-    /// RW-14 "Make it me": the personalization store lives at the app
+    /// RW-14 "Make It Me": the personalization store lives at the app
     /// root so onboarding, the main screen and Settings share one
     /// state machine.
     @StateObject private var personalHeroStore = PersonalHeroStore()
@@ -22,7 +22,7 @@ struct RunWearApp: App {
             }
             .environmentObject(personalHeroStore)
             .task {
-                // "Make it me" OFF (see MakeItMeAvailability): the
+                // "Make It Me" OFF (see MakeItMeAvailability): the
                 // store is never bootstrapped, so it stays in its
                 // initial stock mode for the whole session — no
                 // session, no billing, no personal reads at launch.

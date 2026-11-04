@@ -171,4 +171,50 @@ final class SettingsInventoryTests: XCTestCase {
                           "the section must render the \(row) row under the model's title")
         }
     }
+
+    // MARK: - GEN-3 (WS-D) · the redesigned Make It Me groups
+
+    /// The redesign's binding order: heading/status group → Your
+    /// photos group → Premium offer group → destructive group
+    /// last. The composition's body must list the groups in that
+    /// order (study §Redesign; gen-2's flat stack is the defect).
+    func testGen3MakeItMeGroupsRenderInSpecOrder_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        let bodyStart = try XCTUnwrap(section.range(of: "var body: some View"))
+        let bodyEnd = try XCTUnwrap(section.range(of: "private var statusSection"))
+        let body = String(section[bodyStart.lowerBound..<bodyEnd.lowerBound])
+        let groups = ["statusSection", "photosSection", "offerSection", "destructiveSection"]
+        var lastIndex = -1
+        for group in groups {
+            let index = body.range(of: group)?.lowerBound.utf16Offset(in: body)
+            XCTAssertNotNil(index, "the composition must render the \(group) group")
+            if let index {
+                XCTAssertGreaterThan(index, lastIndex, "\(group) is out of WS-D order")
+                lastIndex = index
+            }
+        }
+    }
+
+    /// The offer card must read as an offer (study P1): the name
+    /// "Premium" (the model's row title), the price with term from
+    /// the store product through the parameterized seam, and a
+    /// real "Get Premium" button — plus the state-aware subscribed
+    /// state for a subscriber.
+    func testGen3OfferCardIsARealOffer_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(section.contains("MakeItMePremiumOfferCard"),
+                      "the free state renders the dedicated offer card")
+        XCTAssertTrue(section.contains("Text(\"Get Premium\")"),
+                      "the card carries a real button that opens the paywall")
+        XCTAssertTrue(section.contains("MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: billing.annualPriceString)"),
+                      "the card's price is the fetched product's price — parameterized, never hardcoded")
+        XCTAssertTrue(section.contains("Made ahead, without limit — every outfit is ready when you open the app."),
+                      "the settled two-benefit copy stands on the card")
+        XCTAssertTrue(section.contains("Text(\"You're subscribed.\")"),
+                      "a subscriber sees the subscribed state instead of the offer")
+        XCTAssertFalse(section.contains("less than paying monthly"),
+                       "WS-F: the monthly comparison renders nowhere in Settings or the paywall")
+        XCTAssertTrue(section.contains("store.billing.perRunFinePrint"),
+                      "WS-F: the paywall's fine print derives from the displayed product's annual price")
+    }
 }

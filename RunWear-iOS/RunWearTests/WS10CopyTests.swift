@@ -617,3 +617,125 @@ final class FirstLookHonestyTests: XCTestCase {
 private enum PersonalHeroStoreAllowance {
     static let value = 5
 }
+
+/// GEN-3 · I-SETTINGS lane — X-9 (Settings in-flight truthfulness),
+/// X-16 (heading casing audit), WS-E (welcome's third feature
+/// point).
+final class Gen3SettingsTruthTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    // MARK: - X-9 · the in-flight count
+
+    func testInFlightCountUnionsMakingCellsAndUserInitiatedPending() {
+        let states: [String: PersonalLookState] = [
+            "cell-a": .making,
+            "cell-b": .ready,
+            "cell-c": .failed(reason: .error),
+            "cell-d": .none,
+        ]
+        XCTAssertEqual(
+            FreeLooksMeter.inFlightCount(lookStates: states, userInitiatedPending: []),
+            1, "only the making cell is in flight"
+        )
+        XCTAssertEqual(
+            FreeLooksMeter.inFlightCount(lookStates: states, userInitiatedPending: ["cell-a", "cell-e"]),
+            2, "a pending cell already counted as making is not double-counted"
+        )
+        XCTAssertEqual(
+            FreeLooksMeter.inFlightCount(lookStates: [:], userInitiatedPending: []),
+            0
+        )
+    }
+
+    func testSettingsPendingLineReadsOnlyWhenSomethingIsInFlight() {
+        XCTAssertNil(FreeLooksMeter.settingsPendingLine(inFlight: 0),
+                     "nothing in flight → the settled meter stands alone, and it is true")
+        XCTAssertEqual(FreeLooksMeter.settingsPendingLine(inFlight: 1), "Making your look…")
+        XCTAssertEqual(FreeLooksMeter.settingsPendingLine(inFlight: 3), "Making 3 looks…")
+    }
+
+    /// The X-9 scenario, exactly as censused: the first look has
+    /// been requested and is generating; nothing has delivered, so
+    /// the shared counter is still 0. The Settings block must not
+    /// read as a settled state: the meter keeps the delivered
+    /// truth AND the pending line carries the in-flight look in
+    /// the same block.
+    func testSettingsBlockDuringFirstGenerationIsNotSettled() {
+        let used = 0
+        let inFlight = FreeLooksMeter.inFlightCount(
+            lookStates: ["first-cell": .making],
+            userInitiatedPending: ["first-cell"]
+        )
+        XCTAssertEqual(inFlight, 1)
+        // The delivered count is unchanged — the server charges on
+        // delivery, so the meter must not pre-debit either.
+        XCTAssertEqual(
+            FreeLooksMeter.settingsLine(used: used, allowance: PersonalHeroStoreAllowance.value),
+            "0 of 5 free looks used"
+        )
+        // …and the block carries the pending line alongside it, so
+        // the two can never be read as "nothing is happening".
+        XCTAssertEqual(FreeLooksMeter.settingsPendingLine(inFlight: inFlight), "Making your look…")
+
+        // Once the look lands, the counter re-read moves to 1 and
+        // the pending line is gone — block and flow agree again.
+        XCTAssertEqual(
+            FreeLooksMeter.settingsLine(used: 1, allowance: PersonalHeroStoreAllowance.value),
+            "1 of 5 free looks used"
+        )
+        XCTAssertNil(FreeLooksMeter.settingsPendingLine(inFlight: 0))
+    }
+
+    func testSettingsRendersThePendingLineFromTheStore_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(section.contains("FreeLooksMeter.settingsPendingLine(inFlight: store.looksInFlight)"),
+                      "the Settings status block composes its pending line from the store's in-flight state through the seam")
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("FreeLooksMeter.inFlightCount("),
+                      "the store derives its in-flight count through the same seam the tests pin")
+    }
+
+    // MARK: - X-16 · casing audit over every app surface
+
+    /// "Make it me" (lowercase "it") may appear NOWHERE in the
+    /// app target — not in a rendered string, a plist, or a
+    /// comment that documents a surface. The wordmark is
+    /// "Make It Me" wherever it appears.
+    func testNoAppSurfaceSaysMakeItMeWithALowercaseIt() throws {
+        let testsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let appDir = testsDir.deletingLastPathComponent().appendingPathComponent("RunWear")
+        guard let enumerator = FileManager.default.enumerator(
+            at: appDir, includingPropertiesForKeys: nil
+        ) else { throw XCTSkip("app source tree unreachable") }
+        var offenders: [String] = []
+        for case let url as URL in enumerator
+        where ["swift", "plist"].contains(url.pathExtension) {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            if text.contains("Make it me") { offenders.append(url.lastPathComponent) }
+        }
+        XCTAssertEqual(offenders, [], "X-16: lowercase-it casing survives in \(offenders)")
+    }
+
+    // MARK: - WS-E · the welcome screen's third feature point
+
+    func testWelcomeCarriesTheThirdFeaturePointUnderTheExistingTwo_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        let second = try XCTUnwrap(onboarding.range(of: "\"See yourself in every outfit\""))
+        let thirdTitle = try XCTUnwrap(onboarding.range(of: "\"Remember every run\""))
+        let thirdLine = try XCTUnwrap(onboarding.range(
+            of: "\"Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.\""))
+        XCTAssertTrue(second.lowerBound < thirdTitle.lowerBound,
+                      "WS-E: the third point sits UNDER the existing two")
+        XCTAssertTrue(thirdTitle.lowerBound < thirdLine.lowerBound,
+                      "WS-E: the headline carries its line beneath it, like the other points")
+    }
+}

@@ -126,10 +126,15 @@ final class MakeItMePresentationTests: XCTestCase {
 /// of the cross-platform paywall-price rule (Android:
 /// MakeItMePriceLabelTest). Every price in the paywall path renders
 /// from the fetched current RevenueCat offering: unresolved rows
-/// fall back to price-free plan names, and the annual row's savings
-/// suffix is computed from the fetched amounts — present at the base
-/// prices, absent at the $19.99/$29.99 experiment arms where it
-/// would be false.
+/// fall back to price-free plan names.
+///
+/// GEN-3 (WS-F) supersedes the gen-2 savings-suffix rule: the
+/// annual row carries NO "less than paying monthly" comparison at
+/// any price. In its place the paywall's fine print frames the
+/// annual price per run, with the basis stated in the line and the
+/// cents figure DERIVED from the displayed product's annual price
+/// — about 4¢ at the $9.99 control, and the honest derived figure
+/// at the $19.99/$29.99 arms, never a hardcoded cents value.
 final class MakeItMePriceLabelTests: XCTestCase {
 
     func testUnresolvedRowsFallBackToPriceFreePlanNames() {
@@ -145,49 +150,78 @@ final class MakeItMePriceLabelTests: XCTestCase {
         XCTAssertEqual("$0.99 / month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"))
     }
 
-    func testBasePricesReproduceTheOriginalAnnualCopy() {
-        // $0.99/mo vs $9.99/yr: 1 - 9.99/11.88 = 15.9% -> "about 16%".
-        XCTAssertEqual(
-            16,
-            MakeItMePriceLabels.annualSavingsPercent(monthly: Decimal(string: "0.99"),
-                                                     annual: Decimal(string: "9.99"))
-        )
-        XCTAssertEqual(
-            "$9.99 / year — about 16% less than paying monthly",
-            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99",
-                                               annual: Decimal(string: "9.99"),
-                                               monthly: Decimal(string: "0.99"))
-        )
-    }
+    // MARK: - WS-F · the monthly comparison is gone at every price
 
-    func testExperimentArmsDropTheSavingsClaimInsteadOfLying() {
-        XCTAssertNil(MakeItMePriceLabels.annualSavingsPercent(monthly: Decimal(string: "0.99"),
-                                                              annual: Decimal(string: "19.99")))
-        XCTAssertNil(MakeItMePriceLabels.annualSavingsPercent(monthly: Decimal(string: "0.99"),
-                                                              annual: Decimal(string: "29.99")))
-        XCTAssertEqual(
-            "$19.99 / year",
-            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$19.99",
-                                               annual: Decimal(string: "19.99"),
-                                               monthly: Decimal(string: "0.99"))
-        )
-        XCTAssertEqual(
-            "$29.99 / year",
-            MakeItMePriceLabels.annualRowLabel(annualPriceString: "$29.99",
-                                               annual: Decimal(string: "29.99"),
-                                               monthly: Decimal(string: "0.99"))
-        )
-    }
-
-    func testUnknownMonthlyPriceYieldsNoSavingsClaim() {
-        XCTAssertNil(MakeItMePriceLabels.annualSavingsPercent(monthly: nil,
-                                                              annual: Decimal(string: "9.99")))
+    func testAnnualRowCarriesNoMonthlyComparisonAtAnyArm() {
+        for (priceString, amount) in [("$9.99", "9.99"), ("$19.99", "19.99"), ("$29.99", "29.99")] {
+            let label = MakeItMePriceLabels.annualRowLabel(
+                annualPriceString: priceString,
+                annual: Decimal(string: amount),
+                monthly: Decimal(string: "0.99")
+            )
+            XCTAssertEqual("\(priceString) / year", label)
+            XCTAssertFalse(label.contains("less than paying monthly"),
+                           "WS-F: the monthly comparison is removed, not reworded")
+            XCTAssertFalse(label.contains("%"),
+                           "WS-F: no percentage claim survives on the annual row")
+        }
+        // Even with the monthly price unknown, the row is the same
+        // plain price + term.
         XCTAssertEqual(
             "$9.99 / year",
             MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99",
                                                annual: Decimal(string: "9.99"),
                                                monthly: nil)
         )
+    }
+
+    // MARK: - WS-F · the per-run fine print derives from the price
+
+    func testPerRunCentsDeriveFromTheAnnualPriceAtTheStatedBasis() {
+        // Basis: four to five runs a week → 4.5 × 52 = 234 runs/yr.
+        // $9.99 → 999/234 = 4.27¢ → about 4¢ (the control framing).
+        XCTAssertEqual(4, MakeItMePriceLabels.perRunCents(annual: Decimal(string: "9.99")))
+        // $19.99 → 1999/234 = 8.54¢ → about 9¢.
+        XCTAssertEqual(9, MakeItMePriceLabels.perRunCents(annual: Decimal(string: "19.99")))
+        // $29.99 → 2999/234 = 12.82¢ → about 13¢.
+        XCTAssertEqual(13, MakeItMePriceLabels.perRunCents(annual: Decimal(string: "29.99")))
+        XCTAssertNil(MakeItMePriceLabels.perRunCents(annual: nil))
+    }
+
+    func testPerRunFinePrintStatesItsBasisAtAllThreeArms() {
+        XCTAssertEqual(
+            "At four to five runs a week, $9.99/year is only about 4¢ per run.",
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$9.99",
+                                                annual: Decimal(string: "9.99"))
+        )
+        XCTAssertEqual(
+            "At four to five runs a week, $19.99/year is only about 9¢ per run.",
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$19.99",
+                                                annual: Decimal(string: "19.99"))
+        )
+        XCTAssertEqual(
+            "At four to five runs a week, $29.99/year is only about 13¢ per run.",
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$29.99",
+                                                annual: Decimal(string: "29.99"))
+        )
+    }
+
+    func testPerRunFinePrintWaitsForTheOffering() {
+        XCTAssertNil(MakeItMePriceLabels.perRunFinePrint(annualPriceString: nil, annual: nil))
+        XCTAssertNil(MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$9.99", annual: nil))
+        XCTAssertNil(MakeItMePriceLabels.perRunFinePrint(annualPriceString: nil,
+                                                         annual: Decimal(string: "9.99")))
+    }
+
+    // MARK: - WS-D · the Settings offer card's price line
+
+    func testSettingsOfferPriceLineIsTheProductPriceWithTerm() {
+        XCTAssertEqual("$9.99 / year",
+                       MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$9.99"))
+        XCTAssertEqual("$19.99 / year",
+                       MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$19.99"))
+        XCTAssertNil(MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: nil),
+                     "unresolved offering → the card carries no price, never a hardcoded one")
     }
 }
 

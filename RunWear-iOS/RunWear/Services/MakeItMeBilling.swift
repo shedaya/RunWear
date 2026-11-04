@@ -51,6 +51,15 @@ final class MakeItMeBilling: ObservableObject {
         )
     }
 
+    /// GEN-3 (WS-F): the paywall's per-run fine print, derived from
+    /// the fetched offering's annual price — nil until it resolves.
+    var perRunFinePrint: String? {
+        MakeItMePriceLabels.perRunFinePrint(
+            annualPriceString: annualPriceString,
+            annual: annualPriceAmount
+        )
+    }
+
     /// Set by PersonalHeroStore: fires on every entitlement change so
     /// the store can kick the server-side matrix fill.
     var onEntitlementChange: ((Bool) -> Void)?

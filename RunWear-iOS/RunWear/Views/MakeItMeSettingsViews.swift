@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - RW-14 "Make it me" — Settings section, subscription sheet,
+// MARK: - RW-14 "Make It Me" — Settings section, subscription sheet,
 // upsell card (spec §3 + §5; strings S1–S14, U1–U2 verbatim).
 
 // MARK: - Settings section (§3)
@@ -32,12 +32,51 @@ struct MakeItMeSettingsSection: View {
     let currentCombination: () -> PersonalCombination?
 
     var body: some View {
-        // A native Form section — Settings is a Form (RW-6.7), so
-        // this renders in the same grammar and adaptive colors as
-        // the preference sections around it. (Wrapped in a Group
-        // so the W-18 .task below binds to the whole section,
-        // unambiguously past the Section's trailing closures.)
+        // GEN-3 (WS-D): the redesign composes the feature as a
+        // GROUP of native Form sections, in spec order — the
+        // status group under the "Make It Me" heading, Your photos
+        // as its own group, the Premium offer as a card in its own
+        // group, and the destructive group last and visually
+        // separated — replacing gen-2's one flat stack of
+        // same-weight rows (study P2/P5). Settings is a Form
+        // (RW-6.7), so the groups render in the same grammar and
+        // adaptive colors as the preference sections around them.
+        // (Wrapped in a Group so the .task below binds to the
+        // whole composition, unambiguously past the Sections'
+        // trailing closures.)
         Group {
+            statusSection
+            if store.mode != .stock {
+                photosSection
+                offerSection
+                destructiveSection
+            }
+
+            // WS-5 (D-14): the account-level data delete is NOT a
+            // row of this composition — SettingsModal hosts it as
+            // the inventory's own section, directly after this
+            // one, reachable whether or not this composition's
+            // mode content renders. The destructive zone therefore
+            // ends the Make It Me block as two adjacent, visually
+            // separated groups: the photos delete closing this
+            // composition, the data delete in its own group after.
+        }
+        // W-18: opening Settings re-reads the server profile, so
+        // the meter this section renders is the server's current
+        // count — a look delivered since the last read (frame 34's
+        // included) is counted here, in the same session.
+        // GEN-3 (WS-D): the billing offering re-reads with it, so
+        // the offer card's price is the store product's current
+        // price, never a stale or hardcoded one.
+        .task {
+            await store.refreshProfile()
+            await store.billing.refresh()
+        }
+    }
+
+    // MARK: Status group (WS-D group 1, under the heading)
+
+    private var statusSection: some View {
         Section {
             switch store.mode {
             case .stock:
@@ -63,6 +102,10 @@ struct MakeItMeSettingsSection: View {
                     }
                 }
             case .free, .subscribed:
+                // ONE status block (WS-D group 1): the state line
+                // and the free-look meter composed together from
+                // the shared seam — one source of truth, so the
+                // block can never contradict itself.
                 VStack(alignment: .leading, spacing: 4) {
                     Text("You're in your photos.")
                         .font(.system(size: 16, weight: .semibold))
@@ -85,45 +128,21 @@ struct MakeItMeSettingsSection: View {
                         Text(FreeLooksMeter.settingsLine(used: store.freeGenerationsUsed, allowance: PersonalHeroStore.freeAllowance))
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
+                        // GEN-3 (X-9): while a look is in flight,
+                        // the block carries it as PENDING under the
+                        // delivered count — the meter stays the
+                        // delivered truth (the server charges on
+                        // delivery), and the block as a whole never
+                        // reads as settled while the flow is
+                        // visibly making a look.
+                        if let pending = FreeLooksMeter.settingsPendingLine(inFlight: store.looksInFlight) {
+                            Text(pending)
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
                     }
                 }
-
-                settingsRow(
-                    title: MakeItMeSettingsRow.yourPhotos.title,
-                    subtitle: "View or replace",
-                    action: { presentation.present(.photos) }
-                )
-
-                if store.mode == .subscribed {
-                    settingsRow(
-                        title: MakeItMeSettingsRow.manageSubscription.title,
-                        subtitle: nil,
-                        action: { Task { await store.billing.showManageSubscriptions() } }
-                    )
-                } else {
-                    // Frame 35: the free state's quiet meter card —
-                    // the real meter above, this §9 line verbatim,
-                    // one door. No price string (§9 price rule).
-                    settingsRow(
-                        title: MakeItMeSettingsRow.premium.title,
-                        subtitle: "Made ahead, without limit — every outfit is ready when you open the app.",
-                        action: { presentation.present(.subscription) }
-                    )
-                }
-
-                Button(role: .destructive) {
-                    presentation.alert = .confirmDelete
-                } label: {
-                    Text(MakeItMeSettingsRow.deletePhotos.title)
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
-
-            // WS-5 (D-14): Delete my data is NOT a row of this
-            // section anymore — SettingsModal hosts it as the
-            // inventory's own section, reachable whether or not
-            // this section's mode content renders.
         } header: {
             // RW-26 (notes §7.5): "Make It Me" is a script
             // wordmark wherever it appears as a title.
@@ -132,12 +151,65 @@ struct MakeItMeSettingsSection: View {
                 .textCase(nil)
                 .foregroundColor(AppTheme.inkPrimary)
         }
+    }
+
+    // MARK: Your photos group (WS-D group 2)
+
+    private var photosSection: some View {
+        Section {
+            settingsRow(
+                title: MakeItMeSettingsRow.yourPhotos.title,
+                subtitle: "View or replace",
+                action: { presentation.present(.photos) }
+            )
         }
-        // W-18: opening Settings re-reads the server profile, so
-        // the meter this section renders is the server's current
-        // count — a look delivered since the last read (frame 34's
-        // included) is counted here, in the same session.
-        .task { await store.refreshProfile() }
+    }
+
+    // MARK: Premium offer group (WS-D group 3)
+
+    private var offerSection: some View {
+        Section {
+            if store.mode == .subscribed {
+                // State-aware (WS-D): a subscriber sees the
+                // subscribed state instead of the offer, with the
+                // frame-37 management door under it.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(MakeItMeSettingsRow.premium.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Text("You're subscribed.")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+                settingsRow(
+                    title: MakeItMeSettingsRow.manageSubscription.title,
+                    subtitle: nil,
+                    action: { Task { await store.billing.showManageSubscriptions() } }
+                )
+            } else {
+                // Frame 35's card, made legible as an offer
+                // (WS-D): the name "Premium", the price with term
+                // from the store product, the settled two-benefit
+                // copy, and a real button opening the paywall.
+                MakeItMePremiumOfferCard(billing: store.billing) {
+                    presentation.present(.subscription)
+                }
+            }
+        }
+    }
+
+    // MARK: Destructive group (WS-D group 4 — last, separated)
+
+    private var destructiveSection: some View {
+        Section {
+            Button(role: .destructive) {
+                presentation.alert = .confirmDelete
+            } label: {
+                Text(MakeItMeSettingsRow.deletePhotos.title)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 
     private func settingsRow(title: String, subtitle: String?, action: @escaping () -> Void) -> some View {
@@ -166,6 +238,53 @@ struct MakeItMeSettingsSection: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - The Premium offer card (GEN-3 · WS-D)
+//
+// Frame 35's quiet card was quiet to the point of illegibility
+// (study P1): no Premium name as an offer, no price, no button —
+// a user could not tell it was an offer, let alone act on it.
+// This card keeps the settled two-benefit copy and the state
+// awareness, and carries what an offer must: the name "Premium",
+// the price with term composed from the fetched store product
+// (parameterized — $9.99/year control, never hardcoded; no price
+// line at all while the offering is unresolved), and a real
+// "Get Premium" button that opens the paywall. It observes the
+// billing object directly so the price lands the moment the
+// offering resolves.
+private struct MakeItMePremiumOfferCard: View {
+    @ObservedObject var billing: MakeItMeBilling
+    let onGetPremium: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(MakeItMeSettingsRow.premium.title)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(AppTheme.inkPrimary)
+            // The settled two-benefit copy (§9 line, verbatim):
+            // looks made ahead, without limit.
+            Text("Made ahead, without limit — every outfit is ready when you open the app.")
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.inkSecondary)
+            if let priceLine = MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: billing.annualPriceString) {
+                Text(priceLine)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.inkPrimary)
+            }
+            Button(action: onGetPremium) {
+                Text("Get Premium")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.primaryColor))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .padding(.vertical, 6)
     }
 }
 
@@ -374,6 +493,19 @@ struct MakeItMeSubscriptionSheet: View {
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(AppTheme.primaryColor, lineWidth: 2)
                     )
+
+                    // GEN-3 (WS-F): the fine print under the card —
+                    // the annual price framed per run with its
+                    // basis stated, DERIVED from the displayed
+                    // product's annual price (never a hardcoded
+                    // cents figure). This replaces the retired
+                    // monthly-comparison line; nothing else on the
+                    // paywall changes.
+                    if let finePrint = store.billing.perRunFinePrint {
+                        Text(finePrint)
+                            .font(.system(size: 12))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
 
                     if store.billing.isSubscribed {
                         Text("You're subscribed — your photo is ready before you open the app.")

@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import AVFoundation
 
-// MARK: - RW-14 "Make it me" — fork + opt-in flow views
+// MARK: - RW-14 "Make It Me" — fork + opt-in flow views
 //
 // Copy is the spec's §7 string deck, verbatim (see
 // runwear-rw14-ux-identity-spec-2026-10-31.md). Strings that had to
@@ -114,7 +114,7 @@ struct MakeItMeForkView: View {
                     Text("Use the standard photos")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text("Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make it me any time in Settings.")
+                    Text("Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make It Me any time in Settings.")
                         .font(.system(size: 15))
                         .foregroundColor(AppTheme.inkSecondary)
                     Button(action: onStock) {
@@ -240,7 +240,7 @@ struct MakeItMeOptInFlow: View {
                     Text("RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.")
                     Text("Your photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.")
                     Text("Pictures made from your photos are kept only for you, so your outfits are ready when you open the app.")
-                    Text("You can delete your photos and every picture made from them at any time: Settings → Make it me → Delete my photos. Deleting is permanent and takes effect right away.")
+                    Text("You can delete your photos and every picture made from them at any time: Settings → Make It Me → Delete my photos. Deleting is permanent and takes effect right away.")
                 }
                 .font(.system(size: 16))
                 .foregroundColor(AppTheme.inkPrimary)
