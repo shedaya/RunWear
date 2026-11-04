@@ -986,6 +986,64 @@ private fun GenderToggleSettings(
     }
 }
 
+/**
+ * GEN-3 Y-15: the location picker's search-result rows, extracted
+ * from [LocationPickerSheet] unchanged (same LazyColumn, same row
+ * layout, same Surface onClick) so the tap-registration parity
+ * check (LocationPickerTapRegistrationTest) can drive the REAL
+ * row composable with real touch events — a ModalBottomSheet
+ * cannot be driven to Expanded under Robolectric. The sheet wraps
+ * each selection with its haptic + focus handling; this list owns
+ * only the rows and their clicks.
+ */
+@Composable
+internal fun LocationSearchResultRows(
+    results: List<LocationResult>,
+    onSelectResult: (LocationResult) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.heightIn(max = 200.dp)
+    ) {
+        items(results) { result ->
+            Surface(
+                onClick = { onSelectResult(result) },
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.Transparent
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = result.name,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 15.sp,
+                            color = RunWearColors.TextPrimary
+                        )
+                        if (result.detail.isNotEmpty()) {
+                            Text(
+                                text = result.detail,
+                                fontSize = 13.sp,
+                                color = RunWearColors.TextSecondary
+                            )
+                        }
+                    }
+                    Icon(
+                        Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = RunWearColors.TextSecondary
+                    )
+                }
+            }
+            HorizontalDivider(color = RunWearColors.BgCardLight)
+        }
+    }
+}
+
 // ============================================================================
 // LOCATION PICKER SHEET - PWA v2.9 Style with GPS + Manual options
 // ============================================================================
@@ -1129,53 +1187,16 @@ fun LocationPickerSheet(
             // Results IMMEDIATELY below search (visible above keyboard)
             if (searchResults.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 200.dp)
-                ) {
-                    items(searchResults) { result ->
-                        Surface(
-                            onClick = {
-                                // §1.7 / §1.3 (WS-9 fix, P-2): place
-                                // selected fires the selection tick.
-                                haptic.performHapticFeedback(HapticSpec.SELECTION)
-                                focusManager.clearFocus()
-                                onSelectLocation(result.latitude, result.longitude, result.displayName)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color.Transparent
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = result.name,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 15.sp,
-                                        color = RunWearColors.TextPrimary
-                                    )
-                                    if (result.detail.isNotEmpty()) {
-                                        Text(
-                                            text = result.detail,
-                                            fontSize = 13.sp,
-                                            color = RunWearColors.TextSecondary
-                                        )
-                                    }
-                                }
-                                Icon(
-                                    Icons.Outlined.ChevronRight,
-                                    contentDescription = null,
-                                    tint = RunWearColors.TextSecondary
-                                )
-                            }
-                        }
-                        HorizontalDivider(color = RunWearColors.BgCardLight)
+                LocationSearchResultRows(
+                    results = searchResults,
+                    onSelectResult = { result ->
+                        // §1.7 / §1.3 (WS-9 fix, P-2): place
+                        // selected fires the selection tick.
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        focusManager.clearFocus()
+                        onSelectLocation(result.latitude, result.longitude, result.displayName)
                     }
-                }
+                )
             } else if (query.length >= 2 && !isSearching) {
                 Spacer(Modifier.height(8.dp))
                 Text(
