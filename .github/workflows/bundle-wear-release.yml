@@ -1,0 +1,42 @@
+name: Bundle Wear Release (dispatch only)
+
+# Scratch CI branch only (ci/wear-bundle-rw27-release-2026-11-03):
+# the repo's bundle-release.yml builds only the phone AAB
+# (:app:bundleRelease). This workflow is its exact mirror for the
+# standalone Wear bundle (:wear:bundleRelease) so the RW-27 release
+# Wear AAB is built the same CI way, from the identical release
+# commit f205186. Signing happens locally with the upload keystore
+# (jarsigner); CI never sees the keystore. This file does NOT exist
+# on the release branch.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Build wear release AAB (unsigned)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build wear release bundle
+        working-directory: RunWear-android
+        run: ./gradlew :wear:bundleRelease --stacktrace
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear-release-aab
+          path: RunWear-android/wear/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
