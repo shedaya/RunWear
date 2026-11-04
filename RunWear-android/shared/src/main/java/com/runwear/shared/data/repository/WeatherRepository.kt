@@ -27,7 +27,53 @@ data class LocationResult(
     /** WS-4: this result as a simple place (its [displayName] is its display). */
     val simplePlace: com.runwear.shared.domain.model.SimplePlace
         get() = com.runwear.shared.domain.model.SimplePlace.fromRawDisplayString(displayName)
+
+    /**
+     * GEN-3 X-12: this result's place identity — the composite the
+     * search-result construction dedupes on: the derived simple
+     * place ([displayName]) plus the full detail line ([detail],
+     * region + country). Two geocoder hits whose identity matches
+     * are the same place AS THIS APP REPRESENTS IT: no rendered
+     * field distinguishes them, so showing both is a duplicate row.
+     *
+     * The identity is deliberately NOT the name alone and NOT the
+     * coordinates: "Florida" the US state, "Florida" the Puerto
+     * Rican county and "Florida" the Uruguayan department share a
+     * name but carry different region/country details, so all three
+     * survive; the New York CITY hit and the New York STATE hit
+     * derive the same simple place and the same detail (see
+     * [dedupeByPlaceIdentity]), so only the first — the city, by
+     * geocoder importance — survives. Coordinates are excluded
+     * because the state hit's centroid sits ~250 km from the city
+     * it duplicates on screen.
+     */
+    val placeIdentity: String
+        get() = displayName.trim().lowercase() + "|" + detail.trim().lowercase()
 }
+
+/**
+ * GEN-3 X-12: drop results that duplicate an earlier result's
+ * [LocationResult.placeIdentity], preserving the original order
+ * (the geocoder's importance order — the survivor of a duplicate
+ * pair is the hit the geocoder ranked first).
+ *
+ * Why duplicates exist at all (verified against live Nominatim,
+ * 2026-11-04): a search for "new York" returns TWO distinct OSM
+ * entities — the city (relation 175905, address carries city +
+ * state) and the state (relation 61320, address carries state
+ * only). [com.runwear.shared.data.model.NominatimSearchResult]
+ * discards every distinguishing field (place_id, osm identity,
+ * addresstype are not even parsed), and its cityName fallback
+ * synthesizes a city for the region-only state hit from the
+ * display name's first segment — so the state hit derives the
+ * SAME simple place ("New York, NY") and the SAME detail
+ * ("New York, United States") as the city hit, and the sheet
+ * rendered both as identical consecutive rows. There is only one
+ * source and no merge; the collapse happens at result
+ * construction, so construction is where the dedupe belongs.
+ */
+internal fun dedupeByPlaceIdentity(results: List<LocationResult>): List<LocationResult> =
+    results.distinctBy { it.placeIdentity }
 
 /**
  * The coarse-location rounding applied at the weather request boundary:
@@ -239,8 +285,10 @@ class WeatherRepository @Inject constructor(
 
     suspend fun searchLocation(query: String): Result<List<LocationResult>> = runCatching {
         val results = nominatimApi.searchLocation(query)
-        results
-            .map { it.toLocationResult() }
+        // GEN-3 X-12: dedupe by place identity at construction,
+        // BEFORE the USA sort and the take(5), so a duplicate can
+        // never crowd a distinct result out of the shown five.
+        dedupeByPlaceIdentity(results.map { it.toLocationResult() })
             .sortedByDescending { it.isUSA } // USA results first
             .take(5) // Limit to 5 results like PWA
     }

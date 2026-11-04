@@ -33,7 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,8 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +65,7 @@ import com.runwear.shared.domain.service.ClothingThumbnailService
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -480,6 +483,81 @@ private fun dayTitle(entry: WearIveRunDayEntry, today: LocalDate): String {
 }
 
 /**
+ * GEN-3 share-render: the working state for a rendering share
+ * artifact — a labeled pill (spinner + what is rendering), shown
+ * OVER the artifact while its render is genuinely in progress.
+ * It replaces the in-flow progress rows both share stages used
+ * before: a row inside the sheet's column added and removed its
+ * own height as the ready-state flipped, shoving the artifact —
+ * and the bottom sheet's own content-sized height — around on
+ * every flip, the flicker family Sol's walkthrough verdict named.
+ * The pill is state-driven (it exists exactly while the
+ * artifact's rendered callback has not fired), carries a label
+ * naming the work, and never moves the artifact beneath it.
+ */
+@Composable
+private fun ShareRenderProgressPill(label: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = RunWearColors.BgCard,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                color = RunWearColors.PineAccent,
+                strokeWidth = 2.dp
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = RunWearColors.TextSecondary
+            )
+        }
+    }
+}
+
+/**
+ * GEN-3 share-render acceptance: the FAILED render's surface. A
+ * render that failed says so — what failed, in words — and offers
+ * its own way back (Close dismisses the sheet), instead of the
+ * pre-fix outcomes (an endless progress state, or a silently
+ * degraded card presented as finished). Overlaid like the
+ * progress pill, so it never moves the artifact beneath it.
+ */
+@Composable
+private fun ShareRenderErrorNotice(
+    label: String,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = RunWearColors.BgCard,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onClose) { Text("Close") }
+        }
+    }
+}
+
+/**
  * The per-card share choice: Morning Poster or Kit Card — NO Range
  * (design frames 11–14). Presented as an M3 modal sheet over the
  * dimmed collection (motion spec §1.3), resting on the one full
@@ -521,34 +599,42 @@ private fun ShareChoiceSheet(
                 // W-9: while the chosen card renders (its photo
                 // decoding can take seconds), the preview stage shows
                 // a visible progress state — never a blank wait.
+                // GEN-3 share-render: the state is now the labeled
+                // pill OVERLAID on the preview (ShareRenderProgressPill),
+                // not an in-flow row — the artifact's position and
+                // the sheet's height no longer move when it clears.
                 var previewReady by remember(chosen) { mutableStateOf(false) }
-                if (!previewReady) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    ) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = RunWearColors.PineAccent
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "Rendering ${chosenLabel(chosen)}…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = RunWearColors.TextSecondary
-                        )
+                // GEN-3 share-render acceptance: a failed render is
+                // a state of its own — surfaced as an error with a
+                // way back, Share withheld — never a finished card.
+                var previewFailed by remember(chosen) { mutableStateOf(false) }
+                Box {
+                    Box(modifier = capture.recordModifier()) {
+                        when (chosen) {
+                            ShareArtifactKind.MORNING_POSTER -> MorningPoster(
+                                entry = entry,
+                                onRendered = { previewReady = true },
+                                onRenderFailed = { previewFailed = true }
+                            )
+                            ShareArtifactKind.KIT_CARD -> KitCard(
+                                entry = entry,
+                                gender = gender,
+                                onRendered = { previewReady = true },
+                                onRenderFailed = { previewFailed = true }
+                            )
+                        }
                     }
-                }
-                Box(modifier = capture.recordModifier()) {
-                    when (chosen) {
-                        ShareArtifactKind.MORNING_POSTER -> MorningPoster(
-                            entry = entry,
-                            onRendered = { previewReady = true }
+                    if (previewFailed) {
+                        ShareRenderErrorNotice(
+                            label = "Couldn't render this card — its photo couldn't be loaded.",
+                            onClose = onDismiss,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
                         )
-                        ShareArtifactKind.KIT_CARD -> KitCard(
-                            entry = entry,
-                            gender = gender,
-                            onRendered = { previewReady = true }
+                    } else if (!previewReady) {
+                        ShareRenderProgressPill(
+                            label = "Rendering ${chosenLabel(chosen)}…",
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
                         )
                     }
                 }
@@ -557,6 +643,10 @@ private fun ShareChoiceSheet(
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDismiss) { Text("Close") }
                     TextButton(
+                        // Share only ever captures a SETTLED,
+                        // non-failed render (pre-fix it could fire
+                        // mid-render and share an unfinished card).
+                        enabled = previewReady && !previewFailed,
                         onClick = {
                             scope.launch {
                                 val bitmap = capture.captureBitmap()
@@ -610,41 +700,36 @@ internal fun ShareChooserStage(
         color = RunWearColors.TextSecondary,
         modifier = Modifier.padding(bottom = 12.dp)
     )
-    if (!posterReady || !kitReady) {
+    // GEN-3 share-render: the "Rendering previews…" state is the
+    // labeled pill overlaid on the thumbnail row — pre-fix it was
+    // an in-flow row whose appearance/disappearance shifted both
+    // thumbnails (and the sheet height) on every ready flip.
+    Box {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            androidx.compose.material3.CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = RunWearColors.PineAccent
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = "Rendering previews…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = RunWearColors.TextSecondary
+            ShareThumbnailChoice(
+                kind = ShareArtifactKind.MORNING_POSTER,
+                entry = entry,
+                gender = gender,
+                onReady = { posterReady = true },
+                modifier = Modifier.weight(1f)
+            ) { onChoose(ShareArtifactKind.MORNING_POSTER) }
+            ShareThumbnailChoice(
+                kind = ShareArtifactKind.KIT_CARD,
+                entry = entry,
+                gender = gender,
+                onReady = { kitReady = true },
+                modifier = Modifier.weight(1f)
+            ) { onChoose(ShareArtifactKind.KIT_CARD) }
+        }
+        if (!posterReady || !kitReady) {
+            ShareRenderProgressPill(
+                label = "Rendering previews…",
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
             )
         }
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        ShareThumbnailChoice(
-            kind = ShareArtifactKind.MORNING_POSTER,
-            entry = entry,
-            gender = gender,
-            onReady = { posterReady = true },
-            modifier = Modifier.weight(1f)
-        ) { onChoose(ShareArtifactKind.MORNING_POSTER) }
-        ShareThumbnailChoice(
-            kind = ShareArtifactKind.KIT_CARD,
-            entry = entry,
-            gender = gender,
-            onReady = { kitReady = true },
-            modifier = Modifier.weight(1f)
-        ) { onChoose(ShareArtifactKind.KIT_CARD) }
     }
     Text(
         text = "Cancel",
@@ -657,9 +742,88 @@ internal fun ShareChooserStage(
     )
 }
 
-/** One chooser thumbnail: the real artifact, scaled to fit its card. */
+/**
+ * GEN-3 X-11: the scale math for the chooser thumbnails. The
+ * artifacts are composed at [NATURAL_WIDTH_DP] — the same width
+ * the full-size preview uses — and the composed layer is scaled
+ * to the thumbnail frame's width. Kept as a pure object so the
+ * geometry pins (PosterThumbnailGeometryTest) read the production
+ * numbers, not copies.
+ */
+internal object ArtifactThumbnailGeometry {
+
+    /** The width every share artifact is composed at, thumbnail and preview alike. */
+    const val NATURAL_WIDTH_DP = 340
+
+    /** The thumbnail frame's height; the scaled artifact is top-anchored and clipped to it. */
+    const val FRAME_HEIGHT_DP = 150
+
+    /** Layer scale for an artifact of [naturalWidthPx] shown in a frame [frameWidthPx] wide. */
+    fun scaleFor(frameWidthPx: Int, naturalWidthPx: Int): Float =
+        if (naturalWidthPx <= 0) 1f else frameWidthPx.toFloat() / naturalWidthPx.toFloat()
+
+    /** The on-screen height of an artifact [naturalHeightPx] tall at [scale]. */
+    fun scaledHeightPx(naturalHeightPx: Int, scale: Float): Int =
+        (naturalHeightPx * scale).roundToInt()
+}
+
+/**
+ * GEN-3 X-11: measure the artifact at its NATURAL size — fixed
+ * [ArtifactThumbnailGeometry.NATURAL_WIDTH_DP] width, unbounded
+ * height, so a fixed-geometry artifact (the Morning Poster's
+ * 420 dp) keeps its designed layout — then scale the composed
+ * layer into the frame, top-anchored; the frame clips the rest.
+ *
+ * The pre-fix thumbnail instead composed the artifact INSIDE the
+ * frame and scaled the result: the frame's constraints (~134 dp
+ * wide × 150 dp high) coerced the poster's fixed 340 dp width and
+ * 420 dp height down to the frame BEFORE the 0.42 graphicsLayer
+ * scale applied, so the poster's top lockup (~80 dp) and its
+ * bottom info column (~110 dp) were laid out inside a ≤150 dp
+ * box and overlapped — the weather/place line rendered over the
+ * wordmark (walkthrough f_080). The Kit Card, with no fixed
+ * height and no overlay columns, composed cleanly either way.
+ * The full-size poster does NOT collide (its bands sit ~230 dp
+ * apart at natural size) — pinned by PosterThumbnailGeometryTest.
+ */
 @Composable
-private fun ShareThumbnailChoice(
+internal fun ArtifactThumbnailScaler(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val naturalWidthPx = ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp.roundToPx()
+        val placeable = measurables.single().measure(
+            Constraints(
+                minWidth = naturalWidthPx,
+                maxWidth = naturalWidthPx,
+                minHeight = 0,
+                maxHeight = Constraints.Infinity
+            )
+        )
+        val scale = ArtifactThumbnailGeometry.scaleFor(
+            frameWidthPx = constraints.maxWidth,
+            naturalWidthPx = placeable.width
+        )
+        val scaledHeightPx = ArtifactThumbnailGeometry.scaledHeightPx(placeable.height, scale)
+        val layoutHeight = if (constraints.maxHeight == Constraints.Infinity) {
+            scaledHeightPx
+        } else {
+            minOf(scaledHeightPx, constraints.maxHeight)
+        }
+        layout(constraints.maxWidth, layoutHeight) {
+            placeable.placeWithLayer(0, 0) {
+                scaleX = scale
+                scaleY = scale
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
+        }
+    }
+}
+
+/** One chooser thumbnail: the real artifact, composed at natural size and scaled to fit its card. */
+@Composable
+internal fun ShareThumbnailChoice(
     kind: ShareArtifactKind,
     entry: WearIveRunDayEntry,
     gender: GenderPreference,
@@ -676,30 +840,23 @@ private fun ShareThumbnailChoice(
             .padding(8.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(150.dp)
+            modifier = Modifier.fillMaxWidth().height(ArtifactThumbnailGeometry.FRAME_HEIGHT_DP.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(RunWearColors.Surface)
         ) {
-            // The artifact composed at its natural width and scaled
-            // from the top-left into the thumbnail frame.
-            Box(
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = 0.42f
-                        scaleY = 0.42f
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
-                    }
-                    .width(340.dp)
-            ) {
+            // GEN-3 X-11: compose at natural size, scale the layer
+            // (see ArtifactThumbnailScaler) — never compose the
+            // artifact under the frame's own constraints.
+            ArtifactThumbnailScaler {
                 when (kind) {
                     ShareArtifactKind.MORNING_POSTER -> MorningPoster(
                         entry = entry,
-                        modifier = Modifier.width(340.dp),
+                        modifier = Modifier.width(ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp),
                         onRendered = onReady
                     )
                     ShareArtifactKind.KIT_CARD -> KitCard(
                         entry = entry,
-                        modifier = Modifier.width(340.dp),
+                        modifier = Modifier.width(ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp),
                         gender = gender,
                         onRendered = onReady
                     )
@@ -729,10 +886,38 @@ fun MorningPoster(
     /** W-9: fires once the artifact has rendered (its hero photo
      * decoded, or immediately when the entry carries no photo) — the
      * share surfaces show a progress state until it fires. */
-    onRendered: (() -> Unit)? = null
+    onRendered: (() -> Unit)? = null,
+    /** GEN-3 share-render acceptance: fires (once, together with
+     * [onRendered]) when the artifact settled WITHOUT its photo —
+     * the decode failed. The share preview turns this into an
+     * explicit error surface with a way back; a failed render must
+     * say so, never pass as a finished card. */
+    onRenderFailed: (() -> Unit)? = null
 ) {
+    // GEN-3 share-render: onRendered fires EXACTLY ONCE per entry,
+    // when the poster is SETTLED — photo decoded, photo failed, or
+    // no photo at all (the pattern the Kit Card already had for
+    // success, extended to every terminal state). Pre-fix the
+    // poster fired only on image SUCCESS and with no once-guard:
+    // a decode error left the share sheet's rendering state up
+    // forever — a spinner as the settled state — and every painter
+    // re-delivery rewrote the sheet's ready-state from inside the
+    // painter callback.
+    var posterRenderReported by remember(entry) { mutableStateOf(false) }
+    fun reportPosterRendered(failed: Boolean) {
+        if (!posterRenderReported) {
+            posterRenderReported = true
+            if (failed) onRenderFailed?.invoke()
+            onRendered?.invoke()
+        }
+    }
     if (entry.heroRef == null) {
-        LaunchedEffect(entry) { onRendered?.invoke() }
+        // Nothing to load: the poster is settled the moment its
+        // composition applies. SideEffect (not LaunchedEffect) —
+        // it IS the composition-applied hook, it carries no frame
+        // of effect-scheduling latency, and the once-guard makes
+        // its every-recomposition firing a no-op after the first.
+        SideEffect { reportPosterRendered(failed = false) }
     }
     Box(
         modifier = modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(16.dp))
@@ -744,8 +929,12 @@ fun MorningPoster(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { painterState ->
-                    if (painterState is coil.compose.AsyncImagePainter.State.Success) {
-                        onRendered?.invoke()
+                    when (painterState) {
+                        is coil.compose.AsyncImagePainter.State.Success ->
+                            reportPosterRendered(failed = false)
+                        is coil.compose.AsyncImagePainter.State.Error ->
+                            reportPosterRendered(failed = true)
+                        else -> Unit
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -828,17 +1017,29 @@ fun KitCard(
     /** W-9: fires once the card has rendered (its first garment
      * render decoded, or immediately when no item resolves to a
      * render) — the share surfaces show progress until it fires. */
-    onRendered: (() -> Unit)? = null
+    onRendered: (() -> Unit)? = null,
+    /** GEN-3 share-render acceptance: fires (once, together with
+     * [onRendered]) when the card settled on a FAILED garment
+     * decode — the preview surfaces it as an error, not a card. */
+    onRenderFailed: (() -> Unit)? = null
 ) {
     val anyRender = entry.items.any { itemName ->
         clothingItemForDisplayName(itemName)?.let {
             ClothingThumbnailService.getThumbnailAssetUri(it, gender)
         } != null
     }
-    if (!anyRender) {
-        LaunchedEffect(entry) { onRendered?.invoke() }
-    }
     var renderReported by remember(entry) { mutableStateOf(false) }
+    if (!anyRender) {
+        // Nothing to load — settled on composition apply (see the
+        // poster's SideEffect note); routed through the same
+        // once-guard as the painter path.
+        SideEffect {
+            if (!renderReported) {
+                renderReported = true
+                onRendered?.invoke()
+            }
+        }
+    }
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -871,10 +1072,23 @@ fun KitCard(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             onState = { painterState ->
-                                if (!renderReported &&
-                                    painterState is coil.compose.AsyncImagePainter.State.Success
-                                ) {
+                                // GEN-3 share-render: the card
+                                // settles on the first render's
+                                // TERMINAL state — success OR error
+                                // (a failure also reports through
+                                // onRenderFailed). Pre-fix only
+                                // success reported, so a failed
+                                // garment decode hung the share
+                                // sheet's rendering state just like
+                                // the poster's did.
+                                val failed = when (painterState) {
+                                    is coil.compose.AsyncImagePainter.State.Success -> false
+                                    is coil.compose.AsyncImagePainter.State.Error -> true
+                                    else -> null
+                                }
+                                if (!renderReported && failed != null) {
                                     renderReported = true
+                                    if (failed) onRenderFailed?.invoke()
                                     onRendered?.invoke()
                                 }
                             },
