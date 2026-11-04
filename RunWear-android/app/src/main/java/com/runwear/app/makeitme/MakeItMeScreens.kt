@@ -9,6 +9,7 @@ import java.io.File
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.togetherWith
+import com.runwear.app.ui.screens.OnboardingMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -429,8 +430,8 @@ fun MakeItMeUploadFlow(
             targetState = step,
             transitionSpec = {
                 val forward = targetState.ordinal > initialState.ordinal
-                val easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
-                val duration = com.runwear.app.ui.screens.OnboardingMotion.STEP_TRANSITION_MS
+                val easing = OnboardingMotion.EmphasizedEasing
+                val duration = OnboardingMotion.STEP_TRANSITION_MS
                 (androidx.compose.animation.slideInHorizontally(
                     animationSpec = androidx.compose.animation.core.tween(duration, easing = easing)
                 ) { width -> if (forward) width else -width } +
@@ -1685,7 +1686,7 @@ fun FirstLookMoment(
     LaunchedEffect(Unit) {
         revealed = true
         delay(
-            com.runwear.app.ui.screens.OnboardingMotion.FIRST_LOOK_BAND_AT_MS.toLong()
+            OnboardingMotion.FIRST_LOOK_BAND_AT_MS.toLong()
         )
         bandSettled = true
         haptic.performHapticFeedback(
@@ -1741,9 +1742,8 @@ fun FirstLookMoment(
                 visible = revealed && photoUrl != null,
                 enter = androidx.compose.animation.fadeIn(
                     animationSpec = androidx.compose.animation.core.tween(
-                        com.runwear.app.ui.screens.OnboardingMotion
-                            .FIRST_LOOK_PHOTO_CROSSFADE_MS,
-                        easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                        OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS,
+                        easing = OnboardingMotion.EmphasizedEasing
                     )
                 )
             ) {
@@ -1780,16 +1780,14 @@ fun FirstLookMoment(
                 visible = bandSettled,
                 enter = androidx.compose.animation.slideInVertically(
                     animationSpec = androidx.compose.animation.core.tween(
-                        com.runwear.app.ui.screens.OnboardingMotion
-                            .FIRST_LOOK_BAND_SETTLE_MS,
-                        easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                        OnboardingMotion.FIRST_LOOK_BAND_SETTLE_MS,
+                        easing = OnboardingMotion.EmphasizedEasing
                     )
                 ) { height -> height / 2 } +
                     androidx.compose.animation.fadeIn(
                         animationSpec = androidx.compose.animation.core.tween(
-                            com.runwear.app.ui.screens.OnboardingMotion
-                                .FIRST_LOOK_BAND_SETTLE_MS,
-                            easing = com.runwear.app.ui.screens.OnboardingMotion.EmphasizedEasing
+                            OnboardingMotion.FIRST_LOOK_BAND_SETTLE_MS,
+                            easing = OnboardingMotion.EmphasizedEasing
                         )
                     )
             ) {

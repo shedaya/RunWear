@@ -1175,7 +1175,7 @@ fun LocationPickerSheet(
                         ) {
                             // WS-10 (A4 residue): the selection
                             // check is designed iconography — a
-                            // vector, not the "✓" text glyph.
+                            // vector, not a text glyph.
                             Icon(
                                 imageVector = Icons.Outlined.Check,
                                 contentDescription = null,
