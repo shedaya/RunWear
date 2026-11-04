@@ -167,13 +167,14 @@ class WearIveRunElementPinTest {
     fun `the element surface's haptics are exactly the S1_7 map entries - cue tick and trash tick`() {
         // WS-9 fix (P-2): §1.7's table names TWO haptics for this
         // surface — the cue's light confirm-class tick and the
-        // trash's light tick. The pre-fix pin asserted exactly one
-        // (the cue), which left the table's trash row unimplemented;
-        // the map is now complete: cue (once, in CueBarContent) +
-        // trash (once per state that carries the button).
+        // trash's light tick. GEN-2's morph unifies the two state
+        // renderings into ONE composable with ONE shared control set,
+        // so each map entry now has exactly one call site (cue tick
+        // at the settle + the shared trash button's light tick) —
+        // the map itself is unchanged.
         val bar = miniBar()
         assertEquals(
-            3,
+            2,
             bar.split("performHapticFeedback").size - 1
         )
         assertTrue(
@@ -200,9 +201,11 @@ class WearIveRunElementPinTest {
         val bar = miniBar()
         assertFalse(bar.contains("TextButton"))
         assertFalse(bar.contains("text = \"Remove\""))
-        // Both states share the trash icon's content description.
+        // GEN-2: the morph's ONE shared trash control serves both
+        // states (identical by construction), so its content
+        // description appears exactly once in the unified surface.
         assertEquals(
-            2,
+            1,
             bar.split("\"Remove from Wear I've Run\"").size - 1
         )
         // No broken-image placeholder icon in the thumbnail slot; the
