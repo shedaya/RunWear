@@ -9,9 +9,20 @@ import java.util.Locale
  * design notes §1 + §8-K). Pure logic, no Android types, mirrored
  * rule-for-rule by the iOS lane's Swift implementation:
  *
- * - One entry per day per place. An entry is created automatically at
- *   the day's first generation; the saved entry is the day's LAST
- *   settled version (a later generation the same day replaces it).
+ * - GEN-3 (WS-C, Sol's Nov 4 correction — supersedes the per-day /
+ *   per-place rule below wherever they conflict): ONE entry per
+ *   SESSION (see [WearIveRunSession] for the operational
+ *   definition). An entry is created automatically at the session's
+ *   first settled generation; within the session every later
+ *   location/weather change replaces it IN PLACE, and the saved
+ *   entry is the session's LAST settled version. Persisted entries
+ *   are keyed by session ([WearIveRunDayEntry.sessionId]), not by
+ *   (day, place) and not by place alone.
+ * - Legacy entries (recorded before the session rule, sessionId
+ *   blank) keep the historical key: one entry per day per place,
+ *   last settled version replaces. They are never wiped; see
+ *   [upsert] for how a session entry supersedes same-day legacy
+ *   rows going forward.
  * - NO backfill: entries exist only from the build that records them.
  * - Chapters are BY LOCATION. A chapter holding more than one stay
  *   counts stays + total days and names the LAST stay — never a
@@ -24,7 +35,14 @@ import java.util.Locale
  * - Days newest-first; stays newest-first; days newest-first within.
  */
 
-/** One day's settled entry for one place. */
+/**
+ * One settled entry. Since GEN-3 its identity is its SESSION
+ * ([sessionId]): one session produces exactly one entry, whose
+ * [date]/[place]/weather/kit fields carry the session's last
+ * settled version. Entries recorded before the session rule carry
+ * a blank [sessionId] and keep their historical (date, place)
+ * identity.
+ */
 data class WearIveRunDayEntry(
     val date: LocalDate,
     val place: String,
@@ -37,7 +55,18 @@ data class WearIveRunDayEntry(
     /** The day's garment list (display names), last settled version. */
     val items: List<String>,
     /** Hero image reference for the day (URL or row id). */
-    val heroRef: String?
+    val heroRef: String?,
+    /** GEN-3 (WS-C): the recording session's id (minted in process
+     * memory at runtime; persisted ON the entry so the scrapbook
+     * can key by session). Blank = legacy, pre-session-rule entry. */
+    val sessionId: String = "",
+    /** GEN-3 (WS-C): when this version settled (epoch millis;
+     * 0 for legacy entries). The recency key that lets every
+     * surface agree on the LATEST entry for a day — never an
+     * alphabetical place comparison (the X-5 stale-TODAY bug: the
+     * pinned card picked the alphabetically-last place and stayed
+     * on Overland Park while he stood in Miami). */
+    val settledAtMillis: Long = 0L
 )
 
 /** The collection's weather filter (design §1). */
@@ -86,16 +115,47 @@ object WearIveRunCollectionLogic {
     fun filtered(entries: List<WearIveRunDayEntry>, filter: WearWeatherFilter): List<WearIveRunDayEntry> =
         entries.filter { matches(it, filter) }
 
+    /** GEN-3: an entry's identity — its session when it has one,
+     * else its legacy (date, place) key. */
+    fun identityOf(entry: WearIveRunDayEntry): String =
+        if (entry.sessionId.isNotBlank()) {
+            "session:${entry.sessionId}"
+        } else {
+            "legacy:${entry.date}|${entry.place}"
+        }
+
+    fun sameIdentity(a: WearIveRunDayEntry, b: WearIveRunDayEntry): Boolean =
+        identityOf(a) == identityOf(b)
+
     /**
-     * Insert-or-replace: the saved entry for (date, place) is the
-     * day's LAST settled version. Returns the full set sorted
-     * newest-first. One entry per day per place is the invariant.
+     * Insert-or-replace, GEN-3 session rule:
+     *
+     * - A SESSION entry (sessionId non-blank) replaces the entry
+     *   with the SAME sessionId wherever it sits — across place and
+     *   across date (a session spanning midnight still holds one
+     *   entry). It also supersedes LEGACY (blank-session) entries
+     *   dated the entry's own date: those rows are today's pre-fix
+     *   accumulation, and from the first session recording of the
+     *   day forward the day follows the session framing. Legacy
+     *   entries for OTHER dates are untouched — history is never
+     *   wiped.
+     * - A LEGACY entry keeps the historical rule: the saved entry
+     *   for (date, place) is the day's LAST settled version.
+     *
+     * Returns the full set sorted newest-first.
      */
     fun upsert(
         entries: List<WearIveRunDayEntry>,
         entry: WearIveRunDayEntry
     ): List<WearIveRunDayEntry> {
-        val rest = entries.filterNot { it.date == entry.date && it.place == entry.place }
+        val rest = if (entry.sessionId.isNotBlank()) {
+            entries.filterNot {
+                (it.sessionId.isNotBlank() && it.sessionId == entry.sessionId) ||
+                    (it.sessionId.isBlank() && it.date == entry.date)
+            }
+        } else {
+            entries.filterNot { it.date == entry.date && it.place == entry.place }
+        }
         return (rest + entry).sortedWith(
             compareByDescending<WearIveRunDayEntry> { it.date }.thenBy { it.place }
         )
@@ -103,6 +163,37 @@ object WearIveRunCollectionLogic {
 
     fun remove(entries: List<WearIveRunDayEntry>, date: LocalDate, place: String): List<WearIveRunDayEntry> =
         entries.filterNot { it.date == date && it.place == place }
+
+    /** GEN-3: remove by identity (session entries by sessionId,
+     * legacy entries by their (date, place) key). */
+    fun removeByIdentity(
+        entries: List<WearIveRunDayEntry>,
+        entry: WearIveRunDayEntry
+    ): List<WearIveRunDayEntry> =
+        entries.filterNot { sameIdentity(it, entry) }
+
+    /**
+     * GEN-3 (X-5): THE entry for [today] — the day's latest settled
+     * version, by [WearIveRunDayEntry.settledAtMillis]. Every
+     * surface that names "today's entry" (the mini bar's holder,
+     * the collection's pinned TODAY card) resolves through this one
+     * function, so the pinned card and the bar can never disagree
+     * or go stale on an earlier place. Legacy entries all carry
+     * settledAtMillis 0; ties break by place name (ascending) so
+     * the choice is deterministic and identical on every surface.
+     */
+    fun todaysEntry(
+        entries: List<WearIveRunDayEntry>,
+        today: LocalDate
+    ): WearIveRunDayEntry? {
+        val todays = entries.filter { it.date == today }
+        val latestSettled = todays.maxOfOrNull { it.settledAtMillis } ?: return null
+        // Among entries tied at the latest settled instant (the
+        // legacy all-zero case), the alphabetically first place —
+        // deterministic, and the same choice on every surface.
+        return todays.filter { it.settledAtMillis == latestSettled }
+            .minByOrNull { it.place }
+    }
 
     /** A maximal run of consecutive calendar days at one place. */
     data class Stay(val days: List<WearIveRunDayEntry>) {

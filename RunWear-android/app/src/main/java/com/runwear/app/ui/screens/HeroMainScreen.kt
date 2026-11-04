@@ -217,8 +217,11 @@ fun HeroMainScreen(
     val screenScope = rememberCoroutineScope()
 
     // RW-26 / WS-3 (RC-3): "Wear I've Run" — the collection is built.
-    // The store persists entries (one per day per place, last settled
-    // version); the holder — the element's ONE state machine
+    // GEN-3 (WS-C): the store persists ONE entry per SESSION (see
+    // WearIveRunSession for the operational definition), keyed by
+    // session and updated in place through every location/weather
+    // change — the saved entry is the session's last settled
+    // version. The holder — the element's ONE state machine
     // (WearIveRunElementMachine) — derives the element's state from
     // them. Entries are created automatically when a generation for
     // TODAY settles (the outfit + weather on screen), never backfilled.
@@ -257,6 +260,12 @@ fun HeroMainScreen(
         if (outfit != null && weather != null && uiState.isNowSelected) {
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
+                    // GEN-3 (WS-C): stamped with THIS process
+                    // session's id and the settle instant — the
+                    // session key replaces the entry in place on
+                    // every later change within the session.
+                    sessionId = com.runwear.app.weariverun.WearIveRunSession.currentId(),
+                    settledAtMillis = System.currentTimeMillis(),
                     date = uiState.locationNow.toLocalDate(),
                     // WS-4 (content seam): the entry's place is the
                     // SIMPLE form from the place model, so the
@@ -740,7 +749,11 @@ fun HeroMainScreen(
                             wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
                             if (entry != null) {
                                 screenScope.launch {
-                                    wearIveRunStore.remove(entry.date, entry.place)
+                                    // GEN-3: delete by identity —
+                                    // a session entry by sessionId
+                                    // (its place may have moved), a
+                                    // legacy entry by (date, place).
+                                    wearIveRunStore.removeByIdentity(entry)
                                 }
                             }
                         },
