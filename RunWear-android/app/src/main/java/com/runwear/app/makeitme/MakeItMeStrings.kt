@@ -81,8 +81,30 @@ object MakeItMeStrings {
     // "About 10 seconds" figure was false against a measured 72 s job
     // and a 2–4 minute backend norm — the line no longer promises a
     // number the system misses.
+    // GEN-3 A-HERO (WS-A(2)): the ONE hero pill's copy. MAKING is
+    // Sol's Nov 4 wording for the on-photo generating state; the
+    // scaffold line is the RW-26 badge's, folded into the pill
+    // (ScaffoldRenderPolicy.homeBadge remains its source — this
+    // constant is the pill's fallback if that policy ever returns
+    // null); GET_UNLIMITED is the free tier's paywall door.
+    const val HERO_PILL_MAKING = "Making this you…"
+    const val HERO_PILL_SCAFFOLD = "Your photo — made for close-by weather"
+    const val HERO_PILL_PREMIUM = "Premium"
+    const val HERO_PILL_GET_UNLIMITED = "Get unlimited"
+
+    /** The pill's free-tier look count: "1 of 5" (real server count). */
+    fun heroPillLookCount(freeGenerationsUsed: Int): String =
+        "$freeGenerationsUsed of 5"
+
     const val G1_PROGRESS = "Making this outfit yours…"
-    const val G2_PROGRESS_SUB = "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    // GEN-3 A-HERO (X-8 copy audit): the pre-fix line promised "the
+    // standard photo stays up until yours is done" — false in the
+    // walkthrough's Overland Park frames, where no standard photo
+    // ever stayed up (X-3). The claim is removed rather than
+    // re-promised: WS-A(1)'s fallback makes a photo stay up wherever
+    // one is truthfully servable, and the line now claims only what
+    // is true in every state.
+    const val G2_PROGRESS_SUB = "This usually takes a few minutes. Your recommendation is ready either way."
     // G5/G6 added Nov 1, 2026 (RW-16.16 — spec §7 amended by dated
     // note). One failure line for every reason class in this build;
     // the class travels in the payload for a later class-specific
@@ -232,6 +254,11 @@ object MakeItMeStrings {
     // headline, and the honest count line — the onboarding look is
     // look 1 of 5 (design §8 Q5 ruling), stated in the frame's own
     // words, never as a surprise later.
+    // GEN-3 A-HERO (WS-B): the first-look moment's FAILED sub-line —
+    // the honest companion to G5: a failed look never charged the
+    // free counter, and the retry lives with the outfit.
+    const val FIRST_LOOK_FAILED_SUB =
+        "No look was used. You can try again any time from your outfit."
     const val FIRST_LOOK_BAND_HEADER = "With Premium"
     const val FIRST_LOOK_HEADLINE = "You're in the photo now."
     const val FIRST_LOOK_COUNT_LINE =

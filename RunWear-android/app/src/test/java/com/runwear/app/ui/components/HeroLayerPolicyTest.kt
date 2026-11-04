@@ -72,4 +72,58 @@ class HeroLayerPolicyTest {
         val layers = HeroLayerPolicy.Layers(kc, null)
         assertEquals(layers, HeroLayerPolicy.onIncomingReady(layers))
     }
+
+    // ── GEN-3 A-HERO (X-7): scene changes ───────────────────────────
+    // The gen-2 layering kept the old place's photo as base through
+    // a place switch: Miami's label sat over New York's photo for
+    // ~1.3 s. A scene change has no access to the old layers at all
+    // (the function takes only the new scene's URLs) — the new base
+    // is the new scene's own fallback, and the resolved photo fades
+    // in over THAT.
+
+    private val miamiFallback = "file:///android_asset/hero_fallback/hot_clear_female.webp"
+    private val miamiPhoto = "https://example.test/miami.webp"
+
+    @Test
+    fun `a scene change bases on the new scene's fallback, never the old photo`() {
+        val layers = HeroLayerPolicy.onSceneChange(miamiPhoto, miamiFallback)
+        assertEquals(miamiFallback, layers.baseUrl)
+        assertEquals(miamiPhoto, layers.incomingUrl)
+    }
+
+    @Test
+    fun `a scene change with no resolved photo yet paints the fallback alone`() {
+        val layers = HeroLayerPolicy.onSceneChange(null, miamiFallback)
+        assertEquals(miamiFallback, layers.baseUrl)
+        assertNull(layers.incomingUrl)
+    }
+
+    @Test
+    fun `a scene change whose target is the fallback has no incoming layer`() {
+        val layers = HeroLayerPolicy.onSceneChange(miamiFallback, miamiFallback)
+        assertEquals(miamiFallback, layers.baseUrl)
+        assertNull(layers.incomingUrl)
+    }
+
+    @Test
+    fun `a scene change with no fallback bases on the resolved photo itself`() {
+        val layers = HeroLayerPolicy.onSceneChange(miamiPhoto, null)
+        assertEquals(miamiPhoto, layers.baseUrl)
+        assertNull(layers.incomingUrl)
+    }
+
+    @Test
+    fun `a scene change with neither photo nor fallback is the gradient truth`() {
+        val layers = HeroLayerPolicy.onSceneChange(null, null)
+        assertNull(layers.baseUrl)
+        assertNull(layers.incomingUrl)
+    }
+
+    @Test
+    fun `after a scene change the incoming photo promotes over the fallback`() {
+        var layers = HeroLayerPolicy.onSceneChange(miamiPhoto, miamiFallback)
+        layers = HeroLayerPolicy.onIncomingReady(layers)
+        assertEquals(miamiPhoto, layers.baseUrl)
+        assertNull(layers.incomingUrl)
+    }
 }

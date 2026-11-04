@@ -106,6 +106,19 @@ data class MainUiState(
     // Hero image from AI service
     val heroImageUrl: String? = null,
     /**
+     * GEN-3 A-HERO (WS-A(1)): the synchronous bundled-fallback URL for
+     * the CURRENT committed conditions — computed in the same commit
+     * as the weather/outfit it belongs to (withFetchedConditions), so
+     * it is never a stale scene's photo. It is the photo every hero
+     * surface paints from a scene's first frame (the hero band's base
+     * layer, the collection/poster thumbnails via [effectiveHeroUrl])
+     * while the async pool/personal resolution runs, and the photo
+     * that stays up while a personal photo generates or fails. Null
+     * only when no truthful photo is servable for the prescription
+     * (the servability census's documented defect signatures).
+     */
+    val heroFallbackUrl: String? = null,
+    /**
      * Identity of the hero photo on screen, for flag reports: the
      * Supabase pool row id when [heroImageUrl] came from the pool
      * (null for fallback/curated photos) and the combination context
@@ -158,7 +171,17 @@ data class MainUiState(
     /** RW-26: how the personal hero was served (exact vs scaffold). */
     val heroServeKind: com.runwear.app.makeitme.PersonalServeKind =
         com.runwear.app.makeitme.PersonalServeKind.EXACT
-)
+) {
+    /**
+     * GEN-3 A-HERO (X-10): the photo every hero-fed surface shows for
+     * the current scene — the resolved hero when one has landed, the
+     * scene's bundled fallback otherwise. One unresolved photo must
+     * never starve the hero, the Wear I've Run thumbnail, the
+     * collection TODAY/chapter thumbnails and the Morning Poster
+     * together: they all read this single resolution.
+     */
+    val effectiveHeroUrl: String? get() = heroImageUrl ?: heroFallbackUrl
+}
 
 data class LocationSearchState(
     val query: String = "",
@@ -233,9 +256,11 @@ internal fun MainUiState.withFetchedConditions(
     forecast: List<HourlyForecast>,
     pendingPlace: com.runwear.shared.domain.model.SimplePlace?,
     locationNowAnchor: LocalDateTime,
-    nowSelected: Boolean
+    nowSelected: Boolean,
+    heroFallbackUrl: String? = null
 ): MainUiState {
     val weatherNow = weather.dateTime.toJavaLocalDateTime()
+    val switchingPlace = pendingPlace != null
     return copy(
         isLoading = false,
         weather = weather,
@@ -244,9 +269,54 @@ internal fun MainUiState.withFetchedConditions(
         locationName = pendingPlace?.display ?: locationName,
         simplePlace = pendingPlace ?: simplePlace,
         locationNow = if (nowSelected) weatherNow else locationNowAnchor,
-        selectedDateTime = if (nowSelected) weatherNow else selectedDateTime
+        selectedDateTime = if (nowSelected) weatherNow else selectedDateTime,
+        // GEN-3 A-HERO (WS-A(1)): the fallback always tracks the
+        // committed conditions — it is computed from THIS fetch's
+        // weather/outfit, synchronously, in this same write.
+        heroFallbackUrl = heroFallbackUrl,
+        // GEN-3 A-HERO (X-7): a place switch commits label + photo +
+        // list together. The previous place's hero (pool, personal,
+        // its candidates and look status) may not survive into the
+        // new place's frame — not even until the new resolution
+        // lands: the hero becomes the NEW place's own bundled
+        // fallback in this same write, and the personal layer resets
+        // to the new cell's truth (re-derived by resolveHeroImage).
+        heroImageUrl = if (switchingPlace) heroFallbackUrl else heroImageUrl,
+        heroImageRowId = if (switchingPlace) null else heroImageRowId,
+        heroCombinationId = if (switchingPlace) null else heroCombinationId,
+        heroCandidates = if (switchingPlace) emptyList() else heroCandidates,
+        heroRequestedCombinationId =
+            if (switchingPlace) null else heroRequestedCombinationId,
+        heroIsPersonal = if (switchingPlace) false else heroIsPersonal,
+        personalHeroId = if (switchingPlace) null else personalHeroId,
+        personalHeroImageUrl = if (switchingPlace) null else personalHeroImageUrl,
+        personalLookStatus = if (switchingPlace) {
+            com.runwear.app.makeitme.PersonalLookStatus.None
+        } else {
+            personalLookStatus
+        },
+        heroServeKind = if (switchingPlace) {
+            com.runwear.app.makeitme.PersonalServeKind.EXACT
+        } else {
+            heroServeKind
+        }
     )
 }
+
+/**
+ * GEN-3 A-HERO (WS-A(1)): the synchronous bundled fallback for one
+ * set of conditions — the one computation every commit path uses,
+ * so the state's fallback can never be derived two ways.
+ */
+internal fun bundledFallbackUrlFor(
+    weather: WeatherConditions,
+    outfit: OutfitRecommendation,
+    gender: com.runwear.shared.domain.model.GenderPreference,
+    comfort: ComfortPreference
+): String? = com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
+    weather, outfit, gender,
+    frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, comfort)
+).imageUrl
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -403,6 +473,7 @@ class MainViewModel @Inject constructor(
                     locationName = seededPlace.display,
                     simplePlace = seededPlace,
                     heroImageUrl = seededHero.imageUrl,
+                    heroFallbackUrl = seededHero.imageUrl,
                     heroImageRowId = null,
                     heroCombinationId = seededHero.combinationId
                 )
@@ -833,7 +904,12 @@ class MainViewModel @Inject constructor(
                             forecast = forecast,
                             pendingPlace = placeToCommit,
                             locationNowAnchor = now,
-                            nowSelected = nowSelected
+                            nowSelected = nowSelected,
+                            heroFallbackUrl = bundledFallbackUrlFor(
+                                weather, outfit,
+                                _uiState.value.genderPreference,
+                                _uiState.value.comfortPreference
+                            )
                         )
                     }
                     if (placeToCommit != null) pendingPlace = null
@@ -905,6 +981,13 @@ class MainViewModel @Inject constructor(
      */
     private fun resolveHeroImage(weather: WeatherConditions, outfit: OutfitRecommendation) {
         val gender = _uiState.value.genderPreference
+        // GEN-3 A-HERO: every write this resolution makes carries the
+        // fallback for these exact conditions (a comfort/gender change
+        // reaches here without a fetch commit, and the fallback must
+        // follow the prescription it serves).
+        val fallbackUrl = bundledFallbackUrlFor(
+            weather, outfit, gender, _uiState.value.comfortPreference
+        )
         heroResolveJob?.cancel()
         heroResolveJob = viewModelScope.launch {
             val result = runCatching {
@@ -971,7 +1054,7 @@ class MainViewModel @Inject constructor(
                 )
             ) {
                 personalCellInView = null
-                writePoolHero(chosen)
+                writePoolHero(chosen, fallbackUrl)
                 return@launch
             }
             val (cell, items) = personalCombinationFor(weather, outfit)
@@ -1010,6 +1093,7 @@ class MainViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         heroImageUrl = hit.imageUrl,
+                        heroFallbackUrl = fallbackUrl,
                         heroImageRowId = null,
                         heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
                         heroCandidates = chosen.candidates,
@@ -1031,7 +1115,7 @@ class MainViewModel @Inject constructor(
             // written once, and the overlay's remainder (look-state
             // lines, the on-demand request, the upsell evaluation)
             // runs against it.
-            writePoolHero(chosen)
+            writePoolHero(chosen, fallbackUrl)
             if (!isActive || personalCellInView != cell) return@launch
             applyPersonalHeroOverlay(cell, items, look)
         }
@@ -1061,7 +1145,10 @@ class MainViewModel @Inject constructor(
     }
 
     /** The pool layer's hero write for one resolution. */
-    private fun writePoolHero(chosen: com.runwear.shared.domain.model.HeroImageResult) {
+    private fun writePoolHero(
+        chosen: com.runwear.shared.domain.model.HeroImageResult,
+        fallbackUrl: String? = null
+    ) {
         // WS-7: a bundled paint from the pool layer files its
         // diagnostics record at paint time (the repository emitted the
         // serve record when it resolved; this is the remote filing).
@@ -1077,6 +1164,7 @@ class MainViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 heroImageUrl = chosen.imageUrl,
+                heroFallbackUrl = fallbackUrl,
                 heroImageRowId = chosen.imageRowId,
                 heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
                 heroCandidates = chosen.candidates,

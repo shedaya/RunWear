@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Refresh
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -184,6 +185,34 @@ fun MakeItMeForkScreen(
                     alignment = ForkBandGeometry.IMAGE_ALIGNMENT,
                     modifier = Modifier.fillMaxSize()
                 )
+            } else {
+                // GEN-3 A-HERO (WS-B): the fork band must never
+                // render empty. The caller now passes the scene's
+                // effective photo (bundled fallback included), so a
+                // null URL means no truthful photo is servable for
+                // this cell at all — the band then carries the
+                // designed placeholder (gradient + glyph), never a
+                // bare flat box that reads as a broken photo.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                listOf(
+                                    RunWearColors.BgCard,
+                                    RunWearColors.PineAccent.copy(alpha = 0.35f)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.DirectionsRun,
+                        contentDescription = null,
+                        tint = RunWearColors.TextSecondary,
+                        modifier = Modifier.size(44.dp)
+                    )
+                }
             }
         }
 
@@ -774,10 +803,20 @@ internal fun MakeItMeUploadFlow(
                     colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
                 ) {
                     if (step == UploadStep.SUBMITTING) {
+                        // GEN-3 A-HERO (WS-B, X-1): a submitting state
+                        // is a spinner WITH its label — the bare
+                        // greyed spinner with no words is the exact
+                        // frame the gen-2 walkthrough condemned.
                         CircularProgressIndicator(
                             color = Color.White,
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (replace) MakeItMeStrings.C2C_CONFIRM_SAVE else MakeItMeStrings.C2C_CONFIRM_FIRST_LOOK,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 16.sp
                         )
                     } else {
                         Text(
@@ -1128,10 +1167,15 @@ internal fun MakeItMePhotosScreen(
 }
 
 // ============================================================================
-// Generation progress line (spec §2.4, strings G1/G2) — sits with the
-// hero while a personal generation is in flight. The recommendation is
-// never blocked: the standard photo stays up until the verified
-// personal image lands.
+// Generation progress line (spec §2.4, strings G1/G2).
+// GEN-3 A-HERO (X-8): this line NO LONGER renders on home — the
+// generating state lives ON the hero image now, as the hero pill
+// (WS-A(2) state (a)), so the state sits on the photo it belongs to
+// instead of in the sheet's scroll content. The composable remains
+// as the G1/G2 strings' reference host. (Copy audit, X-8: G2 no
+// longer claims a standard photo is staying up — with WS-A(1) a
+// truthful photo IS up wherever one is servable, and the line does
+// not need to promise it.)
 // ============================================================================
 
 @Composable
@@ -1794,7 +1838,17 @@ fun FirstLookMoment(
     simplePlace: String?,
     weatherLine: String?,
     onSeeOutfit: () -> Unit,
-    onSeePremium: () -> Unit
+    onSeePremium: () -> Unit,
+    /**
+     * GEN-3 A-HERO (WS-B, X-1): the moment's presentation state,
+     * resolved by [FirstLookPresentation] from the look status and
+     * whether the generated photo is actually displayed. MAKING
+     * shows the generating state ON the photo with honest copy —
+     * no finished headline, no counter, no Premium band; READY is
+     * the only state that may claim "You're in the photo now";
+     * FAILED is the honest terminal state (no look was used).
+     */
+    state: FirstLookState = FirstLookState.READY
 ) {
     // Dismissing the ask IS continuing (design §9) — Back takes the
     // primary door, never traps the user at onboarding's end.
@@ -1805,19 +1859,26 @@ fun FirstLookMoment(
     // look ready = success, once), and the summary band settles
     // 120 ms after the photo lands. Neither button moves or
     // pulses.
+    // GEN-3 A-HERO: the success half of the sequence (haptic + band)
+    // is re-aimed at the generated photo's ACTUAL landing — it runs
+    // when the presentation becomes READY, which may be after the
+    // moment has been up in its MAKING state; it never runs for a
+    // photo that has not landed.
     var revealed by remember { mutableStateOf(false) }
     var bandSettled by remember { mutableStateOf(false) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    LaunchedEffect(Unit) {
+    LaunchedEffect(state) {
         revealed = true
-        delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
-        haptic.performHapticFeedback(
-            // §1.7's first-look confirm-class effect, named by the
-            // map (WS-9 fix, P-2).
-            com.runwear.app.ui.components.HapticSpec.CONFIRM
-        )
-        delay(OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS.toLong())
-        bandSettled = true
+        if (state == FirstLookState.READY) {
+            delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
+            haptic.performHapticFeedback(
+                // §1.7's first-look confirm-class effect, named by the
+                // map (WS-9 fix, P-2).
+                com.runwear.app.ui.components.HapticSpec.CONFIRM
+            )
+            delay(OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS.toLong())
+            bandSettled = true
+        }
     }
 
     Column(
@@ -1880,24 +1941,84 @@ fun FirstLookMoment(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+            // GEN-3 A-HERO (WS-B, X-1/X-2): while the look is being
+            // made, the generating state sits ON the photo — the same
+            // hero pill the home hero carries (WS-A(2) state (a)) —
+            // over the photo actually serving (the bundled fallback,
+            // WS-A(1)). The look/place requested is the one in view:
+            // this moment only exists for it.
+            if (state == FirstLookState.MAKING) {
+                com.runwear.app.ui.components.HeroPill(
+                    content = com.runwear.app.ui.components.HeroPillContent(
+                        kind = com.runwear.app.ui.components.HeroPillKind.MAKING,
+                        text = MakeItMeStrings.HERO_PILL_MAKING,
+                        showSpinner = true
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 14.dp, bottom = 12.dp)
+                )
+            }
         }
 
         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
             Spacer(Modifier.height(20.dp))
-            Text(
-                text = MakeItMeStrings.FIRST_LOOK_HEADLINE,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 25.sp,
-                color = RunWearColors.TextPrimary
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = MakeItMeStrings.FIRST_LOOK_COUNT_LINE,
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
-                color = RunWearColors.TextSecondary
-            )
+            // GEN-3 A-HERO: the copy under the photo is state-honest.
+            // READY alone may claim the finished state + the counter;
+            // MAKING says what is happening (G1/G2 — with WS-A(1) the
+            // photo under the pill is real, and G2 no longer claims
+            // anything about a photo at all); FAILED is G5 + the
+            // no-look-used truth.
+            when (state) {
+                FirstLookState.READY -> {
+                    Text(
+                        text = MakeItMeStrings.FIRST_LOOK_HEADLINE,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 25.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = MakeItMeStrings.FIRST_LOOK_COUNT_LINE,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+                FirstLookState.MAKING -> {
+                    Text(
+                        text = MakeItMeStrings.G1_PROGRESS,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 25.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = MakeItMeStrings.G2_PROGRESS_SUB,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+                FirstLookState.FAILED -> {
+                    Text(
+                        text = MakeItMeStrings.G5_LOOK_FAILED,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 25.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = MakeItMeStrings.FIRST_LOOK_FAILED_SUB,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
+            }
 
             // The summary band — the ONE soft ask (§9's pair,
             // verbatim). It slides up and settles after the photo;
@@ -1971,14 +2092,20 @@ fun FirstLookMoment(
                     fontSize = 16.sp
                 )
             }
-            TextButton(
-                onClick = onSeePremium,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    MakeItMeStrings.FIRST_LOOK_SECOND_DOOR,
-                    color = RunWearColors.TextSecondary
-                )
+            // GEN-3 A-HERO: the second door is part of the Premium
+            // ask — withheld while the look is still being made and
+            // on failure (FirstLookPresentation.showsPremiumBand);
+            // the primary door is always available.
+            if (FirstLookPresentation.showsPremiumBand(state)) {
+                TextButton(
+                    onClick = onSeePremium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        MakeItMeStrings.FIRST_LOOK_SECOND_DOOR,
+                        color = RunWearColors.TextSecondary
+                    )
+                }
             }
             Spacer(Modifier.height(32.dp))
         }

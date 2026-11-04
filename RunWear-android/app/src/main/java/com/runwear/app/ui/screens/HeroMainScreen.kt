@@ -157,6 +157,13 @@ fun HeroMainScreen(
     onPersonalCombinationRequest: () -> Pair<String, List<String>>? = { null },
     /** Re-run hero resolution after a personal-layer change. */
     onPersonalLayerChanged: () -> Unit = {},
+    /**
+     * GEN-3 A-HERO (WS-B, X-1): the hosted upload flow finished a
+     * FIRST look (not a replace) — the host presents the designed
+     * first-look moment, whose making/ready/failed presentation is
+     * driven by the look status, not by the flow's own completion.
+     */
+    onFirstLookRequested: () -> Unit = {},
     onDismissMakeItMeUpsell: () -> Unit = {},
     onRetryPersonalLook: () -> Unit = {},
     /**
@@ -201,6 +208,17 @@ fun HeroMainScreen(
     var makeItMeFlowReplace by remember { mutableStateOf(false) }
     var showMakeItMePhotos by remember { mutableStateOf(false) }
     var showMakeItMePaywall by remember { mutableStateOf(false) }
+
+    // GEN-3 A-HERO (WS-A(2)): THE hero pill — one content value,
+    // resolved once from the look/serve/entitlement state and handed
+    // to every layout's hero (see HeroPillPolicy for the states).
+    val heroPill = com.runwear.app.ui.components.HeroPillPolicy.resolve(
+        lookStatus = uiState.personalLookStatus,
+        serveKind = uiState.heroServeKind,
+        heroIsPersonal = uiState.heroIsPersonal,
+        mode = makeItMeState.mode,
+        freeGenerationsUsed = makeItMeState.freeGenerationsUsed
+    )
 
     // Hero-flag flow: the sheet, plus the URL already flagged in this
     // view (one flag per photo view — the chip goes inert for it).
@@ -251,7 +269,7 @@ fun HeroMainScreen(
     // or a kit change) — a re-recording with the same kit (a weather
     // refresh, a hero URL landing, a location re-render) updates the
     // entry's content silently and never moves the element.
-    LaunchedEffect(uiState.outfit, uiState.weather, uiState.locationName, uiState.heroImageUrl) {
+    LaunchedEffect(uiState.outfit, uiState.weather, uiState.locationName, uiState.effectiveHeroUrl) {
         val outfit = uiState.outfit
         val weather = uiState.weather
         if (outfit != null && weather != null && uiState.isNowSelected) {
@@ -272,7 +290,7 @@ fun HeroMainScreen(
                     isSnowing = weather.isSnowing,
                     isRaining = weather.isRaining,
                     items = outfit.allItems.map { it.displayName },
-                    heroRef = uiState.heroImageUrl
+                    heroRef = uiState.effectiveHeroUrl
                 )
             )
         }
@@ -490,13 +508,10 @@ fun HeroMainScreen(
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
+                                            heroPill = heroPill,
+                                            onHeroPillAction = { showMakeItMePaywall = true },
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (uiState.personalLookStatus ==
-                                            com.runwear.app.makeitme.PersonalLookStatus.Making
-                                        ) {
-                                            com.runwear.app.makeitme.MakeItMeProgressLine()
-                                        }
                                         if (uiState.personalLookStatus is
                                             com.runwear.app.makeitme.PersonalLookStatus.Failed
                                         ) {
@@ -568,13 +583,10 @@ fun HeroMainScreen(
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                             onCycleHero = onCycleHero,
+                                            heroPill = heroPill,
+                                            onHeroPillAction = { showMakeItMePaywall = true },
                                             modifier = Modifier.fillMaxWidth()
                                         )
-                                        if (uiState.personalLookStatus ==
-                                            com.runwear.app.makeitme.PersonalLookStatus.Making
-                                        ) {
-                                            com.runwear.app.makeitme.MakeItMeProgressLine()
-                                        }
                                         if (uiState.personalLookStatus is
                                             com.runwear.app.makeitme.PersonalLookStatus.Failed
                                         ) {
@@ -629,16 +641,11 @@ fun HeroMainScreen(
                                         onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
+                                        heroPill = heroPill,
+                                        onHeroPillAction = { showMakeItMePaywall = true },
                                         modifier = Modifier.fillMaxSize(),
                                         fillHeight = true
                                     )
-                                    if (uiState.personalLookStatus ==
-                                        com.runwear.app.makeitme.PersonalLookStatus.Making
-                                    ) {
-                                        com.runwear.app.makeitme.MakeItMeProgressLine(
-                                            modifier = Modifier.align(Alignment.BottomCenter)
-                                        )
-                                    }
                                     if (uiState.personalLookStatus is
                                         com.runwear.app.makeitme.PersonalLookStatus.Failed
                                     ) {
@@ -878,6 +885,7 @@ fun HeroMainScreen(
             todaysCell = onPersonalCombinationRequest(),
             onFinished = {
                 showMakeItMeFlow = false
+                if (!makeItMeFlowReplace) onFirstLookRequested()
                 onPersonalLayerChanged()
             },
             // From Settings, closing without finishing changes nothing —
@@ -1124,6 +1132,9 @@ private fun HeroSectionContent(
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
+    /** GEN-3 A-HERO (WS-A(2)): the hero pill's content + its action. */
+    heroPill: com.runwear.app.ui.components.HeroPillContent? = null,
+    onHeroPillAction: () -> Unit = {},
     modifier: Modifier = Modifier,
     /** EXPANDED split pane only: the photo fills the pane's height. */
     fillHeight: Boolean = false
@@ -1145,6 +1156,15 @@ private fun HeroSectionContent(
             // string.
             locationName = uiState.simplePlace?.display ?: uiState.locationName,
             heroImageUrl = uiState.heroImageUrl,
+            // GEN-3 A-HERO (WS-A(1)/X-7): the scene's bundled fallback
+            // is the hero band's base from the scene's first frame —
+            // the band never sits on the designed gradient while a
+            // truthful photo is servable, and a place switch re-bases
+            // on the NEW place's fallback, never the old photo.
+            heroFallbackUrl = uiState.heroFallbackUrl,
+            heroSceneKey = uiState.locationName,
+            heroPill = heroPill,
+            onHeroPillAction = onHeroPillAction,
             scrollOffset = scrollOffset,
             onLocationClick = onLocationClick,
             onSettingsClick = onSettingsClick,
@@ -1153,11 +1173,11 @@ private fun HeroSectionContent(
             // one) — and the refresh chip follows the ROTATION size
             // (personal photo + pool candidates), so both controls
             // live in the personal state too.
-            showFlagButton = uiState.heroImageUrl != null,
+            showFlagButton = uiState.effectiveHeroUrl != null,
             flagEnabled = heroFlagEnabled,
             onFlagClick = onFlagClick,
             heroIsPersonal = uiState.heroIsPersonal,
-            showRefreshButton = uiState.heroImageUrl != null &&
+            showRefreshButton = uiState.effectiveHeroUrl != null &&
                 uiState.heroCandidates.size +
                 (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
             onRefreshHeroClick = onCycleHero,
@@ -1241,6 +1261,8 @@ private fun HeroStackedUnit(
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
+    heroPill: com.runwear.app.ui.components.HeroPillContent? = null,
+    onHeroPillAction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -1273,6 +1295,8 @@ private fun HeroStackedUnit(
             onFlagClick = onFlagClick,
             heroFlagEnabled = heroFlagEnabled,
             onCycleHero = onCycleHero,
+            heroPill = heroPill,
+            onHeroPillAction = onHeroPillAction,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()

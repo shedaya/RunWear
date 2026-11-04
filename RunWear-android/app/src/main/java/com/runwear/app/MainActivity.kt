@@ -223,6 +223,12 @@ class MainActivity : ComponentActivity() {
                                         viewModel::currentPersonalCombination,
                                     onPersonalLayerChanged =
                                         viewModel::refreshHeroAfterPersonalChange,
+                                    // GEN-3 A-HERO (WS-B, X-1): a first
+                                    // look finished in the Settings-hosted
+                                    // flow raises the same frame-34
+                                    // moment the onboarding path shows.
+                                    onFirstLookRequested =
+                                        { showFirstLookMoment = true },
                                     onDismissMakeItMeUpsell =
                                         viewModel::dismissMakeItMeUpsell,
                                     onRetryPersonalLook =
@@ -291,7 +297,11 @@ class MainActivity : ComponentActivity() {
                         com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
                     if (forkDue && !showForkUpload) {
                         com.runwear.app.makeitme.MakeItMeForkScreen(
-                            heroImageUrl = uiState.heroImageUrl,
+                            // GEN-3 A-HERO (WS-B): the fork band is fed
+                            // by the scene's one photo resolution — the
+                            // bundled fallback included — so it never
+                            // renders empty while a photo is servable.
+                            heroImageUrl = uiState.effectiveHeroUrl,
                             onUseMyPhotos = { showForkUpload = true },
                             onUseStandardPhotos = {
                                 makeItMeViewModel.decideForkAsStock()
@@ -331,7 +341,21 @@ class MainActivity : ComponentActivity() {
                     // Frame 34 first-look moment (once; never a modal again).
                     if (showFirstLookMoment) {
                         com.runwear.app.makeitme.FirstLookMoment(
-                            photoUrl = uiState.personalHeroImageUrl ?: uiState.heroImageUrl,
+                            // GEN-3 A-HERO (WS-B, X-1/X-2): the moment
+                            // is state-driven — its photo is the scene's
+                            // one resolution (the personal photo when
+                            // it is the one displayed; the fallback
+                            // while it is being made), and its claims
+                            // resolve from the look status for THIS
+                            // cell: finished copy only when the
+                            // generated photo is actually displayed.
+                            state = com.runwear.app.makeitme.FirstLookPresentation.resolve(
+                                lookStatus = uiState.personalLookStatus,
+                                personalPhotoDisplayed = uiState.heroIsPersonal &&
+                                    uiState.personalHeroImageUrl != null &&
+                                    uiState.heroImageUrl == uiState.personalHeroImageUrl
+                            ),
+                            photoUrl = uiState.effectiveHeroUrl,
                             simplePlace = uiState.simplePlace?.city,
                             weatherLine = uiState.weather?.let { weather ->
                                 val items = uiState.outfit?.allItems?.size ?: 0

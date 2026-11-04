@@ -6,7 +6,9 @@ import com.runwear.shared.domain.model.SimplePlace
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
 
@@ -95,6 +97,102 @@ class PlaceSwitchCommitTest {
         assertEquals("Kansas City, MO", refreshed.locationName)
         assertEquals(SimplePlace("Kansas City", "MO"), refreshed.simplePlace)
         assertSame(nyWeather, refreshed.weather)
+    }
+
+    // ── GEN-3 A-HERO (X-7 + WS-A(1)): the photo commits WITH the place ──
+    // GEN-2 W-6 made label + weather + outfit atomic; the PHOTO still
+    // lagged: the state's heroImageUrl kept the old place's photo
+    // (pool or personal) until the async resolution wrote, so Miami's
+    // label sat over New York's photo for ~1.3 s and the Wear I've
+    // Run / collection / poster surfaces recorded the old photo under
+    // the new place. The commit now swaps the hero in the same write:
+    // the new place's own bundled fallback becomes the hero, and the
+    // old place's personal layer is reset to the new cell's truth.
+
+    private val kcHeroState = kcState.copy(
+        heroImageUrl = "https://example.test/kc-personal.webp",
+        heroFallbackUrl = "file:///android_asset/hero_fallback/cool_clear_female.webp",
+        heroImageRowId = "kc-row",
+        heroCombinationId = "kc-cell",
+        heroRequestedCombinationId = "kc-cell",
+        heroIsPersonal = true,
+        personalHeroId = "kc-hero",
+        personalHeroImageUrl = "https://example.test/kc-personal.webp",
+        personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making,
+        heroServeKind = com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD
+    )
+
+    @Test
+    fun `a switch swaps the hero to the new place's fallback in the same write`() {
+        val nyFallback =
+            "file:///android_asset/hero_fallback/mild_clear_female.webp"
+        val committed = kcHeroState.withFetchedConditions(
+            weather = nyWeather,
+            outfit = outfit(nyWeather),
+            forecast = emptyList(),
+            pendingPlace = SimplePlace("New York", "NY"),
+            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 9, 0),
+            nowSelected = true,
+            heroFallbackUrl = nyFallback
+        )
+        // Label + photo + fallback are the new place's, together.
+        assertEquals("New York, NY", committed.locationName)
+        assertEquals(nyFallback, committed.heroImageUrl)
+        assertEquals(nyFallback, committed.heroFallbackUrl)
+        assertEquals(nyFallback, committed.effectiveHeroUrl)
+        // The old place's personal layer does not survive the switch.
+        assertEquals(false, committed.heroIsPersonal)
+        assertNull(committed.personalHeroId)
+        assertNull(committed.personalHeroImageUrl)
+        assertNull(committed.heroImageRowId)
+        assertNull(committed.heroCombinationId)
+        assertNull(committed.heroRequestedCombinationId)
+        assertTrue(committed.heroCandidates.isEmpty())
+        assertEquals(
+            com.runwear.app.makeitme.PersonalLookStatus.None,
+            committed.personalLookStatus
+        )
+        assertEquals(
+            com.runwear.app.makeitme.PersonalServeKind.EXACT,
+            committed.heroServeKind
+        )
+    }
+
+    @Test
+    fun `a same-place refresh keeps the hero and only re-derives the fallback`() {
+        val newFallback =
+            "file:///android_asset/hero_fallback/cool_cloudy_female.webp"
+        val refreshed = kcHeroState.withFetchedConditions(
+            weather = kcWeather,
+            outfit = outfit(kcWeather),
+            forecast = emptyList(),
+            pendingPlace = null,
+            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 8, 0),
+            nowSelected = true,
+            heroFallbackUrl = newFallback
+        )
+        assertEquals("https://example.test/kc-personal.webp", refreshed.heroImageUrl)
+        assertEquals(true, refreshed.heroIsPersonal)
+        assertEquals(newFallback, refreshed.heroFallbackUrl)
+        assertEquals(
+            com.runwear.app.makeitme.PersonalLookStatus.Making,
+            refreshed.personalLookStatus
+        )
+    }
+
+    @Test
+    fun `effectiveHeroUrl prefers the resolved hero and falls back to the bundled fallback`() {
+        val unresolved = kcState.copy(
+            heroImageUrl = null,
+            heroFallbackUrl = "file:///android_asset/hero_fallback/cool_clear_female.webp"
+        )
+        assertEquals(
+            "file:///android_asset/hero_fallback/cool_clear_female.webp",
+            unresolved.effectiveHeroUrl
+        )
+        val resolved = unresolved.copy(heroImageUrl = "https://example.test/pool.webp")
+        assertEquals("https://example.test/pool.webp", resolved.effectiveHeroUrl)
+        assertNull(kcState.copy(heroImageUrl = null, heroFallbackUrl = null).effectiveHeroUrl)
     }
 
     @Test

@@ -556,9 +556,132 @@ object HeroImageSelector {
     /** The full garment census (tests pin it against the paired matrix). */
     fun fallbackGarmentsTable(): Map<String, FallbackGarments> = FALLBACK_GARMENTS
 
+    /**
+     * GEN-3 A-HERO (WS-A(1), 2026-11-04): the POINT-GRAIN extension of
+     * the bundled fallback. The RW-26 matrix holds ONE asset per
+     * bracket × weather × gender, qualified at its bracket's cold-end
+     * prescription; the engine prescribes at point grain, so whole
+     * prescription families inside a bracket (COOL at 40–49°F: bare
+     * head, bare hands; the sun-gate cap/visor variants; the COLD
+     * windbreaker variants) matched NO bundled asset and the gen-2
+     * gate honestly terminated on the gradient (walkthrough X-3/X-6:
+     * ~50 s of empty hero at Overland Park). This extension bundles
+     * additional approved pool rows keyed by the prescription's GATE
+     * SIGNATURE — the tuple [HeroPointGrainPolicy] actually judges
+     * (top-base class, outer present, bottom family, head class,
+     * hands class) — one asset per (gender, signature) the verified
+     * pool can serve but the 44-asset matrix cannot. Selection and
+     * census: release-prep/rw-gen3-ahero-2026-11-04/servability-census.md
+     * (live approved pool read 2026-11-04: 1,026 rows, all approved,
+     * all adjudicated, all person_count = 1). Renders follow the
+     * RW-20 standard (center-crop 2:3, 800×1200, WebP q82) and were
+     * pixel-verified against their source rows (MAE ≤ 2.05/channel).
+     * Signatures with NO qualifying pool row are NOT bundled — they
+     * are reported as pool-coverage defects in the census, never
+     * silently served a contradicting photo (RW-20 invariant).
+     */
+    private val POINT_GRAIN_GARMENTS: Map<String, FallbackGarments> = mapOf(
+        "pg_female_long_o1_shorts_cap_none" to FallbackGarments(null, true, "shorts", "cap", null),
+        "pg_female_long_o1_tights_headband_gloves" to FallbackGarments(null, true, "tights", "headband", "gloves"),
+        "pg_female_short_o0_shorts_cap_none" to FallbackGarments("short", false, "shorts", "cap", null),
+        "pg_female_short_o0_shorts_visor_none" to FallbackGarments("short", false, "shorts", "visor", null),
+        "pg_female_short_o1_shorts_visor_none" to FallbackGarments("short", true, "shorts", "visor", null),
+        "pg_female_sleeveless_o1_shorts_visor_none" to FallbackGarments(null, true, "shorts", "visor", null),
+        "pg_male_long_o1_shorts_cap_none" to FallbackGarments(null, true, "shorts", "cap", null),
+        "pg_male_long_o1_tights_cap_none" to FallbackGarments(null, true, "tights", "cap", null),
+        "pg_male_long_o1_tights_headband_gloves" to FallbackGarments(null, true, "tights", "headband", "gloves"),
+        "pg_male_short_o0_shorts_cap_none" to FallbackGarments("short", false, "shorts", "cap", null)
+    )
+
+    /** GEN-3 A-HERO: provenance of the point-grain assets (rung "PG"). */
+    private val POINT_GRAIN_PROVENANCE: Map<String, FallbackAssetProvenance> = mapOf(
+        "pg_female_long_o1_shorts_cap_none" to FallbackAssetProvenance("FEMALE_RAINY_HOT_DAWN_v5", "d164182f-ef3f-4760-a062-9663f27605d9", "PG"),
+        "pg_female_long_o1_tights_headband_gloves" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_DAWN_0812f41c", "3e16927e-25e0-44e9-bf57-228ed7417858", "PG"),
+        "pg_female_short_o0_shorts_cap_none" to FallbackAssetProvenance("FEMALE_CLEAR_MILD_MIDDAY_v1", "fabb8710-8c08-46d8-9c56-194817821d92", "PG"),
+        "pg_female_short_o0_shorts_visor_none" to FallbackAssetProvenance("FEMALE_CLEAR_WARM_DAWN_v5", "c3d700be-df24-48df-8ce3-50a52f0c3bf0", "PG"),
+        "pg_female_short_o1_shorts_visor_none" to FallbackAssetProvenance("FEMALE_RAINY_WARM_DAWN_v5", "a6fa9b26-fd74-4530-9b26-f234da890515", "PG"),
+        "pg_female_sleeveless_o1_shorts_visor_none" to FallbackAssetProvenance("FEMALE_RAINY_HOT_DUSK", "b01d2b8a-57de-4e29-9386-70cf67133b2b", "PG"),
+        "pg_male_long_o1_shorts_cap_none" to FallbackAssetProvenance("MALE_RAINY_HOT_DUSK_v5", "914d7cc8-a421-4880-9835-4fda351b6e56", "PG"),
+        "pg_male_long_o1_tights_cap_none" to FallbackAssetProvenance("MALE_RAINY_COOL_DAWN_v3", "b4938d64-7ed0-432e-91e9-58b1884e0879", "PG"),
+        "pg_male_long_o1_tights_headband_gloves" to FallbackAssetProvenance("MALE_CLEAR_COOL_DAWN_0812f41c", "4897a1a5-edea-4b50-8d64-73846757dd71", "PG"),
+        "pg_male_short_o0_shorts_cap_none" to FallbackAssetProvenance("MALE_CLEAR_MILD_MIDDAY_v1", "e6ade771-bb21-435f-8185-cff7a1d136c8", "PG")
+    )
+
+    /**
+     * GEN-3 A-HERO: (gender, gate signature) -> point-grain asset, for
+     * the signatures the 44-asset matrix cannot serve. The signature
+     * string is [pointGrainSignature]'s output for the prescription
+     * the asset was selected to serve; an asset whose base is
+     * unperceived under its shell (topBase null) may legitimately
+     * serve neighbouring base classes too — [gatedFallbackUrl]
+     * re-verifies every candidate through
+     * [fallbackMatchesPrescription], so this table only nominates.
+     */
+    private val POINT_GRAIN_FALLBACK: Map<String, String> = mapOf(
+        "FEMALE|long|true|shorts|cap|none" to "pg_female_long_o1_shorts_cap_none",
+        "FEMALE|long|true|tights|headband|gloves" to "pg_female_long_o1_tights_headband_gloves",
+        "FEMALE|short|false|shorts|cap|none" to "pg_female_short_o0_shorts_cap_none",
+        "FEMALE|short|false|shorts|visor|none" to "pg_female_short_o0_shorts_visor_none",
+        "FEMALE|short|true|shorts|visor|none" to "pg_female_short_o1_shorts_visor_none",
+        "FEMALE|sleeveless|true|shorts|visor|none" to "pg_female_sleeveless_o1_shorts_visor_none",
+        "MALE|long|true|shorts|cap|none" to "pg_male_long_o1_shorts_cap_none",
+        "MALE|long|true|tights|cap|none" to "pg_male_long_o1_tights_cap_none",
+        "MALE|long|true|tights|headband|gloves" to "pg_male_long_o1_tights_headband_gloves",
+        "MALE|short|false|shorts|cap|none" to "pg_male_short_o0_shorts_cap_none"
+    )
+
+    /**
+     * GEN-3 A-HERO: the gate signature of one prescription — exactly
+     * the tuple [HeroPointGrainPolicy.matches] judges (its decision
+     * factors through these five components and nothing else).
+     * Format: `topBaseClass|outerPresent|bottomFamily|headClass|handsClass`
+     * with classes in the RW-20 vocabulary and `none` for an empty slot.
+     */
+    fun pointGrainSignature(outfit: OutfitRecommendation): String {
+        val topBaseClass = when (outfit.topBase) {
+            ClothingItem.TANK_TOP -> "sleeveless"
+            ClothingItem.SHORT_SLEEVE -> "short"
+            else -> "long"
+        }
+        val bottomFamily = when (outfit.bottom) {
+            ClothingItem.SHORT_SHORTS, ClothingItem.SHORTS -> "shorts"
+            else -> "tights"
+        }
+        val headClass = when (outfit.head) {
+            null -> "none"
+            ClothingItem.VISOR -> "visor"
+            ClothingItem.BASEBALL_CAP -> "cap"
+            ClothingItem.HEADBAND -> "headband"
+            ClothingItem.LIGHT_BEANIE, ClothingItem.THERMAL_BEANIE -> "beanie"
+            ClothingItem.BALACLAVA -> "balaclava"
+            else -> "other"
+        }
+        val handsClass = when (outfit.hands) {
+            null -> "none"
+            ClothingItem.LIGHT_GLOVES, ClothingItem.THERMAL_GLOVES -> "gloves"
+            ClothingItem.MITTENS -> "mittens"
+            else -> "other"
+        }
+        return "$topBaseClass|${outfit.topOuter != null}|$bottomFamily|$headClass|$handsClass"
+    }
+
+    /** The point-grain asset nominated for (gender, prescription), or null. */
+    fun pointGrainFallbackUrl(gender: GenderPreference, outfit: OutfitRecommendation): String? {
+        if (gender == GenderPreference.UNISEX) return null
+        val asset = POINT_GRAIN_FALLBACK["${gender.name}|${pointGrainSignature(outfit)}"]
+            ?: return null
+        return "file:///android_asset/hero_fallback/$asset.webp"
+    }
+
+    /** GEN-3 A-HERO: the point-grain tables (tests pin them). */
+    fun pointGrainGarmentsTable(): Map<String, FallbackGarments> = POINT_GRAIN_GARMENTS
+    fun pointGrainProvenanceTable(): Map<String, FallbackAssetProvenance> = POINT_GRAIN_PROVENANCE
+    fun pointGrainFallbackTable(): Map<String, String> = POINT_GRAIN_FALLBACK
+
     /** The adjudicated garments of a bundled asset URL, or null if uncensused. */
     fun fallbackGarments(url: String): FallbackGarments? =
         FALLBACK_GARMENTS[fallbackAssetFile(url)]
+            ?: POINT_GRAIN_GARMENTS[fallbackAssetFile(url)]
 
     /**
      * GEN-2 A2: may this bundled asset serve under [outfit]'s exact
@@ -633,12 +756,32 @@ object HeroImageSelector {
                 if (fallbackMatchesPrescription(url, outfit)) return url
             }
         }
+        // GEN-3 A-HERO (WS-A(1)): the point-grain extension — after
+        // the cell walk, the signature-keyed assets bundled from the
+        // verified pool for prescriptions the 44-asset matrix cannot
+        // serve. Gender order mirrors the pool cascade (requested
+        // gender, then opposite; UNISEX tries both), and every
+        // candidate is re-verified through the same gate, so this
+        // pass can only nominate, never force a contradicting serve.
+        val pgGenders = when (gender) {
+            GenderPreference.UNISEX ->
+                listOf(GenderPreference.FEMALE, GenderPreference.MALE)
+            GenderPreference.MALE ->
+                listOf(GenderPreference.MALE, GenderPreference.FEMALE)
+            GenderPreference.FEMALE ->
+                listOf(GenderPreference.FEMALE, GenderPreference.MALE)
+        }
+        for (pgGender in pgGenders) {
+            val url = pointGrainFallbackUrl(pgGender, outfit) ?: continue
+            if (fallbackMatchesPrescription(url, outfit)) return url
+        }
         return null
     }
 
     /** WS-7 / D-22: the manifest provenance of a bundled asset URL, or null. */
     fun fallbackProvenance(url: String): FallbackAssetProvenance? =
         FALLBACK_PROVENANCE[fallbackAssetFile(url)]
+            ?: POINT_GRAIN_PROVENANCE[fallbackAssetFile(url)]
 
     /**
      * The gender-paired bundled asset for an exact cell, or null when

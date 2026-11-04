@@ -316,6 +316,30 @@ fun HeroSection(
     onRefreshHeroClick: () -> Unit = {},
     /** RW-26: the scaffold serve's honest badge (null = no badge). */
     scaffoldBadge: String? = null,
+    /**
+     * GEN-3 A-HERO (WS-A(1)): the synchronous bundled fallback for
+     * the CURRENT committed conditions — the photo the band paints
+     * from the first frame of a scene, before (and unless) the async
+     * resolution lands. Null only when no truthful photo is servable
+     * for the prescription (the census's documented defect cells).
+     */
+    heroFallbackUrl: String? = null,
+    /**
+     * GEN-3 A-HERO (X-7): the identity of the scene the hero target
+     * belongs to — the PLACE (the state commits label + photo
+     * atomically per place; hour/time switches within a place are
+     * not scene changes and keep the GEN-2 layering, where the base
+     * stays whole while the new target decodes). When it changes,
+     * the layer policy DISCARDS the previous scene's photo as base —
+     * the pre-fix layering kept the old place's photo whole under
+     * the new place's label for ~1.3 s (Miami over New York's photo).
+     * The new scene's base is its own fallback, never the old photo.
+     */
+    heroSceneKey: String = "",
+    /** GEN-3 A-HERO (WS-A(2)): THE hero pill's content (null = none). */
+    heroPill: HeroPillContent? = null,
+    /** The pill's trailing action (EXACT_FREE's "Get unlimited"). */
+    onHeroPillAction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -348,8 +372,24 @@ fun HeroSection(
     var heroLayers by remember {
         mutableStateOf(HeroLayerPolicy.Layers(baseUrl = null, incomingUrl = null))
     }
-    LaunchedEffect(heroImageUrl) {
-        heroLayers = HeroLayerPolicy.onTarget(heroLayers, heroImageUrl)
+    // GEN-3 A-HERO (X-7 + WS-A(1)): scene-aware targeting. Within a
+    // scene the GEN-2 A2 rules hold (base stays whole while the
+    // incoming decodes). A scene CHANGE is a different contract: the
+    // old scene's photo may never sit under the new scene's label —
+    // the base resets to the NEW scene's own bundled fallback
+    // (synchronous, on-device, effectively instant) and the resolved
+    // photo, when it lands, fades in over THAT. On the very first
+    // scene the same rule gives the band its fallback from frame
+    // one, instead of the gradient the walkthrough recorded for
+    // ~50 s at Overland Park (X-3) and ~2 s at New York (X-6).
+    var heroScene by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(heroImageUrl, heroFallbackUrl, heroSceneKey) {
+        heroLayers = if (heroScene != heroSceneKey) {
+            heroScene = heroSceneKey
+            HeroLayerPolicy.onSceneChange(heroImageUrl, heroFallbackUrl)
+        } else {
+            HeroLayerPolicy.onTarget(heroLayers, heroImageUrl)
+        }
     }
 
     // Decode the hero at display size, not at the source's full 800×1200.
@@ -556,10 +596,27 @@ fun HeroSection(
             }
         }
 
-        // 4b. RW-26: the scaffold badge — bottom-leading, factual
-        // only ("Your photo — made for close-by weather"); exact and
-        // stock serves carry no badge (§9 silence: no upsell, no meter).
-        if (heroImageUrl != null && scaffoldBadge != null) {
+        // 4b. GEN-3 A-HERO (WS-A(2)): THE hero pill — ONE component
+        // at the bottom of the hero image carrying the personal
+        // layer's state in every case (making / scaffold / exact-free
+        // count + Get unlimited / Premium). It subsumes the RW-26
+        // scaffold badge (same position, same capsule). It renders
+        // whenever its state exists — including over the fallback
+        // photo while a personal photo generates, which is precisely
+        // the frame X-2/X-8 found missing — and a stock serve carries
+        // no pill (§9 silence, preserved by HeroPillPolicy).
+        if (heroPill != null) {
+            HeroPill(
+                content = heroPill,
+                onAction = onHeroPillAction,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 14.dp, bottom = HeroSheetOverlap + 12.dp)
+            )
+        } else if (heroImageUrl != null && scaffoldBadge != null) {
+            // Legacy badge path (kept for the existing call sites
+            // that still pass a badge directly; HeroPillPolicy's
+            // SCAFFOLD state is its successor).
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -688,6 +745,27 @@ object HeroLayerPolicy {
         val baseUrl: String?,
         val incomingUrl: String?
     )
+
+    /**
+     * GEN-3 A-HERO (X-7): the layer state at a SCENE change (a new
+     * place, or a new selected moment). The previous scene's photo
+     * is discarded outright — it may never appear under the new
+     * scene's label, not even for the incoming photo's decode time
+     * (the walkthrough's Miami frame: New York's photo under
+     * Miami's label for ~1.3 s). The new base is the new scene's own
+     * bundled fallback [fallbackUrl] — synchronous and truthful for
+     * the new scene's prescription — or the target itself when the
+     * resolution already landed on it; the target, when it differs
+     * from the fallback, becomes the incoming layer and fades in
+     * over the fallback once decoded. When neither exists, the
+     * gradient is the truthful paint (the census's defect cells).
+     */
+    fun onSceneChange(targetUrl: String?, fallbackUrl: String?): Layers = when {
+        targetUrl == null -> Layers(baseUrl = fallbackUrl, incomingUrl = null)
+        fallbackUrl == null || fallbackUrl == targetUrl ->
+            Layers(baseUrl = targetUrl, incomingUrl = null)
+        else -> Layers(baseUrl = fallbackUrl, incomingUrl = targetUrl)
+    }
 
     /** Register [targetUrl] as the photo to transition to. */
     fun onTarget(layers: Layers, targetUrl: String?): Layers = when {
