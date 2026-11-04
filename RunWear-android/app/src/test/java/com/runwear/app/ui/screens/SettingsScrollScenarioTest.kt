@@ -73,8 +73,15 @@ import org.robolectric.annotation.GraphicsMode
  * row ~40 px below the window's bottom edge at max scroll; the
  * fixed wiring lands it fully inside.
  */
+// LEGACY looper, deliberately: the LazyList scroll animation's
+// frames must execute as they are posted (in the PAUSED mode of
+// run 41864221822 the semantics ScrollBy was accepted but the
+// list's scroll value never moved — 0.0 of 100.0 after 25
+// rounds — while the same drive scrolled the real sheet's list
+// to max under LEGACY in run 41860330133).
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.LEGACY)
 @Config(application = Application::class, sdk = [35], qualifiers = "w411dp-h844dp-xhdpi")
 class SettingsScrollScenarioTest {
 
@@ -120,10 +127,11 @@ class SettingsScrollScenarioTest {
         var rounds = 0
         while (rounds < 25) {
             val root = rootOf(composeView)
-            val scrollNode = nodes(root).firstOrNull {
+            // The list's viewport is the tallest scroll-range node.
+            val scrollNode = nodes(root).filter {
                 it.config.contains(SemanticsProperties.VerticalScrollAxisRange) &&
                     it.config.contains(SemanticsActions.ScrollBy)
-            }
+            }.maxByOrNull { it.boundsInRoot.height }
             assertNotNull("the Settings content must carry a scrollable list", scrollNode)
             range = scrollNode!!.config[SemanticsProperties.VerticalScrollAxisRange]
             if (range.maxValue() > 0f && range.value() >= range.maxValue() - 1f) break
@@ -140,7 +148,14 @@ class SettingsScrollScenarioTest {
             finalRange.maxValue() > 0f
         )
         assertTrue(
-            "the list must reach max scroll (value ${finalRange.value()} of ${finalRange.maxValue()})",
+            "the list must reach max scroll (value ${finalRange.value()} of ${finalRange.maxValue()})" +
+                " — scroll candidates: " + nodes(rootOf(composeView)).filter {
+                    it.config.contains(SemanticsProperties.VerticalScrollAxisRange)
+                }.joinToString { n ->
+                    val r = n.config[SemanticsProperties.VerticalScrollAxisRange]
+                    "[top=${n.boundsInRoot.top} h=${n.boundsInRoot.height} " +
+                        "range=${r.value()}/${r.maxValue()}]"
+                },
             finalRange.value() >= finalRange.maxValue() - 1f
         )
 
