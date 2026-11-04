@@ -225,7 +225,20 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             }
             self.userInitiatedPending.remove(cell)
             self.pollingTasks[cell] = nil
-            if landed != nil { self.landedHeroVersion += 1 }
+            if landed != nil {
+                self.landedHeroVersion += 1
+                // GEN-2 I2 (W-18): a landing IS the server's
+                // charge moment — the worker increments
+                // free_generations_used as it delivers the
+                // verified hero. Re-read the profile here so the
+                // ONE counter every surface binds to (this store's
+                // freeGenerationsUsed) reflects the delivery in
+                // this session. Before this, nothing re-read it
+                // after opt-in, so Settings stood at its pre-
+                // generation value ("0 of 5") while frame 34
+                // announced the debit from a hardcoded line.
+                await self.refreshProfile()
+            }
             return landed
         }
         pollingTasks[cell] = task
@@ -280,6 +293,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                     noteLookState(lookup)
                     if case .show = cache.resolve(lookup: lookup, now: Date()) {
                         landedHeroVersion += 1
+                        // W-18: the hero this response names was
+                        // delivered (and, if chargeable, charged)
+                        // before this request — re-read the one
+                        // counter so every surface agrees.
+                        await refreshProfile()
                     }
                 }
                 userInitiatedPending.remove(cell)

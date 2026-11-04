@@ -446,9 +446,38 @@ private struct FirstLookView: View {
     /// crossfades in, ONE success haptic fires as it lands, and
     /// the §9 summary band slides up 120 ms after it lands
     /// (FirstLookReveal carries the numbers).
+    /// GEN-2 I2 (W-16): the reveal now belongs to the GENERATED
+    /// photo's landing — startFirstLookReveal runs when the
+    /// moment's presentation reaches its ready phase, not when
+    /// the screen appears (the screen previously "revealed" the
+    /// fork's stock photo and captioned it as the user).
     @State private var firstLookPhotoRevealed = false
     @State private var firstLookBandRevealed = false
     @State private var firstLookHapticNonce = 0
+    /// GEN-2 I2 (W-16/W-18): the cell the first generation was
+    /// kicked for, captured from the kick itself — frame 34 reads
+    /// the server's look state for exactly this cell.
+    @State private var firstLookCombo: PersonalCombination?
+
+    /// The cell frame 34 is about: the kick's own cell, falling
+    /// back to the preview's current personal cell.
+    private var firstLookCell: PersonalCombination? {
+        firstLookCombo ?? previewVM.currentPersonalCombination
+    }
+
+    /// Frame 34's state, resolved from the server's look state
+    /// for the cell, whether the generated photo is the photo on
+    /// screen, and the ONE free-looks counter Settings also reads
+    /// (FirstLookPresentation / FreeLooksMeter — W-16/W-18).
+    private var firstLookPresentation: FirstLookPresentation {
+        FirstLookPresentation.resolve(
+            lookState: firstLookCell.map { store.lookState(for: $0) } ?? .none,
+            personalPhotoDisplayed: previewVM.currentPersonalHeroId != nil && previewVM.heroImageUrl != nil,
+            freeGenerationsUsed: store.freeGenerationsUsed,
+            freeAllowance: PersonalHeroStore.freeAllowance,
+            isSubscribed: store.mode == .subscribed
+        )
+    }
 
     private var hasRecommendation: Bool {
         previewVM.weatherData != nil && previewVM.recommendation != nil
@@ -533,6 +562,9 @@ private struct FirstLookView: View {
                             // carries it from here.
                             previewVM.personalStore = store
                             if let combo = await previewVM.reloadHeroForPersonal() {
+                                // W-16: frame 34 tracks THIS
+                                // cell's server look state.
+                                await MainActor.run { firstLookCombo = combo }
                                 store.startUserInitiatedGeneration(for: combo)
                             }
                         }
@@ -586,13 +618,30 @@ private struct FirstLookView: View {
         }
     }
 
-    /// Frame 34 — the first-look moment. The user has just seen
-    /// themselves in a kit photo; the primary door is the run's
-    /// clothing answer ("See My Outfit"), and the ONE soft ask is
-    /// the quiet second door ("See Premium") — once, never a modal
-    /// again. The band carries the two benefit concepts in the §9
-    /// recommended pair, verbatim. The onboarding look counts as
-    /// look 1 of 5 (§8 Q5), and the meter says so.
+    /// Frame 34 — the first-look moment. The primary door is the
+    /// run's clothing answer ("See My Outfit"), and the ONE soft
+    /// ask is the quiet second door ("See Premium") — once, never
+    /// a modal again. The band carries the two benefit concepts
+    /// in the §9 recommended pair, verbatim.
+    ///
+    /// GEN-2 I2 (W-16/W-18): the moment is STATEFUL, and every
+    /// line it shows is gated on FirstLookPresentation. While the
+    /// personal look is generating, the working state lives ON
+    /// the photo (the pool photo visibly treated, the §7 G1/G2
+    /// processing copy on the photo itself — Sol's correction:
+    /// not at the screen's footer), the caption does NOT claim
+    /// the user is in the photo, no free-look debit is presented,
+    /// and the Premium band waits. When the generated photo
+    /// actually lands it crossfades in (§1.4 reveal), the caption
+    /// claims it, and the meter renders from the store's ONE
+    /// counter — the onboarding look counts as look 1 of 5
+    /// (§8 Q5) exactly when the server has counted it, which is
+    /// the same value Settings shows. A failed look shows the
+    /// failure line and charges nothing. Leaving early is always
+    /// possible ("See My Outfit" never waits on generation); the
+    /// home screen's progress/failed surfaces carry the state
+    /// from there, and no debit is ever claimed for a look that
+    /// has not been delivered.
     private var firstLookMomentView: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -622,36 +671,44 @@ private struct FirstLookView: View {
                         .foregroundColor(AppTheme.inkSecondary)
                 }
 
-                AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        AppTheme.cardOnSheet
-                    }
+                // The photo card — state lives ON the photo
+                // (firstLookPhotoCard): while the look is being
+                // made the pool photo is visibly treated with the
+                // processing copy over it; the generated photo
+                // crossfades in when it lands.
+                firstLookPhotoCard
+
+                // Frame 34's own lines, gated on the presentation:
+                // the claim and the meter exist ONLY in the ready
+                // phase (the meter composed from the shared
+                // counter); the failed phase states its failure
+                // and charges nothing; the making phase states
+                // nothing below the photo — its copy is on it.
+                if let caption = firstLookPresentation.caption {
+                    Text(caption)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.inkPrimary)
                 }
-                .frame(height: 220)
-                .clipped()
-                .cornerRadius(16)
-                // §1.4 reveal: the photo crossfades in (it never
-                // pops, and it is never replaced mid-view).
-                .opacity(firstLookPhotoRevealed ? 1 : 0)
 
-                // Frame 34's own lines, as designed: the moment
-                // stated, then the honest meter (look 1 of 5,
-                // §8 Q5 — 4 remain, whenever the user wants them).
-                Text("You're in the photo now.")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.inkPrimary)
+                if let meterLine = firstLookPresentation.meterLine {
+                    Text(meterLine)
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
 
-                Text("That was look 1 of your 5 free looks — 4 remain, whenever you want them.")
-                    .font(.system(size: 13))
-                    .foregroundColor(AppTheme.inkSecondary)
+                if let failureLine = firstLookPresentation.failureLine {
+                    Text(failureLine)
+                        .font(.system(size: 13))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
 
                 // The §9 band — the recommended pair, verbatim.
                 // It slides up 120 ms after the photo lands
                 // (FirstLookReveal.bandStartSeconds from reveal
-                // start), never with or ahead of the photo.
+                // start), never with or ahead of the photo — and
+                // (W-16) it renders only once the first look
+                // exists: the ask follows the look.
+                if firstLookPresentation.showsPremiumBand {
                 VStack(alignment: .leading, spacing: 8) {
                     // WS-9 fix: the band's designed header (frame
                     // 34; Android's FIRST_LOOK_BAND_HEADER) — the
@@ -673,6 +730,7 @@ private struct FirstLookView: View {
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
                 .opacity(firstLookBandRevealed ? 1 : 0)
                 .offset(y: firstLookBandRevealed ? 0 : 12)
+                }
 
                 Button(action: onComplete) {
                     Text("See My Outfit")
@@ -683,25 +741,37 @@ private struct FirstLookView: View {
                         .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
                 }
 
-                // The quiet second door — dismissing the ask IS
-                // continuing; this screen never returns as a modal.
-                Button {
-                    showPremiumSheet = true
-                } label: {
-                    Text("See Premium")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(AppTheme.inkSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
+                // The quiet second door — part of the soft ask,
+                // so it too waits for the ready phase (W-16).
+                // Dismissing the ask IS continuing; this screen
+                // never returns as a modal.
+                if firstLookPresentation.showsPremiumBand {
+                    Button {
+                        showPremiumSheet = true
+                    } label: {
+                        Text("See Premium")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.inkSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                    }
                 }
             }
             .padding(.horizontal, 24)
             .padding(.top, 24)
         }
-        // WS-10 (§1.4/§1.7): the reveal runs once when the moment
-        // first appears; the success haptic is the moment's only
-        // haptic and fires exactly once, as the photo lands.
-        .onAppear(perform: startFirstLookReveal)
+        // WS-10 (§1.4/§1.7) as re-aimed by W-16: the reveal runs
+        // when the GENERATED photo lands (the presentation's
+        // ready phase) — on appear only if the look is already
+        // ready, and again from the ready photo's own load (see
+        // firstLookPhotoCard). The success haptic is the moment's
+        // only haptic and fires exactly once, as the photo lands.
+        .onAppear {
+            if firstLookPresentation.phase == .ready { startFirstLookReveal() }
+        }
+        .onChange(of: firstLookPresentation.phase) { _, phase in
+            if phase == .ready { startFirstLookReveal() }
+        }
         .sensoryFeedback(.success, trigger: firstLookHapticNonce)
         // WS-5 (§1.3): named detent — the paywall's content
         // scrolls, so .large only. Dismissal (any path: swipe,
@@ -714,11 +784,92 @@ private struct FirstLookView: View {
         }
     }
 
+    /// Frame 34's photo card (GEN-2 I2 · W-16/W-17).
+    ///
+    /// W-17 (this card's half): every phase renders through
+    /// HeroPhoto — the home hero's top-anchored crop — so the
+    /// full head is in frame. The bare center-anchored fill this
+    /// card used before cropped the stock photo mid-face and the
+    /// generated photo at the neck.
+    ///
+    /// W-16: the state lives ON the photo. While the look is
+    /// making, the pool photo underneath is visibly a placeholder
+    /// being worked on (blurred, dimmed, under a scrim) and the
+    /// §7 G1/G2 processing copy sits on the photo itself — the
+    /// photo is never presented as the user. When the generated
+    /// photo lands, it replaces the treated placeholder through
+    /// the §1.4 crossfade (its opacity is the reveal's), never a
+    /// silent hard cut. On failure the standard photo stands
+    /// untreated — it is the honest standard photo again, and the
+    /// failure line below the card says what happened.
+    private var firstLookPhotoCard: some View {
+        let presentation = firstLookPresentation
+        return GeometryReader { geo in
+            ZStack {
+                AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
+                    switch phase {
+                    case .success(let image):
+                        switch presentation.phase {
+                        case .ready:
+                            HeroPhoto(image: image, width: geo.size.width, height: 220)
+                                // §1.4 reveal: the generated
+                                // photo crossfades in as it lands
+                                // (it never pops, and the treated
+                                // placeholder is never silently
+                                // replaced underneath it).
+                                .opacity(firstLookPhotoRevealed ? 1 : 0)
+                                .onAppear { startFirstLookReveal() }
+                        case .making:
+                            HeroPhoto(image: image, width: geo.size.width, height: 220)
+                                .blur(radius: 8)
+                                .opacity(0.55)
+                        case .failed:
+                            HeroPhoto(image: image, width: geo.size.width, height: 220)
+                        }
+                    default:
+                        AppTheme.cardOnSheet
+                    }
+                }
+
+                if presentation.phase == .making {
+                    // The working state, ON the photo: a scrim
+                    // over the treated placeholder, the spinner,
+                    // and the processing copy where the user is
+                    // looking — not at the screen's footer.
+                    Color.black.opacity(0.35)
+                    VStack(spacing: 10) {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(1.2)
+                        if let title = presentation.photoOverlayTitle {
+                            Text(title)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                        }
+                        if let detail = presentation.photoOverlayDetail {
+                            Text(detail)
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.9))
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+        }
+        .frame(height: 220)
+        .clipped()
+        .cornerRadius(16)
+    }
+
     /// The frame-34 reveal (§1.4), driven off FirstLookReveal's
     /// numbers: photo crossfade → (photo lands) ONE success
     /// haptic → +120 ms, the summary band slides up. Guarded so
     /// a re-appearance never replays it — the haptic count for
     /// the moment is FirstLookReveal.successHapticCount (1).
+    /// GEN-2 I2 (W-16): callers fire it only for the ready phase
+    /// — the photo being revealed is the generated one.
     private func startFirstLookReveal() {
         guard !firstLookPhotoRevealed else { return }
         withAnimation(.easeInOut(duration: FirstLookReveal.photoCrossfadeSeconds)) {

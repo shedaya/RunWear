@@ -363,7 +363,13 @@ final class WS10CopyTests: XCTestCase {
         let script = try position(of: "Text(\"Make It Me\")")
         let heading = try position(of: "MakeItMeCopy.firstLookHeading(")
         let weather = try position(of: "MakeItMeCopy.firstLookWeatherLine(")
-        let photo = try position(of: "AsyncImage(url: (previewVM.heroImageUrl")
+        // GEN-2 I2 (W-16/W-17): the photo slot is now the moment's
+        // own stateful card (firstLookPhotoCard) — the photo area
+        // carries the phase's treatment and copy, so the bare
+        // AsyncImage that used to sit in this slot is gone. The
+        // ORDER pin's intent is unchanged: header stack → photo →
+        // band → primary door.
+        let photo = try position(of: "firstLookPhotoCard")
         let bandHeader = try position(of: "MakeItMeCopy.firstLookBandHeader")
         let door = try position(of: "Text(\"See My Outfit\")")
         XCTAssertTrue(script < heading && heading < weather && weather < photo
@@ -399,4 +405,215 @@ final class WS10CopyTests: XCTestCase {
         XCTAssertTrue(picker.contains("Image(systemName: \"location.fill\")"),
                       "the Current location row is marked with designed iconography")
     }
+}
+
+/// Pins for GEN-2 I2 (2026-11-04) — W-16 (first-look honesty),
+/// W-17 (frame-34 crop), W-18 (the free-looks counter split):
+///
+///  * While the first look is generating, frame 34's presentation
+///    claims NOTHING: no "You're in the photo now.", no meter, no
+///    Premium band — the working copy rides ON the photo instead.
+///  * The debit exists only in the ready phase, composed from the
+///    ONE counter (the server profile's free_generations_used as
+///    the store holds it) — the same value Settings' line is
+///    composed from, so after a delivered first look both
+///    surfaces agree by construction.
+///  * The regression that shipped (W-18): frame 34's hardcoded
+///    "look 1" line rendered at presentation time while Settings
+///    read a counter nothing re-read after delivery. The server
+///    charges only on delivery (personal-hero-worker), so the
+///    completed-look simulation below feeds the post-delivery
+///    profile value (1) into BOTH surfaces' compositions.
+final class FirstLookHonestyTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    // MARK: - W-16 · the making phase claims nothing
+
+    func testMakingPhaseHasNoCaptionNoMeterNoBand() {
+        for state in [PersonalLookState.making, .none] {
+            let p = FirstLookPresentation.resolve(
+                lookState: state,
+                personalPhotoDisplayed: false,
+                freeGenerationsUsed: 0,
+                freeAllowance: 5,
+                isSubscribed: false
+            )
+            XCTAssertEqual(p.phase, .making)
+            XCTAssertNil(p.caption, "the stock photo must never be captioned as the user")
+            XCTAssertNil(p.meterLine, "no debit may be presented before delivery")
+            XCTAssertNil(p.failureLine)
+            XCTAssertFalse(p.showsPremiumBand, "the soft ask follows the look — it is not presented before the look exists")
+            // The working state lives ON the photo: the §7 G1/G2
+            // processing copy is the overlay's, not a footer line.
+            XCTAssertEqual(p.photoOverlayTitle, MakeItMeCopy.progressTitle)
+            XCTAssertEqual(p.photoOverlayDetail, MakeItMeCopy.progressSubline)
+        }
+    }
+
+    func testFailedPhaseChargesNothingAndSaysSo() {
+        let p = FirstLookPresentation.resolve(
+            lookState: .failed(reason: .error),
+            personalPhotoDisplayed: false,
+            freeGenerationsUsed: 0,
+            freeAllowance: 5,
+            isSubscribed: false
+        )
+        XCTAssertEqual(p.phase, .failed)
+        XCTAssertNil(p.caption)
+        XCTAssertNil(p.meterLine, "a failed look is never charged, so no meter may render")
+        XCTAssertEqual(p.failureLine, MakeItMeCopy.firstLookFailed)
+        XCTAssertTrue(p.failureLine?.contains("No free look was used") == true,
+                      "the failure line states the accounting truth")
+        XCTAssertFalse(p.showsPremiumBand)
+    }
+
+    // MARK: - W-18 · the completed first look: both surfaces agree
+
+    func testCompletedFirstLook_frame34AndSettingsAgree() {
+        // Simulate the completed first look exactly as the system
+        // records it: the worker delivers the verified hero and
+        // increments the profile counter to 1; the store re-reads
+        // the profile on landing (awaitHero) and holds 1. Both
+        // surfaces compose from that one held value.
+        let profile = PersonalProfileRow(
+            personalizationOn: true,
+            freeGenerationsUsed: 1,
+            entitled: false,
+            gender: "MALE"
+        )
+        let used = profile.freeGenerationsUsed
+
+        // Settings' surface (frame 37's meter).
+        XCTAssertEqual(
+            FreeLooksMeter.settingsLine(used: used, allowance: PersonalHeroStoreAllowance.value),
+            "1 of 5 free looks used",
+            "after a delivered first look Settings must count it (W-18's shipped defect read 0)"
+        )
+
+        // Frame 34's surface, ready phase (the generated photo is
+        // the photo on screen).
+        let p = FirstLookPresentation.resolve(
+            lookState: .ready,
+            personalPhotoDisplayed: true,
+            freeGenerationsUsed: used,
+            freeAllowance: PersonalHeroStoreAllowance.value,
+            isSubscribed: false
+        )
+        XCTAssertEqual(p.phase, .ready)
+        XCTAssertEqual(p.caption, "You're in the photo now.")
+        XCTAssertEqual(
+            p.meterLine,
+            "That was look 1 of your 5 free looks — 4 remain, whenever you want them.",
+            "frame 34's meter is the SAME count Settings shows: look 1 spent, 4 remain"
+        )
+        XCTAssertTrue(p.showsPremiumBand, "the soft ask may show once the look exists")
+        XCTAssertNil(p.photoOverlayTitle, "no working state remains on a delivered photo")
+    }
+
+    func testReadyPhaseBeforeCounterConfirm_showsNoMeterRatherThanAWrongOne() {
+        // The photo has landed but the store's profile re-read has
+        // not landed yet (counter still 0): the caption is true
+        // (he IS in the photo), but no number is printed until the
+        // shared counter confirms it — never a "look 0" line that
+        // would contradict the debit, and never the old hardcoded
+        // "look 1" ahead of the server's count.
+        let p = FirstLookPresentation.resolve(
+            lookState: .ready,
+            personalPhotoDisplayed: true,
+            freeGenerationsUsed: 0,
+            freeAllowance: 5,
+            isSubscribed: false
+        )
+        XCTAssertEqual(p.phase, .ready)
+        XCTAssertEqual(p.caption, "You're in the photo now.")
+        XCTAssertNil(p.meterLine)
+    }
+
+    func testReadyPhaseMeterCountsDownFromTheSharedCounter() {
+        let last = FirstLookPresentation.resolve(
+            lookState: .ready, personalPhotoDisplayed: true,
+            freeGenerationsUsed: 5, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(last.meterLine, "That was look 5 of your 5 free looks.")
+        XCTAssertEqual(FreeLooksMeter.settingsLine(used: 5, allowance: 5), "All 5 free looks used")
+
+        let subscribed = FirstLookPresentation.resolve(
+            lookState: .ready, personalPhotoDisplayed: true,
+            freeGenerationsUsed: 3, freeAllowance: 5, isSubscribed: true)
+        XCTAssertNil(subscribed.meterLine, "a subscribed user has no free-look accounting to state")
+    }
+
+    func testDisplayedPersonalPhotoWinsOverAnInFlightRegenState() {
+        // A personal photo on screen IS the ready state even if
+        // the cell also reports a regeneration in flight.
+        let p = FirstLookPresentation.resolve(
+            lookState: .making,
+            personalPhotoDisplayed: true,
+            freeGenerationsUsed: 2,
+            freeAllowance: 5,
+            isSubscribed: false
+        )
+        XCTAssertEqual(p.phase, .ready)
+        XCTAssertEqual(p.meterLine, "That was look 2 of your 5 free looks — 3 remain, whenever you want them.")
+    }
+
+    // MARK: - W-16/W-17/W-18 · wiring pins
+
+    func testFrame34HasNoHardcodedDebitLine_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertFalse(onboarding.contains("That was look 1 of your 5 free looks"),
+                       "the hardcoded debit line is the W-18 defect — frame 34 composes its meter from the shared counter")
+        XCTAssertTrue(onboarding.contains("FirstLookPresentation.resolve("),
+                      "frame 34 resolves its state through the presentation model")
+        XCTAssertTrue(onboarding.contains("freeGenerationsUsed: store.freeGenerationsUsed"),
+                      "frame 34 reads the store's ONE counter — the value Settings reads")
+        XCTAssertTrue(onboarding.contains("store.lookState(for:"),
+                      "frame 34's phase comes from the server's folded look state for its cell")
+    }
+
+    func testFrame34PhotoCardIsTopAnchoredAndCarriesItsState_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        let start = try XCTUnwrap(onboarding.range(of: "private var firstLookPhotoCard"))
+        let end = try XCTUnwrap(onboarding.range(of: "private func startFirstLookReveal"))
+        let card = String(onboarding[start.lowerBound..<end.lowerBound])
+        XCTAssertTrue(card.contains("HeroPhoto(image: image"),
+                      "W-17: the card crops through HeroPhoto — the home hero's top-anchored crop — so the full head is in frame")
+        XCTAssertFalse(card.contains("aspectRatio(contentMode: .fill)"),
+                       "the bare center-anchored fill that cropped the head is gone from this card")
+        XCTAssertTrue(card.contains("photoOverlayTitle"),
+                      "W-16: the processing copy renders ON the photo card")
+        XCTAssertTrue(card.contains(".blur(radius: 8)"),
+                      "W-16: while making, the placeholder photo is visibly treated — never presented as the user")
+    }
+
+    func testSettingsMeterComesThroughTheSharedMeter_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(section.contains("FreeLooksMeter.settingsLine(used: store.freeGenerationsUsed"),
+                      "Settings composes its meter from the shared counter through the one seam")
+        XCTAssertFalse(section.contains("of 5 free looks used\""),
+                       "Settings no longer spells its own meter arithmetic inline")
+        XCTAssertTrue(section.contains("await store.refreshProfile()"),
+                      "opening Settings re-reads the server profile, so a delivered look is counted in-session")
+    }
+
+    func testStoreReReadsTheCounterWhenALookLands_sourcePin() throws {
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("await self.refreshProfile()"),
+                      "W-18: awaitHero re-reads the profile when a look lands — the server's charge moment")
+    }
+}
+
+/// The shipped free allowance, named once for these tests (the
+/// store itself is not compiled into the test target; its value
+/// is pinned against the server limit by the backend contract).
+private enum PersonalHeroStoreAllowance {
+    static let value = 5
 }

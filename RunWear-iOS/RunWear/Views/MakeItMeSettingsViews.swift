@@ -34,7 +34,10 @@ struct MakeItMeSettingsSection: View {
     var body: some View {
         // A native Form section — Settings is a Form (RW-6.7), so
         // this renders in the same grammar and adaptive colors as
-        // the preference sections around it.
+        // the preference sections around it. (Wrapped in a Group
+        // so the W-18 .task below binds to the whole section,
+        // unambiguously past the Section's trailing closures.)
+        Group {
         Section {
             switch store.mode {
             case .stock:
@@ -73,12 +76,13 @@ struct MakeItMeSettingsSection: View {
                         Text("Your photo is ready before you open the app.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
-                    } else if store.freeGenerationsUsed >= PersonalHeroStore.freeAllowance {
-                        Text("All 5 free looks used")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.inkSecondary)
                     } else {
-                        Text("\(store.freeGenerationsUsed) of 5 free looks used")
+                        // W-18: composed through FreeLooksMeter
+                        // from the store's ONE counter — the same
+                        // value frame 34's meter is composed from,
+                        // so the two surfaces cannot keep separate
+                        // books again.
+                        Text(FreeLooksMeter.settingsLine(used: store.freeGenerationsUsed, allowance: PersonalHeroStore.freeAllowance))
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -128,6 +132,12 @@ struct MakeItMeSettingsSection: View {
                 .textCase(nil)
                 .foregroundColor(AppTheme.inkPrimary)
         }
+        }
+        // W-18: opening Settings re-reads the server profile, so
+        // the meter this section renders is the server's current
+        // count — a look delivered since the last read (frame 34's
+        // included) is counted here, in the same session.
+        .task { await store.refreshProfile() }
     }
 
     private func settingsRow(title: String, subtitle: String?, action: @escaping () -> Void) -> some View {
@@ -324,7 +334,7 @@ struct MakeItMeSubscriptionSheet: View {
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
-                        Text("\(store.freeGenerationsUsed) of 5 used · Free looks never expire — and your first ones take about a minute to make.")
+                        Text(FreeLooksMeter.subscriptionLine(used: store.freeGenerationsUsed, allowance: PersonalHeroStore.freeAllowance))
                             .font(.system(size: 13))
                             .foregroundColor(AppTheme.inkSecondary)
                     }

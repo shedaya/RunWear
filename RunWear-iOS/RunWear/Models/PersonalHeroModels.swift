@@ -685,6 +685,45 @@ struct PersonalCellCache {
     }
 }
 
+// MARK: - Free-looks meter (GEN-2 I2 · W-18: ONE source of truth)
+//
+// The diagnosis (2026-11-04 walkthrough, W-18): frame 34 announced
+// its debit from a HARDCODED line ("That was look 1 of your 5 free
+// looks — 4 remain…") rendered the moment the screen appeared,
+// while Settings rendered the store's `freeGenerationsUsed` — the
+// server profile counter, which the server only increments when a
+// look is DELIVERED (personal-hero-worker: the charge lands with
+// the verified hero insert, for a free_on_demand job on a cell
+// never counted before). The two surfaces kept separate books:
+// frame 34 assumed the debit at presentation time; the store's
+// counter was last read at opt-in (before generation was even
+// queued) and nothing re-read it when the look landed, so Settings
+// stood at 0 for the rest of the session.
+//
+// The fix is structural: there is exactly ONE counter — the
+// store's `freeGenerationsUsed`, bound to the server's
+// `personal_profiles.free_generations_used` — and every surface
+// composes its line from that value through this one seam. The
+// store re-reads the profile when a look lands (awaitHero), which
+// is the moment the server's charge exists to be read.
+enum FreeLooksMeter {
+    /// Settings' state line (frame 37's meter), composed from the
+    /// shared counter. `allowance` renders as the bare number the
+    /// deck uses; at the shipped allowance of 5 these are exactly
+    /// the strings Settings has always carried.
+    static func settingsLine(used: Int, allowance: Int) -> String {
+        if used >= allowance { return "All \(allowance) free looks used" }
+        return "\(used) of \(allowance) free looks used"
+    }
+
+    /// The paywall's free bar line, composed from the same counter
+    /// (it previously interpolated the store value inline — same
+    /// number, second spelling site).
+    static func subscriptionLine(used: Int, allowance: Int) -> String {
+        "\(used) of \(allowance) used · Free looks never expire — and your first ones take about a minute to make."
+    }
+}
+
 // MARK: - Upsell eligibility (spec §5)
 //
 // The 6th-cell card shows only when ALL of these hold: the user is on
@@ -940,6 +979,19 @@ enum MakeItMeCopy {
     /// line's retry action. User-initiated only; automatic
     /// re-request stays off.
     static let lookRetry = "Try again"
+    /// GEN-2 I2 (W-16): frame 34's failed-look line. DEVIATION-COPY
+    /// (no deck entry): the G5 line's "tap to try again" names an
+    /// action frame 34 does not carry (the retry lives on the
+    /// outfit screen's hero, G6), so this line states the failure,
+    /// the accounting truth (a failed look is never charged —
+    /// server doctrine, §1), and where the retry lives.
+    static let firstLookFailed = "Your look couldn't be made from these photos. No free look was used — your outfit is ready either way, and you can try again from there."
+    /// GEN-2 I2 (W-16): frame 34's claim line, shown ONLY once the
+    /// generated photo is the photo on screen. Before this fix the
+    /// line was a hardcoded literal rendered over the fork's stock
+    /// photo; it is now the ready phase's caption, composed by
+    /// FirstLookPresentation.
+    static let firstLookReadyCaption = "You're in the photo now."
 }
 
 // MARK: - Photo intake source routing (RW-16.14)
