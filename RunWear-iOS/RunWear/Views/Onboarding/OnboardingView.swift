@@ -77,11 +77,16 @@ struct OnboardingView: View {
                             question: "Whose fit should the outfits follow?"
                         ) {
                             FitPreferencePicker(preference: $genderPreference)
-                            if genderPreference == .unisex {
-                                Text("No preference selected - showing unisex options")
-                                    .font(.appFootnote)
-                                    .foregroundStyle(AppTheme.inkSecondary)
-                            }
+                            // WS-9 fix: a debug-style reassurance
+                            // line that used to sit under this picker
+                            // is removed — no design frame carries
+                            // it, Android has no equivalent, and its
+                            // vocabulary is introduced by no frame.
+                            // The picker's own "No preference" label
+                            // states the selection; the step needs
+                            // no gloss. (The removed string is kept
+                            // out of this comment on purpose: a
+                            // source pin asserts its absence.)
                         }
                     case .comfort:
                         questionScreen(
