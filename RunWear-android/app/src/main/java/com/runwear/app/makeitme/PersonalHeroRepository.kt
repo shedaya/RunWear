@@ -46,7 +46,13 @@ class PersonalHeroRepository @Inject constructor(
          * an in-flight look. Updated by [noteLookStatus] and
          * [cellLookFor] — every path that learns a look's status.
          */
-        val anyLookMaking: Boolean = false
+        val anyLookMaking: Boolean = false,
+        /**
+         * GEN-3 (convergence band): the caller's real bank coverage
+         * (ready/total), read with the profile refresh. Null until a
+         * read succeeds — the band shows only real counts.
+         */
+        val bankCoverage: PersonalHeroService.BankCoverage? = null
     )
 
     private val _state = MutableStateFlow(PersonalState())
@@ -87,13 +93,21 @@ class PersonalHeroRepository @Inject constructor(
     suspend fun refreshFromServer() {
         val profile = service.fetchProfile() ?: return
         val refs = service.fetchReferencePaths()
+        // GEN-3 (convergence band): the coverage read rides the same
+        // refresh; a failed read leaves the previous value in place.
+        val coverage = if (profile.personalizationOn) {
+            service.fetchBankCoverage() ?: _state.value.bankCoverage
+        } else {
+            _state.value.bankCoverage
+        }
         _state.value = _state.value.copy(
             personalizationOn = profile.personalizationOn,
             freeGenerationsUsed = profile.freeGenerationsUsed,
             entitled = profile.entitled,
             gender = profile.gender,
             referenceCount = refs.size,
-            synced = true
+            synced = true,
+            bankCoverage = coverage
         )
     }
 

@@ -297,6 +297,18 @@ object MakeItMeStrings {
 
     const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions."
 
+    // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4 — word
+    // for word; do not paraphrase): the home-sheet band a subscribed
+    // user sees while the bank converges. Progress is phrased in
+    // plain words with the REAL counts — never a bare fraction,
+    // never "N of M ready".
+    const val BAND_MAKING_HEADING = "Making your looks"
+    const val BAND_MAKING_LINE = "We're generating your outfits across all running conditions, so it will be ready when you need it."
+
+    /** "14 of your 24 looks are ready" — counts from the real bank. */
+    fun bandMakingProgress(ready: Int, total: Int): String =
+        "$ready of your $total looks are ready"
+
     // RW-26 §9 frame 34: the first-look band — the recommended pair,
     // verbatim. The concept labels ("immediate results"/"unlimited
     // results") must NOT appear as copy anywhere.

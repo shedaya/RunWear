@@ -222,6 +222,16 @@ fun HeroMainScreen(
         freeGenerationsUsed = makeItMeState.freeGenerationsUsed
     )
 
+    // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4): the
+    // home-sheet band while a subscribed user's bank converges —
+    // resolved once here, seated below the outfit items in every
+    // layout (mock frame 19's seat). Null unless convergence is
+    // genuinely in progress with real counts.
+    val convergenceBand = com.runwear.app.makeitme.ConvergenceBandPolicy.content(
+        mode = makeItMeState.mode,
+        coverage = makeItMeState.bankCoverage
+    )
+
     // Hero-flag flow: the sheet, plus the URL already flagged in this
     // view (one flag per photo view — the chip goes inert for it).
     var showHeroFlagSheet by remember { mutableStateOf(false) }
@@ -554,6 +564,16 @@ fun HeroMainScreen(
                                         )
                                     }
                                 }
+                                // GEN-3: the convergence band, below the
+                                // outfit in the same scroll.
+                                if (convergenceBand != null) {
+                                    item {
+                                        com.runwear.app.makeitme.ConvergenceBand(
+                                            content = convergenceBand,
+                                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                         AdaptiveLayout.MEDIUM -> {
@@ -623,6 +643,14 @@ fun HeroMainScreen(
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
+                                    }
+                                }
+                                if (convergenceBand != null) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        com.runwear.app.makeitme.ConvergenceBand(
+                                            content = convergenceBand,
                                             modifier = Modifier.padding(vertical = 8.dp)
                                         )
                                     }
@@ -714,6 +742,14 @@ fun HeroMainScreen(
                                             com.runwear.app.makeitme.MakeItMeUpsellCard(
                                                 onSubscribeClick = { showMakeItMePaywall = true },
                                                 onDismiss = onDismissMakeItMeUpsell,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
+                                    if (convergenceBand != null) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            com.runwear.app.makeitme.ConvergenceBand(
+                                                content = convergenceBand,
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
                                         }

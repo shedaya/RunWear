@@ -443,6 +443,40 @@ class PersonalHeroService @Inject constructor(
         }.onFailure { Log.w(TAG, "profile fetch failed", it) }.getOrNull()
     }
 
+    /**
+     * GEN-3 (convergence band): the caller's REAL bank coverage.
+     * [ready] = distinct cells with a verified banked hero
+     * (personal_heroes); [total] = distinct cells the server has
+     * engaged for the caller — banked heroes ∪ generation jobs of
+     * any status (personal_generation_jobs). start-personal-fill
+     * enqueues the whole missing matrix at once, so once a fill has
+     * run the union IS the fill set; before any fill it is just the
+     * banked set (ready == total, band hidden). Both tables are
+     * owner-read under RLS (the jobs policy exists "for progress
+     * UI"). Null when there is no session or either read fails —
+     * the band never shows invented counts.
+     */
+    data class BankCoverage(val ready: Int, val total: Int)
+
+    suspend fun fetchBankCoverage(): BankCoverage? {
+        val session = session() ?: return null
+        suspend fun cells(table: String): Set<String>? = runCatching {
+            val response = http.get(
+                "$BASE_URL/rest/v1/$table?select=combination_id"
+            ) {
+                header("apikey", ANON_KEY)
+                header("Authorization", "Bearer ${session.accessToken}")
+            }
+            if (!response.status.isSuccess()) return@runCatching null
+            json.parseToJsonElement(response.bodyAsText()).jsonArray
+                .mapNotNull { it.jsonObject["combination_id"]?.jsonPrimitive?.contentOrNull }
+                .toSet()
+        }.onFailure { Log.w(TAG, "bank coverage read failed ($table)", it) }.getOrNull()
+        val heroCells = cells("personal_heroes") ?: return null
+        val jobCells = cells("personal_generation_jobs") ?: return null
+        return deriveBankCoverage(heroCells, jobCells)
+    }
+
     /** The caller's registered reference-photo storage paths, in order. */
     suspend fun fetchReferencePaths(): List<String> {
         val session = session() ?: return emptyList()
@@ -511,3 +545,18 @@ class PersonalHeroService @Inject constructor(
         private val KEY_USER_ID = stringPreferencesKey("mim_user_id")
     }
 }
+
+/**
+ * GEN-3 (convergence band): coverage from the two owner-read cell
+ * sets — ready is the banked set itself; total is every cell the
+ * server has engaged (banked ∪ ever-enqueued). Pure, so the band's
+ * counts are unit-pinned without a network.
+ */
+internal fun deriveBankCoverage(
+    heroCells: Set<String>,
+    jobCells: Set<String>
+): PersonalHeroService.BankCoverage =
+    PersonalHeroService.BankCoverage(
+        ready = heroCells.size,
+        total = (heroCells union jobCells).size
+    )

@@ -28,7 +28,9 @@ data class MakeItMeUiState(
     val rcEntitled: Boolean = false,
     /** Server-side entitlement flag (webhook + reconciliation driven; gates fill/replenishment). */
     val serverEntitled: Boolean = false,
-    val gender: String = "UNISEX"
+    val gender: String = "UNISEX",
+    /** GEN-3 (convergence band): real bank coverage (ready/total), or null. */
+    val bankCoverage: PersonalHeroService.BankCoverage? = null
 )
 
 /**
@@ -62,7 +64,8 @@ class MakeItMeViewModel @Inject constructor(
             forkDecided = personal.forkDecided,
             rcEntitled = rcActive,
             serverEntitled = personal.entitled,
-            gender = personal.gender
+            gender = personal.gender,
+            bankCoverage = personal.bankCoverage
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, MakeItMeUiState())
 
