@@ -94,6 +94,52 @@ internal object ForkBackPolicy {
     fun actionFor(): ForkBackAction = ForkBackAction.EXIT_FLOW
 }
 
+/**
+ * W-3 (Nov 4 walkthrough): the fork header band's crop geometry.
+ *
+ * The band shows the SAME hero serve home shows, in a 300 dp-tall
+ * full-width box. Home anchors its Crop to the TOP (HeroSection's
+ * BiasAlignment verticalBias −1 at rest — see [com.runwear.app.ui
+ * .components.HeroImageGeometry]). The fork previously passed NO
+ * alignment, so AsyncImage's default CENTER anchor discarded the
+ * top (sourceHeight − sliceHeight)/2 of the frame before the slice
+ * even started — and on the fork's serve the runner's head sat in
+ * that discarded region: the chin crop Sol flagged on both
+ * platforms' forks (home was fine; do not touch it).
+ *
+ * The fix is the anchor alone: top-anchored, exactly as home, so
+ * the slice starts at source y = 0 and nothing above the runner
+ * can be discarded. The band's height is part of the geometry, not
+ * a free knob — at the standard portrait phone widths the 300 dp
+ * band's top-anchored slice reaches at least the bottom of the
+ * head band D-23 audited on the home serve (source y ≈ 392–509 of
+ * 1200); shrinking the band would pull the slice's bottom back up
+ * through the face. [headBandFullyVisible] pins that across the
+ * width matrix in tests.
+ */
+internal object ForkBandGeometry {
+
+    /** The band's height — see the class doc for why it stays. */
+    const val BAND_HEIGHT_DP = 300
+
+    /** Top-anchored, as home: the slice starts at source y = 0. */
+    val IMAGE_ALIGNMENT: Alignment = Alignment.TopCenter
+
+    /**
+     * True when the top-anchored Crop slice for a display box of
+     * [displayWidthPx] × [displayHeightPx] reaches the bottom of
+     * the audited head band — i.e. the FULL head is in frame.
+     * Pure delegation to home's [com.runwear.app.ui.components
+     * .HeroImageGeometry] math (one geometry of record, two
+     * surfaces).
+     */
+    fun headBandFullyVisible(displayWidthPx: Float, displayHeightPx: Float): Boolean =
+        com.runwear.app.ui.components.HeroImageGeometry.sliceHeightSourcePx(
+            displayWidthPx, displayHeightPx
+        ) >= com.runwear.app.ui.components.HeroImageGeometry.HEAD_BAND_BOTTOM_FRACTION *
+            com.runwear.app.ui.components.HeroImageGeometry.SOURCE_HEIGHT_PX
+}
+
 @Composable
 fun MakeItMeForkScreen(
     heroImageUrl: String?,
@@ -118,11 +164,16 @@ fun MakeItMeForkScreen(
             .verticalScroll(rememberScrollState())
     ) {
         // The first recommendation's photo — "that's a model in your
-        // outfit photo."
+        // outfit photo." W-3: the crop is TOP-anchored
+        // (ForkBandGeometry), as home's hero is — the runner's full
+        // head is in the band. The column below scrolls
+        // (verticalScroll on the root), so the whole fork — both
+        // option cards, the "Use standard photos" button included —
+        // is reachable however tall the content runs.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(ForkBandGeometry.BAND_HEIGHT_DP.dp)
                 .background(RunWearColors.BgCard)
         ) {
             if (heroImageUrl != null) {
@@ -130,6 +181,7 @@ fun MakeItMeForkScreen(
                     model = heroImageUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    alignment = ForkBandGeometry.IMAGE_ALIGNMENT,
                     modifier = Modifier.fillMaxSize()
                 )
             }
