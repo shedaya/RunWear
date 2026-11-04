@@ -233,21 +233,35 @@ struct WearIveRunElementMachine: Equatable {
 // MARK: - Landing classification (the collection model's half)
 //
 // The element's cue may only be fed by a landing that is the
-// user's business: the day's first generation, or a settle that
-// changed the entry's KIT (the payload the narration speaks). A
-// settle that changed only weather numbers or the hero image is
-// an asynchronous landing wearing the entry's clothes — the store
-// still records it (the saved entry is the day's last settled
-// version), but it classifies `.silent` and the element never
-// hears about it (D-07's abolished drivers, at the source).
+// user's business: the session's first generation, a settle that
+// changed the entry's KIT (the payload the narration speaks),
+// or — GEN-3 session rule — a settle that moved the session's
+// entry to a new PLACE. A settle that changed only weather
+// numbers or the hero image is an asynchronous landing wearing
+// the entry's clothes — the store still records it (the saved
+// entry is the session's last settled version), but it
+// classifies `.silentUpdate` and the element never hears about
+// it (D-07's abolished drivers, at the source).
 
 enum WearIveRunLandingClassification: Equatable {
     /// No entry with this identity existed: creation.
     case created
     /// The entry existed and its kit (names or keys) changed.
     case kitUpdated
-    /// The entry existed and changed, but not its kit — weather
-    /// or hero only. Recorded silently; never a cue.
+    /// The entry existed and MOVED to a different place (GEN-3
+    /// session rule): within a session the one entry updates in
+    /// place through every location change, and the move is a
+    /// user-caused settle — it narrates from the diff ("Update
+    /// to…") and cues, exactly like a kit change. Before the
+    /// session rule a place change minted a NEW entry (a fresh
+    /// "Added …" per place — census X-4); a place change with an
+    /// unchanged kit must therefore never fall through to the
+    /// silent case, or the bar would keep announcing a place the
+    /// session has moved past.
+    case placeUpdated
+    /// The entry existed and changed, but neither its kit nor
+    /// its place — weather or hero only. Recorded silently;
+    /// never a cue.
     case silentUpdate
     /// Byte-identical settle: nothing happened at all.
     case identical
@@ -263,6 +277,9 @@ enum WearIveRunLandingClassifier {
         if existing.itemNames != incoming.itemNames
             || existing.itemKeys != incoming.itemKeys {
             return .kitUpdated
+        }
+        if existing.placeKey != incoming.placeKey {
+            return .placeUpdated
         }
         return .silentUpdate
     }

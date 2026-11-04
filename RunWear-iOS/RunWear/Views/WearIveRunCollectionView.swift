@@ -3,14 +3,17 @@ import RunWearEngine
 
 // MARK: - "Wear I've Run" Collection (RW-26, checklist §C; notes §8-K)
 //
-// Chapters BY LOCATION. Cover = most recent card + day count +
+// Chapters BY LOCATION (within a location, the entries are
+// sessions — GEN-3). Cover = most recent card + day count +
 // date span + feels-like range, all computed. Multi-stay chapters
 // count stays and name the last stay — never a false-contiguity
 // span. Hometown-scale chapters group by year → month rows. The
 // weather filter lives at the collection level AND inside
-// chapters, and recomputes every summary it touches. Today is
-// pinned. Sharing happens inside, card by card (Poster or Kit
-// Card — no Range, no collection-level sharing).
+// chapters, and recomputes every summary it touches. The current
+// session's entry is pinned above the chapters — and lifted out
+// of them, so it never duplicates a chapter. Sharing happens
+// inside, card by card (Poster or Kit Card — no Range, no
+// collection-level sharing).
 
 struct WearIveRunCollectionView: View {
     @ObservedObject var model: WearIveRunCollectionModel
@@ -20,13 +23,27 @@ struct WearIveRunCollectionView: View {
 
     @State private var filter: WearIveRunWeatherFilter = .all
 
-    private var chapters: [WearIveRunChapter] {
-        WearIveRunCollection.chapters(from: model.entries, filter: filter)
+    /// The pinned entry (GEN-3 session rule): the CURRENT
+    /// session's entry — the same entry the home dock presents.
+    /// It is pinned above the chapters and LIFTED OUT of the
+    /// chapter arithmetic below, so it can never appear twice
+    /// (census X-5: the pinned TODAY card duplicated the chapter
+    /// directly beneath it, and stayed on the day's first place
+    /// while the session moved on — under the session rule the
+    /// pin IS the session's last settled version, by identity).
+    /// A pinned entry the weather filter excludes is not pinned;
+    /// it then stays in its chapter like any other entry.
+    private var pinned: WearIveRunEntry? {
+        model.sessionEntry().flatMap {
+            WearIveRunWeatherClassifier.matches($0, filter: filter) ? $0 : nil
+        }
     }
 
-    private var todays: [WearIveRunEntry] {
-        WearIveRunCollection.todaysEntries(from: model.entries, today: Date())
-            .filter { WearIveRunWeatherClassifier.matches($0, filter: filter) }
+    private var chapters: [WearIveRunChapter] {
+        let unpinned = pinned.map { pin in
+            model.entries.filter { $0.id != pin.id }
+        } ?? model.entries
+        return WearIveRunCollection.chapters(from: unpinned, filter: filter)
     }
 
     var body: some View {
@@ -42,12 +59,12 @@ struct WearIveRunCollectionView: View {
 
                 if model.entries.isEmpty {
                     emptyState
-                } else if chapters.isEmpty {
+                } else if chapters.isEmpty && pinned == nil {
                     Text("No days match this filter yet.")
                         .font(.appSecondary)
                         .foregroundColor(AppTheme.inkSecondary)
                 } else {
-                    if let today = todays.first {
+                    if let today = pinned {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Today")
                                 .font(.appEyebrow)
@@ -111,7 +128,7 @@ struct WearIveRunCollectionView: View {
             Text("Nothing here yet")
                 .font(.appSectionTitle)
                 .foregroundColor(AppTheme.inkPrimary)
-            Text("Your outfits are saved here as you run them — one entry a day, starting with today. Nothing is backfilled.")
+            Text("Your outfits are saved here as you run them — one entry per session, starting with this one. Nothing is backfilled.")
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
         }

@@ -653,9 +653,10 @@ final class WearIveRunW15FixTests: XCTestCase {
         // The placeholder gate, at the recording itself.
         XCTAssertTrue(home.contains("WearIveRunHomePresentation.eligiblePlace(viewModel.simplePlace)"),
                       "recording must refuse an unresolved (placeholder) place")
-        // The dock is date-keyed, never viewed-place-keyed.
-        XCTAssertTrue(home.contains("collectionModel.todaysEntry()"),
-                      "the dock must present today's entry by date")
+        // The dock is session-keyed (GEN-3, superseding this
+        // lane's gen-2 date key), never viewed-place-keyed.
+        XCTAssertTrue(home.contains("collectionModel.sessionEntry()"),
+                      "the dock must present the current session's entry")
         XCTAssertFalse(home.contains("todaysEntry(placeName: viewModel.placeDisplayName)"),
                        "the viewed-place lookup was the W-15 presentation defect")
     }
@@ -752,5 +753,404 @@ final class WearIveRunW15FixTests: XCTestCase {
         XCTAssertTrue(view.contains("fireCueSettle()"))
         // The W-1 jump-in affordance is explicit on the expanded card.
         XCTAssertTrue(view.contains("Open the full Wear I've Run collection"))
+    }
+}
+
+// MARK: - Session rule (GEN-3 lane I-WIR, 2026-11-04)
+//
+// Sol's correction (Nov 4, binding; supersedes once-per-day):
+// one app session produces exactly ONE entry. Within the
+// session the entry updates IN PLACE through every location
+// and weather change — updates replace, never accumulate; the
+// scrapbook keeps the session's last settled version; a new
+// session starts a new entry. Entries are keyed by SESSION;
+// the dock presents the CURRENT session's entry (the gen-2
+// by-date dock key is the thing this rule replaces).
+//
+// Operational session definition (verbatim, as carried in the
+// gate report): a session is one continuous period of app use
+// beginning when the app process launches (cold start) and
+// ending when that process terminates; backgrounding and
+// returning to the same live process does not start a new
+// session — only a new process does.
+//
+// The census evidence these tests kill (X-4 / X-5, recorded on
+// Android; the rule is behavioral parity): three place
+// resolutions minted three "Added" entries and ZERO "Update
+// to…" narrations; the collection held three same-day chapters
+// while the pinned TODAY card stayed on the first place and
+// duplicated its chapter beneath it.
+final class WearIveRunSessionRuleTests: XCTestCase {
+
+    private var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    private func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        var comps = DateComponents()
+        comps.year = year
+        comps.month = month
+        comps.day = day
+        comps.hour = 12
+        return utcCalendar.startOfDay(for: utcCalendar.date(from: comps)!)
+    }
+
+    private func entry(
+        session: String,
+        place: String,
+        feels: Double,
+        items: [String],
+        day: Date,
+        hero: String = "hero"
+    ) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: day,
+            placeName: place,
+            feelsLikeF: feels,
+            actualF: feels + 2,
+            condition: "Clear",
+            itemNames: items,
+            itemKeys: items.map { $0.lowercased() },
+            heroImageReference: hero,
+            sessionID: session
+        )
+    }
+
+    private func state(of model: WearIveRunCollectionModel) -> WearIveRunState {
+        WearIveRunMiniBarModel.state(
+            todaysEntry: model.sessionEntry(),
+            moment: "Now",
+            wasUpdatedThisSession: model.todaysEntryWasUpdated
+        )
+    }
+
+    // MARK: The session identity itself
+
+    func testProcessSessionIDIsOneValueForTheProcess() {
+        // One launch, one identity: every read in this process
+        // returns the same value (a fresh process mints a new
+        // one — that is the session boundary, by definition).
+        XCTAssertFalse(WearIveRunSession.currentID.isEmpty)
+        XCTAssertEqual(WearIveRunSession.currentID, WearIveRunSession.currentID)
+    }
+
+    func testSessionIdentityShape() {
+        let d = day(2026, 11, 4)
+        let a = entry(session: "s1", place: "Miami, FL", feels: 90, items: ["Tee"], day: d)
+        let b = entry(session: "s2", place: "Miami, FL", feels: 90, items: ["Tee"], day: d)
+        // Same day, same place, different sessions: two entries.
+        XCTAssertNotEqual(a.id, b.id)
+        XCTAssertEqual(a.id, "session|s1")
+        // A legacy entry (no session) keeps its day+place identity.
+        let legacy = WearIveRunEntry(
+            dayStart: d, placeName: "Miami, FL", feelsLikeF: 90, actualF: 92,
+            condition: "Clear", itemNames: ["Tee"], itemKeys: ["tee"],
+            heroImageReference: "hero"
+        )
+        XCTAssertEqual(legacy.id, "\(Int(d.timeIntervalSince1970))|miami, fl")
+    }
+
+    // MARK: One entry per session — in-place updates (X-4/X-5a)
+
+    @MainActor
+    func testInSessionPlaceChangesKeepExactlyOneEntry_LastSettledWins() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        let d = day(2026, 11, 4)
+
+        // The walkthrough's three place resolutions, one session.
+        model.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve", "Windbreaker"], day: d))
+        XCTAssertEqual(model.entries.count, 1)
+
+        model.recordSettled(entry(
+            session: "s1", place: "New York, NY", feels: 72,
+            items: ["Tee", "Shorts"], day: d))
+        XCTAssertEqual(model.entries.count, 1, "a place change replaces, never accumulates")
+
+        let miami = entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top", "Shorts"], day: d)
+        model.recordSettled(miami)
+        XCTAssertEqual(model.entries.count, 1)
+        // The scrapbook keeps the session's LAST settled version.
+        XCTAssertEqual(model.sessionEntry(), miami)
+        XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
+        XCTAssertEqual(model.sessionEntry()?.feelsLikeF, 90)
+        // And it is what a fresh read of the store holds.
+        XCTAssertEqual(WearIveRunStore(defaults: defaults).entries, [miami])
+    }
+
+    @MainActor
+    func testUpdateNarrationsAfterTheFirstAdd_NeverAFreshAddedPerPlace() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let model = WearIveRunCollectionModel(
+            store: WearIveRunStore(defaults: defaults), sessionID: "s1")
+        let d = day(2026, 11, 4)
+
+        // First add: the session's one "Added".
+        model.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve", "Windbreaker"], day: d))
+        XCTAssertEqual(model.cueCount, 1)
+        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: "Now"))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: state(of: model)),
+            "Added Overland Park, KS, Now")
+
+        // Place + kit change: narration-from-diff — "Update to"
+        // the new entry's payload, never a second "Added".
+        model.recordSettled(entry(
+            session: "s1", place: "New York, NY", feels: 72,
+            items: ["Tee", "Shorts"], day: d))
+        XCTAssertEqual(model.cueCount, 2)
+        XCTAssertEqual(state(of: model), .updated(payload: "Tee"))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: state(of: model)),
+            "Update to Tee")
+
+        // Place-only change (same kit): still an update — the
+        // bar must never announce a place home has moved past,
+        // and never mint a fresh "Added Miami".
+        model.recordSettled(entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tee", "Shorts"], day: d))
+        XCTAssertEqual(model.cueCount, 3)
+        XCTAssertEqual(state(of: model), .updated(payload: "Tee"))
+        XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
+    }
+
+    func testClassifierPlaceMoveIsANarratedUpdate_NotSilent() {
+        let d = day(2026, 11, 4)
+        let overlandPark = entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Tee", "Shorts"], day: d)
+        let miamiSameKit = entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tee", "Shorts"], day: d)
+        XCTAssertEqual(
+            WearIveRunLandingClassifier.classify(existing: overlandPark, incoming: miamiSameKit),
+            .placeUpdated)
+        // Weather-only at the same place stays silent (D-07).
+        let miamiWarmer = entry(
+            session: "s1", place: "Miami, FL", feels: 92,
+            items: ["Tee", "Shorts"], day: d)
+        XCTAssertEqual(
+            WearIveRunLandingClassifier.classify(existing: miamiSameKit, incoming: miamiWarmer),
+            .silentUpdate)
+    }
+
+    @MainActor
+    func testWeatherOnlySettleInSessionUpdatesInPlaceSilently() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let model = WearIveRunCollectionModel(
+            store: WearIveRunStore(defaults: defaults), sessionID: "s1")
+        let d = day(2026, 11, 4)
+        model.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve", "Windbreaker"], day: d, hero: "hero-1"))
+        // Same place, same kit; numbers and hero settle again.
+        model.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 50,
+            items: ["Light Long Sleeve", "Windbreaker"], day: d, hero: "hero-2"))
+        XCTAssertEqual(model.entries.count, 1)
+        XCTAssertEqual(model.sessionEntry()?.feelsLikeF, 50)
+        XCTAssertEqual(model.sessionEntry()?.heroImageReference, "hero-2")
+        // Recorded, but no cue and no narration flip: an async
+        // landing is not a driver.
+        XCTAssertEqual(model.cueCount, 1)
+        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: "Now"))
+    }
+
+    // MARK: Pinned == chapter identity (X-5b)
+
+    func testPinnedEntryIsTheSessionsChapterEntry_AndLiftingItLeavesNoDuplicate() {
+        let today = day(2026, 11, 4)
+        let yesterday = day(2026, 11, 3)
+        let olderMiami = entry(
+            session: "s0", place: "Miami, FL", feels: 88,
+            items: ["Tee"], day: yesterday)
+        let sessionMiami = entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"], day: today)
+        let newYork = entry(
+            session: "s0", place: "New York, NY", feels: 72,
+            items: ["Tee"], day: yesterday)
+        let entries = [sessionMiami, olderMiami, newYork]
+
+        // The pin IS the session's chapter entry: the Miami
+        // chapter's cover is the very entry the pin presents.
+        let pinned = WearIveRunCollection.sessionEntry(from: entries, sessionID: "s1")
+        XCTAssertEqual(pinned, sessionMiami)
+        let allChapters = WearIveRunCollection.chapters(
+            from: entries, filter: .all, calendar: utcCalendar)
+        let miamiChapter = allChapters.first { $0.placeName == "Miami, FL" }
+        XCTAssertEqual(miamiChapter?.cover.id, pinned?.id)
+
+        // Lifted out (what the collection view renders), the
+        // entry appears in NO chapter — it is presented exactly
+        // once, as the pin — while its chapter survives on its
+        // remaining session.
+        let unpinned = entries.filter { $0.id != pinned?.id }
+        let chapters = WearIveRunCollection.chapters(
+            from: unpinned, filter: .all, calendar: utcCalendar)
+        XCTAssertFalse(chapters.flatMap(\.entries).contains { $0.id == pinned?.id })
+        let miamiAfter = chapters.first { $0.placeName == "Miami, FL" }
+        XCTAssertEqual(miamiAfter?.cover, olderMiami)
+        XCTAssertEqual(chapters.count, 2, "chapters still group by location")
+    }
+
+    // MARK: A new session starts a new entry
+
+    @MainActor
+    func testNewSessionStartsANewEntry_PreviousSessionUntouched() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let d = day(2026, 11, 4)
+        let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        let miami = entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"], day: d)
+        first.recordSettled(miami)
+
+        // A new process ≈ a new model over the same store.
+        let second = WearIveRunCollectionModel(store: store, sessionID: "s2")
+        XCTAssertNil(second.sessionEntry(), "the new session owns no entry yet")
+        let overlandPark = entry(
+            session: "s2", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve"], day: d)
+        second.recordSettled(overlandPark)
+
+        XCTAssertEqual(store.entries.count, 2)
+        XCTAssertEqual(first.sessionEntry(), miami, "the prior session's entry is untouched")
+        XCTAssertEqual(second.sessionEntry(), overlandPark)
+        XCTAssertEqual(second.cueCount, 1, "the new session's first settle is a creation")
+        XCTAssertEqual(state(of: second), .added(place: "Overland Park, KS", moment: "Now"))
+    }
+
+    // MARK: The dock presents the current session's entry
+
+    @MainActor
+    func testDockPresentsCurrentSessionEntryWhileADifferentPlaceIsViewed() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        let d = day(2026, 11, 4)
+        // The W-15 walkthrough scenario, session-keyed: the
+        // session's entry settled at Kansas City; the user is
+        // now VIEWING New York.
+        let kansasCity = entry(
+            session: "s1", place: "Kansas City, MO", feels: 45,
+            items: ["Light Long Sleeve", "Light Tights"], day: d)
+        model.recordSettled(kansasCity)
+
+        XCTAssertEqual(model.sessionEntry(), kansasCity)
+        XCTAssertNil(
+            store.todaysEntry(placeName: "New York, NY", today: d, calendar: utcCalendar),
+            "the viewed place has no entry — the dock must not depend on it")
+        // The narration names the SESSION ENTRY's place.
+        XCTAssertEqual(state(of: model), .added(place: "Kansas City, MO", moment: "Now"))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: state(of: model)),
+            "Added Kansas City, MO, Now")
+    }
+
+    @MainActor
+    func testTrashRemovesTheSessionEntry_AndALaterSettleRecreatesIt() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        let d = day(2026, 11, 4)
+        model.recordSettled(entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"], day: d))
+        // Browsing has since moved the VIEW to New York; trash
+        // still removes the presented (session) entry.
+        model.removeSessionEntry()
+        XCTAssertTrue(model.entries.isEmpty)
+        XCTAssertEqual(state(of: model), .preAdd)
+        // A later settle in the same session re-creates it —
+        // a fresh "Added", as after any trash.
+        model.recordSettled(entry(
+            session: "s1", place: "Miami, FL", feels: 91,
+            items: ["Tank Top"], day: d))
+        XCTAssertEqual(model.entries.count, 1)
+        XCTAssertEqual(state(of: model), .added(place: "Miami, FL", moment: "Now"))
+    }
+
+    // MARK: Legacy rows — decoded, preserved, never adopted
+
+    func testLegacyEntriesDecodeUntouched_AndAreNeverAdopted() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let d = day(2026, 11, 4)
+        // A payload as the pre-session build wrote it: no
+        // sessionID key at all (dates encode as seconds since
+        // the reference date under the default strategy).
+        let legacyJSON = """
+        [{"dayStart":\(d.timeIntervalSinceReferenceDate),\
+        "placeName":"Miami, FL","feelsLikeF":88,"actualF":90,\
+        "condition":"Clear","itemNames":["Tee"],"itemKeys":["tee"],\
+        "heroImageReference":"hero-legacy"}]
+        """
+        defaults.set(Data(legacyJSON.utf8), forKey: "wearIveRun.entries.v1")
+
+        let store = WearIveRunStore(defaults: defaults)
+        XCTAssertEqual(store.entries.count, 1, "legacy history must load, not wipe")
+        let legacy = store.entries[0]
+        XCTAssertEqual(legacy.sessionID, "")
+        XCTAssertEqual(legacy.placeName, "Miami, FL")
+        XCTAssertEqual(legacy.id, "\(Int(d.timeIntervalSince1970))|miami, fl")
+
+        // A new session settling the same place on the same day
+        // does NOT adopt or merge the legacy row: the session
+        // mints its own entry and the legacy row stands.
+        store.record(entry(
+            session: "s-new", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"], day: d))
+        XCTAssertEqual(store.entries.count, 2)
+        XCTAssertTrue(store.entries.contains(legacy))
+        // Both live in the one Miami chapter (grouped by
+        // location); its day count counts DAYS, not sessions.
+        let chapters = WearIveRunCollection.chapters(
+            from: store.entries, filter: .all, calendar: utcCalendar)
+        XCTAssertEqual(chapters.count, 1)
+        XCTAssertEqual(chapters[0].entries.count, 2)
+        XCTAssertEqual(chapters[0].dayCount, 1)
+    }
+
+    // MARK: Source pins (view-layer wiring)
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    func testSessionWiring_sourcePins() throws {
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        // Recording stamps the model's session identity.
+        XCTAssertTrue(home.contains("sessionID: collectionModel.sessionID"),
+                      "every recording must carry the current session's identity")
+        // The dock presents the session entry and trashes it by
+        // session, not by viewed place or date.
+        XCTAssertTrue(home.contains("collectionModel.sessionEntry()"))
+        XCTAssertTrue(home.contains("collectionModel.removeSessionEntry()"))
+        // The collection pins the session entry and lifts it out
+        // of the chapters.
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        XCTAssertTrue(collection.contains("model.sessionEntry()"),
+                      "the pin must be the current session's entry")
+        XCTAssertTrue(collection.contains("$0.id != pin.id"),
+                      "the pinned entry must be lifted out of the chapter arithmetic")
+        XCTAssertFalse(collection.contains("todaysEntries"),
+                       "the date-keyed pin was the X-5 defect's other half")
     }
 }

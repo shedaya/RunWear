@@ -8,9 +8,9 @@ struct WeatherOutfitView: View {
     // .largeTitle (the RW-6.3 pattern the hero numeral used), capped
     // by the text's dynamicTypeSize limit at the call site.
     @ScaledMetric(relativeTo: .largeTitle) private var sheetNumeralSize: CGFloat = 80
-    /// RW-26 "Wear I've Run": the collection model — today's entry
-    /// drives the mini bar dock; the store behind it is the
-    /// collection itself.
+    /// RW-26 "Wear I've Run": the collection model — the current
+    /// session's entry drives the mini bar dock (GEN-3 session
+    /// rule); the store behind it is the collection itself.
     @StateObject private var collectionModel = WearIveRunCollectionModel()
     @State private var showCollection = false
     /// End-of-scroll signal for the mini bar's full expression,
@@ -108,7 +108,7 @@ struct WeatherOutfitView: View {
             }
             // RW-25: the "Wear I've Run" mini bar dock — attached
             // to the home scroll's container; renders only when the
-            // state is not .preAdd (today's entry exists).
+            // state is not .preAdd (the session's entry exists).
             .safeAreaInset(edge: .bottom) {
                 miniBarDock
             }
@@ -260,8 +260,8 @@ struct WeatherOutfitView: View {
             recordTodaysEntry()
         }
         // A re-settled recommendation (refresh, hour change back to
-        // now, outfit change) updates today's entry — the saved
-        // entry is the day's last settled version.
+        // now, outfit change) updates the session's entry in place
+        // — the saved entry is the session's last settled version.
         .onChange(of: recommendation.allItems.map(\.id)) { _, _ in
             recordTodaysEntry()
         }
@@ -653,18 +653,23 @@ struct WeatherOutfitView: View {
             || showCollection || showFeedbackSheet
     }
 
-    /// The mini bar dock: today's entry drives the bar — absent
-    /// pre-entry, narrating once the day's first generation lands.
+    /// The mini bar dock: the session's entry drives the bar —
+    /// absent pre-entry, narrating once the session's first
+    /// generation lands.
     @ViewBuilder private var miniBarDock: some View {
-        // W-15 (the presentation half): the dock presents
-        // TODAY'S entry by date — the entry's own place is what
-        // the narration names, so the element survives the user
-        // browsing another place (Android: "Added Kansas City,
-        // MO, Now" still docked while viewing New York). The
-        // pre-fix place-keyed lookup against the VIEWED place
-        // returned nil for the placeholder-filed entry forever,
-        // and for any entry whose place differed from the view.
-        let todays = collectionModel.todaysEntry()
+        // GEN-3 (the presentation half, superseding W-15's
+        // by-date key): the dock presents the CURRENT SESSION's
+        // entry — the entry's own place is what the narration
+        // names, so the element survives the user browsing
+        // another place, and it can never announce a place the
+        // session has moved past, because the session's one
+        // entry always holds the last settled place. (W-15's
+        // history: the original viewed-place lookup returned nil
+        // for the placeholder-filed entry forever, and for any
+        // entry whose place differed from the view; gen-2 keyed
+        // the lookup by date instead; the session rule keys it
+        // by session.)
+        let todays = collectionModel.sessionEntry()
         // WS-4: the state derives both narration payloads from
         // the entry itself (simple place for "Added", first kit
         // item for "Update to") — the view supplies no payload
@@ -686,23 +691,27 @@ struct WeatherOutfitView: View {
                 isDimmedBySheet: anyHomeSheetPresented,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
-                    // Trash deletes the PRESENTED entry (its own
-                    // day + place), not an entry at the viewed
-                    // place — the two differ once the user has
-                    // browsed elsewhere.
-                    if let todays {
-                        collectionModel.removeToday(placeName: todays.placeName, today: todays.dayStart)
+                    // Trash deletes the PRESENTED entry — the
+                    // session's own entry — not an entry at the
+                    // viewed place; the two differ once the user
+                    // has browsed elsewhere.
+                    if todays != nil {
+                        collectionModel.removeSessionEntry()
                     }
                 }
             )
         }
     }
 
-    /// Automatic entry creation (checklist §C): the day's first
-    /// generation settles an entry; later settles the same day
-    /// replace it (the saved entry is the day's LAST settled
-    /// version). Only the viewed-now day at the current place
-    /// records — browsing another day or hour never writes.
+    /// Automatic entry creation (checklist §C; GEN-3 session
+    /// rule): the session's first generation settles its entry;
+    /// every later settle in the session — a new place, new
+    /// weather — REPLACES that entry in place (the saved entry
+    /// is the session's LAST settled version; updates never
+    /// accumulate). Only the viewed-now day records — browsing
+    /// another day never writes; the entry carries the current
+    /// session's identity, which is what makes the replacement
+    /// land on the same entry across place changes.
     private func recordTodaysEntry() {
         guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
         // W-15: never record under a placeholder. Until the
@@ -728,7 +737,8 @@ struct WeatherOutfitView: View {
             itemKeys: recommendation.allItems.map(\.key),
             heroImageReference: viewModel.heroImageUrl
                 ?? viewModel.fallbackImageUrl
-                ?? defaultFallbackUrl
+                ?? defaultFallbackUrl,
+            sessionID: collectionModel.sessionID
         )
         collectionModel.recordSettled(entry)
     }
