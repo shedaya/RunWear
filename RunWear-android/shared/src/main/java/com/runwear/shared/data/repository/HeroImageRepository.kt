@@ -111,9 +111,9 @@ class HeroImageRepository @Inject constructor() {
         try {
             val searchResult = getRandomImage(combination, outfit)
             val result = if (searchResult.image == null) {
-                getFallbackImage(combination)
+                getFallbackImage(combination, outfit)
             } else {
-                poolResult(combination, searchResult)
+                poolResult(combination, searchResult, outfit)
             }
             // WS-7 / RW-26(c): every serve records its source at serve
             // time (pool / bundled-fallback; a rotation-floor pick of
@@ -126,7 +126,7 @@ class HeroImageRepository @Inject constructor() {
             result
         } catch (e: Exception) {
             // On error, return fallback
-            val result = getFallbackImage(combination)
+            val result = getFallbackImage(combination, outfit)
             HeroServeTelemetry.emitForResult(result, combination, trigger = "bundled-fallback-error")
             result
         }
@@ -141,9 +141,10 @@ class HeroImageRepository @Inject constructor() {
      */
     private fun poolResult(
         combination: OutfitCombination,
-        searchResult: ImageSearchResult
+        searchResult: ImageSearchResult,
+        outfit: OutfitRecommendation
     ): HeroImageResult {
-        val image = searchResult.image ?: return getFallbackImage(combination)
+        val image = searchResult.image ?: return getFallbackImage(combination, outfit)
         val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
         // Full candidate list for the refresh control: every servable
         // pool row at the winning cascade level, in pool order. For the
@@ -157,22 +158,16 @@ class HeroImageRepository @Inject constructor() {
                 servedCombinationId = row.combinationId
             )
         }
-        val candidates = if (HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
-            // RW-26: the floor candidate is resolved gender-aware, so the
-            // curated photo that joins the rotation is never an
-            // opposite-gender subject for this combination's (already
-            // UNISEX-resolved) gender.
-            val floorUrl = getWeatherAwareFallback(combination.tempBracket, heroWeather, combination.genderPreference)
-            if (poolCandidates.any { it.imageUrl == floorUrl }) {
-                poolCandidates
-            } else {
-                poolCandidates + com.runwear.shared.domain.model.HeroCandidate(
-                    imageUrl = floorUrl,
-                    thumbnailUrl = floorUrl,
-                    imageRowId = null,
-                    servedCombinationId = combination.id
-                )
-            }
+        // GEN-2 A2 (W-4): the floor candidate joins the rotation ONLY
+        // when its adjudicated garments match this prescription
+        // (gatedFloorCandidate) — pre-fix it entered unchecked, so the
+        // rotation could deal the bracket's cold-end photo (COOL:
+        // headband + gloves) under a prescription carrying neither.
+        val floorCandidate = gatedFloorCandidate(combination, outfit)
+        val candidates = if (floorCandidate != null &&
+            poolCandidates.none { it.imageUrl == floorCandidate.imageUrl }
+        ) {
+            poolCandidates + floorCandidate
         } else {
             poolCandidates
         }
@@ -351,23 +346,75 @@ class HeroImageRepository @Inject constructor() {
 
     /**
      * Get a fallback image when no cached image is available.
-     * Uses bundled pool-derived images categorized by temperature bracket AND weather condition.
-     * This is a 2D matrix: 6 temp brackets × 4 weather conditions = 24 image categories.
+     *
+     * GEN-2 A2 (W-4/W-5): the resolution is GATED by the exact
+     * prescription — it walks the bundled matrix through
+     * [com.runwear.shared.domain.model.HeroImageSelector.gatedFallbackUrl],
+     * which serves only an asset whose adjudicated garments match
+     * [outfit]. The pre-fix resolver keyed on bracket × weather ×
+     * gender alone, and the matrix's assets are exact at their
+     * bracket's COLD-END prescription (COOL's wear a headband and
+     * gloves), so any warmer point prescription in the bracket was
+     * silently served a photo wearing garments it did not prescribe
+     * — and a within-bracket prescription change could never change
+     * the photo, its key having no prescription component. When no
+     * bundled asset matches, the result carries NO image (the
+     * gradient state) — never a contradicting photo.
      */
-    private fun getFallbackImage(combination: OutfitCombination): HeroImageResult {
+    private fun getFallbackImage(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): HeroImageResult {
         val weatherCondition = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        // RW-26: gender-aware — the combination carries the resolved
-        // hero gender, so the last-resort photo matches it (see the
-        // subject table on the resolver below).
-        val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition, combination.genderPreference)
+        val url = com.runwear.shared.domain.model.HeroImageSelector.gatedFallbackUrl(
+            combination.tempBracket, weatherCondition, combination.genderPreference, outfit
+        )
 
         return HeroImageResult(
             imageUrl = url,
             thumbnailUrl = url,
             combinationId = combination.id,
             serveSource = com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
-            fallbackProvenance = com.runwear.shared.domain.model.HeroImageSelector.fallbackProvenance(url),
-            fallbackAssetFile = com.runwear.shared.domain.model.HeroImageSelector.fallbackAssetFile(url)
+            fallbackProvenance = url?.let {
+                com.runwear.shared.domain.model.HeroImageSelector.fallbackProvenance(it)
+            },
+            fallbackAssetFile = url?.let {
+                com.runwear.shared.domain.model.HeroImageSelector.fallbackAssetFile(it)
+            }
+        )
+    }
+
+    /**
+     * GEN-2 A2 (W-4): the rotation-floor candidate for one
+     * resolution, or null when the floor may not deal. The floor
+     * stands (HeroPoolPolicy: floor cells only) and the candidate is
+     * resolved gender-aware as before (RW-26) — but it joins the
+     * rotation ONLY when the asset's adjudicated garments match the
+     * current prescription, under the same point-grain gate as every
+     * other serve. Internal (not private) so the gate is unit-tested
+     * without a Supabase client.
+     */
+    internal fun gatedFloorCandidate(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): com.runwear.shared.domain.model.HeroCandidate? {
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        if (!HeroPoolPolicy.isFloorCell(combination.tempBracket, heroWeather, combination.timeOfDay)) {
+            return null
+        }
+        val floorUrl = getWeatherAwareFallback(
+            combination.tempBracket, heroWeather, combination.genderPreference
+        )
+        if (!com.runwear.shared.domain.model.HeroImageSelector
+                .fallbackMatchesPrescription(floorUrl, outfit)
+        ) {
+            return null
+        }
+        return com.runwear.shared.domain.model.HeroCandidate(
+            imageUrl = floorUrl,
+            thumbnailUrl = floorUrl,
+            imageRowId = null,
+            servedCombinationId = combination.id
         )
     }
 

@@ -14,6 +14,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -126,6 +131,30 @@ object HeroSheetFormat {
 }
 
 /**
+ * GEN-2 A2 (W-7): the hero numeral's atomicity rule. The numeral is a
+ * readout (WS-2: no counter, no tween in the format layer), yet the
+ * walkthrough caught it rendering through malformed partial glyphs
+ * mid-transition after a location switch — the value changed hands
+ * while the surface around it was still in flight. This policy makes
+ * the swap atomic BY CONSTRUCTION: while a transition is in flight
+ * the numeral on screen is the previously committed value, WHOLE;
+ * when the transition commits, it becomes the new value, WHOLE. The
+ * function's codomain is exactly {held, candidate} — no intermediate
+ * or blended string can exist, which is the strongest form of the
+ * rule a unit test can pin.
+ */
+object HeroNumeralPolicy {
+
+    /**
+     * The numeral to render. [held] is the last committed numeral,
+     * [candidate] the numeral the current state would produce,
+     * [transitionInFlight] whether a fetch/switch is still landing.
+     */
+    fun shown(held: String?, candidate: String?, transitionInFlight: Boolean): String? =
+        if (transitionInFlight) held ?: candidate else candidate ?: held
+}
+
+/**
  * RW-25: the home SHEET block — the lower zone of the two-zone home.
  *
  * In the stacked layouts this block overlaps the photo's foot by
@@ -154,6 +183,12 @@ fun HeroSheetBlock(
     onWeatherPillClick: (String) -> Unit = {},
     overlapsPhoto: Boolean = true,
     modifier: Modifier = Modifier,
+    /**
+     * GEN-2 A2 (W-7): true while a fetch/switch transition is in
+     * flight — the hero numeral holds its last committed value whole
+     * until the transition lands (see [HeroNumeralPolicy]).
+     */
+    holdNumeral: Boolean = false,
     /**
      * WS-2: the render-time unit projection. Every figure in this
      * block (numeral, caption, wind pill) converts from the canonical
@@ -213,9 +248,22 @@ fun HeroSheetBlock(
         // WS-2 (T-1 ruling): the numeral is display-only — no tap
         // target, no haptic, no counter animation. The unit is
         // changed in Settings only.
+        // GEN-2 A2 (W-7): the rendered string passes through
+        // HeroNumeralPolicy — held whole during a transition, swapped
+        // whole at the commit, never a partial or blended rendering.
+        val candidateNumeral = weather?.let { HeroSheetFormat.heroNumeral(it, temperatureUnit) }
+        var heldNumeral by remember { mutableStateOf<String?>(null) }
+        val shownNumeral = HeroNumeralPolicy.shown(
+            held = heldNumeral,
+            candidate = candidateNumeral,
+            transitionInFlight = holdNumeral
+        )
+        LaunchedEffect(candidateNumeral, holdNumeral) {
+            if (!holdNumeral && candidateNumeral != null) heldNumeral = candidateNumeral
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = weather?.let { HeroSheetFormat.heroNumeral(it, temperatureUnit) } ?: "0°",
+                text = shownNumeral ?: "0°",
                 style = TextStyle(
                     fontFamily = FontFamily.Default,
                     fontWeight = FontWeight.SemiBold,

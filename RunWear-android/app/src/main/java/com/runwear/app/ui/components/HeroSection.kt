@@ -333,6 +333,25 @@ fun HeroSection(
         previousHeroIsPersonal = heroIsPersonal
     }
 
+    // GEN-2 A2 (W-6): the photo layers. The pre-fix hero was ONE
+    // painter bound straight to heroImageUrl: the moment the URL
+    // changed (a location switch committing the new place's photo),
+    // the painter reset to Loading and painted NOTHING — the band sat
+    // empty for ~1 s, then the new photo faded in over the bare page
+    // background ("through white"). Now the displayed photo is the
+    // BASE layer and a new target becomes an INCOMING layer above it:
+    // the base stays whole until the incoming image has fully decoded,
+    // then the incoming fades in OVER it (or cuts, on a person change)
+    // and is promoted to base. No frame is ever empty mid-switch, and
+    // no fade ever passes through the background. The layer arithmetic
+    // is HeroLayerPolicy (pure, unit-tested).
+    var heroLayers by remember {
+        mutableStateOf(HeroLayerPolicy.Layers(baseUrl = null, incomingUrl = null))
+    }
+    LaunchedEffect(heroImageUrl) {
+        heroLayers = HeroLayerPolicy.onTarget(heroLayers, heroImageUrl)
+    }
+
     // Decode the hero at display size, not at the source's full 800×1200.
     val density = LocalDensity.current
     val heroWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
@@ -390,52 +409,20 @@ fun HeroSection(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                if (heroImageUrl != null) {
-                    // WS-1 (Part 1 §1.1; D-12 home half): the
-                    // crossfade begins ONLY after the incoming image
-                    // has fully decoded. The painter's alpha stays 0
-                    // until its state is Success — no placeholder, no
-                    // broken-image glyph, no half-decoded frame is
-                    // ever painted. In: 300 ms; out (on swap away):
-                    // 300 ms (§1.1; WS-9 fix P-1); a person change CUTS per
-                    // HeroTransitionPolicy. The crop anchor is the
-                    // parallax bias (top at rest — D-23 geometry);
-                    // there is NO extra 1.1× zoom (the pre-WS-1 zoom
-                    // cropped the served frame arbitrarily).
-                    val heroPainter = coil.compose.rememberAsyncImagePainter(
-                        model = ImageRequest.Builder(context)
-                            .data(heroImageUrl)
-                            .size(heroWidthPx, heroHeightPx)
-                            .crossfade(false)
-                            .build()
-                    )
-                    val heroDecoded =
-                        heroPainter.state is coil.compose.AsyncImagePainter.State.Success
-                    val heroAlpha by androidx.compose.animation.core.animateFloatAsState(
-                        targetValue = if (heroDecoded) 1f else 0f,
-                        animationSpec = androidx.compose.animation.core.tween(
-                            durationMillis = when {
-                                !crossfadeHero -> 0
-                                heroDecoded -> HeroMotionTokens.HERO_CROSSFADE_IN_MS
-                                else -> HeroMotionTokens.HERO_CROSSFADE_OUT_MS
-                            }
-                        ),
-                        label = "heroCrossfade"
-                    )
-                    androidx.compose.foundation.Image(
-                        painter = heroPainter,
-                        contentDescription = generateHeroAltText(weather, outfit),
-                        contentScale = ContentScale.Crop,
-                        alignment = androidx.compose.ui.BiasAlignment(
-                            horizontalBias = 0f,
-                            verticalBias = HeroScrollHandoff.parallaxAnchorBias(handoff)
-                        ),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = heroAlpha }
-                    )
-                } else {
-                    // Fallback gradient when no image
+                // GEN-2 A2 (W-6): layered hero (see heroLayers above).
+                // The gradient is the ground layer whenever no photo
+                // is on screen as base — a true first load, or a
+                // resolution that truthfully produced no photo. The
+                // BASE photo paints whole above it; the INCOMING photo
+                // fades in over the base only once fully decoded
+                // (WS-1 §1.1: no placeholder, no broken-image glyph,
+                // no half-decoded frame is ever painted; a person
+                // change CUTS per HeroTransitionPolicy), then promotes
+                // to base. The crop anchor is the parallax bias (top
+                // at rest — D-23 geometry); there is NO extra 1.1×
+                // zoom (the pre-WS-1 zoom cropped the served frame
+                // arbitrarily).
+                if (heroLayers.baseUrl == null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -447,6 +434,31 @@ fun HeroSection(
                                     )
                                 )
                             )
+                    )
+                }
+                heroLayers.baseUrl?.let { baseUrl ->
+                    HeroPhotoLayer(
+                        url = baseUrl,
+                        widthPx = heroWidthPx,
+                        heightPx = heroHeightPx,
+                        alpha = 1f,
+                        contentDescription = generateHeroAltText(weather, outfit),
+                        verticalBias = HeroScrollHandoff.parallaxAnchorBias(handoff)
+                    )
+                }
+                heroLayers.incomingUrl?.let { incomingUrl ->
+                    HeroIncomingPhotoLayer(
+                        url = incomingUrl,
+                        widthPx = heroWidthPx,
+                        heightPx = heroHeightPx,
+                        crossfade = crossfadeHero,
+                        contentDescription = generateHeroAltText(weather, outfit),
+                        verticalBias = HeroScrollHandoff.parallaxAnchorBias(handoff),
+                        onReady = { readyUrl ->
+                            if (heroLayers.incomingUrl == readyUrl) {
+                                heroLayers = HeroLayerPolicy.onIncomingReady(heroLayers)
+                            }
+                        }
                     )
                 }
             }
@@ -650,6 +662,142 @@ private fun HeroRefreshChip(
                 .size(16.dp)
         )
     }
+}
+
+/**
+ * GEN-2 A2 (W-6): the hero photo's layer arithmetic. [baseUrl] is the
+ * photo on screen, painted whole; [incomingUrl] is the photo being
+ * transitioned to, painted above the base only after it has fully
+ * decoded, and promoted to base when its fade (or cut) completes.
+ * The invariants the walkthrough defect violated, stated as rules:
+ *  - a new target NEVER displaces the base before it is ready —
+ *    [onTarget] only registers the incoming layer;
+ *  - the base changes ONLY through [onIncomingReady] (the incoming
+ *    photo decoded and its transition finished) or through a null
+ *    target (a resolution that produced no photo: the gradient state
+ *    is the truthful paint, reached only once resolution completed —
+ *    while a resolution is in flight the view model keeps the old
+ *    URL in state, so a null target never means "still loading");
+ *  - re-targeting mid-transition replaces the incoming layer, never
+ *    the base.
+ * Pure so the rules are unit-tested without composition.
+ */
+object HeroLayerPolicy {
+
+    data class Layers(
+        val baseUrl: String?,
+        val incomingUrl: String?
+    )
+
+    /** Register [targetUrl] as the photo to transition to. */
+    fun onTarget(layers: Layers, targetUrl: String?): Layers = when {
+        targetUrl == null -> Layers(baseUrl = null, incomingUrl = null)
+        targetUrl == layers.baseUrl -> Layers(baseUrl = layers.baseUrl, incomingUrl = null)
+        targetUrl == layers.incomingUrl -> layers
+        else -> Layers(baseUrl = layers.baseUrl, incomingUrl = targetUrl)
+    }
+
+    /** The incoming photo decoded and finished its transition: promote it. */
+    fun onIncomingReady(layers: Layers): Layers =
+        if (layers.incomingUrl != null) {
+            Layers(baseUrl = layers.incomingUrl, incomingUrl = null)
+        } else {
+            layers
+        }
+}
+
+/**
+ * One decoded hero photo painted whole at a fixed alpha — the BASE
+ * layer of the GEN-2 A2 layered hero. (Its bitmap was decoded as the
+ * incoming layer before promotion, so Coil serves it from cache.)
+ */
+@Composable
+private fun HeroPhotoLayer(
+    url: String,
+    widthPx: Int,
+    heightPx: Int,
+    alpha: Float,
+    contentDescription: String,
+    verticalBias: Float
+) {
+    val context = LocalContext.current
+    val painter = coil.compose.rememberAsyncImagePainter(
+        model = ImageRequest.Builder(context)
+            .data(url)
+            .size(widthPx, heightPx)
+            .crossfade(false)
+            .build()
+    )
+    androidx.compose.foundation.Image(
+        painter = painter,
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
+        alignment = androidx.compose.ui.BiasAlignment(
+            horizontalBias = 0f,
+            verticalBias = verticalBias
+        ),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha }
+    )
+}
+
+/**
+ * The INCOMING layer of the GEN-2 A2 layered hero: invisible until
+ * its image has fully decoded, then it fades in over the base photo
+ * (300 ms, [HeroMotionTokens]) — or cuts, when [crossfade] is false
+ * (a person change, [HeroTransitionPolicy]) — and reports readiness
+ * so the caller can promote it to base. It never paints a loading or
+ * half-decoded frame, and because it fades OVER the base, the
+ * transition never passes through the page background.
+ */
+@Composable
+private fun HeroIncomingPhotoLayer(
+    url: String,
+    widthPx: Int,
+    heightPx: Int,
+    crossfade: Boolean,
+    contentDescription: String,
+    verticalBias: Float,
+    onReady: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val painter = coil.compose.rememberAsyncImagePainter(
+        model = ImageRequest.Builder(context)
+            .data(url)
+            .size(widthPx, heightPx)
+            .crossfade(false)
+            .build()
+    )
+    val decoded = painter.state is coil.compose.AsyncImagePainter.State.Success
+    val alpha = remember(url) { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(url, decoded) {
+        if (decoded) {
+            if (crossfade) {
+                alpha.animateTo(
+                    1f,
+                    androidx.compose.animation.core.tween(
+                        HeroMotionTokens.HERO_CROSSFADE_IN_MS
+                    )
+                )
+            } else {
+                alpha.snapTo(1f)
+            }
+            onReady(url)
+        }
+    }
+    androidx.compose.foundation.Image(
+        painter = painter,
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
+        alignment = androidx.compose.ui.BiasAlignment(
+            horizontalBias = 0f,
+            verticalBias = verticalBias
+        ),
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha.value }
+    )
 }
 
 /**

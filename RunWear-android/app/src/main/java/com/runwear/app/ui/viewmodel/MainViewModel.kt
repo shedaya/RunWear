@@ -211,6 +211,43 @@ internal fun nextHeroInRotation(
     return rotation[(currentIdx + 1) % rotation.size]
 }
 
+/**
+ * GEN-2 A2 (W-6): the ONE state commit that lands a fetch's results.
+ * The fetched weather, outfit and forecast, the location-frame anchor,
+ * and — when a place switch is in flight — the pending place's name
+ * all swap in this single copy, so no rendered frame can pair the new
+ * place with the old place's weather (the walkthrough's "New York,
+ * NY" over Kansas City's 44° frame). With no place pending, the place
+ * fields carry over untouched and only the conditions move. Pure, so
+ * the pairing invariant is unit-tested without the ViewModel: the
+ * returned state is the only state a switch ever produces mid-flight —
+ * there is no intermediate state with the new name and old weather.
+ *
+ * NOW re-anchors on the API's own location-local current time from
+ * this response; an explicit selection keeps its wall-clock moment
+ * and re-anchors only [MainUiState.locationNow] to [locationNowAnchor].
+ */
+internal fun MainUiState.withFetchedConditions(
+    weather: WeatherConditions,
+    outfit: OutfitRecommendation,
+    forecast: List<HourlyForecast>,
+    pendingPlace: com.runwear.shared.domain.model.SimplePlace?,
+    locationNowAnchor: LocalDateTime,
+    nowSelected: Boolean
+): MainUiState {
+    val weatherNow = weather.dateTime.toJavaLocalDateTime()
+    return copy(
+        isLoading = false,
+        weather = weather,
+        outfit = outfit,
+        hourlyForecast = forecast,
+        locationName = pendingPlace?.display ?: locationName,
+        simplePlace = pendingPlace ?: simplePlace,
+        locationNow = if (nowSelected) weatherNow else locationNowAnchor,
+        selectedDateTime = if (nowSelected) weatherNow else selectedDateTime
+    )
+}
+
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val weatherRepository: WeatherRepository,
@@ -245,6 +282,18 @@ class MainViewModel @Inject constructor(
 
     /** The in-flight hero-image resolution (see [resolveHeroImage]). */
     private var heroResolveJob: Job? = null
+
+    /**
+     * GEN-2 A2 (W-6): a place the user has switched to whose weather
+     * has not landed yet. selectLocation / selectManualLocation record
+     * it here instead of writing the name into state; fetchWeather's
+     * success commit (withFetchedConditions) moves the name, the
+     * weather and the frame anchor in ONE state write. Until then the
+     * screen keeps showing the previous place whole — name, weather
+     * and photo in agreement.
+     */
+    @Volatile
+    private var pendingPlace: com.runwear.shared.domain.model.SimplePlace? = null
 
     /** The widget's last-good store — the main screen seeds from it at startup. */
     private val lastGoodStore by lazy { WidgetLastGoodStore(appContext) }
@@ -710,14 +759,15 @@ class MainViewModel @Inject constructor(
 
             // Re-anchor NOW in the location frame on every fetch: if the hour
             // rolled over since the last render, NOW follows the location clock.
+            // GEN-2 A2 (W-6): the anchor is computed LOCALLY and committed
+            // with the fetched conditions in the success write below — the
+            // pre-fix code wrote it to state up front, so during a place
+            // switch the screen transiently paired the new place's frame
+            // with the old place's weather (and selectLocation had already
+            // committed the new NAME — one frame literally read
+            // "New York, NY" over Kansas City's 44°). No state field that
+            // describes the place may move before its weather lands.
             val now = locationNow()
-            _uiState.update {
-                it.copy(
-                    locationNow = now,
-                    selectedDateTime = if (it.isNowSelected) now else it.selectedDateTime
-                )
-            }
-
             val dt = _uiState.value.selectedDateTime
             val nowSelected = _uiState.value.isNowSelected
 
@@ -770,18 +820,23 @@ class MainViewModel @Inject constructor(
                     onOutfitProduced(weather, outfit, countGeneration = true)
                     evaluateRatingMoment(keptThroughRefresh)
 
+                    // GEN-2 A2 (W-6): ONE commit carries the fetched
+                    // conditions AND the pending place (withFetchedConditions):
+                    // place name, weather values and the frame anchor swap
+                    // in the same state write, so no rendered frame can pair
+                    // the new place with the old place's weather.
+                    val placeToCommit = pendingPlace
                     _uiState.update {
-                        it.copy(
-                            isLoading = false,
+                        it.withFetchedConditions(
                             weather = weather,
                             outfit = outfit,
-                            hourlyForecast = forecast,
-                            // NOW re-anchors on the API's own location-local
-                            // current time from this response.
-                            locationNow = if (nowSelected) weather.dateTime.toJavaLocalDateTime() else it.locationNow,
-                            selectedDateTime = if (nowSelected) weather.dateTime.toJavaLocalDateTime() else it.selectedDateTime
+                            forecast = forecast,
+                            pendingPlace = placeToCommit,
+                            locationNowAnchor = now,
+                            nowSelected = nowSelected
                         )
                     }
+                    if (placeToCommit != null) pendingPlace = null
 
                     // Widget write-through (redesign spec §B.3.3): the app
                     // just loaded in the foreground, where location always
@@ -871,6 +926,10 @@ class MainViewModel @Inject constructor(
                     weather, outfit, gender,
                     frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, _uiState.value.comfortPreference)
                 ).also { selectorHero ->
+                    // GEN-2 A2: the gated selector may resolve to NO
+                    // photo (no bundled asset matches the prescription):
+                    // that is not a serve and files no serve record.
+                    if (selectorHero.imageUrl == null) return@also
                     // WS-7 / RW-26(c): the resolve-timeout substitution
                     // is a bundled serve the repository never emitted a
                     // record for — emit it here, with its trigger named.
@@ -1006,8 +1065,11 @@ class MainViewModel @Inject constructor(
         // WS-7: a bundled paint from the pool layer files its
         // diagnostics record at paint time (the repository emitted the
         // serve record when it resolved; this is the remote filing).
-        if (chosen.serveSource == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK ||
-            (chosen.imageUrl?.startsWith("file:///android_asset/hero_fallback/") == true)
+        // GEN-2 A2: a null URL is a resolved NO-photo (the garment
+        // gate exhausted) — nothing was served, nothing is filed.
+        if (chosen.imageUrl != null &&
+            (chosen.serveSource == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK ||
+                chosen.imageUrl.startsWith("file:///android_asset/hero_fallback/"))
         ) {
             recordHeroServeDiagnosticsOnly(chosen)
         }
@@ -1619,10 +1681,13 @@ class MainViewModel @Inject constructor(
                 place.display
             )
 
+            // GEN-2 A2 (W-6): the place is PENDING until its weather
+            // lands — the name commits with the fetched conditions in
+            // fetchWeather's success write, never before them.
+            pendingPlace = place
+
             _uiState.update {
                 it.copy(
-                    locationName = place.display,
-                    simplePlace = place,
                     locationSource = "manual",
                     showLocationSetup = false,
                     hasLocationPermission = true // Bypass permission screen for manual location
@@ -1648,10 +1713,12 @@ class MainViewModel @Inject constructor(
             // Persist manual location to DataStore
             preferencesRepository.saveManualLocation(lat, lon, place.display)
 
+            // GEN-2 A2 (W-6): pending until its weather lands (see
+            // selectLocation) — name, weather and frame commit together.
+            pendingPlace = place
+
             _uiState.update {
                 it.copy(
-                    locationName = place.display,
-                    simplePlace = place,
                     locationSource = "manual",
                     showLocationSetup = false,
                     hasLocationPermission = true // Bypass permission screen for manual location
