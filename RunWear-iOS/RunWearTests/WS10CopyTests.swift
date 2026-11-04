@@ -504,6 +504,7 @@ final class FirstLookHonestyTests: XCTestCase {
         let p = FirstLookPresentation.resolve(
             lookState: .ready,
             personalPhotoDisplayed: true,
+            personalImageLoaded: true,
             freeGenerationsUsed: used,
             freeAllowance: PersonalHeroStoreAllowance.value,
             isSubscribed: false
@@ -529,6 +530,7 @@ final class FirstLookHonestyTests: XCTestCase {
         let p = FirstLookPresentation.resolve(
             lookState: .ready,
             personalPhotoDisplayed: true,
+            personalImageLoaded: true,
             freeGenerationsUsed: 0,
             freeAllowance: 5,
             isSubscribed: false
@@ -540,23 +542,29 @@ final class FirstLookHonestyTests: XCTestCase {
 
     func testReadyPhaseMeterCountsDownFromTheSharedCounter() {
         let last = FirstLookPresentation.resolve(
-            lookState: .ready, personalPhotoDisplayed: true,
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
             freeGenerationsUsed: 5, freeAllowance: 5, isSubscribed: false)
         XCTAssertEqual(last.meterLine, "That was look 5 of your 5 free looks.")
         XCTAssertEqual(FreeLooksMeter.settingsLine(used: 5, allowance: 5), "All 5 free looks used")
 
         let subscribed = FirstLookPresentation.resolve(
-            lookState: .ready, personalPhotoDisplayed: true,
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
             freeGenerationsUsed: 3, freeAllowance: 5, isSubscribed: true)
         XCTAssertNil(subscribed.meterLine, "a subscribed user has no free-look accounting to state")
     }
 
     func testDisplayedPersonalPhotoWinsOverAnInFlightRegenState() {
         // A personal photo on screen IS the ready state even if
-        // the cell also reports a regeneration in flight.
+        // the cell also reports a regeneration in flight. (Sol's
+        // ruling, 2026-11-04: a look generated from any of the
+        // user's own uploaded reference photos — banked photos
+        // included — is the user's look; GEN-3's addition to this
+        // seam is only that the photo's pixels must have loaded,
+        // pinned in Gen3HeroServingTests.)
         let p = FirstLookPresentation.resolve(
             lookState: .making,
             personalPhotoDisplayed: true,
+            personalImageLoaded: true,
             freeGenerationsUsed: 2,
             freeAllowance: 5,
             isSubscribed: false

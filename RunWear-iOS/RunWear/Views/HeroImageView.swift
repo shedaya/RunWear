@@ -55,6 +55,13 @@ struct HeroImageView: View {
     var personalFlagTarget: PersonalHeroFlagTarget? = nil
     var onFlagPersonalHero: (PersonalHeroFlagReason) -> Void = { _ in }
 
+    // GEN-3 (WS-A(2)): THE hero pill — one component, one position
+    // (bottom of the hero image), state-driven by HeroPill from the
+    // requested cell's facts. .hidden renders nothing. The freeLook
+    // state's tap opens the Premium paywall via the callback.
+    var pillState: HeroPillState = .hidden
+    var onPillGetUnlimited: () -> Void = {}
+
     /// How the hero's height is derived (design record §5.2: no
     /// UIScreen.main anywhere — the container decides).
     enum HeightMode {
@@ -120,6 +127,18 @@ struct HeroImageView: View {
         // is HomeHandoffGeometry.flagChipBottomInset — derived
         // from the overlap constant, so the accessory zone is
         // capped by construction and cannot drift from the sheet.
+        // GEN-3 (WS-A(2)): the hero pill, bottom-leading — the one
+        // pill on the photo, in the same accessory zone the flag
+        // chip caps (HomeHandoffGeometry's derived inset), so it
+        // clears the sheet's rounded top edge identically.
+        .overlay(alignment: .bottomLeading) {
+            if pillState != .hidden {
+                heroPill
+                    .padding(.leading, 14)
+                    .padding(.bottom, HomeHandoffGeometry.flagChipBottomInset)
+                    .padding(.trailing, 60) // clear the flag chip's disc
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if let personalFlagTarget {
                 personalFlagChip(for: personalFlagTarget)
@@ -195,6 +214,72 @@ struct HeroImageView: View {
 
     // MARK: - Hero Image Layer
 
+    // MARK: - Hero Pill (GEN-3 WS-A(2))
+
+    /// The ONE pill at the bottom of the hero image. Native iOS
+    /// expression: the app's glass pill chrome (glass belongs on
+    /// chrome — this is chrome), footnote type, a spinner only in
+    /// the making state. The freeLook state is the only tappable
+    /// one: its "Get unlimited" half opens the Premium paywall.
+    @ViewBuilder
+    private var heroPill: some View {
+        switch pillState {
+        case .hidden:
+            EmptyView()
+        case .making:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.white)
+                Text(HeroPill.makingLabel)
+                    .font(.appFootnote.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+            .glassPill()
+            .accessibilityLabel(HeroPill.makingLabel)
+        case .scaffold:
+            Text(HeroPill.scaffoldLabel)
+                .font(.appFootnote.weight(.semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .glassPill()
+                .accessibilityLabel(HeroPill.scaffoldLabel)
+        case .freeLook(let used, let allowance):
+            Button(action: onPillGetUnlimited) {
+                HStack(spacing: 6) {
+                    Text(HeroPill.freeLookCountLabel(used: used, allowance: allowance))
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text("·")
+                        .font(.appFootnote)
+                        .foregroundColor(.white.opacity(0.7))
+                    Text(HeroPill.getUnlimitedLabel)
+                        .font(.appFootnote.weight(.bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                }
+                .glassPill()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(HeroPill.freeLookCountLabel(used: used, allowance: allowance)) free looks used. \(HeroPill.getUnlimitedLabel)")
+        case .premium:
+            HStack(spacing: 6) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(HeroPill.premiumLabel)
+                    .font(.appFootnote.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+            }
+            .glassPill()
+            .accessibilityLabel(HeroPill.premiumLabel)
+        }
+    }
+
     @ViewBuilder
     private func heroImageLayer(width: CGFloat, height: CGFloat) -> some View {
         ZStack {
@@ -203,19 +288,29 @@ struct HeroImageView: View {
             // location settling on the fallback) crossfades like
             // every other hero change — the AsyncImage transaction
             // carries the §1.1 crossfade instead of a hard swap.
-            AsyncImage(
-                url: URL(string: fallbackImageUrl),
-                transaction: Transaction(animation: .easeInOut(duration: reduceMotion ? 0 : AppTheme.crossfadeDuration))
-            ) { phase in
-                switch phase {
-                case .success(let image):
-                    HeroPhoto(image: image, width: width, height: height)
-                case .failure:
-                    Color.black
-                case .empty:
-                    Color.black
-                @unknown default:
-                    Color.black
+            // GEN-3 (WS-A(1)): an EMPTY fallback URL is a resolution,
+            // not a loading state — the point-grain gate found no
+            // truthful bundled photo for this prescription, so the
+            // layer paints the bracket's temperature tint (the
+            // designed gradient terminus) until the pool serve
+            // lands over it.
+            if fallbackImageUrl.isEmpty {
+                AppTheme.temperatureTintOverlay(for: tempBracket, opacity: 0.45)
+            } else {
+                AsyncImage(
+                    url: URL(string: fallbackImageUrl),
+                    transaction: Transaction(animation: .easeInOut(duration: reduceMotion ? 0 : AppTheme.crossfadeDuration))
+                ) { phase in
+                    switch phase {
+                    case .success(let image):
+                        HeroPhoto(image: image, width: width, height: height)
+                    case .failure:
+                        Color.black
+                    case .empty:
+                        Color.black
+                    @unknown default:
+                        Color.black
+                    }
                 }
             }
 

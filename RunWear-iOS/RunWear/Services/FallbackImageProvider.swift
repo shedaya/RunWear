@@ -322,6 +322,13 @@ struct FallbackImageProvider {
             ?? "mild_clear_female"
     }
 
+    /// The bundle URL string for a KNOWN bundled asset name (the
+    /// gated resolution's output), or "" where bundle URLs cannot
+    /// resolve (a logic-test host).
+    func imageURL(forAssetName name: String) -> String {
+        bundledURLString(assetName: name) ?? ""
+    }
+
     func getImageURL(
         temp: HeroTempBracket,
         weather: HeroWeatherCondition,
@@ -353,6 +360,175 @@ struct FallbackImageProvider {
         let size: ImageSize = isWatch ? .watchOS : .iOS
         let name = resolvedAssetName(temp: temp, weather: weather, gender: gender)
         let url = getImageURL(temp: temp, weather: weather, size: size, gender: gender)
+        return HeroImageResult.fromBundledFallback(
+            url: url,
+            assetFile: name,
+            provenance: Self.provenanceByAsset[name]
+        )
+    }
+
+    // MARK: - GEN-3 point-grain gate (WS-A(1))
+
+    /// GEN-3 (WS-A(1), 2026-11-04): the ADJUDICATED garment classes
+    /// of one bundled asset — what the photo actually wears, in the
+    /// RW-20 vocabulary the shared point-grain policy judges. Mirror
+    /// of Android GEN-2 A2's FallbackGarments census (same source:
+    /// the RW-26 derivation record — every asset's source pool row
+    /// was adjudicated person_count = 1, garment_source =
+    /// 'adjudicated', qualified at its cell's cold-end prescription).
+    /// `topBase` is nil where the base is unperceived beneath a
+    /// present shell, which the policy accepts exactly as it does
+    /// for a pool row. An asset with no census entry fails closed.
+    struct BundledGarments: Equatable {
+        let topBase: String?
+        let outer: Bool
+        let bottom: String
+        let head: String?
+        let hands: String?
+    }
+
+    /// The garment census of the 44 bundled assets, keyed by asset
+    /// file base name — byte-for-byte the Android A2 table.
+    static let garmentsByAsset: [String: BundledGarments] = [
+        "freezing_clear_female": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "freezing_clear_male": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "freezing_cloudy_female": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "freezing_cloudy_male": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "freezing_rain_female": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+        "freezing_rain_male": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+        "freezing_snow_female": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "freezing_snow_male": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cold_clear_female": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cold_clear_male": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cold_cloudy_female": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cold_cloudy_male": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cold_rain_female": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+        "cold_rain_male": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+        "cold_snow_female": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cold_snow_male": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+        "cool_clear_female": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "headband", hands: "gloves"),
+        "cool_clear_male": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "headband", hands: "gloves"),
+        "cool_cloudy_female": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "headband", hands: "gloves"),
+        "cool_cloudy_male": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "headband", hands: "gloves"),
+        "cool_rain_female": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+        "cool_rain_male": BundledGarments(topBase: nil, outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+        "cool_snow_female": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "headband", hands: "gloves"),
+        "cool_snow_male": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "headband", hands: "gloves"),
+        "mild_clear_female": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "mild_clear_male": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "mild_cloudy_female": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "mild_cloudy_male": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "mild_rain_female": BundledGarments(topBase: "short", outer: true, bottom: "shorts", head: "cap", hands: nil),
+        "mild_rain_male": BundledGarments(topBase: "short", outer: true, bottom: "shorts", head: "cap", hands: nil),
+        "mild_snow_female": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "mild_snow_male": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "warm_clear_female": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "warm_clear_male": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "warm_cloudy_female": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "warm_cloudy_male": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "warm_rain_female": BundledGarments(topBase: "short", outer: true, bottom: "shorts", head: "cap", hands: nil),
+        "warm_rain_male": BundledGarments(topBase: "short", outer: true, bottom: "shorts", head: "cap", hands: nil),
+        "hot_clear_female": BundledGarments(topBase: "sleeveless", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "hot_clear_male": BundledGarments(topBase: "sleeveless", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "hot_cloudy_female": BundledGarments(topBase: "sleeveless", outer: false, bottom: "short_shorts", head: nil, hands: nil),
+        "hot_cloudy_male": BundledGarments(topBase: "sleeveless", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "hot_rain_female": BundledGarments(topBase: "sleeveless", outer: true, bottom: "shorts", head: "cap", hands: nil),
+        "hot_rain_male": BundledGarments(topBase: "sleeveless", outer: true, bottom: "shorts", head: "cap", hands: nil)
+    ]
+
+    /// May this bundled asset serve under `outfit`'s exact point
+    /// prescription? The SAME shared point-grain gate the pool obeys
+    /// (HeroPointGrainPolicy via its key bridge), fed the asset's
+    /// adjudicated classes as a synthetic pool row (person count 1
+    /// for every asset, per the derivation record). Uncensused
+    /// assets fail closed. Mirror of Android's
+    /// HeroImageSelector.fallbackMatchesPrescription.
+    static func bundledAssetMatches(assetName: String, outfit: OutfitRecommendation) -> Bool {
+        guard let garments = garmentsByAsset[assetName] else { return false }
+        let row = GeneratedImage(
+            id: provenanceByAsset[assetName]?.sourceRowId ?? assetName,
+            combinationId: provenanceByAsset[assetName]?.combinationId ?? assetName,
+            imageUrl: assetName,
+            thumbnailUrl: nil,
+            prompt: nil,
+            reviewStatus: "approved",
+            personCount: 1,
+            garmentClasses: GarmentClasses(
+                topBase: garments.topBase, outer: garments.outer, mid: false,
+                bottom: garments.bottom, head: garments.head, hands: garments.hands,
+                sunglasses: false, gaiter: false
+            ),
+            garmentSource: "adjudicated"
+        )
+        return HeroPointGrainPolicy.matches(image: row, outfit: outfit)
+    }
+
+    /// GEN-3 (WS-A(1)): the garment-gated bundled resolution — the
+    /// fallback terminus under the RW-20 invariant (a serve that
+    /// cannot match the prescription never serves). The walk visits
+    /// cells in the established order (orderedFallbackCells:
+    /// requested cell, its bracket's weathers, neighbouring
+    /// brackets by warmth) and considers assets in gender order
+    /// mirroring the pool cascade: the requested gender first across
+    /// the whole walk, then the opposite gender; an ungendered
+    /// request considers the legacy-view asset per cell first, then
+    /// either paired asset. The first asset whose adjudicated
+    /// garments MATCH the point prescription wins — garment truth
+    /// outranks scene proximity (a nearer photo wearing
+    /// unprescribed garments is the W-4 defect). Returns nil when
+    /// no bundled asset matches: there is no truthful bundled photo
+    /// for that prescription, and the caller falls to the pool
+    /// serve (or, when the pool cannot serve either, reports the
+    /// cell — the GEN-3 servability census carries those cells
+    /// with row-level evidence). Mirror of Android's
+    /// HeroImageSelector.gatedFallbackUrl, returning the asset NAME.
+    func gatedAssetName(
+        temp: HeroTempBracket,
+        weather: HeroWeatherCondition,
+        gender: HeroGender? = nil,
+        outfit: OutfitRecommendation
+    ) -> String? {
+        let cells = orderedFallbackCells(temp: temp, weather: weather)
+        let passes: [[String?]]
+        if let gender {
+            passes = [
+                cells.map { Self.pairedAssets[$0.0]?[$0.1]?[gender] },
+                cells.map { Self.pairedAssets[$0.0]?[$0.1]?[gender.opposite] }
+            ]
+        } else {
+            passes = [
+                cells.map { Self.legacyAssetNames[$0.0]?[$0.1] },
+                cells.flatMap { cell -> [String?] in
+                    [
+                        Self.pairedAssets[cell.0]?[cell.1]?[.FEMALE],
+                        Self.pairedAssets[cell.0]?[cell.1]?[.MALE]
+                    ]
+                }
+            ]
+        }
+        for pass in passes {
+            for name in pass {
+                if let name, Self.bundledAssetMatches(assetName: name, outfit: outfit) {
+                    return name
+                }
+            }
+        }
+        return nil
+    }
+
+    /// The gated bundled serve as a result: nil when no bundled
+    /// asset matches the prescription (see gatedAssetName).
+    func getGatedFallbackResult(
+        temp: HeroTempBracket,
+        weather: HeroWeatherCondition,
+        isWatch: Bool = false,
+        gender: HeroGender? = nil,
+        outfit: OutfitRecommendation
+    ) -> HeroImageResult? {
+        guard let name = gatedAssetName(temp: temp, weather: weather, gender: gender, outfit: outfit) else {
+            return nil
+        }
+        let url = bundledURLString(assetName: name) ?? ""
         return HeroImageResult.fromBundledFallback(
             url: url,
             assetFile: name,

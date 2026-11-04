@@ -458,6 +458,13 @@ private struct FirstLookView: View {
     /// kicked for, captured from the kick itself — frame 34 reads
     /// the server's look state for exactly this cell.
     @State private var firstLookCombo: PersonalCombination?
+    /// GEN-3 (census-ios Y-1, rendering defect 1): the personal
+    /// image URL whose pixels have actually loaded in the
+    /// first-look card. The finished claim requires the photo to
+    /// be ON SCREEN — a set URL whose image is still in flight
+    /// is not on screen (the census's claim-over-empty-band
+    /// step, ~0.7 s of claim and counter over an empty card).
+    @State private var firstLookLoadedImageURL: String?
 
     /// The cell frame 34 is about: the kick's own cell, falling
     /// back to the preview's current personal cell.
@@ -473,10 +480,21 @@ private struct FirstLookView: View {
         FirstLookPresentation.resolve(
             lookState: firstLookCell.map { store.lookState(for: $0) } ?? .none,
             personalPhotoDisplayed: previewVM.currentPersonalHeroId != nil && previewVM.heroImageUrl != nil,
+            personalImageLoaded: firstLookLoadedImageURL != nil
+                && firstLookLoadedImageURL == previewVM.heroImageUrl,
             freeGenerationsUsed: store.freeGenerationsUsed,
             freeAllowance: PersonalHeroStore.freeAllowance,
             isSubscribed: store.mode == .subscribed
         )
+    }
+
+    /// Records that the card's loaded image IS the delivered
+    /// personal photo (called from the card's success branches —
+    /// a success phase means those pixels are on screen).
+    private func recordFirstLookImageLoad() {
+        guard previewVM.currentPersonalHeroId != nil,
+              let url = previewVM.heroImageUrl else { return }
+        firstLookLoadedImageURL = url
     }
 
     private var hasRecommendation: Bool {
@@ -823,6 +841,11 @@ private struct FirstLookView: View {
                             HeroPhoto(image: image, width: geo.size.width, height: 220)
                                 .blur(radius: 8)
                                 .opacity(0.55)
+                                // GEN-3 (Y-1 defect 1): if this
+                                // loaded image is the personal
+                                // photo, record it — the finished
+                                // claim waits for exactly this.
+                                .onAppear { recordFirstLookImageLoad() }
                         case .failed:
                             HeroPhoto(image: image, width: geo.size.width, height: 220)
                         }

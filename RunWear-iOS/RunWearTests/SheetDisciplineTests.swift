@@ -45,13 +45,16 @@ final class SheetDisciplineTests: XCTestCase {
 
     func testHomeSheetsRestAtNamedDetents_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        // 8 sheets: Settings, Date, Time, Shop, WeatherDetail,
-        // Location, Collection, Feedback.
-        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 5,
-                       "Settings, Shop, WeatherDetail, Collection and Feedback rest at .large only")
+        // 9 sheets: Settings, Date, Time, Shop, WeatherDetail,
+        // Location, Collection, Feedback, and (GEN-3 WS-A(2)) the
+        // hero pill's Premium paywall — the pill's "Get unlimited"
+        // door, resting at .large like every other scrolling
+        // paywall presentation.
+        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 6,
+                       "Settings, Shop, WeatherDetail, Collection, Feedback and the pill paywall rest at .large only")
         XCTAssertEqual(occurrences(view, ".presentationDetents([.medium, .large])"), 3,
                        "only Date, Time and Location keep a medium detent")
-        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 8,
+        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 9,
                        "every home sheet names its detents and shows the drag indicator")
     }
 

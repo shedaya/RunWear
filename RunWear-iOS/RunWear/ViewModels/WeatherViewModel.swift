@@ -52,6 +52,22 @@ enum ManualLocationStore {
     }
 }
 
+/// GEN-3 (WS-B, census X-7): may the hero URLs currently resolved
+/// paint under the place the UI is labelling? The hero's resolved
+/// URLs belong to the place whose fetch committed them
+/// (`heroOwnerPlaceKey`); on a place switch the label moves first
+/// (the selection writes it at tap time), so until the new place's
+/// own fetch commits its hero resolution, the gate is CLOSED and
+/// the hero zone shows its skeleton — the previous place's photo
+/// never renders under the new place's name. Pure so the binding
+/// is pinned without a view host.
+enum HeroDisplayGate {
+    static func mayPaint(ownerPlaceKey: String?, displayedPlaceKey: String) -> Bool {
+        guard let ownerPlaceKey else { return false }
+        return ownerPlaceKey == displayedPlaceKey
+    }
+}
+
 /// What the authorized home screen shows, resolved in one place so
 /// the precedence is pinnable (RW-6.2): CONTENT outranks the error —
 /// a failed pull-to-refresh must never replace a good outfit with a
@@ -112,6 +128,24 @@ class WeatherViewModel: ObservableObject {
     @Published var heroImageUrl: String?
     @Published var fallbackImageUrl: String?
     @Published var isHeroImageLoading = false
+
+    /// GEN-3 (WS-B / X-7): the place key the currently resolved
+    /// hero URLs belong to — written in the SAME state write that
+    /// commits a fetch's fallback (loadHeroImage's atomic commit),
+    /// and read by the view through `heroBelongsToDisplayedPlace`.
+    /// Nil until the first hero resolution commits.
+    @Published private(set) var heroOwnerPlaceKey: String?
+
+    /// Whether the resolved hero may paint under the place the UI
+    /// currently labels (HeroDisplayGate). False during a place
+    /// switch's in-flight window — the hero zone skeletons rather
+    /// than showing the previous place's photo (X-7).
+    var heroBelongsToDisplayedPlace: Bool {
+        HeroDisplayGate.mayPaint(
+            ownerPlaceKey: heroOwnerPlaceKey,
+            displayedPlaceKey: placeDisplayName
+        )
+    }
 
     // Identity of the hero currently resolved, for the flag action
     // (mirrors Android's MainUiState hero identity, 2026-10-29): the
@@ -514,22 +548,66 @@ class WeatherViewModel: ObservableObject {
             time: HeroTimeOfDay.from(hour: hour),
             variant: nil
         )
+        let previousRequestedCombinationId = heroRequestedCombinationId
         heroRequestedCombinationId = requestedCombination.fullId
 
         // Set fallback image immediately (zero-lag)
         let tempBracket = HeroTempBracket.from(feelsLikeTemperature: feelsLike)
         let weatherCondition = HeroWeatherCondition.from(weatherCode: weatherCode)
-        // WS-6 (D-20): the pre-paint fallback is resolved WITH the
-        // user's fit preference — the gender-aware path is the path
-        // that paints, first frame and (below) pool-miss alike. A
-        // unisex preference passes nil and keeps the legacy chain
-        // (see GenderPreference.fallbackHeroGender).
-        fallbackImageUrl = fallbackProvider.getImageURL(
-            temp: tempBracket,
-            weather: weatherCondition,
-            size: .iOS,
-            gender: genderPreference.fallbackHeroGender
-        )
+
+        // GEN-3 (WS-A(1) + WS-B / X-7): THE ATOMIC COMMIT. When the
+        // requested cell changes (a place switch, a time change, a
+        // comfort/gender change), the previous cell's pool/personal
+        // photo is dropped in the SAME write that commits this
+        // cell's fallback — the old photo can never paint under the
+        // new place's label or the new cell's outfit (X-7), and the
+        // new cell's truthful fallback serves from this instant
+        // while its pool/personal photo loads. The hero's place
+        // ownership moves in the same write (HeroDisplayGate).
+        if previousRequestedCombinationId != requestedCombination.fullId
+            || heroOwnerPlaceKey != placeDisplayName {
+            heroImageUrl = nil
+            heroImageRowId = nil
+            heroServedCombinationId = nil
+            currentPersonalHeroId = nil
+        }
+        heroOwnerPlaceKey = placeDisplayName
+
+        // GEN-3 (WS-A(1)): the fallback that paints is resolved at
+        // POINT GRAIN — the gated walk over the bundled assets'
+        // adjudicated garment census against the live prescription
+        // (the same gate the pool obeys; Android GEN-2 A2 parity).
+        // WS-6 (D-20) stands: the resolution carries the user's fit
+        // preference (a unisex preference passes nil and walks the
+        // legacy view first). When NO bundled asset matches the
+        // prescription there is no truthful bundled photo for it:
+        // the fallback is EMPTY and the hero paints its designed
+        // gradient until the pool serve lands (the pool cascade
+        // below is the servable layer for those prescriptions —
+        // the GEN-3 servability census carries the genuinely
+        // unservable remainder with row-level evidence). Without a
+        // recommendation there is no prescription to judge, so the
+        // legacy bracket resolution paints, exactly as before.
+        let gatedAssetName: String?
+        if let recommendation {
+            gatedAssetName = fallbackProvider.gatedAssetName(
+                temp: tempBracket,
+                weather: weatherCondition,
+                gender: genderPreference.fallbackHeroGender,
+                outfit: recommendation
+            )
+            fallbackImageUrl = gatedAssetName.map {
+                fallbackProvider.imageURL(forAssetName: $0)
+            } ?? ""
+        } else {
+            gatedAssetName = nil
+            fallbackImageUrl = fallbackProvider.getImageURL(
+                temp: tempBracket,
+                weather: weatherCondition,
+                size: .iOS,
+                gender: genderPreference.fallbackHeroGender
+            )
+        }
 
         // Fetch AI hero image — with the actual outfit, so a
         // replenishment prompt describes what the engine recommended
@@ -544,11 +622,25 @@ class WeatherViewModel: ObservableObject {
             outfit: recommendation
         )
 
-        // Only set hero image if it's from Supabase (not Unsplash fallback)
+        // Only set hero image if it's from Supabase (not Unsplash fallback).
+        // GEN-3 (census-ios Y-1, rendering defect 2): a reload for
+        // the SAME cell while a personal photo is applied must not
+        // republish the pool URL into the shared slot — the
+        // census's middle step was exactly that write, a stock
+        // photo fading in under the finished claim for ~0.6 s
+        // before the personal write cut back. No stock photo may
+        // appear under a finished claim, even transiently. The
+        // personal layer below re-resolves either way; the pool
+        // result still feeds the chapter records through the
+        // serve telemetry.
+        let personalAppliedForThisCell = currentPersonalHeroId != nil
+            && previousRequestedCombinationId == requestedCombination.fullId
         if result.fallbackLevel < 8 {
-            heroImageUrl = result.imageUrl
-            heroImageRowId = result.imageRowId
-            heroServedCombinationId = result.combinationId
+            if !personalAppliedForThisCell {
+                heroImageUrl = result.imageUrl
+                heroImageRowId = result.imageRowId
+                heroServedCombinationId = result.combinationId
+            }
         } else {
             heroImageUrl = nil // Will use fallback
             heroImageRowId = nil
@@ -556,26 +648,24 @@ class WeatherViewModel: ObservableObject {
         }
 
         // WS-7 / RW-26(c): the bundled asset the screen will paint
-        // if the pool missed — the pre-paint fallback URL above is
-        // the paint in that case (the cascade's own level-8 result
-        // is not what renders), so the serve record names THIS
-        // asset. Since WS-6 (D-20) the URL above is resolved with
-        // the user's fit preference, so the asset this record names
-        // is the gendered one — the record follows the paint with
-        // no telemetry change.
-        let paintedBundledAsset: String? = result.fallbackLevel < 8
-            ? nil
-            : fallbackImageUrl.map { url in
-                // The record names the asset the paint serves.
-                // Where bundle URLs cannot resolve (a logic-test
-                // host), the URL string is empty — there the name
-                // is the asset the provider resolved for this cell
-                // and preference (the same resolution getImageURL
-                // performed before its URL lookup, and the
-                // derivation WS-7's own bundled result uses), so
-                // the serve record is complete in every host. On
-                // device the URL is non-empty and this is exactly
-                // the URL-derived name, as before.
+        // if the pool missed — the gated fallback resolved at the
+        // atomic commit above is the paint in that case (the
+        // cascade's own level-8 result is not what renders), so the
+        // serve record names THIS asset. GEN-3: the name is the
+        // gated resolution itself — complete in every host, even
+        // where bundle URLs cannot resolve (a logic-test host's
+        // empty URL string). When the gate found no truthful
+        // bundled asset (gatedAssetName nil under a live
+        // prescription), no bundled serve is recorded: nothing
+        // bundled painted. The no-prescription path keeps the
+        // legacy derivation from the painted URL.
+        let paintedBundledAsset: String?
+        if result.fallbackLevel < 8 {
+            paintedBundledAsset = nil
+        } else if recommendation != nil {
+            paintedBundledAsset = gatedAssetName
+        } else {
+            paintedBundledAsset = fallbackImageUrl.map { url in
                 url.isEmpty
                     ? fallbackProvider.resolvedAssetName(
                         temp: tempBracket,
@@ -584,6 +674,7 @@ class WeatherViewModel: ObservableObject {
                     )
                     : FallbackImageProvider.assetFile(fromURLString: url)
             }
+        }
 
         // RW-14: the personal layer runs after the pool paints, on
         // the same keying frame (prepareHeroFrame), so the
@@ -744,6 +835,35 @@ class WeatherViewModel: ObservableObject {
     func reloadHeroForPersonal() async -> PersonalCombination? {
         await loadHeroImage()
         return currentPersonalCombination
+    }
+
+    /// GEN-3 (WS-A(1) / census X-10): THE always-available photo
+    /// reference — the one resolution every photo-consuming
+    /// surface is fed by (hero, Wear I've Run entry thumbnails,
+    /// the TODAY card, chapter rows, the Morning Poster
+    /// thumbnail): the personal/pool photo when one is displayed,
+    /// otherwise the committed gated fallback. When the entry is
+    /// recorded before the hero load commits (a settle racing the
+    /// cascade), the gated fallback for the CURRENT frame is
+    /// derived on the spot — the same resolution loadHeroImage
+    /// commits — so a recorded entry never falls back to an
+    /// unrelated bracket's stock photo. Nil only when no frame
+    /// exists yet or no truthful bundled asset matches the live
+    /// prescription (the census's unservable remainder).
+    func alwaysAvailableHeroReference() -> String? {
+        if let heroImageUrl { return heroImageUrl }
+        if let fallbackImageUrl, !fallbackImageUrl.isEmpty { return fallbackImageUrl }
+        guard let frame = prepareHeroFrame(), let recommendation else { return nil }
+        let tempBracket = HeroTempBracket.from(feelsLikeTemperature: frame.feelsLikeF)
+        let weatherCondition = HeroWeatherCondition.from(weatherCode: frame.weatherCode)
+        guard let name = fallbackProvider.gatedAssetName(
+            temp: tempBracket,
+            weather: weatherCondition,
+            gender: genderPreference.fallbackHeroGender,
+            outfit: recommendation
+        ) else { return nil }
+        let url = fallbackProvider.imageURL(forAssetName: name)
+        return url.isEmpty ? nil : url
     }
 
     /// The photo a flag would report right now: the pool photo while

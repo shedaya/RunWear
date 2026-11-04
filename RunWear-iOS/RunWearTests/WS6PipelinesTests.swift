@@ -262,9 +262,17 @@ final class WS6PipelinesTests: XCTestCase {
                       "the pre-paint fallback must pass the fit preference")
 
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        assertEveryFallbackCallIsGendered(view, file: "WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("gender: viewModel.genderPreference.fallbackHeroGender"),
-                      "the view's default fallback must pass the fit preference")
+        // GEN-3 (WS-A(1)): the view no longer resolves a default
+        // fallback of its own — the ungated MILD×CLEAR default it
+        // used to paint was the Android census's X-3 shape, and
+        // fallback resolution moved wholesale into
+        // WeatherViewModel (whose gendered calls the assertions
+        // above pin). The invariant for the view is now the
+        // stronger one: NO fallback-resolution call site at all.
+        XCTAssertFalse(view.contains("getImageURL("),
+                       "GEN-3: the view resolves no fallback itself — WeatherViewModel owns the resolution")
+        XCTAssertFalse(view.contains("getGatedFallbackResult("),
+                       "GEN-3: the view resolves no fallback itself — WeatherViewModel owns the resolution")
 
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
         assertEveryFallbackCallIsGendered(hero, file: "HeroImageView.swift")

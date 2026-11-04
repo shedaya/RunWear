@@ -211,14 +211,22 @@ final class HomeCompositionTests: XCTestCase {
     }
 
     func testHeroFirstPaintIsSkeletonUntilTheServeResolves_sourcePin() throws {
-        // §1.1: the first painted hero is the resolved serve or
-        // the skeleton — the photo zone gates on the view model's
-        // unresolved state (no hero URL and no settled fallback).
+        // GEN-3 (WS-A(1)/WS-B) SUPERSEDES the §1.1 gate this pin
+        // originally asserted: the bundled fallback is a final
+        // truthful serve committed atomically with the cell, so it
+        // paints from the first frame — a skeleton spanning the
+        // whole pool-resolution window was the X-3 empty band.
+        // The skeleton now gates on exactly two states: the
+        // resolved hero does not belong to the place on the label
+        // (X-7 place switch in flight), or no fallback has been
+        // committed for this place yet (the first resolution).
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("!viewModel.heroBelongsToDisplayedPlace"),
+                      "the hero zone must skeleton-gate while the resolved hero belongs to another place")
         XCTAssertTrue(view.contains("viewModel.heroImageUrl == nil"),
                       "the hero zone must skeleton-gate on the unresolved serve")
-        XCTAssertTrue(view.contains("viewModel.isHeroImageLoading || viewModel.fallbackImageUrl == nil"),
-                      "the gate must cover the whole pool-resolution window")
+        XCTAssertTrue(view.contains("viewModel.fallbackImageUrl == nil"),
+                      "the gate must cover the pre-commit window (no fallback committed yet)")
         XCTAssertTrue(view.contains("heroSkeleton(heightMode: heightMode)"))
     }
 
