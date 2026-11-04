@@ -43,6 +43,28 @@ data class WearIveRunDayEntry(
 /** The collection's weather filter (design §1). */
 enum class WearWeatherFilter { ALL, COLD, SNOW, RAIN, HEAT }
 
+/** What system Back does on the collection surface (WS-9 fix, P-3). */
+enum class CollectionBackAction { STEP_BACK_TO_CHAPTER_LIST, DISMISS_COLLECTION }
+
+/**
+ * WS-9 fix (P-3, §1.6): the collection's internal navigation is a
+ * stack — chapters → chapter — and Back walks it one step at a
+ * time, exactly as the in-header back arrow does and as iOS's push
+ * navigation does. Back inside a chapter steps back to the chapter
+ * LIST; only Back at the list dismisses the collection to home.
+ * (The pre-fix surface had no Back step: the hosting Dialog's
+ * dismiss fired from inside a chapter too, dropping the user
+ * straight home.)
+ */
+object CollectionBackPolicy {
+    fun actionFor(openChapter: String?): CollectionBackAction =
+        if (openChapter != null) {
+            CollectionBackAction.STEP_BACK_TO_CHAPTER_LIST
+        } else {
+            CollectionBackAction.DISMISS_COLLECTION
+        }
+}
+
 /** Pure collection arithmetic — every summary is computed, never stored. */
 object WearIveRunCollectionLogic {
 

@@ -88,6 +88,19 @@ fun WearIveRunCollectionScreen(
     }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // WS-9 fix (P-3, §1.6): system Back inside a chapter steps
+        // back to the chapter LIST (the same step the header's back
+        // arrow takes; iOS reaches it via its push stack). The
+        // handler is enabled only while a chapter is open — at the
+        // list, Back falls through to the Dialog's own dismiss,
+        // which lands home via onDismissRequest.
+        androidx.activity.compose.BackHandler(enabled = openChapter != null) {
+            if (CollectionBackPolicy.actionFor(openChapter) ==
+                CollectionBackAction.STEP_BACK_TO_CHAPTER_LIST
+            ) {
+                openChapter = null
+            }
+        }
         Surface(modifier = Modifier.fillMaxSize(), color = RunWearColors.Background) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
