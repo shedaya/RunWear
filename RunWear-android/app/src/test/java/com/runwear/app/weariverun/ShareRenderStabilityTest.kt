@@ -105,21 +105,30 @@ class ShareRenderStabilityTest {
         val h = composeView.resources.displayMetrics.heightPixels
         val wSpec = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
         val hSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
-        val scheduler = Robolectric.getForegroundThreadScheduler()
         fun passes(n: Int) {
             repeat(n) {
-                scheduler.advanceBy(50, TimeUnit.MILLISECONDS)
+                // Full scheduler flush (not just a timed advance):
+                // effect coroutines (LaunchedEffect) are posted to
+                // the foreground scheduler behind choreographer
+                // frames, and a partial advance left them unrun in
+                // run 41919186433 — the painter-driven settles fired
+                // while the effect-driven ones (photo-less poster,
+                // name-only kit card) never did. Flush + idle drains
+                // every posted frame and task.
+                Robolectric.flushForegroundThreadScheduler()
                 shadowOf(Looper.getMainLooper()).idle()
                 composeView.measure(wSpec, hSpec)
                 composeView.layout(0, 0, w, h)
                 composeView.draw(Canvas(Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)))
+                Robolectric.flushForegroundThreadScheduler()
+                shadowOf(Looper.getMainLooper()).idle()
             }
         }
         val deadline = System.currentTimeMillis() + timeoutMs
         var settled = false
         while (System.currentTimeMillis() < deadline) {
             passes(2)
-            if (probe.latch.await(100, TimeUnit.MILLISECONDS)) {
+            if (probe.latch.await(25, TimeUnit.MILLISECONDS)) {
                 settled = true
                 break
             }

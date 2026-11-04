@@ -469,6 +469,46 @@ private fun dayTitle(entry: WearIveRunDayEntry, today: LocalDate): String {
 }
 
 /**
+ * GEN-3 share-render: the working state for a rendering share
+ * artifact — a labeled pill (spinner + what is rendering), shown
+ * OVER the artifact while its render is genuinely in progress.
+ * It replaces the in-flow progress rows both share stages used
+ * before: a row inside the sheet's column added and removed its
+ * own height as the ready-state flipped, shoving the artifact —
+ * and the bottom sheet's own content-sized height — around on
+ * every flip, the flicker family Sol's walkthrough verdict named.
+ * The pill is state-driven (it exists exactly while the
+ * artifact's rendered callback has not fired), carries a label
+ * naming the work, and never moves the artifact beneath it.
+ */
+@Composable
+private fun ShareRenderProgressPill(label: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = RunWearColors.BgCard,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                color = RunWearColors.PineAccent,
+                strokeWidth = 2.dp
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = RunWearColors.TextSecondary
+            )
+        }
+    }
+}
+
+/**
  * The per-card share choice: Morning Poster or Kit Card — NO Range
  * (design frames 11–14). Presented as an M3 modal sheet over the
  * dimmed collection (motion spec §1.3), resting on the one full
@@ -510,34 +550,29 @@ private fun ShareChoiceSheet(
                 // W-9: while the chosen card renders (its photo
                 // decoding can take seconds), the preview stage shows
                 // a visible progress state — never a blank wait.
+                // GEN-3 share-render: the state is now the labeled
+                // pill OVERLAID on the preview (ShareRenderProgressPill),
+                // not an in-flow row — the artifact's position and
+                // the sheet's height no longer move when it clears.
                 var previewReady by remember(chosen) { mutableStateOf(false) }
-                if (!previewReady) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    ) {
-                        androidx.compose.material3.CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = RunWearColors.PineAccent
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            text = "Rendering ${chosenLabel(chosen)}…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = RunWearColors.TextSecondary
-                        )
+                Box {
+                    Box(modifier = capture.recordModifier()) {
+                        when (chosen) {
+                            ShareArtifactKind.MORNING_POSTER -> MorningPoster(
+                                entry = entry,
+                                onRendered = { previewReady = true }
+                            )
+                            ShareArtifactKind.KIT_CARD -> KitCard(
+                                entry = entry,
+                                gender = gender,
+                                onRendered = { previewReady = true }
+                            )
+                        }
                     }
-                }
-                Box(modifier = capture.recordModifier()) {
-                    when (chosen) {
-                        ShareArtifactKind.MORNING_POSTER -> MorningPoster(
-                            entry = entry,
-                            onRendered = { previewReady = true }
-                        )
-                        ShareArtifactKind.KIT_CARD -> KitCard(
-                            entry = entry,
-                            gender = gender,
-                            onRendered = { previewReady = true }
+                    if (!previewReady) {
+                        ShareRenderProgressPill(
+                            label = "Rendering ${chosenLabel(chosen)}…",
+                            modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
                         )
                     }
                 }
@@ -599,41 +634,36 @@ internal fun ShareChooserStage(
         color = RunWearColors.TextSecondary,
         modifier = Modifier.padding(bottom = 12.dp)
     )
-    if (!posterReady || !kitReady) {
+    // GEN-3 share-render: the "Rendering previews…" state is the
+    // labeled pill overlaid on the thumbnail row — pre-fix it was
+    // an in-flow row whose appearance/disappearance shifted both
+    // thumbnails (and the sheet height) on every ready flip.
+    Box {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            androidx.compose.material3.CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = RunWearColors.PineAccent
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = "Rendering previews…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = RunWearColors.TextSecondary
+            ShareThumbnailChoice(
+                kind = ShareArtifactKind.MORNING_POSTER,
+                entry = entry,
+                gender = gender,
+                onReady = { posterReady = true },
+                modifier = Modifier.weight(1f)
+            ) { onChoose(ShareArtifactKind.MORNING_POSTER) }
+            ShareThumbnailChoice(
+                kind = ShareArtifactKind.KIT_CARD,
+                entry = entry,
+                gender = gender,
+                onReady = { kitReady = true },
+                modifier = Modifier.weight(1f)
+            ) { onChoose(ShareArtifactKind.KIT_CARD) }
+        }
+        if (!posterReady || !kitReady) {
+            ShareRenderProgressPill(
+                label = "Rendering previews…",
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
             )
         }
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        ShareThumbnailChoice(
-            kind = ShareArtifactKind.MORNING_POSTER,
-            entry = entry,
-            gender = gender,
-            onReady = { posterReady = true },
-            modifier = Modifier.weight(1f)
-        ) { onChoose(ShareArtifactKind.MORNING_POSTER) }
-        ShareThumbnailChoice(
-            kind = ShareArtifactKind.KIT_CARD,
-            entry = entry,
-            gender = gender,
-            onReady = { kitReady = true },
-            modifier = Modifier.weight(1f)
-        ) { onChoose(ShareArtifactKind.KIT_CARD) }
     }
     Text(
         text = "Cancel",
@@ -792,8 +822,24 @@ fun MorningPoster(
      * share surfaces show a progress state until it fires. */
     onRendered: (() -> Unit)? = null
 ) {
+    // GEN-3 share-render: onRendered fires EXACTLY ONCE per entry,
+    // when the poster is SETTLED — photo decoded, photo failed, or
+    // no photo at all (the pattern the Kit Card already had for
+    // success, extended to every terminal state). Pre-fix the
+    // poster fired only on image SUCCESS and with no once-guard:
+    // a decode error left the share sheet's rendering state up
+    // forever — a spinner as the settled state — and every painter
+    // re-delivery rewrote the sheet's ready-state from inside the
+    // painter callback.
+    var posterRenderReported by remember(entry) { mutableStateOf(false) }
+    fun reportPosterRendered() {
+        if (!posterRenderReported) {
+            posterRenderReported = true
+            onRendered?.invoke()
+        }
+    }
     if (entry.heroRef == null) {
-        LaunchedEffect(entry) { onRendered?.invoke() }
+        LaunchedEffect(entry) { reportPosterRendered() }
     }
     Box(
         modifier = modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(16.dp))
@@ -805,8 +851,10 @@ fun MorningPoster(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { painterState ->
-                    if (painterState is coil.compose.AsyncImagePainter.State.Success) {
-                        onRendered?.invoke()
+                    if (painterState is coil.compose.AsyncImagePainter.State.Success ||
+                        painterState is coil.compose.AsyncImagePainter.State.Error
+                    ) {
+                        reportPosterRendered()
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -932,8 +980,16 @@ fun KitCard(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             onState = { painterState ->
+                                // GEN-3 share-render: the card
+                                // settles on the first render's
+                                // TERMINAL state — success OR error.
+                                // Pre-fix only success reported, so a
+                                // failed garment decode hung the
+                                // share sheet's rendering state just
+                                // like the poster's did.
                                 if (!renderReported &&
-                                    painterState is coil.compose.AsyncImagePainter.State.Success
+                                    (painterState is coil.compose.AsyncImagePainter.State.Success ||
+                                        painterState is coil.compose.AsyncImagePainter.State.Error)
                                 ) {
                                     renderReported = true
                                     onRendered?.invoke()

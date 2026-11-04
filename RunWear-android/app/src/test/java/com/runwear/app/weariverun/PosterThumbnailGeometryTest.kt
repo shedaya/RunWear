@@ -141,9 +141,18 @@ class PosterThumbnailGeometryTest {
     }
 
     private fun boundsOf(texts: List<Pair<String, Rect>>, needle: String): Rect {
-        val hit = texts.firstOrNull { it.first.contains(needle) }
-        assertNotNull("no text node containing \"$needle\" in ${texts.map { it.first }}", hit)
-        return hit!!.second
+        // The real laid-out node, not a zero-bounds shadow: in the
+        // thumbnail composition a same-text node with an empty rect
+        // (top=0.0) preceded the real one in walk order in run
+        // 41919186433. Among same-text nodes, the genuine text has
+        // a non-empty rect and sits lowest on the artifact.
+        val candidates = texts.filter { it.first.contains(needle) && it.second.height > 0f }
+        assertTrue(
+            "no laid-out text node containing \"$needle\"; all nodes: " +
+                texts.map { "${it.first}@${it.second}" },
+            candidates.isNotEmpty()
+        )
+        return candidates.maxByOrNull { it.second.bottom }!!.second
     }
 
     @Test
