@@ -117,11 +117,27 @@ class WeatherViewModel: ObservableObject {
     /// string on a rendered line); otherwise the string itself
     /// (the non-place labels above).
     var placeDisplayName: String {
-        if let simplePlace { return simplePlace.displayName }
-        if let parsed = SimplePlace(rawDisplayName: locationName) {
-            return parsed.displayName
+        let resolved: String
+        if let simplePlace {
+            resolved = simplePlace.displayName
+        } else if let parsed = SimplePlace(rawDisplayName: locationName) {
+            resolved = parsed.displayName
+        } else {
+            resolved = locationName
         }
-        return locationName
+        // GEN-3 X-13: every surface that names the place in use
+        // (the home header location line, the navigation title,
+        // the hero) renders this value, and it NEVER renders
+        // empty. Through the app's own assignment paths it cannot
+        // be empty today (the initial label, the "Current
+        // Location" fallback, and SimplePlace display names are
+        // all non-empty) — but the guarantee was incidental: an
+        // empty/whitespace `locationName` assignment would have
+        // passed straight through. It now falls back to the
+        // app's existing non-place label.
+        return resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Current Location"
+            : resolved
     }
 
     // Hero image state

@@ -73,7 +73,12 @@ struct ContentView: View {
         .sheet(isPresented: $showManualLocationPicker) {
             LocationPickerSheet(
                 isPresented: $showManualLocationPicker,
-                isUsingGPS: false,
+                // GEN-3 X-13: the Current location row's CURRENT
+                // badge reads the ACTUAL location state, never a
+                // per-sheet constant — this gate sheet hardcoded
+                // `false`, so the row's state followed the sheet
+                // host instead of the selection in use.
+                isUsingGPS: viewModel.isUsingGPS,
                 onUseCurrentLocation: {
                     viewModel.switchToGPS()
                     locationService.requestPermission()

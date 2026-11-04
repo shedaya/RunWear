@@ -727,7 +727,16 @@ enum HomeHeaderCopy {
     /// string handed to this formatter still cannot reach the
     /// rendered line.
     static func locationLine(place: String, moment: String) -> String {
-        "\(SimplePlace(rawDisplayName: place)?.displayName ?? place) · \(moment)"
+        let resolved = SimplePlace(rawDisplayName: place)?.displayName ?? place
+        // GEN-3 X-13: the line names the place in use — it never
+        // renders with an empty place segment (" · Now"). An
+        // empty/whitespace place falls back to the app's existing
+        // non-place label, the same one the view model uses when
+        // no place has resolved.
+        let named = resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Current Location"
+            : resolved
+        return "\(named) · \(moment)"
     }
 
     static func locationLine(place: SimplePlace, moment: String) -> String {
@@ -738,6 +747,193 @@ enum HomeHeaderCopy {
     /// nothing else.
     static func actualLine(formattedTemperature: String) -> String {
         "Actual \(formattedTemperature)"
+    }
+}
+
+// MARK: - Location search candidates (GEN-3 / X-12)
+
+/// One location-search result BEFORE the picker's row type is
+/// built: the pure form of a geocoder placemark, so result
+/// construction — including the dedupe below — is pinnable
+/// without CoreLocation in the test target.
+///
+/// GEN-3 X-12 diagnosis (iOS): the picker searches ONE source
+/// (CLGeocoder), so Android's dual-source merge does not exist
+/// here — but result construction applied NO dedupe at all:
+/// every placemark became a row under a fresh UUID, so a place
+/// the geocoder returns twice renders as two identical rows.
+/// The dedupe now happens HERE, at result construction, keyed
+/// on place identity — never on the name string alone, so
+/// distinct same-name places survive.
+struct LocationSearchCandidate: Equatable {
+    let name: String
+    let subtitle: String
+    /// The SimplePlace display form ("New York, NY").
+    let displayName: String
+    let latitude: Double
+    let longitude: Double
+
+    /// Place identity: the SimplePlace key (canonicalized, so a
+    /// raw "New York, New York" and the simple "New York, NY"
+    /// are the same place) PLUS the coordinate rounded to
+    /// ~100 m (3 decimal places). Two rows are the same place
+    /// only when BOTH agree: same-name places in different
+    /// regions differ in the key; same-name places in the same
+    /// region differ in the coordinate; a duplicated geocoder
+    /// hit agrees on both and collapses.
+    var identity: String {
+        let placeKey = SimplePlace(rawDisplayName: displayName)?.key
+            ?? displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let lat = Int((latitude * 1000).rounded())
+        let lon = Int((longitude * 1000).rounded())
+        return "\(placeKey)|\(lat)|\(lon)"
+    }
+}
+
+enum LocationSearchResults {
+    /// First occurrence wins; the geocoder's ordering (best
+    /// match first) is preserved.
+    static func deduplicated(_ candidates: [LocationSearchCandidate]) -> [LocationSearchCandidate] {
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0.identity).inserted }
+    }
+}
+
+/// Which geocode completion may replace the results list
+/// (GEN-3 / Y-15). Diagnosis, verified in the pre-fix picker:
+/// a search fired on EVERY keystroke with no debounce and no
+/// staleness check, and every completion replaced the whole
+/// result set — whose rows carried fresh UUID identities, so
+/// each replacement rebuilt every row view. A trailing response
+/// (to "junea", say) landing between the user's touch-down and
+/// touch-up on the "Juneau" row destroyed the row mid-touch and
+/// the tap never fired: intermittent dead taps, worst right
+/// after typing and under rapid repeats — Sol tapped Juneau's
+/// row across four searches without a selection, while slower
+/// searches (Miami, New Haven) eventually landed in a quiet
+/// window and worked.
+///
+/// The gate is the data-layer half of the fix: it vends a
+/// monotonic token per issued query, and a completion may apply
+/// ONLY while it is the latest token for the current query.
+/// Stale completions are dropped without touching the list, so
+/// the rows on screen — and any touch in flight on them — are
+/// never replaced by an older query's answer. (The view-layer
+/// halves: a 250 ms debounce collapses the keystroke storm to
+/// one request, and row identity is the place identity, so
+/// even a legitimate refresh keeps the same row views.)
+final class LocationSearchGate {
+    private(set) var latestToken = 0
+    private(set) var currentQuery = ""
+
+    /// Register a newly issued query; returns its token. Every
+    /// earlier token is stale from this moment.
+    func begin(query: String) -> Int {
+        currentQuery = query
+        latestToken += 1
+        return latestToken
+    }
+
+    /// The query was cleared (or the sheet reset): nothing in
+    /// flight may apply anymore.
+    func invalidate() {
+        currentQuery = ""
+        latestToken += 1
+    }
+
+    /// May this completion replace the results? Only the latest
+    /// issued query's own completion, and only while that query
+    /// is still the current one.
+    func shouldApply(token: Int, query: String) -> Bool {
+        token == latestToken && query == currentQuery && !query.isEmpty
+    }
+}
+
+// MARK: - Morning Poster layout metrics (GEN-3 / X-11)
+
+/// The Morning Poster's layout constants, consumed BY the view
+/// itself (WearIveRunCollectionView's MorningPosterView), so the
+/// geometry pinned here is the geometry that renders.
+///
+/// GEN-3 X-11 diagnosis (iOS): the poster exists at exactly ONE
+/// size. It is composed at 390×520 and rendered once, full-size,
+/// through ImageRenderer; the share sheet's preview is a raster
+/// scale-down of that render. There is no thumbnail-size
+/// re-layout of the view anywhere on iOS — the Android collision
+/// mechanism (a live poster view recomposed at thumbnail size)
+/// has no counterpart here. Within the composition, the lockup
+/// band (top) and the body+foot band (bottom) are sequential
+/// VStack bands separated by a Spacer, so they can meet only if
+/// their heights sum past the canvas; the metrics below bound
+/// that sum, at full size and — because every value scales
+/// linearly — at thumbnail scale alike.
+enum MorningPosterMetrics {
+    static let canvasWidth: Double = 390
+    static let canvasHeight: Double = 520
+    /// The top area scrim's height (gone before the runner's head).
+    static let scrimHeight: Double = 150
+
+    static let lockupTopPadding: Double = 20
+    static let lockupSpacing: Double = 2
+    static let brandFontSize: Double = 37
+    static let hashtagFontSize: Double = 13
+
+    static let bodySpacing: Double = 6
+    static let bodyPadding: Double = 20
+    static let feelsFontSize: Double = 20
+    static let placeFontSize: Double = 14
+    static let itemsFontSize: Double = 13
+
+    static let footFontSize: Double = 24
+    static let footHorizontalPadding: Double = 20
+    static let footBottomPadding: Double = 18
+
+    /// A deliberately generous line height (1.4× the point size)
+    /// — it overestimates both the UI sans and the script face,
+    /// so a no-collision verdict here holds on device.
+    static func lineHeight(_ fontSize: Double) -> Double { fontSize * 1.4 }
+
+    /// The top band: top padding + brand line + spacing + hashtag.
+    static var lockupBandHeight: Double {
+        lockupTopPadding
+            + lineHeight(brandFontSize)
+            + lockupSpacing
+            + lineHeight(hashtagFontSize)
+    }
+
+    /// Wrapped-line estimate for one body line at `fontSize`,
+    /// using a deliberately wide average glyph (0.58× the point
+    /// size) so the estimate over-counts lines, never under.
+    static func lineCount(forText text: String, fontSize: Double) -> Int {
+        let contentWidth = canvasWidth - 2 * bodyPadding
+        let glyphWidth = fontSize * 0.58
+        let charsPerLine = max(1, Int(contentWidth / glyphWidth))
+        return max(1, Int(ceil(Double(text.count) / Double(charsPerLine))))
+    }
+
+    /// The bottom band: the body block (padding, three text lines
+    /// with their wrapping, padding) plus the foot row (its taller
+    /// text line + bottom padding).
+    static func bodyBandHeight(feelsText: String, placeText: String, itemsText: String) -> Double {
+        let body = bodyPadding
+            + lineHeight(feelsFontSize) * Double(lineCount(forText: feelsText, fontSize: feelsFontSize))
+            + bodySpacing
+            + lineHeight(placeFontSize) * Double(lineCount(forText: placeText, fontSize: placeFontSize))
+            + bodySpacing
+            + lineHeight(itemsFontSize) * Double(lineCount(forText: itemsText, fontSize: itemsFontSize))
+            + bodyPadding
+        let foot = lineHeight(footFontSize) + footBottomPadding
+        return body + foot
+    }
+
+    /// True iff the lockup band and the body+foot band would meet
+    /// on a canvas rendered at `scale` (1 = full size; 0.25 ≈ the
+    /// share preview's thumbnail). Every term scales linearly, so
+    /// the verdict is scale-invariant — which is exactly why the
+    /// raster thumbnail cannot collide when the full size does not.
+    static func collides(feelsText: String, placeText: String, itemsText: String, scale: Double = 1) -> Bool {
+        (lockupBandHeight + bodyBandHeight(feelsText: feelsText, placeText: placeText, itemsText: itemsText)) * scale
+            > canvasHeight * scale
     }
 }
 
