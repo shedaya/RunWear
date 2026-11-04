@@ -207,8 +207,22 @@ class LocationPickerTapRegistrationTest {
             pump(host, 1)
             pumps++
         }
+        // Diagnosis (runs 41923320020/41924215271/41925395351):
+        // which texts does the semantics tree actually hold after
+        // the swap? Boston persisting = the recomposition never
+        // ran; Miami present without New York = recomposition ran
+        // but the LazyColumn did not compose the new item.
+        val textsAfterSwap = mutableListOf<String>()
+        fun collectTexts(node: SemanticsNode) {
+            if (node.config.contains(SemanticsProperties.Text)) {
+                textsAfterSwap += node.config[SemanticsProperties.Text].map { it.text }
+            }
+            node.children.forEach { collectTexts(it) }
+        }
+        collectTexts(unmergedRoot(host.composeView))
         assertNotNull(
-            "the new row must compose within a few frames of the results landing (took $pumps)",
+            "the new row must compose within a few frames of the results landing " +
+                "(took $pumps; semantics texts after swap: $textsAfterSwap)",
             findRowCenter(host, "New York")
         )
         tapRow(host, "New York")
