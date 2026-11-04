@@ -17,13 +17,14 @@ enum GenderPreference: String, Codable, CaseIterable {
         }
     }
 
-    var displayIcon: String {
-        switch self {
-        case .male: return "🚹"
-        case .female: return "🚺"
-        case .unisex: return "○"
-        }
-    }
+    // WS-10 (A4 residue, R-1): the former `displayIcon` (🚹/🚺/○
+    // text glyphs) is REMOVED. Its only consumer was the dead
+    // GenderToggle/GenderOption pair (no call sites anywhere in
+    // the app — verified by full-tree search), and no frame of
+    // the approved design carries emoji or text-glyph picker
+    // markers: the live fit picker (FitPreferencePicker) renders
+    // plain text labels. Removal, not redesign — nothing rendered
+    // it, so nothing changes on screen.
 
     /// Text display label (not icons)
     var displayLabel: String {

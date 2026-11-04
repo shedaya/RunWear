@@ -65,7 +65,11 @@ struct MakeItMeForkView: View {
                     Text("Make It Me")
                         .font(.greatVibes(size: 25))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text("Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at. Your first 5 looks are free.")
+                    // WS-10 (A1): the free-looks promise lives
+                    // ONLY on frame 28's Welcome screen — the fork
+                    // (frame 32) carries no promise line; its copy
+                    // is the choice itself.
+                    Text("Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at.")
                         .font(.system(size: 15))
                         .foregroundColor(AppTheme.inkSecondary)
                     Button(action: onCustomize) {

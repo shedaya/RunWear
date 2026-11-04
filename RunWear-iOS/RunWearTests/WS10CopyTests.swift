@@ -1,0 +1,318 @@
+import XCTest
+
+/// Pins for WS-10 (addendum & copy, iOS lane) — A1, A2, A4 residue:
+///
+///  * A1: onboarding's sequence is the design's — promise (frame
+///    28) → setup questions, one per screen with native push
+///    (frames 29–31) → choice (32) → consent (33) → first look
+///    (34). The free-looks promise appears ONLY on frame 28's own
+///    screen; it is gone from the setup form (which no longer has
+///    a header at all) and from the fork.
+///  * A2: the welcome headline is Sol's pick, character for
+///    character: "Run, weather or not."
+///  * T-2 (R-2 ruling): frame 28 stands in the sequence as a
+///    standalone screen, shaped as designed (script logo, the
+///    headline, two promise rows, Get Started, the quiet footer).
+///  * Consent is reachable in ONE gesture from the fork (the
+///    customize door presents the opt-in flow, whose first step
+///    is consent), and consent acceptance is SILENT (§1.7).
+///  * Frame 34's reveal: photo crossfade (FirstLookReveal's
+///    numbers) → band +120 ms after the photo lands → ONE success
+///    haptic.
+///  * A4 residue (R-1's corrected test): EVERY emoji occurrence in
+///    app-target code is censused — present-in-design = keep,
+///    absent-from-design = defect. The 🚹/🚺 displayIcon and its
+///    dead GenderToggle consumer chain are removed; the only
+///    remaining code emoji are WeatherViewModel.shareText's four
+///    lines — a computation with NO UI consumer since WS-6 (T-4),
+///    kept because its composition is pinned by
+///    ShareTextCompositionTests (status recorded in the gate
+///    report; not deleted without evidence about its tests).
+final class WS10CopyTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    private func occurrences(_ haystack: String, _ needle: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+
+    /// Every app-target Swift file, as (name, code lines with
+    /// comment-only lines removed) — the emoji census scans CODE,
+    /// not the comments that document removals and quotations.
+    private func appCodeLines() throws -> [(file: String, line: Int, text: String)] {
+        let testsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let appDir = testsDir.deletingLastPathComponent().appendingPathComponent("RunWear")
+        guard let enumerator = FileManager.default.enumerator(
+            at: appDir, includingPropertiesForKeys: nil
+        ) else { throw XCTSkip("app source tree unreachable") }
+        var out: [(String, Int, String)] = []
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            for (idx, raw) in text.components(separatedBy: "\n").enumerated() {
+                if raw.trimmingCharacters(in: .whitespaces).hasPrefix("//") { continue }
+                out.append((url.lastPathComponent, idx + 1, raw))
+            }
+        }
+        return out
+    }
+
+    private func isEmojiScalar(_ scalar: Unicode.Scalar) -> Bool {
+        (0x1F300...0x1FAFF).contains(scalar.value)
+            || (0x2600...0x26FF).contains(scalar.value)
+            || (0x2700...0x27BF).contains(scalar.value)
+    }
+
+    // MARK: - A1 · step order (the design's sequence)
+
+    func testStepOrderIsTheDesignSequence() {
+        XCTAssertEqual(
+            OnboardingStep.fullSequence,
+            [.welcome, .temperature, .fit, .comfort, .location, .firstLook],
+            "promise (28) → setup (29–31) → choice/consent/first look (32–34)"
+        )
+        XCTAssertEqual(OnboardingStep.setupQuestions, [.temperature, .fit, .comfort])
+    }
+
+    func testStepChainAdvancesInOrderAndEndsAtFirstLook() {
+        XCTAssertEqual(OnboardingStep.welcome.next, .temperature)
+        XCTAssertEqual(OnboardingStep.temperature.next, .fit)
+        XCTAssertEqual(OnboardingStep.fit.next, .comfort)
+        XCTAssertEqual(OnboardingStep.comfort.next, .location)
+        XCTAssertEqual(OnboardingStep.location.next, .firstLook)
+        XCTAssertNil(OnboardingStep.firstLook.next)
+    }
+
+    func testSetupIsOneQuestionPerScreenWithNativePush_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("NavigationStack(path: $path)"),
+                      "the setup advances through a native NavigationStack (§1.4 push)")
+        XCTAssertTrue(onboarding.contains(".navigationDestination(for: OnboardingStep.self)"),
+                      "each step is a pushed destination — Back is the exact reverse")
+        // One screen per question: each shared control is composed
+        // exactly once in onboarding (its own pushed screen), and
+        // the old single scrolling form (and its header) is gone.
+        XCTAssertEqual(occurrences(onboarding, "TemperatureUnitPicker(unit:"), 1)
+        XCTAssertEqual(occurrences(onboarding, "FitPreferencePicker(preference:"), 1)
+        XCTAssertEqual(occurrences(onboarding, "ComfortLevelControl(comfortLevel:"), 1)
+        XCTAssertFalse(onboarding.contains("preferencesBody"),
+                       "the one-screen preferences form is retired")
+        XCTAssertFalse(onboarding.contains("Welcome to RunWear"),
+                       "the old setup-form header (title + promise) is retired with it")
+    }
+
+    // MARK: - A1/T-2 · frame 28 stands, and the promise lives ONLY there
+
+    func testFrame28WelcomeScreenShape_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("private var welcomeScreen"),
+                      "frame 28 is a standalone screen (the stack's root), per the T-2 ruling")
+        XCTAssertTrue(onboarding.contains(".font(.greatVibes(size: 64))"),
+                      "the script logo at frame 28's specimen size")
+        XCTAssertTrue(onboarding.contains("Text(OnboardingCopy.welcomeHeadline)"),
+                      "the headline slot renders the decided line")
+        XCTAssertTrue(onboarding.contains("\"The right outfit for the weather\""),
+                      "promise row 1, as designed")
+        XCTAssertTrue(onboarding.contains("\"See yourself in every outfit\""),
+                      "promise row 2, as designed")
+        XCTAssertTrue(onboarding.contains("\"Free to start · Set up in under a minute\""),
+                      "frame 28's quiet footer")
+        XCTAssertTrue(onboarding.contains("path.append(.temperature)"),
+                      "Get Started pushes the first setup question")
+    }
+
+    func testFreeLooksPromiseAppearsOnlyOnFrame28() throws {
+        // The promise STRING exists exactly once in app code: its
+        // definition in OnboardingCopy. The welcome screen renders
+        // it through the constant; nothing else may spell it out.
+        let lines = try appCodeLines()
+        let hits = lines.filter { $0.text.contains(OnboardingCopy.freeLooksPromise) }
+        XCTAssertEqual(hits.count, 1,
+                       "the promise must be spelled out exactly once — found: \(hits)")
+        XCTAssertEqual(hits.first?.file, "OnboardingSequence.swift")
+
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertEqual(occurrences(onboarding, "OnboardingCopy.freeLooksPromise"), 1,
+                       "the welcome screen references the promise exactly once")
+        // …and that reference sits INSIDE the welcome screen (after
+        // its declaration, before the question screens begin).
+        let welcomeStart = try XCTUnwrap(onboarding.range(of: "private var welcomeScreen"))
+        let promiseUse = try XCTUnwrap(onboarding.range(of: "OnboardingCopy.freeLooksPromise"))
+        let questionsStart = try XCTUnwrap(onboarding.range(of: "private func questionScreen"))
+        XCTAssertTrue(welcomeStart.lowerBound < promiseUse.lowerBound
+                      && promiseUse.lowerBound < questionsStart.lowerBound,
+                      "the promise renders on frame 28's screen and nowhere later")
+
+        let fork = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        XCTAssertFalse(fork.contains(OnboardingCopy.freeLooksPromise),
+                       "the fork (frame 32) carries no promise line — the choice is its copy")
+    }
+
+    func testNoPriceStringsInOnboarding() throws {
+        // §9/§8G: no price appears anywhere in onboarding. A price
+        // STRING is a string literal opening with a $ and a digit
+        // ("$9…") — Swift's $0 closure shorthand is not a price.
+        for file in ["../RunWear/Views/Onboarding/OnboardingView.swift",
+                     "../RunWear/Models/OnboardingSequence.swift",
+                     "../RunWear/Views/MakeItMeFlowViews.swift"] {
+            let source = try sourceFile(file)
+            XCTAssertNil(source.range(of: "\"\\$[0-9]", options: .regularExpression),
+                         "\(file) must carry no price string")
+        }
+    }
+
+    // MARK: - A2 · the headline, character for character
+
+    func testWelcomeHeadlineIsSolPickCharacterForCharacter() {
+        XCTAssertEqual(OnboardingCopy.welcomeHeadline, "Run, weather or not.")
+        XCTAssertNotEqual(OnboardingCopy.welcomeHeadline, "Run, Weather or Not.",
+                          "the tagline's casing is NOT the decided headline — the pick is installed exactly")
+    }
+
+    func testOldHeadlineCopyIsGoneFromTheApp() throws {
+        let lines = try appCodeLines()
+        XCTAssertFalse(lines.contains { $0.text.contains("Let's prepare your perfect run") },
+                       "the replaced headline survives nowhere in app code")
+        XCTAssertFalse(lines.contains { $0.text.contains("prepare your perfect run") })
+    }
+
+    // MARK: - Consent · one gesture from the fork, silent on accept
+
+    func testConsentIsOneGestureFromTheFork_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("onCustomize: { showOptIn = true }"),
+                      "the fork's customize door — one tap — presents the opt-in flow")
+        XCTAssertEqual(occurrences(onboarding, ".fullScreenCover(isPresented: $showOptIn)"), 1,
+                       "the flow rides its own full-screen cover from the fork (WS-5's §1.4 reading)")
+        XCTAssertTrue(onboarding.contains("MakeItMeOptInFlow("),
+                      "the presented flow is the opt-in flow")
+    }
+
+    func testConsentIsTheOptInFlowsFirstStep_sourcePin() throws {
+        let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        XCTAssertTrue(flow.contains("@State private var step: Step = .consent"),
+                      "the opt-in flow OPENS on consent (frame 33) — capture follows it")
+        XCTAssertTrue(flow.contains("case .consent:"),
+                      "consent is a step of the flow in its own right")
+        XCTAssertTrue(flow.contains("These photos are of me, and I am 18 or older."),
+                      "the frame-33 attestation, verbatim")
+        XCTAssertTrue(flow.contains("step = .capture"),
+                      "accepting consent advances to capture — nothing else gates it")
+    }
+
+    func testConsentAcceptanceIsSilent_sourcePin() throws {
+        // §1.7's haptic table is the complete list; consent is not
+        // in it. The whole opt-in flow file carries no sensory
+        // feedback at all — consent accept (and the flow around
+        // it) fires nothing.
+        let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        XCTAssertEqual(occurrences(flow, ".sensoryFeedback"), 0,
+                       "no haptic may ride the consent flow")
+        XCTAssertEqual(occurrences(flow, "UINotificationFeedbackGenerator"), 0)
+        XCTAssertEqual(occurrences(flow, "UIImpactFeedbackGenerator"), 0)
+    }
+
+    // MARK: - Frame 34 · the reveal (§1.4 numbers, one haptic)
+
+    func testFirstLookRevealTiming() {
+        XCTAssertEqual(FirstLookReveal.photoCrossfadeSeconds, 0.6, accuracy: 0.0001)
+        XCTAssertEqual(FirstLookReveal.bandDelayAfterPhotoSeconds, 0.12, accuracy: 0.0001)
+        XCTAssertEqual(FirstLookReveal.bandStartSeconds, 0.72, accuracy: 0.0001,
+                       "the band starts 120 ms AFTER the photo lands, not with it")
+        XCTAssertEqual(FirstLookReveal.successHapticCount, 1,
+                       "exactly one success haptic per reveal (§1.7)")
+    }
+
+    func testFirstLookRevealWiring_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains(".sensoryFeedback(.success, trigger: firstLookHapticNonce)"),
+                      "the reveal's success haptic is the notification .success (§1.7)")
+        XCTAssertEqual(occurrences(onboarding, ".sensoryFeedback("), 1,
+                       "the first-look moment carries exactly ONE haptic wiring")
+        XCTAssertTrue(onboarding.contains("withAnimation(.easeInOut(duration: FirstLookReveal.photoCrossfadeSeconds))"),
+                      "the photo crossfades on the shared timing value")
+        XCTAssertTrue(onboarding.contains("FirstLookReveal.bandStartSeconds"),
+                      "the band's delay is computed from the same numbers the tests pin")
+        XCTAssertTrue(onboarding.contains("guard !firstLookPhotoRevealed else { return }"),
+                      "a re-appearance never replays the reveal (or its haptic)")
+    }
+
+    // MARK: - A4 residue · the emoji census (R-1's test)
+
+    func testEmojiCensus_onlyTheConsumerlessShareTextRemains() throws {
+        let lines = try appCodeLines()
+        var hits: [(file: String, line: Int, text: String)] = []
+        for entry in lines where entry.text.unicodeScalars.contains(where: isEmojiScalar) {
+            hits.append(entry)
+        }
+        // The complete census of app-target CODE: exactly four
+        // lines, all inside WeatherViewModel.shareText. That
+        // computation has had no UI consumer since WS-6 removed
+        // the home ShareLink (T-4); it is kept — and its emoji
+        // with it — because ShareTextCompositionTests pins its
+        // composition (see the gate report's census table). Every
+        // other occurrence the audit found is gone.
+        XCTAssertEqual(hits.count, 4,
+                       "emoji census drifted — found: \(hits.map { "\($0.file):\($0.line)" })")
+        XCTAssertTrue(hits.allSatisfy { $0.file == "WeatherViewModel.swift" },
+                      "no emoji may live outside the shareText computation: \(hits)")
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        let shareStart = try XCTUnwrap(vm.range(of: "var shareText: String?"))
+        for hit in hits {
+            XCTAssertTrue(hit.text.contains("RunWear Recommendation")
+                          || hit.text.contains("placeDisplayName")
+                          || hit.text.contains("Feels like")
+                          || hit.text.contains("Tip:"),
+                          "census hit outside shareText's known lines: \(hit)")
+        }
+        XCTAssertTrue(vm[shareStart.lowerBound...].contains("🏃 RunWear Recommendation"))
+    }
+
+    func testDisplayIconAndItsDeadToggleChainAreRemoved() throws {
+        let gender = try sourceFile("../RunWear/Models/GenderPreference.swift")
+        XCTAssertFalse(gender.contains("var displayIcon"),
+                       "the 🚹/🚺 displayIcon is removed, not left as dead code")
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertFalse(home.contains("struct GenderToggle"),
+                       "GenderToggle had no call sites — the dead chain goes with its glyph")
+        XCTAssertFalse(home.contains("struct GenderOption"))
+        // The LIVE fit picker renders plain text labels — the
+        // design's picker expression on both onboarding and
+        // Settings.
+        let controls = try sourceFile("../RunWear/Views/Components/PreferenceControls.swift")
+        XCTAssertTrue(controls.contains("Text(\"Men's\")"))
+        XCTAssertTrue(controls.contains("Text(\"Women's\")"))
+        XCTAssertTrue(controls.contains("Text(\"No preference\")"))
+    }
+
+    func testShareTextStatusRecorded_consumerlessButKept() throws {
+        // WS-6's flag, recorded as a pin: shareText remains DEFINED
+        // (its composition tests still run against it) and no app
+        // view consumes it in code — the home toolbar's ShareLink
+        // was its last consumer (T-4).
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("var shareText: String?"))
+        let lines = try appCodeLines()
+        let consumers = lines.filter { $0.file != "WeatherViewModel.swift" && $0.text.contains("shareText") }
+        XCTAssertTrue(consumers.isEmpty,
+                      "shareText must stay consumerless in code (comments aside): \(consumers)")
+    }
+
+    func testLocationPickerUsesDesignedIconographyNotTextGlyphs() throws {
+        // A4's picker item, iOS side: the location picker's
+        // selection/current markers are SF Symbol iconography —
+        // no "✓" text glyph serves as a check anywhere in it.
+        let picker = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
+        XCTAssertFalse(picker.contains("Text(\"✓\")"))
+        XCTAssertFalse(picker.contains("\"✓\""))
+        XCTAssertTrue(picker.contains("Image(systemName: \"location.fill\")"),
+                      "the Current location row is marked with designed iconography")
+    }
+}

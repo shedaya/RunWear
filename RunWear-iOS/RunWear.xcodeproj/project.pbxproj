@@ -187,6 +187,9 @@
 		N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */; };
 		N10002000000000000000004 /* HeroServeTelemetryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = N10001000000000000000003 /* HeroServeTelemetryTests.swift */; };
 		W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W60001000000000000000001 /* WS6PipelinesTests.swift */; };
+		X10002000000000000000001 /* OnboardingSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = X10001000000000000000001 /* OnboardingSequence.swift */; };
+		X10002000000000000000002 /* OnboardingSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = X10001000000000000000001 /* OnboardingSequence.swift */; };
+		W70002000000000000000001 /* WS10CopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W70001000000000000000001 /* WS10CopyTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -351,6 +354,8 @@
 		N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFallbackProvenanceTests.swift; sourceTree = "<group>"; };
 		N10001000000000000000003 /* HeroServeTelemetryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroServeTelemetryTests.swift; sourceTree = "<group>"; };
 		W60001000000000000000001 /* WS6PipelinesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS6PipelinesTests.swift; sourceTree = "<group>"; };
+		X10001000000000000000001 /* OnboardingSequence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSequence.swift; sourceTree = "<group>"; };
+		W70001000000000000000001 /* WS10CopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS10CopyTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -428,6 +433,7 @@
 				K10001000000000000000001 /* HomeHandoffGeometry.swift */,
 				L10001000000000000000001 /* WearIveRunElementMachine.swift */,
 				W50001000000000000000001 /* SettingsInventory.swift */,
+				X10001000000000000000001 /* OnboardingSequence.swift */,
 				F10001000000000000000101 /* PersonalHeroModels.swift */,
 			);
 			path = Models;
@@ -607,6 +613,7 @@
 				N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */,
 				N10001000000000000000003 /* HeroServeTelemetryTests.swift */,
 				W60001000000000000000001 /* WS6PipelinesTests.swift */,
+				W70001000000000000000001 /* WS10CopyTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -827,6 +834,7 @@
 				F10002000000000000000105 /* MakeItMeBilling.swift in Sources */,
 				F10002000000000000000138 /* MakeItMePriceLabels.swift in Sources */,
 				H10002000000000000000001 /* SimplePlace.swift in Sources */,
+				X10002000000000000000001 /* OnboardingSequence.swift in Sources */,
 				K10002000000000000000001 /* HomeHandoffGeometry.swift in Sources */,
 				L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000001 /* SettingsInventory.swift in Sources */,
@@ -919,6 +927,7 @@
 				F10002000000000000000137 /* MakeItMeAvailability.swift in Sources */,
 				F10002000000000000000139 /* MakeItMePriceLabels.swift in Sources */,
 				H10002000000000000000002 /* SimplePlace.swift in Sources */,
+				X10002000000000000000002 /* OnboardingSequence.swift in Sources */,
 				K10002000000000000000002 /* HomeHandoffGeometry.swift in Sources */,
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000002 /* SettingsInventory.swift in Sources */,
@@ -942,6 +951,7 @@
 				N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */,
 				N10002000000000000000004 /* HeroServeTelemetryTests.swift in Sources */,
 				W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */,
+				W70002000000000000000001 /* WS10CopyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
