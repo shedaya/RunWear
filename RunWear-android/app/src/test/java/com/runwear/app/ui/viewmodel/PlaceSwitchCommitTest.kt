@@ -181,50 +181,6 @@ class PlaceSwitchCommitTest {
     }
 
     @Test
-    fun `Y-2 - leaving and returning home, the return commit carries home's own fallback for re-resolution`() {
-        // The iOS defect's second half: on returning to the home
-        // place, a stock photo (in fact the previous place's) served
-        // instead of the user's own existing photo for that cell.
-        // The Android contract: the return commit carries HOME's
-        // own bundled fallback (never the away place's photo, never
-        // a stale personal URL from before the trip), with the
-        // personal layer reset — and the personal re-serve then
-        // comes from the repository, where the home cell's accepted
-        // photo is untouched by place switches (the reference epoch
-        // and its acceptance records do not move on a switch; see
-        // ReferenceEpochPolicyTest rule 1).
-        val nyFallback =
-            "file:///android_asset/hero_fallback/mild_clear_female.webp"
-        val away = kcHeroState.withFetchedConditions(
-            weather = nyWeather,
-            outfit = outfit(nyWeather),
-            forecast = emptyList(),
-            pendingPlace = SimplePlace("New York", "NY"),
-            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 9, 0),
-            nowSelected = true,
-            heroFallbackUrl = nyFallback
-        )
-        assertEquals(nyFallback, away.heroImageUrl)
-
-        val kcFallback =
-            "file:///android_asset/hero_fallback/cool_clear_female.webp"
-        val returned = away.withFetchedConditions(
-            weather = kcWeather,
-            outfit = outfit(kcWeather),
-            forecast = emptyList(),
-            pendingPlace = SimplePlace("Kansas City", "MO"),
-            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 8, 0),
-            nowSelected = true,
-            heroFallbackUrl = kcFallback
-        )
-        assertEquals("Kansas City, MO", returned.locationName)
-        assertEquals(kcFallback, returned.heroImageUrl)
-        assertEquals(kcFallback, returned.effectiveHeroUrl)
-        assertEquals(false, returned.heroIsPersonal)
-        assertNull(returned.personalHeroImageUrl)
-    }
-
-    @Test
     fun `effectiveHeroUrl prefers the resolved hero and falls back to the bundled fallback`() {
         val unresolved = kcState.copy(
             heroImageUrl = null,

@@ -76,6 +76,30 @@ class FirstLookPresentationTest {
     }
 
     @Test
+    fun `invariant (d) - no stock photo ever sits under the finished claim, even transiently`() {
+        // The iOS sequence: claim printed over an empty band, then a
+        // STOCK photo faded in under it for ~0.6 s before the user's
+        // own photo cut in. Here the claim and the photo are one
+        // derivation: whenever the photo on screen is not the user's
+        // own delivered photo (personalPhotoDisplayed = false — the
+        // serving photo is stock or the fallback), the state is
+        // MAKING and no finished claim can render over it, at any
+        // instant of the transition.
+        val underStock = FirstLookPresentation.resolve(
+            PersonalLookStatus.Ready, personalPhotoDisplayed = false
+        )
+        assertEquals(FirstLookState.MAKING, underStock)
+        assertFalse(FirstLookPresentation.showsFinishedClaims(underStock))
+        // The personal photo displayed is the ONLY road to READY.
+        assertEquals(
+            FirstLookState.READY,
+            FirstLookPresentation.resolve(
+                PersonalLookStatus.Ready, personalPhotoDisplayed = true
+            )
+        )
+    }
+
+    @Test
     fun `finished claims and the premium band hang off ready alone`() {
         assertTrue(FirstLookPresentation.showsFinishedClaims(FirstLookState.READY))
         assertFalse(FirstLookPresentation.showsFinishedClaims(FirstLookState.MAKING))
