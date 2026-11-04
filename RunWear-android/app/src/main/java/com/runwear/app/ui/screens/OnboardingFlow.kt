@@ -41,8 +41,8 @@ object OnboardingCopy {
         "Make It Me puts you in the photos. Your first 5 looks are free."
     const val PROMISE_CTA = "Get Started"
     // W-21 (Sol, Nov 4 walkthrough): the app is free forever —
-    // premium features are the upsell — so the footer says exactly
-    // that, verbatim, not "Free to start".
+    // premium features are the upsell — so the footer states the
+    // model plainly, in Sol's replacement wording, verbatim.
     const val PROMISE_FOOTER = "Free forever · Premium is optional"
 
     /** The A1 promise sentence — sanctioned on frame 28 ONLY. */
