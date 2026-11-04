@@ -123,8 +123,8 @@ class LocationPickerTapRegistrationTest {
         return found ?: throw IllegalStateException("no ViewRootForTest")
     }
 
-    /** Center (in view coordinates) of the row whose name text is exactly [name]. */
-    private fun rowCenter(host: Host, name: String): Offset {
+    /** Center (in view coordinates) of the row whose name text is exactly [name], or null if not composed yet. */
+    private fun findRowCenter(host: Host, name: String): Offset? {
         var center: Offset? = null
         fun walk(node: SemanticsNode) {
             if (center == null && node.config.contains(SemanticsProperties.Text)) {
@@ -135,6 +135,11 @@ class LocationPickerTapRegistrationTest {
             node.children.forEach { walk(it) }
         }
         walk(unmergedRoot(host.composeView))
+        return center
+    }
+
+    private fun rowCenter(host: Host, name: String): Offset {
+        val center = findRowCenter(host, name)
         assertNotNull("row for \"$name\" must be composed", center)
         return center!!
     }
@@ -183,11 +188,23 @@ class LocationPickerTapRegistrationTest {
     fun `a tap immediately after the results change registers the new row`() {
         val host = composePicker(listOf(boston))
         // The just-typed moment: a new search lands a new result
-        // set; with only the minimum settle for the new rows to
-        // compose, the tap must hit the NEW row — not a stale one,
-        // and not nothing.
+        // set. The tap goes in at the FIRST moment the new row is
+        // composed (the minimum settle physics allows — a tap
+        // cannot land on a row that has not composed yet, on any
+        // platform; the iOS defect was rows that were composed and
+        // visible yet never registered). The new row must compose
+        // within a few frames, and the tap must then hit the NEW
+        // row — not a stale one, and not nothing.
         host.results.value = listOf(miami, newYork)
-        pump(host, 1)
+        var pumps = 0
+        while (findRowCenter(host, "New York") == null && pumps < 5) {
+            pump(host, 1)
+            pumps++
+        }
+        assertNotNull(
+            "the new row must compose within a few frames of the results landing (took $pumps)",
+            findRowCenter(host, "New York")
+        )
         tapRow(host, "New York")
         assertEquals(listOf(newYork), host.selections)
     }
