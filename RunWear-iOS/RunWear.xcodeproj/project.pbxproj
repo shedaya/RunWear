@@ -191,6 +191,7 @@
 		X10002000000000000000002 /* OnboardingSequence.swift in Sources */ = {isa = PBXBuildFile; fileRef = X10001000000000000000001 /* OnboardingSequence.swift */; };
 		W70002000000000000000001 /* WS10CopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W70001000000000000000001 /* WS10CopyTests.swift */; };
 		G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G30001000000000000000001 /* Gen2I3OnboardingTests.swift */; };
+		Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z30001000000000000000001 /* Gen3ISmallTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -358,6 +359,7 @@
 		X10001000000000000000001 /* OnboardingSequence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingSequence.swift; sourceTree = "<group>"; };
 		W70001000000000000000001 /* WS10CopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS10CopyTests.swift; sourceTree = "<group>"; };
 		G30001000000000000000001 /* Gen2I3OnboardingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen2I3OnboardingTests.swift; sourceTree = "<group>"; };
+		Z30001000000000000000001 /* Gen3ISmallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3ISmallTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -617,6 +619,7 @@
 				W60001000000000000000001 /* WS6PipelinesTests.swift */,
 				W70001000000000000000001 /* WS10CopyTests.swift */,
 				G30001000000000000000001 /* Gen2I3OnboardingTests.swift */,
+				Z30001000000000000000001 /* Gen3ISmallTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -956,6 +959,7 @@
 				W60002000000000000000001 /* WS6PipelinesTests.swift in Sources */,
 				W70002000000000000000001 /* WS10CopyTests.swift in Sources */,
 				G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */,
+				Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

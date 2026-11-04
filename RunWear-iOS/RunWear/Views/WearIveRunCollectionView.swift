@@ -473,6 +473,15 @@ struct WearIveRunDayView: View {
 /// #RunAnyWear directly under it, a top area scrim that is gone
 /// before the runner's head, UI-sans body copy, and the "Wear I've
 /// Run" script at the foot.
+///
+/// GEN-3 X-11: this view is composed at ONE size (the
+/// MorningPosterMetrics canvas) and rendered once, full-size, by
+/// `renderPoster()`; the share preview is a raster scale-down of
+/// that render — there is no thumbnail-size composition of this
+/// view anywhere on iOS, so the Android thumbnail text collision
+/// has no mechanism here. The lockup band and the body+foot band
+/// are sequential VStack bands across a Spacer; their bounded
+/// heights are pinned in MorningPosterMetrics.
 struct MorningPosterView: View {
     let entry: WearIveRunEntry
     let hero: UIImage?
@@ -500,39 +509,43 @@ struct MorningPosterView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 150)
+            .frame(height: MorningPosterMetrics.scrimHeight)
             .frame(maxWidth: .infinity)
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Lockup: script brand + hashtag directly under it.
-                VStack(spacing: 2) {
+                // GEN-3 X-11: every layout value comes from
+                // MorningPosterMetrics (the dual-membered pure
+                // enum), so the band geometry the tests pin is
+                // the geometry that renders.
+                VStack(spacing: MorningPosterMetrics.lockupSpacing) {
                     Text("RunWear")
-                        .font(.greatVibes(size: 37))
+                        .font(.greatVibes(size: MorningPosterMetrics.brandFontSize))
                         .foregroundColor(AppTheme.warmWhite)
                         .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
                     Text("#RunAnyWear")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MorningPosterMetrics.hashtagFontSize, weight: .semibold))
                         .foregroundColor(AppTheme.warmWhite)
                 }
-                .padding(.top, 20)
+                .padding(.top, MorningPosterMetrics.lockupTopPadding)
 
                 Spacer()
 
                 // Body in the UI sans (Bebas retired, artifact too).
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: MorningPosterMetrics.bodySpacing) {
                     Text("\(formatTemperature(entry.feelsLikeF)) · \(entry.condition)")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: MorningPosterMetrics.feelsFontSize, weight: .semibold))
                         .foregroundColor(.white)
                     Text("\(entry.placeDisplayName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
-                        .font(.system(size: 14))
+                        .font(.system(size: MorningPosterMetrics.placeFontSize))
                         .foregroundColor(.white.opacity(0.85))
                     Text(entry.itemNames.prefix(4).joined(separator: " · "))
-                        .font(.system(size: 13))
+                        .font(.system(size: MorningPosterMetrics.itemsFontSize))
                         .foregroundColor(.white.opacity(0.85))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
+                .padding(MorningPosterMetrics.bodyPadding)
                 .background(
                     LinearGradient(
                         colors: [.clear, .black.opacity(0.45)],
@@ -543,18 +556,18 @@ struct MorningPosterView: View {
                 // Foot: the collection's signature.
                 HStack(spacing: 8) {
                     Text("Wear I've Run")
-                        .font(.greatVibes(size: 24))
+                        .font(.greatVibes(size: MorningPosterMetrics.footFontSize))
                         .foregroundColor(.white)
                     Spacer()
                     Text("runwear.ai")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 18)
+                .padding(.horizontal, MorningPosterMetrics.footHorizontalPadding)
+                .padding(.bottom, MorningPosterMetrics.footBottomPadding)
             }
         }
-        .frame(width: 390, height: 520)
+        .frame(width: MorningPosterMetrics.canvasWidth, height: MorningPosterMetrics.canvasHeight)
         .clipped()
     }
 }

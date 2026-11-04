@@ -522,7 +522,13 @@ private struct FirstLookView: View {
         .sheet(isPresented: $showLocationPicker) {
             LocationPickerSheet(
                 isPresented: $showLocationPicker,
-                isUsingGPS: false,
+                // GEN-3 X-13: the Current location row's CURRENT
+                // badge reads the ACTUAL location state — this
+                // sheet hardcoded `false` while the preview view
+                // model is in GPS mode by default (its GPS
+                // pipeline guards on `previewVM.isUsingGPS`), so
+                // the row misreported the active selection.
+                isUsingGPS: previewVM.isUsingGPS,
                 onUseCurrentLocation: {
                     previewVM.switchToGPS()
                     locationService.requestPermission()

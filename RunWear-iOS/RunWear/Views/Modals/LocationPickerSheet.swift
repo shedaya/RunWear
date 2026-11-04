@@ -177,7 +177,7 @@ struct LocationPickerSheet: View {
                 return
             }
 
-            searchResults = placemarks.compactMap { placemark in
+            let candidates = placemarks.compactMap { placemark -> LocationSearchCandidate? in
                 guard let location = placemark.location else { return nil }
 
                 let name = placemark.locality ?? placemark.name ?? "Unknown"
@@ -196,11 +196,29 @@ struct LocationPickerSheet: View {
                     city: placemark.locality ?? placemark.name,
                     region: placemark.administrativeArea
                 )
-                return LocationSearchResult(
+                return LocationSearchCandidate(
                     name: name,
                     subtitle: subtitle,
                     displayName: simple?.displayName ?? name,
-                    coordinate: location.coordinate
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                )
+            }
+
+            // GEN-3 X-12: dedupe by place identity at result
+            // construction — the same place returned twice by
+            // the geocoder renders ONCE. Identity (SimplePlace
+            // key + coordinate), not the name string, so
+            // distinct same-name places both survive.
+            searchResults = LocationSearchResults.deduplicated(candidates).map { candidate in
+                LocationSearchResult(
+                    name: candidate.name,
+                    subtitle: candidate.subtitle,
+                    displayName: candidate.displayName,
+                    coordinate: CLLocationCoordinate2D(
+                        latitude: candidate.latitude,
+                        longitude: candidate.longitude
+                    )
                 )
             }
         }
