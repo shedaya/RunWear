@@ -64,8 +64,13 @@ class LocationPickerTapRegistrationTest {
     private class Host(
         val composeView: ComposeView,
         val results: androidx.compose.runtime.MutableState<List<LocationResult>>,
-        val selections: MutableList<LocationResult>
-    )
+        val selections: MutableList<LocationResult>,
+        val controller: org.robolectric.android.controller.ActivityController<ComponentActivity>
+    ) {
+        fun close() {
+            controller.pause().stop().destroy()
+        }
+    }
 
     private fun composePicker(initial: List<LocationResult>): Host {
         com.runwear.app.ui.theme.RunWearColors.setActivePalette(
@@ -97,7 +102,7 @@ class LocationPickerTapRegistrationTest {
                 }
             }
         }
-        val host = Host(composeView, results, selections)
+        val host = Host(composeView, results, selections, controller)
         pump(host, 10)
         return host
     }
@@ -188,6 +193,7 @@ class LocationPickerTapRegistrationTest {
             listOf(newYork, boston, chicago),
             host.selections
         )
+        host.close()
     }
 
     @Test
@@ -199,6 +205,7 @@ class LocationPickerTapRegistrationTest {
             listOf(newYork, newYork, newYork),
             host.selections
         )
+        host.close()
     }
 
     @Test
@@ -243,6 +250,7 @@ class LocationPickerTapRegistrationTest {
         )
         tapRow(host, "New York")
         assertEquals(listOf(newYork), host.selections)
+        host.close()
     }
 
     @Test
@@ -257,5 +265,6 @@ class LocationPickerTapRegistrationTest {
         pump(host, 6)
         assertEquals(listOf(newYork, boston), host.selections)
         assertTrue(host.selections.size == 2)
+        host.close()
     }
 }
