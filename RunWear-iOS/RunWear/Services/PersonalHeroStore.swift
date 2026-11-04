@@ -183,22 +183,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         // cell even when the request guard below suppresses a new
         // automatic request.
         noteLookState(lookup)
-        // GEN-3 (Y-1/Y-2 epoch rule): a hero served under a
-        // pending/failed regeneration cycle predates the current
-        // reference set — it must never paint as the user's
-        // personal photo, and it must not sit in the cache where
-        // freshURL could serve it as one. Evict and fall through
-        // to the request path (the cycle's job is already queued
-        // server-side; the request dedupes against it).
-        if PersonalEpochPolicy.servesPriorEpoch(lookup) {
-            cache.evict(combinationId: cell)
-        } else {
-            switch cache.resolve(lookup: lookup, now: Date()) {
-            case .show(let url):
-                return url
-            case .none:
-                break
-            }
+        switch cache.resolve(lookup: lookup, now: Date()) {
+        case .show(let url):
+            return url
+        case .none:
+            break
         }
         guard isOptedIn else { return nil }
         await requestGenerationIfNeeded(combination: combination, userInitiated: userInitiated)
@@ -226,18 +215,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                 if Task.isCancelled { break }
                 guard let lookup = try? await self.api.getPersonalHero(combinationId: cell) else { continue }
                 self.noteLookState(lookup)
-                // GEN-3 (Y-1): a landing is the DELIVERY of the
-                // commissioned look — a current-epoch hero the
-                // server reports ready. A keep-serving hero from a
-                // superseded reference epoch is found on every
-                // poll while the regeneration runs; landing on it
-                // presented a different person as the finished
-                // first look. It is evicted, never landed on, and
-                // the poll keeps waiting for the real delivery.
-                if PersonalEpochPolicy.servesPriorEpoch(lookup) {
-                    self.cache.evict(combinationId: cell)
-                } else if PersonalEpochPolicy.isDelivery(lookup),
-                          case .show(let url) = self.cache.resolve(lookup: lookup, now: Date()) {
+                if case .show(let url) = self.cache.resolve(lookup: lookup, now: Date()) {
                     landed = url
                     break
                 }
@@ -362,35 +340,22 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         mode = billing.isSubscribed ? .subscribed : .free
         requestedCells.removeAll()
         exhaustedCell = nil
-        // GEN-3 (Y-1): a new reference epoch begins at this
-        // commit. Every cached hero and folded look state belongs
-        // to the superseded epoch — the cache's freshURL path
-        // would otherwise keep serving the old epoch's photo as
-        // this user's current representation until revalidation.
-        cache.removeAll()
-        lookStates.removeAll()
         await refreshProfile()
     }
 
     /// §3 photo replacement: same attestation + quality check in the
     /// view; consent persists server-side. Today's look is asked to
-    /// regenerate right away at no allowance cost (J4):
-    /// register_references detects the changed set and marks the
-    /// affected cells regen-pending — the server KEEPS SERVING the
-    /// prior heroes under the cycle (RW-16.12 Lane C), retiring
-    /// them only when a fresh hero passes the gate. GEN-3 (Y-1):
-    /// the client no longer serves those prior heroes as the
-    /// user's current representation (PersonalEpochPolicy), and
-    /// the local cache/states from the superseded epoch are
-    /// dropped here so no stale entry can paint in the meantime.
+    /// regenerate right away at no allowance cost (J4): since the
+    /// backend (b) addition, register_references detects the changed
+    /// set, retires the verified heroes made from the old references
+    /// (their cells' versions bump, so cached images stop serving),
+    /// and the re-request below enqueues a regeneration job.
     func replaceReferences(jpegPhotos: [Data], currentCombination: PersonalCombination?) async throws {
         for (index, data) in jpegPhotos.enumerated() {
             try await api.uploadReference(jpegData: data, position: index + 1)
         }
         try await api.registerReferences(positions: ReferenceCommitSet.positions(photoCount: jpegPhotos.count))
         referenceCount = jpegPhotos.count
-        cache.removeAll()
-        lookStates.removeAll()
         if let currentCombination {
             requestedCells.remove(currentCombination.combinationId)
             startUserInitiatedGeneration(for: currentCombination)

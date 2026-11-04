@@ -184,21 +184,21 @@ struct FirstLookPresentation: Equatable {
         freeAllowance: Int,
         isSubscribed: Bool
     ) -> FirstLookPresentation {
-        // GEN-3 (Y-1 invariants (c)/(d)): ready is claimed only
-        // when ALL THREE hold — the server reports the look ready,
-        // the delivered personal photo is the photo addressed on
-        // screen, AND that photo's image has actually loaded. The
-        // GEN-2 seam declared ready from the photo's URL presence
-        // alone: the claim and the meter rendered over the card's
-        // still-empty image phase, a pool photo occupied the card
-        // under the claim for a beat, and then the served photo
-        // hard-cut in — and because the store landed on any found
-        // hero, the "delivered" photo was a banked photo from a
-        // superseded reference epoch. A displayed photo the server
-        // still calls making (or whose pixels have not arrived)
-        // keeps the making presentation: claim never precedes
-        // photo.
-        if personalPhotoDisplayed && lookState == .ready && personalImageLoaded {
+        // GEN-3 (census-ios Y-1, narrowed by Sol's ruling of
+        // 2026-11-04): the claim waits for the PHOTO, not just
+        // its address. The GEN-2 seam declared ready from the
+        // photo's URL presence alone — the claim and the counter
+        // rendered over the card's still-empty image phase for
+        // ~0.7 s before any pixels arrived. Ready now requires
+        // the displayed personal photo's image to have actually
+        // loaded: claim never precedes photo. (Which personal
+        // photo serves is not policed here: a look generated from
+        // ANY of the user's own uploaded reference photos —
+        // including banked photos from references uploaded in an
+        // earlier version — is accepted as the user's look per
+        // Sol's ruling; the defects in scope were the ordering
+        // ones.)
+        if personalPhotoDisplayed && personalImageLoaded {
             return FirstLookPresentation(
                 phase: .ready,
                 photoOverlayTitle: nil,

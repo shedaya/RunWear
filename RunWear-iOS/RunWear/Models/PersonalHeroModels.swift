@@ -158,17 +158,6 @@ struct PersonalHeroLookup: Decodable {
     /// "quality_refused" | "service_refused" | "error". The raw
     /// gate/moderation strings never cross the wire.
     let lookReason: String?
-    /// GEN-3 (Y-1): the server's per-cell regeneration state —
-    /// "current" | "pending" | "failed"; nil on a payload that
-    /// predates the field. When the cell's references changed,
-    /// get-personal-hero KEEPS SERVING the prior hero (RW-16.12
-    /// Lane C keep-serving) while reporting regen_status
-    /// "pending"/"failed" — the served hero predates the current
-    /// reference set. Before GEN-3 the client did not decode this
-    /// field at all, so a superseded-epoch hero was
-    /// indistinguishable from a fresh delivery (the Y-1 wrong-
-    /// person first look). PersonalEpochPolicy reads it.
-    let regenStatus: String?
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -180,7 +169,6 @@ struct PersonalHeroLookup: Decodable {
         case replenishmentQueued = "replenishment_queued"
         case lookState = "look_state"
         case lookReason = "look_reason"
-        case regenStatus = "regen_status"
     }
 }
 
@@ -694,59 +682,6 @@ struct PersonalCellCache {
 
     mutating func removeAll() {
         entries.removeAll()
-    }
-}
-
-// MARK: - Reference-epoch serving rule (GEN-3 · Y-1/Y-2)
-//
-// The diagnosis (2026-11-04 iOS walkthrough, census-ios Y-1/Y-2):
-// when the user's reference photos change, the server's
-// register_references detects the change and marks every
-// delivered cell regen_status='pending' — and, under the
-// RW-16.12 Lane C keep-serving ruling (written for the
-// replace-photos flow), get-personal-hero KEEPS SERVING the
-// prior hero — generated from the SUPERSEDED reference set —
-// until a fresh hero lands, reporting regen_status in the same
-// payload. The client never decoded regen_status: its poll
-// treated any found hero as the commissioned delivery, and the
-// first-look presentation declared the look ready from the
-// photo's presence alone. Eleven seconds after the user uploaded
-// his own selfie, his "first look" was a banked photo of a
-// different person from the superseded epoch.
-//
-// The retention ruling stands — superseded-epoch photos stay in
-// the library. The SERVING rule is what changes, here, as one
-// pure policy every serve path consults:
-//
-//   * A hero the server reports under regen_status "pending" or
-//     "failed" predates the current reference set. It must NEVER
-//     paint as the user's personal photo — not on the hero, not
-//     on the first look — and it never counts as a delivery.
-//     While the regeneration is outstanding the truthful stock
-//     photo serves and the hero pill's making state says the
-//     personal photo is being made.
-//   * A hero under "current" (or a pre-field nil) is the current
-//     epoch's and serves normally.
-enum PersonalEpochPolicy {
-    /// True when the lookup's hero (if any) was generated from a
-    /// superseded reference set and must not be served as the
-    /// user's personal photo.
-    static func servesPriorEpoch(_ lookup: PersonalHeroLookup) -> Bool {
-        lookup.regenStatus == "pending" || lookup.regenStatus == "failed"
-    }
-
-    /// May this lookup's hero paint as the user's personal photo?
-    static func mayServeAsPersonal(_ lookup: PersonalHeroLookup) -> Bool {
-        lookup.found && lookup.imageUrl != nil && !servesPriorEpoch(lookup)
-    }
-
-    /// Is this lookup the DELIVERY of a commissioned look — a
-    /// current-epoch hero the server itself reports ready? A
-    /// keep-serving prior hero is never a delivery, even when the
-    /// payload also carries it as found.
-    static func isDelivery(_ lookup: PersonalHeroLookup) -> Bool {
-        mayServeAsPersonal(lookup)
-            && PersonalLookState.from(lookup) == .ready
     }
 }
 

@@ -623,14 +623,16 @@ class WeatherViewModel: ObservableObject {
         )
 
         // Only set hero image if it's from Supabase (not Unsplash fallback).
-        // GEN-3 (Y-1 invariant (d)): a reload for the SAME cell
-        // while a personal photo is applied must not republish the
-        // pool URL into the shared slot — the census's middle step
-        // was exactly that write, a stock photo fading in under
-        // an already-rendered finished claim before the personal
-        // write cut back. The personal layer below re-resolves
-        // either way; the pool result still feeds the chapter
-        // records through the serve telemetry.
+        // GEN-3 (census-ios Y-1, rendering defect 2): a reload for
+        // the SAME cell while a personal photo is applied must not
+        // republish the pool URL into the shared slot — the
+        // census's middle step was exactly that write, a stock
+        // photo fading in under the finished claim for ~0.6 s
+        // before the personal write cut back. No stock photo may
+        // appear under a finished claim, even transiently. The
+        // personal layer below re-resolves either way; the pool
+        // result still feeds the chapter records through the
+        // serve telemetry.
         let personalAppliedForThisCell = currentPersonalHeroId != nil
             && previousRequestedCombinationId == requestedCombination.fullId
         if result.fallbackLevel < 8 {

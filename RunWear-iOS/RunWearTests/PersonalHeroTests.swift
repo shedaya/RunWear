@@ -102,8 +102,7 @@ final class PersonalHeroTests: XCTestCase {
             version: version,
             replenishmentQueued: 0,
             lookState: nil,
-            lookReason: nil,
-            regenStatus: nil
+            lookReason: nil
         )
     }
 
