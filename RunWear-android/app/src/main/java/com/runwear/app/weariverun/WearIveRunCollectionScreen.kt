@@ -44,8 +44,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
@@ -643,9 +645,88 @@ internal fun ShareChooserStage(
     )
 }
 
-/** One chooser thumbnail: the real artifact, scaled to fit its card. */
+/**
+ * GEN-3 X-11: the scale math for the chooser thumbnails. The
+ * artifacts are composed at [NATURAL_WIDTH_DP] — the same width
+ * the full-size preview uses — and the composed layer is scaled
+ * to the thumbnail frame's width. Kept as a pure object so the
+ * geometry pins (PosterThumbnailGeometryTest) read the production
+ * numbers, not copies.
+ */
+internal object ArtifactThumbnailGeometry {
+
+    /** The width every share artifact is composed at, thumbnail and preview alike. */
+    const val NATURAL_WIDTH_DP = 340
+
+    /** The thumbnail frame's height; the scaled artifact is top-anchored and clipped to it. */
+    const val FRAME_HEIGHT_DP = 150
+
+    /** Layer scale for an artifact of [naturalWidthPx] shown in a frame [frameWidthPx] wide. */
+    fun scaleFor(frameWidthPx: Int, naturalWidthPx: Int): Float =
+        if (naturalWidthPx <= 0) 1f else frameWidthPx.toFloat() / naturalWidthPx.toFloat()
+
+    /** The on-screen height of an artifact [naturalHeightPx] tall at [scale]. */
+    fun scaledHeightPx(naturalHeightPx: Int, scale: Float): Int =
+        (naturalHeightPx * scale).toInt()
+}
+
+/**
+ * GEN-3 X-11: measure the artifact at its NATURAL size — fixed
+ * [ArtifactThumbnailGeometry.NATURAL_WIDTH_DP] width, unbounded
+ * height, so a fixed-geometry artifact (the Morning Poster's
+ * 420 dp) keeps its designed layout — then scale the composed
+ * layer into the frame, top-anchored; the frame clips the rest.
+ *
+ * The pre-fix thumbnail instead composed the artifact INSIDE the
+ * frame and scaled the result: the frame's constraints (~134 dp
+ * wide × 150 dp high) coerced the poster's fixed 340 dp width and
+ * 420 dp height down to the frame BEFORE the 0.42 graphicsLayer
+ * scale applied, so the poster's top lockup (~80 dp) and its
+ * bottom info column (~110 dp) were laid out inside a ≤150 dp
+ * box and overlapped — the weather/place line rendered over the
+ * wordmark (walkthrough f_080). The Kit Card, with no fixed
+ * height and no overlay columns, composed cleanly either way.
+ * The full-size poster does NOT collide (its bands sit ~230 dp
+ * apart at natural size) — pinned by PosterThumbnailGeometryTest.
+ */
 @Composable
-private fun ShareThumbnailChoice(
+private fun ArtifactThumbnailScaler(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val naturalWidthPx = ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp.roundToPx()
+        val placeable = measurables.single().measure(
+            Constraints(
+                minWidth = naturalWidthPx,
+                maxWidth = naturalWidthPx,
+                minHeight = 0,
+                maxHeight = Constraints.Infinity
+            )
+        )
+        val scale = ArtifactThumbnailGeometry.scaleFor(
+            frameWidthPx = constraints.maxWidth,
+            naturalWidthPx = placeable.width
+        )
+        val scaledHeightPx = ArtifactThumbnailGeometry.scaledHeightPx(placeable.height, scale)
+        val layoutHeight = if (constraints.maxHeight == Constraints.Infinity) {
+            scaledHeightPx
+        } else {
+            minOf(scaledHeightPx, constraints.maxHeight)
+        }
+        layout(constraints.maxWidth, layoutHeight) {
+            placeable.placeWithLayer(0, 0) {
+                scaleX = scale
+                scaleY = scale
+                transformOrigin = TransformOrigin(0f, 0f)
+            }
+        }
+    }
+}
+
+/** One chooser thumbnail: the real artifact, composed at natural size and scaled to fit its card. */
+@Composable
+internal fun ShareThumbnailChoice(
     kind: ShareArtifactKind,
     entry: WearIveRunDayEntry,
     gender: GenderPreference,
@@ -662,30 +743,23 @@ private fun ShareThumbnailChoice(
             .padding(8.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(150.dp)
+            modifier = Modifier.fillMaxWidth().height(ArtifactThumbnailGeometry.FRAME_HEIGHT_DP.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(RunWearColors.Surface)
         ) {
-            // The artifact composed at its natural width and scaled
-            // from the top-left into the thumbnail frame.
-            Box(
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = 0.42f
-                        scaleY = 0.42f
-                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
-                    }
-                    .width(340.dp)
-            ) {
+            // GEN-3 X-11: compose at natural size, scale the layer
+            // (see ArtifactThumbnailScaler) — never compose the
+            // artifact under the frame's own constraints.
+            ArtifactThumbnailScaler {
                 when (kind) {
                     ShareArtifactKind.MORNING_POSTER -> MorningPoster(
                         entry = entry,
-                        modifier = Modifier.width(340.dp),
+                        modifier = Modifier.width(ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp),
                         onRendered = onReady
                     )
                     ShareArtifactKind.KIT_CARD -> KitCard(
                         entry = entry,
-                        modifier = Modifier.width(340.dp),
+                        modifier = Modifier.width(ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp),
                         gender = gender,
                         onRendered = onReady
                     )

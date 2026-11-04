@@ -136,6 +136,8 @@ fun HeroMainScreen(
     onLocationSelect: (Double, Double, String) -> Unit,
     onUseCurrentLocation: () -> Unit = {},
     isUsingGPS: Boolean = false,
+    /** GEN-3 X-13: the ACTUAL location-permission grant state, for the Set Location sheet's Current location row. */
+    hasLocationPermission: Boolean = false,
     analyticsOptIn: Boolean = false,
     onAnalyticsOptInChange: (Boolean) -> Unit = {},
     onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
@@ -971,6 +973,7 @@ fun HeroMainScreen(
             searchResults = locationSearchState.results,
             isSearching = locationSearchState.isSearching,
             isUsingGPS = isUsingGPS,
+            hasLocationPermission = hasLocationPermission,
             onUseCurrentLocation = {
                 onUseCurrentLocation()
                 showLocationPicker = false

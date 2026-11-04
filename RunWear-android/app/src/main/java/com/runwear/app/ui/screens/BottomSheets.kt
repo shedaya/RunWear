@@ -1000,6 +1000,14 @@ fun LocationPickerSheet(
     searchResults: List<LocationResult> = emptyList(),
     isSearching: Boolean = false,
     isUsingGPS: Boolean = false,
+    /**
+     * GEN-3 X-13: the ACTUAL location-permission grant state,
+     * read by the caller from the permission system (never derived
+     * from [isUsingGPS] / the current place's source). The
+     * "Current location" row resolves its subtitle from this —
+     * see [LocationSheetState].
+     */
+    hasLocationPermission: Boolean = false,
     onUseCurrentLocation: () -> Unit = {},
     /** RW-26 Section E: actually-selected places, most-recent-first. */
     recents: List<RecentLocation> = emptyList(),
@@ -1195,6 +1203,19 @@ fun LocationPickerSheet(
             }
 
             // Use Current Location Option (GPS)
+            // GEN-3 X-13: the row's state comes from the ACTUAL
+            // permission + whether the current place is the GPS
+            // place — resolved in one seam (LocationSheetState) so
+            // every sheet mode reads the same truth. Pre-fix the
+            // subtitle was keyed on isUsingGPS alone, so selecting
+            // a manual place flipped it to "Requires location
+            // permission" with permission granted and in use.
+            val currentRowStatus = LocationSheetState.currentLocationRowStatus(
+                isUsingGPS = isUsingGPS,
+                hasLocationPermission = hasLocationPermission
+            )
+            val isCurrentGpsPlace =
+                currentRowStatus == LocationSheetState.CurrentLocationRowStatus.USING_GPS
             Surface(
                 onClick = {
                     // §1.7 / §1.3 (WS-9 fix, P-2): choosing the
@@ -1205,8 +1226,8 @@ fun LocationPickerSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
-                color = if (isUsingGPS) RunWearColors.CategoryTop.copy(alpha = 0.2f) else RunWearColors.BgCardLight,
-                border = if (isUsingGPS) BorderStroke(2.dp, RunWearColors.Primary) else null
+                color = if (isCurrentGpsPlace) RunWearColors.CategoryTop.copy(alpha = 0.2f) else RunWearColors.BgCardLight,
+                border = if (isCurrentGpsPlace) BorderStroke(2.dp, RunWearColors.Primary) else null
             ) {
                 Row(
                     modifier = Modifier
@@ -1236,7 +1257,7 @@ fun LocationPickerSheet(
                                 fontSize = 15.sp,
                                 color = RunWearColors.TextPrimary
                             )
-                            if (isUsingGPS) {
+                            if (isCurrentGpsPlace) {
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = "CURRENT",
@@ -1247,12 +1268,12 @@ fun LocationPickerSheet(
                             }
                         }
                         Text(
-                            text = if (isUsingGPS) "GPS location enabled" else "Requires location permission",
+                            text = LocationSheetState.currentLocationRowSubtitle(currentRowStatus),
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary
                         )
                     }
-                    if (isUsingGPS) {
+                    if (isCurrentGpsPlace) {
                         Box(
                             modifier = Modifier
                                 .background(RunWearColors.CategoryTop.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
@@ -1348,26 +1369,40 @@ fun LocationPickerSheet(
             SnackbarHost(hostState = recentSnackbar)
 
             // Currently using indicator
-            if (currentLocation.isNotEmpty() && !isUsingGPS) {
+            // GEN-3 X-13: label and place name are ONE line of one
+            // Text, and the pill renders only when the name seam
+            // yields a name — a visible pill always carries its
+            // place name. Pre-fix the name was a second line in
+            // this non-scrollable column; with the IME open it fell
+            // below the sheet's clip and the pill showed its label
+            // with no name (f_105 vs the fully-named f_104).
+            val currentlyUsingName = LocationSheetState.currentlyUsingName(currentLocation)
+            if (currentlyUsingName != null && !isUsingGPS) {
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     color = RunWearColors.Primary.copy(alpha = 0.1f)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("Currently using:", fontSize = 12.sp, color = RunWearColors.TextSecondary)
-                        Text(
-                            text = currentLocation,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = RunWearColors.PineAccent,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    fontSize = 12.sp,
+                                    color = RunWearColors.TextSecondary
+                                )
+                            ) { append("Currently using: ") }
+                            withStyle(
+                                SpanStyle(
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = RunWearColors.PineAccent
+                                )
+                            ) { append(currentlyUsingName) }
+                        },
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(12.dp)
+                    )
                 }
             }
 

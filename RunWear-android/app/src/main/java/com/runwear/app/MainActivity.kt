@@ -197,6 +197,11 @@ class MainActivity : ComponentActivity() {
                                     onLocationSearch = viewModel::searchLocation,
                                     onLocationSelect = viewModel::selectManualLocation,
                                     isUsingGPS = uiState.locationSource == "gps",
+                                    // GEN-3 X-13: the ACTUAL grant state, queried
+                                    // from the permission system — NOT
+                                    // uiState.hasLocationPermission, which manual
+                                    // selection also sets as a bypass.
+                                    hasLocationPermission = viewModel.hasLocationPermission(),
                                     onUseCurrentLocation = {
                                         // Request GPS permission or retry if already granted
                                         if (viewModel.hasLocationPermission()) {
@@ -366,6 +371,9 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showManualLocationPicker = false },
                             searchResults = locationSearchState.results,
                             isUsingGPS = uiState.locationSource == "gps",
+                            // GEN-3 X-13: actual grant state (see the
+                            // HeroMainScreen call above).
+                            hasLocationPermission = viewModel.hasLocationPermission(),
                             onUseCurrentLocation = {
                                 showManualLocationPicker = false
                                 requestLocationPermission()
