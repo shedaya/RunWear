@@ -1,5 +1,6 @@
 name: Bundle Release (dispatch only)
 
+# SCRATCH-BRANCH VARIANT (ci/wear-bundle-rw27-release-2026-11-03): builds the WEAR release AAB instead of the phone AAB.
 # Manual, dispatch-only: builds the phone release AAB on a hosted
 # runner and uploads it UNSIGNED as an artifact. Signing happens
 # locally with the upload keystore (jarsigner), the same pattern the
@@ -14,7 +15,7 @@ permissions:
 
 jobs:
   bundle:
-    name: Build phone release AAB (unsigned)
+    name: Build wear release AAB (unsigned)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -29,11 +30,11 @@ jobs:
 
       - name: Build release bundle
         working-directory: RunWear-android
-        run: ./gradlew :app:bundleRelease --stacktrace
+        run: ./gradlew :wear:bundleRelease --stacktrace
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: phone-release-aab
-          path: RunWear-android/app/build/outputs/bundle/release/*.aab
+          name: wear-release-aab
+          path: RunWear-android/wear/build/outputs/bundle/release/*.aab
           if-no-files-found: error
