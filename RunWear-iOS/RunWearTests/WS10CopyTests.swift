@@ -287,11 +287,17 @@ final class WS10CopyTests: XCTestCase {
         XCTAssertFalse(home.contains("struct GenderOption"))
         // The LIVE fit picker renders plain text labels — the
         // design's picker expression on both onboarding and
-        // Settings.
+        // Settings. GEN-3 (Y-13): the labels are no longer
+        // literals inside a menu Picker's tags — the one live
+        // control (FitPreferenceInlinePicker, both surfaces)
+        // renders the shared fitOptions labels, whose literals
+        // live in the model.
         let controls = try sourceFile("../RunWear/Views/Components/PreferenceControls.swift")
-        XCTAssertTrue(controls.contains("Text(\"Men's\")"))
-        XCTAssertTrue(controls.contains("Text(\"Women's\")"))
-        XCTAssertTrue(controls.contains("Text(\"No preference\")"))
+        XCTAssertTrue(controls.contains("Text(option.label)"),
+                      "the live fit control renders the shared options' plain text labels")
+        XCTAssertEqual(GenderPreference.fitOptions.map { $0.label },
+                       ["Men's", "Women's", "No preference"],
+                       "the three plain-text labels the picker renders, in order")
     }
 
     func testShareTextStatusRecorded_consumerlessButKept() throws {
