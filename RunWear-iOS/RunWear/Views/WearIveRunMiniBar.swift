@@ -3,15 +3,16 @@ import SwiftUI
 // MARK: - "Wear I've Run" Mini Bar (RW-25 scaffolding; RW-26 full behavior; WS-3 one machine)
 //
 // The bar is the collection's doorway (no tab bar — notes §1):
-// - absent before today's entry exists;
+// - absent before the session's entry exists (GEN-3: one entry
+//   per app session, updated in place — see RW26CollectionModels);
 // - collapsed at rest, semi-transparent (light 85% / dark 82% sheet
 //   tint layered over .regularMaterial; text/icons 100%);
 // - expanded at end-of-scroll, on tap, and on the creation/update
 //   cue — with ONE gentle pulse + a soft haptic, then quiet;
 // - two grayed right-end controls: expand/collapse and trash, the
 //   SAME controls with the SAME semantics in both resting states.
-//   Trash removes today's entry in one tap, no confirmation; the
-//   bar leaves until a later generation re-creates the entry.
+//   Trash removes the session's entry in one tap, no confirmation;
+//   the bar leaves until a later generation re-creates the entry.
 // The narration pattern: the script wordmark leads, a verb, and
 // the payload in pine.
 //
@@ -35,9 +36,10 @@ enum WearIveRunState: Equatable {
 enum WearIveRunMiniBarModel {
     static let wordmark = "Wear I've Run"
 
-    /// The bar's state from today's entry: absent without one;
-    /// "Added" on the day's first settle; "Update to" when a later
-    /// settle changed the entry the session already narrated.
+    /// The bar's state from the session's entry: absent without
+    /// one; "Added" on the session's first settle; "Update to"
+    /// when a later in-session settle changed the entry the
+    /// session already narrated (narration-from-diff, X-4).
     ///
     /// WS-4: both payloads derive from the ENTRY, never from a
     /// caller-assembled string — "Added" carries the entry's
@@ -127,23 +129,48 @@ enum WearIveRunBackgroundPolicy {
 @MainActor
 final class WearIveRunCollectionModel: ObservableObject {
     @Published private(set) var entries: [WearIveRunEntry] = []
-    /// True when a settle this session replaced today's entry with
-    /// different content — the narration's "Update to" case.
-    @Published private(set) var todaysEntryWasUpdated = false
-    /// Bumped ONLY on a cue-worthy landing (WS-3): the day's
-    /// creation, or a settle that changed the entry's KIT. A
-    /// settle that changed only weather numbers or the hero image
-    /// is an asynchronous landing — it is recorded below, but it
-    /// never bumps this counter, so it can never move the element
+    /// True when a settle in this session replaced the session's
+    /// entry with different narrated content (a kit change or a
+    /// move to a new place) — the narration's "Update to" case.
+    /// DERIVED, never stored here (GEN-3, census Y-5): the fact
+    /// lives on the entry itself (`wasUpdatedInSession`, written
+    /// in the same store write as the content it describes), and
+    /// this reads it back off the presented entry — the model's
+    /// session entry when there is one, else the entry this
+    /// model narrated. A separately stored flag is exactly what
+    /// desynchronised on device in build 21. (The property's
+    /// name predates the session rule; its scope was always
+    /// "this session" — see `wasUpdatedThisSession` at the
+    /// narration seam.)
+    var todaysEntryWasUpdated: Bool {
+        if let entry = sessionEntry() { return entry.wasUpdatedInSession }
+        if let narratedEntryID {
+            return entries.first { $0.id == narratedEntryID }?.wasUpdatedInSession ?? false
+        }
+        return false
+    }
+    /// Bumped ONLY on a cue-worthy landing (WS-3): the session's
+    /// creation, a settle that changed the entry's KIT, or a
+    /// settle that moved it to a new PLACE (GEN-3). A settle that
+    /// changed only weather numbers or the hero image is an
+    /// asynchronous landing — it is recorded below, but it never
+    /// bumps this counter, so it can never move the element
     /// (D-07's abolished drivers, enforced at the source via
     /// `WearIveRunLandingClassifier`).
     @Published private(set) var cueCount = 0
 
+    /// The identity of the app session this model records for —
+    /// the process session by default (`WearIveRunSession`), so
+    /// every home surface in one launch shares the one session
+    /// entry; tests inject their own to simulate sessions.
+    let sessionID: String
+
     private let store: WearIveRunStore
     private var narratedEntryID: String?
 
-    init(store: WearIveRunStore = WearIveRunStore()) {
+    init(store: WearIveRunStore = WearIveRunStore(), sessionID: String = WearIveRunSession.currentID) {
         self.store = store
+        self.sessionID = sessionID
         self.entries = store.entries
     }
 
@@ -154,15 +181,29 @@ final class WearIveRunCollectionModel: ObservableObject {
     /// The dock's entry (W-15): today's entry by date, whichever
     /// place it was recorded at — the entry the element presents
     /// and narrates, independent of the place being viewed.
+    /// Retained for the gen-2 pins; the dock itself presents
+    /// `sessionEntry()` since the GEN-3 session rule.
     func todaysEntry(today: Date = Date()) -> WearIveRunEntry? {
         store.todaysEntry(today: today)
     }
 
-    /// Record the day's settled version. The store always takes
-    /// the settle (the saved entry is the day's LAST settled
-    /// version); what the classification decides is only whether
-    /// the element hears about it:
-    /// - created / kit-changed → the cue counter bumps;
+    /// The dock's entry (GEN-3 session rule): THIS session's
+    /// entry — the one entry the session has been settling in
+    /// place — independent of the place being viewed and of the
+    /// calendar day it last settled on.
+    func sessionEntry() -> WearIveRunEntry? {
+        store.sessionEntry(sessionID: sessionID)
+    }
+
+    /// Record the session's settled version. The store always
+    /// takes the settle (the saved entry is the session's LAST
+    /// settled version — the upsert keys on the session, so an
+    /// in-session settle replaces, never accumulates); what the
+    /// classification decides is only whether the element hears
+    /// about it:
+    /// - created / kit-changed / place-moved → the cue counter
+    ///   bumps (a place move after the first add narrates
+    ///   "Update to…", never a fresh "Added …" — census X-4);
     /// - weather-only or hero-only change → silent (an async
     ///   landing is not a driver);
     /// - identical → nothing at all.
@@ -172,17 +213,29 @@ final class WearIveRunCollectionModel: ObservableObject {
             existing: existing, incoming: entry
         )
         guard classification != .identical else { return }
-        store.record(entry)
+        // Y-5 atomicity: the narration kind is resolved HERE and
+        // stamped onto the entry, and the ONE store write below
+        // commits place, kit, weather, hero, and narration kind
+        // together — no facet of the entry can land without the
+        // others. A silent settle preserves the kind it found
+        // (weather moving under a settled narration does not
+        // rewrite the narration).
+        let narrationUpdated: Bool
+        switch classification {
+        case .created:
+            narrationUpdated = false
+        case .kitUpdated, .placeUpdated:
+            narrationUpdated = true
+        case .silentUpdate, .identical:
+            narrationUpdated = existing?.wasUpdatedInSession ?? false
+        }
+        store.record(entry.settingWasUpdatedInSession(narrationUpdated))
         entries = store.entries
         switch classification {
         case .created:
             narratedEntryID = entry.id
-            todaysEntryWasUpdated = false
             cueCount += 1
-        case .kitUpdated:
-            if narratedEntryID == entry.id {
-                todaysEntryWasUpdated = true
-            }
+        case .kitUpdated, .placeUpdated:
             cueCount += 1
         case .silentUpdate, .identical:
             break
@@ -196,7 +249,20 @@ final class WearIveRunCollectionModel: ObservableObject {
         let dayStart = calendar.startOfDay(for: today)
         store.remove(dayStart: dayStart, placeName: placeName)
         entries = store.entries
-        todaysEntryWasUpdated = false
+        // The narration kind needs no reset here: it lives on
+        // the entry, and the entry is gone (Y-5 derivation).
+        narratedEntryID = nil
+    }
+
+    /// The trash control under the session rule: the PRESENTED
+    /// entry — this session's — goes away in one tap, whatever
+    /// place it settled at; the bar leaves with it, and a later
+    /// settle in the same session re-creates the session's entry
+    /// (a fresh "Added", as after any trash).
+    func removeSessionEntry() {
+        guard let current = sessionEntry() else { return }
+        store.remove(id: current.id)
+        entries = store.entries
         narratedEntryID = nil
     }
 }

@@ -11,14 +11,51 @@ import Foundation
 // arithmetic is the cross-platform contract: the Android lane
 // implements the same rules in Kotlin and both sides pin them.
 
+// MARK: - App session (GEN-3, I-WIR: once per session)
+//
+// OPERATIONAL SESSION DEFINITION (binding, Sol Nov 4, 2026):
+// a session is one continuous period of app use beginning when
+// the app process launches (cold start — `RunWearApp` comes up)
+// and ending when that process terminates (the user swipes the
+// app away, or the system kills it). Backgrounding the app and
+// returning to the SAME live process does NOT start a new
+// session; only a new process does. Within a session there is
+// exactly ONE "Wear I've Run" entry: every settled generation
+// updates that entry IN PLACE (place and weather included), the
+// scrapbook keeps the session's last settled version, and a new
+// session starts a new entry. This supersedes the gen-2
+// once-per-day keying (and its dock lookup BY DATE): entries are
+// keyed by SESSION.
+
+enum WearIveRunSession {
+    /// The current process's session identity: minted once, the
+    /// first time anything asks, and stable for the rest of the
+    /// process's life (a `static let` — one value per launch).
+    /// Deliberately NOT persisted: persisting it would let a
+    /// later launch resurrect a dead session and merge two
+    /// sessions' entries into one.
+    static let currentID: String = UUID().uuidString
+}
+
 // MARK: - "Wear I've Run" entry
 
-/// One day's settled outfit at one place. The saved entry is the
-/// day's LAST settled version; entries are created automatically at
-/// the day's first generation. There is NO backfill — the store
-/// only ever holds days the app actually generated on.
+/// One session's settled outfit. The saved entry is the
+/// session's LAST settled version — within the session, every
+/// location and weather change replaces it in place, so a
+/// session that visited three places holds ONE entry, at the
+/// last place. Entries are created automatically at the
+/// session's first generation. There is NO backfill — the store
+/// only ever holds sessions the app actually generated in.
+///
+/// LEGACY: entries minted before the session rule carry no
+/// session identity (`sessionID == ""`, decoded from payloads
+/// written before the field existed). They keep their original
+/// day+place identity, stay in the collection untouched, and
+/// are never adopted or merged into a later session's entry —
+/// each legacy row reads as the single entry of a session that
+/// predates the keying.
 struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
-    /// Start-of-day (local) for the entry's day.
+    /// Start-of-day (local) for the day the entry last settled.
     let dayStart: Date
     /// The place's display name, as shown when the entry was made.
     let placeName: String
@@ -36,6 +73,87 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     let itemKeys: [String]
     /// Reference to the day's hero image (remote URL or asset name).
     let heroImageReference: String
+    /// The owning app session's identity (GEN-3 session rule).
+    /// Empty ONLY for legacy entries decoded from pre-session
+    /// payloads; every entry recorded since carries the session
+    /// that settled it.
+    let sessionID: String
+    /// Whether this entry's narration is the UPDATE form (GEN-3,
+    /// census Y-5): true once any in-session settle after the
+    /// creation changed the entry's kit or place. The flag lives
+    /// ON THE ENTRY — it is written in the same store write as
+    /// the place, kit, weather, and hero it describes — so the
+    /// narration kind can never be read from a different settle
+    /// than the payload it narrates. (Build 21 kept the flag in
+    /// separate view-model state: after the first place switch
+    /// the narration read the newest settle while the payload
+    /// read an older entry, and the two never agreed again.)
+    /// The collection model stamps it at record time; callers
+    /// constructing a settle pass the default.
+    let wasUpdatedInSession: Bool
+
+    init(
+        dayStart: Date,
+        placeName: String,
+        feelsLikeF: Double,
+        actualF: Double,
+        condition: String,
+        itemNames: [String],
+        itemKeys: [String],
+        heroImageReference: String,
+        sessionID: String = "",
+        wasUpdatedInSession: Bool = false
+    ) {
+        self.dayStart = dayStart
+        self.placeName = placeName
+        self.feelsLikeF = feelsLikeF
+        self.actualF = actualF
+        self.condition = condition
+        self.itemNames = itemNames
+        self.itemKeys = itemKeys
+        self.heroImageReference = heroImageReference
+        self.sessionID = sessionID
+        self.wasUpdatedInSession = wasUpdatedInSession
+    }
+
+    /// A copy of this entry carrying the given narration flag —
+    /// how the collection model commits the narration kind WITH
+    /// the entry it describes, as one value (Y-5 atomicity).
+    func settingWasUpdatedInSession(_ value: Bool) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: dayStart, placeName: placeName,
+            feelsLikeF: feelsLikeF, actualF: actualF, condition: condition,
+            itemNames: itemNames, itemKeys: itemKeys,
+            heroImageReference: heroImageReference,
+            sessionID: sessionID, wasUpdatedInSession: value
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case dayStart, placeName, feelsLikeF, actualF, condition
+        case itemNames, itemKeys, heroImageReference, sessionID
+        case wasUpdatedInSession
+    }
+
+    /// Legacy-tolerant decoding: a payload written before the
+    /// session rule has no `sessionID` key — it decodes as the
+    /// empty (legacy) identity instead of failing the whole
+    /// store load and wiping the user's history. Payloads from
+    /// before the Y-5 fix likewise have no narration flag —
+    /// they decode as the "Added" form.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dayStart = try container.decode(Date.self, forKey: .dayStart)
+        placeName = try container.decode(String.self, forKey: .placeName)
+        feelsLikeF = try container.decode(Double.self, forKey: .feelsLikeF)
+        actualF = try container.decode(Double.self, forKey: .actualF)
+        condition = try container.decode(String.self, forKey: .condition)
+        itemNames = try container.decode([String].self, forKey: .itemNames)
+        itemKeys = try container.decode([String].self, forKey: .itemKeys)
+        heroImageReference = try container.decode(String.self, forKey: .heroImageReference)
+        sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID) ?? ""
+        wasUpdatedInSession = try container.decodeIfPresent(Bool.self, forKey: .wasUpdatedInSession) ?? false
+    }
 
     /// The entry's place as a SimplePlace (WS-4 / RC-4): the
     /// stored string is parsed through the model, so an entry
@@ -72,8 +190,17 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
             ?? placeName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    /// One entry per day per place: the identity is day + place.
-    var id: String { "\(Int(dayStart.timeIntervalSince1970))|\(placeKey)" }
+    /// Identity (GEN-3 session rule): an entry recorded by a
+    /// session IS that session — one identity for the session's
+    /// whole life, across every place and weather change, so an
+    /// in-session settle REPLACES the entry instead of minting a
+    /// sibling. Legacy entries (no session identity) keep their
+    /// original identity: one entry per day per place.
+    var id: String {
+        sessionID.isEmpty
+            ? "\(Int(dayStart.timeIntervalSince1970))|\(placeKey)"
+            : "session|\(sessionID)"
+    }
 }
 
 // MARK: - Weather filter
@@ -130,9 +257,12 @@ enum WearIveRunWeatherClassifier {
 
 /// A run of consecutive calendar days at one place.
 struct WearIveRunStay: Equatable {
-    /// Days in the stay, newest-first.
+    /// Entries in the stay, newest-first. Under the session rule
+    /// a stay can hold several entries for one calendar day (one
+    /// per session that day), so the DAY count below counts
+    /// distinct days, not entries.
     let entries: [WearIveRunEntry]
-    var dayCount: Int { entries.count }
+    var dayCount: Int { Set(entries.map(\.dayStart)).count }
     /// Earliest day in the stay.
     var firstDay: Date { entries.last!.dayStart }
     /// Latest day in the stay.
@@ -151,7 +281,12 @@ struct WearIveRunChapter: Equatable {
 
     /// The cover is the most recent card.
     var cover: WearIveRunEntry { entries.first! }
-    var dayCount: Int { entries.count }
+    /// Distinct calendar days in the chapter (session rule: a
+    /// chapter's entries are SESSIONS, and two sessions can share
+    /// a day — the summary's "days" counts days, not sessions).
+    /// Identical to the entry count for legacy data, which holds
+    /// at most one entry per day per place.
+    var dayCount: Int { Set(entries.map(\.dayStart)).count }
     var feelsLikeRangeF: (min: Double, max: Double) {
         let values = entries.map(\.feelsLikeF)
         return (values.min()!, values.max()!)
@@ -188,19 +323,33 @@ struct WearIveRunMonthGroup: Equatable, Hashable {
     let month: Int
     /// Days in the month, newest-first.
     let entries: [WearIveRunEntry]
-    var dayCount: Int { entries.count }
+    /// Distinct calendar days (see the chapter's note).
+    var dayCount: Int { Set(entries.map(\.dayStart)).count }
     var feelsLikeRangeF: (min: Double, max: Double) {
         let values = entries.map(\.feelsLikeF)
         return (values.min()!, values.max()!)
     }
 }
 
+/// Newest-first order for entry lists: by the day the entry
+/// last settled, with the entry identity as a deterministic
+/// tiebreak (two sessions can settle on the same day; their
+/// relative order is by identity, never by sort accident).
+private func wearIveRunNewestFirst(_ lhs: WearIveRunEntry, _ rhs: WearIveRunEntry) -> Bool {
+    if lhs.dayStart != rhs.dayStart { return lhs.dayStart > rhs.dayStart }
+    return lhs.id > rhs.id
+}
+
 enum WearIveRunCollection {
-    /// Upsert by (day, place): the day's last settled version wins.
+    /// Upsert by identity: for a session entry the identity is
+    /// the SESSION, so every in-session settle replaces the
+    /// session's one entry in place (the last settled version
+    /// wins) and a new session appends a new entry; legacy
+    /// entries keep their day+place identity.
     static func upserting(_ entries: [WearIveRunEntry], _ entry: WearIveRunEntry) -> [WearIveRunEntry] {
         var result = entries.filter { $0.id != entry.id }
         result.append(entry)
-        return result.sorted { $0.dayStart > $1.dayStart }
+        return result.sorted(by: wearIveRunNewestFirst)
     }
 
     /// Remove one day's entry at a place (the mini bar's trash:
@@ -211,6 +360,22 @@ enum WearIveRunCollection {
             condition: "", itemNames: [], itemKeys: [], heroImageReference: ""
         )
         return entries.filter { $0.id != probe.id }
+    }
+
+    /// Remove the entry with this identity (the mini bar's
+    /// trash under the session rule: the PRESENTED entry — the
+    /// current session's — goes away, whatever place it settled
+    /// at and whatever place is being viewed).
+    static func removing(_ entries: [WearIveRunEntry], id: String) -> [WearIveRunEntry] {
+        entries.filter { $0.id != id }
+    }
+
+    /// The entry a session owns, if it has settled one yet —
+    /// the dock's and the collection pin's lookup (GEN-3): by
+    /// SESSION, never by date and never by the viewed place.
+    static func sessionEntry(from entries: [WearIveRunEntry], sessionID: String) -> WearIveRunEntry? {
+        guard !sessionID.isEmpty else { return nil }
+        return entries.first { $0.sessionID == sessionID }
     }
 
     /// Chapters for a filter: entries are filtered FIRST, then
@@ -225,7 +390,7 @@ enum WearIveRunCollection {
         let admitted = entries.filter { WearIveRunWeatherClassifier.matches($0, filter: filter) }
         let grouped = Dictionary(grouping: admitted, by: \.placeKey)
         var chapters: [WearIveRunChapter] = grouped.values.compactMap { placeEntries in
-            let sorted = placeEntries.sorted { $0.dayStart > $1.dayStart }
+            let sorted = placeEntries.sorted(by: wearIveRunNewestFirst)
             guard let first = sorted.first else { return nil }
             return WearIveRunChapter(
                 // Chapter covers name the place in its simple
@@ -242,7 +407,9 @@ enum WearIveRunCollection {
 
     /// Consecutive-day runs within one place's newest-first
     /// entries. Two entries a calendar day apart continue a stay;
-    /// anything wider starts a new one.
+    /// anything wider starts a new one. Under the session rule a
+    /// gap of ZERO also continues the stay: two sessions on the
+    /// same calendar day at the same place are one day of it.
     static func stays(from newestFirst: [WearIveRunEntry], calendar: Calendar = .current) -> [WearIveRunStay] {
         var result: [WearIveRunStay] = []
         var current: [WearIveRunEntry] = []
@@ -252,7 +419,7 @@ enum WearIveRunCollection {
                    [.day],
                    from: calendar.startOfDay(for: entry.dayStart),
                    to: calendar.startOfDay(for: previous.dayStart)
-               ).day, gap == 1 {
+               ).day, gap == 0 || gap == 1 {
                 current.append(entry)
             } else {
                 if !current.isEmpty { result.append(WearIveRunStay(entries: current)) }
@@ -277,19 +444,24 @@ enum WearIveRunCollection {
             return WearIveRunMonthGroup(
                 year: comps.year ?? 0,
                 month: comps.month ?? 0,
-                entries: monthEntries.sorted { $0.dayStart > $1.dayStart }
+                entries: monthEntries.sorted(by: wearIveRunNewestFirst)
             )
         }
         groups.sort { ($0.year, $0.month) > ($1.year, $1.month) }
         return groups
     }
 
-    /// Today's entries (any place), newest first — the collection
-    /// pins today above the chapters.
+    /// Today's entries (any place), newest first. Retained for
+    /// the legacy date-keyed arithmetic (and its pins); the
+    /// collection's PIN no longer comes from here — under the
+    /// session rule the pin is the current session's entry
+    /// (`sessionEntry(from:sessionID:)`), and the chapters are
+    /// computed from the entries that remain after it is lifted
+    /// out, so the pinned entry never duplicates a chapter.
     static func todaysEntries(from entries: [WearIveRunEntry], today: Date, calendar: Calendar = .current) -> [WearIveRunEntry] {
         entries
             .filter { calendar.isDate($0.dayStart, inSameDayAs: today) }
-            .sorted { $0.dayStart > $1.dayStart }
+            .sorted(by: wearIveRunNewestFirst)
     }
 }
 
@@ -358,8 +530,10 @@ final class WearIveRunStore {
         return decoded
     }
 
-    /// Record a settled entry (automatic at the day's first
-    /// generation; later settles the same day replace it).
+    /// Record a settled entry (automatic at the session's first
+    /// generation; later settles in the same session replace it
+    /// in place — the store upserts by the entry's identity,
+    /// which is the session for session entries).
     func record(_ entry: WearIveRunEntry) {
         save(WearIveRunCollection.upserting(entries, entry))
     }
@@ -369,15 +543,27 @@ final class WearIveRunStore {
         save(WearIveRunCollection.removing(entries, dayStart: dayStart, placeName: placeName))
     }
 
-    /// Today's entry, whichever place it was recorded at — what
-    /// the home dock presents (W-15). The dock's entry is the
-    /// day's entry, not an entry at the place currently being
-    /// VIEWED: Android's holder selects today's entry by date
-    /// alone, and its narration keeps naming the recorded place
-    /// after the user browses elsewhere ("Added Kansas City, MO,
-    /// Now" while viewing New York). The place-keyed lookup
-    /// below survives for callers that genuinely need it (the
-    /// store's own tests, chapter arithmetic).
+    /// The mini bar's trash under the session rule: remove the
+    /// entry with this identity (the presented session entry).
+    func remove(id: String) {
+        save(WearIveRunCollection.removing(entries, id: id))
+    }
+
+    /// The entry the given session owns — what the home dock
+    /// presents and the collection pins (GEN-3, superseding the
+    /// W-15 date lookup below). The dock's entry is the CURRENT
+    /// SESSION's entry, not an entry at the place currently
+    /// being VIEWED and not merely any entry dated today: its
+    /// narration keeps naming the place the session's entry
+    /// last settled at after the user browses elsewhere.
+    func sessionEntry(sessionID: String) -> WearIveRunEntry? {
+        WearIveRunHomePresentation.sessionEntry(from: entries, sessionID: sessionID)
+    }
+
+    /// Today's entry, whichever place it was recorded at — the
+    /// W-15 (gen-2) dock lookup, BY DATE. Retained for the
+    /// legacy arithmetic and its pins; the dock no longer
+    /// presents through it (the session rule replaced its key).
     func todaysEntry(today: Date, calendar: Calendar = .current) -> WearIveRunEntry? {
         WearIveRunHomePresentation.todaysEntry(from: entries, today: today, calendar: calendar)
     }
@@ -419,12 +605,15 @@ final class WearIveRunStore {
 // (its `placeDisplayName` change), exactly as Android's
 // recording effect is keyed on the location name.
 //
-// (b) PRESENTATION. The dock presents TODAY'S entry by date,
-// never by the currently viewed place — the place-keyed
-// lookup was the second half of W-15: even a correctly filed
-// entry vanished the moment the viewed place differed from
-// the recorded place, and the placeholder-filed entry could
-// never match any real place at all.
+// (b) PRESENTATION. The dock presents the CURRENT SESSION's
+// entry (GEN-3 session rule — this key REPLACES the gen-2
+// by-date key, which was itself the W-15 fix for the original
+// defect: a lookup by the currently VIEWED place, which no
+// placeholder-filed entry could ever match and no entry at a
+// different place could match either). By session, the entry
+// the dock presents is the one this session has been updating
+// in place, whichever place it last settled at and whichever
+// place is on screen now.
 enum WearIveRunHomePresentation {
     /// The place an entry may be recorded under: the resolved
     /// simple place's display name, or nil while the place is
@@ -433,8 +622,19 @@ enum WearIveRunHomePresentation {
         simplePlace?.displayName
     }
 
-    /// Today's entry by DATE alone (see the store's note): the
-    /// first entry whose day is today, whichever place it names.
+    /// The current session's entry (see the store's note): the
+    /// entry recorded under this session's identity, whichever
+    /// place it names and whichever day it last settled on.
+    static func sessionEntry(
+        from entries: [WearIveRunEntry],
+        sessionID: String
+    ) -> WearIveRunEntry? {
+        WearIveRunCollection.sessionEntry(from: entries, sessionID: sessionID)
+    }
+
+    /// Today's entry by DATE alone — the gen-2 presentation
+    /// key, retained for the legacy arithmetic and its pins;
+    /// the dock no longer presents through it.
     static func todaysEntry(
         from entries: [WearIveRunEntry],
         today: Date,

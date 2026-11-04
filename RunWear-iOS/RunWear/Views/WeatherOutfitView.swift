@@ -8,9 +8,9 @@ struct WeatherOutfitView: View {
     // .largeTitle (the RW-6.3 pattern the hero numeral used), capped
     // by the text's dynamicTypeSize limit at the call site.
     @ScaledMetric(relativeTo: .largeTitle) private var sheetNumeralSize: CGFloat = 80
-    /// RW-26 "Wear I've Run": the collection model — today's entry
-    /// drives the mini bar dock; the store behind it is the
-    /// collection itself.
+    /// RW-26 "Wear I've Run": the collection model — the current
+    /// session's entry drives the mini bar dock (GEN-3 session
+    /// rule); the store behind it is the collection itself.
     @StateObject private var collectionModel = WearIveRunCollectionModel()
     @State private var showCollection = false
     /// End-of-scroll signal for the mini bar's full expression,
@@ -111,7 +111,7 @@ struct WeatherOutfitView: View {
             }
             // RW-25: the "Wear I've Run" mini bar dock — attached
             // to the home scroll's container; renders only when the
-            // state is not .preAdd (today's entry exists).
+            // state is not .preAdd (the session's entry exists).
             .safeAreaInset(edge: .bottom) {
                 miniBarDock
             }
@@ -263,8 +263,8 @@ struct WeatherOutfitView: View {
             recordTodaysEntry()
         }
         // A re-settled recommendation (refresh, hour change back to
-        // now, outfit change) updates today's entry — the saved
-        // entry is the day's last settled version.
+        // now, outfit change) updates the session's entry in place
+        // — the saved entry is the session's last settled version.
         .onChange(of: recommendation.allItems.map(\.id)) { _, _ in
             recordTodaysEntry()
         }
@@ -664,26 +664,37 @@ struct WeatherOutfitView: View {
             || showCollection || showFeedbackSheet
     }
 
-    /// The mini bar dock: today's entry drives the bar — absent
-    /// pre-entry, narrating once the day's first generation lands.
+    /// The mini bar dock: the session's entry drives the bar —
+    /// absent pre-entry, narrating once the session's first
+    /// generation lands.
     @ViewBuilder private var miniBarDock: some View {
-        // W-15 (the presentation half): the dock presents
-        // TODAY'S entry by date — the entry's own place is what
-        // the narration names, so the element survives the user
-        // browsing another place (Android: "Added Kansas City,
-        // MO, Now" still docked while viewing New York). The
-        // pre-fix place-keyed lookup against the VIEWED place
-        // returned nil for the placeholder-filed entry forever,
-        // and for any entry whose place differed from the view.
-        let todays = collectionModel.todaysEntry()
-        // WS-4: the state derives both narration payloads from
-        // the entry itself (simple place for "Added", first kit
-        // item for "Update to") — the view supplies no payload
-        // string of its own.
+        // GEN-3 (the presentation half, superseding W-15's
+        // by-date key): the dock presents the CURRENT SESSION's
+        // entry — the entry's own place is what the narration
+        // names, so the element survives the user browsing
+        // another place, and it can never announce a place the
+        // session has moved past, because the session's one
+        // entry always holds the last settled place. (W-15's
+        // history: the original viewed-place lookup returned nil
+        // for the placeholder-filed entry forever, and for any
+        // entry whose place differed from the view; gen-2 keyed
+        // the lookup by date instead; the session rule keys it
+        // by session.)
+        let todays = collectionModel.sessionEntry()
+        // WS-4 + Y-5: the state derives EVERYTHING from the one
+        // entry value above — both narration payloads (simple
+        // place for "Added", first kit item for "Update to") AND
+        // the narration kind, which the entry carries on itself
+        // (`wasUpdatedInSession`, committed in the same store
+        // write as the content). There is no second state holder
+        // for the flag to lag behind in: build 21 read the kind
+        // from separate model state and the payload from an
+        // older entry, and the card disagreed with itself for
+        // the rest of the session.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: todays,
             moment: sheetMoment,
-            wasUpdatedThisSession: collectionModel.todaysEntryWasUpdated
+            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
         )
         if state != .preAdd {
             WearIveRunMiniBarView(
@@ -697,23 +708,27 @@ struct WeatherOutfitView: View {
                 isDimmedBySheet: anyHomeSheetPresented,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
-                    // Trash deletes the PRESENTED entry (its own
-                    // day + place), not an entry at the viewed
-                    // place — the two differ once the user has
-                    // browsed elsewhere.
-                    if let todays {
-                        collectionModel.removeToday(placeName: todays.placeName, today: todays.dayStart)
+                    // Trash deletes the PRESENTED entry — the
+                    // session's own entry — not an entry at the
+                    // viewed place; the two differ once the user
+                    // has browsed elsewhere.
+                    if todays != nil {
+                        collectionModel.removeSessionEntry()
                     }
                 }
             )
         }
     }
 
-    /// Automatic entry creation (checklist §C): the day's first
-    /// generation settles an entry; later settles the same day
-    /// replace it (the saved entry is the day's LAST settled
-    /// version). Only the viewed-now day at the current place
-    /// records — browsing another day or hour never writes.
+    /// Automatic entry creation (checklist §C; GEN-3 session
+    /// rule): the session's first generation settles its entry;
+    /// every later settle in the session — a new place, new
+    /// weather — REPLACES that entry in place (the saved entry
+    /// is the session's LAST settled version; updates never
+    /// accumulate). Only the viewed-now day records — browsing
+    /// another day never writes; the entry carries the current
+    /// session's identity, which is what makes the replacement
+    /// land on the same entry across place changes.
     private func recordTodaysEntry() {
         guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
         // W-15: never record under a placeholder. Until the
@@ -737,12 +752,29 @@ struct WeatherOutfitView: View {
             condition: viewModel.currentCondition.shortDescription,
             itemNames: recommendation.allItems.map(\.name),
             itemKeys: recommendation.allItems.map(\.key),
-            // GEN-3 (WS-A(1) / X-10): the entry's photo is fed by
-            // the SAME always-available resolution as the hero —
-            // one unresolved photo must never starve the mini-bar
-            // thumbnail, the TODAY card, the chapter row and the
-            // Morning Poster thumbnail at once.
-            heroImageReference: viewModel.alwaysAvailableHeroReference() ?? ""
+            // GEN-3 train merge (I-HERO x I-WIR, forced choice
+            // documented in the train record): Y-10's served-hero
+            // priority AND X-10's never-starve rule, in that order.
+            // The entry records the hero ACTUALLY SERVED for this
+            // place at settle time — the view model's flag target,
+            // its own "photo on screen right now" (pool/personal
+            // hero, else the curated fallback the fetch resolved) —
+            // never the view's locally recomputed `defaultFallbackUrl`
+            // (a fresh MILD/CLEAR resolution), which could stamp the
+            // entry with a stock photo the place never showed (the
+            // New Haven chapter carried exactly such a third image).
+            // Only when NO hero has been served yet (flag target
+            // nil) does the entry fall back to the SAME
+            // always-available gated bundled resolution the hero
+            // itself paints (WS-A(1) / X-10), so one unresolved
+            // photo cannot starve the mini-bar thumbnail, the TODAY
+            // card, the chapter row and the Morning Poster thumbnail
+            // at once; that resolution is condition-matched to the
+            // current frame, not a foreign stock photo. Y-10's
+            // "honestly empty before first resolution" sub-rule is
+            // the one element that yields in this merge.
+            heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference() ?? "",
+            sessionID: collectionModel.sessionID
         )
         collectionModel.recordSettled(entry)
     }
