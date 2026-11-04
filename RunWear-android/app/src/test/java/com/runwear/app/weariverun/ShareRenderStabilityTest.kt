@@ -72,6 +72,7 @@ class ShareRenderStabilityTest {
 
     private class Probe {
         val count = AtomicInteger(0)
+        val failedCount = AtomicInteger(0)
         val latch = CountDownLatch(1)
         @Volatile var settledAtMs: Long = -1
         val startedAtMs = System.currentTimeMillis()
@@ -80,6 +81,8 @@ class ShareRenderStabilityTest {
             settledAtMs = System.currentTimeMillis() - startedAtMs
             latch.countDown()
         }
+        /** The acceptance signal: a failed render must SAY so, once. */
+        val failedCallback: () -> Unit = { failedCount.incrementAndGet() }
     }
 
     /**
@@ -145,11 +148,16 @@ class ShareRenderStabilityTest {
     fun `poster without a photo settles promptly and exactly once`() {
         val probe = Probe()
         val settled = composeAndSettle(probe, timeoutMs = 15_000) {
-            MorningPoster(entry = entry(null, listOf("Light Long Sleeve")), onRendered = probe.callback)
+            MorningPoster(
+                entry = entry(null, listOf("Light Long Sleeve")),
+                onRendered = probe.callback,
+                onRenderFailed = probe.failedCallback
+            )
         }
         println("poster/no-photo settled=${settled} at ${probe.settledAtMs}ms count=${probe.count.get()}")
         assertTrue("photo-less poster must settle (nothing is pending)", settled)
         assertEquals("onRendered must fire exactly once", 1, probe.count.get())
+        assertEquals("a photo-less poster is a designed render, not a failure", 0, probe.failedCount.get())
     }
 
     @Test
@@ -158,7 +166,8 @@ class ShareRenderStabilityTest {
         val settled = composeAndSettle(probe, timeoutMs = 30_000) {
             MorningPoster(
                 entry = entry("file:///nonexistent/runwear/hero-that-is-not-there.jpg", listOf("Light Long Sleeve")),
-                onRendered = probe.callback
+                onRendered = probe.callback,
+                onRenderFailed = probe.failedCallback
             )
         }
         println("poster/broken-photo settled=${settled} at ${probe.settledAtMs}ms count=${probe.count.get()}")
@@ -167,6 +176,9 @@ class ShareRenderStabilityTest {
             settled
         )
         assertEquals("onRendered must fire exactly once", 1, probe.count.get())
+        // Acceptance: the failure must SAY SO — exactly one failure
+        // signal, which the preview turns into its error surface.
+        assertEquals("a failed render must report its failure exactly once", 1, probe.failedCount.get())
     }
 
     @Test
@@ -179,12 +191,14 @@ class ShareRenderStabilityTest {
         val settled = composeAndSettle(probe, timeoutMs = 30_000) {
             MorningPoster(
                 entry = entry(photoFile.absolutePath, listOf("Light Long Sleeve")),
-                onRendered = probe.callback
+                onRendered = probe.callback,
+                onRenderFailed = probe.failedCallback
             )
         }
         println("poster/real-photo settled=${settled} at ${probe.settledAtMs}ms count=${probe.count.get()}")
         assertTrue("a decodable local photo must settle the poster", settled)
         assertEquals("onRendered must fire exactly once however often the painter re-delivers", 1, probe.count.get())
+        assertEquals("a successful decode is not a failure", 0, probe.failedCount.get())
     }
 
     @Test
@@ -194,12 +208,14 @@ class ShareRenderStabilityTest {
             KitCard(
                 entry = entry(null, listOf("Mystery Garment", "Unknown Layer")),
                 gender = GenderPreference.UNISEX,
-                onRendered = probe.callback
+                onRendered = probe.callback,
+                onRenderFailed = probe.failedCallback
             )
         }
         println("kit/name-only settled=${settled} at ${probe.settledAtMs}ms count=${probe.count.get()}")
         assertTrue("a kit card with no renders must settle immediately", settled)
         assertEquals(1, probe.count.get())
+        assertEquals(0, probe.failedCount.get())
     }
 
     @Test
@@ -209,11 +225,46 @@ class ShareRenderStabilityTest {
             KitCard(
                 entry = entry(null, listOf("Light Long Sleeve", "Windbreaker")),
                 gender = GenderPreference.MALE,
-                onRendered = probe.callback
+                onRendered = probe.callback,
+                onRenderFailed = probe.failedCallback
             )
         }
         println("kit/real-renders settled=${settled} at ${probe.settledAtMs}ms count=${probe.count.get()}")
         assertTrue("the kit card must settle once its first render lands OR fails", settled)
         assertEquals(1, probe.count.get())
+    }
+
+    // ── The preview stage's acceptance wiring (source pin — a
+    // ModalBottomSheet cannot be driven under Robolectric) ───────
+
+    @Test
+    fun `the preview surfaces a failed render as an error with a way back and withholds share`() {
+        var dir: java.io.File? = java.io.File(System.getProperty("user.dir")).absoluteFile
+        var source: String? = null
+        while (dir != null && source == null) {
+            for (candidate in listOf(
+                "app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt",
+                "RunWear-android/app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt",
+                "../app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"
+            )) {
+                val file = java.io.File(dir, candidate)
+                if (file.isFile) {
+                    source = file.readText()
+                    break
+                }
+            }
+            dir = dir.parentFile
+        }
+        assertTrue("collection screen source not found", source != null)
+        val screen = source!!
+        // The failure signal reaches the preview state…
+        assertTrue(screen.contains("onRenderFailed = { previewFailed = true }"))
+        // …which renders the error surface (with its own Close)…
+        assertTrue(screen.contains("ShareRenderErrorNotice("))
+        assertTrue(screen.contains("Couldn't render this card"))
+        // …and Share is withheld until a settled, non-failed render.
+        assertTrue(screen.contains("enabled = previewReady && !previewFailed"))
+        // Progress is the labeled overlay pill in BOTH stages.
+        assertTrue(screen.contains("ShareRenderProgressPill("))
     }
 }

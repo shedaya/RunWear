@@ -33,7 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -509,6 +509,41 @@ private fun ShareRenderProgressPill(label: String, modifier: Modifier = Modifier
 }
 
 /**
+ * GEN-3 share-render acceptance: the FAILED render's surface. A
+ * render that failed says so — what failed, in words — and offers
+ * its own way back (Close dismisses the sheet), instead of the
+ * pre-fix outcomes (an endless progress state, or a silently
+ * degraded card presented as finished). Overlaid like the
+ * progress pill, so it never moves the artifact beneath it.
+ */
+@Composable
+private fun ShareRenderErrorNotice(
+    label: String,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = RunWearColors.BgCard,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp, end = 4.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.weight(1f)
+            )
+            TextButton(onClick = onClose) { Text("Close") }
+        }
+    }
+}
+
+/**
  * The per-card share choice: Morning Poster or Kit Card — NO Range
  * (design frames 11–14). Presented as an M3 modal sheet over the
  * dimmed collection (motion spec §1.3), resting on the one full
@@ -555,21 +590,34 @@ private fun ShareChoiceSheet(
                 // not an in-flow row — the artifact's position and
                 // the sheet's height no longer move when it clears.
                 var previewReady by remember(chosen) { mutableStateOf(false) }
+                // GEN-3 share-render acceptance: a failed render is
+                // a state of its own — surfaced as an error with a
+                // way back, Share withheld — never a finished card.
+                var previewFailed by remember(chosen) { mutableStateOf(false) }
                 Box {
                     Box(modifier = capture.recordModifier()) {
                         when (chosen) {
                             ShareArtifactKind.MORNING_POSTER -> MorningPoster(
                                 entry = entry,
-                                onRendered = { previewReady = true }
+                                onRendered = { previewReady = true },
+                                onRenderFailed = { previewFailed = true }
                             )
                             ShareArtifactKind.KIT_CARD -> KitCard(
                                 entry = entry,
                                 gender = gender,
-                                onRendered = { previewReady = true }
+                                onRendered = { previewReady = true },
+                                onRenderFailed = { previewFailed = true }
                             )
                         }
                     }
-                    if (!previewReady) {
+                    if (previewFailed) {
+                        ShareRenderErrorNotice(
+                            label = "Couldn't render this card — its photo couldn't be loaded.",
+                            onClose = onDismiss,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                        )
+                    } else if (!previewReady) {
                         ShareRenderProgressPill(
                             label = "Rendering ${chosenLabel(chosen)}…",
                             modifier = Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
@@ -581,6 +629,10 @@ private fun ShareChoiceSheet(
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = onDismiss) { Text("Close") }
                     TextButton(
+                        // Share only ever captures a SETTLED,
+                        // non-failed render (pre-fix it could fire
+                        // mid-render and share an unfinished card).
+                        enabled = previewReady && !previewFailed,
                         onClick = {
                             scope.launch {
                                 val bitmap = capture.captureBitmap()
@@ -721,7 +773,7 @@ internal object ArtifactThumbnailGeometry {
  * apart at natural size) — pinned by PosterThumbnailGeometryTest.
  */
 @Composable
-private fun ArtifactThumbnailScaler(
+internal fun ArtifactThumbnailScaler(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -820,7 +872,13 @@ fun MorningPoster(
     /** W-9: fires once the artifact has rendered (its hero photo
      * decoded, or immediately when the entry carries no photo) — the
      * share surfaces show a progress state until it fires. */
-    onRendered: (() -> Unit)? = null
+    onRendered: (() -> Unit)? = null,
+    /** GEN-3 share-render acceptance: fires (once, together with
+     * [onRendered]) when the artifact settled WITHOUT its photo —
+     * the decode failed. The share preview turns this into an
+     * explicit error surface with a way back; a failed render must
+     * say so, never pass as a finished card. */
+    onRenderFailed: (() -> Unit)? = null
 ) {
     // GEN-3 share-render: onRendered fires EXACTLY ONCE per entry,
     // when the poster is SETTLED — photo decoded, photo failed, or
@@ -832,14 +890,20 @@ fun MorningPoster(
     // re-delivery rewrote the sheet's ready-state from inside the
     // painter callback.
     var posterRenderReported by remember(entry) { mutableStateOf(false) }
-    fun reportPosterRendered() {
+    fun reportPosterRendered(failed: Boolean) {
         if (!posterRenderReported) {
             posterRenderReported = true
+            if (failed) onRenderFailed?.invoke()
             onRendered?.invoke()
         }
     }
     if (entry.heroRef == null) {
-        LaunchedEffect(entry) { reportPosterRendered() }
+        // Nothing to load: the poster is settled the moment its
+        // composition applies. SideEffect (not LaunchedEffect) —
+        // it IS the composition-applied hook, it carries no frame
+        // of effect-scheduling latency, and the once-guard makes
+        // its every-recomposition firing a no-op after the first.
+        SideEffect { reportPosterRendered(failed = false) }
     }
     Box(
         modifier = modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(16.dp))
@@ -851,10 +915,12 @@ fun MorningPoster(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { painterState ->
-                    if (painterState is coil.compose.AsyncImagePainter.State.Success ||
-                        painterState is coil.compose.AsyncImagePainter.State.Error
-                    ) {
-                        reportPosterRendered()
+                    when (painterState) {
+                        is coil.compose.AsyncImagePainter.State.Success ->
+                            reportPosterRendered(failed = false)
+                        is coil.compose.AsyncImagePainter.State.Error ->
+                            reportPosterRendered(failed = true)
+                        else -> Unit
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -937,17 +1003,29 @@ fun KitCard(
     /** W-9: fires once the card has rendered (its first garment
      * render decoded, or immediately when no item resolves to a
      * render) — the share surfaces show progress until it fires. */
-    onRendered: (() -> Unit)? = null
+    onRendered: (() -> Unit)? = null,
+    /** GEN-3 share-render acceptance: fires (once, together with
+     * [onRendered]) when the card settled on a FAILED garment
+     * decode — the preview surfaces it as an error, not a card. */
+    onRenderFailed: (() -> Unit)? = null
 ) {
     val anyRender = entry.items.any { itemName ->
         clothingItemForDisplayName(itemName)?.let {
             ClothingThumbnailService.getThumbnailAssetUri(it, gender)
         } != null
     }
-    if (!anyRender) {
-        LaunchedEffect(entry) { onRendered?.invoke() }
-    }
     var renderReported by remember(entry) { mutableStateOf(false) }
+    if (!anyRender) {
+        // Nothing to load — settled on composition apply (see the
+        // poster's SideEffect note); routed through the same
+        // once-guard as the painter path.
+        SideEffect {
+            if (!renderReported) {
+                renderReported = true
+                onRendered?.invoke()
+            }
+        }
+    }
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -982,16 +1060,21 @@ fun KitCard(
                             onState = { painterState ->
                                 // GEN-3 share-render: the card
                                 // settles on the first render's
-                                // TERMINAL state — success OR error.
-                                // Pre-fix only success reported, so a
-                                // failed garment decode hung the
-                                // share sheet's rendering state just
-                                // like the poster's did.
-                                if (!renderReported &&
-                                    (painterState is coil.compose.AsyncImagePainter.State.Success ||
-                                        painterState is coil.compose.AsyncImagePainter.State.Error)
-                                ) {
+                                // TERMINAL state — success OR error
+                                // (a failure also reports through
+                                // onRenderFailed). Pre-fix only
+                                // success reported, so a failed
+                                // garment decode hung the share
+                                // sheet's rendering state just like
+                                // the poster's did.
+                                val failed = when (painterState) {
+                                    is coil.compose.AsyncImagePainter.State.Success -> false
+                                    is coil.compose.AsyncImagePainter.State.Error -> true
+                                    else -> null
+                                }
+                                if (!renderReported && failed != null) {
                                     renderReported = true
+                                    if (failed) onRenderFailed?.invoke()
                                     onRendered?.invoke()
                                 }
                             },

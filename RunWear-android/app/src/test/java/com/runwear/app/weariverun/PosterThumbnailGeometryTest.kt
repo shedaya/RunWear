@@ -16,7 +16,6 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
 import com.runwear.app.ui.theme.RunWearTheme
-import com.runwear.shared.domain.model.GenderPreference
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
@@ -185,18 +184,27 @@ class PosterThumbnailGeometryTest {
 
     @Test
     fun `poster thumbnail - composed at natural size, the bands still do not collide`() {
+        // The production scaler, composed WITHOUT the chooser
+        // frame around it. Why not through ShareThumbnailChoice:
+        // semantics bounds are clipped by the frame's clip
+        // ancestor, and in the real thumbnail the poster's bottom
+        // column legitimately sits below the 150 dp frame (the
+        // thumbnail is top-anchored) — run 41920668266's node dump
+        // shows the bottom texts at Rect(0,0,0,0) through the
+        // clipped choice card while the top texts read natural
+        // coordinates. The geometry question — was the artifact
+        // composed at natural size, so its bands cannot collide —
+        // is a property of the scaler + artifact, asserted here
+        // unclipped; the frame's clip itself is stock Compose.
         val rendered = render {
-            // The chooser card's on-device width class (half the
-            // sheet minus gaps/padding): the frame the artifact
-            // used to be composed inside.
-            Box(modifier = Modifier.width(160.dp)) {
-                ShareThumbnailChoice(
-                    kind = ShareArtifactKind.MORNING_POSTER,
-                    entry = entry,
-                    gender = GenderPreference.UNISEX,
-                    onReady = {},
-                    onClick = {}
-                )
+            Box(modifier = Modifier.width(144.dp)) {
+                ArtifactThumbnailScaler {
+                    MorningPoster(
+                        entry = entry,
+                        modifier = Modifier.width(ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp),
+                        onRendered = {}
+                    )
+                }
             }
         }
         val texts = textBounds(rendered.root)
