@@ -509,11 +509,14 @@ struct WearIveRunDayView: View {
 /// frame 14) built from the slot's single image instance;
 /// rendering/idle → the LABELED working state (the hero-pill
 /// rule: labeled, state-driven — never a bare spinner on a blank
-/// sheet); failed → the failure line with a retry.
+/// sheet); failed → the failure line with a retry. Both waiting
+/// states carry an explicit Close — the census path trapped the
+/// user in the sheet for ~31 s with no cancel affordance at all.
 struct ShareCardSheetView: View {
     @ObservedObject var slot: ShareCardSlot
     let kind: ShareCardKind
     var onRetry: () -> Void
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         switch slot.state {
@@ -540,6 +543,9 @@ struct ShareCardSheetView: View {
                 Button("Try again") { onRetry() }
                     .font(.appButtonLabel)
                     .foregroundColor(AppTheme.pinePayload)
+                Button("Close") { dismiss() }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
             }
             .padding(24)
         case .idle, .rendering:
@@ -553,6 +559,9 @@ struct ShareCardSheetView: View {
             Text(ShareCardCopy.progressLabel(for: kind))
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
+            Button("Close") { dismiss() }
+                .font(.appButtonLabel)
+                .foregroundColor(AppTheme.pinePayload)
         }
         .padding(24)
     }

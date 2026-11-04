@@ -26,6 +26,20 @@ import UIKit
 //      re-downloaded and re-rendered both cards from zero.
 //   6. Both renders ran ImageRenderer at 3x on the main actor
 //      over the hero at its full downloaded resolution.
+//   7. The two collapses back to the entry detail (census Y-3:
+//      three spinner stretches ≈22.4 s + 3.0 s + 5.7 s): the
+//      collection model republishes its @Published entries on
+//      EVERY non-identical settle — hero-only and weather-only
+//      landings included (WearIveRunCollectionModel.
+//      recordSettled) — and the home view feeds it from four
+//      onChange triggers while the collection is open. Each
+//      republish rebuilt the day view, cancelling the render
+//      .task and tearing the sheet down; the rebuilt view
+//      re-presented the sheet and restarted the serial chain
+//      from zero (later stretches shorter as URLCache warmed).
+//      The fix's render lives in the slot's own unstructured
+//      task and writes the shared cache even if the slot dies,
+//      so presenter churn can neither cancel it nor lose it.
 //
 // The fix is structural, and it lives here so the test target
 // (which dual-members this file) pins the mechanism itself:
@@ -132,9 +146,25 @@ final class ShareCardSlot: ObservableObject {
         state = .rendering
         task = Task { [weak self] in
             let rendered = await render()
-            guard let self, self.key == key else { return }
+            // The cache write does NOT wait on the slot living.
+            // Census Y-3's collapses are the presenter being torn
+            // down and rebuilt by collection-model republishes
+            // mid-render (WearIveRunCollectionModel.recordSettled
+            // reassigns its @Published entries on every
+            // non-identical settle, hero-only and weather-only
+            // included, and the home view feeds it from four
+            // onChange triggers under the open collection). If
+            // that churn kills this slot mid-render, the finished
+            // card STILL lands in the cache, and the re-presented
+            // sheet is served instantly — the repeated spinner
+            // stretches cannot recur. The render task is the
+            // slot's own unstructured Task, never the day view's
+            // .task, so view teardown cannot cancel it either.
             if let rendered {
                 ShareCardImageCache.shared.store(rendered, for: key)
+            }
+            guard let self, self.key == key else { return }
+            if let rendered {
                 self.image = rendered
                 self.state = .ready
             } else {

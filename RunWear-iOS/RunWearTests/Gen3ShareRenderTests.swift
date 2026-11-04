@@ -155,6 +155,41 @@ final class Gen3ShareRenderTests: XCTestCase {
         XCTAssertTrue(second.image === first.image, "the cached instance itself is served")
     }
 
+    // MARK: - Presenter churn cannot lose a render (census Y-3)
+
+    @MainActor
+    func testRenderLandsInCache_evenWhenTheSlotDiesMidRender() async {
+        // The Y-3 collapse mechanism: a collection-model
+        // republish rebuilds the day view mid-render, and the
+        // view's slot dies with it. The render itself (the slot's
+        // unstructured task) must still finish INTO THE CACHE, so
+        // the re-presented sheet is served instantly instead of
+        // starting a new spinner stretch.
+        let key = uniqueKey("poster")
+        let counter = RenderCounter()
+        var slot: ShareCardSlot? = ShareCardSlot()
+        slot!.request(key: key) {
+            counter.increment()
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            return self.tinyImage()
+        }
+        slot = nil // the presenter churn kills the slot here
+
+        var cached: UIImage?
+        for _ in 0..<40 {
+            if let image = ShareCardImageCache.shared.image(for: key) { cached = image; break }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        XCTAssertNotNil(cached, "the orphaned render still lands in the cache")
+        XCTAssertEqual(counter.count, 1)
+
+        // And the next presentation (a fresh slot) is instant.
+        let fresh = ShareCardSlot()
+        fresh.request(key: key) { counter.increment(); return nil }
+        XCTAssertEqual(fresh.state, .ready)
+        XCTAssertEqual(counter.count, 1, "no re-render after the churn — the cache serves it")
+    }
+
     // MARK: - Failure is a state, not a dead spinner
 
     @MainActor
@@ -219,5 +254,9 @@ final class Gen3ShareRenderTests: XCTestCase {
                       "the sheet's working state is the labeled copy")
         XCTAssertTrue(collection.contains("ShareCardImagePrep.downscaledForPoster"),
                       "the poster hero is downscaled before the render")
+        XCTAssertTrue(collection.contains("Button(\"Close\")"),
+                      "the waiting and failure states carry an explicit way back — the census path had no cancel at all")
+        XCTAssertTrue(collection.contains("@Environment(\\.dismiss)"),
+                      "the Close affordance dismisses the share sheet itself")
     }
 }
