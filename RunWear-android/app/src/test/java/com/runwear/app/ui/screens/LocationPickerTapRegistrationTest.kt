@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.RunWearTheme
 import com.runwear.shared.data.repository.LocationResult
 import java.util.concurrent.TimeUnit
@@ -79,10 +80,20 @@ class LocationPickerTapRegistrationTest {
         composeView.setContent {
             RunWearTheme(darkTheme = false) {
                 Box(modifier = Modifier.width(360.dp)) {
-                    LocationSearchResultRows(
-                        results = results.value,
-                        onSelectResult = { selections += it }
-                    )
+                    androidx.compose.foundation.layout.Column {
+                        // Harness probe: reads the same state so a
+                        // semantics dump can separate "the state
+                        // change never recomposed" from "the list
+                        // did not compose its new item".
+                        androidx.compose.material3.Text(
+                            text = "probe-count:${results.value.size}",
+                            fontSize = 10.sp
+                        )
+                        LocationSearchResultRows(
+                            results = results.value,
+                            onSelectResult = { selections += it }
+                        )
+                    }
                 }
             }
         }
@@ -201,7 +212,12 @@ class LocationPickerTapRegistrationTest {
         // visible yet never registered). The new row must compose
         // within a few frames, and the tap must then hit the NEW
         // row — not a stale one, and not nothing.
-        host.results.value = listOf(miami, newYork)
+        // Deliver the swap the way the app does: the ViewModel's
+        // results land via a collector on the main queue. A direct
+        // write from the test thread between frames was observed
+        // (runs 41923320020–41926593273) to never recompose in this
+        // harness — the semantics tree kept the pre-swap rows.
+        host.composeView.post { host.results.value = listOf(miami, newYork) }
         var pumps = 0
         while (findRowCenter(host, "New York") == null && pumps < 5) {
             pump(host, 1)
