@@ -1,14 +1,24 @@
 import SwiftUI
 
-// MARK: - Onboarding (RW-6.8 / R-17)
+// MARK: - Onboarding (WS-10 · A1/A2 — the design's sequence, §9)
 //
-// One scrolling screen built from the same native PreferenceControls as
-// Settings — no pager, no progress bars, no step transitions. The
-// temperature unit starts from the device locale
+// The sequence is the design's (OnboardingSequence): promise
+// (frame 28) → setup (frames 29–31) → choice (32) → consent (33)
+// → first look (34). iOS expression (§1.4): the Welcome/promise
+// screen is the root of a NavigationStack and the setup questions
+// advance ONE question per screen with native push transitions —
+// Back is the exact reverse. Preferences are built FIRST, before
+// Make It Me is ever introduced: the free-looks promise lives only
+// on frame 28's own screen (A1), the fork (frame 32) introduces
+// the feature, consent (frame 33) follows the fork's customize
+// door, and the first personal look (frame 34) ends the flow.
+//
+// The temperature unit starts from the device locale
 // (Locale.measurementSystem) instead of a hard-coded Fahrenheit.
-// Location is a choice made here, in context: "Use My Location" fires
-// the system permission request from the tap; "Set a City Instead" is
-// remembered and ContentView opens the city picker on first launch.
+// Location is a choice made at the location step, in context:
+// "Use My Location" fires the system permission request from the
+// tap; "Set a City Instead" is remembered and the first-look
+// phase opens the city picker.
 struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
 
@@ -19,11 +29,13 @@ struct OnboardingView: View {
 
     @StateObject private var locationService = LocationService()
 
-    /// RW-14 (§2.1): onboarding ends with the fork — the first REAL
-    /// recommendation, then "See yourself in every outfit" vs "Use
-    /// the standard photos". Preferences come first; the fork is a
-    /// first-class final phase, not an afterthought sheet.
-    @State private var phase: Phase = .preferences
+    /// The first-look phase (fork → consent → first look) begins
+    /// only after the setup's last step saves the preference
+    /// profile — preferences first, always.
+    @State private var phase: Phase = .setup
+    /// The setup stack's pushed steps (the Welcome screen is its
+    /// root). Native push, one question per screen (§1.4).
+    @State private var path: [OnboardingStep] = []
 
     private enum LocationChoice {
         case gps
@@ -31,7 +43,7 @@ struct OnboardingView: View {
     }
 
     private enum Phase {
-        case preferences
+        case setup
         case firstLook
     }
 
@@ -43,36 +55,167 @@ struct OnboardingView: View {
                 onComplete: { hasCompletedOnboarding = true }
             )
         } else {
-            preferencesBody
+            setupStack
         }
     }
 
-    private var preferencesBody: some View {
+    private var setupStack: some View {
+        NavigationStack(path: $path) {
+            welcomeScreen
+                .navigationDestination(for: OnboardingStep.self) { step in
+                    switch step {
+                    case .temperature:
+                        questionScreen(
+                            title: "Temperature",
+                            question: "How do you measure the weather?"
+                        ) {
+                            TemperatureUnitPicker(unit: $temperatureUnit)
+                        }
+                    case .fit:
+                        questionScreen(
+                            title: "Fit Preference",
+                            question: "Whose fit should the outfits follow?"
+                        ) {
+                            FitPreferencePicker(preference: $genderPreference)
+                            if genderPreference == .unisex {
+                                Text("No preference selected - showing unisex options")
+                                    .font(.appFootnote)
+                                    .foregroundStyle(AppTheme.inkSecondary)
+                            }
+                        }
+                    case .comfort:
+                        questionScreen(
+                            title: "Body Temperature",
+                            question: "Do you get cold easily, or overheat quickly?"
+                        ) {
+                            ComfortLevelControl(comfortLevel: $comfortLevel)
+                        }
+                    case .location:
+                        locationScreen
+                    case .welcome, .firstLook:
+                        // Neither is a pushed setup destination:
+                        // welcome is the stack's root, and the
+                        // first-look phase replaces the stack.
+                        EmptyView()
+                    }
+                }
+        }
+    }
+
+    // MARK: - Frame 28 · Welcome (the promise screen)
+
+    /// Frame 28 as designed: the script logo at specimen size, the
+    /// headline (A2 — Sol's pick, character for character, from
+    /// OnboardingCopy), one promise per row, nothing to decide
+    /// yet. This screen is the ONLY place in onboarding where the
+    /// free-looks promise may appear (A1) — it is stated here,
+    /// inside the Make It Me promise row, as one of the screen's
+    /// product truths; no price appears anywhere in onboarding.
+    private var welcomeScreen: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 10) {
+                Text("RunWear")
+                    .font(.greatVibes(size: 64))
+                    .foregroundStyle(AppTheme.inkPrimary)
+
+                Text(OnboardingCopy.welcomeHeadline)
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppTheme.inkSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: 24) {
+                promiseRow(
+                    icon: "cloud",
+                    title: "The right outfit for the weather",
+                    detail: "One recommendation for the run you're about to take — feels-like, wind, and rain included."
+                )
+                promiseRow(
+                    icon: "person",
+                    title: "See yourself in every outfit",
+                    detail: "Make It Me puts you in the photos. \(OnboardingCopy.freeLooksPromise)"
+                )
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 52)
+
+            Spacer()
+
+            Button {
+                path.append(.temperature)
+            } label: {
+                Text("Get Started")
+                    .font(.appButtonLabel)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.primaryColor)
+
+            Text("Free to start · Set up in under a minute")
+                .font(.appFootnote)
+                .foregroundStyle(AppTheme.inkSecondary)
+                .padding(.top, 12)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.background.ignoresSafeArea())
+    }
+
+    private func promiseRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(AppTheme.pinePayload)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.appSectionTitle)
+                    .foregroundStyle(AppTheme.inkPrimary)
+                Text(detail)
+                    .font(.appSecondary)
+                    .foregroundStyle(AppTheme.inkSecondary)
+            }
+        }
+    }
+
+    // MARK: - Frames 29–30 · One question per screen
+
+    /// One setup question on its own pushed screen: the question,
+    /// the same native PreferenceControls Settings uses (so the
+    /// two surfaces can never drift apart, and each selection
+    /// settles with the control's own selection haptic, §1.4),
+    /// and one Continue that pushes the next step.
+    private func questionScreen<Content: View>(
+        title: String,
+        question: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 36) {
-                header
+            VStack(alignment: .leading, spacing: 16) {
+                Text(title)
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(AppTheme.inkPrimary)
 
-                temperatureSection
+                Text(question)
+                    .font(.appSecondary)
+                    .foregroundStyle(AppTheme.inkSecondary)
 
-                fitSection
-
-                comfortSection
-
-                locationSection
+                content()
             }
             .padding(.horizontal, 24)
             .padding(.top, 32)
-            .padding(.bottom, 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(AppTheme.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom) {
-            // The single advance action, pinned and always reachable.
-            // RW-14: it no longer completes onboarding — it moves to
-            // the first-look fork (the recommendation, then the
-            // customize-vs-stock choice).
-            Button(action: beginFirstLook) {
-                Text("Get Started")
+            Button {
+                advanceToNextStep()
+            } label: {
+                Text("Continue")
                     .font(.appButtonLabel)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -85,150 +228,73 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "figure.run")
-                .font(.system(size: 48))
-                .foregroundStyle(AppTheme.inkPrimary)
-
-            Text("Welcome to RunWear")
-                .font(.title.weight(.bold))
-                .foregroundStyle(AppTheme.inkPrimary)
-
-            Text("Outfit recommendations tuned to your weather. Set your preferences once — you can change them anytime in Settings.")
-                .font(.appSecondary)
-                .foregroundStyle(AppTheme.inkSecondary)
-
-            // Frame 28: product truth only — answers "will this
-            // cost me?" early and honestly. It is information,
-            // not an ask (§9 placement table).
-            Text("Your first 5 looks are free")
-                .font(.appSecondary.weight(.semibold))
-                .foregroundStyle(AppTheme.inkPrimary)
-        }
+    /// Push the step after the one on top of the stack. The
+    /// location step is the setup's last: its own doors finish
+    /// the setup (see below), so Continue never pushes past it.
+    private func advanceToNextStep() {
+        guard let current = path.last, let next = current.next,
+              next != .firstLook else { return }
+        path.append(next)
     }
 
-    // MARK: - Sections
+    /// Frame 30 — the location step. The honest privacy copy sits
+    /// in the step itself (promoted from the permission screen):
+    /// location kept on the phone, forecast lookups rounded to a
+    /// rough area, never sold, never advertising. Both doors
+    /// finish the setup: "Use My Location" fires the system
+    /// permission prompt from the tap (frame 31 is that prompt's
+    /// standalone context); "Set a City Instead" is a full door,
+    /// and the first-look phase opens the place search for it.
+    private var locationScreen: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("One more thing — where are you running?")
+                    .font(.title.weight(.bold))
+                    .foregroundStyle(AppTheme.inkPrimary)
 
-    private func sectionHeader(icon: String, title: String, description: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(title, systemImage: icon)
-                .font(.appSectionTitle)
-                .foregroundStyle(AppTheme.inkPrimary)
-
-            Text(description)
-                .font(.appSecondary)
-                .foregroundStyle(AppTheme.inkSecondary)
-        }
-    }
-
-    private var temperatureSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                icon: "thermometer.medium",
-                title: "Temperature Unit",
-                description: "How do you prefer to see temperatures?"
-            )
-
-            TemperatureUnitPicker(unit: $temperatureUnit)
-        }
-    }
-
-    private var fitSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                icon: "tshirt",
-                title: "Fit Preference",
-                description: "Select your preferred fit for clothing recommendations"
-            )
-
-            FitPreferencePicker(preference: $genderPreference)
-
-            if genderPreference == .unisex {
-                Text("No preference selected - showing unisex options")
-                    .font(.appFootnote)
+                Text("RunWear saves your most recent location on your phone so your outfit is ready when you open the app. For a forecast, it sends coordinates rounded to a rough area — never your exact spot — and your location is never sold or used for advertising.")
+                    .font(.appSecondary)
                     .foregroundStyle(AppTheme.inkSecondary)
-            }
-        }
-    }
 
-    private var comfortSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                icon: "person.fill.questionmark",
-                title: "Body Temperature",
-                description: "Do you typically run warm or cold?"
-            )
-
-            ComfortLevelControl(comfortLevel: $comfortLevel)
-        }
-    }
-
-    private var locationSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(
-                icon: "location",
-                title: "Location",
-                description: "RunWear uses your location for local weather — or set a city instead."
-            )
-
-            // Frame 30: the coded honest privacy copy, promoted
-            // into the step itself (§8-G) — and true of the code:
-            // forecast lookups round coordinates to a rough area
-            // at the service (WeatherService), the precise fix
-            // never leaves the phone.
-            Text("Your location stays on this phone. Forecast lookups are rounded to a rough area — never your exact spot — and your location is never sold or used for advertising.")
-                .font(.appFootnote)
-                .foregroundStyle(AppTheme.inkSecondary)
-
-            Button {
-                locationChoice = .gps
-                locationService.requestPermission()
-            } label: {
-                HStack {
+                Button {
+                    locationChoice = .gps
+                    locationService.requestPermission()
+                    beginFirstLook()
+                } label: {
                     Text("Use My Location")
                         .font(.appButtonLabel)
-                    Spacer()
-                    if locationChoice == .gps {
-                        Image(systemName: "checkmark")
-                    }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
-            }
-            .buttonStyle(.bordered)
-            .tint(AppTheme.inkPrimary)
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.primaryColor)
 
-            Button {
-                locationChoice = .manual
-            } label: {
-                HStack {
+                Button {
+                    locationChoice = .manual
+                    beginFirstLook()
+                } label: {
                     Text("Set a City Instead")
                         .font(.appButtonLabel)
-                    Spacer()
-                    if locationChoice == .manual {
-                        Image(systemName: "checkmark")
-                    }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 16)
+                .buttonStyle(.bordered)
+                .tint(AppTheme.inkPrimary)
             }
-            .buttonStyle(.bordered)
-            .tint(AppTheme.inkPrimary)
+            .padding(.horizontal, 24)
+            .padding(.top, 32)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(AppTheme.background.ignoresSafeArea())
     }
 
-    // MARK: - Completion
+    // MARK: - Completion of setup
 
     /// Preferences are saved first (the first-look view model reads
     /// them back from UserDefaults, exactly like the home screen
-    /// will), then the fork phase begins. Onboarding completes only
-    /// from the fork — either door (spec §2.2: dismissing the fork
-    /// by choosing stock IS the stock choice, fully respected).
+    /// will), then the first-look phase begins. Onboarding completes
+    /// only from that phase — either door (spec §2.2: dismissing the
+    /// fork by choosing stock IS the stock choice, fully respected).
     private func beginFirstLook() {
         savePreferences()
         phase = .firstLook
@@ -273,6 +339,13 @@ private struct FirstLookView: View {
     /// onboarding's natural end on the fork's success path.
     @State private var showFirstLookMoment = false
     @State private var showPremiumSheet = false
+    /// WS-10 (§1.4): the frame-34 reveal's state — the photo
+    /// crossfades in, ONE success haptic fires as it lands, and
+    /// the §9 summary band slides up 120 ms after it lands
+    /// (FirstLookReveal carries the numbers).
+    @State private var firstLookPhotoRevealed = false
+    @State private var firstLookBandRevealed = false
+    @State private var firstLookHapticNonce = 0
 
     private var hasRecommendation: Bool {
         previewVM.weatherData != nil && previewVM.recommendation != nil
@@ -431,6 +504,9 @@ private struct FirstLookView: View {
                 .frame(height: 220)
                 .clipped()
                 .cornerRadius(16)
+                // §1.4 reveal: the photo crossfades in (it never
+                // pops, and it is never replaced mid-view).
+                .opacity(firstLookPhotoRevealed ? 1 : 0)
 
                 Text(contextLine)
                     .font(.system(size: 14, weight: .medium))
@@ -441,6 +517,9 @@ private struct FirstLookView: View {
                     .foregroundColor(AppTheme.inkSecondary)
 
                 // The §9 band — the recommended pair, verbatim.
+                // It slides up 120 ms after the photo lands
+                // (FirstLookReveal.bandStartSeconds from reveal
+                // start), never with or ahead of the photo.
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Ready the moment you open the app — made ahead, never while you wait.")
                         .font(.system(size: 15, weight: .semibold))
@@ -452,6 +531,8 @@ private struct FirstLookView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
+                .opacity(firstLookBandRevealed ? 1 : 0)
+                .offset(y: firstLookBandRevealed ? 0 : 12)
 
                 Button(action: onComplete) {
                     Text("See My Outfit")
@@ -477,6 +558,11 @@ private struct FirstLookView: View {
             .padding(.horizontal, 24)
             .padding(.top, 24)
         }
+        // WS-10 (§1.4/§1.7): the reveal runs once when the moment
+        // first appears; the success haptic is the moment's only
+        // haptic and fires exactly once, as the photo lands.
+        .onAppear(perform: startFirstLookReveal)
+        .sensoryFeedback(.success, trigger: firstLookHapticNonce)
         // WS-5 (§1.3): named detent — the paywall's content
         // scrolls, so .large only. Dismissal (any path: swipe,
         // purchase, restore) still completes onboarding via
@@ -485,6 +571,26 @@ private struct FirstLookView: View {
             MakeItMeSubscriptionSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// The frame-34 reveal (§1.4), driven off FirstLookReveal's
+    /// numbers: photo crossfade → (photo lands) ONE success
+    /// haptic → +120 ms, the summary band slides up. Guarded so
+    /// a re-appearance never replays it — the haptic count for
+    /// the moment is FirstLookReveal.successHapticCount (1).
+    private func startFirstLookReveal() {
+        guard !firstLookPhotoRevealed else { return }
+        withAnimation(.easeInOut(duration: FirstLookReveal.photoCrossfadeSeconds)) {
+            firstLookPhotoRevealed = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + FirstLookReveal.photoCrossfadeSeconds) {
+            firstLookHapticNonce += FirstLookReveal.successHapticCount
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + FirstLookReveal.bandStartSeconds) {
+            withAnimation(.smooth(duration: 0.35)) {
+                firstLookBandRevealed = true
+            }
         }
     }
 

@@ -1268,46 +1268,14 @@ struct TemperatureBracketBadge: View {
     }
 }
 
-struct GenderToggle: View {
-    let selected: GenderPreference
-    let onSelect: (GenderPreference) -> Void
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(GenderPreference.allCases, id: \.self) { preference in
-                GenderOption(
-                    preference: preference,
-                    isSelected: selected == preference,
-                    onTap: { onSelect(preference) }
-                )
-            }
-        }
-        .padding(4)
-        // WS-8: the token card fill for this (currently call-site-
-        // less, legacy) segmented container — the system
-        // secondarySystemBackground is an off-table ground.
-        .background(AppTheme.cardOnSheet)
-        .cornerRadius(20)
-    }
-}
-
-struct GenderOption: View {
-    let preference: GenderPreference
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            Text(preference.displayIcon)
-                .font(.system(size: preference == .unisex ? 12 : 16))
-                .frame(width: 36, height: 32)
-                .background(isSelected ? AppTheme.primaryColor : Color.clear)
-                .cornerRadius(16)
-                .opacity(isSelected ? 1.0 : 0.45)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
+// WS-10 (A4 residue, R-1): the legacy GenderToggle / GenderOption
+// pair that used to sit here is REMOVED. It had no call sites
+// anywhere in the app (full-tree search: definitions only), and
+// its GenderOption rendered GenderPreference.displayIcon — the
+// 🚹/🚺/○ text glyphs no frame of the approved design carries.
+// The live fit control is FitPreferencePicker (plain text labels,
+// shared by Settings and Onboarding). Nothing rendered the pair,
+// so nothing changes on screen.
 
 #Preview {
     let viewModel = WeatherViewModel()
