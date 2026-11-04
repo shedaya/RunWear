@@ -48,6 +48,33 @@ class GuidedSelfieChecksTest {
     }
 
     @Test
+    fun `turnedPassing names exactly the checks that flip to passing`() {
+        // WS-9 fix (P-2, §1.7): the selection tick fires once per
+        // check that TURNS passing — the flip set is computed from
+        // two production evaluations, never from hand-built states.
+        val before = GuidedSelfieChecks.evaluate(m(faces = 0))
+        val after = GuidedSelfieChecks.evaluate(m())
+        // With no face in frame, the size and brightness chips
+        // already pass (they judge the frame, not the face) — only
+        // the three face-dependent checks can turn.
+        assertEquals(
+            listOf("Face in frame", "Just you", "Facing forward"),
+            GuidedSelfieChecks.turnedPassing(before, after).map { it.label }
+        )
+        // Nothing turns when nothing changes, and a check that
+        // REGRESSES does not fire.
+        assertTrue(GuidedSelfieChecks.turnedPassing(after, after).isEmpty())
+        assertTrue(GuidedSelfieChecks.turnedPassing(after, before).isEmpty())
+        // A partial improvement names only the checks that flipped
+        // (here brightness regresses while the face checks turn).
+        val partial = GuidedSelfieChecks.evaluate(m(faces = 1, lum = 0.05))
+        assertEquals(
+            listOf("Face in frame", "Just you", "Facing forward"),
+            GuidedSelfieChecks.turnedPassing(before, partial).map { it.label }
+        )
+    }
+
+    @Test
     fun `chips fail independently and the coaching line names the first failure`() {
         assertFalse(GuidedSelfieChecks.allPassed(m(faces = 0)))
         assertEquals("Move your face into the oval.", GuidedSelfieChecks.coachingLine(m(faces = 0)))

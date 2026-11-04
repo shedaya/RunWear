@@ -1688,7 +1688,9 @@ fun FirstLookMoment(
         revealed = true
         delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
         haptic.performHapticFeedback(
-            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+            // §1.7's first-look confirm-class effect, named by the
+            // map (WS-9 fix, P-2).
+            com.runwear.app.ui.components.HapticSpec.CONFIRM
         )
         delay(OnboardingMotion.FIRST_LOOK_BAND_DELAY_AFTER_PHOTO_MS.toLong())
         bandSettled = true

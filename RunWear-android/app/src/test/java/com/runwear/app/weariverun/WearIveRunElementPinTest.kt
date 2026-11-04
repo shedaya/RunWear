@@ -164,17 +164,27 @@ class WearIveRunElementPinTest {
     }
 
     @Test
-    fun `exactly one haptic on the element surface - the cue pulse's soft tick - S1_7`() {
+    fun `the element surface's haptics are exactly the S1_7 map entries - cue tick and trash tick`() {
+        // WS-9 fix (P-2): §1.7's table names TWO haptics for this
+        // surface — the cue's light confirm-class tick and the
+        // trash's light tick. The pre-fix pin asserted exactly one
+        // (the cue), which left the table's trash row unimplemented;
+        // the map is now complete: cue (once, in CueBarContent) +
+        // trash (once per state that carries the button).
         val bar = miniBar()
         assertEquals(
-            1,
+            3,
             bar.split("performHapticFeedback").size - 1
         )
         assertTrue(
-            "the cue haptic is the soft tick, not the old LongPress",
-            bar.contains("HapticFeedbackType.TextHandleMove")
+            "the cue haptic is the map's cue tick, not the old LongPress",
+            bar.contains("HapticSpec.CUE_TICK")
         )
-        assertFalse(bar.contains("HapticFeedbackType.LongPress"))
+        assertTrue(
+            "the trash buttons fire the map's light tick",
+            bar.contains("HapticSpec.LIGHT_TICK")
+        )
+        assertFalse(bar.contains("HapticSpec.LONG_PRESS"))
         // The host fires no haptic for this element at all anymore.
         assertFalse(heroMainScreen().contains("performHapticFeedback"))
         // The pulse is a single non-looping pair of 450 ms halves and

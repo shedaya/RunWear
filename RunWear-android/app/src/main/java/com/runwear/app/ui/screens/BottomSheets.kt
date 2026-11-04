@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.core.view.WindowCompat
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.runwear.app.ui.components.HapticSpec
 import com.runwear.app.ui.components.conditionIcon
 import com.runwear.app.ui.components.getCategoryIconRes
 import com.runwear.app.ui.theme.RunWearColors
@@ -117,6 +119,7 @@ fun DatePickerSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val haptic = LocalHapticFeedback.current
     val days = (0 until ForecastHorizonPolicy.BROWSE_DAYS).map { today.plusDays(it.toLong()) }
 
     ModalBottomSheet(
@@ -161,7 +164,14 @@ fun DatePickerSheet(
                     )
 
                     Surface(
-                        onClick = { if (!beyondHorizon) onSelectDate(date) },
+                        onClick = {
+                            if (!beyondHorizon) {
+                                // §1.7 (WS-9 fix, P-2): day selection
+                                // fires the selection-class tick.
+                                haptic.performHapticFeedback(HapticSpec.SELECTION)
+                                onSelectDate(date)
+                            }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
                     ) {
@@ -299,6 +309,7 @@ private fun HourGrid(
     selectedHour: Int,
     onSelectTime: (Int) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         hours.chunked(3).forEach { rowHours ->
             Row(
@@ -309,7 +320,12 @@ private fun HourGrid(
                     val isSelected = hour == selectedHour
 
                     Surface(
-                        onClick = { onSelectTime(hour) },
+                        onClick = {
+                            // §1.7 (WS-9 fix, P-2): hour selection
+                            // fires the selection-class tick.
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                            onSelectTime(hour)
+                        },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
                         color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
@@ -725,6 +741,10 @@ private fun UnitToggle(
     isCelsius: Boolean,
     onToggle: () -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): a Settings preference selection fires
+    // the selection-class tick. Both cells below only invoke
+    // onToggle when the tap actually changes the unit.
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
@@ -737,7 +757,12 @@ private fun UnitToggle(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (!isCelsius) RunWearColors.Primary else Color.Transparent)
-                .clickable { if (isCelsius) onToggle() }
+                .clickable {
+                    if (isCelsius) {
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onToggle()
+                    }
+                }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -754,7 +779,12 @@ private fun UnitToggle(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isCelsius) RunWearColors.Primary else Color.Transparent)
-                .clickable { if (!isCelsius) onToggle() }
+                .clickable {
+                    if (!isCelsius) {
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onToggle()
+                    }
+                }
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -778,6 +808,9 @@ private fun AppearanceSelector(
     selected: AppearancePreference,
     onSelect: (AppearancePreference) -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): preference selection tick, on change
+    // (iOS fires its selection feedback on the value changing).
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -793,7 +826,12 @@ private fun AppearanceSelector(
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
-                    .clickable { onSelect(pref) }
+                    .clickable {
+                        if (!isSelected) {
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onSelect(pref)
+                    }
                     .padding(vertical = 10.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -818,6 +856,8 @@ private fun ComfortSelector(
     selected: ComfortPreference,
     onSelect: (ComfortPreference) -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): preference selection tick, on change.
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -833,7 +873,12 @@ private fun ComfortSelector(
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
-                    .clickable { onSelect(pref) }
+                    .clickable {
+                        if (!isSelected) {
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onSelect(pref)
+                    }
                     .padding(vertical = 10.dp, horizontal = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -859,6 +904,9 @@ private fun GenderToggleSettings(
     selected: GenderPreference,
     onSelect: (GenderPreference) -> Unit
 ) {
+    // §1.7 (WS-9 fix, P-2): preference selection tick — every tap
+    // here changes the selection (select, or tap-again to deselect).
+    val haptic = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -875,6 +923,7 @@ private fun GenderToggleSettings(
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isMale) RunWearColors.Primary else Color.Transparent)
                 .clickable {
+                    haptic.performHapticFeedback(HapticSpec.SELECTION)
                     onSelect(if (isMale) GenderPreference.UNISEX else GenderPreference.MALE)
                 }
                 .padding(vertical = 12.dp),
@@ -896,6 +945,7 @@ private fun GenderToggleSettings(
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isFemale) RunWearColors.Primary else Color.Transparent)
                 .clickable {
+                    haptic.performHapticFeedback(HapticSpec.SELECTION)
                     onSelect(if (isFemale) GenderPreference.UNISEX else GenderPreference.FEMALE)
                 }
                 .padding(vertical = 12.dp),
@@ -934,6 +984,7 @@ fun LocationPickerSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var query by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
+    val haptic = LocalHapticFeedback.current
     // RW-26: long-press raises the M3 contextual bar over a recent.
     var contextRecent by remember { mutableStateOf<RecentLocation?>(null) }
     val recentSnackbar = remember { SnackbarHostState() }
@@ -971,6 +1022,9 @@ fun LocationPickerSheet(
                     IconButton(onClick = {
                         val removed = contextRecent!!
                         contextRecent = null
+                        // §1.7 (WS-9 fix, P-2): recents removal
+                        // fires the light tick.
+                        haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
                         onRemoveRecent(removed)
                         recentScope.launch {
                             val result = recentSnackbar.showSnackbar(
@@ -1048,6 +1102,9 @@ fun LocationPickerSheet(
                     items(searchResults) { result ->
                         Surface(
                             onClick = {
+                                // §1.7 / §1.3 (WS-9 fix, P-2): place
+                                // selected fires the selection tick.
+                                haptic.performHapticFeedback(HapticSpec.SELECTION)
                                 focusManager.clearFocus()
                                 onSelectLocation(result.latitude, result.longitude, result.displayName)
                             },
@@ -1115,6 +1172,9 @@ fun LocationPickerSheet(
             // Use Current Location Option (GPS)
             Surface(
                 onClick = {
+                    // §1.7 / §1.3 (WS-9 fix, P-2): choosing the
+                    // current location is a place selection too.
+                    haptic.performHapticFeedback(HapticSpec.SELECTION)
                     focusManager.clearFocus()
                     onUseCurrentLocation()
                 },
@@ -1216,10 +1276,19 @@ fun LocationPickerSheet(
                             .fillMaxWidth()
                             .combinedClickable(
                                 onClick = {
+                                    // §1.7 / §1.3 (WS-9 fix, P-2):
+                                    // place selected — selection tick.
+                                    haptic.performHapticFeedback(HapticSpec.SELECTION)
                                     focusManager.clearFocus()
                                     onSelectLocation(recent.latitude, recent.longitude, recent.name)
                                 },
-                                onLongClick = { contextRecent = recent }
+                                // §1.7 (WS-9 fix, P-2): the ONE
+                                // specified long-press haptic — the
+                                // recents contextual bar.
+                                onLongClick = {
+                                    haptic.performHapticFeedback(HapticSpec.LONG_PRESS)
+                                    contextRecent = recent
+                                }
                             )
                             .padding(vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically

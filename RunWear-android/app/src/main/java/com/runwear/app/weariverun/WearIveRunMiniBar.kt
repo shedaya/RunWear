@@ -38,7 +38,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -50,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
+import com.runwear.app.ui.components.HapticSpec
 import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
@@ -134,6 +134,7 @@ private fun MiniBarContent(
     onRemoveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
     Surface(
         modifier = modifier.fillMaxWidth().clickable { onExpandClick() },
         shape = RoundedCornerShape(20.dp),
@@ -172,7 +173,12 @@ private fun MiniBarContent(
                     modifier = Modifier.size(14.dp)
                 )
             }
-            IconButton(onClick = onRemoveClick) {
+            IconButton(onClick = {
+                // §1.7 (WS-9 fix, P-2): the element's trash fires
+                // the light tick.
+                haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
+                onRemoveClick()
+            }) {
                 Icon(
                     imageVector = Icons.Outlined.Delete,
                     contentDescription = "Remove from Wear I've Run",
@@ -228,7 +234,8 @@ private fun CueBarContent(
         )
         // …then ONE pulse (900 ms ease-in-out), with the soft haptic
         // at the START of the pulse — and then still. Never loops.
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        // §1.7's cue tick, named by the map (WS-9 fix, P-2).
+        haptic.performHapticFeedback(HapticSpec.CUE_TICK)
         pulse.animateTo(
             targetValue = 1.03f,
             animationSpec = tween(
@@ -287,6 +294,7 @@ private fun ExpandedBarContent(
     onBodyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
     Surface(
         modifier = modifier.fillMaxWidth().clickable { onBodyClick() },
         shape = RoundedCornerShape(20.dp),
@@ -366,7 +374,12 @@ private fun ExpandedBarContent(
                         modifier = Modifier.size(14.dp)
                     )
                 }
-                IconButton(onClick = onRemoveClick) {
+                IconButton(onClick = {
+                    // §1.7 (WS-9 fix, P-2): the element's trash
+                    // fires the light tick (same as the mini state).
+                    haptic.performHapticFeedback(HapticSpec.LIGHT_TICK)
+                    onRemoveClick()
+                }) {
                     Icon(
                         imageVector = Icons.Outlined.Delete,
                         contentDescription = "Remove from Wear I've Run",

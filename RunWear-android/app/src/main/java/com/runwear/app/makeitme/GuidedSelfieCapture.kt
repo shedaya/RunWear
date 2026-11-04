@@ -97,6 +97,19 @@ object GuidedSelfieChecks {
         )
     }
 
+    /**
+     * WS-9 fix (P-2, §1.7): the checks that TURN passing between two
+     * evaluations — the selection tick fires once per check named
+     * here, and only when it turns (a check already passing, or one
+     * still failing, is silent).
+     */
+    fun turnedPassing(
+        previous: List<GuidedCheck>,
+        current: List<GuidedCheck>
+    ): List<GuidedCheck> = current.filter { now ->
+        now.passed && previous.firstOrNull { it.label == now.label }?.passed != true
+    }
+
     fun allPassed(m: PhotoQualityChecker.Measurements?): Boolean =
         m != null && evaluate(m).all { it.passed } &&
             PhotoQualityPolicy.decide(
@@ -167,6 +180,24 @@ fun GuidedSelfieCapture(
     LaunchedEffect(capturedUri) {
         val uri = capturedUri
         measurements = if (uri != null) PhotoQualityChecker.measure(context, uri) else null
+    }
+
+    // §1.7 (WS-9 fix, P-2): a capture check TURNING passing fires
+    // the selection tick — once per check that turns, keyed on the
+    // measurement that re-evaluated the chips.
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var previousChecks by remember { mutableStateOf<List<GuidedCheck>?>(null) }
+    LaunchedEffect(measurements) {
+        val now = GuidedSelfieChecks.evaluate(measurements)
+        val prev = previousChecks
+        if (prev != null) {
+            GuidedSelfieChecks.turnedPassing(prev, now).forEach { _ ->
+                haptic.performHapticFeedback(
+                    com.runwear.app.ui.components.HapticSpec.SELECTION
+                )
+            }
+        }
+        previousChecks = now
     }
 
     val checks = GuidedSelfieChecks.evaluate(measurements)
