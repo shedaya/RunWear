@@ -18,6 +18,10 @@ struct LocationPickerSheet: View {
     @State private var searchText = ""
     @State private var searchResults: [LocationSearchResult] = []
     @State private var isSearching = false
+    /// GEN-3 Y-15: the search debounce task and the staleness
+    /// gate — see LocationSearchGate for the dead-tap diagnosis.
+    @State private var searchTask: Task<Void, Never>?
+    @State private var searchGate = LocationSearchGate()
     @StateObject private var recentsModel = RecentLocationsModel()
 
     private let geocoder = CLGeocoder()
@@ -34,8 +38,11 @@ struct LocationPickerSheet: View {
                             .autocorrectionDisabled()
                             .onChange(of: searchText) { _, newValue in
                                 if newValue.count >= 2 {
-                                    searchLocation(query: newValue)
+                                    scheduleSearch(query: newValue)
                                 } else {
+                                    searchTask?.cancel()
+                                    searchGate.invalidate()
+                                    isSearching = false
                                     searchResults = []
                                 }
                             }
@@ -143,6 +150,14 @@ struct LocationPickerSheet: View {
                                         .font(.appFootnote)
                                         .foregroundColor(AppTheme.inkSecondary)
                                 }
+                                // GEN-3 Y-15: the hit area is the
+                                // WHOLE row, not the text block —
+                                // with .plain, the contentShape is
+                                // the hit area, and the unframed
+                                // VStack made it text-sized (the
+                                // sheet's other tappable rows are
+                                // full-width HStacks with Spacers).
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -165,11 +180,32 @@ struct LocationPickerSheet: View {
 
     // MARK: - Search Logic
 
+    /// GEN-3 Y-15: debounce the keystroke storm — one search,
+    /// 250 ms after typing settles, cancellable by the next
+    /// keystroke. The pre-fix code geocoded on EVERY keystroke,
+    /// and its trailing responses kept replacing the result rows
+    /// (fresh UUID identities — full row rebuilds) for a second
+    /// or more after typing stopped, destroying rows mid-touch.
+    private func scheduleSearch(query: String) {
+        searchTask?.cancel()
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            searchLocation(query: query)
+        }
+    }
+
     private func searchLocation(query: String) {
+        let token = searchGate.begin(query: query)
         isSearching = true
 
         geocoder.cancelGeocode()
         geocoder.geocodeAddressString(query) { placemarks, error in
+            // GEN-3 Y-15: a stale completion (an earlier query's
+            // answer, or one issued before the text was cleared)
+            // NEVER touches the list — the rows on screen, and a
+            // touch in flight on them, survive it.
+            guard searchGate.shouldApply(token: token, query: query) else { return }
             isSearching = false
 
             guard let placemarks = placemarks, error == nil else {
@@ -212,6 +248,12 @@ struct LocationPickerSheet: View {
             // distinct same-name places both survive.
             searchResults = LocationSearchResults.deduplicated(candidates).map { candidate in
                 LocationSearchResult(
+                    // GEN-3 Y-15: the row's identity is the
+                    // PLACE identity, stable across refreshes —
+                    // the pre-fix UUID-per-construction meant
+                    // every response rebuilt every row view,
+                    // killing touches in flight.
+                    id: candidate.identity,
                     name: candidate.name,
                     subtitle: candidate.subtitle,
                     displayName: candidate.displayName,
@@ -255,7 +297,10 @@ final class RecentLocationsModel: ObservableObject {
 // MARK: - Search Result Model
 
 struct LocationSearchResult: Identifiable {
-    let id = UUID()
+    /// The place identity (LocationSearchCandidate.identity) —
+    /// stable across result refreshes, so SwiftUI keeps the row
+    /// view (and a touch in flight on it) when a refresh lands.
+    let id: String
     let name: String
     let subtitle: String
     let displayName: String

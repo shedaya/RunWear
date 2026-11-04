@@ -136,6 +136,86 @@ final class Gen3ISmallTests: XCTestCase {
                       "placemarks are mapped to the pure candidate before dedupe")
     }
 
+    // MARK: - Y-15: dead result-row taps (the Juneau mechanism)
+
+    /// The mechanism, as diagnosed in the sheet: one geocode per
+    /// keystroke, no staleness check, and every completion
+    /// replacing rows built under fresh UUIDs — trailing
+    /// responses rebuilt the row mid-touch and the tap died.
+    /// The gate half of the fix: only the latest query's own
+    /// completion may ever replace the list.
+    func testSearchGate_keystrokeStorm_onlyTheFinalQueryApplies() {
+        let gate = LocationSearchGate()
+        // Sol typing "Juneau": one issued search per keystroke.
+        let tokens = ["ju", "jun", "june", "junea", "juneau"].map { gate.begin(query: $0) }
+        // Completions landing late and out of order — including
+        // AFTER the user has stopped typing and is tapping:
+        XCTAssertFalse(gate.shouldApply(token: tokens[2], query: "june"),
+                       "a mid-storm completion must not replace the rows under the user's finger")
+        XCTAssertFalse(gate.shouldApply(token: tokens[3], query: "junea"),
+                       "the trailing keystroke's answer is stale the moment the final query issues")
+        XCTAssertFalse(gate.shouldApply(token: tokens[4], query: "junea"),
+                       "a token/query mismatch never applies")
+        XCTAssertTrue(gate.shouldApply(token: tokens[4], query: "juneau"),
+                      "exactly one completion — the final query's — may land")
+    }
+
+    func testSearchGate_juneauReSearches_eachFreshSearchApplies() {
+        // The Juneau scenario shape: the SAME query searched
+        // again and again (four times in the census). Nothing in
+        // the fix may swallow legitimate re-searches — each new
+        // issue is the latest and applies; each previous issue
+        // is stale.
+        let gate = LocationSearchGate()
+        var previous = gate.begin(query: "juneau")
+        XCTAssertTrue(gate.shouldApply(token: previous, query: "juneau"))
+        for _ in 0..<3 {
+            let next = gate.begin(query: "juneau")
+            XCTAssertFalse(gate.shouldApply(token: previous, query: "juneau"),
+                           "the prior search's late completion is stale")
+            XCTAssertTrue(gate.shouldApply(token: next, query: "juneau"),
+                          "the fresh re-search applies — repeats are not swallowed")
+            previous = next
+        }
+    }
+
+    func testSearchGate_clearedText_invalidatesInFlightCompletions() {
+        let gate = LocationSearchGate()
+        let token = gate.begin(query: "juneau")
+        gate.invalidate()
+        XCTAssertFalse(gate.shouldApply(token: token, query: "juneau"),
+                       "after the text is cleared, nothing in flight may repopulate the list")
+    }
+
+    func testResultRowIdentity_isStableAcrossRefreshes() {
+        // The view half of Y-15: a result set that re-lands with
+        // the same places must produce the SAME row identities,
+        // so SwiftUI keeps the row views — a touch in flight on
+        // the Juneau row survives the refresh.
+        let juneau = candidate(displayName: "Juneau, AK", latitude: 58.3019, longitude: -134.4197,
+                               subtitle: "Alaska, United States")
+        let firstBuild = LocationSearchResults.deduplicated([juneau]).map(\.identity)
+        let secondBuild = LocationSearchResults.deduplicated([juneau]).map(\.identity)
+        XCTAssertEqual(firstBuild, secondBuild, "identical results carry identical row identities")
+        XCTAssertFalse(firstBuild.first?.isEmpty ?? true, "the identity is a real value, not a placeholder")
+    }
+
+    func testPickerTapPath_debounceGateIdentityAndHitArea_sourcePins() throws {
+        let sheet = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
+        XCTAssertTrue(sheet.contains("Task.sleep(nanoseconds: 250_000_000)"),
+                      "the search is debounced — one request after typing settles, not one per keystroke")
+        XCTAssertTrue(sheet.contains("searchTask?.cancel()"),
+                      "the next keystroke cancels the pending search")
+        XCTAssertTrue(sheet.contains("searchGate.shouldApply(token: token, query: query)"),
+                      "completions pass the staleness gate before touching the list")
+        XCTAssertTrue(sheet.contains("id: candidate.identity"),
+                      "row identity is the place identity, stable across refreshes")
+        XCTAssertFalse(sheet.contains("let id = UUID()"),
+                       "no per-construction UUID identity remains to rebuild rows mid-touch")
+        XCTAssertTrue(sheet.contains(".frame(maxWidth: .infinity, alignment: .leading)"),
+                      "the result row's hit area spans the full row width, not just its text")
+    }
+
     // MARK: - X-13: the Current location row reads actual state
 
     func testCurrentLocationRow_everyCallSitePassesTheActualState_sourcePin() throws {

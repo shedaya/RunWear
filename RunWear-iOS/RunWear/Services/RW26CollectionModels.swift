@@ -599,6 +599,56 @@ enum LocationSearchResults {
     }
 }
 
+/// Which geocode completion may replace the results list
+/// (GEN-3 / Y-15). Diagnosis, verified in the pre-fix picker:
+/// a search fired on EVERY keystroke with no debounce and no
+/// staleness check, and every completion replaced the whole
+/// result set — whose rows carried fresh UUID identities, so
+/// each replacement rebuilt every row view. A trailing response
+/// (to "junea", say) landing between the user's touch-down and
+/// touch-up on the "Juneau" row destroyed the row mid-touch and
+/// the tap never fired: intermittent dead taps, worst right
+/// after typing and under rapid repeats — Sol tapped Juneau's
+/// row across four searches without a selection, while slower
+/// searches (Miami, New Haven) eventually landed in a quiet
+/// window and worked.
+///
+/// The gate is the data-layer half of the fix: it vends a
+/// monotonic token per issued query, and a completion may apply
+/// ONLY while it is the latest token for the current query.
+/// Stale completions are dropped without touching the list, so
+/// the rows on screen — and any touch in flight on them — are
+/// never replaced by an older query's answer. (The view-layer
+/// halves: a 250 ms debounce collapses the keystroke storm to
+/// one request, and row identity is the place identity, so
+/// even a legitimate refresh keeps the same row views.)
+final class LocationSearchGate {
+    private(set) var latestToken = 0
+    private(set) var currentQuery = ""
+
+    /// Register a newly issued query; returns its token. Every
+    /// earlier token is stale from this moment.
+    func begin(query: String) -> Int {
+        currentQuery = query
+        latestToken += 1
+        return latestToken
+    }
+
+    /// The query was cleared (or the sheet reset): nothing in
+    /// flight may apply anymore.
+    func invalidate() {
+        currentQuery = ""
+        latestToken += 1
+    }
+
+    /// May this completion replace the results? Only the latest
+    /// issued query's own completion, and only while that query
+    /// is still the current one.
+    func shouldApply(token: Int, query: String) -> Bool {
+        token == latestToken && query == currentQuery && !query.isEmpty
+    }
+}
+
 // MARK: - Morning Poster layout metrics (GEN-3 / X-11)
 
 /// The Morning Poster's layout constants, consumed BY the view
