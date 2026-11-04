@@ -9,15 +9,6 @@ import androidx.compose.ui.unit.sp
 import com.runwear.app.R
 
 /**
- * Bebas Neue font family for temperature display and section headers.
- * Embedded TTF from Google Fonts (SIL Open Font License).
- * https://fonts.google.com/specimen/Bebas+Neue
- */
-val BebasNeueFontFamily = FontFamily(
-    Font(R.font.bebasneue_regular, FontWeight.Normal)
-)
-
-/**
  * Great Vibes font family for the script wordmarks (the RunWear logo,
  * "Wear I've Run", "Make It Me"). Wordmarks only — never body text.
  * Genuine embedded TTF from Google Fonts (SIL Open Font License 1.1),

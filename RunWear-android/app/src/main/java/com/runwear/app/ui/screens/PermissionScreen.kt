@@ -50,8 +50,8 @@ object PermissionCopy {
 /**
  * Location permission screen, styled to match the main app interface:
  * centered status-screen layout (same pattern as the main screen's error
- * state) on RunWearColors.Background, Bebas Neue title (the app's display
- * font), centered max-width 600dp column (main screen MEDIUM pattern),
+ * state) on RunWearColors.Background, title in the default font,
+ * centered max-width 600dp column (main screen MEDIUM pattern),
  * and the welcome flow's full-width 52dp Primary / outlined actions.
  * All copy is unchanged.
  */

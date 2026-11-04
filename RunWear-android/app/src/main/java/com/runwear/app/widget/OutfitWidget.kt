@@ -67,8 +67,9 @@ import java.time.LocalDateTime
 // Widget palette mirrors the phone app's kit (ui/theme RunWearColors):
 // background #0A0A0A, card #262626, text #FFFFFF / #B3B3B3 / #737373,
 // primary teal #00796B, and the app's per-category colors for item icons.
-// Glance cannot load the app's Bebas font, so display type is Bold system
-// at display size (per the widgets/watch audit re-skin spec).
+// Display type is Bold system at display size (per the widgets/watch
+// audit re-skin spec) — Glance composes its own type, and the app's
+// one script face (Great Vibes) is wordmarks-only besides.
 private val WidgetBackground = Color(0xFF0A0A0A)
 private val WidgetCard = Color(0xFF262626)
 
