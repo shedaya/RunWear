@@ -97,11 +97,11 @@ class SettingsScrollScenarioTest {
         while (rounds < 40) {
             val root = dialogRoot(dialog, unmerged = true)
             val scrollNode = nodes(root).firstOrNull {
-                it.config.contains(SemanticsProperties.ScrollAxisRange) &&
+                it.config.contains(SemanticsProperties.VerticalScrollAxisRange) &&
                     it.config.contains(SemanticsActions.ScrollBy)
             }
             assertNotNull("the Settings sheet must carry a scrollable list", scrollNode)
-            range = scrollNode!!.config[SemanticsProperties.ScrollAxisRange]
+            range = scrollNode!!.config[SemanticsProperties.VerticalScrollAxisRange]
             if (range.maxValue() > 0f && range.value() >= range.maxValue() - 1f) break
             val advanced = scrollNode.config[SemanticsActions.ScrollBy]
                 .action?.invoke(0f, 8000f) == true
