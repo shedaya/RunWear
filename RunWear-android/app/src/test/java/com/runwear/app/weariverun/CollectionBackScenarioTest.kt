@@ -124,8 +124,14 @@ class CollectionBackScenarioTest {
             "the cover click must be accepted",
             cover!!.config[SemanticsActions.OnClick].action?.invoke() == true
         )
-        settle(composeView)
-
+        // The Dialog window's recomposition + layout land on their
+        // own frame schedule under Robolectric — poll (bounded) for
+        // the chapter state instead of assuming one settle suffices;
+        // the harness's frame timing differs between machines, and
+        // a state that never arrives still fails the assertion.
+        awaitState(composeView) {
+            hasContentDescription(dialogRoot(dialog), "Back")
+        }
         assertTrue(
             "inside the chapter, the header Back arrow is composed",
             hasContentDescription(dialogRoot(dialog), "Back")
@@ -135,7 +141,9 @@ class CollectionBackScenarioTest {
         // System Back inside the chapter: step back to the list —
         // the collection stays open and nothing is dismissed.
         backDispatcher.onBackPressed()
-        settle(composeView)
+        awaitState(composeView) {
+            !hasContentDescription(dialogRoot(dialog), "Back")
+        }
 
         assertFalse(
             "Back inside a chapter must NOT dismiss the collection",
@@ -153,7 +161,7 @@ class CollectionBackScenarioTest {
         // System Back at the list: the Dialog's own dismiss lands
         // home — and the activity is never finished either way.
         backDispatcher.onBackPressed()
-        settle(composeView)
+        awaitState(composeView) { dismissed.get() }
 
         assertTrue(
             "Back at the chapter list must dismiss the collection to home",
@@ -164,6 +172,14 @@ class CollectionBackScenarioTest {
             activity.isFinishing
         )
         controller.pause().stop().destroy()
+    }
+
+    /** Settle in rounds until [condition] holds (bounded). */
+    private fun awaitState(composeView: ComposeView, condition: () -> Boolean) {
+        repeat(30) {
+            if (condition()) return
+            settle(composeView)
+        }
     }
 
     private fun settle(composeView: ComposeView) {
