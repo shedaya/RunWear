@@ -31,5 +31,5 @@ import Foundation
 // shipped binary always matches what App Review was told it
 // contains. MakeItMeAvailabilityTests pins the shipped posture.
 enum MakeItMeAvailability {
-    static let isEnabled = false
+    static let isEnabled = true
 }

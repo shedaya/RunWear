@@ -1,8 +1,10 @@
 import XCTest
 
-/// "Make it me" OFF posture (Sol's ruling, 2026-11-02) — the App
-/// Store resubmission build carries the feature switched off, "til
-/// it actually works," matching the Android production candidate.
+/// "Make it me" posture pin. The store line carried the feature OFF
+/// (Sol's ruling, 2026-11-02, "til it actually works"). This release
+/// branch (release/rw27-flag-on-ios-2026-11-03) carries it ON for the
+/// RW-27 release build against the now-live pipeline (Sol's release
+/// ruling, 2026-11-03); the pin below asserts this branch's posture.
 ///
 /// The gate is one constant (MakeItMeAvailability.isEnabled) and
 /// every entry point consults it: the app never bootstraps the
@@ -17,12 +19,12 @@ import XCTest
 /// layer — so the pin lives on the gate every surface consults.)
 final class MakeItMeAvailabilityTests: XCTestCase {
 
-    func testShippedBuildHasMakeItMeOff() {
-        XCTAssertFalse(
+    func testFlagOnReleaseBuildHasMakeItMeOn() {
+        XCTAssertTrue(
             MakeItMeAvailability.isEnabled,
-            "This build line ships with \"Make it me\" OFF (Sol, 2026-11-02). "
-                + "Re-enabling takes a new ruling and a new build — flip the "
-                + "constant and this pin together, deliberately."
+            "This release branch carries \"Make it me\" ON (Sol's RW-27 "
+                + "release ruling, 2026-11-03) — the constant and this pin "
+                + "were flipped together, deliberately, for the release build."
         )
     }
 }
