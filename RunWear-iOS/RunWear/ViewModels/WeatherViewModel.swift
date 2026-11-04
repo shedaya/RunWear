@@ -565,7 +565,25 @@ class WeatherViewModel: ObservableObject {
         // no telemetry change.
         let paintedBundledAsset: String? = result.fallbackLevel < 8
             ? nil
-            : fallbackImageUrl.map { FallbackImageProvider.assetFile(fromURLString: $0) }
+            : fallbackImageUrl.map { url in
+                // The record names the asset the paint serves.
+                // Where bundle URLs cannot resolve (a logic-test
+                // host), the URL string is empty — there the name
+                // is the asset the provider resolved for this cell
+                // and preference (the same resolution getImageURL
+                // performed before its URL lookup, and the
+                // derivation WS-7's own bundled result uses), so
+                // the serve record is complete in every host. On
+                // device the URL is non-empty and this is exactly
+                // the URL-derived name, as before.
+                url.isEmpty
+                    ? fallbackProvider.resolvedAssetName(
+                        temp: tempBracket,
+                        weather: weatherCondition,
+                        gender: genderPreference.fallbackHeroGender
+                    )
+                    : FallbackImageProvider.assetFile(fromURLString: url)
+            }
 
         // RW-14: the personal layer runs after the pool paints, on
         // the same keying frame (prepareHeroFrame), so the

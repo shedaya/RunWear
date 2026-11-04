@@ -107,45 +107,118 @@ final class WS6PipelinesTests: XCTestCase {
         super.tearDown()
     }
 
+    /// Weather fixture for the pool-miss drive: day 1 at 07:00 is
+    /// 10°C actual / 5°C feels-like (= 41°F, the COOL bracket) under
+    /// weather code 0 (CLEAR) — the same canonical fixture shape
+    /// StateTruthTests builds its loaded view models from.
+    private func poolMissWeather() -> WeatherData {
+        let hourly = HourlyWeather(
+            time: ["2026-10-29T07:00", "2026-10-30T07:00"],
+            temperature2m: [10, 22],
+            apparentTemperature: [5, 20],
+            relativeHumidity2m: [50, 50],
+            precipitationProbability: [0, 0],
+            precipitation: [0, 0],
+            rain: [0, 0],
+            uvIndex: [0, 0],
+            windSpeed10m: [8, 12],
+            windDirection10m: [0, 90],
+            windGusts10m: [8, 12],
+            weatherCode: [0, 0]
+        )
+        return WeatherData(
+            latitude: 40.7128,
+            longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: 10, windspeed: 8, weathercode: 0, isDay: 1),
+            hourly: hourly,
+            timezone: "America/New_York",
+            currentDetail: nil
+        )
+    }
+
+    /// WS-9 fix: this test REPLACES the original WS-6 pin, which
+    /// hand-constructed the HeroServeRecord it asserted and would
+    /// have stayed green if loadHeroImage's pool-miss telemetry
+    /// branch were deleted (the WS-9 JG-15 finding). It now drives
+    /// the PRODUCTION path end to end: a real WeatherViewModel,
+    /// loaded with fixture weather and NO recommendation, runs its
+    /// real loadHeroImage (via the public reloadHeroForPersonal
+    /// seam). With no outfit, the production HeroImageService
+    /// cascade can serve no pool row (its point-grain gate refuses
+    /// pool rows without a prescription), so the resolution lands
+    /// on the cascade's real level-8 bundled result — an actual
+    /// pool miss — and the assertions below consume ONLY the
+    /// record loadHeroImage itself emitted into the installed
+    /// sink. Delete the `else if let paintedBundledAsset` branch
+    /// (or recordHeroServe's emit) and no record arrives: the
+    /// count assertion fails. Nothing in the test constructs a
+    /// HeroServeRecord or calls HeroServeTelemetry.emit.
     @MainActor
-    func testPoolMissServeRecordNamesTheGenderedAssetForBothPreferences() {
+    func testPoolMissServeRecordNamesTheGenderedAssetForBothPreferences() async {
         ManualLocationStore.clear()
         defer { ManualLocationStore.clear() }
+
+        // WeatherViewModel.init loads its preferences from
+        // UserDefaults; pin them per case BEFORE construction (the
+        // preference's didSet reload would otherwise race the
+        // drive) and restore the suite's stored values afterwards.
+        let savedGender = UserDefaults.standard.string(forKey: "genderPreference")
+        let savedComfort = UserDefaults.standard.object(forKey: "comfortLevel")
+        defer {
+            if let savedGender {
+                UserDefaults.standard.set(savedGender, forKey: "genderPreference")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "genderPreference")
+            }
+            if let savedComfort {
+                UserDefaults.standard.set(savedComfort, forKey: "comfortLevel")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "comfortLevel")
+            }
+        }
 
         for (preference, expectedAsset) in [
             (GenderPreference.male, "cool_clear_male"),
             (GenderPreference.female, "cool_clear_female"),
         ] {
+            UserDefaults.standard.set(preference.rawValue, forKey: "genderPreference")
+            UserDefaults.standard.removeObject(forKey: "comfortLevel")
             capturedServes = []
-            let vm = WeatherViewModel()
-            vm.genderPreference = preference
-            // The pool-miss paint IS the pre-paint fallback (the
-            // view model's loadHeroImage records exactly this
-            // record for it — bundled source, the painted asset
-            // and its provenance, the bundled-fallback trigger).
-            let paintedAsset = vm.prePaintFallbackAssetName(temp: .COOL, weather: .CLEAR)
-            let record = HeroServeRecord(
-                source: .bundledFallback,
-                requestedCombinationId: nil,
-                tempBracket: .COOL,
-                weatherCondition: .CLEAR,
-                gender: preference,
-                fallbackAssetFile: paintedAsset,
-                fallbackProvenance: FallbackImageProvider.provenance(forAssetName: paintedAsset),
-                trigger: "bundled-fallback"
-            )
-            HeroServeTelemetry.emit(record)
 
-            XCTAssertEqual(1, capturedServes.count)
-            let emitted = capturedServes[0]
+            let vm = WeatherViewModel()
+            XCTAssertEqual(vm.genderPreference, preference,
+                           "the preference must come from the stored value, as at launch")
+            vm.weatherData = poolMissWeather()
+            vm.selectedDate = Calendar.current.date(
+                from: DateComponents(year: 2026, month: 10, day: 29))!
+            vm.selectedHour = 7
+            vm.updateSelectedWeatherSnapshot()
+            XCTAssertNil(vm.recommendation,
+                         "no recommendation: the pool cascade has no prescription to serve against")
+
+            // The production drive: loadHeroImage runs, the pool
+            // misses (level 8), the bundled fallback paints.
+            _ = await vm.reloadHeroForPersonal()
+
+            XCTAssertNil(vm.heroImageUrl,
+                         "a pool miss leaves the bundled fallback as the paint")
+            XCTAssertEqual(1, capturedServes.count,
+                           "exactly one serve record — the one loadHeroImage emitted for the miss")
+            guard let emitted = capturedServes.first else { continue }
             XCTAssertEqual(HeroServeSource.bundledFallback, emitted.source)
             XCTAssertEqual(expectedAsset, emitted.fallbackAssetFile,
                            "the recorded pool-miss serve must name the gendered asset")
-            XCTAssertNotNil(emitted.fallbackProvenance)
+            XCTAssertEqual(HeroTempBracket.COOL, emitted.tempBracket)
+            XCTAssertEqual(HeroWeatherCondition.CLEAR, emitted.weatherCondition)
+            XCTAssertEqual(preference, emitted.gender)
+            XCTAssertEqual("bundled-fallback", emitted.trigger)
+            XCTAssertNotNil(emitted.fallbackProvenance,
+                            "the miss record must carry the asset's bundled-fallback provenance")
             let summary = emitted.summary()
             XCTAssertTrue(summary.contains("asset=\(expectedAsset)"), summary)
             XCTAssertTrue(summary.contains("gender=\(preference.rawValue.uppercased())"), summary)
             XCTAssertTrue(summary.contains("source=bundled-fallback"), summary)
+            XCTAssertTrue(summary.contains("provenance_combination="), summary)
         }
     }
 
