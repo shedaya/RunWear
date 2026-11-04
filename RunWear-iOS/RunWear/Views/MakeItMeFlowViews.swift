@@ -53,7 +53,15 @@ struct MakeItMeForkView: View {
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
 
-                Text("That's a model in your outfit photo. It could be you — in this morning's weather, on a road like yours, wearing exactly what RunWear recommends.")
+                // WS-9 fix: frame 32's sub-headline, verbatim from
+                // the frozen design package. The RW-14 deck lead
+                // that used to sit in this slot is not frame 32's
+                // copy and is retired; the frame's fork speaks in
+                // the headline, this line, the two choices and the
+                // closing line — nothing else. (Frame 32 carries no
+                // free-looks promise sentence, and neither does
+                // this fork — see the Option A note below.)
+                Text("Your recommendations, with you in the photo.")
                     .font(.system(size: 16))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
