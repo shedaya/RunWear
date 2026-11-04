@@ -26,7 +26,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowDialog
 
 /**
@@ -52,9 +51,17 @@ import org.robolectric.shadows.ShadowDialog
  * and asserts the About header AND its Version row are fully
  * inside the window.
  */
+// PAUSED looper (the default), deliberately NOT the LEGACY mode
+// the Dialog scenario tests use: the sheet's AnchoredDraggable
+// spring to Expanded is driven by choreographer frames, which
+// the foreground scheduler advances in PAUSED mode. Under LEGACY
+// the sheet never left its hidden offset in run 41860330133 —
+// the list scrolled to max INSIDE a sheet still translated
+// ~1560 px down the window, so About's bottom read 3248 against
+// the 1688 window. The bounded re-read loops below absorb the
+// semantics-publishing timing that motivated LEGACY elsewhere.
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@LooperMode(LooperMode.Mode.LEGACY)
 @Config(application = Application::class, sdk = [35], qualifiers = "w411dp-h844dp-xhdpi")
 class SettingsScrollScenarioTest {
 
@@ -88,6 +95,24 @@ class SettingsScrollScenarioTest {
         val dialog = ShadowDialog.getLatestDialog()
         assertNotNull("Settings must be hosted in a sheet Dialog", dialog)
         assertTrue("the Settings sheet Dialog must be showing", dialog!!.isShowing)
+
+        // Await the sheet's own expansion: at Expanded the
+        // SETTINGS title (the list's first item) sits near the
+        // window's top, under the drag handle — while hidden or
+        // in flight it sits at or below the window's bottom.
+        var titleTop = Float.MAX_VALUE
+        repeat(30) {
+            val title = textNode(dialogRoot(dialog, unmerged = true), "SETTINGS")
+            if (title != null) {
+                titleTop = title.boundsInRoot.top
+                if (titleTop < 400f) return@repeat
+            }
+            settle(composeView)
+        }
+        assertTrue(
+            "the sheet must rest Expanded (SETTINGS title top $titleTop)",
+            titleTop < 400f
+        )
 
         // Drive the sheet's one scroll consumer to its max through
         // its own ScrollBy semantics action, re-reading the range
