@@ -84,26 +84,13 @@ struct TemperatureUnitPicker: View {
     }
 }
 
-// MARK: Fit Preference
+// MARK: Fit Preference — inline (onboarding + Settings)
 
-/// Native Picker for the fit preference. Menu style: the third option's
-/// full label ("No preference") truncates in a segmented control at
-/// large Dynamic Type sizes, and the menu is the native Form pattern.
-struct FitPreferencePicker: View {
-    @Binding var preference: GenderPreference
-
-    var body: some View {
-        Picker("Fit Preference", selection: $preference) {
-            Text("Men's").tag(GenderPreference.male)
-            Text("Women's").tag(GenderPreference.female)
-            Text("No preference").tag(GenderPreference.unisex)
-        }
-        .labelsHidden()
-        .sensoryFeedback(.selection, trigger: preference)
-    }
-}
-
-// MARK: Fit Preference — inline (onboarding)
+// GEN-3 (Y-13): the former menu-style FitPreferencePicker is
+// REMOVED. Its last call site was Settings, where it rendered as
+// a collapsed "Men's ⌄" menu row — the presentation Y-13 rules
+// out. The inline picker below is now the ONE fit control on
+// both selection surfaces.
 
 /// W-22 (GEN-2 walkthrough, 2026-11-04): the onboarding Fit
 /// Preference step's selection, rendered INLINE. The step's only
@@ -113,8 +100,10 @@ struct FitPreferencePicker: View {
 /// short options shows them directly: a grouped list of the three
 /// choices with the current selection checkmarked (the native
 /// iOS inline-selection expression), no dropdown to open.
-/// Settings keeps the menu-style FitPreferencePicker — its Form
-/// rows are the menu's designed context there.
+/// GEN-3 (Y-13): Settings presents these same rows — the gen-2
+/// census caught Settings still using a collapsed menu row while
+/// onboarding (here) and Android Settings both present the choice
+/// directly; the surfaces are aligned on this one control.
 struct FitPreferenceInlinePicker: View {
     @Binding var preference: GenderPreference
 

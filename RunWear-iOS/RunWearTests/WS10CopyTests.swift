@@ -725,6 +725,19 @@ final class Gen3SettingsTruthTests: XCTestCase {
         XCTAssertEqual(offenders, [], "X-16: lowercase-it casing survives in \(offenders)")
     }
 
+    /// Y-12 (iOS census): the casing slip lived in BODY copy, not
+    /// a heading — the consent sheet's delete-directions line.
+    /// Pin the corrected consent string verbatim so the sweep's
+    /// coverage of consent + body copy is explicit, not implied
+    /// by the tree scan above.
+    func testConsentCopyUsesTheWordmarkCasing_sourcePin() throws {
+        let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        XCTAssertTrue(flow.contains("Settings → Make It Me → Delete my photos"),
+                      "Y-12: the consent copy names the section with the wordmark casing")
+        XCTAssertTrue(flow.contains("You can switch to Make It Me any time in Settings."),
+                      "the fork's body copy carries the same casing")
+    }
+
     // MARK: - WS-E · the welcome screen's third feature point
 
     func testWelcomeCarriesTheThirdFeaturePointUnderTheExistingTwo_sourcePin() throws {

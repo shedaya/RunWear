@@ -195,6 +195,22 @@ final class SettingsInventoryTests: XCTestCase {
         }
     }
 
+    /// GEN-3 (Y-13): Settings' Fit Preference presents the three
+    /// choices directly — the shared inline rows onboarding uses
+    /// (W-22) — not a collapsed menu row. The menu-style picker is
+    /// gone from the controls entirely, so no surface can drift
+    /// back to it.
+    func testGen3SettingsFitPreferencePresentsDirectChoices_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(settings.contains("FitPreferenceInlinePicker(preference: $genderPreference)"),
+                      "Y-13: the Settings Fit Preference section renders the direct-choice rows")
+        let controls = try sourceFile("../RunWear/Views/Components/PreferenceControls.swift")
+        XCTAssertFalse(controls.contains("struct FitPreferencePicker: View"),
+                       "Y-13: the collapsed menu picker is removed — the inline rows are the one fit control")
+        XCTAssertTrue(controls.contains("struct FitPreferenceInlinePicker: View"),
+                      "the shared inline control stands")
+    }
+
     /// The offer card must read as an offer (study P1): the name
     /// "Premium" (the model's row title), the price with term from
     /// the store product through the parameterized seam, and a

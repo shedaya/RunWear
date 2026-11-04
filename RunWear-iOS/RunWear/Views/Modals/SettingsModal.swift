@@ -145,8 +145,13 @@ struct SettingsModal: View {
             }
 
         case .fitPreference:
+            // GEN-3 (Y-13): Settings presents the three fit
+            // choices DIRECTLY — the same inline rows onboarding
+            // uses (W-22) and Android Settings' direct toggle —
+            // not the collapsed "Men's ⌄" menu row the gen-2 iOS
+            // census caught here. One control, both surfaces.
             Section("Fit Preference") {
-                FitPreferencePicker(preference: $genderPreference)
+                FitPreferenceInlinePicker(preference: $genderPreference)
             }
 
         case .bodyTemperature:

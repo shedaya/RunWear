@@ -1324,8 +1324,8 @@ struct TemperatureBracketBadge: View {
 // anywhere in the app (full-tree search: definitions only), and
 // its GenderOption rendered GenderPreference.displayIcon — the
 // 🚹/🚺/○ text glyphs no frame of the approved design carries.
-// The live fit control is FitPreferencePicker (plain text labels,
-// shared by Settings and Onboarding). Nothing rendered the pair,
+// The live fit control is FitPreferenceInlinePicker (plain text
+// labels, shared by Settings and Onboarding). Nothing rendered the pair,
 // so nothing changes on screen.
 
 #Preview {
