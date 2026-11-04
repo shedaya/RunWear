@@ -145,6 +145,8 @@
 		H10002000000000000000002 /* SimplePlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = H10001000000000000000001 /* SimplePlace.swift */; };
 		G10002000000000000000001 /* RW26CollectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000001 /* RW26CollectionModels.swift */; };
 		G10002000000000000000002 /* RW26CollectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000001 /* RW26CollectionModels.swift */; };
+		Q10002000000000000000001 /* ShareCardRenderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = Q10001000000000000000001 /* ShareCardRenderStore.swift */; };
+		Q10002000000000000000002 /* ShareCardRenderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = Q10001000000000000000001 /* ShareCardRenderStore.swift */; };
 		G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000002 /* GuidedSelfieCaptureView.swift */; };
 		G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000003 /* WearIveRunCollectionView.swift */; };
 		G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000004 /* RW26Phase2Tests.swift */; };
@@ -192,6 +194,7 @@
 		W70002000000000000000001 /* WS10CopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W70001000000000000000001 /* WS10CopyTests.swift */; };
 		G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G30001000000000000000001 /* Gen2I3OnboardingTests.swift */; };
 		Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z30001000000000000000001 /* Gen3ISmallTests.swift */; };
+		Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z40001000000000000000001 /* Gen3ShareRenderTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -340,6 +343,7 @@
 		F10001000000000000000138 /* MakeItMePriceLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMePriceLabels.swift; sourceTree = "<group>"; };
 		H10001000000000000000001 /* SimplePlace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimplePlace.swift; sourceTree = "<group>"; };
 		G10001000000000000000001 /* RW26CollectionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26CollectionModels.swift; sourceTree = "<group>"; };
+		Q10001000000000000000001 /* ShareCardRenderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCardRenderStore.swift; sourceTree = "<group>"; };
 		G10001000000000000000002 /* GuidedSelfieCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuidedSelfieCaptureView.swift; sourceTree = "<group>"; };
 		G10001000000000000000003 /* WearIveRunCollectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunCollectionView.swift; sourceTree = "<group>"; };
 		G10001000000000000000004 /* RW26Phase2Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW26Phase2Tests.swift; sourceTree = "<group>"; };
@@ -360,6 +364,7 @@
 		W70001000000000000000001 /* WS10CopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WS10CopyTests.swift; sourceTree = "<group>"; };
 		G30001000000000000000001 /* Gen2I3OnboardingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen2I3OnboardingTests.swift; sourceTree = "<group>"; };
 		Z30001000000000000000001 /* Gen3ISmallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3ISmallTests.swift; sourceTree = "<group>"; };
+		Z40001000000000000000001 /* Gen3ShareRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3ShareRenderTests.swift; sourceTree = "<group>"; };
 		F10001000000000000000106 /* PersonalHeroStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalHeroStore.swift; sourceTree = "<group>"; };
 		F10001000000000000000107 /* MakeItMeFlowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeFlowViews.swift; sourceTree = "<group>"; };
 		F10001000000000000000108 /* MakeItMeSettingsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MakeItMeSettingsViews.swift; sourceTree = "<group>"; };
@@ -499,6 +504,7 @@
 				F10001000000000000000105 /* MakeItMeBilling.swift */,
 				F10001000000000000000138 /* MakeItMePriceLabels.swift */,
 				G10001000000000000000001 /* RW26CollectionModels.swift */,
+				Q10001000000000000000001 /* ShareCardRenderStore.swift */,
 				N10001000000000000000001 /* HeroServeTelemetry.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
 			);
@@ -620,6 +626,7 @@
 				W70001000000000000000001 /* WS10CopyTests.swift */,
 				G30001000000000000000001 /* Gen2I3OnboardingTests.swift */,
 				Z30001000000000000000001 /* Gen3ISmallTests.swift */,
+				Z40001000000000000000001 /* Gen3ShareRenderTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
 			);
@@ -845,6 +852,7 @@
 				L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000001 /* SettingsInventory.swift in Sources */,
 				G10002000000000000000001 /* RW26CollectionModels.swift in Sources */,
+				Q10002000000000000000001 /* ShareCardRenderStore.swift in Sources */,
 				N10002000000000000000001 /* HeroServeTelemetry.swift in Sources */,
 				G10002000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */,
 				G10002000000000000000004 /* WearIveRunCollectionView.swift in Sources */,
@@ -938,6 +946,7 @@
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000002 /* SettingsInventory.swift in Sources */,
 				G10002000000000000000002 /* RW26CollectionModels.swift in Sources */,
+				Q10002000000000000000002 /* ShareCardRenderStore.swift in Sources */,
 				G10002000000000000000005 /* RW26Phase2Tests.swift in Sources */,
 				H10002000000000000000003 /* SimplePlaceTests.swift in Sources */,
 				J10002000000000000000003 /* StateTruthTests.swift in Sources */,
@@ -960,6 +969,7 @@
 				W70002000000000000000001 /* WS10CopyTests.swift in Sources */,
 				G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */,
 				Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */,
+				Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

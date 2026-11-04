@@ -332,17 +332,23 @@ struct WearIveRunDayView: View {
     let formatTemperature: (Double) -> String
     let genderPreference: GenderPreference
 
-    @State private var shareKind: ShareKind?
-    @State private var posterImage: Image?
-    @State private var kitImage: Image?
-    /// Garment renders prefetched as images — ImageRenderer does
-    /// not wait for AsyncImage, so the Kit Card renders from these.
-    @State private var kitThumbnails: [String: UIImage] = [:]
+    @State private var shareKind: ShareCardKind?
+    /// GEN-3 share-render fix: each card renders through its own
+    /// slot (ShareCardRenderStore) — independent pipelines,
+    /// render-once per content key, process-wide image cache.
+    /// The pre-fix view ran ONE serial task (every Kit thumbnail
+    /// download, then the poster, then the Kit Card) into three
+    /// @State values the share sheet branched over, so the sheet
+    /// waited behind the other card's downloads and its content
+    /// was replaced at every phase landing — the ~23 s blank
+    /// spinner and the flickering card Sol recorded on build 21.
+    @StateObject private var posterSlot = ShareCardSlot()
+    @StateObject private var kitSlot = ShareCardSlot()
 
-    private enum ShareKind: Identifiable {
-        case poster, kit
-        var id: String { self == .poster ? "poster" : "kit" }
-    }
+    /// Content keys: a re-recorded entry (new hero, new kit) is a
+    /// new card; the same entry is the same card forever.
+    private var posterKey: String { "\(entry.id)|poster|\(entry.heroImageReference)" }
+    private var kitKey: String { "\(entry.id)|kit|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)" }
 
     var body: some View {
         ScrollView {
@@ -376,13 +382,21 @@ struct WearIveRunDayView: View {
 
                 // Sharing lives inside, card by card: the user
                 // chooses Poster or Kit Card (frame 11 — no Range).
+                // Tapping also requests the render (the appearance
+                // pre-warm usually beats the tap; the slot dedupes).
                 HStack(spacing: 12) {
-                    Button("Morning Poster") { shareKind = .poster }
-                        .font(.appButtonLabel)
-                        .foregroundColor(AppTheme.pinePayload)
-                    Button("Kit Card") { shareKind = .kit }
-                        .font(.appButtonLabel)
-                        .foregroundColor(AppTheme.pinePayload)
+                    Button("Morning Poster") {
+                        requestPoster()
+                        shareKind = .poster
+                    }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
+                    Button("Kit Card") {
+                        requestKit()
+                        shareKind = .kit
+                    }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
                 }
                 .padding(.top, 8)
             }
@@ -397,73 +411,150 @@ struct WearIveRunDayView: View {
             // now rests at .large like the other scrolling-free
             // share door (its content does not scroll; .large
             // names the detent it already defaulted to).
-            shareSheet(for: kind)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            ShareCardSheetView(
+                slot: kind == .poster ? posterSlot : kitSlot,
+                kind: kind,
+                onRetry: { kind == .poster ? requestPoster() : requestKit() }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
-        .task {
-            kitThumbnails = await loadKitThumbnails()
-            posterImage = await renderPoster()
-            kitImage = await renderKitCard()
-        }
+        // Pre-warm BOTH cards on appearance, as two independent
+        // pipelines — neither waits for the other, and each slot
+        // renders at most once per entry (the cache serves any
+        // later visit outright). The pre-fix single serial task
+        // is the 23-second spinner's mechanism; it is gone.
+        .task { await MainActor.run { requestPoster() } }
+        .task { await MainActor.run { requestKit() } }
     }
 
-    /// The native share sheet with the caption pre-filled
-    /// #RunAnyWear (frame 14).
-    @ViewBuilder
-    private func shareSheet(for kind: ShareKind) -> some View {
-        let image = kind == .poster ? posterImage : kitImage
-        if let image {
-            ShareLink(
-                item: image,
-                subject: Text("RunWear — Wear I've Run"),
-                message: Text("#RunAnyWear"),
-                preview: SharePreview("Wear I've Run", image: image)
-            ) {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .font(.appButtonLabel)
-                    .padding(24)
-            }
-        } else {
-            ProgressView().padding(24)
-        }
+    // MARK: Render requests (slot-deduped)
+
+    @MainActor
+    private func requestPoster() {
+        posterSlot.request(key: posterKey) { await renderPosterImage() }
     }
 
     @MainActor
-    private func renderPoster() async -> Image? {
+    private func requestKit() {
+        kitSlot.request(key: kitKey) { await renderKitImage() }
+    }
+
+    // MARK: Render pipelines
+
+    /// Poster pipeline: hero download → poster-size downscale
+    /// (off the main actor) → the one full-size render.
+    private func renderPosterImage() async -> UIImage? {
         let hero = await loadHeroUIImage()
         let view = MorningPosterView(entry: entry, hero: hero, formatTemperature: formatTemperature)
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 3
-        return renderer.uiImage.map { Image(uiImage: $0) }
+        return await MainActor.run {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3
+            return renderer.uiImage
+        }
     }
 
-    @MainActor
-    private func renderKitCard() async -> Image? {
-        let view = KitCardView(entry: entry, genderPreference: genderPreference, thumbnails: kitThumbnails)
-        let renderer = ImageRenderer(content: view)
-        renderer.scale = 3
-        return renderer.uiImage.map { Image(uiImage: $0) }
+    /// Kit pipeline: garment renders fetched CONCURRENTLY (the
+    /// pre-fix loop awaited them one at a time), then the one
+    /// full-size render. ImageRenderer does not wait for
+    /// AsyncImage, so the card renders from the fetched images.
+    private func renderKitImage() async -> UIImage? {
+        let thumbnails = await loadKitThumbnails()
+        let view = KitCardView(entry: entry, genderPreference: genderPreference, thumbnails: thumbnails)
+        return await MainActor.run {
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 3
+            return renderer.uiImage
+        }
     }
 
     private func loadKitThumbnails() async -> [String: UIImage] {
-        var result: [String: UIImage] = [:]
-        for key in entry.itemKeys {
-            guard let urlString = RunWearEngine.ClothingThumbnailService.shared
-                    .getThumbnailUrl(itemName: key, genderName: genderPreference.rawValue.uppercased()),
-                  let url = URL(string: urlString),
-                  let (data, _) = try? await URLSession.shared.data(from: url),
-                  let image = UIImage(data: data) else { continue }
-            result[key] = image
+        await withTaskGroup(of: (String, UIImage?).self) { group in
+            for key in entry.itemKeys {
+                group.addTask { (key, await fetchThumbnail(forKey: key)) }
+            }
+            var result: [String: UIImage] = [:]
+            for await (key, image) in group {
+                if let image { result[key] = image }
+            }
+            return result
         }
-        return result
+    }
+
+    private func fetchThumbnail(forKey key: String) async -> UIImage? {
+        guard let urlString = RunWearEngine.ClothingThumbnailService.shared
+                .getThumbnailUrl(itemName: key, genderName: genderPreference.rawValue.uppercased()),
+              let url = URL(string: urlString),
+              let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
+        return UIImage(data: data)
     }
 
     private func loadHeroUIImage() async -> UIImage? {
         guard let url = URL(string: entry.heroImageReference),
               let (data, _) = try? await URLSession.shared.data(from: url),
               let image = UIImage(data: data) else { return nil }
-        return image
+        // Downscale to the poster's rendered size OFF the main
+        // actor, so the render never pays full-resolution decode.
+        return await Task.detached(priority: .userInitiated) {
+            ShareCardImagePrep.downscaledForPoster(image)
+        }.value
+    }
+}
+
+// MARK: - Share sheet (per card)
+
+/// The share door for ONE card, observing ONLY that card's slot:
+/// the other card's pipeline cannot republish this sheet. States:
+/// ready → the native ShareLink (caption pre-filled #RunAnyWear,
+/// frame 14) built from the slot's single image instance;
+/// rendering/idle → the LABELED working state (the hero-pill
+/// rule: labeled, state-driven — never a bare spinner on a blank
+/// sheet); failed → the failure line with a retry.
+struct ShareCardSheetView: View {
+    @ObservedObject var slot: ShareCardSlot
+    let kind: ShareCardKind
+    var onRetry: () -> Void
+
+    var body: some View {
+        switch slot.state {
+        case .ready:
+            if let image = slot.image {
+                ShareLink(
+                    item: Image(uiImage: image),
+                    subject: Text("RunWear — Wear I've Run"),
+                    message: Text("#RunAnyWear"),
+                    preview: SharePreview("Wear I've Run", image: Image(uiImage: image))
+                ) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .font(.appButtonLabel)
+                        .padding(24)
+                }
+            } else {
+                progress
+            }
+        case .failed:
+            VStack(spacing: 12) {
+                Text(ShareCardCopy.failureLabel(for: kind))
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkPrimary)
+                Button("Try again") { onRetry() }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
+            }
+            .padding(24)
+        case .idle, .rendering:
+            progress
+        }
+    }
+
+    private var progress: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text(ShareCardCopy.progressLabel(for: kind))
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
+        }
+        .padding(24)
     }
 }
 
