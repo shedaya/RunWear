@@ -52,6 +52,16 @@ import org.robolectric.shadows.ShadowDialog
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+// LEGACY looper mode: under the default PAUSED mode the Dialog
+// window's posted frame callbacks — the ones that recompose
+// after the chapter opens and arm the BackHandler — did not
+// reliably run when this class runs in the full suite (the
+// scenario passed standalone but raced in-suite, locally and in
+// CI); LEGACY executes posted work as it is posted, as a device
+// does. (A unique-qualifiers sandbox was also tried and dropped:
+// the extra sandbox's native-runtime load races Robolectric's
+// font loader intermittently — worse, not better.)
+@org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.LEGACY)
 @Config(application = Application::class, sdk = [35], qualifiers = "w411dp-h844dp-xhdpi")
 class CollectionBackScenarioTest {
 
