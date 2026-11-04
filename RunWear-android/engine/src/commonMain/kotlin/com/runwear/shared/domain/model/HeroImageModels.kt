@@ -468,6 +468,174 @@ object HeroImageSelector {
     fun fallbackAssetFile(url: String): String =
         url.substringAfterLast('/').removeSuffix(".webp")
 
+    /**
+     * GEN-2 A2 (W-4/W-5, 2026-11-04): the ADJUDICATED garment classes
+     * of one bundled fallback asset — what the photo actually wears,
+     * in the RW-20 vocabulary ([HeroPointGrainPolicy]'s classes).
+     * Sourced from the RW-26 derivation record
+     * (release-prep/rw26-fallback-matrix-derivation-2026-11-03.md
+     * §3/§7/§9): every asset's source row was adjudicated with
+     * person_count = 1 and garment_source = 'adjudicated', and the
+     * picks were qualified at their cell's COLD-END point
+     * prescription. [topBase] is null where the derivation records
+     * "(under)" — the base unperceived beneath a present shell,
+     * which [HeroPointGrainPolicy] accepts exactly as it does for
+     * pool rows.
+     */
+    data class FallbackGarments(
+        val topBase: String?,
+        val outer: Boolean,
+        val bottom: String,
+        val head: String?,
+        val hands: String?
+    )
+
+    /**
+     * The garment census of the 44 bundled assets, keyed by asset
+     * file base name. This table is the fix for the W-4 class: the
+     * matrix was derived at bracket grain (each asset exact at its
+     * bracket's cold-end prescription — COOL's assets wear the
+     * headband and gloves that 35°F prescribes), while the engine
+     * prescribes at point grain (at 44°F the same bracket prescribes
+     * neither). Before this census the resolver served the bracket's
+     * one asset under ANY prescription in the bracket, unchecked —
+     * a 2-item prescription got a 4-garment photo, in every frame,
+     * and a within-bracket prescription change (W-5) could never
+     * move the photo because the fallback key (bracket × weather ×
+     * gender) contains no prescription component. An asset with no
+     * census entry fails closed, exactly like an unadjudicated pool
+     * row (RW-20).
+     */
+    private val FALLBACK_GARMENTS: Map<String, FallbackGarments> = mapOf(
+        "freezing_clear_female" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "freezing_clear_male" to FallbackGarments(null, true, "tights", "beanie", "gloves"),
+        "freezing_cloudy_female" to FallbackGarments(null, true, "tights", "beanie", "gloves"),
+        "freezing_cloudy_male" to FallbackGarments(null, true, "tights", "beanie", "gloves"),
+        "freezing_rain_female" to FallbackGarments(null, true, "tights", "cap", "gloves"),
+        "freezing_rain_male" to FallbackGarments("long", true, "tights", "cap", "gloves"),
+        "freezing_snow_female" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "freezing_snow_male" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "cold_clear_female" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "cold_clear_male" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "cold_cloudy_female" to FallbackGarments(null, true, "tights", "beanie", "gloves"),
+        "cold_cloudy_male" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "cold_rain_female" to FallbackGarments(null, true, "tights", "cap", "gloves"),
+        "cold_rain_male" to FallbackGarments(null, true, "tights", "cap", "gloves"),
+        "cold_snow_female" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "cold_snow_male" to FallbackGarments("long", true, "tights", "beanie", "gloves"),
+        "cool_clear_female" to FallbackGarments("long", false, "tights", "headband", "gloves"),
+        "cool_clear_male" to FallbackGarments("long", false, "tights", "headband", "gloves"),
+        "cool_cloudy_female" to FallbackGarments("long", false, "tights", "headband", "gloves"),
+        "cool_cloudy_male" to FallbackGarments("long", false, "tights", "headband", "gloves"),
+        "cool_rain_female" to FallbackGarments("long", true, "tights", "cap", "gloves"),
+        "cool_rain_male" to FallbackGarments(null, true, "tights", "cap", "gloves"),
+        "cool_snow_female" to FallbackGarments("long", false, "tights", "headband", "gloves"),
+        "cool_snow_male" to FallbackGarments("long", false, "tights", "headband", "gloves"),
+        "mild_clear_female" to FallbackGarments("short", false, "shorts", null, null),
+        "mild_clear_male" to FallbackGarments("short", false, "shorts", null, null),
+        "mild_cloudy_female" to FallbackGarments("short", false, "shorts", null, null),
+        "mild_cloudy_male" to FallbackGarments("short", false, "shorts", null, null),
+        "mild_rain_female" to FallbackGarments("short", true, "shorts", "cap", null),
+        "mild_rain_male" to FallbackGarments("short", true, "shorts", "cap", null),
+        "mild_snow_female" to FallbackGarments("short", false, "shorts", null, null),
+        "mild_snow_male" to FallbackGarments("short", false, "shorts", null, null),
+        "warm_clear_female" to FallbackGarments("short", false, "shorts", null, null),
+        "warm_clear_male" to FallbackGarments("short", false, "shorts", null, null),
+        "warm_cloudy_female" to FallbackGarments("short", false, "shorts", null, null),
+        "warm_cloudy_male" to FallbackGarments("short", false, "shorts", null, null),
+        "warm_rain_female" to FallbackGarments("short", true, "shorts", "cap", null),
+        "warm_rain_male" to FallbackGarments("short", true, "shorts", "cap", null),
+        "hot_clear_female" to FallbackGarments("sleeveless", false, "shorts", null, null),
+        "hot_clear_male" to FallbackGarments("sleeveless", false, "shorts", null, null),
+        "hot_cloudy_female" to FallbackGarments("sleeveless", false, "short_shorts", null, null),
+        "hot_cloudy_male" to FallbackGarments("sleeveless", false, "shorts", null, null),
+        "hot_rain_female" to FallbackGarments("sleeveless", true, "shorts", "cap", null),
+        "hot_rain_male" to FallbackGarments("sleeveless", true, "shorts", "cap", null)
+    )
+
+    /** The full garment census (tests pin it against the paired matrix). */
+    fun fallbackGarmentsTable(): Map<String, FallbackGarments> = FALLBACK_GARMENTS
+
+    /** The adjudicated garments of a bundled asset URL, or null if uncensused. */
+    fun fallbackGarments(url: String): FallbackGarments? =
+        FALLBACK_GARMENTS[fallbackAssetFile(url)]
+
+    /**
+     * GEN-2 A2: may this bundled asset serve under [outfit]'s exact
+     * prescription? The same point-grain gate the pool obeys
+     * ([HeroPointGrainPolicy]), fed the asset's adjudicated classes
+     * (person count 1 for every asset, per the derivation record).
+     * Uncensused assets fail closed.
+     */
+    fun fallbackMatchesPrescription(url: String, outfit: OutfitRecommendation): Boolean {
+        val garments = fallbackGarments(url) ?: return false
+        return HeroPointGrainPolicy.matches(
+            personCount = 1,
+            topBaseClass = garments.topBase,
+            outerClass = garments.outer,
+            bottomClass = garments.bottom,
+            prescribedTopBase = outfit.topBase,
+            prescribedTopOuter = outfit.topOuter,
+            prescribedBottom = outfit.bottom,
+            headClass = garments.head,
+            handsClass = garments.hands,
+            prescribedHead = outfit.head,
+            prescribedHands = outfit.hands
+        )
+    }
+
+    /**
+     * GEN-2 A2: the garment-gated bundled resolution — the fallback
+     * terminus under the RW-20 invariant (a serve that cannot match
+     * the prescription never serves). The walk visits cells in the
+     * established order ([orderedFallbackCells]: requested cell,
+     * its bracket's weathers, neighbouring brackets by warmth), and
+     * at each cell considers assets in gender order mirroring the
+     * pool cascade: the requested gender first across the whole
+     * walk, then the opposite gender (the cascade's levels 4–5);
+     * UNISEX considers the legacy-view asset per cell first, then
+     * either paired asset. The first asset whose adjudicated
+     * garments MATCH [outfit] wins — garment truth outranks scene
+     * proximity, because a nearer photo wearing unprescribed
+     * garments is precisely the W-4 defect. Returns null when no
+     * bundled asset matches: the honest terminus is NO photo (the
+     * gradient state), never a contradicting one.
+     */
+    fun gatedFallbackUrl(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition,
+        gender: GenderPreference,
+        outfit: OutfitRecommendation
+    ): String? {
+        val cells = orderedFallbackCells(tempBracket, weatherCondition)
+        val passes: List<List<String>> = when (gender) {
+            GenderPreference.UNISEX -> listOf(
+                cells.mapNotNull { (b, w) -> FALLBACK_IMAGES_2D[b]?.get(w) },
+                cells.flatMap { (b, w) ->
+                    listOfNotNull(
+                        FALLBACK_IMAGES_PAIRED[b to w]?.get(GenderPreference.FEMALE),
+                        FALLBACK_IMAGES_PAIRED[b to w]?.get(GenderPreference.MALE)
+                    )
+                }
+            )
+            else -> {
+                val opposite =
+                    if (gender == GenderPreference.MALE) GenderPreference.FEMALE
+                    else GenderPreference.MALE
+                listOf(
+                    cells.mapNotNull { (b, w) -> FALLBACK_IMAGES_PAIRED[b to w]?.get(gender) },
+                    cells.mapNotNull { (b, w) -> FALLBACK_IMAGES_PAIRED[b to w]?.get(opposite) }
+                )
+            }
+        }
+        for (pass in passes) {
+            for (url in pass) {
+                if (fallbackMatchesPrescription(url, outfit)) return url
+            }
+        }
+        return null
+    }
+
     /** WS-7 / D-22: the manifest provenance of a bundled asset URL, or null. */
     fun fallbackProvenance(url: String): FallbackAssetProvenance? =
         FALLBACK_PROVENANCE[fallbackAssetFile(url)]
@@ -515,15 +683,21 @@ object HeroImageSelector {
 
         val combination = OutfitCombination.fromConditions(weather, outfit, gender, frameFeelsLikeF)
         val weatherCondition = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
-        val url = getWeatherAwareFallback(combination.tempBracket, weatherCondition, gender)
+        // GEN-2 A2 (W-4/W-5): the synchronous fallback serve obeys
+        // the same point-grain gate as the pool — it resolves through
+        // the garment census, not the bare bracket key. When no
+        // bundled asset matches the prescription the result carries
+        // NO image: the caller paints the gradient state rather than
+        // a photo that contradicts the outfit on screen.
+        val url = gatedFallbackUrl(combination.tempBracket, weatherCondition, gender, outfit)
 
         return HeroImageResult(
             imageUrl = url,
             thumbnailUrl = url,
             combinationId = combination.id,
             serveSource = HeroServeSource.BUNDLED_FALLBACK,
-            fallbackProvenance = fallbackProvenance(url),
-            fallbackAssetFile = fallbackAssetFile(url)
+            fallbackProvenance = url?.let { fallbackProvenance(it) },
+            fallbackAssetFile = url?.let { fallbackAssetFile(it) }
         )
     }
 

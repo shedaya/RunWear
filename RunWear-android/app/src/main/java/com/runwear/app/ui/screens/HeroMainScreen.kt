@@ -1166,7 +1166,10 @@ private fun HeroSheetContent(
             onWeatherPillClick = onWeatherPillClick,
             overlapsPhoto = overlapsPhoto,
             modifier = Modifier.fillMaxWidth(),
-            temperatureUnit = uiState.temperatureUnit
+            temperatureUnit = uiState.temperatureUnit,
+            // GEN-2 A2 (W-7): hold the hero numeral whole while a
+            // fetch/switch is in flight; it swaps at the commit.
+            holdNumeral = uiState.isLoading
         )
     }
 }
