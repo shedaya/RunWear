@@ -670,14 +670,20 @@ struct WeatherOutfitView: View {
         // the lookup by date instead; the session rule keys it
         // by session.)
         let todays = collectionModel.sessionEntry()
-        // WS-4: the state derives both narration payloads from
-        // the entry itself (simple place for "Added", first kit
-        // item for "Update to") — the view supplies no payload
-        // string of its own.
+        // WS-4 + Y-5: the state derives EVERYTHING from the one
+        // entry value above — both narration payloads (simple
+        // place for "Added", first kit item for "Update to") AND
+        // the narration kind, which the entry carries on itself
+        // (`wasUpdatedInSession`, committed in the same store
+        // write as the content). There is no second state holder
+        // for the flag to lag behind in: build 21 read the kind
+        // from separate model state and the payload from an
+        // older entry, and the card disagreed with itself for
+        // the rest of the session.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: todays,
             moment: sheetMoment,
-            wasUpdatedThisSession: collectionModel.todaysEntryWasUpdated
+            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
         )
         if state != .preAdd {
             WearIveRunMiniBarView(
@@ -735,9 +741,21 @@ struct WeatherOutfitView: View {
             condition: viewModel.currentCondition.shortDescription,
             itemNames: recommendation.allItems.map(\.name),
             itemKeys: recommendation.allItems.map(\.key),
-            heroImageReference: viewModel.heroImageUrl
-                ?? viewModel.fallbackImageUrl
-                ?? defaultFallbackUrl,
+            // Y-10: the entry records the hero ACTUALLY SERVED
+            // for this place at settle time — the view model's
+            // flag target, its own "photo on screen right now"
+            // (pool/personal hero, else the curated fallback the
+            // fetch resolved) — never a reference recomputed at
+            // record time. The pre-fix chain fell back to this
+            // view's `defaultFallbackUrl` (a fresh MILD/CLEAR
+            // resolution), which could stamp the entry with a
+            // stock photo the place never showed; the New Haven
+            // chapter carried exactly such a third image. Before
+            // the first hero resolution the flag target is nil
+            // and the reference is honestly empty; the hero
+            // landing re-offers this recording and stamps the
+            // served photo then.
+            heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? "",
             sessionID: collectionModel.sessionID
         )
         collectionModel.recordSettled(entry)

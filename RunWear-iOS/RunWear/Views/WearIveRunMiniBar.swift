@@ -132,10 +132,23 @@ final class WearIveRunCollectionModel: ObservableObject {
     /// True when a settle in this session replaced the session's
     /// entry with different narrated content (a kit change or a
     /// move to a new place) — the narration's "Update to" case.
-    /// (The property's name predates the session rule; its scope
-    /// was always "this session" — see `wasUpdatedThisSession` at
-    /// the narration seam.)
-    @Published private(set) var todaysEntryWasUpdated = false
+    /// DERIVED, never stored here (GEN-3, census Y-5): the fact
+    /// lives on the entry itself (`wasUpdatedInSession`, written
+    /// in the same store write as the content it describes), and
+    /// this reads it back off the presented entry — the model's
+    /// session entry when there is one, else the entry this
+    /// model narrated. A separately stored flag is exactly what
+    /// desynchronised on device in build 21. (The property's
+    /// name predates the session rule; its scope was always
+    /// "this session" — see `wasUpdatedThisSession` at the
+    /// narration seam.)
+    var todaysEntryWasUpdated: Bool {
+        if let entry = sessionEntry() { return entry.wasUpdatedInSession }
+        if let narratedEntryID {
+            return entries.first { $0.id == narratedEntryID }?.wasUpdatedInSession ?? false
+        }
+        return false
+    }
     /// Bumped ONLY on a cue-worthy landing (WS-3): the session's
     /// creation, a settle that changed the entry's KIT, or a
     /// settle that moved it to a new PLACE (GEN-3). A settle that
@@ -200,17 +213,29 @@ final class WearIveRunCollectionModel: ObservableObject {
             existing: existing, incoming: entry
         )
         guard classification != .identical else { return }
-        store.record(entry)
+        // Y-5 atomicity: the narration kind is resolved HERE and
+        // stamped onto the entry, and the ONE store write below
+        // commits place, kit, weather, hero, and narration kind
+        // together — no facet of the entry can land without the
+        // others. A silent settle preserves the kind it found
+        // (weather moving under a settled narration does not
+        // rewrite the narration).
+        let narrationUpdated: Bool
+        switch classification {
+        case .created:
+            narrationUpdated = false
+        case .kitUpdated, .placeUpdated:
+            narrationUpdated = true
+        case .silentUpdate, .identical:
+            narrationUpdated = existing?.wasUpdatedInSession ?? false
+        }
+        store.record(entry.settingWasUpdatedInSession(narrationUpdated))
         entries = store.entries
         switch classification {
         case .created:
             narratedEntryID = entry.id
-            todaysEntryWasUpdated = false
             cueCount += 1
         case .kitUpdated, .placeUpdated:
-            if narratedEntryID == entry.id {
-                todaysEntryWasUpdated = true
-            }
             cueCount += 1
         case .silentUpdate, .identical:
             break
@@ -224,7 +249,8 @@ final class WearIveRunCollectionModel: ObservableObject {
         let dayStart = calendar.startOfDay(for: today)
         store.remove(dayStart: dayStart, placeName: placeName)
         entries = store.entries
-        todaysEntryWasUpdated = false
+        // The narration kind needs no reset here: it lives on
+        // the entry, and the entry is gone (Y-5 derivation).
         narratedEntryID = nil
     }
 
@@ -237,7 +263,6 @@ final class WearIveRunCollectionModel: ObservableObject {
         guard let current = sessionEntry() else { return }
         store.remove(id: current.id)
         entries = store.entries
-        todaysEntryWasUpdated = false
         narratedEntryID = nil
     }
 }

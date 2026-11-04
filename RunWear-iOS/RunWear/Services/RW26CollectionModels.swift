@@ -78,6 +78,19 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// payloads; every entry recorded since carries the session
     /// that settled it.
     let sessionID: String
+    /// Whether this entry's narration is the UPDATE form (GEN-3,
+    /// census Y-5): true once any in-session settle after the
+    /// creation changed the entry's kit or place. The flag lives
+    /// ON THE ENTRY — it is written in the same store write as
+    /// the place, kit, weather, and hero it describes — so the
+    /// narration kind can never be read from a different settle
+    /// than the payload it narrates. (Build 21 kept the flag in
+    /// separate view-model state: after the first place switch
+    /// the narration read the newest settle while the payload
+    /// read an older entry, and the two never agreed again.)
+    /// The collection model stamps it at record time; callers
+    /// constructing a settle pass the default.
+    let wasUpdatedInSession: Bool
 
     init(
         dayStart: Date,
@@ -88,7 +101,8 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         itemNames: [String],
         itemKeys: [String],
         heroImageReference: String,
-        sessionID: String = ""
+        sessionID: String = "",
+        wasUpdatedInSession: Bool = false
     ) {
         self.dayStart = dayStart
         self.placeName = placeName
@@ -99,17 +113,34 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         self.itemKeys = itemKeys
         self.heroImageReference = heroImageReference
         self.sessionID = sessionID
+        self.wasUpdatedInSession = wasUpdatedInSession
+    }
+
+    /// A copy of this entry carrying the given narration flag —
+    /// how the collection model commits the narration kind WITH
+    /// the entry it describes, as one value (Y-5 atomicity).
+    func settingWasUpdatedInSession(_ value: Bool) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: dayStart, placeName: placeName,
+            feelsLikeF: feelsLikeF, actualF: actualF, condition: condition,
+            itemNames: itemNames, itemKeys: itemKeys,
+            heroImageReference: heroImageReference,
+            sessionID: sessionID, wasUpdatedInSession: value
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
         case dayStart, placeName, feelsLikeF, actualF, condition
         case itemNames, itemKeys, heroImageReference, sessionID
+        case wasUpdatedInSession
     }
 
     /// Legacy-tolerant decoding: a payload written before the
     /// session rule has no `sessionID` key — it decodes as the
     /// empty (legacy) identity instead of failing the whole
-    /// store load and wiping the user's history.
+    /// store load and wiping the user's history. Payloads from
+    /// before the Y-5 fix likewise have no narration flag —
+    /// they decode as the "Added" form.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         dayStart = try container.decode(Date.self, forKey: .dayStart)
@@ -121,6 +152,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         itemKeys = try container.decode([String].self, forKey: .itemKeys)
         heroImageReference = try container.decode(String.self, forKey: .heroImageReference)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID) ?? ""
+        wasUpdatedInSession = try container.decodeIfPresent(Bool.self, forKey: .wasUpdatedInSession) ?? false
     }
 
     /// The entry's place as a SimplePlace (WS-4 / RC-4): the

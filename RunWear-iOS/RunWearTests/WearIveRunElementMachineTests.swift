@@ -820,10 +820,14 @@ final class WearIveRunSessionRuleTests: XCTestCase {
 
     @MainActor
     private func state(of model: WearIveRunCollectionModel) -> WearIveRunState {
-        WearIveRunMiniBarModel.state(
-            todaysEntry: model.sessionEntry(),
+        // The production derivation (WeatherOutfitView's dock):
+        // narration kind read off the presented entry itself —
+        // the Y-5 atomicity shape.
+        let presented = model.sessionEntry()
+        return WearIveRunMiniBarModel.state(
+            todaysEntry: presented,
             moment: "Now",
-            wasUpdatedThisSession: model.todaysEntryWasUpdated
+            wasUpdatedThisSession: presented?.wasUpdatedInSession ?? false
         )
     }
 
@@ -878,12 +882,16 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             items: ["Tank Top", "Shorts"], day: d)
         model.recordSettled(miami)
         XCTAssertEqual(model.entries.count, 1)
-        // The scrapbook keeps the session's LAST settled version.
-        XCTAssertEqual(model.sessionEntry(), miami)
+        // The scrapbook keeps the session's LAST settled version
+        // — carrying its update narration kind on itself (Y-5:
+        // the two in-session place moves were narrated updates).
+        XCTAssertEqual(model.sessionEntry(), miami.settingWasUpdatedInSession(true))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
         XCTAssertEqual(model.sessionEntry()?.feelsLikeF, 90)
         // And it is what a fresh read of the store holds.
-        XCTAssertEqual(WearIveRunStore(defaults: defaults).entries, [miami])
+        XCTAssertEqual(
+            WearIveRunStore(defaults: defaults).entries,
+            [miami.settingWasUpdatedInSession(true)])
     }
 
     @MainActor
@@ -1123,6 +1131,96 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         XCTAssertEqual(chapters[0].dayCount, 1)
     }
 
+    // MARK: Facet atomicity (census Y-5)
+
+    @MainActor
+    func testFacetsCommitAtomicallyAcrossAPlaceChange() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let model = WearIveRunCollectionModel(
+            store: WearIveRunStore(defaults: defaults), sessionID: "s1")
+        let d = day(2026, 11, 4)
+        model.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve", "Windbreaker"], day: d, hero: "hero-overland"))
+        model.recordSettled(entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top", "Shorts"], day: d, hero: "hero-miami"))
+
+        // Read the persisted value back ONCE, through the JSON
+        // round trip: narration kind, place, weather, kit, and
+        // photo are facets of this single decoded value — there
+        // is no second read from which a stale facet could come.
+        let persisted = WearIveRunStore(defaults: defaults).entries
+        XCTAssertEqual(persisted.count, 1)
+        let settled = persisted[0]
+        XCTAssertEqual(settled.placeDisplayName, "Miami, FL")
+        XCTAssertEqual(settled.feelsLikeF, 90)
+        XCTAssertEqual(settled.itemNames, ["Tank Top", "Shorts"])
+        XCTAssertEqual(settled.heroImageReference, "hero-miami")
+        XCTAssertTrue(settled.wasUpdatedInSession)
+        // The narration computed from THIS value names THIS
+        // value's payload: "Update to Tank Top" over the Miami
+        // entry — the build-21 shape (an update naming one
+        // place's item over another place's entry) cannot be
+        // produced, because both halves read the same value.
+        let narration = WearIveRunMiniBarModel.state(
+            todaysEntry: settled, moment: "Now",
+            wasUpdatedThisSession: settled.wasUpdatedInSession)
+        XCTAssertEqual(narration, .updated(payload: settled.itemNames[0]))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: narration), "Update to Tank Top")
+        XCTAssertEqual(
+            WearIveRunNarration.expandedLine(for: settled, formattedFeelsLike: "90°"),
+            "Miami, FL · Today — 90° feels like · 2 items")
+    }
+
+    @MainActor
+    func testNarrationKindSurvivesModelRecreation_AndSilentSettlesPreserveIt() {
+        let defaults = UserDefaults(suiteName: "gen3-iwir-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let d = day(2026, 11, 4)
+        let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        first.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve"], day: d))
+        first.recordSettled(entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"], day: d))
+
+        // Home's view (and with it the collection model) is
+        // recreated mid-session: the narration kind is still the
+        // update form, because it was never the model's to lose —
+        // it is stored on the entry.
+        let recreated = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        XCTAssertEqual(recreated.sessionEntry()?.wasUpdatedInSession, true)
+        XCTAssertEqual(state(of: recreated), .updated(payload: "Tank Top"))
+
+        // A weather-only settle updates the numbers and keeps
+        // the narration kind it found.
+        recreated.recordSettled(entry(
+            session: "s1", place: "Miami, FL", feels: 92,
+            items: ["Tank Top"], day: d))
+        XCTAssertEqual(recreated.sessionEntry()?.feelsLikeF, 92)
+        XCTAssertEqual(recreated.sessionEntry()?.wasUpdatedInSession, true)
+        XCTAssertEqual(state(of: recreated), .updated(payload: "Tank Top"))
+    }
+
+    // MARK: Served-hero identity (census Y-10)
+
+    func testChapterCoverIsTheRecordedServedHero_NeverReResolved() {
+        // The chapter renders the reference the entry recorded
+        // at settle time — the photo actually served for that
+        // place in that session — verbatim.
+        let d = day(2026, 11, 4)
+        let newHaven = entry(
+            session: "s1", place: "New Haven, MO", feels: 53,
+            items: ["Tee", "Shorts"], day: d, hero: "served-teal-runner")
+        let chapters = WearIveRunCollection.chapters(
+            from: [newHaven], filter: .all, calendar: utcCalendar)
+        XCTAssertEqual(chapters.first?.cover.heroImageReference, "served-teal-runner")
+        XCTAssertEqual(chapters.first?.cover, newHaven)
+    }
+
     // MARK: Source pins (view-layer wiring)
 
     private func sourceFile(_ relativePath: String) throws -> String {
@@ -1153,5 +1251,15 @@ final class WearIveRunSessionRuleTests: XCTestCase {
                       "the pinned entry must be lifted out of the chapter arithmetic")
         XCTAssertFalse(collection.contains("todaysEntries"),
                        "the date-keyed pin was the X-5 defect's other half")
+        // Y-10: the recorded hero is the SERVED hero (the view
+        // model's flag target — the photo on screen), never the
+        // view's locally recomputed default fallback.
+        XCTAssertTrue(home.contains("heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? \"\""),
+                      "the entry must stamp the served hero identity at settle time")
+        // And the collection renders the recorded reference
+        // verbatim — it re-resolves nothing at open time.
+        XCTAssertTrue(collection.contains("entry.heroImageReference"))
+        XCTAssertFalse(collection.contains("FallbackImageProvider"),
+                       "the collection must never re-resolve a chapter's photo")
     }
 }
