@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
@@ -31,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,7 +42,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -260,9 +257,6 @@ private fun MorphBarContent(
 
     val p = progress.value
     val contentAlpha = WearIveRunMotion.expandedContentAlpha(p)
-    // The expanded section's full height, measured unbounded so the
-    // morph's height is a pure function of progress: full * p.
-    var expandedHeightPx by remember { mutableIntStateOf(0) }
     val risePx = if (riseArmed && kind == WearIveRunElementKind.CUE) {
         (1f - p) * WearIveRunElementMachine.CUE_RISE_DP
     } else {
@@ -388,14 +382,12 @@ private fun MorphBarContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(with(density) { (expandedHeightPx * p).toInt().toDp() })
+                        .height((WearIveRunMotion.EXPANDED_SECTION_HEIGHT_DP * p).dp)
                         .clip(RoundedCornerShape(0.dp))
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .wrapContentHeight(align = Alignment.Top, unbounded = true)
-                            .onSizeChanged { expandedHeightPx = it.height }
                             .alpha(contentAlpha)
                             .graphicsLayer {
                                 translationY =

@@ -56,6 +56,16 @@ object WearIveRunMotion {
     /** §2: expanded-only content drifts up at most this far (dp). */
     const val CONTENT_DRIFT_DP = 4f
 
+    /**
+     * The expanded section's height (dp) — fixed geometry by
+     * construction: 8 dp section gap + the 56 dp thumbnail row +
+     * 10 dp + the 40 dp collection-doorway button. Every element in
+     * the section has a fixed height (the slot and the button are
+     * token-sized; the detail line rides inside the slot's row), so
+     * the morph's height travel is exact: section height * progress.
+     */
+    const val EXPANDED_SECTION_HEIGHT_DP = 114f
+
     /** §7.1: the cue's overshoot caps — 3% of travel, 3 dp absolute. */
     const val OVERSHOOT_FRACTION_CAP = 0.03f
     const val OVERSHOOT_DP_CAP = 3f

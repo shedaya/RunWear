@@ -114,6 +114,17 @@ class WearIveRunMotionTest {
     }
 
     @Test
+    fun `expanded section height is its fixed geometry`() {
+        // 8dp section gap + 56dp thumbnail row + 10dp + 40dp button.
+        assertEquals(114f, WearIveRunMotion.EXPANDED_SECTION_HEIGHT_DP, 0.001f)
+        assertEquals(
+            8f + 56f + 10f + 40f,
+            WearIveRunMotion.EXPANDED_SECTION_HEIGHT_DP,
+            0.001f
+        )
+    }
+
+    @Test
     fun `overshoot cap is 3 percent of travel and 3dp absolute`() {
         assertEquals(3f, WearIveRunMotion.overshootCapDp(200f), 0.001f)
         assertEquals(1.5f, WearIveRunMotion.overshootCapDp(50f), 0.001f)
