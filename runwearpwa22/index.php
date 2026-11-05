@@ -2892,6 +2892,15 @@
             autoLat: parseFloat(localStorage.getItem('autoLat')) || null,
             autoLon: parseFloat(localStorage.getItem('autoLon')) || null,
             selectedDate: new Date(),
+            // "Now" is the VIEWED LOCATION's live local time, not the device
+            // clock (Sol, 2026-11-04: "Now is now — in another time zone it's
+            // their local time NOW"). locationUtcOffsetSeconds /
+            // locationTimezone are learned from each Open-Meteo response
+            // (timezone=auto); isNowSelected tracks the Now state so a
+            // weather load re-anchors selectedDate to the location's now.
+            locationUtcOffsetSeconds: null,
+            locationTimezone: null,
+            isNowSelected: true,
             useCelsius: localStorage.getItem('useCelsius') === 'true',
             gender: localStorage.getItem('gender') || 'all', // 'male', 'female', or 'all' (unisex default)
             comfort: parseInt(localStorage.getItem('comfort')) || 0, // -10, -5, 0, 5, 10
@@ -3270,7 +3279,7 @@
             if (weather.uvIndex > 5) outfit.items.push(ClothingItems.SUNSCREEN);
             if (temp < 30) outfit.items.push(ClothingItems.NECK_GAITER);
             // Reflective gear for dawn/dusk/night
-            const hour = weather.hour ?? new Date().getHours();
+            const hour = weather.hour ?? locationNow().getHours();
             if (hour < 7 || hour > 18) outfit.items.push(ClothingItems.REFLECTIVE_GEAR);
 
             // === TIPS ===
@@ -3328,7 +3337,6 @@
         const coarseCoordinate = (v) => Math.round(v * 10) / 10;
 
         async function fetchWeather(lat, lon, date) {
-            const isToday = isSameDay(date, new Date()) && date.getHours() === new Date().getHours();
             const unit = state.useCelsius ? 'celsius' : 'fahrenheit';
             const windUnit = state.useCelsius ? 'kmh' : 'mph';
 
@@ -3346,7 +3354,22 @@
             const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
             if (!response.ok) throw new Error('Weather API error');
             const data = await response.json();
-            
+
+            // Learn the viewed location's frame from the response itself
+            // (Open-Meteo resolves timezone=auto to the location's zone).
+            if (typeof data.utc_offset_seconds === 'number') state.locationUtcOffsetSeconds = data.utc_offset_seconds;
+            if (data.timezone) state.locationTimezone = data.timezone;
+            // In the Now state the selection IS the location's live clock:
+            // re-anchor it here, where the location's frame is known, so the
+            // pill, "Today" and the current-vs-hourly choice below all read
+            // the location's time — never the device clock.
+            let effectiveDate = date;
+            if (state.isNowSelected) {
+                effectiveDate = locationNow();
+                state.selectedDate = effectiveDate;
+            }
+            const isToday = isSameDay(effectiveDate, locationNow()) && effectiveDate.getHours() === locationNow().getHours();
+
             let weather;
             if (isToday && data.current) {
                 const c = data.current;
@@ -3375,14 +3398,14 @@
                     cloudCover: c.cloud_cover,
                     uvIndex: c.uv_index ?? 0,
                     weatherCode: c.weather_code,
-                    hour: date.getHours()
+                    hour: effectiveDate.getHours()
                 };
             } else {
                 // hourly.time entries are location-local (timezone=auto);
                 // toISOString() is UTC and was 4-5h off for US timezones (F5).
                 // Match on wall-clock components instead.
                 const p2 = n => String(n).padStart(2, '0');
-                const targetHour = `${date.getFullYear()}-${p2(date.getMonth() + 1)}-${p2(date.getDate())}T${p2(date.getHours())}`;
+                const targetHour = `${effectiveDate.getFullYear()}-${p2(effectiveDate.getMonth() + 1)}-${p2(effectiveDate.getDate())}T${p2(effectiveDate.getHours())}`;
                 const hourly = data.hourly;
                 let idx = hourly.time.findIndex(t => t.startsWith(targetHour));
                 if (idx === -1) {
@@ -3405,7 +3428,7 @@
                     cloudCover: hourly.cloud_cover[idx],
                     uvIndex: hourly.uv_index[idx],
                     weatherCode: hourly.weather_code[idx],
-                    hour: date.getHours()
+                    hour: effectiveDate.getHours()
                 };
             }
             
@@ -4414,8 +4437,26 @@ MOOD: ${getMoodDesc(tempBracket)}`;
             })();
         }
 
+        // ============ LOCATION-FRAME "NOW" ============
+        // A Date whose LOCAL getters (getHours, getDate, toLocaleTimeString,
+        // …) read the viewed location's wall clock, wherever the device is.
+        // Local getters display (epoch + device UTC offset), so pre-shift the
+        // instant by (location offset − device offset). Before the first
+        // weather response the location's offset is unknown and this falls
+        // back to the device instant; fetchWeather re-anchors the Now state
+        // as soon as the response supplies utc_offset_seconds.
+        function locationNowFromOffset(utcOffsetSeconds, nowMs) {
+            const ms = (nowMs === undefined ? Date.now() : nowMs);
+            if (utcOffsetSeconds === null || utcOffsetSeconds === undefined) return new Date(ms);
+            return new Date(ms + utcOffsetSeconds * 1000 + new Date(ms).getTimezoneOffset() * 60000);
+        }
+
+        function locationNow() {
+            return locationNowFromOffset(state.locationUtcOffsetSeconds);
+        }
+
         function formatDate(date) {
-            const today = new Date();
+            const today = locationNow();
             const tomorrow = new Date(today);
             tomorrow.setDate(tomorrow.getDate() + 1);
             
@@ -4433,7 +4474,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         }
 
         function isViewingNow() {
-            const now = new Date();
+            const now = locationNow();
             const selected = state.selectedDate;
             return isSameDay(selected, now) && selected.getHours() === now.getHours();
         }
@@ -4564,8 +4605,9 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         function prevDay() {
             const prev = new Date(state.selectedDate);
             prev.setDate(prev.getDate() - 1);
-            const now = new Date();
+            const now = locationNow();
             if (prev >= new Date(now.setHours(0,0,0,0))) {
+                state.isNowSelected = false;
                 state.selectedDate = prev;
                 loadWeather();
             }
@@ -4574,20 +4616,23 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         function nextDay() {
             const next = new Date(state.selectedDate);
             next.setDate(next.getDate() + 1);
-            const maxDate = new Date();
+            const maxDate = locationNow();
             maxDate.setDate(maxDate.getDate() + 6);
             if (next <= maxDate) {
+                state.isNowSelected = false;
                 state.selectedDate = next;
                 loadWeather();
             }
         }
 
         function resetToNow() {
-            state.selectedDate = new Date();
+            state.isNowSelected = true;
+            state.selectedDate = locationNow();
             loadWeather();
         }
 
         function setHour(hour) {
+            state.isNowSelected = false;
             state.selectedDate.setHours(hour, 0, 0, 0);
             // Reset hero image to placeholder while new one loads
             setFallbackHeroImage(PLACEHOLDER_IMAGE);
@@ -4596,7 +4641,8 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         }
 
         function setDate(daysFromNow) {
-            const newDate = new Date();
+            state.isNowSelected = false;
+            const newDate = locationNow();
             newDate.setDate(newDate.getDate() + daysFromNow);
             newDate.setHours(state.selectedDate.getHours(), 0, 0, 0);
             state.selectedDate = newDate;
@@ -4609,7 +4655,7 @@ MOOD: ${getMoodDesc(tempBracket)}`;
         // Pickers
         function openDatePicker() {
             const container = document.getElementById('datePickerGrid');
-            const today = new Date();
+            const today = locationNow();
             let html = '';
             
             for (let i = 0; i <= 6; i++) {
