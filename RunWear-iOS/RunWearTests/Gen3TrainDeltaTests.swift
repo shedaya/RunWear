@@ -144,6 +144,70 @@ final class Gen3TrainDeltaTests: XCTestCase {
             "leaving mid-generation must land on home with the generating pill active")
     }
 
+    // MARK: - Onboarding · the three preference questions COMBINED (Sol RULED, Nov 4)
+
+    /// The combined screen's copy, verbatim: headline, lede, and
+    /// the three questions in their shipped wording and order.
+    func testCombinedPreferencesCopyVerbatim() {
+        XCTAssertEqual(OnboardingCopy.preferencesHeadline, "Make it yours")
+        XCTAssertEqual(OnboardingCopy.preferencesLede,
+                       "Three quick calls. You can change any of them later in Settings.")
+        XCTAssertEqual(OnboardingCopy.preferencesQuestions, [
+            "How do you measure the weather?",
+            "Whose fit should the outfits follow?",
+            "Do you get cold easily, or overheat quickly?",
+        ])
+    }
+
+    /// Option fidelity is binding (shipped iOS wording/options):
+    /// full-word Fahrenheit / Celsius; Men's / Women's / No
+    /// preference — ALL THREE (the design frame dropping "No
+    /// preference" is NOT followed); five slider stops.
+    func testCombinedPreferencesOptionFidelity() {
+        XCTAssertEqual(TemperatureUnit.allCases.map(\.label), ["Fahrenheit", "Celsius"],
+                       "temperature unit options are the full words, in order")
+        XCTAssertEqual(GenderPreference.fitOptions.map(\.label), ["Men's", "Women's", "No preference"],
+                       "fit options are all three shipped choices, in order")
+        XCTAssertEqual(ComfortLevel.allCases.count, 5,
+                       "body temperature keeps its five stops")
+    }
+
+    /// The combined screen's composition: one pushed destination
+    /// carrying all three shared controls under the ruled
+    /// headline/lede, each question heading its control in order;
+    /// the substantive steps stay separate screens.
+    func testCombinedPreferencesScreenComposition_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("private var preferencesScreen"),
+                      "the combined screen exists as its own view")
+        let start = try XCTUnwrap(onboarding.range(of: "private var preferencesScreen")?.lowerBound)
+        let end = try XCTUnwrap(onboarding.range(of: "private func preferenceGroup")?.lowerBound)
+        let screen = String(onboarding[start..<end])
+        XCTAssertTrue(screen.contains("Text(OnboardingCopy.preferencesHeadline)"),
+                      "the headline renders from the ruled copy")
+        XCTAssertTrue(screen.contains("Text(OnboardingCopy.preferencesLede)"),
+                      "the lede renders from the ruled copy")
+        // Each question heads its control, in the ruled order.
+        let q0 = try XCTUnwrap(screen.range(of: "preferencesQuestions[0]")?.lowerBound)
+        let c0 = try XCTUnwrap(screen.range(of: "TemperatureUnitPicker(unit: $temperatureUnit)")?.lowerBound)
+        let q1 = try XCTUnwrap(screen.range(of: "preferencesQuestions[1]")?.lowerBound)
+        let c1 = try XCTUnwrap(screen.range(of: "FitPreferenceInlinePicker(preference: $genderPreference)")?.lowerBound)
+        let q2 = try XCTUnwrap(screen.range(of: "preferencesQuestions[2]")?.lowerBound)
+        let c2 = try XCTUnwrap(screen.range(of: "ComfortLevelControl(comfortLevel: $comfortLevel)")?.lowerBound)
+        XCTAssertTrue(q0 < c0 && c0 < q1 && q1 < c1 && c1 < q2 && q2 < c2,
+                      "question → control, three times, in order, on the one screen")
+        // The slider control itself carries the shipped end
+        // labels over five stops.
+        let controls = try sourceFile("../RunWear/Views/Components/PreferenceControls.swift")
+        XCTAssertTrue(controls.contains("Text(\"Runs Cold\")") && controls.contains("Text(\"Runs Warm\")"),
+                      "the slider's end labels are the shipped Runs Cold / Runs Warm")
+        XCTAssertTrue(controls.contains("in: 0...4, step: 1"),
+                      "the slider is five stops")
+        // The substantive steps remain their own screens.
+        XCTAssertTrue(onboarding.contains("case .location:"),
+                      "location stays a separate step/screen")
+    }
+
     // MARK: - Convergence band · settled copy, bar-only progress (count HELD), spinner
 
     func testConvergenceBandCopyIsSolSettledWordingVerbatim() {

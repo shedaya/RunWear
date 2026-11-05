@@ -73,37 +73,49 @@ final class WS10CopyTests: XCTestCase {
     // MARK: - A1 · step order (the design's sequence)
 
     func testStepOrderIsTheDesignSequence() {
+        // GEN-3 (Sol, Nov 4 — RULED): the three preference
+        // questions combine into ONE screen, superseding the
+        // one-question-per-screen structure for these three only
+        // (and closing the gen-2 R-3 divergence in the ruled
+        // direction). The step-structure pins are updated
+        // deliberately under that ruling.
         XCTAssertEqual(
             OnboardingStep.fullSequence,
-            [.welcome, .temperature, .fit, .comfort, .location, .firstLook],
-            "promise (28) → setup (29–31) → choice/consent/first look (32–34)"
+            [.welcome, .preferences, .location, .firstLook],
+            "promise (28) → combined preferences (29) → location (30) → choice/consent/first look (32–34)"
         )
-        XCTAssertEqual(OnboardingStep.setupQuestions, [.temperature, .fit, .comfort])
     }
 
     func testStepChainAdvancesInOrderAndEndsAtFirstLook() {
-        XCTAssertEqual(OnboardingStep.welcome.next, .temperature)
-        XCTAssertEqual(OnboardingStep.temperature.next, .fit)
-        XCTAssertEqual(OnboardingStep.fit.next, .comfort)
-        XCTAssertEqual(OnboardingStep.comfort.next, .location)
+        XCTAssertEqual(OnboardingStep.welcome.next, .preferences)
+        XCTAssertEqual(OnboardingStep.preferences.next, .location)
         XCTAssertEqual(OnboardingStep.location.next, .firstLook)
         XCTAssertNil(OnboardingStep.firstLook.next)
     }
 
-    func testSetupIsOneQuestionPerScreenWithNativePush_sourcePin() throws {
+    func testSetupIsOneCombinedPreferencesScreenWithNativePush_sourcePin() throws {
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
         XCTAssertTrue(onboarding.contains("NavigationStack(path: $path)"),
                       "the setup advances through a native NavigationStack (§1.4 push)")
         XCTAssertTrue(onboarding.contains(".navigationDestination(for: OnboardingStep.self)"),
                       "each step is a pushed destination — Back is the exact reverse")
-        // One screen per question: each shared control is composed
-        // exactly once in onboarding (its own pushed screen), and
-        // the old single scrolling form (and its header) is gone.
+        // GEN-3 combined screen: each shared control is composed
+        // exactly once in onboarding — all three on the ONE
+        // preferences screen — and the old per-question steps are
+        // gone.
         XCTAssertEqual(occurrences(onboarding, "TemperatureUnitPicker(unit:"), 1)
         XCTAssertEqual(occurrences(onboarding, "FitPreferenceInlinePicker(preference:"), 1)
         XCTAssertEqual(occurrences(onboarding, "ComfortLevelControl(comfortLevel:"), 1)
+        XCTAssertTrue(onboarding.contains("case .preferences:"),
+                      "the combined screen is the preferences step's destination")
+        XCTAssertFalse(onboarding.contains("case .temperature:"),
+                       "the separate temperature step is superseded by the GEN-3 combination")
+        XCTAssertFalse(onboarding.contains("case .fit:"),
+                       "the separate fit step is superseded by the GEN-3 combination")
+        XCTAssertFalse(onboarding.contains("case .comfort:"),
+                       "the separate comfort step is superseded by the GEN-3 combination")
         XCTAssertFalse(onboarding.contains("preferencesBody"),
-                       "the one-screen preferences form is retired")
+                       "the pre-WS-10 single scrolling form stays retired (the combined screen is preferencesScreen)")
         XCTAssertFalse(onboarding.contains("Welcome to RunWear"),
                        "the old setup-form header (title + promise) is retired with it")
     }
@@ -131,8 +143,8 @@ final class WS10CopyTests: XCTestCase {
                       "frame 28's quiet footer renders the decided line (W-21)")
         XCTAssertFalse(onboarding.contains("Free to start"),
                        "the struck footer wording is gone (W-21)")
-        XCTAssertTrue(onboarding.contains("path.append(.temperature)"),
-                      "Get Started pushes the first setup question")
+        XCTAssertTrue(onboarding.contains("path.append(.preferences)"),
+                      "Get Started pushes the combined preferences screen (GEN-3 ruling)")
     }
 
     func testFreeLooksPromiseAppearsOnlyOnFrame28() throws {

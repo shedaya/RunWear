@@ -46,7 +46,8 @@ struct OnboardingView: View {
     /// profile — preferences first, always.
     @State private var phase: Phase = .setup
     /// The setup stack's pushed steps (the Welcome screen is its
-    /// root). Native push, one question per screen (§1.4).
+    /// root). Native push; the three preference questions share
+    /// ONE combined screen (GEN-3 ruling, Sol Nov 4).
     @State private var path: [OnboardingStep] = []
 
     private enum LocationChoice {
@@ -76,41 +77,8 @@ struct OnboardingView: View {
             welcomeScreen
                 .navigationDestination(for: OnboardingStep.self) { step in
                     switch step {
-                    case .temperature:
-                        questionScreen(
-                            title: "Temperature",
-                            question: "How do you measure the weather?"
-                        ) {
-                            TemperatureUnitPicker(unit: $temperatureUnit)
-                        }
-                    case .fit:
-                        questionScreen(
-                            title: "Fit Preference",
-                            question: "Whose fit should the outfits follow?"
-                        ) {
-                            // W-22: the fit step shows its three
-                            // choices directly (inline grouped
-                            // list), not behind a collapsed menu —
-                            // see FitPreferenceInlinePicker.
-                            FitPreferenceInlinePicker(preference: $genderPreference)
-                            // WS-9 fix: a debug-style reassurance
-                            // line that used to sit under this picker
-                            // is removed — no design frame carries
-                            // it, Android has no equivalent, and its
-                            // vocabulary is introduced by no frame.
-                            // The picker's own "No preference" label
-                            // states the selection; the step needs
-                            // no gloss. (The removed string is kept
-                            // out of this comment on purpose: a
-                            // source pin asserts its absence.)
-                        }
-                    case .comfort:
-                        questionScreen(
-                            title: "Body Temperature",
-                            question: "Do you get cold easily, or overheat quickly?"
-                        ) {
-                            ComfortLevelControl(comfortLevel: $comfortLevel)
-                        }
+                    case .preferences:
+                        preferencesScreen
                     case .location:
                         locationScreen
                     case .welcome, .firstLook:
@@ -162,7 +130,7 @@ struct OnboardingView: View {
             Spacer()
 
             Button {
-                path.append(.temperature)
+                path.append(.preferences)
             } label: {
                 Text("Get Started")
                     .font(.appButtonLabel)
@@ -205,29 +173,48 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Frames 29–30 · One question per screen
+    // MARK: - Frame 29 · The combined preferences screen
 
-    /// One setup question on its own pushed screen: the question,
-    /// the same native PreferenceControls Settings uses (so the
-    /// two surfaces can never drift apart, and each selection
-    /// settles with the control's own selection haptic, §1.4),
-    /// and one Continue that pushes the next step.
-    private func questionScreen<Content: View>(
-        title: String,
-        question: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
+    /// GEN-3 (Sol, Nov 4 — RULED): the three preference questions
+    /// on ONE screen — "Make it yours". Each question heads the
+    /// SAME native PreferenceControls control Settings uses (so
+    /// the two surfaces can never drift apart, and each selection
+    /// settles with the control's own selection haptic), with the
+    /// shipped wording and options: Fahrenheit / Celsius in full
+    /// words; Men's / Women's / No preference as direct-choice
+    /// rows (W-22/Y-13 — all three, including "No preference");
+    /// the 5-stop body-temperature slider with its Runs Cold /
+    /// Runs Warm end labels. One Continue pushes the location
+    /// step. (Supersedes the one-question-per-screen structure
+    /// for these three questions only.)
+    private var preferencesScreen: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text(title)
-                    .font(.title.weight(.bold))
-                    .foregroundStyle(AppTheme.inkPrimary)
+            VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(OnboardingCopy.preferencesHeadline)
+                        .font(.title.weight(.bold))
+                        .foregroundStyle(AppTheme.inkPrimary)
 
-                Text(question)
-                    .font(.appSecondary)
-                    .foregroundStyle(AppTheme.inkSecondary)
+                    Text(OnboardingCopy.preferencesLede)
+                        .font(.appSecondary)
+                        .foregroundStyle(AppTheme.inkSecondary)
+                }
 
-                content()
+                preferenceGroup(question: OnboardingCopy.preferencesQuestions[0]) {
+                    TemperatureUnitPicker(unit: $temperatureUnit)
+                }
+
+                preferenceGroup(question: OnboardingCopy.preferencesQuestions[1]) {
+                    // W-22: the fit choices show directly
+                    // (inline grouped list), not behind a
+                    // collapsed menu — see
+                    // FitPreferenceInlinePicker.
+                    FitPreferenceInlinePicker(preference: $genderPreference)
+                }
+
+                preferenceGroup(question: OnboardingCopy.preferencesQuestions[2]) {
+                    ComfortLevelControl(comfortLevel: $comfortLevel)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.top, 32)
@@ -248,6 +235,20 @@ struct OnboardingView: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
             .background(AppTheme.background)
+        }
+    }
+
+    /// One question + its control, on the combined screen.
+    private func preferenceGroup<Content: View>(
+        question: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(question)
+                .font(.appSecondary)
+                .foregroundStyle(AppTheme.inkSecondary)
+
+            content()
         }
     }
 

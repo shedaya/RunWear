@@ -5,15 +5,21 @@ import Foundation
 // The design's onboarding order (§9; frames 28–34), as one value
 // the flow and the tests both read:
 //
-//   promise (28) → setup (29–31) → choice (32) → consent (33)
-//   → first look (34)
+//   promise (28) → preferences (29) → location (30) → choice (32)
+//   → consent (33) → first look (34)
 //
-// iOS expression (§1.4): the setup questions advance ONE question
-// per screen with native push transitions — welcome is the stack's
-// root, each question is pushed, Back is the exact reverse. The
-// first-look phase (the fork, consent, capture, and the frame-34
-// moment) is hosted by the onboarding view after the location
-// step completes the setup.
+// iOS expression: native push transitions — welcome is the stack's
+// root, each STEP is pushed, Back is the exact reverse. GEN-3
+// (Sol, Nov 4 — RULED): the three frame-29 preference questions
+// (temperature unit, fit preference, body temperature) are ONE
+// COMBINED SCREEN, superseding the one-question-per-screen
+// structure for these three questions only; the substantive
+// steps (location, fork, consent, photos) stay one step per
+// screen. This also closes the gen-2 carried R-3
+// onboarding-structure divergence in the ruled direction: both
+// platforms now combine. The first-look phase (the fork,
+// consent, capture, and the frame-34 moment) is hosted by the
+// onboarding view after the location step completes the setup.
 
 enum OnboardingStep: Int, CaseIterable, Hashable {
     /// Frame 28 — the standalone Welcome / promise screen. The
@@ -21,12 +27,10 @@ enum OnboardingStep: Int, CaseIterable, Hashable {
     /// promise (A1): the setup form's header lost it, and no later
     /// onboarding screen repeats it.
     case welcome
-    /// Frame 29, question 1 of 3 — temperature unit.
-    case temperature
-    /// Frame 29, question 2 of 3 — fit preference.
-    case fit
-    /// Frame 29, question 3 of 3 — body temperature.
-    case comfort
+    /// Frame 29 — the COMBINED preferences screen (Sol's GEN-3
+    /// ruling): temperature unit, fit preference and body
+    /// temperature together under "Make it yours".
+    case preferences
     /// Frame 30 — location (the system permission prompt, frame
     /// 31's subject, fires from this step's "Use My Location").
     case location
@@ -37,11 +41,6 @@ enum OnboardingStep: Int, CaseIterable, Hashable {
     /// The step this step advances to; nil only past the end.
     var next: OnboardingStep? {
         OnboardingStep(rawValue: rawValue + 1)
-    }
-
-    /// The setup questions, in order — one per screen on iOS.
-    static var setupQuestions: [OnboardingStep] {
-        [.temperature, .fit, .comfort]
     }
 
     /// Every step from the promise screen through the first look,
@@ -108,6 +107,21 @@ enum OnboardingCopy {
     /// so "free to start" misstates the model. This wording is
     /// flagged for Sol's walkthrough verdict — do not vary it.
     static let welcomeFooter = "Free forever · Premium is optional"
+
+    /// GEN-3 (Sol, Nov 4 — RULED): the combined preferences
+    /// screen's headline and lede, verbatim.
+    static let preferencesHeadline = "Make it yours"
+    static let preferencesLede = "Three quick calls. You can change any of them later in Settings."
+
+    /// The three preference questions, in order, in their SHIPPED
+    /// wording — each heads its control on the combined screen
+    /// (they were the one-per-screen steps' question lines before
+    /// the GEN-3 combination; the wording is unchanged).
+    static let preferencesQuestions = [
+        "How do you measure the weather?",
+        "Whose fit should the outfits follow?",
+        "Do you get cold easily, or overheat quickly?",
+    ]
 }
 
 // MARK: - Fork caption composition (W-23)
