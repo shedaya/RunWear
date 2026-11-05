@@ -3,14 +3,19 @@ package com.runwear.app.makeitme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +40,13 @@ import com.runwear.app.ui.theme.RunWearColors
  * subscribed mode, a successful coverage read, and ready < total.
  * When the bank is complete (or counts are unknown) there is no
  * band — never an invented number.
+ *
+ * GEN-3 ROUND 2 (Sol, Nov 4): the band carries the SAME animated
+ * spinner as the generating hero pill — the band represents active
+ * generation and must visibly say so. Same spinner component, same
+ * 12dp / 1.5dp geometry; the tint is the band's own accent (the
+ * pill's PhotoInk is for photo surfaces — on the sheet card it
+ * would be invisible in light theme).
  */
 data class ConvergenceBandContent(
     val heading: String,
@@ -75,12 +87,23 @@ fun ConvergenceBand(
             .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
-        Text(
-            text = content.heading,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = RunWearColors.TextPrimary
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // The generating hero pill's spinner (GEN-3 round 2).
+            CircularProgressIndicator(
+                color = RunWearColors.PineAccent,
+                modifier = Modifier.size(12.dp),
+                strokeWidth = 1.5.dp
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = content.heading,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             text = content.line,

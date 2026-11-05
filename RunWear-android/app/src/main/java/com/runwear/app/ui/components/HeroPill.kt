@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -163,8 +166,8 @@ fun HeroPill(
             )
             if (content.showLock) {
                 Spacer(Modifier.width(5.dp))
-                androidx.compose.material3.Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Filled.Lock,
+                Icon(
+                    imageVector = Icons.Filled.Lock,
                     contentDescription = null,
                     tint = com.runwear.app.ui.theme.PhotoInk,
                     modifier = Modifier.size(11.dp)
