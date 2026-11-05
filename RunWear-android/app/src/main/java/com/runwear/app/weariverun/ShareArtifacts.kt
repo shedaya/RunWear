@@ -4,13 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.layer.GraphicsLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -35,6 +28,13 @@ import java.io.FileOutputStream
  * composed by [ShareCaptionComposer] from the day record and
  * chosen in the Share Studio (stage 2 wires the picker; the
  * payload contract lands here first).
+ *
+ * GEN-6 Wave B (stage 2): the bitmap that arrives here is the
+ * OFFSCREEN EXPORT RENDER ([ShareExportRenderer]) at exact export
+ * pixels, already inspected by [ShareRasterVerifier] — the gen-5
+ * graphics-layer capture of the on-screen preview
+ * (ShareCaptureHandle) is retired from the share path and deleted:
+ * nothing in the app captures a preview for sharing any more.
  */
 
 /** Which designed artifact a collection card shares. */
@@ -68,40 +68,7 @@ object SharePayload {
     )
 }
 
-/**
- * A capture handle over a [GraphicsLayer] that records whatever
- * composable the [recordModifier] wraps. The share sheet wraps the
- * artifact preview in it; tapping Share rasterizes exactly what the
- * user is looking at.
- */
-class ShareCaptureHandle internal constructor(
-    private val layer: GraphicsLayer
-) {
-    fun recordModifier(): Modifier = Modifier.drawWithContent {
-        // Explicit receiver: inside record's DrawScope lambda, the
-        // ContentDrawScope's drawContent must be named through the
-        // captured outer scope or the compiler refuses the call.
-        val contentScope = this
-        layer.record { contentScope.drawContent() }
-        // The content ALSO draws normally for display. The layer is
-        // never drawn into a canvas — it exists only to be read back
-        // by captureBitmap(); drawing a RenderNode into a software
-        // canvas is illegal ("Software rendering doesn't support
-        // drawRenderNode"), while recording into one is not.
-        drawContent()
-    }
-
-    /** Rasterize the recorded content. Call after it has drawn. */
-    suspend fun captureBitmap(): Bitmap = layer.toImageBitmap().asAndroidBitmap()
-}
-
-@Composable
-fun rememberShareCapture(): ShareCaptureHandle {
-    val layer = rememberGraphicsLayer()
-    return remember(layer) { ShareCaptureHandle(layer) }
-}
-
-/** Writing + intent-building for a captured artifact bitmap. */
+/** Writing + intent-building for a rendered artifact bitmap. */
 object ShareArtifacts {
 
     private const val SHARE_DIR = "share-artifacts"
