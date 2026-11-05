@@ -222,7 +222,11 @@ final class Gen3HeroServingTests: XCTestCase {
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5)
         )
-        XCTAssertEqual("Your photo — made for close-by weather", HeroPill.scaffoldLabel)
+        // GEN-3 DESIGN DELTA 2 (Sol's final mocked states): the
+        // scaffold is "Your photo" — NOTHING MORE; the "made for
+        // close-by weather" line is out.
+        XCTAssertEqual("Your photo", HeroPill.scaffoldLabel)
+        XCTAssertEqual("Make It Me", HeroPill.scriptMarkText)
         XCTAssertEqual("Making this you…", HeroPill.makingLabel)
     }
 
@@ -234,8 +238,9 @@ final class Gen3HeroServingTests: XCTestCase {
             HeroPill.resolve(optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5)
         )
-        XCTAssertEqual("1 of 5", HeroPill.freeLookCountLabel(used: 1, allowance: 5))
-        XCTAssertEqual("5 of 5", HeroPill.freeLookCountLabel(used: 7, allowance: 5),
+        // GEN-3 DESIGN DELTA 2: the mock's wording — "N of 5 looks".
+        XCTAssertEqual("1 of 5 looks", HeroPill.freeLookCountLabel(used: 1, allowance: 5))
+        XCTAssertEqual("5 of 5 looks", HeroPill.freeLookCountLabel(used: 7, allowance: 5),
                        "the count clamps to the allowance, like the W-18 meter")
         XCTAssertEqual("Get unlimited", HeroPill.getUnlimitedLabel)
         // W-18 discipline: before the shared counter confirms the
@@ -308,6 +313,16 @@ final class Gen3HeroServingTests: XCTestCase {
         XCTAssertTrue(hero.contains("HeroPill.scaffoldLabel"))
         XCTAssertTrue(hero.contains("HeroPill.getUnlimitedLabel"))
         XCTAssertTrue(hero.contains("HeroPill.premiumLabel"))
+        // GEN-3 DESIGN DELTA 2: the script mark renders in the
+        // pill (states (b)(c)(d) share the one pillScriptMark
+        // view), and the premium state carries the lock glyph —
+        // the crown is out.
+        XCTAssertTrue(hero.contains("pillScriptMark"))
+        XCTAssertTrue(hero.contains("Text(HeroPill.scriptMarkText)"))
+        XCTAssertTrue(hero.contains("\"lock.fill\""),
+                      "the premium pill carries the mock's lock glyph")
+        XCTAssertFalse(hero.contains("crown"),
+                       "the crown I-HERO shipped is superseded by the lock")
     }
 
     func testAllPhotoSurfacesShareTheAlwaysAvailableResolution_sourcePin() throws {

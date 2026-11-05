@@ -1079,8 +1079,8 @@ struct WeatherOutfitView: View {
                 // GEN-3 (WS-A(2)): the making state — and the
                 // scaffold treatment while a banked photo is on
                 // screen — now live ON the photo as the ONE hero
-                // pill (HeroPill: "Making this you…" / "Your photo
-                // — made for close-by weather"). The pre-GEN-3 lines
+                // pill (HeroPill: "Making this you…" / script mark
+                // + "Your photo"). The pre-GEN-3 lines
                 // here (the G1/G2 progress block and the scaffold
                 // badge text) sat in the scroll content under the
                 // hero — census X-8's wrong-place defect — and are

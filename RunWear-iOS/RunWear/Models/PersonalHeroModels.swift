@@ -786,17 +786,24 @@ enum FreeLooksMeter {
 //      cell and none is on screen yet: "Making this you…" over
 //      the fallback photo (which stays up — WS-A(1)).
 //  (b) scaffold — the user's own banked photo for close-by
-//      weather is on screen while the exact look makes:
-//      "Your photo — made for close-by weather". This folds the
-//      PersonalServePolicy scaffold treatment into the pill.
+//      weather is on screen while the exact look makes: the
+//      Make It Me script mark + "Your photo" — NOTHING MORE
+//      (GEN-3 DESIGN DELTA 2, Sol's Nov 4 mockup review: the
+//      "made for close-by weather" line is OUT, found confusing).
+//      This folds the PersonalServePolicy scaffold treatment
+//      into the pill.
 //  (c) freeLook — the exact personal photo IS displayed, free
-//      tier: the look count from the ONE shared counter
-//      (FreeLooksMeter's source) + "Get unlimited", which opens
-//      the Premium paywall. Like the W-16/W-18 meter, the count
+//      tier: the script mark + the look count from the ONE
+//      shared counter (FreeLooksMeter's source), in the mock's
+//      "N of 5 looks" form, + "Get unlimited", which opens the
+//      Premium paywall. Like the W-16/W-18 meter, the count
 //      waits for the counter to confirm the delivery (used > 0)
 //      rather than printing an unverified number.
 //  (d) premium — the exact personal photo is displayed and the
-//      user is subscribed: Premium status.
+//      user is subscribed: the script mark + "Premium" + a lock
+//      glyph (the mock's device — NOT the crown I-HERO shipped).
+// States (b)(c)(d) carry the Make It Me script mark; state (a)
+// is unchanged (approved as excellent).
 // A failed look renders NO pill: the standard photo serves
 // quietly and the failure line + retry live in the personal
 // section, as before. Not opted in renders no pill.
@@ -810,14 +817,20 @@ enum HeroPillState: Equatable {
 
 enum HeroPill {
     static let makingLabel = "Making this you…"
-    static let scaffoldLabel = "Your photo — made for close-by weather"
+    /// GEN-3 DESIGN DELTA 2: "Your photo" — nothing more.
+    static let scaffoldLabel = "Your photo"
     static let premiumLabel = "Premium"
     static let getUnlimitedLabel = "Get unlimited"
+    /// The Make It Me script mark the pill carries in states
+    /// (b)(c)(d) — rendered in Great Vibes wherever the pill is
+    /// drawn (GEN-3 DESIGN DELTA 2).
+    static let scriptMarkText = "Make It Me"
 
-    /// The count half of the free-look pill, in the deck's "1 of 5"
-    /// form, clamped to the allowance like the W-18 meter.
+    /// The count half of the free-look pill, in the approved
+    /// mock's "1 of 5 looks" form, clamped to the allowance like
+    /// the W-18 meter.
     static func freeLookCountLabel(used: Int, allowance: Int) -> String {
-        "\(min(used, allowance)) of \(allowance)"
+        "\(min(used, allowance)) of \(allowance) looks"
     }
 
     static func resolve(

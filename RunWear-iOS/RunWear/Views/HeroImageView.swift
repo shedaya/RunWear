@@ -221,6 +221,15 @@ struct HeroImageView: View {
     /// chrome — this is chrome), footnote type, a spinner only in
     /// the making state. The freeLook state is the only tappable
     /// one: its "Get unlimited" half opens the Premium paywall.
+    /// GEN-3 DESIGN DELTA 2: states (b)(c)(d) lead with the Make
+    /// It Me script mark; (d) trails a lock glyph.
+    private var pillScriptMark: some View {
+        Text(HeroPill.scriptMarkText)
+            .font(.greatVibes(size: 15))
+            .foregroundColor(.white)
+            .lineLimit(1)
+    }
+
     @ViewBuilder
     private var heroPill: some View {
         switch pillState {
@@ -239,16 +248,20 @@ struct HeroImageView: View {
             .glassPill()
             .accessibilityLabel(HeroPill.makingLabel)
         case .scaffold:
-            Text(HeroPill.scaffoldLabel)
-                .font(.appFootnote.weight(.semibold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .glassPill()
-                .accessibilityLabel(HeroPill.scaffoldLabel)
+            HStack(spacing: 6) {
+                pillScriptMark
+                Text(HeroPill.scaffoldLabel)
+                    .font(.appFootnote.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .glassPill()
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.scaffoldLabel)")
         case .freeLook(let used, let allowance):
             Button(action: onPillGetUnlimited) {
                 HStack(spacing: 6) {
+                    pillScriptMark
                     Text(HeroPill.freeLookCountLabel(used: used, allowance: allowance))
                         .font(.appFootnote.weight(.semibold))
                         .foregroundColor(.white)
@@ -264,19 +277,22 @@ struct HeroImageView: View {
                 .glassPill()
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(HeroPill.freeLookCountLabel(used: used, allowance: allowance)) free looks used. \(HeroPill.getUnlimitedLabel)")
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.freeLookCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
         case .premium:
             HStack(spacing: 6) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
+                pillScriptMark
                 Text(HeroPill.premiumLabel)
                     .font(.appFootnote.weight(.semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
+                // GEN-3 DESIGN DELTA 2: the mock's device is the
+                // lock, not the crown I-HERO shipped.
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
             }
             .glassPill()
-            .accessibilityLabel(HeroPill.premiumLabel)
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.premiumLabel)")
         }
     }
 
