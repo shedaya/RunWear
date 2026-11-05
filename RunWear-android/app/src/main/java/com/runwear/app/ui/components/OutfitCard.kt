@@ -301,9 +301,12 @@ fun OutfitSection(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(10.dp) // 10dp gap per PWA
     ) {
-        // Section header
+        // Section header — GEN-6 WAVE C (RW-54): the settled
+        // string lives in ONE place (OutfitHeaderCopy) so the
+        // rendered header and any other header can never diverge
+        // again; this composable's copy was the dead duplicate.
         Text(
-            text = "${items.size} items for your run",
+            text = OutfitHeaderCopy.header(items.size),
             style = MaterialTheme.typography.titleMedium,
             color = RunWearColors.TextSecondary,
             modifier = Modifier.padding(vertical = 12.dp)
@@ -442,3 +445,11 @@ fun TipsSection(
         }
     }
 }
+
+/** GEN-6 WAVE C (RW-54): the ONE outfit-header wording —
+ * "N items for your run" (design-spec §5). Every rendered header
+ * resolves through here. */
+object OutfitHeaderCopy {
+    fun header(itemCount: Int): String = "$itemCount items for your run"
+}
+

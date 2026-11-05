@@ -58,11 +58,26 @@ class TimePickerDraftTest {
 
     @Test
     fun `NOW state on a future day does NOT start on the now hour`() {
+        // GEN-6 WAVE C (RW-53(iii) / FA-32 supersedes the carried-
+        // over-hour pin): a future day opens on its FIRST forecast
+        // hour — with the full set that is 0, never the now hour
+        // and never the hour carried over from another day.
         val s = TimePickerDraftPolicy.open(
             selectedHour = 9, isNowSelected = true, isToday = false,
             nowHour = null, selectableHours = allHours
         )
-        assertEquals(9, s.draftHour)
+        assertEquals(0, s.draftHour)
+    }
+
+    @Test
+    fun `future day opens on its first forecast hour - FA-32`() {
+        val s = TimePickerDraftPolicy.open(
+            selectedHour = 19, isNowSelected = false, isToday = false,
+            nowHour = null, selectableHours = (6..22).toSet()
+        )
+        assertEquals(6, s.draftHour)
+        // Cancel still restores the pre-open selection exactly.
+        assertEquals(19, s.originalHour)
     }
 
     @Test

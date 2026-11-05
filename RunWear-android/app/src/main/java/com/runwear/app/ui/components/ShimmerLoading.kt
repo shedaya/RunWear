@@ -172,6 +172,16 @@ fun HeroShimmerPlaceholder(
 }
 
 /**
+ * GEN-6 WAVE C (RW-60): the settled home-loading line (final-design
+ * frame 46). It appears on the home loading surface alongside the
+ * phase status line — the gen-5 skeleton rotated location/forecast
+ * captions and the settled line existed nowhere in the module.
+ */
+object HomeLoadingCopy {
+    const val FIRST_RECOMMENDATION: String = "Getting your first recommendation…"
+}
+
+/**
  * The status line for the no-content startup wait, derived from what the
  * load is actually blocked on. [locationName] is the state default
  * "Getting location..." until a fix is adopted and named.
@@ -195,36 +205,13 @@ fun BrandedLoadingScreen(
     statusText: String,
     modifier: Modifier = Modifier
 ) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(RunWearColors.Background),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Wordmark: the RunWear script (RW-26).
-            Text(
-                text = "RunWear",
-                fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-                fontSize = 44.sp,
-                color = RunWearColors.TextPrimary
-            )
-
-            Spacer(Modifier.height(28.dp))
-
-            CircularProgressIndicator(color = RunWearColors.PineAccent)
-
-            Spacer(Modifier.height(16.dp))
-
-            Text(
-                text = statusText,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = RunWearColors.TextSecondary,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    // GEN-6 WAVE C (DA-24): a loading placeholder must be shaped
+    // like the screen it precedes. The gen-5 branded state was a
+    // logo alone on a blank ground (~1 s after the permission
+    // grant read as a dead screen); it now renders the home
+    // skeleton — photo block, sheet lines, outfit rows — with the
+    // caller's status line.
+    HomeSkeletonScreen(statusText = statusText, modifier = modifier)
 }
 
 /**
@@ -336,6 +323,16 @@ fun HomeSkeletonScreen(
         }
         OutfitListShimmer(itemCount = 3, modifier = Modifier.padding(top = 8.dp))
         Spacer(Modifier.height(16.dp))
+        // RW-60: the settled loading line (frame 46).
+        Text(
+            text = HomeLoadingCopy.FIRST_RECOMMENDATION,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = RunWearColors.TextPrimary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(Modifier.height(4.dp))
         Text(
             text = statusText,
             fontSize = 13.sp,
