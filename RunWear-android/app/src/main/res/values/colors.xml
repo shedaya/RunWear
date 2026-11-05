@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- GEN-5 (RW-29 cream map): the launcher icon sits on the
-         pine of record, replacing the retired fusion teal. -->
-    <color name="ic_launcher_background">#FF175E4C</color>
+    <!-- GEN-5 Addendum 9 (Sol's icon pick, Nov 5, 2026): the
+         launcher icon is Candidate C — the fusion-ring mark on
+         the cream ground, shirt fill in pine #175E4C — so the
+         adaptive background color resource is the cream ground
+         itself, per the staged integration note. -->
+    <color name="ic_launcher_background">#FFF5F1E8</color>
     <!-- GEN-5 (RW-29 cream map): the splash ground is the
          design's cream ground in the light appearance (the
          values-night copy carries Warm Charcoal). The gen-4

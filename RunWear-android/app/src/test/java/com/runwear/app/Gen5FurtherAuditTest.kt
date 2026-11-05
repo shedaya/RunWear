@@ -226,7 +226,11 @@ class Gen5FurtherAuditTest {
             "app/src/main/res/values/colors.xml"
         ).map { File(it) }.first { it.exists() }.readText()
         assertTrue(colors.contains("#FFF5F1E8"))
-        assertTrue(colors.contains("#FF175E4C"))
+        // Addendum 9 (Candidate C icon): the launcher background
+        // color resource is the cream ground itself; the pine
+        // #FF175E4C moved out of this file into the icon's shirt
+        // fill, so it is no longer asserted here.
+        assertTrue(colors.contains("ic_launcher_background\">#FFF5F1E8"))
         assertFalse(colors.contains("0A0A0A"))
         val widgetBg = listOf(
             "src/main/res/drawable/widget_background.xml",
