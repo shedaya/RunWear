@@ -82,6 +82,24 @@ class WearIveRunStore(private val context: Context) {
                     put("raining", e.isRaining)
                     put("items", JSONArray(e.items))
                     e.heroRef?.let { put("heroRef", it) }
+                    // GEN-6 Wave B (RW-31): the share fields —
+                    // written only when present, so a legacy
+                    // entry's stored shape is unchanged.
+                    e.actualF?.let { put("actualF", it) }
+                    e.windMph?.let { put("windMph", it) }
+                    e.dayLowF?.let { put("dayLowF", it) }
+                    e.dayHighF?.let { put("dayHighF", it) }
+                    if (e.itemKeys.isNotEmpty()) {
+                        put("itemKeys", JSONArray(e.itemKeys))
+                    }
+                    e.faceAnchor?.let { anchor ->
+                        put("faceAnchor", JSONObject().apply {
+                            put("cx", anchor.centerX)
+                            put("cy", anchor.centerY)
+                            put("w", anchor.width)
+                            put("h", anchor.height)
+                        })
+                    }
                 })
             }
             return array.toString()
@@ -120,7 +138,42 @@ class WearIveRunStore(private val context: Context) {
                         isSnowing = o.optBoolean("snowing"),
                         isRaining = o.optBoolean("raining"),
                         items = (0 until items.length()).map { items.optString(it) },
-                        heroRef = o.optString("heroRef").takeIf { it.isNotBlank() }
+                        heroRef = o.optString("heroRef").takeIf { it.isNotBlank() },
+                        // GEN-6 Wave B (RW-31): the share fields
+                        // decode null-safely — a legacy record
+                        // (keys absent) decodes with nulls /
+                        // empty, the rest of the record intact.
+                        actualF = if (o.has("actualF") && !o.isNull("actualF")) {
+                            o.optDouble("actualF")
+                        } else {
+                            null
+                        },
+                        windMph = if (o.has("windMph") && !o.isNull("windMph")) {
+                            o.optDouble("windMph")
+                        } else {
+                            null
+                        },
+                        dayLowF = if (o.has("dayLowF") && !o.isNull("dayLowF")) {
+                            o.optDouble("dayLowF")
+                        } else {
+                            null
+                        },
+                        dayHighF = if (o.has("dayHighF") && !o.isNull("dayHighF")) {
+                            o.optDouble("dayHighF")
+                        } else {
+                            null
+                        },
+                        itemKeys = o.optJSONArray("itemKeys")?.let { keys ->
+                            (0 until keys.length()).map { keys.optString(it) }
+                        } ?: emptyList(),
+                        faceAnchor = o.optJSONObject("faceAnchor")?.let { fa ->
+                            ShareFaceAnchor(
+                                centerX = fa.optDouble("cx"),
+                                centerY = fa.optDouble("cy"),
+                                width = fa.optDouble("w"),
+                                height = fa.optDouble("h")
+                            )
+                        }
                     )
                 }.getOrNull()
             }

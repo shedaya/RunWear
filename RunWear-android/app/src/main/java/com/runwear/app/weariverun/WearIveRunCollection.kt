@@ -73,7 +73,37 @@ data class WearIveRunDayEntry(
      * Wear card re-solves with a confirmed hour change, and the
      * narration names this reading when the time is what changed.
      * Entries recorded before GEN-5 carry null (Now). */
-    val momentLabel: String? = null
+    val momentLabel: String? = null,
+    /** GEN-6 Wave B (RW-31): the day's actual temperature,
+     * canonical °F — the share caption's thermometer number and
+     * the poster's Tier 4 "Actual" figure. Null on entries
+     * recorded before Wave B; the share layer falls back to
+     * [feelsLikeF] (the iOS lane's null-safe rule). */
+    val actualF: Double? = null,
+    /** GEN-6 Wave B (RW-31): wind at settle time, canonical mph
+     * (the poster's Tier 4 micro-line). Null on legacy entries. */
+    val windMph: Double? = null,
+    /** GEN-6 Wave B (RW-31): the day's low, canonical °F — the
+     * min of the day's hourly forecast at settle time. Null
+     * when the forecast carried no rows for the day (never
+     * fabricated); the share layer derives its fallback from
+     * the day's own actual/feels-like. */
+    val dayLowF: Double? = null,
+    /** GEN-6 Wave B (RW-31): the day's high, canonical °F —
+     * the max of the day's hourly forecast at settle time.
+     * Null under the same rule as [dayLowF]. */
+    val dayHighF: Double? = null,
+    /** GEN-6 Wave B (RW-31): the day's garment keys in wearing
+     * order (the engine items' keys, parallel to [items]) —
+     * the Kit Card grid's per-tile identity. Empty on legacy
+     * entries, which recorded names only. */
+    val itemKeys: List<String> = emptyList(),
+    /** GEN-6 Wave B (RW-31): the hero photograph's face anchor
+     * (§4.3), stored null-safely. Always null today — no
+     * generation or pool metadata source populates it yet (the
+     * same honest gap as iOS); the share path resolves stored →
+     * detection → default at render time. */
+    val faceAnchor: ShareFaceAnchor? = null
 )
 
 /** The collection's weather filter (design §1). */
