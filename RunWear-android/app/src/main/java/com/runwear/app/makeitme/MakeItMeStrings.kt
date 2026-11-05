@@ -92,16 +92,13 @@ object MakeItMeStrings {
     // Sol's Nov 4 wording for the on-photo generating state;
     // GET_UNLIMITED is the free tier's paywall door.
     // GEN-3 DESIGN DELTA (Sol's mockup review, Nov 4 — FINAL mocked
-    // states, superseding the A-HERO wording): states (b)(c)(d)
-    // carry the Make It Me script mark; (b) SCAFFOLD is the script
-    // mark + "Your photo" — NOTHING MORE (the "made for close-by
-    // weather" line is OUT, Sol found it confusing;
-    // ScaffoldRenderPolicy.homeBadge carries the same shortened
-    // line, this constant is the pill's fallback if that policy
-    // ever returns null); (c) the free-tier count reads
-    // "N of 5 looks" per the approved mock.
+    // states, superseding the A-HERO wording): the pill states
+    // carry the Make It Me script mark; the free-tier count reads
+    // "N of 5 looks" per the approved mock. GEN-6 (RW-34): the
+    // scaffold "Your photo" label is REMOVED — the owner ruled
+    // Nov 5, 2026 it is not an approved pill; a scaffold serve is
+    // silent, so no scaffold pill constant remains.
     const val HERO_PILL_MAKING = "Making this you…"
-    const val HERO_PILL_SCAFFOLD = "Your photo"
     const val HERO_PILL_PREMIUM = "Premium"
     const val HERO_PILL_GET_UNLIMITED = "Get unlimited"
     // GEN-5 C-4 AMENDED (Sol, Nov 5, 2026 ~06:28 CST): the FREE-tier

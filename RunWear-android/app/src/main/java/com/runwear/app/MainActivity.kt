@@ -308,7 +308,7 @@ class MainActivity : ComponentActivity() {
                         uiState.outfit != null &&
                         !makeItMeState.forkDecided &&
                         com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
-                    if (forkDue && !showForkUpload) {
+                    if (com.runwear.app.makeitme.ForkHostPolicy.showForkScreen(forkDue, showForkUpload)) {
                         com.runwear.app.makeitme.MakeItMeForkScreen(
                             // GEN-3 A-HERO (WS-B): the fork band is fed
                             // by the scene's one photo resolution — the
@@ -331,7 +331,20 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-                    if (forkDue && showForkUpload) {
+                    // GEN-6 WAVE A (DA-03): the upload flow is
+                    // hosted whenever it is OPEN — NOT gated on
+                    // forkDue. Gen-5's `forkDue && showForkUpload`
+                    // unmounted the flow mid-submit: submitting
+                    // flips forkDecided (PhotoSubmissionDecided),
+                    // forkDue went false, the composition died, the
+                    // SAVED beat was cancelled, onFinished never
+                    // fired — and the first-look moment below was
+                    // never raised. See ForkHostPolicy.
+                    if (com.runwear.app.makeitme.ForkHostPolicy.showUploadFlow(
+                            showForkUpload,
+                            com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+                        )
+                    ) {
                         com.runwear.app.makeitme.MakeItMeUploadFlow(
                             viewModel = makeItMeViewModel,
                             gender = uiState.genderPreference.name,
@@ -383,7 +396,12 @@ class MainActivity : ComponentActivity() {
                             },
                             // GEN-5 (RW-29 FA-6): the count line
                             // composes from the shared meter.
-                            freeLooksUsed = makeItMeState.freeGenerationsUsed
+                            freeLooksUsed = makeItMeState.freeGenerationsUsed,
+                            // GEN-6 WAVE A (DA-12 + DA-03): the tier
+                            // for the policy-resolved MAKING pill, and
+                            // the FAILED phase's same-cell retry.
+                            mode = makeItMeState.mode,
+                            onRetry = { viewModel.retryPersonalLook() }
                         )
                     }
                     if (showFirstLookPaywall) {

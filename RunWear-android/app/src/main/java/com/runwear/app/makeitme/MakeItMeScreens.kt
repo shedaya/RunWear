@@ -2420,7 +2420,21 @@ fun FirstLookMoment(
      * this moment — the READY count line composes from it rather
      * than asserting "look 1 of 5" for every user.
      */
-    freeLooksUsed: Int = 1
+    freeLooksUsed: Int = 1,
+    /**
+     * GEN-6 WAVE A (DA-12): the user's tier — the MAKING pill is
+     * resolved through HeroPillPolicy like every other hero
+     * surface, and the policy needs the tier (the C-4 green line
+     * rides the FREE generating pill only).
+     */
+    mode: MakeItMeMode = MakeItMeMode.FREE,
+    /**
+     * GEN-6 WAVE A (DA-03 / FA-12 residual): the FAILED phase's
+     * same-cell "Try again" — wired by the host to the main view
+     * model's retry of the cell in view. The failed surface
+     * previously had no tap target of its own.
+     */
+    onRetry: () -> Unit = {}
 ) {
     // Dismissing the ask IS continuing (design §9) — Back takes the
     // primary door, never traps the user at onboarding's end.
@@ -2438,10 +2452,19 @@ fun FirstLookMoment(
     // photo that has not landed.
     var revealed by remember { mutableStateOf(false) }
     var bandSettled by remember { mutableStateOf(false) }
+    // GEN-6 WAVE A (DA-03): the reveal is gated on the photo being
+    // actually LOADED, not merely on its URL being the displayed
+    // one — the iOS choreography's rule (displayed AND loaded →
+    // 0.4 s crossfade, one haptic, Premium band at 0.52 s). Gen-5
+    // keyed readiness to URL equality alone, so the haptic and band
+    // could fire over a photo that had not painted.
+    var photoLoaded by remember { mutableStateOf(false) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    LaunchedEffect(state) {
-        revealed = true
-        if (state == FirstLookState.READY) {
+    LaunchedEffect(state, photoLoaded) {
+        if (FirstLookRevealPolicy.shouldReveal(state, photoLoaded, photoUrl != null)) {
+            revealed = true
+        }
+        if (FirstLookRevealPolicy.shouldRunSuccessSequence(state, photoLoaded)) {
             delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
             haptic.performHapticFeedback(
                 // §1.7's first-look confirm-class effect, named by the
@@ -2514,6 +2537,12 @@ fun FirstLookMoment(
                     // other hero surface — the gen-4 centre anchor
                     // cropped the head on this surface alone.
                     alignment = Alignment.TopCenter,
+                    // GEN-6 (DA-03): success AND error both settle
+                    // the load — the reveal choreography keys on the
+                    // photo having landed (or failed honestly),
+                    // never on URL bookkeeping alone.
+                    onSuccess = { photoLoaded = true },
+                    onError = { photoLoaded = true },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -2524,16 +2553,26 @@ fun FirstLookMoment(
             // WS-A(1)). The look/place requested is the one in view:
             // this moment only exists for it.
             if (state == FirstLookState.MAKING) {
-                com.runwear.app.ui.components.HeroPill(
-                    content = com.runwear.app.ui.components.HeroPillContent(
-                        kind = com.runwear.app.ui.components.HeroPillKind.MAKING,
-                        text = MakeItMeStrings.HERO_PILL_MAKING,
-                        showSpinner = true
-                    ),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(start = 14.dp, bottom = 12.dp)
+                // GEN-6 WAVE A (DA-12): resolved through the ONE
+                // HeroPillPolicy, exactly like the home pill — the
+                // gen-5 hand-built pill here dropped the script mark
+                // and the C-4 green line the policy guarantees.
+                val makingPill = com.runwear.app.ui.components.HeroPillPolicy.resolve(
+                    lookStatus = PersonalLookStatus.Making,
+                    serveKind = PersonalServeKind.EXACT,
+                    heroIsPersonal = false,
+                    mode = mode,
+                    freeGenerationsUsed = freeLooksUsed
                 )
+                if (makingPill != null) {
+                    com.runwear.app.ui.components.HeroPill(
+                        content = makingPill,
+                        onAction = onSeePremium,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 14.dp, bottom = 12.dp)
+                    )
+                }
             }
         }
 
@@ -2593,6 +2632,25 @@ fun FirstLookMoment(
                         lineHeight = 19.sp,
                         color = RunWearColors.TextSecondary
                     )
+                    // GEN-6 WAVE A (DA-03, closing the FA-12
+                    // residual): the failed phase carries its own
+                    // same-cell "Try again" — the surface previously
+                    // told the user a retry existed in Settings but
+                    // offered no tap target of its own.
+                    Spacer(Modifier.height(14.dp))
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onRetry,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            MakeItMeStrings.G6_RETRY,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
+                    }
                 }
             }
 

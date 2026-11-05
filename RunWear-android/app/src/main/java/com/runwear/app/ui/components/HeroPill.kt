@@ -24,7 +24,6 @@ import com.runwear.app.makeitme.MakeItMeMode
 import com.runwear.app.makeitme.MakeItMeStrings
 import com.runwear.app.makeitme.PersonalLookStatus
 import com.runwear.app.makeitme.PersonalServeKind
-import com.runwear.app.makeitme.ScaffoldRenderPolicy
 
 /**
  * GEN-3 A-HERO (WS-A(2), 2026-11-04): THE hero pill — one component,
@@ -39,21 +38,23 @@ import com.runwear.app.makeitme.ScaffoldRenderPolicy
  *      (WS-A(1) guarantees a photo is under it wherever one is
  *      servable). UNCHANGED by the Nov 4 design delta (approved as
  *      excellent).
- *  (b) SCAFFOLD — the user's own banked photo served for close-by
- *      weather: the Make It Me script mark + "Your photo" — NOTHING
- *      MORE (GEN-3 DESIGN DELTA, Sol's Nov 4 mockup review: the
- *      "made for close-by weather" line is OUT, found confusing).
+ *  (b) SCAFFOLD — GEN-6 (RW-34): SILENT. The owner ruled Nov 5,
+ *      2026 that the shipped "Your photo" scaffold label is not an
+ *      approved pill; a banked photo standing in carries no pill.
  *  (c) EXACT_FREE — the exact personal photo is displayed, free
  *      tier: the script mark + the look count ("1 of 5 looks") plus
  *      a "Get unlimited" action that opens the Premium paywall.
  *  (d) PREMIUM — the exact personal photo is displayed, subscribed:
  *      the script mark + "Premium" + a lock glyph.
+ *  (e) EXHAUSTED — free tier, all 5 looks used: the script mark +
+ *      the honest used-up count + "Get unlimited" as the pill's
+ *      main (green) message; the whole pill taps to Premium.
  *
  * A stock serve carries NO pill (the design's §9 silence stands),
  * and neither does a failed look (its durable line + retry live in
  * the sheet, unchanged).
  */
-enum class HeroPillKind { MAKING, SCAFFOLD, EXACT_FREE, PREMIUM, EXHAUSTED }
+enum class HeroPillKind { MAKING, EXACT_FREE, PREMIUM, EXHAUSTED }
 
 data class HeroPillContent(
     val kind: HeroPillKind,
@@ -123,13 +124,12 @@ object HeroPillPolicy {
         }
         if (!heroIsPersonal) return null
         return when (serveKind) {
-            // (b) Scaffold serve: script mark + "Your photo", nothing more.
-            PersonalServeKind.SCAFFOLD -> HeroPillContent(
-                kind = HeroPillKind.SCAFFOLD,
-                text = ScaffoldRenderPolicy.homeBadge(PersonalServeKind.SCAFFOLD)
-                    ?: MakeItMeStrings.HERO_PILL_SCAFFOLD,
-                showScriptMark = true
-            )
+            // (b) GEN-6 WAVE A (RW-34): scaffold serve is SILENT.
+            // The owner ruled Nov 5, 2026 that the shipped "Your
+            // photo" label is NOT an approved pill — a banked photo
+            // standing in carries no claim label at all. (This
+            // supersedes design-spec §3.6's older scaffold text.)
+            PersonalServeKind.SCAFFOLD -> null
             PersonalServeKind.EXACT -> when (mode) {
                 // (d) Subscribed: script mark + Premium status + lock glyph.
                 MakeItMeMode.SUBSCRIBED -> HeroPillContent(
@@ -226,7 +226,14 @@ fun HeroPill(
                     text = content.actionText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = com.runwear.app.ui.theme.PhotoInk,
+                    // GEN-6 (RW-34): on the EXHAUSTED pill the
+                    // upsell is the MAIN message — it takes the
+                    // green accent; elsewhere the action stays ink.
+                    color = if (content.kind == HeroPillKind.EXHAUSTED) {
+                        com.runwear.app.ui.theme.PineAccentOnDark
+                    } else {
+                        com.runwear.app.ui.theme.PhotoInk
+                    },
                     modifier = Modifier.clickable { onAction() }
                 )
             }

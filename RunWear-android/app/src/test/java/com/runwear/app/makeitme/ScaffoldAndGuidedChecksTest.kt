@@ -15,7 +15,10 @@ class ScaffoldRenderPolicyTest {
             PersonalLookStatus.Making, serveKindRaw = "scaffold", found = true
         )
         assertEquals(PersonalServeKind.SCAFFOLD, kind)
-        assertEquals("Your photo", ScaffoldRenderPolicy.homeBadge(kind))
+        // GEN-6 (RW-34): NO badge — the owner ruled Nov 5, 2026
+        // the "Your photo" scaffold label is not an approved pill;
+        // a scaffold serve is silent on every surface.
+        assertNull(ScaffoldRenderPolicy.homeBadge(kind))
         val exact = ScaffoldRenderPolicy.kindFor(
             PersonalLookStatus.Ready, serveKindRaw = "exact", found = true
         )

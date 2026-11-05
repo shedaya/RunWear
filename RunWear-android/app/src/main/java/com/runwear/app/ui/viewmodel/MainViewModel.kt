@@ -421,6 +421,17 @@ class MainViewModel @Inject constructor(
      */
     private val preferencesApplied = kotlinx.coroutines.CompletableDeferred<Unit>()
 
+    /**
+     * GEN-6 WAVE A (DA-07): completes when the init launch has read
+     * the persisted saved location (and restored it, when one
+     * exists). The Activity's permission/GPS entry point awaits
+     * this: gen-5 raced it — MainActivity called
+     * checkLocationPermission() from onCreate while the restore was
+     * still in flight, currentLat was still null, and the GPS path
+     * adopted the phone's fix over the place the user had picked.
+     */
+    private val savedLocationChecked = kotlinx.coroutines.CompletableDeferred<Boolean>()
+
     // ── Feedback + analytics (spec) ─────────────────────────────────────────
     // Everything here is inert unless the user opts in to analytics; feedback
     // sends only on the user's own tap. See the feedback package.
@@ -500,6 +511,11 @@ class MainViewModel @Inject constructor(
         val dLat = lastGood.latitude - lat
         val dLon = lastGood.longitude - lon
         if (dLat * dLat + dLon * dLon > SEED_COORD_TOLERANCE_DEG * SEED_COORD_TOLERANCE_DEG) return
+        // GEN-6 WAVE A (DA-07): resolve the banked own photo for the
+        // seeded cell BEFORE the first paint, so the seed can serve
+        // it as the FIRST hero state. Best-effort and bounded by the
+        // repository's own read; any failure simply seeds stock.
+        val pendingSeedPersonalHit = resolveSeedPersonalHit(lastGood)
         _uiState.update { state ->
             if (state.outfit != null) state else {
                 val seededHero = com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
@@ -516,14 +532,54 @@ class MainViewModel @Inject constructor(
                     outfit = lastGood.outfit,
                     locationName = seededPlace.display,
                     simplePlace = seededPlace,
-                    heroImageUrl = seededHero.imageUrl,
+                    // GEN-6 WAVE A (DA-07): the seed's hero is the
+                    // banked own photo when one was resolved for
+                    // this cell before the seed painted (see
+                    // pendingSeedPersonalHit) — never stock-first
+                    // when the user's own photo exists.
+                    heroImageUrl = ColdStartPolicy.firstHeroUrl(
+                        pendingSeedPersonalHit?.imageUrl, seededHero.imageUrl
+                    ),
                     heroFallbackUrl = seededHero.imageUrl,
-                    heroIsScaffold = seededHero.isScaffold,
+                    heroIsPersonal = ColdStartPolicy.firstHeroIsPersonal(
+                        pendingSeedPersonalHit?.imageUrl
+                    ),
+                    heroServeKind = pendingSeedPersonalHit?.serveKind
+                        ?: state.heroServeKind,
+                    personalHeroImageUrl = pendingSeedPersonalHit?.imageUrl
+                        ?: state.personalHeroImageUrl,
+                    personalHeroId = pendingSeedPersonalHit?.heroId
+                        ?: state.personalHeroId,
+                    heroIsScaffold = pendingSeedPersonalHit?.let {
+                        it.serveKind == com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD
+                    } ?: seededHero.isScaffold,
                     heroImageRowId = null,
                     heroCombinationId = seededHero.combinationId
                 )
             }
         }
+    }
+
+    /**
+     * GEN-6 WAVE A (DA-07): the banked own photo for the last-good
+     * snapshot's cell, resolved before the seed paints. Engages
+     * only when the personal layer is on for this user (server
+     * profile opted in); a miss or any failure returns null and the
+     * seed falls back to stock exactly as before.
+     */
+    private suspend fun resolveSeedPersonalHit(
+        lastGood: com.runwear.app.widget.WidgetLastGood
+    ): PersonalHeroRepository.PersonalHeroHit? {
+        if (!com.runwear.app.makeitme.MakeItMeAvailability.ENABLED) return null
+        // Engage when the mirror says on — OR when it has not
+        // synced yet (cold start races the profile read; the
+        // lookup itself is server truth and simply misses for a
+        // user who never opted in).
+        val mirror = personalHeroRepository.state.value
+        if (mirror.synced && !mirror.personalizationOn) return null
+        val (cell, _) = personalCombinationFor(lastGood.weather, lastGood.outfit)
+        return runCatching { personalHeroRepository.cellLookFor(cell) }
+            .getOrNull()?.hit
     }
 
     // Stale-location guard (F1): a saved GPS fix must not be reused forever.
@@ -602,6 +658,9 @@ class MainViewModel @Inject constructor(
                 resolveLocationZone()
                 fetchWeather()
             }
+            if (!savedLocationChecked.isCompleted) {
+                savedLocationChecked.complete(savedLocation != null)
+            }
             // If no saved location, MainActivity will call checkLocationPermission()
         }
 
@@ -653,6 +712,19 @@ class MainViewModel @Inject constructor(
     }
     
     fun checkLocationPermission() {
+        // GEN-6 WAVE A (DA-07): never race the saved-place restore.
+        // The Activity calls this from onCreate, typically BEFORE
+        // the init launch has read the persisted location — gen-5
+        // then saw currentLat == null and ran the GPS path, which
+        // adopted (and persisted) the phone's fix over the user's
+        // picked place. Wait for the restore verdict first.
+        if (!savedLocationChecked.isCompleted) {
+            viewModelScope.launch {
+                savedLocationChecked.await()
+                checkLocationPermission()
+            }
+            return
+        }
         // Skip if we already have a location (manual or saved GPS)
         if (currentLat != null && currentLon != null) {
             return
@@ -735,6 +807,20 @@ class MainViewModel @Inject constructor(
                     val newLon = result.location.longitude
                     val movedKm = distanceKm(currentLat!!, currentLon!!, newLat, newLon)
                     if (force || movedKm >= STALE_LOCATION_KM) {
+                        // GEN-6 WAVE A (DA-07): the persisted record
+                        // outranks the in-memory source — if the
+                        // saved place is a manual pick, this adoption
+                        // (and its saveGPSLocation overwrite of the
+                        // shared slot) must not happen.
+                        val persisted = runCatching {
+                            preferencesRepository.getSavedLocation()
+                        }.getOrNull()
+                        if (!ColdStartPolicy.gpsAdoptionAllowed(
+                                persisted?.source, _uiState.value.locationSource
+                            )
+                        ) {
+                            return@launch
+                        }
                         // User moved significantly: adopt the fresh fix.
                         currentLat = newLat
                         currentLon = newLon
@@ -866,6 +952,33 @@ class MainViewModel @Inject constructor(
      * record, which carries it — lands whenever the geocode returns.
      */
     private suspend fun adoptGpsFix(lat: Double, lon: Double) {
+        // GEN-6 WAVE A (DA-07): a persisted MANUAL pick is
+        // authoritative — GPS adoption is refused while one exists,
+        // no matter which entry point produced the fix (cold-start
+        // fast path, fresh fix, explicit fetch). Gen-5 let any GPS
+        // save overwrite the single shared saved-location slot, so
+        // the picked place (Miami) was gone by the next launch.
+        val saved = runCatching { preferencesRepository.getSavedLocation() }.getOrNull()
+        if (!ColdStartPolicy.gpsAdoptionAllowed(saved?.source, _uiState.value.locationSource)) {
+            if (saved != null && saved.source == ColdStartPolicy.SOURCE_MANUAL) {
+                currentLat = saved.latitude
+                currentLon = saved.longitude
+                val savedPlace = com.runwear.shared.domain.model.SimplePlace
+                    .fromRawDisplayString(saved.name)
+                _uiState.update {
+                    it.copy(
+                        locationName = savedPlace.display,
+                        simplePlace = savedPlace,
+                        locationSource = saved.source,
+                        isLoading = true
+                    )
+                }
+                seedFromLastGood(saved.latitude, saved.longitude)
+                resolveLocationZone()
+                fetchWeather()
+            }
+            return
+        }
         currentLat = lat
         currentLon = lon
         _uiState.update { it.copy(locationSource = "gps") }

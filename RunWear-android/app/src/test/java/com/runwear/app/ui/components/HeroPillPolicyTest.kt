@@ -104,10 +104,10 @@ class HeroPillPolicyTest {
     }
 
     @Test
-    fun `a scaffold serve carries the script mark and Your photo - nothing more`() {
-        // GEN-3 DESIGN DELTA (Sol, Nov 4): state (b) is the script
-        // mark + "Your photo" — the "made for close-by weather"
-        // line is OUT.
+    fun `a scaffold serve is SILENT - no pill, no label (owner ruling Nov 5)`() {
+        // GEN-6 (RW-34): the shipped "Your photo" label is REMOVED —
+        // the owner ruled it is not an approved pill. A banked photo
+        // standing in carries no claim label at all.
         val pill = HeroPillPolicy.resolve(
             lookStatus = PersonalLookStatus.Ready,
             serveKind = PersonalServeKind.SCAFFOLD,
@@ -115,12 +115,15 @@ class HeroPillPolicyTest {
             mode = MakeItMeMode.FREE,
             freeGenerationsUsed = 1
         )
-        assertEquals(HeroPillKind.SCAFFOLD, pill?.kind)
-        assertEquals("Your photo", pill?.text)
-        assertEquals(MakeItMeStrings.HERO_PILL_SCAFFOLD, pill?.text)
-        assertTrue(pill?.showScriptMark == true)
-        assertTrue(pill?.showLock == false)
-        assertNull(pill?.actionText)
+        assertNull(pill)
+        val subscribedPill = HeroPillPolicy.resolve(
+            lookStatus = PersonalLookStatus.Ready,
+            serveKind = PersonalServeKind.SCAFFOLD,
+            heroIsPersonal = true,
+            mode = MakeItMeMode.SUBSCRIBED,
+            freeGenerationsUsed = 0
+        )
+        assertNull(subscribedPill)
     }
 
     @Test

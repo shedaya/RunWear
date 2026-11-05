@@ -95,15 +95,14 @@ object ScaffoldRenderPolicy {
         else -> PersonalServeKind.EXACT
     }
 
-    /** The home badge for a serve kind — factual only, never a pitch.
-     * GEN-3 DESIGN DELTA (Sol, Nov 4): the scaffold line is
-     * "Your photo" — nothing more; the "made for close-by weather"
-     * explanation is OUT (Sol found it confusing). */
-    fun homeBadge(kind: PersonalServeKind): String? = when (kind) {
-        PersonalServeKind.SCAFFOLD -> "Your photo"
-        PersonalServeKind.EXACT -> null
-        PersonalServeKind.STOCK_QUIET -> null
-    }
+    /** The home badge for a serve kind.
+     * GEN-6 WAVE A (RW-34): NO serve kind carries a badge any more.
+     * The owner ruled Nov 5, 2026 that the scaffold "Your photo"
+     * label is not an approved pill — a scaffold serve is SILENT
+     * (see HeroPillPolicy, which likewise resolves scaffold to no
+     * pill). This seam stays so every legacy badge call site
+     * resolves to silence rather than painting the removed label. */
+    fun homeBadge(kind: PersonalServeKind): String? = null
 }
 
 /**
