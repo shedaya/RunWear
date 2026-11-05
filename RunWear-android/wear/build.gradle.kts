@@ -37,10 +37,10 @@ android {
         // app (see ~/workspace/release-prep/wear-os-distribution-playbook.md):
         // phone bundles use the plain series (1, 2, 3, …); standalone wear
         // bundles use 10000 + the aligned phone versionCode.
-        // This build: 10034 ↔ phone 1.2.19 / vc34 (GEN-3 Android release
+        // This build: 10035 ↔ phone 1.2.20 / vc35 (GEN-4 Android release
         // 2026-11-04). The wear versionName tracks the phone versionName.
-        versionCode = 10034
-        versionName = "1.2.19"
+        versionCode = 10035
+        versionName = "1.2.20"
     }
 
     buildTypes {
