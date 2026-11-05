@@ -727,16 +727,22 @@ enum HomeHeaderCopy {
     /// string handed to this formatter still cannot reach the
     /// rendered line.
     static func locationLine(place: String, moment: String) -> String {
+        "\(placeSegment(place: place)) · \(moment)"
+    }
+
+    /// The location line's place segment alone, resolved through
+    /// the same model as the full line (GEN-4: the headline line
+    /// renders its segments separately — the moment is the
+    /// tappable entry — so the place resolution lives in exactly
+    /// one place). GEN-3 X-13: the segment never renders empty;
+    /// an empty/whitespace place falls back to the app's existing
+    /// non-place label, the same one the view model uses when no
+    /// place has resolved.
+    static func placeSegment(place: String) -> String {
         let resolved = SimplePlace(rawDisplayName: place)?.displayName ?? place
-        // GEN-3 X-13: the line names the place in use — it never
-        // renders with an empty place segment (" · Now"). An
-        // empty/whitespace place falls back to the app's existing
-        // non-place label, the same one the view model uses when
-        // no place has resolved.
-        let named = resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "Current Location"
             : resolved
-        return "\(named) · \(moment)"
     }
 
     static func locationLine(place: SimplePlace, moment: String) -> String {

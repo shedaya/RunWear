@@ -215,15 +215,25 @@ struct WeatherOutfitView: View {
                 }
             }
             .sheet(isPresented: $showTimePicker) {
+                // GEN-4: the chart sheet works on a DRAFT — the
+                // view model's selection is written only by
+                // Confirm, through applyTimePickerCommit. (The
+                // pre-GEN-4 form bound selectedHour live, and an
+                // onChange re-solved home behind the sheet on
+                // every tile tap; both are gone with the tiles.)
                 TimePickerSheet(
-                    selectedHour: $viewModel.selectedHour,
-                    isPresented: $showTimePicker
+                    chart: viewModel.dayChart,
+                    dateLabel: navDateString,
+                    placeName: viewModel.placeDisplayName,
+                    unit: viewModel.temperatureUnit,
+                    initialHour: timePickerInitialHour,
+                    openedInNowState: viewModel.isNowSelection,
+                    nowHour: viewModel.dayChartNowHour,
+                    isPresented: $showTimePicker,
+                    onConfirm: { viewModel.applyTimePickerCommit($0) }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .onChange(of: viewModel.selectedHour) { _, newHour in
-                    viewModel.updateSelectedTime(date: viewModel.selectedDate, hour: newHour)
-                }
             }
             .sheet(isPresented: $showShop) {
                 ShopModal(
@@ -415,6 +425,8 @@ struct WeatherOutfitView: View {
                                 }
                                 outfitSection
                                     .padding(.top, 24)
+                                dayChartBand
+                                    .padding(.top, 24)
                                 personalSection
                                     .padding(.top, 24)
                             }
@@ -536,6 +548,9 @@ struct WeatherOutfitView: View {
                     .padding(.top, 16)
             }
             outfit()
+            // GEN-4: the glance band sits below the outfit list.
+            dayChartBand
+                .padding(.top, 24)
             personalSection
                 .padding(.top, 24)
             Spacer(minLength: 40)
@@ -554,11 +569,14 @@ struct WeatherOutfitView: View {
         .zIndex(1)
     }
 
-    /// The sheet header block, in order (notes §7.2): (i) "Feels
-    /// like" label, (ii) location line, (iii) hero number +
-    /// temperature chip, (iv) "Actual NN°" line, (v) weather
-    /// strip — then the flat date/time pills. Used by the stacked
-    /// sheet and, flat, by the Duo trailing column.
+    /// The sheet header block, in order (notes §7.2, GEN-4
+    /// amended): (i) "Feels like" label, (ii) location line —
+    /// its moment segment is the second time-picking entry,
+    /// (iii) hero number + temperature chip with the
+    /// right-justified weather figures beside the numeral,
+    /// (iv) "Actual NN°" line — then the flat date/time pills.
+    /// Used by the stacked sheet and, flat, by the Duo trailing
+    /// column.
     private var sheetHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             // (a)+(b) RW-26 settled header stack (notes §7.2): the
@@ -571,42 +589,49 @@ struct WeatherOutfitView: View {
                     .textCase(.uppercase)
                     .tracking(0.5)
                     .foregroundColor(AppTheme.inkMuted)
-                Text(HomeHeaderCopy.locationLine(
-                    place: viewModel.placeDisplayName,
-                    moment: sheetMoment
-                ))
-                .font(.system(size: 15.5, weight: .semibold))
-                .foregroundColor(AppTheme.inkPrimary)
-                .lineLimit(1)
+                headlineLocationLine
             }
 
             // (b) Hero number (ink, never temperature-colored) +
-            // temperature chip (filled dot + bracket label).
-            HStack(alignment: .center, spacing: 14) {
-                Text(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))
-                    .font(.system(size: sheetNumeralSize, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundColor(AppTheme.inkPrimary)
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(AppTheme.temperatureColor(for: viewModel.currentTempBracket))
-                        .frame(width: 8, height: 8)
-                    Text(viewModel.currentTempBracket.rawValue)
-                        .font(.appEyebrow)
+            // temperature chip (filled dot + bracket label), with
+            // GEN-4's right-justified weather figures beside the
+            // numeral: WIND / RAIN / HUMIDITY / UV in a strict
+            // two-column grid — labels in one fixed column, values
+            // flush right — its block top aligned to the
+            // numeral's top. Nothing weather-related sits below
+            // the headline on home anymore (the weather pills
+            // row that used to render under the date/time pills
+            // is retired from home; the weather detail sheet
+            // itself is unchanged).
+            HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .center, spacing: 14) {
+                    Text(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))
+                        .font(.system(size: sheetNumeralSize, weight: .semibold))
+                        .monospacedDigit()
                         .foregroundColor(AppTheme.inkPrimary)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(AppTheme.temperatureColor(for: viewModel.currentTempBracket))
+                            .frame(width: 8, height: 8)
+                        Text(viewModel.currentTempBracket.rawValue)
+                            .font(.appEyebrow)
+                            .foregroundColor(AppTheme.inkPrimary)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(AppTheme.cardOnSheet))
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(AppTheme.cardOnSheet))
 
                 Spacer(minLength: 0)
+
+                heroWeatherFigures
+                    .padding(.top, 8)
             }
 
             // (c) RW-26 (notes §7.1): the line carries the actual
-            // temperature ONLY — condition/wind/humidity live in
-            // the weather strip beneath it, nowhere else.
+            // temperature ONLY.
             Text(HomeHeaderCopy.actualLine(
                 formattedTemperature: viewModel.temperatureUnit.format(viewModel.currentTemperature)
             ))
@@ -615,16 +640,134 @@ struct WeatherOutfitView: View {
 
             // (d) Date/time pills, flat on the sheet.
             sheetDateTimePills
-
-            // (e) Weather pills row (behavior unchanged). The row
-            // carries its own 16pt content inset, so it cancels the
-            // header's inset and spans the sheet edge-to-edge like
-            // it did above the outfit before RW-25.
-            weatherPillsSection
-                .padding(.horizontal, -16)
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
+    }
+
+    /// GEN-4 (day-chart wave, Concept 1): the headline location
+    /// line with its second entry into time-picking. The line
+    /// still reads "{Place} · {Moment}" in the line's own
+    /// typography, but the MOMENT segment is now tappable —
+    /// pine, bold, chevron — and opens the Choose-a-Time sheet
+    /// (the same sheet the pill's time segment and the glance
+    /// band's Change button open). The place segment stays
+    /// non-interactive. In the changed-time state only, the way
+    /// back rides in the same line, immediately after the
+    /// moment in its dot-separated rhythm: a compact pine
+    /// refresh + "Now" (~13pt against the line's ~15.5pt, same
+    /// baseline) performing exactly the existing reset-to-now.
+    /// It is an ADDITION — the pill row below keeps its own Now
+    /// segment and behaviour.
+    private var headlineLocationLine: some View {
+        HStack(spacing: 0) {
+            Text("\(HomeHeaderCopy.placeSegment(place: viewModel.placeDisplayName)) · ")
+                .foregroundColor(AppTheme.inkPrimary)
+
+            Button { showTimePicker = true } label: {
+                HStack(spacing: 3) {
+                    Text(sheetMoment)
+                    Text("›")
+                }
+                .foregroundColor(AppTheme.pinePayload)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Choose a time: \(sheetMoment)")
+
+            if HeadlineNowReturn.isShown(isViewingNow: isViewingNow) {
+                Text(" · ")
+                    .foregroundColor(AppTheme.inkPrimary)
+                Button { viewModel.resetToNow() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                        Text("Now")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(AppTheme.pinePayload)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to now")
+            }
+        }
+        .font(.system(size: 15.5, weight: .semibold))
+        .lineLimit(1)
+    }
+
+    /// GEN-4: the hero's right-justified weather figures — the
+    /// strict two-column grid beside the feels-like numeral
+    /// (mock §1, right-justified variant): labels WIND / RAIN /
+    /// HUMIDITY / UV in one fixed column, values flush right
+    /// (mph / % / % / "N of 11"), even row spacing. The figures
+    /// describe the selected moment, from the same snapshot the
+    /// retired pills row read.
+    private var heroWeatherFigures: some View {
+        let snapshot = viewModel.selectedWeatherSnapshot
+        let wind = snapshot?.windSpeed ?? weather.currentWeather.windspeed
+        let rain = snapshot?.precipitationProbability ?? 0
+        let humidity = snapshot?.humidity ?? 50
+        let uv = snapshot?.uvIndex ?? 0
+        return Grid(horizontalSpacing: 12, verticalSpacing: 3) {
+            GridRow {
+                heroFigureLabel("WIND")
+                heroFigureValue("\(Int(wind.rounded())) mph")
+            }
+            GridRow {
+                heroFigureLabel("RAIN")
+                heroFigureValue("\(rain)%")
+            }
+            GridRow {
+                heroFigureLabel("HUMIDITY")
+                heroFigureValue("\(humidity)%")
+            }
+            GridRow {
+                heroFigureLabel("UV")
+                heroFigureValue("\(Int(uv.rounded())) of 11")
+            }
+        }
+    }
+
+    private func heroFigureLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .bold))
+            .tracking(0.7)
+            .foregroundColor(AppTheme.inkMuted)
+            .gridColumnAlignment(.leading)
+    }
+
+    private func heroFigureValue(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13.5, weight: .semibold))
+            .monospacedDigit()
+            .foregroundColor(AppTheme.inkPrimary)
+            .gridColumnAlignment(.trailing)
+    }
+
+    /// The Choose-a-Time sheet's default draft hour: the
+    /// currently selected hour — except in the NOW state on the
+    /// location's today, where the draft starts on the
+    /// location's current hour (the NOW marker's hour).
+    private var timePickerInitialHour: Int {
+        if viewModel.isNowSelection, let nowHour = viewModel.dayChartNowHour {
+            return nowHour
+        }
+        return viewModel.selectedHour
+    }
+
+    /// GEN-4: the home glance band — the day's feels-like curve
+    /// over its prescription-bracket bands, below the outfit
+    /// list in every home layout. Absent when the selected day
+    /// carries no forecast hours.
+    @ViewBuilder private var dayChartBand: some View {
+        if let chart = viewModel.dayChart {
+            DayChartBandView(
+                model: chart,
+                selectedHour: viewModel.selectedHour,
+                nowHour: viewModel.dayChartNowHour,
+                unit: viewModel.temperatureUnit,
+                onChange: { showTimePicker = true }
+            )
+            .padding(.horizontal, 16)
+        }
     }
 
     /// "Now" when viewing now (sentence case — the location line
@@ -1045,42 +1188,6 @@ struct WeatherOutfitView: View {
             freeGenerationsUsed: personalStore.freeGenerationsUsed,
             freeAllowance: PersonalHeroStore.freeAllowance
         )
-    }
-
-    // MARK: - Weather Pills Section
-
-    private var weatherPillsSection: some View {
-        WeatherPillsRow(
-            condition: viewModel.currentCondition,
-            windSpeed: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
-            windDirection: viewModel.selectedWeatherSnapshot?.windDirectionCompass ?? "N",
-            humidity: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
-            precipitationProbability: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
-            uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0,
-            onConditionTapped: {
-                selectedWeatherDetail = .condition(viewModel.currentCondition)
-            },
-            onWindTapped: {
-                let snapshot = viewModel.selectedWeatherSnapshot
-                selectedWeatherDetail = .wind(
-                    speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
-                    direction: snapshot?.windDirectionCompass ?? "N",
-                    gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
-                )
-            },
-            onHumidityTapped: {
-                selectedWeatherDetail = .humidity(percentage: viewModel.selectedWeatherSnapshot?.humidity ?? 50)
-            },
-            onPrecipitationTapped: {
-                selectedWeatherDetail = .precipitation(percentage: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0)
-            },
-            onUVTapped: {
-                selectedWeatherDetail = .uvIndex(value: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0)
-            }
-        )
-        .padding(.vertical, 16)
-        // RW-25: no background — the row sits on the sheet now; the
-        // gradient existed only to blend the row into the hero.
     }
 
     // MARK: - RW-14 Personal Section
