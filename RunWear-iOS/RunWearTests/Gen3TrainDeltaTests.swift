@@ -59,22 +59,27 @@ final class Gen3TrainDeltaTests: XCTestCase {
                        "Y-16: no intermediate title menu in the home location path")
         XCTAssertTrue(home.contains("ToolbarItem(placement: .principal)"),
                       "the location is a principal toolbar button")
-        // The button's action is the picker presentation itself,
-        // and the picker rests at the full-height detent only, so
-        // the first tap lands on the complete UI.
+        // The button's action is the picker presentation itself:
+        // the first tap opens the sheet directly — no menu, no
+        // intermediate step — and the sheet's content is the
+        // complete picker (search field, current location,
+        // results) from the first moment.
         let pickerSheet = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
         XCTAssertTrue(pickerSheet.contains("TextField(\"Search for a city\""),
                       "the picker carries its search field")
         XCTAssertTrue(pickerSheet.contains("\"Current location\""),
                       "the picker carries its current-location row")
-        // The home presentation of the picker: search the home
-        // file's sheet block for its detent line.
+        // The home presentation of the picker: its detents are
+        // the settled sheet discipline (§1.3 — Location keeps a
+        // medium detent, per SheetDisciplineTests); Y-16's fix
+        // was the removed menu, not the detent. (An earlier
+        // version of this pin demanded [.large] only and
+        // contradicted the discipline pin — the gate caught it,
+        // run 41944552163.)
         let sheetIdx = try XCTUnwrap(home.range(of: ".sheet(isPresented: $showLocationPicker)"))
         let sheetBlock = home[sheetIdx.lowerBound...].prefix(1600)
-        XCTAssertTrue(sheetBlock.contains(".presentationDetents([.large])"),
-                      "Y-16: the picker opens complete — full-height detent only")
-        XCTAssertFalse(sheetBlock.contains(".medium"),
-                       "Y-16: no medium rest the user must expand")
+        XCTAssertTrue(sheetBlock.contains(".presentationDetents([.medium, .large])"),
+                      "Y-16: the directly-opened picker rests at the settled detents")
     }
 
     // MARK: - Round 2 · the name-led welcome (Sol's chosen composition)

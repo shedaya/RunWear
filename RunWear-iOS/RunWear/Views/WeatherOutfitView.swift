@@ -268,10 +268,12 @@ struct WeatherOutfitView: View {
                 )
                 // Y-16: the COMPLETE picker (search field, current
                 // location, results) at first presentation — the
-                // full-height detent only, no medium rest the user
-                // must expand (the WS-5 discipline for sheets whose
-                // content scrolls).
-                .presentationDetents([.large])
+                // one-tap fix was removing the intermediate title
+                // menu, so the first tap opens this sheet directly.
+                // Detents follow the settled sheet discipline
+                // (§1.3): Location is one of the three sheets that
+                // keep a medium detent (SheetDisciplineTests).
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
         }

@@ -98,8 +98,8 @@ struct OnboardingView: View {
     /// OnboardingCopy), one promise per row, nothing to decide
     /// yet. No price appears anywhere in onboarding. (A1's
     /// free-looks promise placement on this screen was superseded
-    /// by Sol's GEN-3 round-2 final point-2 copy — see
-    /// OnboardingCopy.freeLooksPromise.)
+    /// by Sol's GEN-3 round-2 final point-2 copy — the promise's
+    /// canonical wording stays defined in OnboardingCopy.)
     private var welcomeScreen: some View {
         VStack(spacing: 0) {
             Spacer()
