@@ -75,7 +75,7 @@ fun WeatherConditionsRow(
     } else {
         Color.White.copy(alpha = 0.1f)
     }
-    val pillInk = if (onSheet) RunWearColors.TextPrimary else Color.White
+    val pillInk = if (onSheet) RunWearColors.TextPrimary else com.runwear.app.ui.theme.PhotoInk
 
     // FlowRow, not Row: in a narrow hero (foldable rail pane, landscape
     // phone) a fixed Row measures pills in order and gives the LAST one
@@ -171,7 +171,7 @@ private fun WeatherPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     background: Color = Color.White.copy(alpha = 0.1f), // 10% white per PWA
-    ink: Color = Color.White
+    ink: Color = com.runwear.app.ui.theme.PhotoInk
 ) {
     Box(
         modifier = modifier

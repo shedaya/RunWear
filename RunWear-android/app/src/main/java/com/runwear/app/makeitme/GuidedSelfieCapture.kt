@@ -60,10 +60,15 @@ import java.io.File
  * that hosts this screen), judged by the same checks with the
  * C3E/C3F retake strings.
  *
- * The capture itself rides the platform camera (TakePicture into a
- * FileProvider file — no manifest camera permission), so the
- * coaching loop is: capture → measure → chips + one coaching line →
- * retake or accept. [GuidedSelfieChecks] is the pure chip logic.
+ * GEN-5 (RW-28 item 16): the capture is IN-APP — a CameraX live
+ * preview inside the oval, ML Kit face detection over the live
+ * frames, the four checks reading out LIVE, one coaching line,
+ * and the oval turning pine at the passing moment. The gen-4
+ * build handed off to the stock camera app (TakePicture) and
+ * coached only after the fact; that hand-off is the defect this
+ * replaces (A-8). A captured still is reviewed by the same four
+ * checks over [PhotoQualityChecker]'s measurement of the file.
+ * [GuidedSelfieChecks] is the pure check logic both paths share.
  */
 
 /** One live check chip's state. */
@@ -78,24 +83,57 @@ object GuidedSelfieChecks {
     /** Head turn (degrees) beyond which the face is not frontal. */
     const val MAX_HEAD_TURN_DEGREES: Float = 18f
 
+    // GEN-5 (RW-28 items 16/17): the FOUR checks of record — the
+    // same four names on the live capture readout and on the
+    // review: In frame · Face size · Straight on · Light. (The
+    // old five-chip set carried "Just you" as its own chip; the
+    // single-face rule still gates acceptance through
+    // PhotoQualityPolicy in allPassed, and the coaching line
+    // still names it when more than one face is in frame.)
+    const val CHECK_IN_FRAME = "In frame"
+    const val CHECK_FACE_SIZE = "Face size"
+    const val CHECK_STRAIGHT_ON = "Straight on"
+    const val CHECK_LIGHT = "Light"
+
     fun evaluate(m: PhotoQualityChecker.Measurements?): List<GuidedCheck> {
         if (m == null) {
             return listOf(
-                GuidedCheck("Face in frame", false),
-                GuidedCheck("Just you", false),
-                GuidedCheck("Face large enough", false),
-                GuidedCheck("Facing forward", false),
-                GuidedCheck("Bright enough", false)
+                GuidedCheck(CHECK_IN_FRAME, false),
+                GuidedCheck(CHECK_FACE_SIZE, false),
+                GuidedCheck(CHECK_STRAIGHT_ON, false),
+                GuidedCheck(CHECK_LIGHT, false)
             )
         }
         return listOf(
-            GuidedCheck("Face in frame", m.faceCount >= 1),
-            GuidedCheck("Just you", m.faceCount == 1),
-            GuidedCheck("Face large enough", m.largestFaceWidthFraction >= MIN_FACE_WIDTH_FRACTION),
-            GuidedCheck("Facing forward", m.faceCount >= 1 && m.maxAbsHeadTurnDegrees <= MAX_HEAD_TURN_DEGREES),
-            GuidedCheck("Bright enough", m.meanLuminance >= PhotoQualityPolicy.MIN_MEAN_LUMINANCE)
+            GuidedCheck(CHECK_IN_FRAME, m.faceCount >= 1),
+            GuidedCheck(CHECK_FACE_SIZE, m.largestFaceWidthFraction >= MIN_FACE_WIDTH_FRACTION),
+            GuidedCheck(CHECK_STRAIGHT_ON, m.faceCount >= 1 && m.maxAbsHeadTurnDegrees <= MAX_HEAD_TURN_DEGREES),
+            GuidedCheck(CHECK_LIGHT, m.meanLuminance >= PhotoQualityPolicy.MIN_MEAN_LUMINANCE)
         )
     }
+
+    /**
+     * The LIVE evaluation for the in-app capture: the same four
+     * checks over one analyzed preview frame's readings. The live
+     * path and the captured-photo review can never disagree about
+     * what the checks are.
+     */
+    fun evaluateLive(
+        faceCount: Int,
+        largestFaceWidthFraction: Float,
+        maxAbsHeadTurnDegrees: Float,
+        meanLuminance: Double
+    ): List<GuidedCheck> = evaluate(
+        PhotoQualityChecker.Measurements(
+            faceCount = faceCount,
+            largestFaceWidthFraction = largestFaceWidthFraction,
+            meanLuminance = meanLuminance,
+            maxAbsHeadTurnDegrees = maxAbsHeadTurnDegrees,
+            subjectHeadRollDegrees = 0f
+        )
+    )
+
+    fun allLivePassed(checks: List<GuidedCheck>): Boolean = checks.all { it.passed }
 
     /**
      * WS-9 fix (P-2, §1.7): the checks that TURN passing between two
@@ -117,23 +155,28 @@ object GuidedSelfieChecks {
                 m.subjectHeadRollDegrees
             ) == null
 
+    /** The settled passing line (design §10.3 verbatim). */
+    const val PASSING_LINE = "✓ That's exactly what we need"
+
     /** The ONE coaching line, aimed at the first failing check. */
     fun coachingLine(m: PhotoQualityChecker.Measurements?): String {
         if (m == null) return "Fill the oval with your face, with a little room around it."
         val checks = evaluate(m)
         return when {
             !checks[0].passed -> "Move your face into the oval."
-            !checks[1].passed -> "Just you in the frame — one face only."
+            // The single-face rule (no longer its own chip) is
+            // coached here, before size and angle.
+            m.faceCount > 1 -> "Just you in the frame — one face only."
             // WS-6 (F-1): the roll gate coaches before size/framing —
             // a sideways capture is retaken upright, never accepted.
             // (Post-EXIF-decode this is residual-only: the camera's
             // own captures arrive upright at the source.)
             !IntakeOrientation.rollWithinGate(m.subjectHeadRollDegrees) ->
                 "Hold your phone upright — that one came out sideways."
-            !checks[2].passed -> "Move a little closer — your face should fill the oval."
-            !checks[3].passed -> "Face the camera straight on."
-            !checks[4].passed -> "Find brighter light — face a window or a lamp."
-            else -> "That's it — this photo works."
+            !checks[1].passed -> "Move a little closer — your face should fill the oval."
+            !checks[2].passed -> "Face the camera straight on."
+            !checks[3].passed -> "Find brighter light — face a window or a lamp."
+            else -> PASSING_LINE
         }
     }
 }
@@ -144,64 +187,214 @@ fun GuidedSelfieCapture(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var capturedUri by remember { mutableStateOf<Uri?>(null) }
     var measurements by remember { mutableStateOf<PhotoQualityChecker.Measurements?>(null) }
-    var pendingUri by remember { mutableStateOf<Uri?>(null) }
 
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        val uri = pendingUri
-        pendingUri = null
-        if (success && uri != null) {
-            capturedUri = uri
+    // ── Camera permission (in-app capture declares CAMERA; the
+    // stock-camera hand-off that avoided it is retired). ─────────
+    var hasPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> hasPermission = granted }
+    LaunchedEffect(Unit) {
+        if (!hasPermission) {
+            permissionLauncher.launch(android.Manifest.permission.CAMERA)
         }
     }
 
-    fun launchCamera() {
+    // ── Live analysis state: the four checks over the preview
+    // stream, updated as frames are analyzed. ────────────────────
+    var liveMeasurements by remember { mutableStateOf<PhotoQualityChecker.Measurements?>(null) }
+    val liveChecks = GuidedSelfieChecks.evaluate(liveMeasurements)
+    val livePassing = liveMeasurements != null &&
+        GuidedSelfieChecks.allLivePassed(liveChecks) && liveMeasurements!!.faceCount == 1
+
+    val imageCapture = remember {
+        androidx.camera.core.ImageCapture.Builder()
+            .setCaptureMode(androidx.camera.core.ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .build()
+    }
+    val faceDetector = remember {
+        com.google.mlkit.vision.face.FaceDetection.getClient(
+            com.google.mlkit.vision.face.FaceDetectorOptions.Builder()
+                .setPerformanceMode(
+                    com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_FAST
+                )
+                .setMinFaceSize(0.12f)
+                .build()
+        )
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { faceDetector.close() }
+    }
+    val lastAnalyzedMillis = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+
+    val previewView = remember {
+        androidx.camera.view.PreviewView(context).apply {
+            scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
+        }
+    }
+
+    // Bind front camera: preview + capture + live analysis. Bound
+    // once permission exists; stays bound while a captured still is
+    // reviewed (the still overlays the preview in the oval).
+    LaunchedEffect(hasPermission) {
+        if (!hasPermission) return@LaunchedEffect
+        val future = androidx.camera.lifecycle.ProcessCameraProvider.getInstance(context)
+        future.addListener(
+            {
+                val provider = try {
+                    future.get()
+                } catch (e: Exception) {
+                    return@addListener
+                }
+                val preview = androidx.camera.core.Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+                val analysis = androidx.camera.core.ImageAnalysis.Builder()
+                    .setBackpressureStrategy(
+                        androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
+                    )
+                    .build()
+                analysis.setAnalyzer(
+                    androidx.core.content.ContextCompat.getMainExecutor(context)
+                ) { proxy ->
+                    val nowMillis = System.currentTimeMillis()
+                    val last = lastAnalyzedMillis.get()
+                    if (nowMillis - last < 250L) {
+                        proxy.close()
+                        return@setAnalyzer
+                    }
+                    lastAnalyzedMillis.set(nowMillis)
+                    val mediaImage = proxy.image
+                    if (mediaImage == null) {
+                        proxy.close()
+                        return@setAnalyzer
+                    }
+                    // Mean luminance from the Y plane, sampled.
+                    val yBuffer = proxy.planes[0].buffer.duplicate()
+                    var sum = 0L
+                    var count = 0
+                    val step = 24
+                    var i = 0
+                    while (i < yBuffer.capacity()) {
+                        sum += yBuffer.get(i).toInt() and 0xFF
+                        count++
+                        i += step
+                    }
+                    val luminance = if (count > 0) {
+                        (sum.toDouble() / count) / 255.0
+                    } else {
+                        0.0
+                    }
+                    val frameWidth = proxy.width.coerceAtLeast(1)
+                    val input = com.google.mlkit.vision.common.InputImage.fromMediaImage(
+                        mediaImage, proxy.imageInfo.rotationDegrees
+                    )
+                    faceDetector.process(input)
+                        .addOnSuccessListener { faces ->
+                            val largest = faces.maxOfOrNull {
+                                it.boundingBox.width().toFloat()
+                            } ?: 0f
+                            val turn = faces.maxOfOrNull {
+                                kotlin.math.abs(it.headEulerAngleY)
+                            } ?: 0f
+                            liveMeasurements = PhotoQualityChecker.Measurements(
+                                faceCount = faces.size,
+                                largestFaceWidthFraction = largest / frameWidth,
+                                meanLuminance = luminance,
+                                maxAbsHeadTurnDegrees = turn,
+                                subjectHeadRollDegrees = 0f
+                            )
+                        }
+                        .addOnCompleteListener { proxy.close() }
+                }
+                try {
+                    provider.unbindAll()
+                    provider.bindToLifecycle(
+                        lifecycleOwner,
+                        androidx.camera.core.CameraSelector.DEFAULT_FRONT_CAMERA,
+                        preview,
+                        imageCapture,
+                        analysis
+                    )
+                } catch (e: Exception) {
+                    // No front camera / busy camera: the surface
+                    // keeps its placeholder and the library door
+                    // below remains the way in.
+                }
+            },
+            androidx.core.content.ContextCompat.getMainExecutor(context)
+        )
+    }
+
+    fun capture() {
         val file = File(context.cacheDir, "makeitme/guided-${System.currentTimeMillis()}.jpg")
         file.parentFile?.mkdirs()
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        pendingUri = uri
-        try {
-            cameraLauncher.launch(uri)
-        } catch (e: Exception) {
-            pendingUri = null
-        }
+        val uri = FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", file
+        )
+        imageCapture.takePicture(
+            androidx.camera.core.ImageCapture.OutputFileOptions.Builder(file).build(),
+            androidx.core.content.ContextCompat.getMainExecutor(context),
+            object : androidx.camera.core.ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(
+                    output: androidx.camera.core.ImageCapture.OutputFileResults
+                ) {
+                    capturedUri = uri
+                }
+
+                override fun onError(
+                    exception: androidx.camera.core.ImageCaptureException
+                ) {
+                    // Stay on the live surface; the coaching loop
+                    // continues and the user can try again.
+                }
+            }
+        )
     }
 
-    // Camera-first: open the camera as soon as the surface appears.
-    val cameraPresent = remember {
-        context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
-    }
-    LaunchedEffect(Unit) {
-        if (cameraPresent) launchCamera()
-    }
+    // The captured still is measured by the same checker the
+    // upload door uses — the review's four checks.
     LaunchedEffect(capturedUri) {
         val uri = capturedUri
         measurements = if (uri != null) PhotoQualityChecker.measure(context, uri) else null
     }
 
-    // §1.7 (WS-9 fix, P-2): a capture check TURNING passing fires
-    // the selection tick — once per check that turns, keyed on the
-    // measurement that re-evaluated the chips.
+    // §1.7 (WS-9 fix, P-2): a check TURNING passing fires the
+    // selection tick — once per check that turns, over whichever
+    // evaluation is on screen (live or review).
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val reviewing = capturedUri != null
+    val checks = if (reviewing) {
+        GuidedSelfieChecks.evaluate(measurements)
+    } else {
+        liveChecks
+    }
+    val passed = if (reviewing) {
+        GuidedSelfieChecks.allPassed(measurements)
+    } else {
+        livePassing
+    }
     var previousChecks by remember { mutableStateOf<List<GuidedCheck>?>(null) }
-    LaunchedEffect(measurements) {
-        val now = GuidedSelfieChecks.evaluate(measurements)
+    LaunchedEffect(checks) {
         val prev = previousChecks
         if (prev != null) {
-            GuidedSelfieChecks.turnedPassing(prev, now).forEach { _ ->
+            GuidedSelfieChecks.turnedPassing(prev, checks).forEach { _ ->
                 haptic.performHapticFeedback(
                     com.runwear.app.ui.components.HapticSpec.SELECTION
                 )
             }
         }
-        previousChecks = now
+        previousChecks = checks
     }
-
-    val checks = GuidedSelfieChecks.evaluate(measurements)
-    val passed = GuidedSelfieChecks.allPassed(measurements)
 
     Box(modifier = Modifier.fillMaxSize().background(com.runwear.app.ui.theme.DarkPalette.Background)) {
         Column(
@@ -210,7 +403,7 @@ fun GuidedSelfieCapture(
         ) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Outlined.Close, "Close", tint = Color.White.copy(alpha = 0.8f))
+                    Icon(Icons.Outlined.Close, "Close", tint = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.8f))
                 }
             }
             Text(
@@ -221,12 +414,14 @@ fun GuidedSelfieCapture(
             )
             Spacer(Modifier.height(16.dp))
 
-            // Face oval overlay (framing coach: margin, large, frontal).
+            // Face oval: the LIVE preview inside it (the still,
+            // once captured). The border turns pine at the passing
+            // moment — live or review.
             Box(
                 modifier = Modifier.size(240.dp).clip(CircleShape)
                     .border(
                         3.dp,
-                        if (passed) com.runwear.app.ui.theme.PineAccentOnDark else Color.White.copy(alpha = 0.7f),
+                        if (passed) com.runwear.app.ui.theme.PineAccentOnDark else com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f),
                         CircleShape
                     )
                     .background(Color.White.copy(alpha = 0.06f)),
@@ -239,19 +434,25 @@ fun GuidedSelfieCapture(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize().clip(CircleShape)
                     )
+                } else if (hasPermission) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { previewView },
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
                 } else {
                     Text(
                         text = "Your face here",
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.6f),
                         fontSize = 14.sp
                     )
                 }
             }
             Spacer(Modifier.height(16.dp))
 
-            // Live check chips — re-evaluated after every capture.
+            // The four checks — live readout while framing, the
+            // review's readout over the captured still.
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                checks.chunked(3).forEach { rowChecks ->
+                checks.chunked(2).forEach { rowChecks ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         rowChecks.forEach { check ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -265,7 +466,7 @@ fun GuidedSelfieCapture(
                                     tint = if (check.passed) {
                                         com.runwear.app.ui.theme.PineAccentOnDark
                                     } else {
-                                        Color.White.copy(alpha = 0.5f)
+                                        com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.5f)
                                     },
                                     modifier = Modifier.size(16.dp)
                                 )
@@ -275,7 +476,7 @@ fun GuidedSelfieCapture(
                                     color = if (check.passed) {
                                         com.runwear.app.ui.theme.PhotoInk
                                     } else {
-                                        Color.White.copy(alpha = 0.6f)
+                                        com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.6f)
                                     },
                                     modifier = Modifier.padding(start = 4.dp)
                                 )
@@ -286,7 +487,9 @@ fun GuidedSelfieCapture(
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                text = GuidedSelfieChecks.coachingLine(measurements),
+                text = GuidedSelfieChecks.coachingLine(
+                    if (reviewing) measurements else liveMeasurements
+                ),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 color = com.runwear.app.ui.theme.PhotoInk
@@ -296,36 +499,59 @@ fun GuidedSelfieCapture(
                 Text(
                     text = MakeItMeStrings.C3E_RETAKE_GUIDED,
                     fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.65f)
+                    color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.65f)
                 )
             }
             Spacer(Modifier.height(20.dp))
-            if (passed && capturedUri != null) {
-                Button(
-                    onClick = { onAccepted(capturedUri!!) },
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
-                ) {
-                    Text("Use this photo", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            when {
+                reviewing && passed -> {
+                    Button(
+                        onClick = { capturedUri?.let(onAccepted) },
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                    ) {
+                        Text("Use this photo", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    }
                 }
-            } else {
-                Button(
-                    onClick = { launchCamera() },
-                    enabled = cameraPresent,
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
-                ) {
-                    Text(
-                        if (capturedUri == null) "Open camera" else "Retake",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp
-                    )
+                reviewing -> {
+                    Button(
+                        onClick = {
+                            capturedUri = null
+                            measurements = null
+                        },
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                    ) {
+                        Text("Retake", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    }
+                }
+                !hasPermission -> {
+                    Button(
+                        onClick = {
+                            permissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                    ) {
+                        Text("Allow camera", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    }
+                }
+                else -> {
+                    Button(
+                        onClick = { capture() },
+                        modifier = Modifier.fillMaxWidth().height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                    ) {
+                        Text("Take photo", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                    }
                 }
             }
             TextButton(onClick = onDismiss) {
-                Text("Choose from library instead", color = Color.White.copy(alpha = 0.7f))
+                Text("Choose from library instead", color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f))
             }
         }
     }

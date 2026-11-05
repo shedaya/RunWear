@@ -123,8 +123,17 @@ internal object ForkBackPolicy {
  */
 internal object ForkBandGeometry {
 
-    /** The band's height — part of the composition, not a free knob. */
-    const val BAND_HEIGHT_DP = 300
+    /**
+     * The band's height. GEN-5: 260 dp (was 300) — with the new
+     * hard-coded image the head's safety comes from the anchoring
+     * rule, not the band height (see below), and the shorter band
+     * is what lets BOTH fork doors arrive fully visible on the
+     * fork screen (item 19, A-4). At phone widths the band aspect
+     * stays in the asset lane's full-upper-body range; at wide
+     * (foldable/tablet) widths it lands in their tested range
+     * where face, shoulders and chest stay composed.
+     */
+    const val BAND_HEIGHT_DP = 260
 
     // GEN-5 (RW-28, ruling C-2): the fork band is ONE purpose-designed
     // hard-coded image (res/drawable-nodpi/mim_fork_hero.webp,
@@ -295,7 +304,7 @@ fun MakeItMeForkScreen(
         }
 
         Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(16.dp))
                     // Frame 32: the fork introduces Make It Me under its
         // script wordmark (third wordmark, design §7.5).
         Text(
@@ -321,7 +330,7 @@ Text(
                 color = RunWearColors.TextSecondary
             )
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
 
             // Option A — customize
             ForkOptionCard(
@@ -349,7 +358,7 @@ Text(
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary
             )
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -412,6 +421,16 @@ private fun ForkOptionCard(
 
 internal enum class UploadStep { CONSENT, PHOTOS, SUBMITTING, SAVED }
 
+/**
+ * GEN-5 (RW-28 item 21): which door the user entered the upload
+ * flow through. STANDARD is the plain flow (fork, Settings
+ * opt-in). GUIDED_SELFIE / LIBRARY come from the Your Photos
+ * surface's two separate replacement doors: the named door
+ * pre-opens when the capture step arrives — the guided capture
+ * dialog for one, the library picker for the other.
+ */
+enum class MakeItMeEntryDoor { STANDARD, GUIDED_SELFIE, LIBRARY }
+
 /** What a system Back press does at one upload-flow step (WS-5, F-2). */
 internal enum class UploadBackAction { EXIT_FLOW, STEP_BACK_TO_CONSENT, STAY }
 
@@ -446,7 +465,8 @@ fun MakeItMeUploadFlow(
     todaysCell: Pair<String, List<String>>?,
     onFinished: () -> Unit,
     onExitAsStock: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    entryDoor: MakeItMeEntryDoor = MakeItMeEntryDoor.STANDARD
 ) {
     MakeItMeUploadFlow(
         recordConsent = { g, onResult -> viewModel.recordConsent(g, onResult) },
@@ -458,7 +478,8 @@ fun MakeItMeUploadFlow(
         todaysCell = todaysCell,
         onFinished = onFinished,
         onExitAsStock = onExitAsStock,
-        modifier = modifier
+        modifier = modifier,
+        entryDoor = entryDoor
     )
 }
 
@@ -478,7 +499,8 @@ internal fun MakeItMeUploadFlow(
     todaysCell: Pair<String, List<String>>?,
     onFinished: () -> Unit,
     onExitAsStock: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    entryDoor: MakeItMeEntryDoor = MakeItMeEntryDoor.STANDARD
 ) {
     val context = LocalContext.current
     var step by remember { mutableStateOf(UploadStep.CONSENT) }
@@ -520,25 +542,19 @@ internal fun MakeItMeUploadFlow(
         }
     }
 
-    // RW-16.14: the camera source. TakePicture drives the platform
-    // camera app into a FileProvider file in our cache — full
-    // resolution, NO manifest camera permission — and the result is
-    // a content Uri of exactly the shape the picker produces, so
-    // the quality-check effect below treats a capture identically
-    // to a library pick. There is one intake path, not two.
+    // GEN-5 (RW-28 item 16): the camera source is the IN-APP
+    // guided capture — the "Take photo" door opens the guided
+    // selfie dialog (CameraX live preview + the four live checks),
+    // never the stock camera app. Its accepted photo lands in the
+    // same photos list the picker feeds, so the quality-check
+    // effect below treats a capture identically to a library pick.
+    // There is one intake path, not two. (The gen-4 TakePicture
+    // hand-off is retired.)
     var showSourceChoice by remember { mutableStateOf(false) }
-    var showGuidedCapture by remember { mutableStateOf(false) }
-    var sourceNote by remember { mutableStateOf<String?>(null) }
-    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture()
-    ) { success ->
-        val uri = pendingCaptureUri
-        pendingCaptureUri = null
-        if (success && uri != null && photos.none { it.uri == uri }) {
-            photos.add(PickedPhoto(uri))
-        }
+    var showGuidedCapture by remember {
+        mutableStateOf(entryDoor == MakeItMeEntryDoor.GUIDED_SELFIE)
     }
+    var sourceNote by remember { mutableStateOf<String?>(null) }
     val cameraPresent = remember {
         context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
     }
@@ -550,19 +566,18 @@ internal fun MakeItMeUploadFlow(
     }
 
     fun launchCamera() {
-        val file = File(context.cacheDir, "makeitme/capture-${System.currentTimeMillis()}.jpg")
-        file.parentFile?.mkdirs()
-        val uri = FileProvider.getUriForFile(
-            context, "${context.packageName}.fileprovider", file
-        )
-        pendingCaptureUri = uri
-        try {
-            cameraLauncher.launch(uri)
-        } catch (e: Exception) {
-            // No activity answers the capture intent after all:
-            // the policy's fallback — library, with the note.
-            pendingCaptureUri = null
-            sourceNote = PhotoIntakePolicy.CAMERA_UNAVAILABLE_NOTE
+        showGuidedCapture = true
+    }
+
+    // GEN-5 (item 21): entering through the "Choose a Different
+    // Photo" door opens the library picker as soon as the capture
+    // step arrives (once — the door is an entry, not a state).
+    var entryDoorConsumed by remember { mutableStateOf(false) }
+    LaunchedEffect(step) {
+        if (step == UploadStep.PHOTOS &&
+            entryDoor == MakeItMeEntryDoor.LIBRARY && !entryDoorConsumed
+        ) {
+            entryDoorConsumed = true
             launchPicker()
         }
     }
@@ -660,6 +675,17 @@ internal fun MakeItMeUploadFlow(
         when (animatedStep) {
             UploadStep.CONSENT -> {
               Column {
+                // GEN-5 (RW-28 item 20, A-6): the consent screen
+                // carries the Make It Me SCRIPT header, like the
+                // fork and the paywall — the gen-4 build headed it
+                // with the plain title alone.
+                Text(
+                    text = "Make It Me",
+                    fontFamily = GreatVibesFontFamily,
+                    fontSize = 34.sp,
+                    color = RunWearColors.TextPrimary
+                )
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = MakeItMeStrings.C1A_CONSENT_TITLE,
                     fontFamily = FontFamily.Default,
@@ -714,19 +740,23 @@ internal fun MakeItMeUploadFlow(
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
                 ) {
+                    // GEN-5 (item 20, A-7): the working state
+                    // keeps its LABEL — spinner beside the word,
+                    // never a bare spinner arc on a greyed button
+                    // that reads as disabled.
                     if (working) {
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = com.runwear.app.ui.theme.PhotoInk,
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp
                         )
-                    } else {
-                        Text(
-                            MakeItMeStrings.C1D_CONTINUE,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp
-                        )
+                        Spacer(Modifier.width(10.dp))
                     }
+                    Text(
+                        MakeItMeStrings.C1D_CONTINUE,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 TextButton(
@@ -768,7 +798,7 @@ internal fun MakeItMeUploadFlow(
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
                 ) {
-                    Text("Take a guided selfie", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                    Text("Take a guided selfie", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = com.runwear.app.ui.theme.PhotoInk)
                 }
                 if (showGuidedCapture) {
                     androidx.compose.ui.window.Dialog(
@@ -886,7 +916,7 @@ internal fun MakeItMeUploadFlow(
                         // greyed spinner with no words is the exact
                         // frame the gen-2 walkthrough condemned.
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = com.runwear.app.ui.theme.PhotoInk,
                             modifier = Modifier.size(20.dp),
                             strokeWidth = 2.dp
                         )
@@ -1103,14 +1133,33 @@ fun MakeItMePhotosScreen(
     viewModel: MakeItMeViewModel,
     onReplaceClick: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetakeSelfieClick: () -> Unit = onReplaceClick,
+    onChooseDifferentPhotoClick: () -> Unit = onReplaceClick
 ) {
+    // GEN-5 (item 21): the settled surface carries its own
+    // "Delete my photos" door, hosted here with the same dialog
+    // the Settings Danger zone uses.
+    var showDeleteDialog by remember { mutableStateOf(false) }
     MakeItMePhotosScreen(
         loadReferenceUrls = { onResult -> viewModel.loadReferenceUrls(onResult) },
         onReplaceClick = onReplaceClick,
         onDismiss = onDismiss,
-        modifier = modifier
+        modifier = modifier,
+        onRetakeSelfieClick = onRetakeSelfieClick,
+        onChooseDifferentPhotoClick = onChooseDifferentPhotoClick,
+        onDeletePhotosClick = { showDeleteDialog = true }
     )
+    if (showDeleteDialog) {
+        MakeItMeDeleteDialog(
+            viewModel = viewModel,
+            onDismiss = { showDeleteDialog = false },
+            onDeleted = {
+                showDeleteDialog = false
+                onDismiss()
+            }
+        )
+    }
 }
 
 /**
@@ -1124,7 +1173,10 @@ internal fun MakeItMePhotosScreen(
     loadReferenceUrls: ((List<String>) -> Unit) -> Unit,
     onReplaceClick: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetakeSelfieClick: () -> Unit = onReplaceClick,
+    onChooseDifferentPhotoClick: () -> Unit = onReplaceClick,
+    onDeletePhotosClick: (() -> Unit)? = null
 ) {
     var urls by remember { mutableStateOf<List<String>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
@@ -1169,6 +1221,16 @@ internal fun MakeItMePhotosScreen(
                 )
             }
         }
+        // GEN-5 (item 21): the title zone carries the script
+        // wordmark above the plain title, as on the fork, the
+        // consent and the paywall.
+        Text(
+            text = "Make It Me",
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 30.sp,
+            color = RunWearColors.TextPrimary
+        )
+        Spacer(Modifier.height(4.dp))
         Text(
             text = MakeItMeStrings.S6_PHOTOS_ROW,
             fontFamily = FontFamily.Default,
@@ -1200,6 +1262,20 @@ internal fun MakeItMePhotosScreen(
                 }
             )
             else -> {
+            // GEN-5 (item 21): the settled current-photo block —
+            // its heading and arrival line above the photo itself.
+            Text(
+                text = MakeItMeStrings.S30_YOUR_CURRENT_PHOTO,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
+            Text(
+                text = MakeItMeStrings.S31_CURRENT_PHOTO_LINE,
+                fontSize = 13.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 urls.forEach { url ->
                     ReferencePhotoTile(
@@ -1219,26 +1295,66 @@ internal fun MakeItMePhotosScreen(
                 lineHeight = 19.sp,
                 color = RunWearColors.TextSecondary
             )
-            Spacer(Modifier.height(8.dp))
-            // Frame 38: the epoch rule in plain words.
+            Spacer(Modifier.height(16.dp))
+            // Frame 38: the epoch, headed in the settled words,
+            // with the rule in plain words beneath it.
+            Text(
+                text = MakeItMeStrings.S32_EPOCH_HEADING,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = RunWearColors.TextPrimary
+            )
             Text(
                 text = MakeItMeStrings.S20_EPOCH_RULE,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
-                color = RunWearColors.TextSecondary
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.padding(top = 2.dp)
             )
             }
         }
         Spacer(Modifier.height(24.dp))
+        // GEN-5 (item 21): TWO separate replacement doors — the
+        // guided selfie (primary) and a different library photo —
+        // not one merged "Replace photos" button. Each door routes
+        // into the replace flow through its own entry (the flow
+        // pre-opens the named door at its capture step).
         Button(
-            onClick = onReplaceClick,
+            onClick = onRetakeSelfieClick,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
         ) {
-            Text("Replace photos", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(
+                MakeItMeStrings.S33_RETAKE_SELFIE,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedButton(
+            onClick = onChooseDifferentPhotoClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                MakeItMeStrings.S34_CHOOSE_DIFFERENT_PHOTO,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp
+            )
+        }
+        if (onDeletePhotosClick != null) {
+            Spacer(Modifier.height(18.dp))
+            MakeItMeSettingsRow(
+                title = MakeItMeStrings.S10_DELETE_ROW,
+                sub = null,
+                destructive = true,
+                onClick = onDeletePhotosClick
+            )
         }
         Spacer(Modifier.height(32.dp))
     }
@@ -1557,7 +1673,7 @@ fun MakeItMePaywallSheet(
                             MakeItMeStrings.U2I_CTA,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp,
-                            color = Color.White
+                            color = com.runwear.app.ui.theme.PhotoInk
                         )
                     }
                 }
@@ -1914,7 +2030,7 @@ fun MakeItMeSettingsSection(
                                     card.ctaLabel ?: MakeItMeStrings.S27_GET_PREMIUM,
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 15.sp,
-                                    color = Color.White
+                                    color = com.runwear.app.ui.theme.PhotoInk
                                 )
                             }
                             // C-5 + C-6: the monthly price, present

@@ -183,12 +183,12 @@ fun DatePickerSheet(
                                 text = label,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 fontSize = 14.sp,
-                                color = if (isSelected) Color.White else RunWearColors.TextPrimary
+                                color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary
                             )
                             Text(
                                 text = sublabel,
                                 fontSize = 12.sp,
-                                color = if (isSelected) Color.White.copy(alpha = 0.8f) else RunWearColors.TextSecondary
+                                color = if (isSelected) com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.8f) else RunWearColors.TextSecondary
                             )
                         }
                     }
@@ -673,7 +673,7 @@ private fun UnitToggle(
                 text = "Fahrenheit",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (!isCelsius) Color.White else RunWearColors.TextSecondary
+                color = if (!isCelsius) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
             )
         }
 
@@ -695,7 +695,7 @@ private fun UnitToggle(
                 text = "Celsius",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isCelsius) Color.White else RunWearColors.TextSecondary
+                color = if (isCelsius) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
             )
         }
     }
@@ -742,7 +742,7 @@ private fun AppearanceSelector(
                     text = pref.label,
                     fontSize = 13.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Color.White else RunWearColors.TextPrimary,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary,
                     textAlign = TextAlign.Center,
                     maxLines = 1
                 )
@@ -804,7 +804,7 @@ private fun ComfortSelector(
                     text = pref.shortLabel,
                     fontSize = 10.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Color.White else RunWearColors.TextPrimary,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     lineHeight = 12.sp
@@ -863,7 +863,7 @@ private fun GenderToggleSettings(
                     text = label,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) Color.White else RunWearColors.TextSecondary,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary,
                     maxLines = 1
                 )
             }
@@ -1043,7 +1043,12 @@ fun LocationPickerSheet(
                     query = it
                     if (it.length >= 2) onSearch(it)
                 },
-                placeholder = { Text("Enter city or ZIP code...") },
+                // GEN-5 (RW-28 item 31, A-25/A-27): the settled
+                // placeholder wording — "Search a place" — and an
+                // unfocused border that actually reads on the cream
+                // sheet (the gen-4 BgCardLight border was nearly
+                // invisible, so the field looked borderless).
+                placeholder = { Text("Search a place") },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)
                 },
@@ -1061,13 +1066,24 @@ fun LocationPickerSheet(
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = RunWearColors.PineAccent,
-                    unfocusedBorderColor = RunWearColors.BgCardLight
+                    unfocusedBorderColor = RunWearColors.TextSecondary.copy(alpha = 0.45f)
                 ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
                     onSearch = { focusManager.clearFocus() }
                 )
             )
+
+            // GEN-5 (item 31, A-27): the settled hint under the
+            // field, in the quiet voice — shown until typing starts.
+            if (query.isEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Start typing a city or ZIP — results appear as you type.",
+                    fontSize = 13.sp,
+                    color = RunWearColors.TextSecondary
+                )
+            }
 
             // Results IMMEDIATELY below search (visible above keyboard)
             if (searchResults.isNotEmpty()) {
@@ -1150,7 +1166,7 @@ fun LocationPickerSheet(
                         Icon(
                             imageVector = Icons.Outlined.MyLocation,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = com.runwear.app.ui.theme.PhotoInk,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -1402,7 +1418,7 @@ fun ShopAllSheet(
                         text = "Shop All →",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = com.runwear.app.ui.theme.PhotoInk,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }

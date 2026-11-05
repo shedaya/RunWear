@@ -15,19 +15,26 @@ import androidx.wear.compose.material3.Typography
  * Matches the phone app's hero-image design with adaptations for small screens.
  */
 object RunWearColors {
-    // Brand Colors
-    val Primary = Color(0xFF00796B)           // Teal - PRIMARY brand color
-    val PrimaryLight = Color(0xFF4DB6AC)
-    val PrimaryDark = Color(0xFF004D40)
+    // GEN-5 design pass (RW-28 Addendum 5): the Wear palette joins
+    // the adopted design system — the watch is an always-dark
+    // surface, so it takes the phone's DARK (Warm Charcoal) pair
+    // and the pine family in its dark expression. The gen-4 Wear
+    // theme still carried the retired teal primary (#00796B),
+    // pure-black / cool-grey surfaces and pure-white ink — the
+    // off-system disease Sol named, on the watch.
+    // Brand Colors — pine seed #175E4C, dark accent #5CC79F.
+    val Primary = Color(0xFF5CC79F)           // Pine accent on dark
+    val PrimaryLight = Color(0xFF5CC79F)
+    val PrimaryDark = Color(0xFF175E4C)       // Pine seed
 
-    // Category Colors (for outfit chips)
-    val CategoryTop = Color(0xFF00796B)       // Teal (tops)
-    val CategoryBottom = Color(0xFF1565C0)    // Blue (bottoms)
-    val CategoryHead = Color(0xFF2E7D32)      // Green (head)
-    val CategoryHands = Color(0xFF5E35B1)     // Purple (hands)
-    val CategoryAccessories = Color(0xFFE65100) // Orange (accessories)
+    // Category Colors (for outfit chips) — the phone's dark set.
+    val CategoryTop = Color(0xFF26A69A)
+    val CategoryBottom = Color(0xFF42A5F5)
+    val CategoryHead = Color(0xFF66BB6A)
+    val CategoryHands = Color(0xFF9575CD)
+    val CategoryAccessories = Color(0xFFFF7043)
 
-    // Temperature Bracket Colors
+    // Temperature Bracket Colors — the shared hex set, unchanged.
     val TempFreezing = Color(0xFF8B5CF6)      // Purple - <20°F
     val TempCold = Color(0xFF6366F1)          // Indigo - 20-34°F
     val TempCool = Color(0xFF3B82F6)          // Blue - 35-49°F
@@ -35,15 +42,15 @@ object RunWearColors {
     val TempWarm = Color(0xFFF59E0B)          // Amber - 65-79°F
     val TempHot = Color(0xFFF97316)           // Orange - 80°F+
 
-    // Surface Colors (OLED optimized)
-    val Background = Color(0xFF000000)        // Pure black for OLED
-    val Surface = Color(0xFF1A1A1A)           // Dark surface
-    val SurfaceElevated = Color(0xFF262626)   // Cards
+    // Surface Colors — Warm Charcoal (design of record, Nov 2).
+    val Background = Color(0xFF16130F)        // Charcoal ground
+    val Surface = Color(0xFF211D17)           // Charcoal sheet
+    val SurfaceElevated = Color(0xFF2A251E)   // Charcoal card
 
-    // Text Colors
-    val TextPrimary = Color(0xFFFFFFFF)
-    val TextSecondary = Color(0xFFB3B3B3)
-    val TextMuted = Color(0xFF737373)
+    // Text Colors — warm ink pair.
+    val TextPrimary = Color(0xFFF5F1EA)
+    val TextSecondary = Color(0xFFB8AEA0)
+    val TextMuted = Color(0xFFB8AEA0)
 }
 
 /**
@@ -77,13 +84,13 @@ object WeatherColors {
 
 private val WearColorScheme = ColorScheme(
     primary = RunWearColors.Primary,
-    onPrimary = Color.White,
+    onPrimary = Color(0xFF16130F),
     primaryContainer = RunWearColors.PrimaryDark,
-    onPrimaryContainer = RunWearColors.PrimaryLight,
-    secondary = Color(0xFF4DB6AC),
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF00363D),
-    onSecondaryContainer = Color(0xFF70F5E6),
+    onPrimaryContainer = RunWearColors.TextPrimary,
+    secondary = RunWearColors.Primary,
+    onSecondary = Color(0xFF16130F),
+    secondaryContainer = RunWearColors.PrimaryDark,
+    onSecondaryContainer = RunWearColors.TextPrimary,
     tertiary = Color(0xFFF59E0B),
     onTertiary = Color.Black,
     tertiaryContainer = Color(0xFF5F3D00),
@@ -94,7 +101,7 @@ private val WearColorScheme = ColorScheme(
     surfaceContainer = RunWearColors.SurfaceElevated,
     onSurfaceVariant = RunWearColors.TextSecondary,
     outline = RunWearColors.TextMuted,
-    outlineVariant = Color(0xFF3D3D3D),
+    outlineVariant = Color(0xFF3A342A),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005)
 )

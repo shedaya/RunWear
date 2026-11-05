@@ -298,6 +298,10 @@ internal fun ChapterCover(
                         model = chapter.cover.heroRef,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
+                        // GEN-5 (sharing fix): top-anchored, like
+                        // the poster — a square centre crop of a
+                        // runner portrait cuts the head the same way.
+                        alignment = Alignment.TopCenter,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -521,6 +525,7 @@ internal fun DayCard(
                                 model = thumbnailRef,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
+                                alignment = Alignment.TopCenter,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -1010,6 +1015,11 @@ fun MorningPoster(
                 model = entry.heroRef,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                // GEN-5 (sharing fix): TOP-anchored crop — the
+                // gen-4 centre crop took the source's middle band
+                // and rendered the runner headless on the poster
+                // (Sol's Nov 5 evidence). See ShareCropPolicy.
+                alignment = Alignment.TopCenter,
                 onState = { painterState ->
                     when (painterState) {
                         is coil.compose.AsyncImagePainter.State.Success ->

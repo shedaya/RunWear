@@ -44,7 +44,32 @@ class GuidedSelfieChecksTest {
     @Test
     fun `a good selfie passes every chip`() {
         assertTrue(GuidedSelfieChecks.allPassed(m()))
-        assertEquals("That's it — this photo works.", GuidedSelfieChecks.coachingLine(m()))
+        // GEN-5 (item 17): the settled passing line, verbatim.
+        assertEquals("✓ That's exactly what we need", GuidedSelfieChecks.coachingLine(m()))
+    }
+
+    @Test
+    fun `the checks are the design's four - In frame, Face size, Straight on, Light`() {
+        // GEN-5 (items 16/17): exactly four checks, the design's
+        // names, on the still evaluation AND the live evaluation.
+        assertEquals(
+            listOf("In frame", "Face size", "Straight on", "Light"),
+            GuidedSelfieChecks.evaluate(m()).map { it.label }
+        )
+        assertEquals(
+            listOf("In frame", "Face size", "Straight on", "Light"),
+            GuidedSelfieChecks.evaluate(null).map { it.label }
+        )
+        assertEquals(
+            GuidedSelfieChecks.evaluate(m()).map { it.label },
+            GuidedSelfieChecks.evaluateLive(1, 0.35f, 5f, 0.5).map { it.label }
+        )
+        assertTrue(
+            GuidedSelfieChecks.allLivePassed(GuidedSelfieChecks.evaluateLive(1, 0.35f, 5f, 0.5))
+        )
+        assertFalse(
+            GuidedSelfieChecks.allLivePassed(GuidedSelfieChecks.evaluateLive(0, 0.35f, 5f, 0.5))
+        )
     }
 
     @Test
@@ -54,11 +79,11 @@ class GuidedSelfieChecksTest {
         // two production evaluations, never from hand-built states.
         val before = GuidedSelfieChecks.evaluate(m(faces = 0))
         val after = GuidedSelfieChecks.evaluate(m())
-        // With no face in frame, the size and brightness chips
-        // already pass (they judge the frame, not the face) — only
-        // the three face-dependent checks can turn.
+        // With no face in frame, the size and light chips already
+        // pass (they judge the frame readings, not the face) —
+        // only the two face-dependent checks can turn.
         assertEquals(
-            listOf("Face in frame", "Just you", "Facing forward"),
+            listOf("In frame", "Straight on"),
             GuidedSelfieChecks.turnedPassing(before, after).map { it.label }
         )
         // Nothing turns when nothing changes, and a check that
@@ -66,10 +91,10 @@ class GuidedSelfieChecksTest {
         assertTrue(GuidedSelfieChecks.turnedPassing(after, after).isEmpty())
         assertTrue(GuidedSelfieChecks.turnedPassing(after, before).isEmpty())
         // A partial improvement names only the checks that flipped
-        // (here brightness regresses while the face checks turn).
+        // (here light regresses while the face checks turn).
         val partial = GuidedSelfieChecks.evaluate(m(faces = 1, lum = 0.05))
         assertEquals(
-            listOf("Face in frame", "Just you", "Facing forward"),
+            listOf("In frame", "Straight on"),
             GuidedSelfieChecks.turnedPassing(before, partial).map { it.label }
         )
     }

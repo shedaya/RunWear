@@ -246,13 +246,13 @@ internal fun HeroWeatherPage(
                 Text(
                     text = weather.weatherCode.description,
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.9f),
                     maxLines = 1
                 )
                 Text(
                     text = locationName,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.7f),
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.7f),
                     maxLines = 1
                 )
             }
@@ -287,7 +287,7 @@ internal fun HeroWeatherPage(
                             text = "${animatedTemp}°$unitSymbol",
                             fontSize = 48.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color.White,
+                            color = RunWearColors.TextPrimary,
                             letterSpacing = (-1).sp
                         )
                     }
@@ -303,7 +303,7 @@ internal fun HeroWeatherPage(
                     Text(
                         text = "Feels like",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = RunWearColors.TextPrimary.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -319,7 +319,7 @@ internal fun HeroWeatherPage(
                         DateTimeFormatter.ofPattern("EEE")
                     ),
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = RunWearColors.TextPrimary.copy(alpha = 0.8f)
                 )
                 Spacer(Modifier.height(4.dp))
                 // More prominent swipe hint

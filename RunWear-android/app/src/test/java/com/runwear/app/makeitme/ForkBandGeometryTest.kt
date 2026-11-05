@@ -1,7 +1,5 @@
 package com.runwear.app.makeitme
 
-import androidx.compose.ui.Alignment
-import com.runwear.app.ui.components.HeroImageGeometry
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -9,25 +7,23 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * W-3 (Nov 4 walkthrough, GEN-2 lane A4) — the Make It Me fork's
- * header photo band cropped the runner at the chin: the band's
- * AsyncImage carried NO alignment, so Crop defaulted to CENTER and
- * discarded the top of the frame, head included. Home's hero — the
- * same serve — anchors TOP (HeroSection's BiasAlignment −1 at
- * rest) and shows the full head.
+ * GEN-5 (RW-28, ruling C-2): the fork band's geometry for the
+ * purpose-designed hard-coded image (mim-fork-hero.webp,
+ * 2048 × 1152) and its code-drawn dashed face box.
  *
- * Pins:
- *  - the fork band's alignment IS Alignment.TopCenter;
- *  - across the standard portrait phone matrix, the band's
- *    top-anchored slice reaches the bottom of the head band D-23
- *    audited on the home serve (source y 392–509 of 1200) — the
- *    full head is in frame;
- *  - the CENTER anchor the band used before discards a real top
- *    region of the frame at these sizes (the defect mechanism);
- *  - source-level: the rendered band actually passes the pinned
- *    alignment, and the fork root scrolls (the whole fork — the
- *    "Use standard photos" button included — stays reachable
- *    however tall the content runs).
+ * The asset lane's anchoring rule is binding (plain centre-crop is
+ * ruled OUT — the head has only 3.2% headroom in the image):
+ *  - band aspect ≤ image aspect (1.778): the FULL image height is
+ *    shown and the horizontal window is centred on the face
+ *    centre x = 0.507, clamped to the image edges;
+ *  - band aspect > image aspect: the FULL image width is shown
+ *    and the vertical window is anchored to the TOP (y = 0).
+ *
+ * Pins: the rule's two branches, the face box's registration to
+ * the face under the SAME transform as the image, the head's full
+ * visibility across the asset lane's crop-test matrix, and the
+ * source-level facts (bundled asset, cream placeholder, dashed
+ * overlay, scrolling root).
  */
 class ForkBandGeometryTest {
 
@@ -54,72 +50,85 @@ class ForkBandGeometryTest {
             .readText()
 
     @Test
-    fun `the fork band is top-anchored, as home`() {
-        assertEquals(Alignment.TopCenter, ForkBandGeometry.IMAGE_ALIGNMENT)
+    fun `narrow bands show the full image height with the window centred on the face`() {
+        // 1080 x 900 (1.2:1) — full height shown, so the displayed
+        // height equals the band height and the top is zero; the
+        // face centre lands at the band's horizontal centre.
+        val rect = ForkBandGeometry.displayedImageRect(1080f, 900f)
+        assertEquals(900f, rect.height, 0.5f)
+        assertEquals(0f, rect.top, 0.001f)
+        val faceCentreX = rect.left + ForkBandGeometry.FACE_CENTRE_X_FRACTION * rect.width
+        assertEquals(540f, faceCentreX, 1.0f)
     }
 
     @Test
-    fun `the top-anchored slice covers the audited head band across the portrait phone matrix`() {
-        // Portrait phone widths (dp) × densities; the band is
-        // ForkBandGeometry.BAND_HEIGHT_DP tall in every case.
-        val widthsDp = listOf(320, 360, 390, 411, 430, 450)
-        val densities = listOf(2.0f, 2.75f, 3.0f)
-        for (widthDp in widthsDp) {
-            for (density in densities) {
-                val widthPx = widthDp * density
-                val heightPx = ForkBandGeometry.BAND_HEIGHT_DP * density
-                assertTrue(
-                    "full head must be in the fork band at ${widthDp}dp ×$density",
-                    ForkBandGeometry.headBandFullyVisible(widthPx, heightPx)
-                )
-            }
+    fun `the shipped-like band (1080x620) centres the face and keeps the full head`() {
+        val rect = ForkBandGeometry.displayedImageRect(1080f, 620f)
+        assertEquals(620f, rect.height, 0.5f)
+        val faceCentreX = rect.left + ForkBandGeometry.FACE_CENTRE_X_FRACTION * rect.width
+        assertEquals(540f, faceCentreX, 1.0f)
+        assertTrue(ForkBandGeometry.headFullyVisible(1080f, 620f))
+    }
+
+    @Test
+    fun `wide bands show the full image width anchored to the top`() {
+        // 2560 x 1000 (2.56:1) — full width shown, window at y = 0,
+        // so the head (top 3.2% of the image) is always in frame.
+        val rect = ForkBandGeometry.displayedImageRect(2560f, 1000f)
+        assertEquals(2560f, rect.width, 0.5f)
+        assertEquals(0f, rect.left, 0.001f)
+        assertEquals(0f, rect.top, 0.001f)
+        assertTrue(ForkBandGeometry.headFullyVisible(2560f, 1000f))
+    }
+
+    @Test
+    fun `the head is fully visible across the asset lane's crop-test matrix`() {
+        // Aspects from the README's crop tests, at a fixed height.
+        for (aspect in listOf(0.86f, 1.0f, 1.2f, 1.5f, 1.74f, 2.32f, 2.56f)) {
+            val height = 1000f
+            val width = aspect * height
+            assertTrue(
+                "full head must be visible at aspect $aspect",
+                ForkBandGeometry.headFullyVisible(width, height)
+            )
         }
     }
 
     @Test
-    fun `the old center anchor discarded the top of the frame at band sizes`() {
-        // The defect mechanism, in home's own geometry: a CENTER
-        // anchor's slice starts at (sourceHeight − sliceHeight)/2,
-        // strictly below the frame's top — whatever the serve
-        // places up there (on the fork's serve: the head) is cut
-        // before the slice begins. The top anchor starts at 0.
-        val widthPx = 411f * 2.0f
-        val heightPx = ForkBandGeometry.BAND_HEIGHT_DP * 2.0f
-        val slice = HeroImageGeometry.sliceHeightSourcePx(widthPx, heightPx)
-        val centerSliceTop =
-            (HeroImageGeometry.SOURCE_HEIGHT_PX - slice) / 2f
-        assertTrue(
-            "center anchor must discard a real top region (was $centerSliceTop source px)",
-            centerSliceTop > 100f
-        )
+    fun `the face box is the normalised box under the same transform as the image`() {
+        for ((w, h) in listOf(1080f to 900f, 1080f to 620f, 2560f to 1000f, 800f to 930f)) {
+            val img = ForkBandGeometry.displayedImageRect(w, h)
+            val box = ForkBandGeometry.faceBoxRect(w, h)
+            assertEquals(img.left + 0.400f * img.width, box.left, 0.5f)
+            assertEquals(img.top + 0.018f * img.height, box.top, 0.5f)
+            assertEquals(0.214f * img.width, box.width, 0.5f)
+            assertEquals(0.478f * img.height, box.height, 0.5f)
+            // And the box actually contains the measured head box.
+            val headLeft = img.left + 0.414f * img.width
+            val headRight = img.left + 0.600f * img.width
+            val headTop = img.top + 0.032f * img.height
+            val headBottom = img.top + 0.482f * img.height
+            assertTrue(box.left <= headLeft && box.left + box.width >= headRight)
+            assertTrue(box.top <= headTop && box.top + box.height >= headBottom)
+        }
     }
 
     @Test
-    fun `the rendered fork band passes the pinned alignment and the fork scrolls`() {
+    fun `source - bundled asset, cream placeholder, dashed overlay, scrolling root`() {
         val source = makeItMeScreens()
-        assertTrue(
-            "the fork band's AsyncImage must pass ForkBandGeometry.IMAGE_ALIGNMENT",
-            source.contains("alignment = ForkBandGeometry.IMAGE_ALIGNMENT")
-        )
-        assertTrue(
-            "the band height must come from ForkBandGeometry.BAND_HEIGHT_DP",
-            source.contains(".height(ForkBandGeometry.BAND_HEIGHT_DP.dp)")
-        )
-        // Reachability (W-3's second half): the fork root is a
-        // vertical-scrolling column, so the full content — both
-        // option cards, the "Use standard photos" button, and the
-        // footer — is reachable at any viewport height.
-        val forkStart = source.indexOf("fun MakeItMeForkScreen")
-        val forkEnd = source.indexOf("private fun ForkOptionCard")
-        assertTrue(forkStart in 0 until forkEnd)
-        val forkBody = source.substring(forkStart, forkEnd)
-        assertTrue(
-            "the fork root must scroll",
-            forkBody.contains(".verticalScroll(rememberScrollState())")
-        )
-        assertTrue(
-            "the fork must render the standard-photos option card",
-            forkBody.contains("MakeItMeStrings.F8_OPTION_B_BUTTON")
-        )
+        val fork = source.substringAfter("fun MakeItMeForkScreen(")
+            .substringBefore("private fun ForkOptionCard")
+        assertTrue(fork.contains("R.drawable.mim_fork_hero"))
+        // The designed loading ground is the cream Background
+        // token, never white (A-5).
+        assertTrue(fork.contains(".background(RunWearColors.Background)"))
+        // The face box is a code overlay with the dashed language.
+        assertTrue(fork.contains("dashPathEffect"))
+        assertTrue(fork.contains("ForkBandGeometry.faceBoxRect"))
+        assertTrue(fork.contains("ForkBandGeometry.displayedImageRect"))
+        // The band's height comes from the geometry object.
+        assertTrue(fork.contains(".height(ForkBandGeometry.BAND_HEIGHT_DP.dp)"))
+        // The whole fork stays reachable: the root scrolls.
+        assertTrue(fork.contains("verticalScroll(rememberScrollState())"))
     }
 }

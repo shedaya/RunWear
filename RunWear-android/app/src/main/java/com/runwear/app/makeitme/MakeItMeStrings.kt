@@ -202,6 +202,14 @@ object MakeItMeStrings {
     // discipline (server + phone, what goes, no undo) and adds the
     // two facts the photos copy doesn't carry: the account itself
     // goes, and deleting data does NOT cancel a store subscription.
+    // GEN-5 (RW-28 item 21): the settled Your Photos surface —
+    // current-photo heading + arrival line, the epoch heading, and
+    // the two separate replacement doors.
+    const val S30_YOUR_CURRENT_PHOTO = "Your current photo"
+    const val S31_CURRENT_PHOTO_LINE = "This is the photo your looks are made from."
+    const val S32_EPOCH_HEADING = "A new photo starts a new set"
+    const val S33_RETAKE_SELFIE = "Retake Selfie"
+    const val S34_CHOOSE_DIFFERENT_PHOTO = "Choose a Different Photo"
     const val S20_DELETE_DATA_ROW = "Delete my data"
     // GEN-5 (RW-28 item 25): the destructive rows' own heading,
     // quarantined at the very end of Settings.

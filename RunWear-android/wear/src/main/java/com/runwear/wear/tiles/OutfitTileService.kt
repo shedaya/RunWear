@@ -37,15 +37,19 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val RESOURCES_VERSION = "2"
+// GEN-5: bumped for the design-pass palette change so installed
+// tiles re-render in the Warm Charcoal pair.
+private const val RESOURCES_VERSION = "3"
 
-// Tile palette mirrors the phone app's kit: white display type, #B3B3B3
-// secondary, #737373 muted, primary teal #00796B. Item rows use the app's
-// category icons (baked in category colors — ProtoLayout cannot tint).
-private const val TILE_TEXT_PRIMARY = 0xFFFFFFFF.toInt()
-private const val TILE_TEXT_SECONDARY = 0xFFB3B3B3.toInt()
-private const val TILE_TEXT_MUTED = 0xFF737373.toInt()
-private const val TILE_PRIMARY = 0xFF00796B.toInt()
+// Tile palette mirrors the phone app's kit — GEN-5 design pass:
+// the Warm Charcoal pair (warm ink #F5F1EA, muted #B8AEA0) and the
+// pine dark accent #5CC79F, replacing the retired cool greys and
+// teal. Item rows use the app's category icons (baked in the phone
+// dark category colors — ProtoLayout cannot tint).
+private const val TILE_TEXT_PRIMARY = 0xFFF5F1EA.toInt()
+private const val TILE_TEXT_SECONDARY = 0xFFB8AEA0.toInt()
+private const val TILE_TEXT_MUTED = 0xFFB8AEA0.toInt()
+private const val TILE_PRIMARY = 0xFF5CC79F.toInt()
 
 @OptIn(ExperimentalHorologistApi::class)
 class OutfitTileService : SuspendingTileService() {

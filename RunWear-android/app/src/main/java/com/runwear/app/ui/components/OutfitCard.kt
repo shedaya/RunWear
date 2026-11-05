@@ -205,12 +205,21 @@ fun OutfitCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = if (centeredText) item.description else item.category.displayName,
+                    // GEN-5 (RW-28 item 30, A-24): the row's second
+                    // line is the item's settled one-line NOTE
+                    // ("Lightweight, breathable, maximum airflow") in
+                    // BOTH presentations — the bare category word
+                    // ("Base Layer") the gen-4 list showed carried no
+                    // information. Falls back to the category word
+                    // only for an item with no note (the PWA's
+                    // `desc || category` rule, now on both layouts).
+                    text = item.description.ifBlank { item.category.displayName },
                     style = TextStyle(
                         fontSize = 13.sp,
                         color = RunWearColors.TextSecondary
                     ),
-                    textAlign = if (centeredText) TextAlign.Center else TextAlign.Start
+                    textAlign = if (centeredText) TextAlign.Center else TextAlign.Start,
+                    maxLines = 1
                 )
             }
 

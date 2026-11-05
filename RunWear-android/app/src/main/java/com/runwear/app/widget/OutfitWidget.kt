@@ -64,27 +64,32 @@ import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toJavaLocalDateTime
 import java.time.LocalDateTime
 
-// Widget palette mirrors the phone app's kit (ui/theme RunWearColors):
-// background #0A0A0A, card #262626, text #FFFFFF / #B3B3B3 / #737373,
-// primary teal #00796B, and the app's per-category colors for item icons.
+// Widget palette mirrors the phone app's kit (ui/theme RunWearColors).
+// GEN-5 design pass (RW-28 Addendum 5): the widget carried the
+// RETIRED cool-grey set (#0A0A0A / #262626 / #1A1A1A, pure-white
+// ink, teal primary) long after the design adopted the cream +
+// Warm Charcoal pair — the same off-system disease Sol named in
+// Settings. The widget renders on the dark pair: ground #16130F,
+// sheet #211D17, card #2A251E, warm ink #F5F1EA, muted #B8AEA0,
+// and the pine dark accent #5CC79F as its primary.
 // Display type is Bold system at display size (per the widgets/watch
 // audit re-skin spec) — Glance composes its own type, and the app's
 // one script face (Great Vibes) is wordmarks-only besides.
-private val WidgetBackground = Color(0xFF0A0A0A)
-private val WidgetCard = Color(0xFF262626)
+private val WidgetBackground = Color(0xFF16130F)
+private val WidgetCard = Color(0xFF2A251E)
 
 /**
  * The garment panel's raised surface (square compositions): a subtle
- * tint step above the tile background (#0A0A0A). Glance has no shadow
+ * tint step above the tile background (#16130F). Glance has no shadow
  * primitive — the tint step plus rounded corners is the approximation.
  * The secondary chips keep the lighter WidgetCard tint so they still
  * read as raised on the panel.
  */
-private val WidgetPanel = Color(0xFF1A1A1A)
-private val WidgetTextPrimary = Color(0xFFFFFFFF)
-private val WidgetTextSecondary = Color(0xFFB3B3B3)
-private val WidgetTextMuted = Color(0xFF737373)
-private val WidgetPrimary = Color(0xFF00796B)
+private val WidgetPanel = Color(0xFF211D17)
+private val WidgetTextPrimary = Color(0xFFF5F1EA)
+private val WidgetTextSecondary = Color(0xFFB8AEA0)
+private val WidgetTextMuted = Color(0xFFB8AEA0)
+private val WidgetPrimary = Color(0xFF5CC79F)
 
 /**
  * Home-screen outfit widget (redesign spec §B.3).

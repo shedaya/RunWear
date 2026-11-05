@@ -700,7 +700,7 @@ private fun HeroFlagChip(
         Icon(
             imageVector = Icons.Outlined.Flag,
             contentDescription = "Flag this photo",
-            tint = Color.White.copy(alpha = if (enabled) 0.9f else 0.45f),
+            tint = com.runwear.app.ui.theme.PhotoInk.copy(alpha = if (enabled) 0.9f else 0.45f),
             modifier = Modifier
                 .padding(8.dp)
                 .size(16.dp)
@@ -729,7 +729,7 @@ private fun HeroRefreshChip(
         Icon(
             imageVector = Icons.Outlined.Refresh,
             contentDescription = "Show another photo",
-            tint = Color.White.copy(alpha = 0.9f),
+            tint = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.9f),
             modifier = Modifier
                 .padding(8.dp)
                 .size(16.dp)

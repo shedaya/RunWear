@@ -720,7 +720,7 @@ private fun TokenSegmentedControl(
                     text = label,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (isSelected) Color.White else RunWearColors.TextSecondary,
+                    color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary,
                     textAlign = TextAlign.Center,
                     maxLines = 1
                 )

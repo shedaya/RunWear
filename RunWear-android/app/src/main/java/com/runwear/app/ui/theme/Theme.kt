@@ -318,7 +318,7 @@ fun getTemperatureFallbackGradient(tempFahrenheit: Double): Color {
 
 internal val DarkColorScheme = darkColorScheme(
     primary = DarkPalette.Primary,
-    onPrimary = Color.White,
+    onPrimary = com.runwear.app.ui.theme.PhotoInk,
     primaryContainer = DarkPalette.PrimaryDark,
     onPrimaryContainer = DarkPalette.PineAccent,
     secondary = DarkPalette.PineAccent,
@@ -345,7 +345,7 @@ internal val DarkColorScheme = darkColorScheme(
 
 internal val LightColorScheme = lightColorScheme(
     primary = LightPalette.Primary,
-    onPrimary = Color.White,
+    onPrimary = com.runwear.app.ui.theme.PhotoInk,
     primaryContainer = LightPalette.PrimaryLight,
     onPrimaryContainer = Color.White,
     secondary = LightPalette.Primary,

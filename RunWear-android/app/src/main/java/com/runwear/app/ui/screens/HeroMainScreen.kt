@@ -208,6 +208,11 @@ fun HeroMainScreen(
     // upsell card, or the photos view).
     var showMakeItMeFlow by remember { mutableStateOf(false) }
     var makeItMeFlowReplace by remember { mutableStateOf(false) }
+    // GEN-5 (item 21): which door the flow is entered through —
+    // the Your Photos doors pre-open their named intake door.
+    var makeItMeFlowEntryDoor by remember {
+        mutableStateOf(com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD)
+    }
     var showMakeItMePhotos by remember { mutableStateOf(false) }
     var showMakeItMePaywall by remember { mutableStateOf(false) }
 
@@ -1053,12 +1058,17 @@ fun HeroMainScreen(
             todaysCell = onPersonalCombinationRequest(),
             onFinished = {
                 showMakeItMeFlow = false
+                makeItMeFlowEntryDoor = com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD
                 if (!makeItMeFlowReplace) onFirstLookRequested()
                 onPersonalLayerChanged()
             },
             // From Settings, closing without finishing changes nothing —
             // personalization stays off (State A remains the truth).
-            onExitAsStock = { showMakeItMeFlow = false }
+            onExitAsStock = {
+                showMakeItMeFlow = false
+                makeItMeFlowEntryDoor = com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD
+            },
+            entryDoor = makeItMeFlowEntryDoor
         )
     }
 
@@ -1084,6 +1094,22 @@ fun HeroMainScreen(
                 onReplaceClick = {
                     showMakeItMePhotos = false
                     makeItMeFlowReplace = true
+                    showMakeItMeFlow = true
+                },
+                // GEN-5 (item 21): the two separate doors enter the
+                // replace flow through their own entries.
+                onRetakeSelfieClick = {
+                    showMakeItMePhotos = false
+                    makeItMeFlowReplace = true
+                    makeItMeFlowEntryDoor =
+                        com.runwear.app.makeitme.MakeItMeEntryDoor.GUIDED_SELFIE
+                    showMakeItMeFlow = true
+                },
+                onChooseDifferentPhotoClick = {
+                    showMakeItMePhotos = false
+                    makeItMeFlowReplace = true
+                    makeItMeFlowEntryDoor =
+                        com.runwear.app.makeitme.MakeItMeEntryDoor.LIBRARY
                     showMakeItMeFlow = true
                 }
             )
@@ -1346,7 +1372,14 @@ private fun HeroSectionContent(
             flagEnabled = heroFlagEnabled,
             onFlagClick = onFlagClick,
             heroIsPersonal = uiState.heroIsPersonal,
-            showRefreshButton = uiState.effectiveHeroUrl != null &&
+            // GEN-5 (RW-28 item 32, A-23): the Now-state hero shows
+            // the FLAG control only; the refresh chip joins in
+            // CHANGED states (a non-Now moment selected), where
+            // cycling the moment's photos is meaningful. The gen-4
+            // build showed refresh at Now too whenever the cell had
+            // more than one candidate.
+            showRefreshButton = !uiState.isNowSelected &&
+                uiState.effectiveHeroUrl != null &&
                 uiState.heroCandidates.size +
                 (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
             onRefreshHeroClick = onCycleHero,
@@ -1556,13 +1589,13 @@ private fun OutfitSectionHeader(
                             imageVector = Icons.Outlined.ShoppingBag,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = Color.White
+                            tint = com.runwear.app.ui.theme.PhotoInk
                         )
                         Text(
                             text = "Shop",
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 13.sp,
-                            color = Color.White
+                            color = com.runwear.app.ui.theme.PhotoInk
                         )
                     }
                 }

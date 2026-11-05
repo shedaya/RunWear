@@ -56,7 +56,12 @@ class ForkBandNonEmptyTest {
     }
 
     @Test
-    fun `the fork band renders a designed placeholder when no photo is servable`() {
+    fun `the fork band renders the bundled hard-coded image - it can never be blank`() {
+        // GEN-5 (C-2): the band no longer renders the (possibly
+        // unservable) hero photo at all — it renders the bundled
+        // purpose-designed asset, synchronously, over the designed
+        // cream ground. The gen-3 null-photo placeholder branch is
+        // retired with the serve it guarded (A-5).
         val screens = sourceFile(
             "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt"
         ).readText()
@@ -65,12 +70,16 @@ class ForkBandNonEmptyTest {
         assertTrue(forkStart in 0 until forkEnd)
         val forkBody = screens.substring(forkStart, forkEnd)
         assertTrue(
-            "the null-photo branch must paint the gradient placeholder",
-            forkBody.contains("Brush.verticalGradient")
+            "the band must paint the bundled fork asset",
+            forkBody.contains("R.drawable.mim_fork_hero")
         )
         assertTrue(
-            "the null-photo branch must carry the glyph",
-            forkBody.contains("Icons.Outlined.DirectionsRun")
+            "the band's ground must be the designed cream, never white",
+            forkBody.contains(".background(RunWearColors.Background)")
+        )
+        assertTrue(
+            "no async photo load may gate the fork band",
+            !forkBody.contains("AsyncImage")
         )
     }
 

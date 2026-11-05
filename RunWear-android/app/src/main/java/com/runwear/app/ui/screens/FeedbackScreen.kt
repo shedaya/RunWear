@@ -167,7 +167,7 @@ fun FeedbackScreen(
                             text = entry.label,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isSelected) Color.White else RunWearColors.TextPrimary
+                            color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextPrimary
                         )
                     }
                 }
@@ -277,7 +277,7 @@ fun FeedbackScreen(
             ) {
                 if (sending) {
                     CircularProgressIndicator(
-                        color = Color.White,
+                        color = com.runwear.app.ui.theme.PhotoInk,
                         modifier = Modifier.size(20.dp)
                     )
                 } else {

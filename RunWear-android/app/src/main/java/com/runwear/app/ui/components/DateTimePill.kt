@@ -113,8 +113,8 @@ fun DateTimePill(
         ),
         label = "dayStripSettle"
     )
-    val primaryInk = if (onSheet) RunWearColors.TextPrimary else Color.White
-    val secondaryInk = if (onSheet) RunWearColors.TextSecondary else Color.White.copy(alpha = 0.7f)
+    val primaryInk = if (onSheet) RunWearColors.TextPrimary else com.runwear.app.ui.theme.PhotoInk
+    val secondaryInk = if (onSheet) RunWearColors.TextSecondary else com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f)
     val dividerColor = if (onSheet) {
         RunWearColors.TextSecondary.copy(alpha = 0.3f)
     } else {
@@ -275,13 +275,13 @@ fun DateButton(
             Icon(
                 Icons.Outlined.CalendarToday,
                 contentDescription = "Select date",
-                tint = Color.White,
+                tint = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = dateText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
+                color = com.runwear.app.ui.theme.PhotoInk,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -314,13 +314,13 @@ fun TimeButton(
             Icon(
                 Icons.Outlined.Schedule,
                 contentDescription = "Select time",
-                tint = Color.White,
+                tint = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.size(18.dp)
             )
             Text(
                 text = timeText,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
+                color = com.runwear.app.ui.theme.PhotoInk,
                 fontWeight = FontWeight.Medium
             )
         }

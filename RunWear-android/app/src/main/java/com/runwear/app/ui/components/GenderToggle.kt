@@ -99,7 +99,7 @@ private fun GenderOption(
             style = TextStyle(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold, // 600
-                color = if (isSelected) Color.White else RunWearColors.TextSecondary
+                color = if (isSelected) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
             )
         )
     }
