@@ -46,9 +46,13 @@ enum SettingsSectionID: String, CaseIterable, Identifiable {
     case bodyTemperature
     case helpImprove
     case makeItMe
-    case deleteMyData
     case support
     case about
+    /// GEN-6 (RW-56): ONE quarantined danger zone, seated LAST —
+    /// it carries both destructive rows (Delete my photos and
+    /// Delete my data), which gen-5 left split across two
+    /// identically-headed sections.
+    case dangerZone
 
     var id: String { rawValue }
 }
@@ -63,9 +67,9 @@ enum SettingsInventory {
         .bodyTemperature,
         .helpImprove,
         .makeItMe,
-        .deleteMyData,
         .support,
         .about,
+        .dangerZone,
     ]
 
     /// The sections a Settings surface renders for one
@@ -98,9 +102,11 @@ enum MakeItMeSettingsRow: String, CaseIterable {
     case premium
     /// Frame 37's management door in the subscribed state.
     case manageSubscription
-    /// The photos-only delete (frame 39's sibling row). The
-    /// account-level Delete-my-data is NOT this row — it is the
-    /// inventory's own section (see SettingsSectionID.deleteMyData).
+    /// The photos-only delete (frame 39's sibling row). GEN-6
+    /// (RW-56): this row renders in the inventory's ONE danger
+    /// zone section (see SettingsSectionID.dangerZone), beside
+    /// the account-level Delete-my-data — not inside the Make It
+    /// Me section's own groups.
     case deletePhotos
 
     var title: String {
@@ -131,9 +137,9 @@ enum MakeItMeSettingsPresentation {
         case .stock:
             return [.notStarted]
         case .free:
-            return [.yourPhotos, .premium, .deletePhotos]
+            return [.yourPhotos, .premium]
         case .subscribed:
-            return [.yourPhotos, .manageSubscription, .deletePhotos]
+            return [.yourPhotos, .manageSubscription]
         }
     }
 }

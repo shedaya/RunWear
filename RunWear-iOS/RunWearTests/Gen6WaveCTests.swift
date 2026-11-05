@@ -212,4 +212,36 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertFalse(watch.contains("cart.fill"), "no cart glyph on the watch")
         XCTAssertFalse(watch.contains("Link(destination:"), "no outbound link on the watch outfit rows")
     }
+
+    // MARK: - RW-56: one danger zone, seated last
+
+    func testRW56OneDangerZoneSeatedLast() throws {
+        XCTAssertEqual(SettingsInventory.sections.last, .dangerZone)
+        XCTAssertEqual(SettingsInventory.sections.filter { $0 == .dangerZone }.count, 1)
+        let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertEqual(modal.components(separatedBy: "settingsSectionHeader(\"Danger zone\")").count - 1, 1,
+                       "exactly one Danger zone section renders in Settings")
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertFalse(section.contains("destructiveSection"),
+                       "the Make It Me composition carries no destructive group")
+    }
+
+    // MARK: - RW-57: selfie thumbnail row; subscribed seat is management only
+
+    func testRW57PhotosRowCarriesTheSelfieThumbnail_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(section.contains("ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)"),
+                      "the row's thumbnail loads through the shared loader seam")
+        XCTAssertTrue(section.contains("AsyncImage(url: url)"),
+                      "the row renders the user's own photo as its thumbnail")
+        XCTAssertTrue(section.contains("photosThumbnail"))
+    }
+
+    func testRW57SubscribedSeatCarriesManagementOnly_sourcePin() throws {
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertFalse(section.contains("Text(\"You're subscribed.\")"),
+                       "the unlisted subscribed block is removed")
+        XCTAssertTrue(section.contains("MakeItMeSettingsRow.manageSubscription.title"),
+                      "the management door stands in the subscribed seat")
+    }
 }

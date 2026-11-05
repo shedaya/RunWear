@@ -463,7 +463,10 @@ final class Gen5FidelityTests: XCTestCase {
 
     func testSettingsSource_DangerZoneAndVerbatimLines() throws {
         let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
-        XCTAssertTrue(settings.contains("Text(\"Danger zone\")"))
+        // GEN-6 (RW-56): the Danger zone heading moved OUT of
+        // this file — one quarantined section in SettingsModal
+        // carries both destructive rows now.
+        XCTAssertFalse(settings.contains("Text(\"Danger zone\")"))
         XCTAssertTrue(settings.contains("Subscribed · Your photo is ready before you open the app."))
         XCTAssertTrue(settings.contains("settingsMonthlyLabel"))
         XCTAssertTrue(settings.contains("perRunLine"))
@@ -475,6 +478,8 @@ final class Gen5FidelityTests: XCTestCase {
         // GEN-5 supersession (cream design pass): the modal's
         // headers render through the .ssec helper, same words.
         XCTAssertTrue(modal.contains("settingsSectionHeader(\"Danger zone\")"))
+        XCTAssertTrue(modal.contains("Text(\"Delete my photos\")"))
+        XCTAssertTrue(modal.contains("Text(\"Delete my data\")"))
     }
 
     func testLocationSource_SettledSearchField() throws {

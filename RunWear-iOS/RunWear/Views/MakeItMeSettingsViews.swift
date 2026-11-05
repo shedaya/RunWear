@@ -49,17 +49,14 @@ struct MakeItMeSettingsSection: View {
             if store.mode != .stock {
                 photosSection
                 offerSection
-                destructiveSection
             }
 
-            // WS-5 (D-14): the account-level data delete is NOT a
-            // row of this composition — SettingsModal hosts it as
-            // the inventory's own section, directly after this
-            // one, reachable whether or not this composition's
-            // mode content renders. The destructive zone therefore
-            // ends the Make It Me block as two adjacent, visually
-            // separated groups: the photos delete closing this
-            // composition, the data delete in its own group after.
+            // GEN-6 (RW-56): NO destructive group in this
+            // composition. Both destructive rows (Delete my
+            // photos, Delete my data) live in SettingsModal's ONE
+            // quarantined "Danger zone" section, seated last in
+            // the Settings inventory — gen-5's split across two
+            // identically-headed sections is consolidated there.
         }
         // W-18: opening Settings re-reads the server profile, so
         // the meter this section renders is the server's current
@@ -173,13 +170,64 @@ struct MakeItMeSettingsSection: View {
 
     // MARK: Your photos group (WS-D group 2)
 
+    /// GEN-6 (RW-57): the loader behind the row's selfie
+    /// thumbnail — the same ReferencePhotosLoader seam the Your
+    /// Photos screen uses, over the same API.
+    @StateObject private var thumbnailLoader = ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)
+
     private var photosSection: some View {
         Section {
-            settingsRow(
-                title: MakeItMeSettingsRow.yourPhotos.title,
-                subtitle: "View or replace",
-                action: { presentation.present(.photos) }
-            )
+            // GEN-6 (RW-57): the row carries the user's own
+            // selfie thumbnail (design-spec §13) in the free and
+            // subscribed states alike — it was a text-only row.
+            Button { presentation.present(.photos) } label: {
+                HStack(spacing: 12) {
+                    photosThumbnail
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(MakeItMeSettingsRow.yourPhotos.title)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("View or replace")
+                            .font(.system(size: 13))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+            }
+            .task {
+                if thumbnailLoader.state == .idle {
+                    await thumbnailLoader.load()
+                }
+            }
+        }
+    }
+
+    /// The first reference photo as a small rounded thumbnail;
+    /// a neutral photo glyph until (or unless) it loads — the
+    /// row's door works regardless.
+    @ViewBuilder
+    private var photosThumbnail: some View {
+        if case .loaded(let urls) = thumbnailLoader.state, let url = urls.first {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    Image(systemName: "person.crop.rectangle")
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else {
+            Image(systemName: "person.crop.rectangle")
+                .font(.system(size: 20))
+                .foregroundColor(AppTheme.inkSecondary)
+                .frame(width: 44, height: 44)
+                .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardOnSheet))
         }
     }
 
@@ -188,17 +236,12 @@ struct MakeItMeSettingsSection: View {
     private var offerSection: some View {
         Section {
             if store.mode == .subscribed {
-                // State-aware (WS-D): a subscriber sees the
-                // subscribed state instead of the offer, with the
-                // frame-37 management door under it.
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(MakeItMeSettingsRow.premium.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppTheme.inkPrimary)
-                    Text("You're subscribed.")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.inkSecondary)
-                }
+                // State-aware (WS-D): a subscriber sees management
+                // only — GEN-6 (RW-57): the unlisted "Premium /
+                // You're subscribed." block that sat in this seat
+                // is REMOVED; the subscribed state is already
+                // stated by the status block above, and this seat
+                // carries the frame-37 management door only.
                 // GEN-3 (WS-D addition, Sol Nov 4): while the
                 // bank is still generating, the subscribed state
                 // carries the SAME "Making your looks" element as
@@ -228,30 +271,6 @@ struct MakeItMeSettingsSection: View {
                     presentation.present(.subscription)
                 }
             }
-        }
-    }
-
-    // MARK: Destructive group (WS-D group 4 — last, separated)
-
-    private var destructiveSection: some View {
-        // GEN-5 (RW-28 item 25): destructive rows quarantined
-        // under their own "Danger zone" heading, last.
-        Section {
-            Button(role: .destructive) {
-                presentation.alert = .confirmDelete
-            } label: {
-                Text(MakeItMeSettingsRow.deletePhotos.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        } header: {
-            // GEN-5 (design pass): the .ssec header treatment,
-            // matching SettingsModal's sections.
-            Text("Danger zone")
-                .font(.system(size: 13, weight: .semibold))
-                .textCase(.uppercase)
-                .tracking(0.6)
-                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 

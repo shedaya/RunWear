@@ -245,18 +245,29 @@ struct SettingsModal: View {
                 currentCombination: currentCombination
             )
 
-        case .deleteMyData:
-            // WS-5 (D-14): Delete my data is its OWN section
-            // (RW-16.30 decision 5a: the account-level erasure,
-            // offered in every mode and every flag state — a
-            // stock-mode user still has an account). It used to
-            // be a row inside the Make It Me section, so it
-            // vanished whenever that section emitted nothing;
-            // now Settings hosts it directly, and its
-            // confirmation rides the same single alert slot.
-            // GEN-5 (RW-28 item 25): the account delete is
-            // quarantined under its own "Danger zone" heading.
+        case .dangerZone:
+            // GEN-6 (RW-56): ONE quarantined "Danger zone"
+            // section, seated LAST in the inventory, carrying
+            // BOTH destructive rows. Gen-5 left them split: the
+            // photos delete closed the Make It Me composition
+            // under one "Danger zone" heading and the data delete
+            // sat here under a second, identical heading, both
+            // before Support/About. The data delete keeps its
+            // WS-5 terms (offered in every mode and flag state —
+            // a stock-mode user still has an account); the photos
+            // delete shows when the user has photos in play
+            // (free/subscribed modes), and both confirmations ride
+            // the same single alert slot.
             Section {
+                if personalStore.mode != .stock {
+                    Button(role: .destructive) {
+                        makeItMePresentation.alert = .confirmDelete
+                    } label: {
+                        Text("Delete my photos")
+                            .font(.system(size: 16, weight: .medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 Button(role: .destructive) {
                     makeItMePresentation.alert = .confirmDeleteData
                 } label: {
