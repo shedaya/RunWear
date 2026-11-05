@@ -97,7 +97,13 @@ enum HeroServeTelemetry {
         guard !url.isEmpty else { return }
         let isBundled = FallbackImageProvider.isBundledURL(url)
         let source: HeroServeSource
-        if isBundled {
+        // GEN-4: a scaffold result keeps the scaffold source even
+        // when its photo is a bundled asset — the bundled-URL
+        // ground truth below must not relabel a scaffold serve as
+        // an (exact-claiming) bundled-fallback serve.
+        if result.fallbackTier == .scaffold {
+            source = .scaffold
+        } else if isBundled {
             source = .bundledFallback
         } else if let labelled = result.serveSource {
             source = labelled
@@ -119,7 +125,8 @@ enum HeroServeTelemetry {
                 fallbackProvenance: isBundled
                     ? (result.fallbackProvenance ?? FallbackImageProvider.provenance(forURLString: url))
                     : result.fallbackProvenance,
-                trigger: trigger
+                trigger: trigger,
+                fallbackTier: result.fallbackTier
             )
         )
     }

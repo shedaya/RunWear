@@ -210,6 +210,38 @@ enum HeroServeSource: String, Equatable {
     var wire: String { rawValue }
 }
 
+/// GEN-4 (hero-fallback lane, 2026-11-04): WHERE a stock hero
+/// resolution landed in the fallback chain — the chain's tiers,
+/// in serving order (see HeroFallbackChain in
+/// FallbackImageProvider.swift for the full definition):
+///  - exact: a candidate (pool row or bundled asset) whose
+///    adjudicated garments PASS the point-grain gate for the
+///    prescription's signature — the photo may claim the outfit.
+///  - scaffold: no exact candidate exists; the nearest covered
+///    same-gender photo serves as a scaffold while the exact
+///    photo is generated/replenished. A scaffold is recorded
+///    with serve source `scaffold` (the design's existing
+///    non-exact convention — the HeroServeSource.scaffold wire
+///    value, the same source the personal bank's scaffold serves
+///    already record) and is NEVER recorded or presented as the
+///    exact photo. There is NO stock-scaffold UI copy in the
+///    design: the personal scaffold's words ("Your photo" /
+///    "This look was made for similar weather…") describe the
+///    user's OWN banked photo and are not reused for stock.
+///  - bundledFloor: no live pool consultation was available
+///    (pool unreachable/empty at this layer, or the synchronous
+///    pre-paint commit, which paints before any pool answer
+///    exists); the nearest BUNDLED asset under the same metric
+///    serves. Recorded as a bundled-fallback serve, exactly as
+///    bundled serves have always been recorded.
+enum HeroFallbackTier: String, Equatable {
+    case exact = "exact"
+    case scaffold = "scaffold"
+    case bundledFloor = "bundled-floor"
+
+    var wire: String { rawValue }
+}
+
 /// WS-7 / D-22: point-grain standing for one bundled fallback asset —
 /// the precomputed prescription verdict the pool obeys, recorded per
 /// slot in the staged RW-26 bundle manifest
@@ -243,9 +275,15 @@ struct HeroServeRecord: Equatable {
     var fallbackAssetFile: String? = nil
     var fallbackProvenance: FallbackAssetProvenance? = nil
     var trigger: String? = nil
+    /// GEN-4: the fallback-chain tier of this serve, when the
+    /// GEN-4 chain produced it — the record-level honest label:
+    /// a scaffold serve's summary says `tier=scaffold`, so it can
+    /// never be read back as an exact serve.
+    var fallbackTier: HeroFallbackTier? = nil
 
     func summary() -> String {
         var parts: [String] = ["hero_serve source=\(source.wire)"]
+        if let fallbackTier { parts.append("tier=\(fallbackTier.wire)") }
         if let tempBracket { parts.append("bracket=\(tempBracket.rawValue)") }
         if let weatherCondition { parts.append("weather=\(weatherCondition.rawValue)") }
         if let gender { parts.append("gender=\(gender.rawValue.uppercased())") }
@@ -292,6 +330,16 @@ struct HeroImageResult {
     /// WS-7: the bundled asset file base name served (no extension),
     /// for a bundled serve.
     var fallbackAssetFile: String? = nil
+    /// GEN-4: the fallback-chain tier this result resolved at
+    /// (HeroFallbackTier), when the GEN-4 chain produced it. Nil
+    /// for results from the legacy paths (the no-prescription
+    /// bracket resolution, personal serves).
+    var fallbackTier: HeroFallbackTier? = nil
+
+    /// GEN-4: true iff this result is a scaffold serve — the
+    /// honest-labelling seam every consumer can read instead of
+    /// re-deriving tier from the serve source.
+    var isScaffold: Bool { fallbackTier == .scaffold }
 
     /// Creates a result from an exact or cascade match
     static func fromMatch(
@@ -326,10 +374,16 @@ struct HeroImageResult {
     /// result carries its serve source, the asset file served, and
     /// that asset's manifest provenance (D-22), so the paint layer
     /// can emit the serve record without re-deriving any of it.
+    /// GEN-4: `tier` records where the fallback chain resolved —
+    /// a scaffold tier flips the serve source to .scaffold (the
+    /// existing non-exact recording convention); exact and floor
+    /// tiers keep the bundled-fallback source bundled serves have
+    /// always carried.
     static func fromBundledFallback(
         url: String,
         assetFile: String,
-        provenance: FallbackAssetProvenance?
+        provenance: FallbackAssetProvenance?,
+        tier: HeroFallbackTier? = nil
     ) -> HeroImageResult {
         HeroImageResult(
             imageUrl: url,
@@ -338,9 +392,33 @@ struct HeroImageResult {
             imageRowId: nil,
             isFromFallback: true,
             fallbackLevel: 8,
-            serveSource: .bundledFallback,
+            serveSource: tier == .scaffold ? .scaffold : .bundledFallback,
             fallbackProvenance: provenance,
-            fallbackAssetFile: assetFile
+            fallbackAssetFile: assetFile,
+            fallbackTier: tier
+        )
+    }
+
+    /// GEN-4: creates a result for a SCAFFOLD pool serve — a live
+    /// approved pool row that did NOT pass the point-grain gate
+    /// for the prescription but is the nearest covered photo
+    /// under the chain metric. It carries the row's OWN identity
+    /// (its combination and row id — the photo it actually is,
+    /// never the requested cell's), serve source .scaffold, and
+    /// fallback level 9: beyond the exact cascade (1–7) and the
+    /// bundled terminus (8), so every existing `fallbackLevel < 8`
+    /// exact-pool check stays false for it and consumers must
+    /// opt into the scaffold explicitly.
+    static func fromScaffoldPool(image: GeneratedImage) -> HeroImageResult {
+        HeroImageResult(
+            imageUrl: image.imageUrl,
+            thumbnailUrl: image.thumbnailUrl,
+            combinationId: image.combinationId,
+            imageRowId: image.id,
+            isFromFallback: true,
+            fallbackLevel: 9,
+            serveSource: .scaffold,
+            fallbackTier: .scaffold
         )
     }
 }
