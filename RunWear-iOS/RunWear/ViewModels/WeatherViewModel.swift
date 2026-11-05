@@ -175,6 +175,18 @@ class WeatherViewModel: ObservableObject {
     @Published var selectedDate: Date = Date()
     @Published var selectedHour: Int = Calendar.current.component(.hour, from: Date())
 
+    /// GEN-4: the first-class NOW state, made explicit on iOS.
+    /// It was previously only derivable (selected date is today
+    /// and selected hour is the current hour), which cannot
+    /// distinguish "tracking now" from "explicitly picked the
+    /// current hour" — the Choose-a-Time draft rule needs the
+    /// distinction (confirming an unmoved draft opened in NOW
+    /// keeps NOW; any other confirm is an explicit pick). True
+    /// at launch and after resetToNow; every explicit date/time
+    /// pick clears it. (Android's MainViewModel carries the same
+    /// state as isNowSelected.)
+    @Published private(set) var isNowSelection = true
+
     // Current weather snapshot for selected date/time
     @Published var selectedWeatherSnapshot: HourlyWeatherSnapshot?
 
@@ -382,7 +394,14 @@ class WeatherViewModel: ObservableObject {
         await fetchWeather(for: currentLocation)
     }
 
+    /// An explicit date/time pick: exits the NOW state (the
+    /// long-standing setDateTime semantics the study records).
     func updateSelectedTime(date: Date, hour: Int) {
+        applySelectedTime(date: date, hour: hour, nowState: false)
+    }
+
+    private func applySelectedTime(date: Date, hour: Int, nowState: Bool) {
+        isNowSelection = nowState
         selectedDate = date
         selectedHour = hour
         updateSelectedWeatherSnapshot()
@@ -396,6 +415,22 @@ class WeatherViewModel: ObservableObject {
 
         // Reload hero image for new conditions
         Task { await loadHeroImage() }
+    }
+
+    /// GEN-4: the Choose-a-Time sheet's Confirm lands here — the
+    /// ONE apply path for a chart pick, so the sheet and the
+    /// tests drive identical downstream behaviour. Keeping NOW
+    /// re-enters the native reset (the selection re-snapshots to
+    /// now through the same code as the pill's Now segment); an
+    /// explicit pick re-solves the selected day at the drafted
+    /// hour. Cancel never reaches this function at all.
+    func applyTimePickerCommit(_ commit: TimePickerDraft.Commit) {
+        switch commit {
+        case .keepNow:
+            resetToNow()
+        case .explicitPick(let hour):
+            updateSelectedTime(date: selectedDate, hour: hour)
+        }
     }
 
     /// THE engine-call assembly — the single construction every path
@@ -426,11 +461,96 @@ class WeatherViewModel: ObservableObject {
         )
     }
 
-    /// Reset to current date and time
+    /// Reset to current date and time — re-enters the NOW state.
     func resetToNow() {
         let now = Date()
         let currentHour = Calendar.current.component(.hour, from: now)
-        updateSelectedTime(date: now, hour: currentHour)
+        applySelectedTime(date: now, hour: currentHour, nowState: true)
+    }
+
+    // MARK: - GEN-4 day chart
+
+    /// A calendar in the VIEWED LOCATION's timezone (the hourly
+    /// forecast's own zone, resolved by the weather service from
+    /// the coordinates). "Now" for the chart surfaces — the
+    /// band's NOW marker and the sheet's default draft — is the
+    /// location's live local time, not the device's.
+    var locationCalendar: Calendar {
+        var calendar = Calendar.current
+        if let identifier = weatherData?.timezone,
+           let zone = TimeZone(identifier: identifier) {
+            calendar.timeZone = zone
+        }
+        return calendar
+    }
+
+    /// The viewed location's current hour, in its own clock.
+    func locationNowHour(at instant: Date = Date()) -> Int {
+        locationCalendar.component(.hour, from: instant)
+    }
+
+    /// Whether the selected day is the viewed location's today:
+    /// the selected day read in the app's existing framing (the
+    /// device-calendar components the hourly matching uses),
+    /// compared against the location's own current day.
+    var selectedDayIsLocationToday: Bool {
+        let selected = Calendar.current.dateComponents([.year, .month, .day], from: selectedDate)
+        let locationNow = locationCalendar.dateComponents([.year, .month, .day], from: Date())
+        return selected.year == locationNow.year
+            && selected.month == locationNow.month
+            && selected.day == locationNow.day
+    }
+
+    /// The selected day's day-chart model, built from the day's
+    /// hourly forecast — the same per-hour snapshots the selected
+    /// moment resolves from, each run through the ONE engine
+    /// assembly's inputs (comfort-adjusted feels-like for the
+    /// warmth frame, raw for the sun gates, measured rain, mph
+    /// wind). Hours the forecast does not carry for the day are
+    /// absent from the model (horizon honesty). Nil when the day
+    /// has no forecast hours at all.
+    var dayChart: DayChartModel? {
+        guard let hourly = weatherData?.hourly else { return nil }
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: selectedDate)
+        guard let year = components.year, let month = components.month, let day = components.day
+        else { return nil }
+        let dayPrefix = String(format: "%04d-%02d-%02d", year, month, day)
+        var points: [DayChartHour] = []
+        for (index, time) in hourly.time.enumerated() where time.hasPrefix(dayPrefix) {
+            guard let snapshot = HourlyWeatherSnapshot.from(hourly: hourly, at: index)
+            else { continue }
+            let rawFeelsLike = snapshot.feelsLikeFahrenheit
+            let adjustedFeelsLike = comfortLevel.adjustTemperature(rawFeelsLike)
+            let hourRecommendation = outfitService.getRecommendation(
+                for: adjustedFeelsLike,
+                rawTemperature: rawFeelsLike,
+                isRaining: snapshot.rain > 0,
+                windSpeed: snapshot.windSpeed,
+                humidity: snapshot.humidity,
+                uvIndex: snapshot.uvIndex,
+                precipitation: snapshot.precipitation,
+                hour: snapshot.hour
+            )
+            points.append(DayChartHour(
+                hour: snapshot.hour,
+                feelsLikeF: adjustedFeelsLike,
+                bracket: hourRecommendation.temperatureBracket,
+                outfitItemNames: hourRecommendation.allItems.map(\.name)
+            ))
+        }
+        return DayChartModel.build(points: points)
+    }
+
+    /// The chart's NOW marker hour for the current selection —
+    /// non-nil only on the viewed location's today (see
+    /// DayChartNowMarker for the rule).
+    var dayChartNowHour: Int? {
+        guard let dayChart else { return nil }
+        return DayChartNowMarker.hour(
+            selectedDayIsLocationToday: selectedDayIsLocationToday,
+            locationNowHour: locationNowHour(),
+            model: dayChart
+        )
     }
 
     // MARK: - Private Methods

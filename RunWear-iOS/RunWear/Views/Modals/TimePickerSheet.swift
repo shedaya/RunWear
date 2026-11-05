@@ -1,98 +1,189 @@
 import SwiftUI
 
+/// GEN-4: "Choose a Time" — the day chart replaces the hour
+/// grid (the tiles are retired; the grid's per-hour feels-like
+/// values survive as the curve's data and the readout's text).
+/// Same sheet, same entry points (the pill's time segment, the
+/// glance band's Change button, the headline moment).
+///
+/// DRAFT semantics (governing mechanics, time-picker demo):
+/// opening snapshots the selection into a TimePickerDraft;
+/// scrub / tap / steppers move the draft ONLY — home does not
+/// re-solve behind the sheet. Confirm commits (the same
+/// downstream re-solve as a pick today) and dismisses; Cancel
+/// restores the pre-open selection exactly and dismisses —
+/// exactly, because the selection was never written, so Cancel
+/// and swipe-dismissal alike have nothing to undo.
+///
+/// Gesture safety: this sheet's content is fixed (no scroll
+/// consumer — the discipline SheetDisciplineTests pins for the
+/// medium-detent pickers), so the chart's horizontal scrub has
+/// no scroll gesture to fight; the scrub lives entirely inside
+/// the chart's full-height hit area.
 struct TimePickerSheet: View {
-    @Binding var selectedHour: Int
+    /// The selected day's chart; nil when the day carries no
+    /// forecast hours (beyond the horizon).
+    let chart: DayChartModel?
+    /// "{Date} · {Place} · Feels-like by hour" context line.
+    let dateLabel: String
+    let placeName: String
+    let unit: TemperatureUnit
     @Binding var isPresented: Bool
+    /// Confirm's commit — the host applies it through the view
+    /// model's one apply path.
+    var onConfirm: (TimePickerDraft.Commit) -> Void = { _ in }
 
+    @State private var draft: TimePickerDraft
 
-    // Available hours: 5 AM to 9 PM
-    private let availableHours = Array(5...21)
+    init(
+        chart: DayChartModel?,
+        dateLabel: String,
+        placeName: String,
+        unit: TemperatureUnit,
+        initialHour: Int,
+        openedInNowState: Bool,
+        nowHour: Int?,
+        isPresented: Binding<Bool>,
+        onConfirm: @escaping (TimePickerDraft.Commit) -> Void = { _ in }
+    ) {
+        self.chart = chart
+        self.dateLabel = dateLabel
+        self.placeName = placeName
+        self.unit = unit
+        self._isPresented = isPresented
+        self.onConfirm = onConfirm
+        // Default draft: the currently selected hour; in the NOW
+        // state on the location's today the host passes the
+        // location's current hour as the initial hour, so the
+        // handle starts on the NOW marker.
+        _draft = State(initialValue: TimePickerDraft(
+            originalHour: initialHour,
+            openedInNowState: openedInNowState,
+            nowHour: nowHour,
+            selectableHours: chart?.selectableHours ?? []
+        ))
+    }
 
-    // Presented as a real .sheet (design record §5.2): the system
-    // owns the backdrop, drag handle, and dismissal.
     var body: some View {
-        VStack(spacing: 20) {
-            // Title
-            Text("Select Time")
+        VStack(spacing: 16) {
+            Text("Choose a Time")
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
 
-            // Time grid
-            timeGrid
+            Text("\(dateLabel) · \(placeName) · Feels-like by hour")
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
+                .lineLimit(1)
 
-            Spacer().frame(height: 16)
+            if let chart {
+                readoutRow(chart: chart)
+                DayChartView(
+                    model: chart,
+                    selectedHour: draft.draftHour,
+                    nowHour: draft.nowHour,
+                    interactive: true,
+                    showsAxisLabels: true,
+                    onSelectHour: { draft.move(to: $0) }
+                )
+                .frame(height: 168)
+
+                Text("Drag to pick an hour.")
+                    .font(.appFootnote)
+                    .foregroundColor(AppTheme.inkSecondary)
+
+                HStack {
+                    Button("Cancel") { dismiss() }
+                        .font(.appSecondary.weight(.semibold))
+                        .foregroundColor(AppTheme.inkSecondary)
+                    Spacer()
+                    Button("Confirm") {
+                        onConfirm(draft.commit())
+                        dismiss()
+                    }
+                    .font(.appSecondary.weight(.bold))
+                    .foregroundColor(AppTheme.pinePayload)
+                }
+            } else {
+                // Horizon honesty: a day the forecast does not
+                // reach has no hours to offer — named, never
+                // dressed over with invented hours.
+                Text("Forecast isn't available for this day yet.")
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .multilineTextAlignment(.center)
+
+                Button("Cancel") { dismiss() }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(AppTheme.inkSecondary)
+            }
+
+            Spacer().frame(height: 8)
         }
         .padding(24)
         .frame(maxWidth: .infinity)
         .background(AppTheme.background.ignoresSafeArea())
-        // RW-6.10: one selection tick per change — nothing more.
-        .sensoryFeedback(.selection, trigger: selectedHour)
+        // One selection tick per hour crossed: the trigger is the
+        // SNAPPED draft hour, so it fires exactly once per hour
+        // the handle crosses, never per drag event.
+        .sensoryFeedback(.selection, trigger: draft.draftHour)
     }
 
+    // MARK: - Readout + steppers
 
-    // MARK: - Time Grid
-
-    private var timeGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 12) {
-            ForEach(availableHours, id: \.self) { hour in
-                TimeButton(
-                    hour: hour,
-                    isSelected: hour == selectedHour,
-                    action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedHour = hour
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            dismiss()
-                        }
-                    }
-                )
+    /// The live readout flanked by the −/+ steppers (≥44pt):
+    /// hour + feels-like ONLY, with the drafted hour's outfit
+    /// preview line beneath it. The readout is real text, so
+    /// VoiceOver hears exactly what the eye sees.
+    private func readoutRow(chart: DayChartModel) -> some View {
+        let entry = chart.entry(forHour: draft.draftHour)
+        return HStack(spacing: 10) {
+            stepper(systemImage: "minus", label: "Previous hour") {
+                draft.step(by: -1)
             }
-        }
-    }
 
+            VStack(spacing: 3) {
+                Text(entry.map {
+                    DayChartFormat.readout(
+                        hour: $0.hour,
+                        formattedFeelsLike: unit.formatFromFahrenheit($0.feelsLikeF)
+                    )
+                } ?? "")
+                .font(.system(size: 15.5, weight: .bold))
+                .foregroundColor(AppTheme.inkPrimary)
+                .monospacedDigit()
 
-    private func dismiss() {
-        // State-driven dismissal (RW-6.12): the system animates the
-        // sheet away; no hand-rolled transition wrapper.
-        isPresented = false
-    }
-}
-
-// MARK: - Time Button
-
-private struct TimeButton: View {
-    let hour: Int
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 2) {
-                Text(formattedHour)
-                    .font(.appItemName)
-                    .monospacedDigit()
-                    .foregroundColor(isSelected ? .white : AppTheme.inkPrimary)
-
-                Text(period)
-                    .font(.appEyebrow)
-                    .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.inkSecondary)
+                if let entry, !entry.outfitItemNames.isEmpty {
+                    Text(entry.outfitItemNames.joined(separator: " · "))
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            // Interactive Liquid Glass; selection is the teal tint of
-            // the same glass (shared GlassButtonModifier).
-            .glassButton(isSelected: isSelected, cornerRadius: 12)
+
+            stepper(systemImage: "plus", label: "Next hour") {
+                draft.step(by: 1)
+            }
         }
     }
 
-    private var formattedHour: String {
-        let displayHour = hour % 12 == 0 ? 12 : hour % 12
-        return "\(displayHour):00"
+    private func stepper(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(AppTheme.inkPrimary)
+                .frame(width: 44, height: 44)
+                .background(Circle().stroke(AppTheme.cardStroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
-    private var period: String {
-        hour >= 12 ? "PM" : "AM"
+    private func dismiss() {
+        // State-driven dismissal (RW-6.12): the system animates
+        // the sheet away; no hand-rolled transition wrapper.
+        isPresented = false
     }
 }
 
@@ -100,7 +191,20 @@ private struct TimeButton: View {
 
 #Preview {
     TimePickerSheet(
-        selectedHour: .constant(14),
+        chart: DayChartModel.build(points: (0..<24).map { hour in
+            DayChartHour(
+                hour: hour,
+                feelsLikeF: 42 + 11 * sin(Double(hour - 6) / 24 * 2 * Double.pi) + Double(hour) / 4,
+                bracket: .cool,
+                outfitItemNames: ["Short-Sleeve Running Shirt", "5-Inch Running Shorts", "Cap"]
+            )
+        }),
+        dateLabel: "Today",
+        placeName: "Kansas City",
+        unit: .fahrenheit,
+        initialHour: 16,
+        openedInNowState: true,
+        nowHour: 16,
         isPresented: .constant(true)
     )
 }

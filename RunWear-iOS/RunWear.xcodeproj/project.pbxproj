@@ -154,6 +154,10 @@
 		J10002000000000000000003 /* StateTruthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = J10001000000000000000002 /* StateTruthTests.swift */; };
 		K10002000000000000000001 /* HomeHandoffGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000001 /* HomeHandoffGeometry.swift */; };
 		K10002000000000000000002 /* HomeHandoffGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000001 /* HomeHandoffGeometry.swift */; };
+		G40002000000000000000001 /* DayChartModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000001 /* DayChartModel.swift */; };
+		G40002000000000000000002 /* DayChartModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000001 /* DayChartModel.swift */; };
+		G40002000000000000000003 /* DayChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000002 /* DayChartView.swift */; };
+		G40002000000000000000004 /* Gen4DayChartTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000003 /* Gen4DayChartTests.swift */; };
 		K10002000000000000000003 /* HomeCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000002 /* HomeCompositionTests.swift */; };
 		L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
 		L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
@@ -352,6 +356,9 @@
 		H10001000000000000000002 /* SimplePlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimplePlaceTests.swift; sourceTree = "<group>"; };
 		J10001000000000000000002 /* StateTruthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateTruthTests.swift; sourceTree = "<group>"; };
 		K10001000000000000000001 /* HomeHandoffGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHandoffGeometry.swift; sourceTree = "<group>"; };
+		G40001000000000000000001 /* DayChartModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayChartModel.swift; sourceTree = "<group>"; };
+		G40001000000000000000002 /* DayChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DayChartView.swift; sourceTree = "<group>"; };
+		G40001000000000000000003 /* Gen4DayChartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4DayChartTests.swift; sourceTree = "<group>"; };
 		K10001000000000000000002 /* HomeCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCompositionTests.swift; sourceTree = "<group>"; };
 		L10001000000000000000001 /* WearIveRunElementMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachine.swift; sourceTree = "<group>"; };
 		L10001000000000000000002 /* WearIveRunElementMachineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachineTests.swift; sourceTree = "<group>"; };
@@ -444,6 +451,7 @@
 				A10001000000000000000023 /* HeroFlag.swift */,
 				H10001000000000000000001 /* SimplePlace.swift */,
 				K10001000000000000000001 /* HomeHandoffGeometry.swift */,
+				G40001000000000000000001 /* DayChartModel.swift */,
 				L10001000000000000000001 /* WearIveRunElementMachine.swift */,
 				W50001000000000000000001 /* SettingsInventory.swift */,
 				X10001000000000000000001 /* OnboardingSequence.swift */,
@@ -568,6 +576,7 @@
 				A10001000000000000000013 /* PreferenceControls.swift */,
 				A10001000000000000000014 /* WeatherPill.swift */,
 				A10001000000000000000015 /* WeatherPillsRow.swift */,
+				G40001000000000000000002 /* DayChartView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -619,6 +628,7 @@
 				H10001000000000000000002 /* SimplePlaceTests.swift */,
 				J10001000000000000000002 /* StateTruthTests.swift */,
 				K10001000000000000000002 /* HomeCompositionTests.swift */,
+				G40001000000000000000003 /* Gen4DayChartTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
 				W50001000000000000000002 /* SettingsInventoryTests.swift */,
 				W50001000000000000000003 /* SheetDisciplineTests.swift */,
@@ -855,6 +865,8 @@
 				H10002000000000000000001 /* SimplePlace.swift in Sources */,
 				X10002000000000000000001 /* OnboardingSequence.swift in Sources */,
 				K10002000000000000000001 /* HomeHandoffGeometry.swift in Sources */,
+				G40002000000000000000001 /* DayChartModel.swift in Sources */,
+				G40002000000000000000003 /* DayChartView.swift in Sources */,
 				L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000001 /* SettingsInventory.swift in Sources */,
 				G10002000000000000000001 /* RW26CollectionModels.swift in Sources */,
@@ -949,6 +961,8 @@
 				H10002000000000000000002 /* SimplePlace.swift in Sources */,
 				X10002000000000000000002 /* OnboardingSequence.swift in Sources */,
 				K10002000000000000000002 /* HomeHandoffGeometry.swift in Sources */,
+				G40002000000000000000002 /* DayChartModel.swift in Sources */,
+				G40002000000000000000004 /* Gen4DayChartTests.swift in Sources */,
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000002 /* SettingsInventory.swift in Sources */,
 				G10002000000000000000002 /* RW26CollectionModels.swift in Sources */,
