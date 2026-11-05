@@ -230,6 +230,47 @@ final class WearIveRunCollectionModel: ObservableObject {
     /// - identical → nothing at all.
     func recordSettled(_ entry: WearIveRunEntry) {
         let existing = entries.first { $0.id == entry.id }
+        // GEN-6 (RW-42 / DA-09): RESTORE, not creation. This
+        // session has settled nothing yet (no entry carries its
+        // identity), but the store already holds an entry for
+        // the SAME day at the SAME place, written by an earlier
+        // session (or a legacy build). That is the relaunch
+        // shape: the process died, the app relaunched, and home's
+        // automatic re-settle — onAppear and the landing
+        // triggers, no user action — offers the persisted place
+        // again. Keyed on the session identity alone, the settle
+        // classified .created, bumped the cue counter, and the
+        // bar fired a second "Added {place}, Now" for an entry
+        // that already existed (Sol's gen-5 recording: "Added
+        // Miami, FL, Now" at 1:30 and again on relaunch at
+        // 3:47). A restore is not a state change: the new
+        // session SUPERSEDES the prior entry for that day+place
+        // (the FA-36 legacy-twin rule, extended to any prior
+        // session — the day keeps ONE entry for the place), the
+        // narration kind and payload it already carried are
+        // preserved untouched, and the cue counter does NOT
+        // move — no announcement fires. The bar then composes
+        // over the restored entry through the machine's
+        // entryAlreadyPresent reconciliation: present at MINI,
+        // silently. A first settle at a day+place with NO
+        // pre-existing entry is a genuine creation and still
+        // announces, exactly once.
+        if existing == nil,
+           let prior = entries.first(where: {
+               $0.id != entry.id
+                   && $0.sessionID != entry.sessionID
+                   && $0.placeKey == entry.placeKey
+                   && Calendar.current.isDate($0.dayStart, inSameDayAs: entry.dayStart)
+           }) {
+            store.remove(id: prior.id)
+            store.record(entry.settingNarration(
+                wasUpdated: prior.wasUpdatedInSession,
+                payload: prior.updatePayload
+            ))
+            entries = store.entries
+            narratedEntryID = entry.id
+            return
+        }
         let classification = WearIveRunLandingClassifier.classify(
             existing: existing, incoming: entry
         )
