@@ -50,35 +50,10 @@ enum AppTheme {
     static let tempWarm = Color(hex: tempWarmHex)
     static let tempHot = Color(hex: tempHotHex)
 
-    /// The pinned hex for a bracket (test + diagnostics surface).
-    static func temperatureHex(for bracket: HeroTempBracket) -> String {
-        switch bracket {
-        case .FREEZING: return tempFreezingHex
-        case .COLD: return tempColdHex
-        case .COOL: return tempCoolHex
-        case .MILD: return tempMildHex
-        case .WARM: return tempWarmHex
-        case .HOT: return tempHotHex
-        }
-    }
-
-    /// Returns the appropriate color for a temperature bracket
-    static func temperatureColor(for bracket: HeroTempBracket) -> Color {
-        switch bracket {
-        case .FREEZING: return tempFreezing
-        case .COLD: return tempCold
-        case .COOL: return tempCool
-        case .MILD: return tempMild
-        case .WARM: return tempWarm
-        case .HOT: return tempHot
-        }
-    }
-
-    /// Returns the appropriate color for a temperature in Fahrenheit
-    static func temperatureColor(fahrenheit: Double) -> Color {
-        let bracket = HeroTempBracket.from(feelsLikeTemperature: fahrenheit)
-        return temperatureColor(for: bracket)
-    }
+    // The bracket-typed temperature helpers (temperatureHex,
+    // temperatureColor, temperatureTintOverlay) live in
+    // AppThemeTemperature.swift — this file is membered into the
+    // widget extension, which cannot see HeroTempBracket.
 
     // MARK: - Glass Morphism
     static let glassBackground = Color.white.opacity(0.1)
@@ -101,11 +76,6 @@ enum AppTheme {
             startPoint: .top,
             endPoint: .bottom
         )
-    }
-
-    /// Creates a temperature-tinted overlay
-    static func temperatureTintOverlay(for bracket: HeroTempBracket, opacity: Double = 0.12) -> Color {
-        temperatureColor(for: bracket).opacity(opacity)
     }
 
     // MARK: - Animation Durations
