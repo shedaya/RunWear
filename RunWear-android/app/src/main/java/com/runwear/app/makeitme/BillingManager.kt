@@ -59,6 +59,16 @@ class BillingManager @Inject constructor(
     /** RevenueCat-side truth for the make_it_me entitlement. */
     val makeItMeActive: StateFlow<Boolean> = _makeItMeActive.asStateFlow()
 
+    private val _makeItMeInTrial = MutableStateFlow(false)
+    /**
+     * GEN-3 (convergence band HOLD, Sol Nov 4): true while the
+     * entitlement's current period is a free TRIAL (RevenueCat
+     * periodType). Banking is Premium-only behaviour — a trial
+     * user gets on-demand looks, no bank — so surfaces that
+     * represent the bank must be able to tell the two apart.
+     */
+    val makeItMeInTrial: StateFlow<Boolean> = _makeItMeInTrial.asStateFlow()
+
     @Volatile
     private var configured = false
 
@@ -82,6 +92,9 @@ class BillingManager @Inject constructor(
     private fun applyCustomerInfo(info: CustomerInfo) {
         _customerInfo.value = info
         _makeItMeActive.value = info.entitlements[ENTITLEMENT_ID]?.isActive == true
+        _makeItMeInTrial.value =
+            info.entitlements[ENTITLEMENT_ID]?.periodType ==
+                com.revenuecat.purchases.PeriodType.TRIAL
     }
 
     /** The app_user_id RevenueCat currently runs under, if configured. */

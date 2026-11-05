@@ -229,7 +229,8 @@ fun HeroMainScreen(
     // genuinely in progress with real counts.
     val convergenceBand = com.runwear.app.makeitme.ConvergenceBandPolicy.content(
         mode = makeItMeState.mode,
-        coverage = makeItMeState.bankCoverage
+        coverage = makeItMeState.bankCoverage,
+        inTrial = makeItMeState.inTrial
     )
 
     // Hero-flag flow: the sheet, plus the URL already flagged in this

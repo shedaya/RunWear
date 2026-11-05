@@ -25,21 +25,25 @@ import com.runwear.app.ui.theme.RunWearColors
 
 /**
  * GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4): the
- * home-sheet band a SUBSCRIBED user sees while his bank of looks is
+ * home-sheet band a PREMIUM user sees while his bank of looks is
  * still converging — mock frame 19's seat (in the sheet scroll,
  * below the outfit items), with Sol's final copy:
  *
  *   Heading: "Making your looks"
  *   Line:    "We're generating your outfits across all running
  *             conditions, so it will be ready when you need it."
- *   Progress (plain words, real counts): "14 of your 24 looks are
- *             ready" + a simple progress bar. No bare fractions,
- *             no "14 of 24 ready" labelling.
+ *   Plus the animated spinner and a progress bar — WITHOUT any
+ *   numeric count (HOLD, Sol Nov 4: the count wording is
+ *   withdrawn; the bar's fraction still comes from the real
+ *   banking state, only the number is withheld).
  *
- * The band exists only while convergence is genuinely in progress:
- * subscribed mode, a successful coverage read, and ready < total.
- * When the bank is complete (or counts are unknown) there is no
- * band — never an invented number.
+ * PREMIUM CONTEXT ONLY: banking is Premium-only behaviour — free
+ * users get 5 on-demand looks and in-trial users likewise have no
+ * bank, so the band renders only for paying subscribers (mode
+ * SUBSCRIBED and not in a trial period), only while convergence
+ * is genuinely in progress (a successful coverage read with
+ * ready < total). When the bank is complete (or the state is
+ * unknown) there is no band.
  *
  * GEN-3 ROUND 2 (Sol, Nov 4): the band carries the SAME animated
  * spinner as the generating hero pill — the band represents active
@@ -51,7 +55,7 @@ import com.runwear.app.ui.theme.RunWearColors
 data class ConvergenceBandContent(
     val heading: String,
     val line: String,
-    val progressText: String,
+    /** The bar's fraction, from the real banking state (no count shown). */
     val fraction: Float
 )
 
@@ -59,15 +63,17 @@ object ConvergenceBandPolicy {
 
     fun content(
         mode: MakeItMeMode,
-        coverage: PersonalHeroService.BankCoverage?
+        coverage: PersonalHeroService.BankCoverage?,
+        inTrial: Boolean
     ): ConvergenceBandContent? {
+        // Premium context only — never free, never in-trial.
         if (mode != MakeItMeMode.SUBSCRIBED) return null
+        if (inTrial) return null
         val cov = coverage ?: return null
         if (cov.total <= 0 || cov.ready >= cov.total) return null
         return ConvergenceBandContent(
             heading = MakeItMeStrings.BAND_MAKING_HEADING,
             line = MakeItMeStrings.BAND_MAKING_LINE,
-            progressText = MakeItMeStrings.bandMakingProgress(cov.ready, cov.total),
             fraction = cov.ready.toFloat() / cov.total.toFloat()
         )
     }
@@ -112,17 +118,13 @@ fun ConvergenceBand(
             color = RunWearColors.TextSecondary
         )
         Spacer(Modifier.height(12.dp))
+        // The progress bar — fraction from the real banking state,
+        // NO numeric count (HOLD, Sol Nov 4).
         LinearProgressIndicator(
             progress = { content.fraction },
             modifier = Modifier.fillMaxWidth(),
             color = RunWearColors.PineAccent,
             trackColor = RunWearColors.TextSecondary.copy(alpha = 0.25f)
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = content.progressText,
-            fontSize = 13.sp,
-            color = RunWearColors.TextPrimary
         )
     }
 }

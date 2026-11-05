@@ -1,15 +1,19 @@
 package com.runwear.app.makeitme
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4): the band's
- * copy is pinned WORD FOR WORD, its progress is phrased in plain
- * words with the real counts, and the band exists only while a
- * subscribed user's bank is genuinely converging.
+ * GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4) + the
+ * Nov 4 HOLD on the numeric count: the heading and line are
+ * pinned WORD FOR WORD; NO numeric count is shown anywhere (the
+ * earlier "N of your M looks are ready" wording is withdrawn —
+ * neither 24 nor 48 is hard-coded); the progress bar's fraction
+ * still derives from the real banking state; and the band is
+ * PREMIUM CONTEXT ONLY — never for free users, never in-trial
+ * (banking is Premium-only behaviour).
  */
 class ConvergenceBandCopyTest {
 
@@ -23,19 +27,18 @@ class ConvergenceBandCopyTest {
     }
 
     @Test
-    fun `progress is phrased in plain words with the real counts`() {
-        assertEquals(
-            "14 of your 24 looks are ready",
-            MakeItMeStrings.bandMakingProgress(ready = 14, total = 24)
-        )
-        assertEquals(
-            "1 of your 20 looks are ready",
-            MakeItMeStrings.bandMakingProgress(ready = 1, total = 20)
-        )
-        // Never a bare fraction, never "N of M ready".
-        val line = MakeItMeStrings.bandMakingProgress(ready = 14, total = 24)
-        assertTrue(line.contains("of your"))
-        assertTrue(line.endsWith("looks are ready"))
+    fun `no numeric count is carried by the band - the count wording is withdrawn`() {
+        val content = ConvergenceBandPolicy.content(
+            mode = MakeItMeMode.SUBSCRIBED,
+            coverage = PersonalHeroService.BankCoverage(ready = 14, total = 48),
+            inTrial = false
+        )!!
+        // The rendered strings carry no digits at all — no "14",
+        // no "24", no "48", no fraction label.
+        assertFalse(content.heading.any { it.isDigit() })
+        assertFalse(content.line.any { it.isDigit() })
+        // The bar's fraction still comes from the real state.
+        assertEquals(14f / 48f, content.fraction)
     }
 
     @Test
@@ -49,30 +52,37 @@ class ConvergenceBandCopyTest {
     }
 
     @Test
-    fun `the band shows only for a subscribed user mid-convergence with real counts`() {
-        val mid = PersonalHeroService.BankCoverage(ready = 14, total = 24)
-        val content = ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, mid)
+    fun `the band is Premium context only - never free, never in-trial`() {
+        val mid = PersonalHeroService.BankCoverage(ready = 14, total = 48)
+        // Paying subscriber, mid-convergence: the band shows.
+        val content = ConvergenceBandPolicy.content(
+            MakeItMeMode.SUBSCRIBED, mid, inTrial = false
+        )
         assertEquals("Making your looks", content?.heading)
-        assertEquals("14 of your 24 looks are ready", content?.progressText)
-        assertEquals(14f / 24f, content?.fraction)
 
+        // In-trial: NO band (trials get on-demand looks, no bank).
+        assertNull(
+            ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, mid, inTrial = true)
+        )
+        // Free / stock: no band.
+        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.FREE, mid, inTrial = false))
+        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.STOCK, mid, inTrial = false))
         // Bank complete: no band.
         assertNull(
             ConvergenceBandPolicy.content(
                 MakeItMeMode.SUBSCRIBED,
-                PersonalHeroService.BankCoverage(ready = 24, total = 24)
+                PersonalHeroService.BankCoverage(ready = 48, total = 48),
+                inTrial = false
             )
         )
-        // Counts unknown: no band (never an invented number).
-        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, null))
-        // Not subscribed: no band.
-        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.FREE, mid))
-        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.STOCK, mid))
+        // State unknown: no band (never an invented fraction).
+        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, null, inTrial = false))
         // Empty engaged set: no band.
         assertNull(
             ConvergenceBandPolicy.content(
                 MakeItMeMode.SUBSCRIBED,
-                PersonalHeroService.BankCoverage(ready = 0, total = 0)
+                PersonalHeroService.BankCoverage(ready = 0, total = 0),
+                inTrial = false
             )
         )
     }

@@ -30,7 +30,9 @@ data class MakeItMeUiState(
     val serverEntitled: Boolean = false,
     val gender: String = "UNISEX",
     /** GEN-3 (convergence band): real bank coverage (ready/total), or null. */
-    val bankCoverage: PersonalHeroService.BankCoverage? = null
+    val bankCoverage: PersonalHeroService.BankCoverage? = null,
+    /** GEN-3 (band HOLD): the entitlement is in its free-trial period. */
+    val inTrial: Boolean = false
 )
 
 /**
@@ -48,8 +50,9 @@ class MakeItMeViewModel @Inject constructor(
 
     val uiState: StateFlow<MakeItMeUiState> = combine(
         repository.state,
-        billing.makeItMeActive
-    ) { personal, rcActive ->
+        billing.makeItMeActive,
+        billing.makeItMeInTrial
+    ) { personal, rcActive, inTrial ->
         val entitled = rcActive || personal.entitled
         MakeItMeUiState(
             mode = when {
@@ -65,7 +68,8 @@ class MakeItMeViewModel @Inject constructor(
             rcEntitled = rcActive,
             serverEntitled = personal.entitled,
             gender = personal.gender,
-            bankCoverage = personal.bankCoverage
+            bankCoverage = personal.bankCoverage,
+            inTrial = inTrial
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, MakeItMeUiState())
 
