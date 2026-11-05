@@ -113,9 +113,22 @@ private struct DateButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            // Interactive Liquid Glass; selection is the teal tint of
-            // the same glass (shared GlassButtonModifier).
-            .glassButton(isSelected: isSelected, cornerRadius: 12)
+            // GEN-5 design pass (cream map row 21): the day
+            // cells are CONTENT, not chrome — the design
+            // reserves glass for chrome — so the cells take the
+            // flat card treatment every other content surface
+            // uses (cardFill + cardStroke), with selection as
+            // the pine fill. The Liquid Glass button modifier
+            // leaves this grid.
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? AppTheme.primaryColor : AppTheme.cardFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.clear : AppTheme.cardStroke, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 

@@ -176,6 +176,13 @@ struct LocationPickerSheet: View {
                 }
             }
             .listStyle(.insetGrouped)
+            // GEN-5 design pass (cream map rows 23/56): the
+            // ROWS take the sheet tone too — build 25 painted
+            // the cream ground behind the list and left every
+            // row card in the system's white (light) / cool
+            // grey (dark). The search row keeps its own clear
+            // background (its card is drawn inside the row).
+            .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
             .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle("Set Location")

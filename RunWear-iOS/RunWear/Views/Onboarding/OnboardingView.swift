@@ -628,12 +628,22 @@ private struct FirstLookView: View {
         ScrollView {
             VStack(spacing: 20) {
                 VStack(spacing: 8) {
-                    AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image.resizable().aspectRatio(contentMode: .fill)
-                        default:
-                            AppTheme.cardOnSheet
+                    // GEN-5 (RW-29 FA-42): ONE crop discipline
+                    // for hero-class surfaces — the standard
+                    // card renders through the same protected
+                    // top-anchored HeroPhoto as the Make It Me
+                    // card beside it; build 25 used a bare
+                    // centre-anchored fill here, the exact crop
+                    // class that produced the filed share-poster
+                    // face cut.
+                    GeometryReader { geo in
+                        AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
+                            switch phase {
+                            case .success(let image):
+                                HeroPhoto(image: image, width: geo.size.width, height: 180)
+                            default:
+                                AppTheme.cardOnSheet
+                            }
                         }
                     }
                     .frame(height: 180)
@@ -729,8 +739,28 @@ private struct FirstLookView: View {
                 // the claim and the meter exist ONLY in the ready
                 // phase (the meter composed from the shared
                 // counter); the failed phase states its failure
-                // and charges nothing; the making phase states
-                // nothing below the photo — its copy is on it.
+                // and charges nothing; the making phase carries
+                // its processing copy here, below the plain
+                // standard photo (GEN-5 FA-5).
+                if firstLookPresentation.phase == .making {
+                    VStack(spacing: 6) {
+                        ProgressView()
+                            .tint(AppTheme.inkSecondary)
+                        if let title = firstLookPresentation.photoOverlayTitle {
+                            Text(title)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                                .multilineTextAlignment(.center)
+                        }
+                        if let detail = firstLookPresentation.photoOverlayDetail {
+                            Text(detail)
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.inkSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                }
+
                 if let caption = firstLookPresentation.caption {
                     Text(caption)
                         .font(.system(size: 15, weight: .semibold))
@@ -747,6 +777,18 @@ private struct FirstLookView: View {
                     Text(failureLine)
                         .font(.system(size: 13))
                         .foregroundColor(AppTheme.inkSecondary)
+                    // GEN-5 (RW-29 FA-12): the failed phase
+                    // offers a real retry on this surface —
+                    // re-kick the same cell's generation and
+                    // return to the making phase (the store's
+                    // look state drives the presentation back).
+                    if firstLookPresentation.phase == .failed, let cell = firstLookCell {
+                        Button(MakeItMeCopy.lookRetry) {
+                            store.startUserInitiatedGeneration(for: cell)
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppTheme.pinePayload)
+                    }
                 }
 
                 // The §9 band — the recommended pair, verbatim.
@@ -855,74 +897,48 @@ private struct FirstLookView: View {
     /// card used before cropped the stock photo mid-face and the
     /// generated photo at the neck.
     ///
-    /// W-16: the state lives ON the photo. While the look is
-    /// making, the pool photo underneath is visibly a placeholder
-    /// being worked on (blurred, dimmed, under a scrim) and the
-    /// §7 G1/G2 processing copy sits on the photo itself — the
-    /// photo is never presented as the user. When the generated
-    /// photo lands, it replaces the treated placeholder through
-    /// the §1.4 crossfade (its opacity is the reveal's), never a
+    /// W-16: the state lives with the photo. When the generated
+    /// photo lands, it replaces the standard photo through the
+    /// §1.4 crossfade (its opacity is the reveal's), never a
     /// silent hard cut. On failure the standard photo stands
-    /// untreated — it is the honest standard photo again, and the
-    /// failure line below the card says what happened.
+    /// untreated — it is the honest standard photo again, and
+    /// the failure line below the card says what happened.
+    ///
+    /// GEN-5 (RW-29 FA-5, design-spec §11): while the look is
+    /// making, the screen sits on the cell's real standard
+    /// photo — NO grey blur, no dim, no scrim (build 25 blurred
+    /// it at radius 8, 55% opacity, under a 35% black scrim).
+    /// The processing copy renders BELOW the photo in the
+    /// caption zone, where it stays readable and the photo
+    /// stays recognisable.
     private var firstLookPhotoCard: some View {
         let presentation = firstLookPresentation
         return GeometryReader { geo in
-            ZStack {
-                AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
-                    switch phase {
-                    case .success(let image):
-                        switch presentation.phase {
-                        case .ready:
-                            HeroPhoto(image: image, width: geo.size.width, height: 220)
-                                // §1.4 reveal: the generated
-                                // photo crossfades in as it lands
-                                // (it never pops, and the treated
-                                // placeholder is never silently
-                                // replaced underneath it).
-                                .opacity(firstLookPhotoRevealed ? 1 : 0)
-                                .onAppear { startFirstLookReveal() }
-                        case .making:
-                            HeroPhoto(image: image, width: geo.size.width, height: 220)
-                                .blur(radius: 8)
-                                .opacity(0.55)
-                                // GEN-3 (Y-1 defect 1): if this
-                                // loaded image is the personal
-                                // photo, record it — the finished
-                                // claim waits for exactly this.
-                                .onAppear { recordFirstLookImageLoad() }
-                        case .failed:
-                            HeroPhoto(image: image, width: geo.size.width, height: 220)
-                        }
-                    default:
-                        AppTheme.cardOnSheet
+            AsyncImage(url: (previewVM.heroImageUrl ?? previewVM.fallbackImageUrl).flatMap(URL.init(string:))) { phase in
+                switch phase {
+                case .success(let image):
+                    switch presentation.phase {
+                    case .ready:
+                        HeroPhoto(image: image, width: geo.size.width, height: 220)
+                            // §1.4 reveal: the generated
+                            // photo crossfades in as it lands
+                            // (it never pops, and the standard
+                            // photo is never silently replaced
+                            // underneath it).
+                            .opacity(firstLookPhotoRevealed ? 1 : 0)
+                            .onAppear { startFirstLookReveal() }
+                    case .making:
+                        HeroPhoto(image: image, width: geo.size.width, height: 220)
+                            // GEN-3 (Y-1 defect 1): if this
+                            // loaded image is the personal
+                            // photo, record it — the finished
+                            // claim waits for exactly this.
+                            .onAppear { recordFirstLookImageLoad() }
+                    case .failed:
+                        HeroPhoto(image: image, width: geo.size.width, height: 220)
                     }
-                }
-
-                if presentation.phase == .making {
-                    // The working state, ON the photo: a scrim
-                    // over the treated placeholder, the spinner,
-                    // and the processing copy where the user is
-                    // looking — not at the screen's footer.
-                    Color.black.opacity(0.35)
-                    VStack(spacing: 10) {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(1.2)
-                        if let title = presentation.photoOverlayTitle {
-                            Text(title)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white)
-                                .multilineTextAlignment(.center)
-                        }
-                        if let detail = presentation.photoOverlayDetail {
-                            Text(detail)
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.9))
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                    .padding(.horizontal, 20)
+                default:
+                    AppTheme.cardOnSheet
                 }
             }
         }

@@ -865,11 +865,20 @@ enum HeroPill {
         freeAllowance: Int
     ) -> HeroPillState {
         guard optedIn else { return .hidden }
+        // GEN-5 (RW-29 FA-1, parity settlement): a generation in
+        // flight OUTRANKS the scaffold serve — when this cell's
+        // look is making, the pill reports the generation, not
+        // the photo underneath it (Android's HeroPillPolicy is
+        // test-pinned to exactly this precedence; iOS build 25
+        // inverted it, resolving to the scaffold state whenever a
+        // personal photo showed during a generation). The C-4
+        // amendment's gating applies here too: a free user's
+        // generating pill carries the green instantly line, a
+        // subscriber's stays clean.
+        if lookState == .making {
+            return isSubscribed ? .making : .makingWithUpsell
+        }
         if personalPhotoDisplayed {
-            // A personal photo is on screen while this cell's exact
-            // look is still making: by the convergence architecture
-            // that photo is the banked scaffold (PersonalServePolicy).
-            if lookState == .making { return .scaffold }
             if isSubscribed { return .premium }
             // GEN-5: the exhausted status takes over the free pill
             // the moment the shared counter reaches the allowance —
@@ -884,14 +893,9 @@ enum HeroPill {
             guard freeGenerationsUsed > 0 else { return .hidden }
             return .freeLook(used: freeGenerationsUsed, allowance: freeAllowance)
         }
-        // No personal photo on screen: the pill speaks only while
-        // THIS cell's look is making (over the fallback photo).
-        // GEN-5 (C-4 AMENDED): a free user's generating pill
-        // carries the green instantly line; a subscriber's stays
-        // clean — nothing left to sell.
-        if lookState == .making {
-            return isSubscribed ? .making : .makingWithUpsell
-        }
+        // No personal photo on screen and nothing making (the
+        // making case is settled at the top, FA-1): the pill is
+        // silent over a fallback serve.
         return .hidden
     }
 }
@@ -952,6 +956,18 @@ enum ForkHeroSpec {
             width: faceBoxNormalized.width * imageSize.width * scaleX,
             height: faceBoxNormalized.height * imageSize.height * scaleY
         )
+    }
+
+    /// The band's height for a given width (RW-29 FA-40): the
+    /// band is never wider than 2.4:1, so at every shipped width
+    /// the visible window keeps the face, shoulders, and chest
+    /// composed (the asset lane's crop table: at 2.32:1 the
+    /// torso is visible to y = 0.767, at 2.56:1 to 0.694). A
+    /// fixed 180 pt band satisfies this on phones (≤ 432 pt
+    /// wide) and grows on wider form factors instead of letting
+    /// the window slide down the torso and through the chin.
+    static func bandHeight(forWidth width: CGFloat) -> CGFloat {
+        max(180, width / 2.4)
     }
 
     /// True when the whole draw box (and therefore the head) is
@@ -1278,7 +1294,11 @@ enum MakeItMeCopy {
     /// original "About 10 seconds" figure was false against a
     /// measured 72-second job and a 2–4 minute backend norm; the
     /// amended line promises no number the system misses.
-    static let progressSubline = "This usually takes a few minutes. Your recommendation is ready either way — the standard photo stays up until yours is done."
+    // GEN-5 (RW-29 FA-5): the standard-photo claim clause is
+    // removed — Android's gen-3 WS-B copy audit removed the same
+    // claim after it proved false in the Overland Park frames;
+    // both platforms now state the identical honesty line.
+    static let progressSubline = "This usually takes a few minutes. Your recommendation is ready either way."
     /// Spec §7 G5 (added Nov 1, 2026 — RW-16.16): the durable
     /// failed-look line at the hero, shown with the G6 action
     /// whenever the server reports the current cell's look as

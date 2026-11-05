@@ -614,10 +614,19 @@ final class FirstLookHonestyTests: XCTestCase {
                       "W-17: the card crops through HeroPhoto — the home hero's top-anchored crop — so the full head is in frame")
         XCTAssertFalse(card.contains("aspectRatio(contentMode: .fill)"),
                        "the bare center-anchored fill that cropped the head is gone from this card")
-        XCTAssertTrue(card.contains("photoOverlayTitle"),
-                      "W-16: the processing copy renders ON the photo card")
-        XCTAssertTrue(card.contains(".blur(radius: 8)"),
-                      "W-16: while making, the placeholder photo is visibly treated — never presented as the user")
+        // GEN-5 (RW-29 FA-5, design-spec §11) SUPERSEDES the
+        // W-16 treatment pins: while making, the standard photo
+        // sits PLAINLY — no blur, no dim, no scrim — and the
+        // processing copy renders below the photo in the moment
+        // view's caption zone, not over the photo.
+        XCTAssertFalse(card.contains(".blur("),
+                       "FA-5: the generating photo is never blurred")
+        XCTAssertFalse(card.contains("Color.black.opacity"),
+                       "FA-5: the generating photo carries no scrim")
+        XCTAssertTrue(onboarding.contains("firstLookPresentation.phase == .making"),
+                      "FA-5: the making phase renders its processing copy in the caption zone")
+        XCTAssertTrue(onboarding.contains("firstLookPresentation.photoOverlayTitle"),
+                      "FA-5: the processing copy still renders — below the photo now")
     }
 
     func testSettingsMeterComesThroughTheSharedMeter_sourcePin() throws {

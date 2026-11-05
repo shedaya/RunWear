@@ -106,7 +106,8 @@ class WatchViewModel: NSObject, ObservableObject {
             state = .loading
             locationManager.requestLocation()
         @unknown default:
-            state = .error("Unknown location status")
+            // GEN-5 (RW-29 FA-15 / EX-20): authored words.
+            state = .error("Location isn't available.")
         }
     }
 
@@ -154,7 +155,9 @@ class WatchViewModel: NSObject, ObservableObject {
             // Load hero image
             await loadHeroImage()
         } catch {
-            state = .error(error.localizedDescription)
+            // GEN-5 (RW-29 FA-15 / EX-20): authored words, never
+            // raw system error text (design-spec §17).
+            state = .error("Couldn't reach the weather service.")
         }
     }
 
@@ -255,7 +258,9 @@ extension WatchViewModel: CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            state = .error("Could not get location: \(error.localizedDescription)")
+            // GEN-5 (RW-29 FA-15 / EX-20): authored words, never
+            // raw system error text (design-spec §17).
+            state = .error("Couldn't get your location.")
         }
     }
 

@@ -212,6 +212,10 @@ struct WeatherDetailSheet: View {
                 }
             }
             .listStyle(.sidebar)
+            // GEN-5 design pass (cream map rows 24/56): the
+            // sidebar's rows take the sheet tone instead of the
+            // sidebar list's system material.
+            .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
             .navigationTitle("Weather Detail")
         } detail: {

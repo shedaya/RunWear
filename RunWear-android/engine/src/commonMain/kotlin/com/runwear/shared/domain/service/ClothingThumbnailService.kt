@@ -136,4 +136,15 @@ object ClothingThumbnailService {
     fun hasThumbnail(itemName: String): Boolean {
         return thumbnailKeyForName(itemName) != null
     }
+
+    /**
+     * The catalogue's one-line note ([ClothingItem.description]) for an
+     * item name/key, or null for an unknown item. GEN-5 (RW-29 FA-17):
+     * the iOS Kit Card resolves its per-garment notes through this
+     * lookup — the catalogue stays the engine's single source, exactly
+     * as with the thumbnail keys. Additive only; no existing behaviour
+     * changes.
+     */
+    fun itemDescriptionForName(itemName: String): String? =
+        itemForName(itemName)?.description
 }

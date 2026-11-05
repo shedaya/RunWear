@@ -943,7 +943,10 @@ final class LocationSearchGate {
 /// linearly — at thumbnail scale alike.
 enum MorningPosterMetrics {
     static let canvasWidth: Double = 390
-    static let canvasHeight: Double = 520
+    /// GEN-5 (RW-29 FA-21): the settled canvas ratio is 4:5
+    /// (frame 12) — build 25 rendered 390×520 (3:4). 390 × 488
+    /// keeps the width and lands on 4:5.
+    static let canvasHeight: Double = 488
     /// The top area scrim's height (gone before the runner's head).
     static let scrimHeight: Double = 150
 

@@ -1,6 +1,7 @@
 import Foundation
 import CoreLocation
 import SwiftUI
+import WidgetKit
 
 /// Persistence for the user's manually chosen location — the iOS
 /// counterpart of Android's PreferencesRepository.SavedLocation,
@@ -345,7 +346,14 @@ class WeatherViewModel: ObservableObject {
             await loadHeroImage()
 
         } catch {
-            errorMessage = error.localizedDescription
+            // GEN-5 (RW-29 FA-15): the error surface speaks in
+            // authored words (design-spec §17 / frame 47: name
+            // the failure and what is safe) — never the raw
+            // system error text the build-25 code surfaced.
+            errorMessage = "The weather service couldn't be reached. Your places, settings, and photos stay on this phone — nothing is lost."
+            // The widget's never-succeeded card reads its
+            // failure category from the same fact (Addendum 7).
+            WidgetLastGoodStore.saveErrorCategory(.weather)
         }
 
         isLoading = false
@@ -353,7 +361,10 @@ class WeatherViewModel: ObservableObject {
 
     func refresh(location: CLLocation?) async {
         guard let location = location else {
-            errorMessage = "Location not available"
+            // GEN-5 (RW-29 FA-15): authored form (frame 47's
+            // pattern — the failure named, and what is safe).
+            errorMessage = "Location isn't available. Your places, settings, and photos stay on this phone — nothing is lost."
+            WidgetLastGoodStore.saveErrorCategory(.location)
             return
         }
         await fetchWeather(for: location)
@@ -398,7 +409,9 @@ class WeatherViewModel: ObservableObject {
     /// manual mode must not silently substitute a GPS fix.
     func refreshCurrent() async {
         guard let currentLocation else {
-            errorMessage = "Location not available"
+            // GEN-5 (RW-29 FA-15): authored form, as above.
+            errorMessage = "Location isn't available. Your places, settings, and photos stay on this phone — nothing is lost."
+            WidgetLastGoodStore.saveErrorCategory(.location)
             return
         }
         await fetchWeather(for: currentLocation)
@@ -469,6 +482,151 @@ class WeatherViewModel: ObservableObject {
             precipitation: snapshot.precipitation,
             hour: snapshot.hour
         )
+
+        // GEN-5 (Addendum 7 — the iOS widget): every successful
+        // NOW-frame recommendation is the widget's last-good
+        // record. Browsed hours never write it (the guard is
+        // the NOW state itself), and a failed load never reaches
+        // here, so the record only ever moves forward.
+        persistWidgetLastGoodIfNow()
+    }
+
+    // MARK: - Widget last-good (GEN-5, Addendum 7)
+
+    /// Persist the current NOW recommendation for the widget
+    /// and ask WidgetKit to re-render. No-op in every other
+    /// state (browsing, loading, failed).
+    private func persistWidgetLastGoodIfNow() {
+        guard isViewingLocationNow,
+              let snapshot = selectedWeatherSnapshot,
+              let recommendation else { return }
+        let condition = WeatherCondition.from(code: snapshot.weatherCode)
+        let record = WidgetLastGood(
+            feelsLikeF: snapshot.feelsLikeFahrenheit,
+            temperatureF: snapshot.temperatureFahrenheit,
+            conditionText: condition.rawValue,
+            conditionIcon: condition.icon,
+            windMph: snapshot.windSpeed,
+            humidityPercent: snapshot.humidity,
+            uvIndex: snapshot.uvIndex,
+            locationName: locationName,
+            topBaseName: recommendation.topBase.name,
+            layerNames: [recommendation.topMid, recommendation.topOuter].compactMap { $0?.name },
+            bottomName: recommendation.bottom.name,
+            secondaryNames: [recommendation.head, recommendation.hands].compactMap { $0?.name }
+                + recommendation.accessories.map { $0.name },
+            laterTodayLine: widgetLaterTodayLine(current: recommendation),
+            unitIsCelsius: temperatureUnit == .celsius,
+            savedAt: Date()
+        )
+        WidgetLastGoodStore.save(record)
+        WidgetLastGoodStore.clearErrorCategory()
+        WidgetCenter.shared.reloadTimelines(ofKind: "RunWearWidget")
+    }
+
+    /// The hourly snapshot for a location-local day/hour, by the
+    /// same textual prefix match updateSelectedWeatherSnapshot
+    /// uses. Nil outside the forecast.
+    private func hourlySnapshot(on date: Date, hour: Int) -> HourlyWeatherSnapshot? {
+        guard let hourly = weatherData?.hourly else { return nil }
+        let components = locationCalendar.dateComponents([.year, .month, .day], from: date)
+        let prefix = String(
+            format: "%04d-%02d-%02dT%02d",
+            components.year ?? 0, components.month ?? 0, components.day ?? 0, hour
+        )
+        guard let index = hourly.time.firstIndex(where: { $0.hasPrefix(prefix) }) else { return nil }
+        return HourlyWeatherSnapshot.from(hourly: hourly, at: index)
+    }
+
+    /// A port of Android's LaterTodayLine (the settled Large
+    /// widget line): the earliest outfit CHANGE at +3 h / +6 h
+    /// wins; only when the outfit is stable does the line fall
+    /// back to the next-hours feels-like range + peak rain.
+    private func widgetLaterTodayLine(current: OutfitRecommendation) -> String? {
+        let today = locationNowDate()
+        let nowHour = locationNowHour()
+        for delta in [3, 6] {
+            let targetHour = nowHour + delta
+            guard targetHour <= 23,
+                  let later = hourlySnapshot(on: today, hour: targetHour) else { continue }
+            let laterRecommendation = outfitService.getRecommendation(
+                for: comfortLevel.adjustTemperature(later.feelsLikeFahrenheit),
+                rawTemperature: later.feelsLikeFahrenheit,
+                isRaining: later.rain > 0,
+                windSpeed: later.windSpeed,
+                humidity: later.humidity,
+                uvIndex: later.uvIndex,
+                precipitation: later.precipitation,
+                hour: later.hour
+            )
+            let clauses = widgetOutfitDeltaClauses(current: current, later: laterRecommendation)
+            if !clauses.isEmpty {
+                var line = "By \(widgetHourLabel(hour: targetHour, on: today)): \(clauses.joined(separator: " · "))"
+                if later.precipitationProbability >= 30 {
+                    line += " · rain \(later.precipitationProbability)%"
+                }
+                return line
+            }
+        }
+        var feels: [Double] = []
+        var peakRain = 0
+        for delta in 1...6 {
+            let hour = nowHour + delta
+            guard hour <= 23, let snapshot = hourlySnapshot(on: today, hour: hour) else { continue }
+            feels.append(snapshot.feelsLikeFahrenheit)
+            peakRain = max(peakRain, snapshot.precipitationProbability)
+        }
+        guard let minF = feels.min(), let maxF = feels.max() else { return nil }
+        let symbol = temperatureUnit.symbol
+        let range = Int(round(temperatureUnit.convert(fromFahrenheit: minF))) == Int(round(temperatureUnit.convert(fromFahrenheit: maxF)))
+            ? "feels like \(Int(round(temperatureUnit.convert(fromFahrenheit: minF))))\(symbol)"
+            : "feels like \(Int(round(temperatureUnit.convert(fromFahrenheit: minF))))–\(Int(round(temperatureUnit.convert(fromFahrenheit: maxF))))\(symbol)"
+        var line = "Later today: \(range)"
+        if peakRain >= 30 { line += " · rain up to \(peakRain)%" }
+        return line
+    }
+
+    /// Android's outfitDeltaClauses, verbatim logic: slots in
+    /// significance order (outer, mid, base, bottom, head,
+    /// hands), "drop the X" / "add the X", capped at two.
+    private func widgetOutfitDeltaClauses(
+        current: OutfitRecommendation,
+        later: OutfitRecommendation
+    ) -> [String] {
+        let slots: [(ClothingItem?, ClothingItem?)] = [
+            (current.topOuter, later.topOuter),
+            (current.topMid, later.topMid),
+            (current.topBase, later.topBase),
+            (current.bottom, later.bottom),
+            (current.head, later.head),
+            (current.hands, later.hands)
+        ]
+        var clauses: [String] = []
+        for (nowItem, thenItem) in slots {
+            if nowItem?.key == thenItem?.key { continue }
+            if let nowItem, thenItem == nil {
+                clauses.append("drop the \(nowItem.name)")
+            } else if nowItem == nil, let thenItem {
+                clauses.append("add the \(thenItem.name)")
+            } else if let nowItem, let thenItem {
+                clauses.append("drop the \(nowItem.name)")
+                clauses.append("add the \(thenItem.name)")
+            }
+            if clauses.count >= 2 { break }
+        }
+        return Array(clauses.prefix(2))
+    }
+
+    private func widgetHourLabel(hour: Int, on date: Date) -> String {
+        var components = locationCalendar.dateComponents([.year, .month, .day], from: date)
+        components.hour = hour
+        components.minute = 0
+        guard let target = locationCalendar.date(from: components) else { return "\(hour)" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "h a"
+        formatter.timeZone = locationCalendar.timeZone
+        return formatter.string(from: target)
     }
 
     /// Reset to current date and time — re-enters the NOW state.
@@ -1223,6 +1381,11 @@ class WeatherViewModel: ObservableObject {
             simplePlace = nil
             locationName = "Current Location"
         }
+        // GEN-5 (Addendum 7): the place name has now resolved —
+        // re-persist the widget record so it never carries the
+        // loading placeholder (the first persist happens inside
+        // makeRecommendation, before the geocode lands).
+        persistWidgetLastGoodIfNow()
     }
 
     // MARK: - Computed Properties

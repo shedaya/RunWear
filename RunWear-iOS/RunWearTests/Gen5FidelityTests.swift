@@ -237,6 +237,44 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(FreeLooksMeter.settingsLine(used: 4, allowance: 5), "4 of 5 free looks used")
     }
 
+    // MARK: - RW-29 HIGH findings FA-1 / FA-2 / FA-3
+
+    func testPill_GenerationOutranksTheScaffoldServe_FA1() {
+        // A personal (scaffold) photo on screen while a look is
+        // generating: the pill must show the GENERATING status,
+        // not the scaffold status — generation in flight
+        // outranks the scaffold serve (Android test-pins the
+        // same precedence).
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
+                             isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5),
+            .makingWithUpsell)
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
+                             isSubscribed: true, freeGenerationsUsed: 0, freeAllowance: 5),
+            .making)
+    }
+
+    func testRecordTodaysEntry_NeverWritesOutsideNow_FA2() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        let start = try XCTUnwrap(view.range(of: "private func recordTodaysEntry()"))
+        let rest = view[start.upperBound..<view.endIndex]
+        let end = rest.range(of: "\n    private func ")?.lowerBound ?? view.endIndex
+        let body = String(view[start.lowerBound..<end])
+        XCTAssertTrue(body.contains("guard viewModel.isViewingLocationNow"),
+                      "FA-2: the NOW-state guard stands at the recording gate")
+        XCTAssertTrue(body.contains("isDateInToday"),
+                      "the date guard remains as the second condition")
+    }
+
+    func testNarrationMomentComesFromTheEntry_FA3() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("moment: todays?.momentReading ?? \"Now\""),
+                      "FA-3: the narration moment derives from the ENTRY, per C-7")
+        XCTAssertFalse(view.contains("moment: viewModel.sheetMoment"),
+                       "FA-3: the live home view's moment never feeds the narration")
+    }
+
     func testPillView_EveryStatusLeadsWithTheScript() throws {
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
         XCTAssertTrue(hero.contains("case .makingWithUpsell"))
@@ -333,6 +371,26 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(ForkHeroSpec.faceBoxNormalized.minY, 0.018, accuracy: 0.0001)
         XCTAssertEqual(ForkHeroSpec.faceBoxNormalized.width, 0.214, accuracy: 0.0001)
         XCTAssertEqual(ForkHeroSpec.faceBoxNormalized.height, 0.478, accuracy: 0.0001)
+    }
+
+    func testForkBand_SizedHeightsKeepTheFaceAtEveryShippedWidth() {
+        // RW-29 FA-40: the band the view actually builds —
+        // height from ForkHeroSpec.bandHeight — at every width
+        // from a small phone to a tablet. The whole face box
+        // (and therefore the head) stays in the visible window,
+        // and the window always reaches at least the chest
+        // (torso visible to y ≥ 0.65 of the image height).
+        XCTAssertEqual(ForkHeroSpec.bandHeight(forWidth: 390), 180)
+        XCTAssertEqual(ForkHeroSpec.bandHeight(forWidth: 834), 834 / 2.4, accuracy: 0.001)
+        for width in stride(from: 320.0, through: 1180.0, by: 20.0) {
+            let frame = CGSize(width: width, height: ForkHeroSpec.bandHeight(forWidth: width))
+            XCTAssertTrue(
+                ForkHeroSpec.faceBoxFullyVisible(imageSize: ForkHeroSpec.imageSize, frameSize: frame),
+                "face box must be fully in frame at width \(width)")
+            let visible = ForkHeroSpec.visibleRect(imageSize: ForkHeroSpec.imageSize, frameSize: frame)
+            XCTAssertGreaterThanOrEqual(visible.maxY, 0.65 * 1152,
+                                        "the window must reach the chest at width \(width)")
+        }
     }
 
     func testForkView_UsesTheBundledAssetWithTheCodeDrawnBox() throws {

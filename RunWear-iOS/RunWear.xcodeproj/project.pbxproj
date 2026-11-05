@@ -205,6 +205,14 @@
 		G30002000000000000000001 /* Gen2I3OnboardingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G30001000000000000000001 /* Gen2I3OnboardingTests.swift */; };
 		Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z30001000000000000000001 /* Gen3ISmallTests.swift */; };
 		Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z40001000000000000000001 /* Gen3ShareRenderTests.swift */; };
+		AA1000000000000000003001 /* RunWearWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001001 /* RunWearWidget.swift */; };
+		AA1000000000000000003002 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
+		AA1000000000000000003003 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
+		AA1000000000000000003004 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
+		AA1000000000000000003005 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
+		AA1000000000000000003006 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
+		AA1000000000000000003007 /* RunWearWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001005 /* RunWearWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001007 /* Gen5WidgetTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -214,6 +222,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = B10000FE233456780000000;
 			remoteInfo = "RunWear Watch";
+		};
+		AA1000000000000000005001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000F8233456780000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA1000000000000000006001;
+			remoteInfo = RunWearWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -260,6 +275,17 @@
 				E10002000000000000000006 /* RunWearEngine.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA1000000000000000004004 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				AA1000000000000000003007 /* RunWearWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -399,6 +425,13 @@
 		C10001000000000000000091 /* Gen3HeroServingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3HeroServingTests.swift; sourceTree = "<group>"; };
 		G40001000000000000000004 /* Gen4HeroFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4HeroFallbackTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000095 /* Gen3TrainDeltaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3TrainDeltaTests.swift; sourceTree = "<group>"; };
+		AA1000000000000000001005 /* RunWearWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunWearWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA1000000000000000001001 /* RunWearWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWearWidget.swift; sourceTree = "<group>"; };
+		AA1000000000000000001002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA1000000000000000001003 /* RunWearWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWearWidget.entitlements; sourceTree = "<group>"; };
+		AA1000000000000000001004 /* RunWear.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWear.entitlements; sourceTree = "<group>"; };
+		AA1000000000000000001006 /* WidgetLastGood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLastGood.swift; sourceTree = "<group>"; };
+		AA1000000000000000001007 /* Gen5WidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen5WidgetTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -427,12 +460,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA1000000000000000004002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A1000020233456780000001 /* RunWear */ = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000001004 /* RunWear.entitlements */,
 				A1000002233456780000001 /* RunWearApp.swift */,
 				A1000021233456780000002 /* Models */,
 				A1000022233456780000003 /* Views */,
@@ -525,6 +566,7 @@
 				F10001000000000000000138 /* MakeItMePriceLabels.swift */,
 				G10001000000000000000001 /* RW26CollectionModels.swift */,
 				Q10001000000000000000001 /* ShareCardRenderStore.swift */,
+				AA1000000000000000001006 /* WidgetLastGood.swift */,
 				N10001000000000000000001 /* HeroServeTelemetry.swift */,
 				F10001000000000000000106 /* PersonalHeroStore.swift */,
 			);
@@ -545,6 +587,7 @@
 		A10000F7233456780000000 = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000002001 /* RunWearWidget */,
 				A1000020233456780000001 /* RunWear */,
 				B1000020233456780000001 /* RunWearWatch */,
 				C1000020233456780000001 /* RunWearTests */,
@@ -556,6 +599,7 @@
 		A10000FF233456780000000 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000001005 /* RunWearWidget.appex */,
 				A1000000233456780000000 /* RunWear.app */,
 				B1000000233456780000000 /* RunWear Watch.app */,
 				C1000000233456780000000 /* RunWearTests.xctest */,
@@ -613,6 +657,7 @@
 		C1000020233456780000001 /* RunWearTests */ = {
 			isa = PBXGroup;
 			children = (
+				AA1000000000000000001007 /* Gen5WidgetTests.swift */,
 				C10001000000000000000001 /* OutfitRulesSweepTest.swift */,
 				C10001000000000000000002 /* EngineBoundaryTests.swift */,
 				C10001000000000000000003 /* HeroFlagPayloadTests.swift */,
@@ -661,6 +706,16 @@
 			path = RunWearTests;
 			sourceTree = "<group>";
 		};
+		AA1000000000000000002001 /* RunWearWidget */ = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000001001 /* RunWearWidget.swift */,
+				AA1000000000000000001002 /* Info.plist */,
+				AA1000000000000000001003 /* RunWearWidget.entitlements */,
+			);
+			path = RunWearWidget;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -672,11 +727,13 @@
 				A10000FD233456780000000 /* Frameworks */,
 				A10000FE233456790000000 /* Resources */,
 				D10000FC233456780000001 /* Embed Watch Content */,
+				AA1000000000000000004004 /* Embed App Extensions */,
 				E10000FC2334567800000001 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				AA1000000000000000005002 /* PBXTargetDependency */,
 				D1000100233456780000001 /* PBXTargetDependency */,
 			);
 			name = RunWear;
@@ -723,6 +780,23 @@
 			productReference = C1000000233456780000000 /* RunWearTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		AA1000000000000000006001 /* RunWearWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA1000000000000000007001 /* Build configuration list for PBXNativeTarget "RunWearWidget" */;
+			buildPhases = (
+				AA1000000000000000004001 /* Sources */,
+				AA1000000000000000004002 /* Frameworks */,
+				AA1000000000000000004003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RunWearWidget;
+			productName = RunWearWidget;
+			productReference = AA1000000000000000001005 /* RunWearWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -740,6 +814,9 @@
 						CreatedOnToolsVersion = 15.0;
 					};
 					C10000FE233456780000000 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					AA1000000000000000006001 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -762,6 +839,7 @@
 			targets = (
 				A10000FE233456780000000 /* RunWear */,
 				B10000FE233456780000000 /* RunWear Watch */,
+				AA1000000000000000006001 /* RunWearWidget */,
 				C10000FE233456780000000 /* RunWearTests */,
 			);
 		};
@@ -817,6 +895,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA1000000000000000004003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000003006 /* GreatVibes-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -824,6 +910,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA1000000000000000003004 /* WidgetLastGood.swift in Sources */,
 				A1000001233456780000001 /* RunWearApp.swift in Sources */,
 				A1000003233456780000002 /* ContentView.swift in Sources */,
 				A1000007233456780000004 /* AppTheme.swift in Sources */,
@@ -924,6 +1011,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */,
+				AA1000000000000000003005 /* WidgetLastGood.swift in Sources */,
 				C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */,
 				C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */,
 				E10002000000000000000013 /* EngineBridge.swift in Sources */,
@@ -1011,6 +1100,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA1000000000000000004001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000003001 /* RunWearWidget.swift in Sources */,
+				AA1000000000000000003002 /* AppTheme.swift in Sources */,
+				AA1000000000000000003003 /* WidgetLastGood.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1018,6 +1117,11 @@
 			isa = PBXTargetDependency;
 			target = B10000FE233456780000000 /* RunWear Watch */;
 			targetProxy = D10000FF233456780000001 /* PBXContainerItemProxy */;
+		};
+		AA1000000000000000005002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA1000000000000000006001 /* RunWearWidget */;
+			targetProxy = AA1000000000000000005001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1146,6 +1250,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_ENTITLEMENTS = RunWear/RunWear.entitlements;
 				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
@@ -1184,6 +1289,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Manual;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_ENTITLEMENTS = RunWear/RunWear.entitlements;
 				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = L2D8SN7BJ4;
 				ENABLE_PREVIEWS = YES;
@@ -1328,6 +1434,64 @@
 			};
 			name = Release;
 		};
+		AA1000000000000000008001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = RunWearWidget/RunWearWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 26;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RunWearWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.uptimeventures.runwear.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear Widget App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AA1000000000000000008002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = RunWearWidget/RunWearWidget.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 26;
+				DEVELOPMENT_TEAM = L2D8SN7BJ4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = RunWearWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.uptimeventures.runwear.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "RunWear Widget App Store";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1363,6 +1527,15 @@
 			buildConfigurations = (
 				C1000108233456780000000 /* Debug */,
 				C1000109233456780000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA1000000000000000007001 /* Build configuration list for PBXNativeTarget "RunWearWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA1000000000000000008001 /* Debug */,
+				AA1000000000000000008002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -24,38 +24,38 @@ struct MakeItMeForkView: View {
     let onStock: () -> Void
 
     var body: some View {
-        ScrollView {
+        // GEN-5 (RW-29 FA-40 + EX-21): the photo band is a FIXED
+        // header, not the first element of the scrolling column —
+        // as a scrolling first element it scrolled away under the
+        // top of the screen and the runner was progressively cut
+        // by the viewport edge at every scroll position. Only the
+        // choices scroll; the invitation surface stays composed.
+        // The band's height comes from ForkHeroSpec.bandHeight —
+        // never wider than 2.4:1, so the spec window keeps the
+        // face, shoulders, and chest composed at every width,
+        // phones through tablets.
+        GeometryReader { proxy in
+            let contentWidth = max(proxy.size.width - 48, 0)
+            let bandHeight = ForkHeroSpec.bandHeight(forWidth: contentWidth)
             VStack(spacing: 20) {
-                // The first recommendation stays visible above the
-                // choice (§2.2).
+                // The first recommendation stays visible above
+                // the choice (§2.2).
                 VStack(spacing: 8) {
-                    // W-17 (GEN-2, fork half): the photo renders
-                    // through HeroPhoto — the home hero's
-                    // top-anchored cover crop — not a bare
-                    // center-anchored .fill, which cropped the
-                    // runner at the neck on this card. The head
-                    // sits at the top of every pool portrait, so
-                    // the top anchor keeps it in full. (This card
-                    // only; the home hero is untouched.)
-                    // W-23: while the photo loads, the area is a
-                    // designed placeholder (card fill, photo glyph,
-                    // spinner) — never a blank cream slab.
-                    // GEN-5 (RW-28 item 19, ruling C-2): the fork's
-                    // photo is the purpose-designed HARD-CODED
-                    // bundled image (ForkHeroSpec), cropped by the
-                    // asset lane's anchoring rule — never the
-                    // recommendation's pool photo, whose shipped
-                    // crop was half blank sky with the runner
-                    // sheet-cut (A-3). The dashed face box is a
-                    // code overlay in image space, transformed
-                    // with the same crop, so it stays registered
-                    // to the face at every form factor.
-                    GeometryReader { geometry in
-                        forkHeroBand(width: geometry.size.width, height: 180)
-                    }
-                    .frame(height: 180)
-                    .clipped()
-                    .cornerRadius(16)
+                    // GEN-5 (RW-28 item 19, ruling C-2): the
+                    // fork's photo is the purpose-designed
+                    // HARD-CODED bundled image (ForkHeroSpec),
+                    // rendered through the asset lane's anchoring
+                    // window — never the recommendation's pool
+                    // photo, whose shipped crop was half blank
+                    // sky with the runner sheet-cut (A-3). The
+                    // dashed face box is a code overlay in image
+                    // space, transformed with the same window, so
+                    // it stays registered to the face at every
+                    // form factor. The image is bundled, so the
+                    // band never renders blank on arrival (A-5).
+                    forkHeroBand(width: contentWidth, height: bandHeight)
+                        .clipped()
+                        .cornerRadius(16)
 
                     if let previewContextLine {
                         Text(previewContextLine)
@@ -68,6 +68,8 @@ struct MakeItMeForkView: View {
                         .multilineTextAlignment(.center)
                 }
 
+                ScrollView {
+                    VStack(spacing: 20) {
                 Text("See yourself in every outfit.")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
@@ -136,23 +138,44 @@ struct MakeItMeForkView: View {
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
+                    }
+                    .padding(.bottom, 24)
+                }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
         }
     }
 
-    /// GEN-5 (C-2): the bundled fork hero with its dashed face
-    /// box. The image is local, so the band never renders blank
-    /// on arrival (A-5); the cream placeholder sits behind it for
-    /// the first-frame paint.
+    /// GEN-5 (C-2 + RW-29 FA-40): the bundled fork hero with its
+    /// dashed face box, rendered through the asset lane's
+    /// anchoring WINDOW (ForkHeroSpec.visibleRect) — the full
+    /// image is scaled so the spec window maps exactly onto the
+    /// band and offset by the window's origin, then clipped.
+    /// (Build 25 rendered the pool portrait through a generic
+    /// top-anchored cover in a fixed 180 pt band; the generic
+    /// cover's image-centre window is not the spec's face-centre
+    /// window, and the fixed height let wide form factors slice
+    /// through the chin.) The image is local, so the band never
+    /// renders blank on arrival (A-5); the cream placeholder
+    /// sits behind it for the first-frame paint.
     private func forkHeroBand(width: CGFloat, height: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
+        let frameSize = CGSize(width: width, height: height)
+        let visible = ForkHeroSpec.visibleRect(
+            imageSize: ForkHeroSpec.imageSize, frameSize: frameSize)
+        let scale = visible.width > 0 ? width / visible.width : 1
+        return ZStack(alignment: .topLeading) {
             AppTheme.background
             if let forkImage = Self.bundledForkImage {
-                HeroPhoto(image: Image(uiImage: forkImage), width: width, height: height)
+                Image(uiImage: forkImage)
+                    .resizable()
+                    .frame(
+                        width: ForkHeroSpec.imageSize.width * scale,
+                        height: ForkHeroSpec.imageSize.height * scale)
+                    .offset(x: -visible.minX * scale, y: -visible.minY * scale)
                 let box = ForkHeroSpec.faceBoxRectInFrame(
                     imageSize: ForkHeroSpec.imageSize,
-                    frameSize: CGSize(width: width, height: height)
+                    frameSize: frameSize
                 )
                 RoundedRectangle(cornerRadius: box.height * 0.12)
                     .strokeBorder(
@@ -164,6 +187,7 @@ struct MakeItMeForkView: View {
             }
         }
         .frame(width: width, height: height)
+        .clipped()
     }
 
     /// The bundled fork asset (hero_fallback folder reference —

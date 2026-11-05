@@ -382,8 +382,21 @@ struct WearIveRunDayView: View {
 
     /// Content keys: a re-recorded entry (new hero, new kit) is a
     /// new card; the same entry is the same card forever.
-    private var posterKey: String { "\(entry.id)|poster|\(entry.heroImageReference)" }
-    private var kitKey: String { "\(entry.id)|kit|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)" }
+    /// GEN-5 (RW-29 FA-24): the content keys carry a CONTENT
+    /// FINGERPRINT, not just identity — an in-session settle can
+    /// change the entry's place, feels-like, condition or items
+    /// in place (same id), and a key that cannot see the change
+    /// serves the stale card for the rest of the session.
+    private var shareContentFingerprint: String {
+        [entry.placeKey,
+         String(entry.dayStart.timeIntervalSince1970),
+         String(entry.feelsLikeF),
+         entry.condition,
+         entry.itemNames.joined(separator: ","),
+         entry.heroImageReference].joined(separator: "|")
+    }
+    private var posterKey: String { "\(entry.id)|poster|\(shareContentFingerprint)" }
+    private var kitKey: String { "\(entry.id)|kit|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)|\(shareContentFingerprint)" }
 
     var body: some View {
         ScrollView {
@@ -479,8 +492,13 @@ struct WearIveRunDayView: View {
 
     /// Poster pipeline: hero download → poster-size downscale
     /// (off the main actor) → the one full-size render.
+    /// GEN-5 (RW-29 FA-25): a poster whose hero could not be
+    /// loaded FAILS the slot (the labeled failure surface with
+    /// Try again) — it never lands as a "ready" photo-less dark
+    /// rectangle, which is what the build-25 pipeline produced
+    /// and what Sol's walkthrough received as a black payload.
     private func renderPosterImage() async -> UIImage? {
-        let hero = await loadHeroUIImage()
+        guard let hero = await loadHeroUIImage() else { return nil }
         let view = MorningPosterView(entry: entry, hero: hero, formatTemperature: formatTemperature)
         return await MainActor.run {
             let renderer = ImageRenderer(content: view)
@@ -524,9 +542,20 @@ struct WearIveRunDayView: View {
         return UIImage(data: data)
     }
 
+    /// GEN-5 (RW-29 FA-25): the hero fetch is BOUNDED — a
+    /// dedicated session with a 20-second request timeout, so a
+    /// stalled fetch reaches the failure surface instead of
+    /// holding the slot in its working state indefinitely.
+    private static let heroFetchSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 30
+        return URLSession(configuration: configuration)
+    }()
+
     private func loadHeroUIImage() async -> UIImage? {
         guard let url = URL(string: entry.heroImageReference),
-              let (data, _) = try? await URLSession.shared.data(from: url),
+              let (data, _) = try? await Self.heroFetchSession.data(from: url),
               let image = UIImage(data: data) else { return nil }
         // Downscale to the poster's rendered size OFF the main
         // actor, so the render never pays full-resolution decode.
@@ -565,33 +594,73 @@ struct WearIveRunDayView: View {
 
 /// The share door for ONE card, observing ONLY that card's slot:
 /// the other card's pipeline cannot republish this sheet. States:
-/// ready → the native ShareLink (caption pre-filled #RunAnyWear,
-/// frame 14) built from the slot's single image instance;
-/// rendering/idle → the LABELED working state (the hero-pill
-/// rule: labeled, state-driven — never a bare spinner on a blank
-/// sheet); failed → the failure line with a retry. Both waiting
-/// states carry an explicit Close — the census path trapped the
-/// user in the sheet for ~31 s with no cancel affordance at all.
+/// ready → the rendered CARD ITSELF, drawn on the sheet, with a
+/// Share affordance and a Close; rendering/idle → the LABELED
+/// working state (the hero-pill rule: labeled, state-driven —
+/// never a bare spinner on a blank sheet); failed → the failure
+/// line with a retry. EVERY state carries an explicit Close —
+/// the census path trapped the user in the sheet for ~31 s
+/// with no cancel affordance at all.
+///
+/// GEN-5 (RW-29 FA-63 / FA-65): build 25's ready state was one
+/// "Share" label on a full-height white sheet — the card was
+/// never drawn, there was no exit control, and because the
+/// door was a ShareLink (which reports no completion), this
+/// sheet stayed open behind the system sheet after either
+/// outcome. The door is now a UIActivityViewController whose
+/// completion handler dismisses this sheet on BOTH outcomes,
+/// and its payload is exactly the card image plus the settled
+/// caption "#RunAnyWear" — no subject field exists in this
+/// path, so nothing concatenates onto the caption (FA-65;
+/// Android's caption is the same hashtag alone). The sheet
+/// itself sits on the app's cream ground (cream map: the app's
+/// own share sheet was an Absent row).
 struct ShareCardSheetView: View {
     @ObservedObject var slot: ShareCardSlot
     let kind: ShareCardKind
     var onRetry: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var activityPresented = false
 
     var body: some View {
+        ZStack {
+            AppTheme.background.ignoresSafeArea()
+            content
+        }
+        .sheet(isPresented: $activityPresented) {
+            if let image = slot.image {
+                ActivityViewController(items: [image, "#RunAnyWear"]) {
+                    activityPresented = false
+                    dismiss()
+                }
+                .ignoresSafeArea()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch slot.state {
         case .ready:
             if let image = slot.image {
-                ShareLink(
-                    item: Image(uiImage: image),
-                    subject: Text("RunWear — Wear I've Run"),
-                    message: Text("#RunAnyWear"),
-                    preview: SharePreview("Wear I've Run", image: Image(uiImage: image))
-                ) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+                VStack(spacing: 16) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+                    Button {
+                        activityPresented = true
+                    } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(.appButtonLabel)
+                            .foregroundColor(AppTheme.pinePayload)
+                    }
+                    Button("Close") { dismiss() }
                         .font(.appButtonLabel)
-                        .padding(24)
+                        .foregroundColor(AppTheme.pinePayload)
                 }
+                .padding(24)
             } else {
                 progress
             }
@@ -625,6 +694,23 @@ struct ShareCardSheetView: View {
         }
         .padding(24)
     }
+}
+
+/// The system share sheet, presented directly so its
+/// completion (sent OR cancelled) is observable — the property
+/// ShareLink cannot provide and FA-63 requires: the app's own
+/// sheet dismisses when the system sheet finishes.
+private struct ActivityViewController: UIViewControllerRepresentable {
+    let items: [Any]
+    let onFinish: () -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in onFinish() }
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Morning Poster (frame 12)
@@ -703,7 +789,11 @@ struct MorningPosterView: View {
                     Text("\(formatTemperature(entry.feelsLikeF)) · \(entry.condition)")
                         .font(.system(size: MorningPosterMetrics.feelsFontSize, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("\(entry.placeDisplayName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
+                    // GEN-5 (RW-29 FA-21): the second line
+                    // carries the run's human MOMENT (the
+                    // entry's recorded moment reading), never a
+                    // stamped "Nov 5" date form (frame 12).
+                    Text("\(entry.placeDisplayName) · \(entry.momentReading)")
                         .font(.system(size: MorningPosterMetrics.placeFontSize))
                         .foregroundColor(.white.opacity(0.85))
                     Text(entry.itemNames.prefix(4).joined(separator: " · "))
@@ -772,6 +862,19 @@ struct KitCardView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 ForEach(Array(zip(entry.itemNames, entry.itemKeys).enumerated()), id: \.offset) { _, pair in
                     VStack(spacing: 6) {
+                        // GEN-5 (RW-29 FA-64): the garment
+                        // renders are charcoal garments on pure
+                        // black source photographs (opaque — the
+                        // black is baked into the asset, verified
+                        // against the stored bytes). Build 25
+                        // floated each as a hard-cornered black
+                        // square inside a taller cream cell,
+                        // which reads as a broken image and
+                        // collapses to a black void at share
+                        // scale. The tile is now a designed
+                        // object: a square tile, rounded corners,
+                        // a hairline edge — the dark product tile
+                        // the photography was made as.
                         Group {
                             if let thumbnail = thumbnails[pair.1] {
                                 Image(uiImage: thumbnail)
@@ -793,11 +896,26 @@ struct KitCardView: View {
                                 }
                             }
                         }
-                        .frame(height: 90)
+                        .frame(width: 90, height: 90)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(AppTheme.textSecondary.opacity(0.35), lineWidth: 1)
+                        )
                         Text(pair.0)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(AppTheme.textPrimary)
                             .multilineTextAlignment(.center)
+                        // GEN-5 (RW-29 FA-17): frame 13 carries
+                        // the catalogue's one-line note under
+                        // each garment's name, resolved from
+                        // the engine catalogue by item key.
+                        if let note = EngineBridge.itemNote(forKey: pair.1) {
+                            Text(note)
+                                .font(.system(size: 11))
+                                .foregroundColor(AppTheme.textSecondary)
+                                .multilineTextAlignment(.center)
+                        }
                     }
                 }
             }
@@ -805,6 +923,16 @@ struct KitCardView: View {
             Text("#RunAnyWear")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(AppTheme.primaryColor)
+
+            // GEN-5 (RW-29 FA-17): frame 13's single call to
+            // action and the Amazon Associates disclosure —
+            // both verbatim, exactly one CTA on the card.
+            Text("Shop this kit →")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.primaryColor)
+            Text("As an Amazon Associate, RunWear earns from qualifying purchases.")
+                .font(.system(size: 10))
+                .foregroundColor(AppTheme.textSecondary)
         }
         .padding(20)
         .frame(width: 390)

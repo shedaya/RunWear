@@ -81,6 +81,13 @@ enum EngineBridge {
         )
     }
 
+    /// The catalogue's one-line note for an item key (GEN-5,
+    /// RW-29 FA-17 — the Kit Card's per-garment note), resolved
+    /// from the engine catalogue, never a client-side copy.
+    static func itemNote(forKey key: String) -> String? {
+        RunWearEngine.ClothingThumbnailService.shared.itemDescriptionForName(itemName: key)
+    }
+
     /// Strip the engine tip's leading emoji grapheme + following space,
     /// when present ("🏃 You should feel…" → "You should feel…"). A tip
     /// that starts with a letter or digit is returned untouched.

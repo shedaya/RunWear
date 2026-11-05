@@ -260,16 +260,28 @@ final class Gen3HeroServingTests: XCTestCase {
 
     func testPillScaffoldState() {
         // (b) a personal photo IS on screen while this cell's exact
-        // look still makes → the banked scaffold, folded into the
-        // one pill with the GEN-3 label.
+        // look still makes. GEN-5 (RW-29 FA-1) SUPERSEDES the
+        // gen-3 iOS pin that resolved this combination to the
+        // scaffold state: the settled precedence — Android's
+        // HeroPillPolicy is test-pinned to it — is that a
+        // generation in flight OUTRANKS the scaffold serve, so
+        // the pill reports the making state (with the C-4
+        // amendment's free-tier gating), never "Your photo",
+        // while the look is still being made.
         XCTAssertEqual(
-            .scaffold,
+            .makingWithUpsell,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
                              isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5)
         )
-        // GEN-3 DESIGN DELTA 2 (Sol's final mocked states): the
-        // scaffold is "Your photo" — NOTHING MORE; the "made for
-        // close-by weather" line is out.
+        XCTAssertEqual(
+            .making,
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
+                             isSubscribed: true, freeGenerationsUsed: 1, freeAllowance: 5)
+        )
+        // The scaffold rendering case and its GEN-3 label remain
+        // in the pill's vocabulary (the serve underneath is still
+        // the scaffold); resolve simply never selects it over an
+        // in-flight generation again.
         XCTAssertEqual("Your photo", HeroPill.scaffoldLabel)
         XCTAssertEqual("Make It Me", HeroPill.scriptMarkText)
         XCTAssertEqual("Making this you…", HeroPill.makingLabel)

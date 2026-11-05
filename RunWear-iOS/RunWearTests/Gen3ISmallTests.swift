@@ -31,7 +31,7 @@ import XCTest
 /// non-empty name instead of passing an empty string through.
 ///
 /// X-11 — Morning Poster thumbnail text overlap. iOS composes
-/// the poster at ONE size (390×520, MorningPosterMetrics) and
+/// the poster at ONE size (390×488 (4:5), MorningPosterMetrics) and
 /// renders it once, full-size, through ImageRenderer; the share
 /// preview is a raster scale-down. There is no thumbnail-size
 /// re-layout anywhere on iOS, so Android's collision mechanism
@@ -296,7 +296,7 @@ final class Gen3ISmallTests: XCTestCase {
         let poster = worstCasePoster
         XCTAssertFalse(
             MorningPosterMetrics.collides(feelsText: poster.feels, placeText: poster.place, itemsText: poster.items, scale: 1),
-            "full size (390×520): lockup band + body/foot band leave headroom — NO collision")
+            "full size (390×488 (4:5)): lockup band + body/foot band leave headroom — NO collision")
         let occupied = MorningPosterMetrics.lockupBandHeight
             + MorningPosterMetrics.bodyBandHeight(feelsText: poster.feels, placeText: poster.place, itemsText: poster.items)
         XCTAssertLessThan(occupied, MorningPosterMetrics.canvasHeight * 0.85,

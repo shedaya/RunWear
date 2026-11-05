@@ -874,7 +874,8 @@ struct WeatherOutfitView: View {
         let todays = collectionModel.sessionEntry()
         // WS-4 + Y-5: the state derives EVERYTHING from the one
         // entry value above — both narration payloads (simple
-        // place for "Added", first kit item for "Update to") AND
+        // place for "Added"; per C-7 the entry's own update
+        // payload — place or moment reading, never garments) AND
         // the narration kind, which the entry carries on itself
         // (`wasUpdatedInSession`, committed in the same store
         // write as the content). There is no second state holder
@@ -882,6 +883,9 @@ struct WeatherOutfitView: View {
         // from separate model state and the payload from an
         // older entry, and the card disagreed with itself for
         // the rest of the session.
+        // GEN-5 (RW-29 FA-3): the moment below is the ENTRY's
+        // recorded momentReading — never the live sheetMoment,
+        // which browsing would rewrite into stamped forms.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: todays,
             moment: todays?.momentReading ?? "Now",
@@ -921,6 +925,17 @@ struct WeatherOutfitView: View {
     /// session's identity, which is what makes the replacement
     /// land on the same entry across place changes.
     private func recordTodaysEntry() {
+        // GEN-5 (RW-29 FA-2, design-spec §8.2): the settled entry
+        // is the NOW entry — browsing or confirming another hour
+        // never moves it. Build 25 guarded only the date, so a
+        // confirmed 9 p.m. overwrote today's entry with the
+        // future hour's kit, feels-like, and hero and narrated
+        // it as an update. The recording happens only in the
+        // location's Now state (Android's recording effect has
+        // the same guard); a session that only ever settles at
+        // changed hours records nothing, which is the settled
+        // session model's other side, not an accident.
+        guard viewModel.isViewingLocationNow else { return }
         guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
         // W-15: never record under a placeholder. Until the
         // reverse geocode (or a manual selection) derives a

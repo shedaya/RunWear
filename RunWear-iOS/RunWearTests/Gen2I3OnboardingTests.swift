@@ -50,8 +50,10 @@ final class Gen2I3OnboardingTests: XCTestCase {
         // with the asset lane's anchoring rule (ForkHeroSpec) and
         // the code-drawn dashed face box — a stronger form of the
         // same never-crop-the-head contract.
-        XCTAssertTrue(fork.contains("forkHeroBand(width: geometry.size.width, height: 180)"),
+        XCTAssertTrue(fork.contains("forkHeroBand(width: contentWidth, height: bandHeight)"),
                       "the fork card renders the bundled fork image through its spec-anchored band (C-2)")
+        XCTAssertTrue(fork.contains("ForkHeroSpec.bandHeight(forWidth: contentWidth)"),
+                      "the band's height scales with its width (RW-29 FA-40) — a fixed 180 pt band slices the chin on wide form factors")
         XCTAssertTrue(fork.contains("ForkHeroSpec"),
                       "the band's crop comes from the asset lane's spec of record")
         XCTAssertFalse(fork.contains("image.resizable().aspectRatio(contentMode: .fill)"),
