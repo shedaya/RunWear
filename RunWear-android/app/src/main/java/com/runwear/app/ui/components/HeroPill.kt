@@ -226,10 +226,18 @@ fun HeroPill(
                     text = content.actionText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    // GEN-6 (RW-34): on the EXHAUSTED pill the
-                    // upsell is the MAIN message — it takes the
-                    // green accent; elsewhere the action stays ink.
-                    color = if (content.kind == HeroPillKind.EXHAUSTED) {
+                    // GEN-6 (RW-34; RW-68): the "Get unlimited"
+                    // action takes the approved green accent on
+                    // BOTH free kinds that carry it — EXHAUSTED
+                    // (where it is the main message) and EXACT_FREE
+                    // (the owner's approved table: the look count
+                    // "with a green 'Get unlimited' button", Nov 5,
+                    // 2026; the iOS half of this wave fixed its
+                    // identical white rendering to the same accent).
+                    // actionText exists only on those two kinds.
+                    color = if (content.kind == HeroPillKind.EXHAUSTED ||
+                        content.kind == HeroPillKind.EXACT_FREE
+                    ) {
                         com.runwear.app.ui.theme.PineAccentOnDark
                     } else {
                         com.runwear.app.ui.theme.PhotoInk
