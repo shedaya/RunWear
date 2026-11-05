@@ -270,13 +270,29 @@ class ShareArtifactRenderTest {
     }
 
     @Test
-    fun `the share intent is an image send with the hashtag caption`() {
+    fun `the share intent is an image send carrying the composed caption verbatim`() {
+        // GEN-6 Wave B (RW-31): the caption is a payload parameter
+        // now — composed by ShareCaptionComposer from the day
+        // record and carried verbatim as EXTRA_TEXT. The gen-5
+        // bare-hashtag constant is retired.
+        val caption = ShareCaptionComposer.caption(
+            ShareCaptionTemplate.SHORT_CALL,
+            ShareCaptionInput(
+                place = "Kansas City, MO",
+                captionMoment = "this morning",
+                isPastChapter = false,
+                feels = 57, actual = 61, low = 55, high = 63,
+                swingF = 8.0, feelsF = 57.0,
+                conditionLower = "clear sky",
+                kitNames = listOf("Short-sleeve shirt", "Running shorts", "Sunglasses")
+            )
+        )
         val stream = Uri.parse("content://com.runwear.app.fileprovider/share-artifacts/x.png")
-        val intent = ShareArtifacts.buildIntent(stream, ShareArtifactKind.KIT_CARD)
+        val intent = ShareArtifacts.buildIntent(stream, ShareArtifactKind.KIT_CARD, caption)
         assertEquals(Intent.ACTION_SEND, intent.action)
         assertEquals("image/png", intent.type)
         assertEquals(stream, intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
-        assertEquals("#RunAnyWear", intent.getStringExtra(Intent.EXTRA_TEXT))
+        assertEquals(caption, intent.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
     }
 }

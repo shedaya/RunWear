@@ -15,9 +15,12 @@ import org.junit.Test
  * WS-6 (D-15/D-16/D-17): the share payload's pins.
  *
  *  - The ONLY payload shape is an image stream (PNG) with the
- *    #RunAnyWear caption pre-filled — for BOTH collection share
- *    choices. A text-only payload is unrepresentable in
- *    [SharePayload]'s spec and absent from the sources.
+ *    caller's composed caption carried verbatim — for BOTH
+ *    collection share choices. A text-only payload is
+ *    unrepresentable in [SharePayload]'s spec and absent from
+ *    the sources. (GEN-6 Wave B: the caption is a parameter
+ *    composed by [ShareCaptionComposer]; the gen-5 bare-hashtag
+ *    constant is retired.)
  *  - The home text share is gone: no `shareOutfit`, no `text/plain`
  *    ACTION_SEND anywhere in the home or collection sources, and
  *    the photo-zone chrome carries no Share button (D-15).
@@ -69,11 +72,27 @@ class ShareArtifactsTest {
     // ---- The payload shape ----
 
     @Test
-    fun `both share choices produce an image payload with the hashtag caption`() {
+    fun `both share choices produce an image payload carrying the composed caption verbatim`() {
+        // GEN-6 Wave B (RW-31): the caption is a payload parameter
+        // now — composed by ShareCaptionComposer from the day
+        // record, carried verbatim for BOTH collection share
+        // choices. The bare-hashtag constant is retired.
+        val caption = ShareCaptionComposer.caption(
+            ShareCaptionTemplate.FEELS_LIKE_STORY,
+            ShareCaptionInput(
+                place = "Kansas City, MO",
+                captionMoment = "this morning",
+                isPastChapter = false,
+                feels = 57, actual = 61, low = 55, high = 63,
+                swingF = 8.0, feelsF = 57.0,
+                conditionLower = "clear sky",
+                kitNames = listOf("Short-sleeve shirt", "Running shorts", "Sunglasses")
+            )
+        )
         for (kind in ShareArtifactKind.entries) {
-            val spec = SharePayload.spec(kind)
+            val spec = SharePayload.spec(kind, caption)
             assertEquals("image/png", spec.mimeType)
-            assertEquals("#RunAnyWear", spec.caption)
+            assertEquals(caption, spec.caption)
             assertTrue(spec.carriesImageStream)
             assertFalse("no text-only payload exists", spec.carriesTextOnlyPayload)
             assertTrue(kind.chooserTitle.contains("Share"))

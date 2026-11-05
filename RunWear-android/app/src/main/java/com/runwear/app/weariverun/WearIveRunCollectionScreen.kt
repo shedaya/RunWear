@@ -820,7 +820,18 @@ private fun ShareChoiceSheet(
                                 // share dismisses.
                                 runCatching {
                                     val bitmap = capture.captureBitmap()
-                                    ShareArtifacts.share(context, bitmap, chosen)
+                                    // GEN-6 Wave B stage-1 bridge:
+                                    // the caption is a payload
+                                    // parameter now (composed by
+                                    // ShareCaptionComposer); stage 2's
+                                    // Share Studio passes the chosen
+                                    // caption here. Until then this
+                                    // sheet keeps the gen-5 bare
+                                    // hashtag so its behaviour is
+                                    // unchanged.
+                                    ShareArtifacts.share(
+                                        context, bitmap, chosen, "#RunAnyWear"
+                                    )
                                 }.onSuccess {
                                     onDismiss()
                                 }.onFailure {

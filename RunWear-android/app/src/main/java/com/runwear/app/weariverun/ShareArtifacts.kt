@@ -29,6 +29,12 @@ import java.io.FileOutputStream
  * wordmark carries #RunAnyWear directly beneath it; the Kit Card
  * closes with the hashtag) and the caption repeats the hashtag for
  * the receiving app's text field (design frame 14).
+ *
+ * GEN-6 Wave B (RW-31, stage 1): the caption is no longer a
+ * constant baked into this file — it is a payload PARAMETER,
+ * composed by [ShareCaptionComposer] from the day record and
+ * chosen in the Share Studio (stage 2 wires the picker; the
+ * payload contract lands here first).
  */
 
 /** Which designed artifact a collection card shares. */
@@ -39,12 +45,12 @@ enum class ShareArtifactKind(val chooserTitle: String, val fileStem: String) {
 
 /**
  * The share payload's pure shape — the gate pins it: image stream,
- * PNG, the one caption. `carriesTextOnlyPayload` is part of the
- * spec precisely so a test can assert it is always false.
+ * PNG, the caller's caption carried verbatim. `carriesTextOnlyPayload`
+ * is part of the spec precisely so a test can assert it is always
+ * false.
  */
 object SharePayload {
 
-    const val CAPTION = "#RunAnyWear"
     const val MIME_TYPE = "image/png"
 
     data class Spec(
@@ -54,9 +60,9 @@ object SharePayload {
         val carriesTextOnlyPayload: Boolean
     )
 
-    fun spec(kind: ShareArtifactKind): Spec = Spec(
+    fun spec(kind: ShareArtifactKind, caption: String): Spec = Spec(
         mimeType = MIME_TYPE,
-        caption = CAPTION,
+        caption = caption,
         carriesImageStream = true,
         carriesTextOnlyPayload = false
     )
@@ -117,8 +123,8 @@ object ShareArtifacts {
     }
 
     /** The ACTION_SEND intent for an artifact image — never text-only. */
-    fun buildIntent(stream: Uri, kind: ShareArtifactKind): Intent {
-        val spec = SharePayload.spec(kind)
+    fun buildIntent(stream: Uri, kind: ShareArtifactKind, caption: String): Intent {
+        val spec = SharePayload.spec(kind, caption)
         return Intent(Intent.ACTION_SEND).apply {
             type = spec.mimeType
             putExtra(Intent.EXTRA_STREAM, stream)
@@ -128,9 +134,9 @@ object ShareArtifacts {
     }
 
     /** Raster file → system share sheet (the OS's own, unmodified). */
-    fun share(context: Context, bitmap: Bitmap, kind: ShareArtifactKind) {
+    fun share(context: Context, bitmap: Bitmap, kind: ShareArtifactKind, caption: String) {
         val stream = writePng(context, bitmap, kind)
-        val intent = buildIntent(stream, kind)
+        val intent = buildIntent(stream, kind, caption)
         context.startActivity(Intent.createChooser(intent, kind.chooserTitle))
     }
 }
