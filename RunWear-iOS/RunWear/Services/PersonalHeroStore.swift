@@ -144,9 +144,76 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             // value in place.
             if let coverage = await api.fetchBankCoverage() {
                 bankCoverage = coverage
+                stallTracker.observe(coverage, now: Date())
             }
         } else if mode != .stock {
             mode = .stock
+        }
+        syncCoveragePolling()
+    }
+
+    /// GEN-5 (RW-29 FA-4): the ONE convergence-band gate both
+    /// surfaces (home band, Settings band) read — subscribed
+    /// AND not in a trial period. Trial users get on-demand
+    /// looks and no bank (the model's premium-context rule), so
+    /// the band never renders for them; Android suppresses it
+    /// for trial users the same way.
+    var convergenceBand: ConvergenceBandContent? {
+        // GEN-5 (Addendum 8): a bank whose real ready count has
+        // not advanced for the stall threshold renders the
+        // band's stalled line — never ordinary in-progress
+        // forever.
+        ConvergenceBand.content(
+            isSubscribed: mode == .subscribed && !billing.isInTrial,
+            coverage: bankCoverage,
+            stalled: bankCoverage.map { stallTracker.isStalled($0, now: Date()) } ?? false
+        )
+    }
+
+    /// GEN-5 (Addendum 8): the bank stall tracker (pure rule in
+    /// the model layer; the store feeds it every coverage read).
+    private var stallTracker = BankStallTracker()
+
+    // MARK: - Bank coverage polling (GEN-5, RW-29 EX-15)
+    //
+    // Build 25 re-read coverage ONLY as a passenger on profile
+    // refreshes, so a bank that finished filling server-side
+    // mid-session left the convergence band standing on stale
+    // counts until some unrelated refresh happened by. While
+    // the band's own condition holds (subscribed, coverage
+    // engaged, not yet complete), the store now re-reads
+    // coverage on a slow poll until the bank completes — the
+    // band retires on the bank's actual completion, in-session.
+
+    private var coveragePollTask: Task<Void, Never>?
+
+    private var bandConditionHolds: Bool {
+        // Exactly the band's own visibility (FA-4 gate
+        // included): the poll lives while the band shows.
+        convergenceBand != nil
+    }
+
+    private func syncCoveragePolling() {
+        if bandConditionHolds {
+            guard coveragePollTask == nil else { return }
+            coveragePollTask = Task { [weak self] in
+                guard let self else { return }
+                // ~20 minutes at 30-second intervals — far past
+                // any honest fill; the poll is a freshness
+                // mechanism, not a daemon.
+                for _ in 0..<40 {
+                    try? await Task.sleep(nanoseconds: 30_000_000_000)
+                    if Task.isCancelled || !self.bandConditionHolds { break }
+                    if let coverage = await self.api.fetchBankCoverage() {
+                        self.bankCoverage = coverage
+                        self.stallTracker.observe(coverage, now: Date())
+                    }
+                }
+                self.coveragePollTask = nil
+            }
+        } else {
+            coveragePollTask?.cancel()
+            coveragePollTask = nil
         }
     }
 
@@ -470,6 +537,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             for attempt in 0..<6 {
                 do {
                     _ = try await self.api.startPersonalFill()
+                    // GEN-5 (RW-29 EX-15): the fill starting is
+                    // the moment the band appears — re-read
+                    // coverage for it directly, not as a
+                    // passenger on some later refresh.
+                    await self.refreshProfile()
                     return
                 } catch PersonalHeroAPIError.notEntitled {
                     if attempt == 5 { return }

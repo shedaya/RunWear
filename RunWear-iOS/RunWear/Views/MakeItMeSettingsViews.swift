@@ -82,10 +82,9 @@ struct MakeItMeSettingsSection: View {
     /// the Premium card alongside the status it replaces — the
     /// gen-4 B-12 defect).
     private var settingsConvergenceBand: ConvergenceBandContent? {
-        ConvergenceBand.content(
-            isSubscribed: store.mode == .subscribed,
-            coverage: store.bankCoverage
-        )
+        // GEN-5 (RW-29 FA-4): the store's one band gate
+        // (trial users never see the band).
+        store.convergenceBand
     }
 
     private var statusSection: some View {
@@ -246,7 +245,13 @@ struct MakeItMeSettingsSection: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         } header: {
+            // GEN-5 (design pass): the .ssec header treatment,
+            // matching SettingsModal's sections.
             Text("Danger zone")
+                .font(.system(size: 13, weight: .semibold))
+                .textCase(.uppercase)
+                .tracking(0.6)
+                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 
@@ -349,6 +354,17 @@ private struct MakeItMePremiumOfferCard: View {
             .padding(.top, 4)
         }
         .padding(.vertical, 6)
+        // GEN-5 (cream map row 30): the offer card carries its
+        // OWN quiet-card surface inside the sheet-toned section
+        // row — the design's card-on-sheet treatment (fill,
+        // padding, rounded corners, hairline) — where build 25
+        // laid the card's contents bare on the row. (C-5's
+        // ruling keeps the prices on the card; the design
+        // note's no-price line applies to the store listing,
+        // not this in-app card.)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.cardOnSheet))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardStroke, lineWidth: 1))
     }
 }
 
@@ -356,7 +372,47 @@ private struct MakeItMePremiumOfferCard: View {
 
 struct MakeItMePhotosView: View {
     let onReplace: () -> Void
+    /// GEN-5 (RW-29 EX-10): the surface's own delete door —
+    /// raises the SAME confirmation the Settings danger zone
+    /// raises (one alert slot, one deletion path).
+    var onDeletePhotos: () -> Void = {}
     @StateObject private var loader = ReferencePhotosLoader(fetcher: PersonalHeroAPI.shared)
+
+    /// GEN-5 (RW-29 EX-10): the arrival stamp for the settled
+    /// "Added {date}" line. iOS keeps no server-side arrival
+    /// timestamp for the reference set, so the stamp is the
+    /// device's own first-sight record: the day this exact set
+    /// of reference photos was first seen on this phone. A new
+    /// set (a replace) re-stamps.
+    @State private var arrivalDate: Date?
+
+    private static let arrivalFingerprintKey = "rw.gen5.referenceArrival.fingerprint"
+    private static let arrivalDateKey = "rw.gen5.referenceArrival.date"
+
+    private func noteLoadedSet(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        let fingerprint = urls.map(\.absoluteString).joined(separator: "|")
+        let defaults = UserDefaults.standard
+        if defaults.string(forKey: Self.arrivalFingerprintKey) == fingerprint,
+           let stamp = defaults.object(forKey: Self.arrivalDateKey) as? Date {
+            arrivalDate = stamp
+        } else {
+            let now = Date()
+            defaults.set(fingerprint, forKey: Self.arrivalFingerprintKey)
+            defaults.set(now, forKey: Self.arrivalDateKey)
+            arrivalDate = now
+        }
+    }
+
+    private var arrivalLine: String {
+        // Frame 38/EX-10's form: "Added Nov 2 · Every look is
+        // made from this one." Without a stamp (no set loaded
+        // yet) the line keeps its settled second half alone.
+        guard let arrivalDate else { return "Every look is made from this one." }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d"
+        return "Added \(formatter.string(from: arrivalDate)) · Every look is made from this one."
+    }
 
     var body: some View {
         ZStack {
@@ -420,7 +476,7 @@ struct MakeItMePhotosView: View {
                         Text("Your current photo")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("Every look is made from this one.")
+                        Text(arrivalLine)
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -457,12 +513,28 @@ struct MakeItMePhotosView: View {
                             .padding(.vertical, 14)
                             .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.cardFill))
                     }
+
+                    // GEN-5 (RW-29 EX-10): the delete door ON
+                    // the surface itself — frame 39 hangs the
+                    // erasure off this screen, not only off the
+                    // Settings list behind it. Same confirmation,
+                    // same deletion path as the danger zone.
+                    Button(role: .destructive, action: onDeletePhotos) {
+                        Text("Delete my photos")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
                 }
                 .padding(24)
             }
         }
         .task {
             await loader.load()
+        }
+        .onChange(of: loader.state) { _, newState in
+            if case .loaded(let urls) = newState { noteLoadedSet(urls) }
         }
     }
 }

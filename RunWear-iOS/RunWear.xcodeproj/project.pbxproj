@@ -213,6 +213,7 @@
 		AA1000000000000000003006 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000010 /* GreatVibes-Regular.ttf */; };
 		AA1000000000000000003007 /* RunWearWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001005 /* RunWearWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001007 /* Gen5WidgetTests.swift */; };
+		AA1000000000000000003009 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -984,6 +985,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA1000000000000000003009 /* HeroPhoto.swift in Sources */,
 				B1000001233456780000001 /* RunWearWatchApp.swift in Sources */,
 				B1000003233456780000002 /* WatchContentView.swift in Sources */,
 				B1000005233456780000003 /* WatchOutfitView.swift in Sources */,

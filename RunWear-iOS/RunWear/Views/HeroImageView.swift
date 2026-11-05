@@ -435,7 +435,9 @@ struct HeroImageView: View {
             isPresented: $showFlagSheet,
             titleVisibility: .visible
         ) {
-            ForEach(HeroFlagReason.allCases, id: \.self) { reason in
+            // GEN-5 (RW-29 FA-18): the settled sheet order —
+            // outfit reason, quality reason, residual.
+            ForEach(HeroFlagReason.sheetOrder, id: \.self) { reason in
                 Button(reason.label) {
                     flaggedImageUrl = target.imageUrl
                     onFlagHero(reason)
@@ -469,13 +471,20 @@ struct HeroImageView: View {
             isPresented: $showFlagSheet,
             titleVisibility: .visible
         ) {
-            ForEach(PersonalHeroFlagReason.allCases, id: \.self) { reason in
+            // GEN-5 (RW-29 FA-18): frame 45's personal sheet —
+            // the lead reason, the outfit reason, the residual.
+            ForEach(PersonalHeroFlagReason.sheetOrder, id: \.self) { reason in
                 Button(reason.label) {
                     flaggedImageUrl = target.imageUrl
                     onFlagPersonalHero(reason)
                 }
             }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            // The consequence, stated before the user commits
+            // (frame 45 carries it under the lead reason; the
+            // dialog's message seat is its iOS expression).
+            Text(PersonalHeroFlagReason.consequenceLine)
         }
     }
 

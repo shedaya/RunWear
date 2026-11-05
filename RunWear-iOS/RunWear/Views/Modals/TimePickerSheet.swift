@@ -87,7 +87,12 @@ struct TimePickerSheet: View {
                 )
                 .frame(height: 168)
 
-                Text("Drag to pick an hour.")
+                // GEN-5 (RW-29 FA-57): the settled instruction
+                // sentence from the day-chart research mock —
+                // build 25's paraphrase omitted both facts it
+                // carries (every hour available; the handle
+                // snaps hour to hour).
+                Text("Every hour can be chosen — the handle snaps hour to hour.")
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
 
@@ -137,7 +142,9 @@ struct TimePickerSheet: View {
     private func readoutRow(chart: DayChartModel) -> some View {
         let entry = chart.entry(forHour: draft.draftHour)
         return HStack(spacing: 10) {
-            stepper(systemImage: "minus", label: "Previous hour") {
+            // GEN-5 (RW-29 FA-39): steppers disable at the
+            // selectable range's ends.
+            stepper(systemImage: "minus", label: "Previous hour", isEnabled: draft.canStep(by: -1)) {
                 draft.step(by: -1)
             }
 
@@ -162,21 +169,22 @@ struct TimePickerSheet: View {
             }
             .frame(maxWidth: .infinity)
 
-            stepper(systemImage: "plus", label: "Next hour") {
+            stepper(systemImage: "plus", label: "Next hour", isEnabled: draft.canStep(by: 1)) {
                 draft.step(by: 1)
             }
         }
     }
 
-    private func stepper(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+    private func stepper(systemImage: String, label: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(AppTheme.inkPrimary)
+                .foregroundColor(isEnabled ? AppTheme.inkPrimary : AppTheme.inkMuted)
                 .frame(width: 44, height: 44)
                 .background(Circle().stroke(AppTheme.cardStroke, lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
         .accessibilityLabel(label)
     }
 

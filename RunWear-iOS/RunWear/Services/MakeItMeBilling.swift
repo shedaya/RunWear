@@ -34,6 +34,10 @@ final class MakeItMeBilling: ObservableObject {
     private static let apiKey = "appl_UEECNwJOFHXpDkMQTPYFUkAoBTY"
 
     @Published private(set) var isSubscribed = false
+    /// GEN-5 (RW-29 FA-4): the active entitlement is in its
+    /// trial period (RevenueCat periodType) — read by the
+    /// convergence band's gate.
+    @Published private(set) var isInTrial = false
     @Published private(set) var monthlyPriceString: String?
     @Published private(set) var annualPriceString: String?
     @Published private(set) var monthlyPriceAmount: Decimal?
@@ -96,7 +100,14 @@ final class MakeItMeBilling: ObservableObject {
     }
 
     private func apply(customerInfo: CustomerInfo) {
-        let active = customerInfo.entitlements[Self.entitlementId]?.isActive == true
+        let entitlement = customerInfo.entitlements[Self.entitlementId]
+        let active = entitlement?.isActive == true
+        // GEN-5 (RW-29 FA-4): the trial distinction IS available
+        // client-side — RevenueCat reports the entitlement's
+        // period type. Android suppresses the convergence band
+        // for trial users (no bank is built during a trial);
+        // iOS now reads the same signal for the same gate.
+        isInTrial = active && entitlement?.periodType == .trial
         if active != isSubscribed {
             isSubscribed = active
             onEntitlementChange?(active)

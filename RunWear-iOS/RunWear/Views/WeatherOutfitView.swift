@@ -102,7 +102,11 @@ struct WeatherOutfitView: View {
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            .background(Capsule().fill(Color.black.opacity(0.75)))
+                            // GEN-5 (cream map row 51): the
+                            // transient capsules sit on the
+                            // theme's Warm Charcoal, not pure
+                            // black.
+                            .background(Capsule().fill(AppTheme.darkBackground.opacity(0.92)))
                             .padding(.bottom, 32)
                     }
                     .ignoresSafeArea()
@@ -677,8 +681,16 @@ struct WeatherOutfitView: View {
     /// segment and behaviour.
     private var headlineLocationLine: some View {
         HStack(spacing: 0) {
+            // GEN-5 (RW-29 FA-47): layout priority belongs to
+            // the interactive segments — the MOMENT and the
+            // "↻ Now" way-back keep their full width at every
+            // place-name length, and the PLACE truncates first.
+            // Build 25 let a long place name squeeze the moment
+            // segment (the row's actual control) off the line.
             Text("\(HomeHeaderCopy.placeSegment(place: viewModel.placeDisplayName)) · ")
                 .foregroundColor(AppTheme.inkPrimary)
+                .lineLimit(1)
+                .layoutPriority(0)
 
             Button { showTimePicker = true } label: {
                 HStack(spacing: 3) {
@@ -688,11 +700,13 @@ struct WeatherOutfitView: View {
                 .foregroundColor(AppTheme.pinePayload)
             }
             .buttonStyle(.plain)
+            .layoutPriority(1)
             .accessibilityLabel("Choose a time: \(sheetMoment)")
 
             if HeadlineNowReturn.isShown(isViewingNow: isViewingNow) {
                 Text(" · ")
                     .foregroundColor(AppTheme.inkPrimary)
+                    .layoutPriority(1)
                 Button { viewModel.resetToNow() } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.counterclockwise")
@@ -701,6 +715,7 @@ struct WeatherOutfitView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(AppTheme.pinePayload)
                 }
+                .layoutPriority(1)
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back to now")
             }
@@ -809,24 +824,28 @@ struct WeatherOutfitView: View {
     /// reading for the Wear I've Run narration — "Now" at now,
     /// a clock reading ("9 p.m.") for a picked hour today,
     /// "Tomorrow evening"-family readings beyond. Never a stamp.
-    private var entryMomentReading: String {
-        if isViewingNow { return "Now" }
+    ///
+    /// GEN-5 (Addendum 8): the reading is CONSTRUCTED as the
+    /// structural MomentReading — and the beyond-tomorrow case
+    /// now renders as a weekday daypart ("Friday evening")
+    /// where the gen-5 first pass fell back to the sheet's
+    /// stamped form ("Nov 7 9:00 PM"), which C-7 forbids in
+    /// narrations.
+    private var entryMomentReading: MomentReading {
+        if isViewingNow { return .now }
         let calendar = Calendar.current
         let hour = viewModel.selectedHour
-        let clock: String = {
+        if calendar.isDateInToday(viewModel.selectedDate) {
             let display = hour % 12 == 0 ? 12 : hour % 12
-            return "\(display) \(hour >= 12 ? "p.m." : "a.m.")"
-        }()
-        if calendar.isDateInToday(viewModel.selectedDate) { return clock }
-        if calendar.isDateInTomorrow(viewModel.selectedDate) {
-            switch hour {
-            case 5..<12: return "Tomorrow morning"
-            case 12..<17: return "Tomorrow afternoon"
-            case 17..<22: return "Tomorrow evening"
-            default: return "Tomorrow night"
-            }
+            return .clock(hour12: display, isPM: hour >= 12)
         }
-        return sheetMoment
+        let part = MomentReading.DayPart.forHour(hour)
+        if calendar.isDateInTomorrow(viewModel.selectedDate) {
+            return .daypart(dayWord: "Tomorrow", part: part)
+        }
+        let weekday = DateFormatter()
+        weekday.dateFormat = "EEEE"
+        return .daypart(dayWord: weekday.string(from: viewModel.selectedDate), part: part)
     }
 
     private var heroHourString: String {
@@ -888,7 +907,7 @@ struct WeatherOutfitView: View {
         // which browsing would rewrite into stamped forms.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: todays,
-            moment: todays?.momentReading ?? "Now",
+            moment: todays?.momentReading ?? .now,
             wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
         )
         if state != .preAdd {
@@ -1012,7 +1031,7 @@ struct WeatherOutfitView: View {
     /// Portrait-regular outfit: the same cards in a two-column grid.
     private var outfitGridSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Recommended Outfit")
+            Text("\(recommendation.allItems.count) items for your run")
                 .font(.appSectionTitle)
                 .foregroundColor(AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
@@ -1303,7 +1322,9 @@ struct WeatherOutfitView: View {
     /// flagged on Oct 31 and again on Nov 5.) Visible only while
     /// a subscribed user's bank is genuinely converging.
     @ViewBuilder private var homeBandSection: some View {
-        if let band = ConvergenceBand.content(isSubscribed: personalStore.mode == .subscribed, coverage: personalStore.bankCoverage) {
+        // GEN-5 (RW-29 FA-4): the store's one band gate
+        // (trial users never see the band).
+        if let band = personalStore.convergenceBand {
             ConvergenceBandView(content: band)
         }
     }
@@ -1314,8 +1335,12 @@ struct WeatherOutfitView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Section header — Shop lives in the toolbar now
             // (design record §5.2); the teal pill is gone.
+            // GEN-5 (RW-29 FA-55): the header is the settled
+            // count line ("N items for your run", Android's
+            // form), not the generic "Recommended Outfit" —
+            // both layouts carry it.
             HStack {
-                Text("Recommended Outfit")
+                Text("\(recommendation.allItems.count) items for your run")
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
 
@@ -1400,8 +1425,11 @@ private struct RefreshErrorBanner: View {
         }
         .padding(12)
         .background(
+            // GEN-5 (cream map row 51): Warm Charcoal, not pure
+            // black (the pine-on-fill contrast note above was
+            // computed against this family and still holds).
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.85))
+                .fill(AppTheme.darkBackground.opacity(0.94))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)

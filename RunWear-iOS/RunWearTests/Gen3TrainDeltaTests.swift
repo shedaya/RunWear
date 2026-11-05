@@ -330,8 +330,14 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertTrue(gate < seat && seat < readiness,
                       "the band renders in place of the status block; the readiness line lives in the else branch and cannot co-render while generating")
         // And the offer group no longer carries a second seat.
+        // (The slice is bounded at the next section property —
+        // an unbounded slice caught later sections' comments
+        // mentioning the band and failed spuriously in CI run
+        // 42033586131.)
         let offerStart = try XCTUnwrap(section.range(of: "private var offerSection")?.lowerBound)
-        let offerSlice = String(section[offerStart...])
+        let offerRest = section[offerStart...].dropFirst("private var offerSection".count)
+        let offerEnd = offerRest.range(of: "\n    private var ")?.lowerBound ?? offerRest.endIndex
+        let offerSlice = String(offerRest[..<offerEnd])
         XCTAssertFalse(offerSlice.contains("ConvergenceBand"),
                        "the duplicate offer-group band seat is gone (GEN-5 item 22)")
     }

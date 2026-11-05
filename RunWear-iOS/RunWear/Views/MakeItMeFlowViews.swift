@@ -362,6 +362,9 @@ private struct PickedPhoto: Identifiable {
     let originalData: Data
     var state: State = .checking
     var jpegData: Data?
+    /// GEN-5 (RW-29 FA-54): the per-check report the review
+    /// renders individually.
+    var report: PhotoCheckReport?
 
     enum State: Equatable {
         case checking
@@ -392,6 +395,9 @@ struct MakeItMeCaptureView: View {
     // RW-16.14: the intake offers the camera beside the library.
     @State private var showSourceChoice = false
     @State private var showCamera = false
+    /// GEN-5 (RW-29 FA-53): the one-time auto-presentation of
+    /// the guided capture when intake opens empty.
+    @State private var guidedAutoPresented = false
     /// The honest fallback line when the camera was asked for but
     /// can't be used (PhotoIntakeRouting's notes) — the flow opens
     /// the library instead and says why; never a dead end.
@@ -487,9 +493,13 @@ struct MakeItMeCaptureView: View {
                                 }
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(AppTheme.inkPrimary)
-                                Text(SelfieCheck.allCases.map(\.passedLabel).joined(separator: " · "))
-                                    .font(.system(size: 12))
-                                    .foregroundColor(AppTheme.inkSecondary)
+                                // GEN-5 (RW-29 FA-54): the four
+                                // checks are reported INDIVIDUALLY
+                                // — build 25 joined the labels into
+                                // one string under a single verdict.
+                                if let report = photo.report {
+                                    checkReportList(report)
+                                }
                             case .rejected(let rejection):
                                 // C3: the specific reason, under the
                                 // photo, in the flow — never
@@ -497,6 +507,28 @@ struct MakeItMeCaptureView: View {
                                 Text(rejection.specString)
                                     .font(.system(size: 14))
                                     .foregroundColor(warningColor)
+                                // GEN-5 (RW-29 FA-54): the four
+                                // checks individually here too, and
+                                // the failure ROUTES to the guided
+                                // camera — the surface that frames
+                                // the face for you — rather than
+                                // leaving the user to guess again
+                                // in the library.
+                                if let report = photo.report {
+                                    checkReportList(report)
+                                }
+                                Button {
+                                    photos.removeAll { $0.id == photo.id }
+                                    showCamera = true
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "camera.fill")
+                                        Text("Retake with the guided camera")
+                                    }
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.pinePayload)
+                                }
+                                .padding(.top, 2)
                             }
                         }
                         Spacer()
@@ -622,9 +654,28 @@ struct MakeItMeCaptureView: View {
                     showCamera = false
                     Task { await addPhoto(originalData: data) }
                 },
-                onCancel: { showCamera = false }
+                onCancel: { showCamera = false },
+                // GEN-5 (RW-29 FA-53): the library door inside
+                // the guided surface.
+                onUsePhotoInstead: {
+                    showCamera = false
+                    routeToSource(.library)
+                }
             )
             .ignoresSafeArea()
+        }
+        // GEN-5 (RW-29 FA-53): the guided capture is the PRIMARY
+        // surface on open — build 25 opened on the review page
+        // behind a source-choice dialog, with the designed
+        // surface one tap away. Opening intake with no photo yet
+        // presents the guided capture directly, once; the page
+        // underneath remains the review/commit surface the
+        // capture (or the library door inside it) returns to.
+        .onAppear {
+            if photos.isEmpty && !guidedAutoPresented {
+                guidedAutoPresented = true
+                showCamera = true
+            }
         }
     }
 
@@ -655,6 +706,26 @@ struct MakeItMeCaptureView: View {
         case .restricted: return .restricted
         @unknown default: return .denied
         }
+    }
+
+    /// GEN-5 (RW-29 FA-54): the four settled checks, one row
+    /// each — a drawn pass glyph or a plain marker for the
+    /// failed check, with the check's settled label. Shared by
+    /// the accepted and rejected review rows.
+    private func checkReportList(_ report: PhotoCheckReport) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(SelfieCheck.allCases, id: \.rawValue) { check in
+                HStack(spacing: 6) {
+                    Image(systemName: report.passed(check) ? "checkmark.circle.fill" : "xmark.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(report.passed(check) ? AppTheme.pinePayload : warningColor)
+                    Text(check.passedLabel)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(AppTheme.inkPrimary)
+                }
+            }
+        }
+        .padding(.top, 2)
     }
 
     @ViewBuilder
@@ -699,6 +770,7 @@ struct MakeItMeCaptureView: View {
         photos.append(picked)
         let result = await PhotoQualityChecker.check(imageData: data)
         if let index = photos.firstIndex(where: { $0.id == picked.id }) {
+            photos[index].report = result.report
             if let rejection = result.rejection {
                 photos[index].state = .rejected(rejection)
             } else if let jpeg = result.uploadData {

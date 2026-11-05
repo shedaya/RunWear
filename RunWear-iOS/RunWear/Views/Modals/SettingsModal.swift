@@ -8,6 +8,18 @@ import SwiftUI
 // the hand-rolled ScrollView version had to fake. All three preference
 // controls are the shared PreferenceControls — the same views Onboarding
 // uses, so the surfaces cannot drift.
+/// GEN-5 (design pass, cream map Settings rows): the design's
+/// section-header treatment (.ssec) — uppercase, tracked, in
+/// the secondary ink token — replacing SwiftUI's default grey
+/// Form header on the titled sections in this file.
+fileprivate func settingsSectionHeader(_ title: String) -> Text {
+    Text(title)
+        .font(.system(size: 13, weight: .semibold))
+        .textCase(.uppercase)
+        .tracking(0.6)
+        .foregroundColor(AppTheme.inkSecondary)
+}
+
 struct SettingsModal: View {
     @Binding var isPresented: Bool
     @Binding var temperatureUnit: TemperatureUnit
@@ -144,7 +156,7 @@ struct SettingsModal: View {
         case .appearance:
             // RW-25: native segmented appearance picker
             // (System / Light / Dark) — Form idioms only.
-            Section("Appearance") {
+            Section {
                 Picker("Appearance", selection: $appearancePreference) {
                     ForEach(AppearancePreference.allCases) { preference in
                         Text(preference.displayName).tag(preference)
@@ -152,11 +164,15 @@ struct SettingsModal: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
+            } header: {
+                settingsSectionHeader("Appearance")
             }
 
         case .temperatureUnit:
-            Section("Temperature Unit") {
+            Section {
                 TemperatureUnitPicker(unit: $temperatureUnit)
+            } header: {
+                settingsSectionHeader("Temperature Unit")
             }
 
         case .fitPreference:
@@ -165,13 +181,17 @@ struct SettingsModal: View {
             // uses (W-22) and Android Settings' direct toggle —
             // not the collapsed "Men's ⌄" menu row the gen-2 iOS
             // census caught here. One control, both surfaces.
-            Section("Fit Preference") {
+            Section {
                 FitPreferenceInlinePicker(preference: $genderPreference)
+            } header: {
+                settingsSectionHeader("Fit Preference")
             }
 
         case .bodyTemperature:
-            Section("Body Temperature") {
+            Section {
                 ComfortLevelControl(comfortLevel: $comfortLevel)
+            } header: {
+                settingsSectionHeader("Body Temperature")
             }
 
         case .helpImprove:
@@ -186,6 +206,8 @@ struct SettingsModal: View {
             // RW26Phase2Tests).
             Section {
                 VStack(alignment: .leading, spacing: 10) {
+                    // GEN-5 (cream map row 28 residue): the
+                    // toggle's on-state is pine, not system green.
                     Toggle(isOn: $analyticsOptIn) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Help improve the app")
@@ -195,6 +217,7 @@ struct SettingsModal: View {
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
                     }
+                    .tint(AppTheme.primaryColor)
                     Text("We count how the app is used — which features get used and where recommendations miss — and nothing else. No account, no advertising ID, and your location never leaves the phone more precisely than the city name. Turn this off and nothing is counted or sent.")
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
@@ -242,12 +265,12 @@ struct SettingsModal: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } header: {
-                Text("Danger zone")
+                settingsSectionHeader("Danger zone")
             }
 
         case .support:
             // R-15: the always-available feedback + rating doors.
-            Section("Support") {
+            Section {
                 Button {
                     showFeedback = true
                 } label: {
@@ -257,16 +280,20 @@ struct SettingsModal: View {
                 Link(destination: Self.reviewURL) {
                     Label("Rate RunWear", systemImage: "star")
                 }
+            } header: {
+                settingsSectionHeader("Support")
             }
 
         case .about:
-            Section("About") {
+            Section {
                 LabeledContent("Version", value: appVersion)
+            } header: {
+                settingsSectionHeader("About")
             }
         }
     }
 
-    // MARK: - "Make It Me" presentation content (RW-16.7)
+// MARK: - "Make It Me" presentation content (RW-16.7)
 
     @ViewBuilder
     private func makeItMeSheetContent(_ sheet: MakeItMeSheet) -> some View {
@@ -304,9 +331,16 @@ struct SettingsModal: View {
                 commitDriver: makeItMePresentation.commitDriver
             )
         case .photos:
-            MakeItMePhotosView(onReplace: {
-                makeItMePresentation.present(.replace)
-            })
+            MakeItMePhotosView(
+                onReplace: {
+                    makeItMePresentation.present(.replace)
+                },
+                // GEN-5 (RW-29 EX-10): the surface's own delete
+                // door raises the shared confirmation.
+                onDeletePhotos: {
+                    makeItMePresentation.alert = .confirmDelete
+                }
+            )
         case .subscription:
             MakeItMeSubscriptionSheet()
         }
@@ -321,7 +355,10 @@ struct SettingsModal: View {
 
     private var makeItMeAlertTitle: LocalizedStringKey {
         switch makeItMePresentation.alert {
-        case .confirmDelete: return "Delete your photos?"
+        // GEN-5 (RW-29 FA-20): frame 39's settled heading is
+        // "Delete my photos?" (the buttons already carry the
+        // matching "Delete my photos" / "Keep my photos").
+        case .confirmDelete: return "Delete my photos?"
         case .deletedConfirmation: return "Your photos and pictures are deleted."
         case .deleteFailed: return "Your photos could not be deleted. Please try again."
         case .confirmDeleteData: return "Delete all your data?"
@@ -449,19 +486,23 @@ struct FeedbackSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Category") {
+                Section {
                     Picker("Category", selection: $category) {
                         ForEach(FeedbackCategory.allCases) { category in
                             Text(category.rawValue).tag(category)
                         }
                     }
                     .labelsHidden()
+                } header: {
+                    settingsSectionHeader("Category")
                 }
 
-                Section("Your Feedback") {
+                Section {
                     TextEditor(text: $message)
                         .frame(minHeight: 120)
                         .accessibilityLabel("Your feedback")
+                } header: {
+                    settingsSectionHeader("Your Feedback")
                 }
 
                 Section {
@@ -471,7 +512,7 @@ struct FeedbackSheet: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Reply To")
+                    settingsSectionHeader("Reply To")
                 } footer: {
                     Text("Only used to reply to your feedback.")
                 }
@@ -481,7 +522,7 @@ struct FeedbackSheet: View {
                 // (AppTheme.inkSecondary), not system .secondary —
                 // same D-25 residue class as the analytics section
                 // above.
-                Section("What We're Sending With This") {
+                Section {
                     ForEach(FeedbackPayloads.disclosureLines(bundle: bundle), id: \.self) { line in
                         Text(line)
                             .font(.appFootnote)
@@ -490,6 +531,8 @@ struct FeedbackSheet: View {
                     Text("Plus your message, exactly as written, under the category you picked. Nothing else — no location beyond what you type, no photos.")
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
+                } header: {
+                    settingsSectionHeader("What We're Sending With This")
                 }
 
                 if sent {

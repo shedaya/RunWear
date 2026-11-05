@@ -49,6 +49,9 @@ class WatchViewModel: NSObject, ObservableObject {
 
     private var currentLocation: CLLocation?
     private var currentWeather: WeatherData?
+    /// GEN-5 (RW-29 FA-56): the measured feels-like (°F) from
+    /// the last fetch — the glance's number.
+    private(set) var currentFeelsLikeF: Double?
 
     override init() {
         super.init()
@@ -133,6 +136,7 @@ class WatchViewModel: NSObject, ObservableObject {
             // falling back to the actual temperature when absent.
             let rawFeelsLikeF = weather.currentDetail?.apparentTemperature.map { $0 * 9 / 5 + 32 }
                 ?? weather.currentWeather.temperatureFahrenheit
+            currentFeelsLikeF = rawFeelsLikeF
             let adjustedTemp = comfortLevel.adjustTemperature(rawFeelsLikeF)
             // The watch reads the current-conditions block only (no
             // hourly snapshot), so its rain signal stays the condition
@@ -240,9 +244,15 @@ class WatchViewModel: NSObject, ObservableObject {
 
     var displayTemperature: String {
         guard let weather = currentWeather else { return "--°" }
+        // GEN-5 (RW-29 FA-56): the glance number is the
+        // FEELS-LIKE — the number the outfit is priced off —
+        // not the actual temperature build 25 showed. Falls
+        // back to the actual temperature only when no
+        // feels-like was measured.
+        let feelsLikeF = currentFeelsLikeF ?? weather.currentWeather.temperatureFahrenheit
         let temp = temperatureUnit == .fahrenheit
-            ? weather.currentWeather.temperatureFahrenheit
-            : weather.currentWeather.temperature
+            ? feelsLikeF
+            : (feelsLikeF - 32) * 5 / 9
         return "\(Int(round(temp)))°"
     }
 }

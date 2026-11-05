@@ -165,19 +165,32 @@ enum DayChartNowMarker {
 /// range, y is linear in feels-like between the day's low and
 /// high (padded, so the curve never touches the frame's edges).
 enum DayChartGeometry {
+    /// GEN-5 (RW-29 FA-29): the chart's horizontal scale is the
+    /// fixed 24-hour day (hours 0…23 across the full width) on
+    /// EVERY day — build 25 mapped across the forecast's own
+    /// span, so on a partial day (a forecast that starts at
+    /// 14:00) nine hours stretched across the full width and
+    /// every marker sat at a different scale than a full day's.
+    /// A partial day's curve now occupies its true slice of the
+    /// day and ends at the forecast horizon; the region outside
+    /// the forecast stays empty (the sheets name it "Beyond
+    /// forecast"). Full-day geometry is unchanged.
+    static let dayFirstHour = 0
+    static let dayLastHour = 23
+
     static func x(forHour hour: Int, model: DayChartModel, width: CGFloat) -> CGFloat {
-        let span = max(1, model.lastHour - model.firstHour)
-        let fraction = CGFloat(hour - model.firstHour) / CGFloat(span)
-        return fraction * width
+        let span = max(1, dayLastHour - dayFirstHour)
+        let fraction = CGFloat(hour - dayFirstHour) / CGFloat(span)
+        return min(max(fraction, 0), 1) * width
     }
 
     /// The fractional hour under a scrub position — the caller
     /// snaps it through `nearestSelectableHour`.
     static func fractionalHour(atX x: CGFloat, model: DayChartModel, width: CGFloat) -> Double {
-        guard width > 0 else { return Double(model.firstHour) }
-        let span = Double(max(1, model.lastHour - model.firstHour))
+        guard width > 0 else { return Double(dayFirstHour) }
+        let span = Double(max(1, dayLastHour - dayFirstHour))
         let fraction = min(max(Double(x / width), 0), 1)
-        return Double(model.firstHour) + fraction * span
+        return Double(dayFirstHour) + fraction * span
     }
 
     static func y(forFeelsLike feelsLikeF: Double, model: DayChartModel, height: CGFloat) -> CGFloat {
@@ -300,6 +313,18 @@ struct TimePickerDraft: Equatable {
         guard let index = selectableHours.firstIndex(of: draftHour) else { return }
         let target = min(max(index + delta, 0), selectableHours.count - 1)
         move(to: selectableHours[target])
+    }
+
+    /// GEN-5 (RW-29 FA-39): whether a step in `delta`'s
+    /// direction would move at all — the sheet DISABLES the
+    /// stepper at the first/last selectable hour instead of
+    /// letting it sit live but inert (build 25 clamped the
+    /// step silently, so the button looked tappable and did
+    /// nothing).
+    func canStep(by delta: Int) -> Bool {
+        guard let index = selectableHours.firstIndex(of: draftHour) else { return false }
+        let target = index + delta
+        return target >= 0 && target < selectableHours.count
     }
 
     func commit() -> Commit {

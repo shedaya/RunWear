@@ -101,7 +101,10 @@ struct WearIveRunCollectionView: View {
             .padding(16)
         }
         .background(AppTheme.background.ignoresSafeArea())
-        .navigationTitle("Wear I've Run")
+        // GEN-5 (RW-29 FA-19): no plain-text navigation title —
+        // the script wordmark above is the collection's only
+        // header (design-spec §8.2; Android's header is the
+        // script alone). Build 25 printed the name twice.
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -126,10 +129,14 @@ struct WearIveRunCollectionView: View {
     /// the collection is and that it starts with today's run.
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Nothing here yet")
+            // GEN-5 (RW-29 FA-16): frame 10's honest empty
+            // state, verbatim — build 25's invented head and
+            // session-framed body are replaced with the settled
+            // day-language text.
+            Text("Your scrapbook starts with today's run.")
                 .font(.appSectionTitle)
                 .foregroundColor(AppTheme.inkPrimary)
-            Text("Your outfits are saved here as you run them — one entry per session, starting with this one. Nothing is backfilled.")
+            Text("Each day's outfit is saved here automatically — one card per day, in the places you've run. Nothing is backfilled. It begins the first time today's outfit is generated.")
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
         }
@@ -793,7 +800,7 @@ struct MorningPosterView: View {
                     // carries the run's human MOMENT (the
                     // entry's recorded moment reading), never a
                     // stamped "Nov 5" date form (frame 12).
-                    Text("\(entry.placeDisplayName) · \(entry.momentReading)")
+                    Text("\(entry.placeDisplayName) · \(entry.momentReading.rendered)")
                         .font(.system(size: MorningPosterMetrics.placeFontSize))
                         .foregroundColor(.white.opacity(0.85))
                     Text(entry.itemNames.prefix(4).joined(separator: " · "))

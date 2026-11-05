@@ -28,9 +28,14 @@ enum WearIveRunState: Equatable {
     /// No entry for today yet — the bar does not render.
     case preAdd
     /// Today's entry was created at a place and moment.
-    case added(place: String, moment: String)
+    /// GEN-5 (Addendum 8): the moment is the structural
+    /// MomentReading — no free-text moment exists.
+    case added(place: String, moment: MomentReading)
     /// Today's entry was re-settled to a new payload.
-    case updated(payload: String)
+    /// GEN-5 (Addendum 8): the payload is the structural
+    /// NarrationPayload (place or moment) — a garment payload
+    /// is unrepresentable in this state.
+    case updated(payload: NarrationPayload)
 }
 
 enum WearIveRunMiniBarModel {
@@ -53,7 +58,7 @@ enum WearIveRunMiniBarModel {
     /// both sides, different strings.)
     static func state(
         todaysEntry: WearIveRunEntry?,
-        moment: String,
+        moment: MomentReading,
         wasUpdatedThisSession: Bool
     ) -> WearIveRunState {
         guard let entry = todaysEntry else { return .preAdd }
@@ -75,9 +80,9 @@ enum WearIveRunNarration {
         case .preAdd:
             return nil
         case .added(let place, let moment):
-            return "Added \(place), \(moment)"
+            return "Added \(place), \(moment.rendered)"
         case .updated(let payload):
-            return "Update to \(payload)"
+            return "Update to \(payload.rendered)"
         }
     }
 
@@ -92,8 +97,15 @@ enum WearIveRunNarration {
     /// the narration's payload twice (the D-08 duplication).
     /// The view renders it with NO line limit — it wraps.
     static func expandedLine(for entry: WearIveRunEntry, formattedFeelsLike: String) -> String {
-        let items = entry.itemNames.count == 1 ? "1 item" : "\(entry.itemNames.count) items"
-        return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(items)"
+        // GEN-5 (RW-29 FA-34): the expanded anatomy carries the
+        // OUTFIT LINE — the item names themselves — where build
+        // 25 stopped at the count. The count form remains only
+        // for an entry with no recorded items.
+        if entry.itemNames.isEmpty {
+            let items = entry.itemNames.count == 1 ? "1 item" : "\(entry.itemNames.count) items"
+            return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(items)"
+        }
+        return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(entry.itemNames.joined(separator: " · "))"
     }
 }
 
@@ -235,7 +247,7 @@ final class WearIveRunCollectionModel: ObservableObject {
         // garment: a kit-only settle preserves the narration it
         // found, exactly like a weather-only settle.
         let narrationUpdated: Bool
-        let narrationPayload: String?
+        let narrationPayload: NarrationPayload?
         switch classification {
         case .created:
             narrationUpdated = false
@@ -248,6 +260,13 @@ final class WearIveRunCollectionModel: ObservableObject {
         case .kitUpdated, .silentUpdate, .identical:
             narrationUpdated = existing?.wasUpdatedInSession ?? false
             narrationPayload = existing?.updatePayload
+        }
+        // GEN-5 (RW-29 FA-36): the session's FIRST settle at a
+        // day+place supersedes a legacy (pre-session) entry for
+        // the same day+place — the day keeps ONE entry, never a
+        // legacy row beside the session's.
+        if classification == .created {
+            store.removeLegacyTwin(of: entry)
         }
         store.record(entry.settingNarration(wasUpdated: narrationUpdated, payload: narrationPayload))
         entries = store.entries
@@ -660,14 +679,14 @@ struct WearIveRunMiniBarView: View {
             VStack(alignment: .leading, spacing: 2) {
                 wordmarkView
                 if let line = WearIveRunNarration.line(for: state) {
-                    // One line BY DESIGN (frame 2): the line is
-                    // short by construction (WS-4) — wordmark +
-                    // verb + a simple place + "Now", or a single
-                    // kit item — so the limit never amputates a
-                    // raw geocode string at a comma (D-09).
+                    // GEN-5 (RW-29 FA-48) SUPERSEDES the frame-2
+                    // one-line limit: a long simple place in the
+                    // payload was end-truncated at one line on
+                    // Sol's device. The narration may wrap to two
+                    // lines — the payload is never amputated.
                     narrationText(line)
                         .font(.appFootnote)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
             }
             Spacer(minLength: 0)
@@ -691,16 +710,19 @@ struct WearIveRunMiniBarView: View {
     private func expandedBlock(progress: Double) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
+                // GEN-5 (RW-29 FA-45): the thumbnail renders
+                // through HeroPhoto's top-anchored crop — build
+                // 25's bare centre fill could cut the head here
+                // as surely as on the poster.
                 AsyncImage(url: entry.flatMap { URL(string: $0.heroImageReference) }) { phase in
                     if case .success(let image) = phase {
-                        image.resizable().aspectRatio(contentMode: .fill)
+                        HeroPhoto(image: image, width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
                     } else {
                         Color.clear
+                            .frame(width: 56, height: 56)
                     }
                 }
-                .frame(width: 56, height: 56)
-                .clipped()
-                .cornerRadius(10)
 
                 if let entry {
                     // No line limit, by design (WS-4): the
@@ -733,6 +755,12 @@ struct WearIveRunMiniBarView: View {
         .padding(.bottom, 16)
         .opacity(WearIveRunMorph.expandedContentOpacity(progress: progress))
         .offset(y: WearIveRunMorph.expandedContentOffset(progress: progress))
+        // GEN-5 (RW-29 FA-33): the expanded block's body is a
+        // tap surface — tapping it settles the bar back to
+        // mini (the machine's new transition). The "Open the
+        // collection" button inside keeps its own tap.
+        .contentShape(Rectangle())
+        .onTapGesture { send(.tapMiniBarBody) }
     }
 
     /// The wordmark in the genuine Great Vibes (RW-26: the Snell
@@ -786,12 +814,12 @@ struct WearIveRunMiniBarView: View {
     private func narrationText(_ line: String) -> Text {
         if case .updated(let payload) = state {
             return Text("Update to ").foregroundColor(AppTheme.inkSecondary)
-                + Text(payload).foregroundColor(AppTheme.pinePayload)
+                + Text(payload.rendered).foregroundColor(AppTheme.pinePayload)
         }
         if case .added(let place, let moment) = state {
             // The payload "{Place}, {Moment}" carries the pine.
             return Text("Added ").foregroundColor(AppTheme.inkSecondary)
-                + Text("\(place), \(moment)").foregroundColor(AppTheme.pinePayload)
+                + Text("\(place), \(moment.rendered)").foregroundColor(AppTheme.pinePayload)
         }
         return Text(line).foregroundColor(AppTheme.inkSecondary)
     }

@@ -419,10 +419,10 @@ final class WearIveRunElementMachineTests: XCTestCase {
                        "the kit change itself is still recorded")
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
-                todaysEntry: model.entries.first, moment: "Now",
+                todaysEntry: model.entries.first, moment: .now,
                 wasUpdatedThisSession: model.todaysEntryWasUpdated
             ),
-            .added(place: "New York", moment: "Now"),
+            .added(place: "New York", moment: .now),
             "GEN-5 C-7: a kit-only settle leaves the creation narration standing"
         )
         // Trash deletes the entry the machine absented.
@@ -599,7 +599,7 @@ final class WearIveRunW15FixTests: XCTestCase {
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: model.todaysEntry(today: e.dayStart),
-                moment: "Now", wasUpdatedThisSession: false
+                moment: .now, wasUpdatedThisSession: false
             ),
             .preAdd
         )
@@ -619,9 +619,9 @@ final class WearIveRunW15FixTests: XCTestCase {
         // narration — Android's first-frame line for this flow.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: model.todaysEntry(today: e.dayStart),
-            moment: "Now", wasUpdatedThisSession: model.todaysEntryWasUpdated
+            moment: .now, wasUpdatedThisSession: model.todaysEntryWasUpdated
         )
-        XCTAssertEqual(state, .added(place: "Kansas City, MO", moment: "Now"))
+        XCTAssertEqual(state, .added(place: "Kansas City, MO", moment: .now))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state),
             "Added Kansas City, MO, Now"
@@ -835,7 +835,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         let presented = model.sessionEntry()
         return WearIveRunMiniBarModel.state(
             todaysEntry: presented,
-            moment: "Now",
+            moment: .now,
             wasUpdatedThisSession: presented?.wasUpdatedInSession ?? false
         )
     }
@@ -896,13 +896,13 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // payload on itself (Y-5: the two in-session place moves
         // were narrated updates; GEN-5: the payload is the place
         // that changed, "Miami, FL").
-        XCTAssertEqual(model.sessionEntry(), miami.settingNarration(wasUpdated: true, payload: "Miami, FL"))
+        XCTAssertEqual(model.sessionEntry(), miami.settingNarration(wasUpdated: true, payload: .place("Miami, FL")))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
         XCTAssertEqual(model.sessionEntry()?.feelsLikeF, 90)
         // And it is what a fresh read of the store holds.
         XCTAssertEqual(
             WearIveRunStore(defaults: defaults).entries,
-            [miami.settingNarration(wasUpdated: true, payload: "Miami, FL")])
+            [miami.settingNarration(wasUpdated: true, payload: .place("Miami, FL"))])
     }
 
     @MainActor
@@ -917,7 +917,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "Overland Park, KS", feels: 48,
             items: ["Light Long Sleeve", "Windbreaker"], day: d))
         XCTAssertEqual(model.cueCount, 1)
-        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: "Now"))
+        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: .now))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
             "Added Overland Park, KS, Now")
@@ -931,7 +931,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "New York, NY", feels: 72,
             items: ["Tee", "Shorts"], day: d))
         XCTAssertEqual(model.cueCount, 2)
-        XCTAssertEqual(state(of: model), .updated(payload: "New York, NY"))
+        XCTAssertEqual(state(of: model), .updated(payload: .place("New York, NY")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
             "Update to New York, NY")
@@ -943,7 +943,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "Miami, FL", feels: 90,
             items: ["Tee", "Shorts"], day: d))
         XCTAssertEqual(model.cueCount, 3)
-        XCTAssertEqual(state(of: model), .updated(payload: "Miami, FL"))
+        XCTAssertEqual(state(of: model), .updated(payload: .place("Miami, FL")))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
     }
 
@@ -986,7 +986,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // Recorded, but no cue and no narration flip: an async
         // landing is not a driver.
         XCTAssertEqual(model.cueCount, 1)
-        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: "Now"))
+        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: .now))
     }
 
     // MARK: Pinned == chapter identity (X-5b)
@@ -1052,7 +1052,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         XCTAssertEqual(first.sessionEntry(), miami, "the prior session's entry is untouched")
         XCTAssertEqual(second.sessionEntry(), overlandPark)
         XCTAssertEqual(second.cueCount, 1, "the new session's first settle is a creation")
-        XCTAssertEqual(state(of: second), .added(place: "Overland Park, KS", moment: "Now"))
+        XCTAssertEqual(state(of: second), .added(place: "Overland Park, KS", moment: .now))
     }
 
     // MARK: The dock presents the current session's entry
@@ -1076,7 +1076,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             store.todaysEntry(placeName: "New York, NY", today: d, calendar: utcCalendar),
             "the viewed place has no entry — the dock must not depend on it")
         // The narration names the SESSION ENTRY's place.
-        XCTAssertEqual(state(of: model), .added(place: "Kansas City, MO", moment: "Now"))
+        XCTAssertEqual(state(of: model), .added(place: "Kansas City, MO", moment: .now))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
             "Added Kansas City, MO, Now")
@@ -1102,7 +1102,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "Miami, FL", feels: 91,
             items: ["Tank Top"], day: d))
         XCTAssertEqual(model.entries.count, 1)
-        XCTAssertEqual(state(of: model), .added(place: "Miami, FL", moment: "Now"))
+        XCTAssertEqual(state(of: model), .added(place: "Miami, FL", moment: .now))
     }
 
     // MARK: Legacy rows — decoded, preserved, never adopted
@@ -1181,9 +1181,9 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // pin carried ("Update to Tank Top"): the payload is the
         // place that changed.
         let narration = WearIveRunMiniBarModel.state(
-            todaysEntry: settled, moment: "Now",
+            todaysEntry: settled, moment: .now,
             wasUpdatedThisSession: settled.wasUpdatedInSession)
-        XCTAssertEqual(narration, .updated(payload: "Miami, FL"))
+        XCTAssertEqual(narration, .updated(payload: .place("Miami, FL")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: narration), "Update to Miami, FL")
         XCTAssertEqual(
@@ -1213,7 +1213,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // GEN-5 (RW-28, C-7): the surviving payload is the place
         // that changed — supersedes the garment payload ("Tank
         // Top") this pin carried under WS-4.
-        XCTAssertEqual(state(of: recreated), .updated(payload: "Miami, FL"))
+        XCTAssertEqual(state(of: recreated), .updated(payload: .place("Miami, FL")))
 
         // A weather-only settle updates the numbers and keeps
         // the narration kind it found.
@@ -1222,7 +1222,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             items: ["Tank Top"], day: d))
         XCTAssertEqual(recreated.sessionEntry()?.feelsLikeF, 92)
         XCTAssertEqual(recreated.sessionEntry()?.wasUpdatedInSession, true)
-        XCTAssertEqual(state(of: recreated), .updated(payload: "Miami, FL"))
+        XCTAssertEqual(state(of: recreated), .updated(payload: .place("Miami, FL")))
     }
 
     // MARK: Served-hero identity (census Y-10)

@@ -335,15 +335,29 @@ enum PersonalHeroFlagReason: String, CaseIterable {
     /// The stored/validated `reason` value.
     var code: String { rawValue }
 
-    /// The label shown in the flag menu.
+    /// The label shown in the flag menu. GEN-5 (RW-29 FA-18):
+    /// frame 45's personal sheet, verbatim — the lead reason,
+    /// the outfit reason, and the residual; the codes above are
+    /// the server contract and do not change.
     var label: String {
         switch self {
         case .doesntLookLikeMe: return "This doesn't look like me"
-        case .looksBroken: return "Looks broken"
-        case .inappropriate: return "Inappropriate"
-        case .outfitMismatch: return "Doesn't match the outfit"
+        case .outfitMismatch: return "Wrong outfit for the weather"
+        case .looksBroken: return "Something else"
+        case .inappropriate: return "Other"
         }
     }
+
+    /// The personal sheet's presentation (frame 45): exactly
+    /// three reasons — the lead, the outfit reason, and the
+    /// residual, which files under the generic defect code.
+    static var sheetOrder: [PersonalHeroFlagReason] {
+        [.doesntLookLikeMe, .outfitMismatch, .looksBroken]
+    }
+
+    /// What flagging a personal photo does, stated before the
+    /// user commits (frame 45, under the lead reason).
+    static let consequenceLine = "We'll stop showing this photo and make it again."
 }
 
 /// The personalized photo on screen, as a personal flag must
@@ -1035,20 +1049,67 @@ enum ConvergenceBand {
     static let heading = "Making your looks"
     static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
 
+    /// GEN-5 (Addendum 8, bank non-convergence): the STALLED
+    /// line. Sol's device sat at ~90% for three hours after
+    /// subscribing while the band presented as ordinary
+    /// in-progress — a bank that has stopped advancing must say
+    /// so, in the band itself. The fraction stays the REAL
+    /// banked fraction (ready ÷ total from the server's cell
+    /// sets — audited: there is no time-based or estimated
+    /// progress anywhere in this rule); only the line changes.
+    /// Lane-authored copy (no settled stalled line exists in
+    /// the design record), written to the honesty rules: it
+    /// names the delay, and it claims only what is true — the
+    /// looks already banked ARE the ones being served.
+    static let stalledLine = "This is taking longer than usual. Your ready looks are already in your outfits — the rest are still being made."
+
+    /// How long coverage may fail to advance before the bank
+    /// reads as stalled (the store's tracker applies it).
+    static let stallThreshold: TimeInterval = 30 * 60
+
     /// The premium-context input is a plain Bool, deliberately:
     /// this model file is compiled into BOTH the app and the
     /// unit-test targets, while PersonalHeroStore is app-only —
     /// the seats map their mode at the call site
     /// (`mode == .subscribed`), so the rule itself stays
     /// testable in the model layer like everything else here.
-    static func content(isSubscribed: Bool, coverage: BankCoverage?) -> ConvergenceBandContent? {
+    static func content(isSubscribed: Bool, coverage: BankCoverage?, stalled: Bool = false) -> ConvergenceBandContent? {
         guard isSubscribed, let coverage else { return nil }
         guard coverage.total > 0, coverage.ready < coverage.total else { return nil }
         return ConvergenceBandContent(
             heading: heading,
-            line: line,
+            line: stalled ? stalledLine : line,
             fraction: Double(coverage.ready) / Double(coverage.total)
         )
+    }
+}
+
+/// GEN-5 (Addendum 8): the stall tracker — pure, so the rule is
+/// pinned in the model layer. It watches the REAL ready count:
+/// every observation that ADVANCES it resets the clock; when
+/// the count has not advanced for `ConvergenceBand.stallThreshold`
+/// while the bank is still incomplete, the bank reads as
+/// stalled. A completed bank is never stalled, and the first
+/// observation of a bank starts its clock (a bank is not born
+/// stalled).
+struct BankStallTracker: Equatable {
+    private var lastReady: Int?
+    private var lastAdvanceAt: Date?
+
+    mutating func observe(_ coverage: BankCoverage, now: Date) {
+        if let lastReady, coverage.ready > lastReady {
+            self.lastReady = coverage.ready
+            lastAdvanceAt = now
+        } else if lastReady == nil {
+            lastReady = coverage.ready
+            lastAdvanceAt = now
+        }
+    }
+
+    func isStalled(_ coverage: BankCoverage, now: Date) -> Bool {
+        guard coverage.total > 0, coverage.ready < coverage.total,
+              let lastAdvanceAt else { return false }
+        return now.timeIntervalSince(lastAdvanceAt) >= ConvergenceBand.stallThreshold
     }
 }
 
@@ -1237,6 +1298,52 @@ enum PhotoQualityVerdict {
         if largestFaceAreaRatio < tooSmallThreshold { return .faceTooSmall }
         if largestFaceAreaRatio > tooCloseThreshold { return .tooClose }
         return nil
+    }
+}
+
+/// GEN-5 (RW-29 FA-54): the per-check report behind the upload
+/// review. Build 25's review collapsed the still check to ONE
+/// verdict line (plus, on acceptance, the four labels joined in
+/// a single string) — the design's review reports the four
+/// settled checks INDIVIDUALLY, the same four the guided capture
+/// coaches live. Derived from the same measurements and the
+/// same thresholds the verdict uses, so the report can never
+/// disagree with the verdict it accompanies.
+struct PhotoCheckReport: Equatable {
+    let inFrame: Bool
+    let faceSize: Bool
+    let straightOn: Bool
+    let light: Bool
+
+    static func report(
+        faceCount: Int,
+        largestFaceAreaRatio: Double,
+        meanLuminance: Double,
+        faceRollDegrees: Double
+    ) -> PhotoCheckReport {
+        PhotoCheckReport(
+            inFrame: faceCount >= 1,
+            faceSize: faceCount >= 1
+                && largestFaceAreaRatio >= PhotoQualityVerdict.tooSmallThreshold
+                && largestFaceAreaRatio <= PhotoQualityVerdict.tooCloseThreshold,
+            straightOn: IntakeOrientation.rollWithinGate(faceRollDegrees),
+            light: meanLuminance >= PhotoQualityVerdict.darkThreshold
+        )
+    }
+
+    /// The all-failed report for a photo that could not be
+    /// measured at all (the checker's fail-closed case).
+    static let unmeasurable = PhotoCheckReport(
+        inFrame: false, faceSize: false, straightOn: false, light: false
+    )
+
+    func passed(_ check: SelfieCheck) -> Bool {
+        switch check {
+        case .faceFound: return inFrame
+        case .faceLargeEnough: return faceSize
+        case .faceFrontal: return straightOn
+        case .wellLit: return light
+        }
     }
 }
 

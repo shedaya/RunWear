@@ -64,22 +64,34 @@ final class RW25NextGenHomeTests: XCTestCase {
 
     func testNarrationAddedUsesCommaForm() {
         XCTAssertEqual(
-            WearIveRunNarration.line(for: .added(place: "New York", moment: "Now")),
+            WearIveRunNarration.line(for: .added(place: "New York", moment: .now)),
             "Added New York, Now"
         )
     }
 
     func testNarrationAddedWithPlaceAndTime() {
+        // GEN-5 (Addendum 8) SUPERSEDES the stamped literal: the
+        // moment is a structural clock reading now, rendering
+        // the C-7 simple form "7 a.m." — the "7:00 AM" stamp
+        // this pin carried is unrepresentable in the type.
         XCTAssertEqual(
-            WearIveRunNarration.line(for: .added(place: "Central Park", moment: "7:00 AM")),
-            "Added Central Park, 7:00 AM"
+            WearIveRunNarration.line(for: .added(place: "Central Park", moment: .clock(hour12: 7, isPM: false))),
+            "Added Central Park, 7 a.m."
         )
     }
 
     func testNarrationUpdateToPayload() {
+        // GEN-5 (Addendum 8): the payload is structural — the
+        // "Cool-weather kit" garment literal this pin carried
+        // can no longer be written at all. A place payload:
         XCTAssertEqual(
-            WearIveRunNarration.line(for: .updated(payload: "Cool-weather kit")),
-            "Update to Cool-weather kit"
+            WearIveRunNarration.line(for: .updated(payload: .place("Miami, FL"))),
+            "Update to Miami, FL"
+        )
+        // And a moment payload (a clock reading is in-spec, C-7):
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: .updated(payload: .moment(.clock(hour12: 9, isPM: true)))),
+            "Update to 9 p.m."
         )
     }
 
@@ -91,7 +103,7 @@ final class RW25NextGenHomeTests: XCTestCase {
         // the derivation instead.)
         XCTAssertEqual(WearIveRunMiniBarModel.wordmark, "Wear I've Run")
         let noEntry = WearIveRunMiniBarModel.state(
-            todaysEntry: nil, moment: "Now",
+            todaysEntry: nil, moment: .now,
             wasUpdatedThisSession: false
         )
         XCTAssertEqual(noEntry, .preAdd)
@@ -104,10 +116,10 @@ final class RW25NextGenHomeTests: XCTestCase {
         )
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
-                todaysEntry: entry, moment: "Now",
+                todaysEntry: entry, moment: .now,
                 wasUpdatedThisSession: false
             ),
-            .added(place: "New York", moment: "Now")
+            .added(place: "New York", moment: .now)
         )
         // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment payload:
         // an entry carrying no stored update payload narrates
@@ -117,10 +129,10 @@ final class RW25NextGenHomeTests: XCTestCase {
         // both superseded in turn.)
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
-                todaysEntry: entry, moment: "Now",
+                todaysEntry: entry, moment: .now,
                 wasUpdatedThisSession: true
             ),
-            .updated(payload: "New York")
+            .updated(payload: .place("New York"))
         )
     }
 

@@ -25,7 +25,7 @@ final class Gen5FidelityTests: XCTestCase {
     private func entry(
         place: String, day: Date, feels: Double, items: [String] = ["Tank Top"],
         hero: String = "https://example.com/hero.webp", session: String = "",
-        moment: String = "Now", savedAt: Date? = nil
+        moment: MomentReading = .now, savedAt: Date? = nil
     ) -> WearIveRunEntry {
         WearIveRunEntry(
             dayStart: day, placeName: place, feelsLikeF: feels, actualF: feels - 5,
@@ -58,16 +58,16 @@ final class Gen5FidelityTests: XCTestCase {
         let after = entry(place: "Miami, Florida", day: nov5, feels: 78)
         XCTAssertEqual(
             WearIveRunNarrationRules.updatePayload(existing: before, incoming: after),
-            "Miami, FL")
+            .place("Miami, FL"))
     }
 
     func testNarrationPayload_TimeChangeNamesTheReading() {
-        let before = entry(place: "Miami, Florida", day: nov5, feels: 78, moment: "Now")
+        let before = entry(place: "Miami, Florida", day: nov5, feels: 78, moment: .now)
         let after = entry(place: "Miami, Florida", day: nov5, feels: 83,
-                          items: ["Light Long Sleeve"], moment: "9 p.m.")
+                          items: ["Light Long Sleeve"], moment: .clock(hour12: 9, isPM: true))
         XCTAssertEqual(
             WearIveRunNarrationRules.updatePayload(existing: before, incoming: after),
-            "9 p.m.")
+            .moment(.clock(hour12: 9, isPM: true)))
         // And the classifier treats a moment-only change as a
         // narrated, cued update — the Wear card re-solves and the
         // cue fires (items 8/9).
@@ -83,12 +83,16 @@ final class Gen5FidelityTests: XCTestCase {
         // narration it found (pinned in
         // WearIveRunElementMachineTests.testCollectionModelCueSemantics).
         let before = entry(place: "Miami, Florida", day: nov5, feels: 78,
-                           items: ["Tank Top"], moment: "9 p.m.")
+                           items: ["Tank Top"], moment: .clock(hour12: 9, isPM: true))
         let after = entry(place: "Miami, Florida", day: nov5, feels: 78,
-                          items: ["Light Long Sleeve"], moment: "9 p.m.")
+                          items: ["Light Long Sleeve"], moment: .clock(hour12: 9, isPM: true))
         let payload = WearIveRunNarrationRules.updatePayload(existing: before, incoming: after)
-        XCTAssertEqual(payload, "9 p.m.")
-        XCTAssertFalse(payload.contains("Sleeve"))
+        // GEN-5 (Addendum 8): the payload is a structural case —
+        // a moment here — and its rendered form names the
+        // reading, never the garment that changed.
+        XCTAssertEqual(payload, .moment(.clock(hour12: 9, isPM: true)))
+        XCTAssertEqual(payload.rendered, "9 p.m.")
+        XCTAssertFalse(payload.rendered.contains("Sleeve"))
         XCTAssertEqual(
             WearIveRunLandingClassifier.classify(existing: before, incoming: after),
             .kitUpdated)
@@ -105,9 +109,9 @@ final class Gen5FidelityTests: XCTestCase {
          "wasUpdatedInSession": true}
         """
         let decoded = try JSONDecoder().decode(WearIveRunEntry.self, from: Data(legacy.utf8))
-        XCTAssertEqual(decoded.momentReading, "Now")
+        XCTAssertEqual(decoded.momentReading, .now)
         XCTAssertNil(decoded.updatePayload)
-        XCTAssertEqual(decoded.narrationPayload, "Miami, FL")
+        XCTAssertEqual(decoded.narrationPayload, .place("Miami, FL"))
         XCTAssertEqual(decoded.lastSavedAt, decoded.dayStart)
     }
 
@@ -526,5 +530,242 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(MakeItMeCopy.lookFailed,
                        "Your look couldn't be made from these photos — tap to try again.")
         XCTAssertEqual(MakeItMeCopy.lookRetry, "Try again")
+    }
+
+    // MARK: - Addendum 8.2: a garment payload is UNREPRESENTABLE
+
+    func testMomentReading_RendersOnlySimpleForms() {
+        XCTAssertEqual(MomentReading.now.rendered, "Now")
+        XCTAssertEqual(MomentReading.clock(hour12: 9, isPM: true).rendered, "9 p.m.")
+        XCTAssertEqual(MomentReading.clock(hour12: 12, isPM: false).rendered, "12 a.m.")
+        XCTAssertEqual(
+            MomentReading.daypart(dayWord: "Tomorrow", part: .evening).rendered,
+            "Tomorrow evening")
+        XCTAssertEqual(
+            MomentReading.daypart(dayWord: "Friday", part: .morning).rendered,
+            "Friday morning")
+    }
+
+    func testMomentReading_ParsingRejectsGarmentsAndStamps() {
+        XCTAssertEqual(MomentReading(parsing: "Now"), .now)
+        XCTAssertEqual(MomentReading(parsing: "9 p.m."), .clock(hour12: 9, isPM: true))
+        XCTAssertEqual(MomentReading(parsing: "Tomorrow evening"),
+                       .daypart(dayWord: "Tomorrow", part: .evening))
+        // The Android breach string and the stamped form have
+        // NO case:
+        XCTAssertNil(MomentReading(parsing: "Ear Warmer / Headband"))
+        XCTAssertNil(MomentReading(parsing: "Nov 7 9:00 PM"))
+        XCTAssertNil(MomentReading(parsing: "Tank Top / Singlet"))
+    }
+
+    func testLegacyGarmentPayload_IsDroppedAtDecode() throws {
+        // An entry persisted by the old defect, carrying a
+        // garment update payload: decode must not carry it
+        // forward — the payload drops and the entry narrates
+        // from its place.
+        let legacy = """
+        {"dayStart": 500000000, "placeName": "Miami, Florida",
+         "feelsLikeF": 78, "actualF": 73, "condition": "Clear sky",
+         "itemNames": ["Tank Top"], "itemKeys": ["tank"],
+         "heroImageReference": "", "sessionID": "s1",
+         "wasUpdatedInSession": true, "momentReading": "Now",
+         "updatePayload": "Ear Warmer / Headband"}
+        """
+        let decoded = try JSONDecoder().decode(WearIveRunEntry.self, from: Data(legacy.utf8))
+        XCTAssertNil(decoded.updatePayload)
+        XCTAssertEqual(decoded.narrationPayload, .place("Miami, FL"))
+        XCTAssertEqual(decoded.narrationPayload.rendered, "Miami, FL")
+    }
+
+    func testChangedHeadwearSettle_ProducesNoNarration() {
+        // The Addendum 8 state-sequence proof: two settles
+        // differing ONLY in the headwear item. The classifier
+        // reads the change as a kit change (silent), and the
+        // recorded entry keeps the narration it already had —
+        // no garment narration can be produced by this settle.
+        let before = entry(place: "Kansas City, Missouri", day: nov5, feels: 36,
+                           items: ["Ear Warmer", "Tights"], session: "s-head")
+        let after = entry(place: "Kansas City, Missouri", day: nov5, feels: 36,
+                          items: ["Headband", "Tights"], session: "s-head")
+        XCTAssertEqual(
+            WearIveRunLandingClassifier.classify(existing: before, incoming: after),
+            .kitUpdated)
+        let model = WearIveRunCollectionModel(
+            store: WearIveRunStore(defaults: UserDefaults(suiteName: "gen5-headwear-\(UUID().uuidString)")!),
+            sessionID: "s-head")
+        model.recordSettled(before)
+        let narratedBefore = model.sessionEntry()?.narrationPayload
+        model.recordSettled(after)
+        let settled = model.sessionEntry()
+        XCTAssertEqual(settled?.itemNames.first, "Headband",
+                       "the settle itself lands — only its narration is silent")
+        XCTAssertEqual(settled?.narrationPayload, narratedBefore)
+        XCTAssertEqual(settled?.wasUpdatedInSession, false)
+        XCTAssertFalse(settled?.narrationPayload.rendered.contains("Headband") ?? true)
+        XCTAssertFalse(settled?.narrationPayload.rendered.contains("Ear Warmer") ?? true)
+    }
+
+    // MARK: - Addendum 8.1: the band's progress is real counts; a stalled bank says so
+
+    func testBandFraction_IsTheRealBankedFraction() {
+        let content = ConvergenceBand.content(
+            isSubscribed: true, coverage: BankCoverage(ready: 43, total: 48))
+        XCTAssertEqual(content?.fraction, 43.0 / 48.0)
+        XCTAssertEqual(content?.line, ConvergenceBand.line)
+    }
+
+    func testBandStalledLine_ReplacesTheInProgressLineOnly() {
+        let coverage = BankCoverage(ready: 43, total: 48)
+        let stalled = ConvergenceBand.content(isSubscribed: true, coverage: coverage, stalled: true)
+        XCTAssertEqual(stalled?.line, ConvergenceBand.stalledLine)
+        XCTAssertEqual(stalled?.fraction, 43.0 / 48.0,
+                       "the fraction stays the real banked fraction in the stalled state")
+        XCTAssertEqual(stalled?.heading, "Making your looks")
+    }
+
+    func testBankStallTracker_AdvancementResetsTheClock() {
+        var tracker = BankStallTracker()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let partial = BankCoverage(ready: 10, total: 48)
+        tracker.observe(partial, now: t0)
+        XCTAssertFalse(tracker.isStalled(partial, now: t0.addingTimeInterval(29 * 60)))
+        XCTAssertTrue(tracker.isStalled(partial, now: t0.addingTimeInterval(31 * 60)),
+                      "no advancement for the threshold reads as stalled")
+        // Advancement restarts the clock:
+        let advanced = BankCoverage(ready: 11, total: 48)
+        tracker.observe(advanced, now: t0.addingTimeInterval(31 * 60))
+        XCTAssertFalse(tracker.isStalled(advanced, now: t0.addingTimeInterval(59 * 60)))
+        // A completed bank is never stalled:
+        let complete = BankCoverage(ready: 48, total: 48)
+        XCTAssertFalse(tracker.isStalled(complete, now: t0.addingTimeInterval(999 * 60)))
+    }
+
+    // MARK: - RW-29 batch pins
+
+    func testTolerantDecoding_OneMalformedRecordDropsOnlyItself() throws {
+        // FA-14: a whole-history JSON array with one corrupt
+        // record between two valid ones — both neighbours load.
+        let good1 = """
+        {"dayStart": 500000000, "placeName": "Miami, Florida",
+         "feelsLikeF": 78, "actualF": 73, "condition": "Clear",
+         "itemNames": [], "itemKeys": [], "heroImageReference": "",
+         "sessionID": "", "wasUpdatedInSession": false}
+        """
+        let good2 = """
+        {"dayStart": 500100000, "placeName": "Kansas City, Missouri",
+         "feelsLikeF": 36, "actualF": 31, "condition": "Clear",
+         "itemNames": [], "itemKeys": [], "heroImageReference": "",
+         "sessionID": "", "wasUpdatedInSession": false}
+        """
+        let data = Data("[\(good1), {\"dayStart\": \"not-a-date\"}, \(good2)]".utf8)
+        let decoded = TolerantArrayDecoding.decode(WearIveRunEntry.self, from: data)
+        XCTAssertEqual(decoded.count, 2)
+        XCTAssertEqual(Set(decoded.map(\.placeDisplayName)), ["Miami, FL", "Kansas City, MO"])
+    }
+
+    func testLegacyFallbackAndSupersede_FA36() {
+        // FA-36: a legacy (session-less) entry dated today is
+        // the pin/dock's entry until the session settles; the
+        // session's first settle at the same day+place
+        // supersedes it — one entry for the day, not two. A
+        // legacy entry at a DIFFERENT place is untouched.
+        let legacyToday = entry(place: "Miami, Florida", day: nov5, feels: 78)
+        let legacyElsewhere = entry(place: "Kansas City, Missouri", day: nov4, feels: 36)
+        let found = WearIveRunCollection.sessionEntry(
+            from: [legacyToday, legacyElsewhere], sessionID: "new-session", today: nov5)
+        XCTAssertEqual(found?.id, legacyToday.id)
+
+        let suite = UserDefaults(suiteName: "gen5-fa36-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: suite)
+        store.record(legacyToday)
+        store.record(legacyElsewhere)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "new-session")
+        let sessionSettle = entry(place: "Miami, Florida", day: nov5, feels: 79, session: "new-session")
+        model.recordSettled(sessionSettle)
+        let miamiToday = model.entries.filter {
+            $0.placeKey == sessionSettle.placeKey
+                && Calendar.current.isDate($0.dayStart, inSameDayAs: nov5)
+        }
+        XCTAssertEqual(miamiToday.count, 1, "the day keeps ONE Miami entry — the session's")
+        XCTAssertEqual(miamiToday.first?.sessionID, "new-session")
+        XCTAssertTrue(model.entries.contains { $0.id == legacyElsewhere.id },
+                      "the other place's legacy entry is history and stays")
+    }
+
+    func testDayChartGeometry_PartialDayUsesTheFixedDayScale_FA29() throws {
+        // FA-29: a forecast covering only hours 14...23 must
+        // place hour 14 at 14/23 of the width — the fixed day
+        // scale — not at the model's own left edge.
+        let points = (14...23).map { hour in
+            DayChartHour(hour: hour, feelsLikeF: 50 + Double(hour), bracket: .mild, outfitItemNames: [])
+        }
+        let model = try XCTUnwrap(DayChartModel.build(points: points))
+        let x = DayChartGeometry.x(forHour: 14, model: model, width: 230)
+        XCTAssertEqual(Double(x), 230.0 * 14.0 / 23.0, accuracy: 0.001)
+        XCTAssertEqual(Double(DayChartGeometry.x(forHour: 23, model: model, width: 230)), 230, accuracy: 0.001)
+        XCTAssertEqual(Double(DayChartGeometry.x(forHour: 0, model: model, width: 230)), 0, accuracy: 0.001)
+    }
+
+    func testTimePickerDraft_SteppersDisableAtTheEnds_FA39() {
+        var draft = TimePickerDraft(
+            originalHour: 6, openedInNowState: true, nowHour: 6,
+            selectableHours: Array(0...23))
+        XCTAssertTrue(draft.canStep(by: 1))
+        XCTAssertTrue(draft.canStep(by: -1))
+        draft.move(to: 0)
+        XCTAssertFalse(draft.canStep(by: -1), "the minus stepper disables at the first selectable hour")
+        XCTAssertTrue(draft.canStep(by: 1))
+        draft.move(to: 23)
+        XCTAssertFalse(draft.canStep(by: 1), "the plus stepper disables at the last selectable hour")
+    }
+
+    func testPhotoCheckReport_ReportsTheFourChecksIndividually_FA54() {
+        // A dark photo with a well-framed, upright face: Light
+        // fails, the other three pass — reported individually,
+        // from the same thresholds the verdict uses.
+        let report = PhotoCheckReport.report(
+            faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.05, faceRollDegrees: 0)
+        XCTAssertTrue(report.passed(.faceFound))
+        XCTAssertTrue(report.passed(.faceLargeEnough))
+        XCTAssertTrue(report.passed(.faceFrontal))
+        XCTAssertFalse(report.passed(.wellLit))
+        let small = PhotoCheckReport.report(
+            faceCount: 1, largestFaceAreaRatio: 0.005, meanLuminance: 0.5, faceRollDegrees: 0)
+        XCTAssertFalse(small.passed(.faceLargeEnough))
+        XCTAssertTrue(small.passed(.wellLit))
+        let sideways = PhotoCheckReport.report(
+            faceCount: 1, largestFaceAreaRatio: 0.2, meanLuminance: 0.5, faceRollDegrees: 80)
+        XCTAssertFalse(sideways.passed(.faceFrontal))
+        let nobody = PhotoCheckReport.report(
+            faceCount: 0, largestFaceAreaRatio: 0, meanLuminance: 0.5, faceRollDegrees: 0)
+        XCTAssertFalse(nobody.passed(.faceFound))
+        XCTAssertFalse(nobody.passed(.faceLargeEnough))
+    }
+
+    func testFlagReasonLabels_AreTheSettledPresentation_FA18() throws {
+        XCTAssertEqual(HeroFlagReason.outfitMismatch.label, "Wrong outfit for the weather")
+        XCTAssertEqual(HeroFlagReason.looksBroken.label, "Unflattering photo")
+        XCTAssertEqual(HeroFlagReason.inappropriate.label, "Other")
+        XCTAssertEqual(HeroFlagReason.sheetOrder, [.outfitMismatch, .looksBroken, .inappropriate])
+        XCTAssertEqual(PersonalHeroFlagReason.doesntLookLikeMe.label, "This doesn't look like me")
+        XCTAssertEqual(PersonalHeroFlagReason.outfitMismatch.label, "Wrong outfit for the weather")
+        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.label, "Something else")
+        XCTAssertEqual(PersonalHeroFlagReason.inappropriate.label, "Other")
+        XCTAssertEqual(PersonalHeroFlagReason.sheetOrder,
+                       [.doesntLookLikeMe, .outfitMismatch, .looksBroken],
+                       "frame 45's personal sheet carries exactly three reasons")
+        XCTAssertEqual(PersonalHeroFlagReason.consequenceLine,
+                       "We'll stop showing this photo and make it again.")
+        // The BACKEND codes are unchanged — presentation only.
+        XCTAssertEqual(HeroFlagReason.outfitMismatch.code, "outfit_mismatch")
+        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.code, "looks_broken")
+    }
+
+    func testCollectionEmptyState_IsFrame10Verbatim_FA16() throws {
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        XCTAssertTrue(collection.contains("Your scrapbook starts with today's run."))
+        XCTAssertTrue(collection.contains("Each day's outfit is saved here automatically — one card per day, in the places you've run. Nothing is backfilled. It begins the first time today's outfit is generated."))
+        XCTAssertFalse(collection.contains("Nothing here yet"),
+                       "the invented session-framed empty state is gone")
     }
 }

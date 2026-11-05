@@ -41,7 +41,7 @@ struct WatchLoadingView: View {
                 .tint(AppTheme.primaryColor)
             Text("Loading...")
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 }
@@ -62,7 +62,7 @@ struct WatchPermissionView: View {
                 Text("RunWear needs your location for weather-based outfit recommendations.")
                     .font(.caption2)
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 Button(action: onRequest) {
                     Text("Enable")
@@ -85,7 +85,9 @@ struct WatchErrorView: View {
             VStack(spacing: 12) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 32))
-                    .foregroundColor(.orange)
+                    // GEN-5 (cream map row 62): the paired
+                    // dark-mode warning accent, not system orange.
+                    .foregroundColor(AppTheme.weatherAccentColor(.orange, isDark: true))
 
                 Text("Error")
                     .font(.headline)
@@ -93,7 +95,7 @@ struct WatchErrorView: View {
                 Text(message)
                     .font(.caption2)
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppTheme.inkSecondary)
 
                 Button(action: onRetry) {
                     Label("Retry", systemImage: "arrow.clockwise")

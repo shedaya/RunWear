@@ -186,6 +186,14 @@ struct WearIveRunElementMachine: Equatable {
         case (.cue, .tapMiniBarBody):
             state = .expanded
             return [.cancelCueTimer]
+        // GEN-5 (RW-29 FA-33): a body tap while EXPANDED
+        // settles the bar back to mini — build 25's machine
+        // let it fall to the default no-op, so the expanded
+        // block's body was a dead surface (only the chevron
+        // collapsed it).
+        case (.expanded, .tapMiniBarBody):
+            state = .mini
+            return []
         case (.mini, .tapToggleControl):
             state = .expanded
             return []
@@ -222,8 +230,8 @@ struct WearIveRunElementMachine: Equatable {
         // Everything else — every async landing in every state,
         // a creation arriving when an entry already exists, a
         // timeout outside the cue, scroll/tap events in ABSENT,
-        // scrolling away in MINI/CUE, a body tap in EXPANDED —
-        // is not a driver: no movement, no effects.
+        // scrolling away in MINI/CUE — is not a driver: no
+        // movement, no effects.
         default:
             return []
         }

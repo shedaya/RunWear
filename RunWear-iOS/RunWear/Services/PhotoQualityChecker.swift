@@ -54,6 +54,10 @@ enum PhotoQualityChecker {
     struct CheckResult {
         let rejection: PhotoRejection?
         let uploadData: Data?
+        /// GEN-5 (RW-29 FA-54): the per-check report the upload
+        /// review renders — derived from the final measurement
+        /// the verdict itself used.
+        let report: PhotoCheckReport
     }
 
     /// Measure + classify one picked photo. Returns nil when the
@@ -72,14 +76,14 @@ enum PhotoQualityChecker {
     /// pair at the intake seam.
     static func check(imageData: Data) async -> CheckResult {
         guard let decoded = UIImage(data: imageData) else {
-            return CheckResult(rejection: .faceUnclear, uploadData: nil)
+            return CheckResult(rejection: .faceUnclear, uploadData: nil, report: .unmeasurable)
         }
         // F-1: apply the file's EXIF orientation NOW, at decode —
         // every later stage (measurement, encode) works on upright
         // pixels.
         var image = bakedUpright(decoded)
         guard var measurement = await measure(image: image) else {
-            return CheckResult(rejection: .faceUnclear, uploadData: nil)
+            return CheckResult(rejection: .faceUnclear, uploadData: nil, report: .unmeasurable)
         }
         // F-1 roll correction: an EXIF-less residual quarter-turn
         // is uprighted here and re-measured ONCE. The correction
@@ -115,10 +119,16 @@ enum PhotoQualityChecker {
             meanLuminance: measurement.meanLuminance,
             faceRollDegrees: measurement.faceRollDegrees
         )
+        let report = PhotoCheckReport.report(
+            faceCount: measurement.faceCount,
+            largestFaceAreaRatio: measurement.largestFaceAreaRatio,
+            meanLuminance: measurement.meanLuminance,
+            faceRollDegrees: measurement.faceRollDegrees
+        )
         if let rejection {
-            return CheckResult(rejection: rejection, uploadData: nil)
+            return CheckResult(rejection: rejection, uploadData: nil, report: report)
         }
-        return CheckResult(rejection: nil, uploadData: jpegData(forUploadImage: image))
+        return CheckResult(rejection: nil, uploadData: jpegData(forUploadImage: image), report: report)
     }
 
     static func measure(imageData: Data) async -> Measurement? {

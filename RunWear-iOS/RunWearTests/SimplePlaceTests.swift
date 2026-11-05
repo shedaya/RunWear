@@ -147,10 +147,10 @@ final class SimplePlaceTests: XCTestCase {
         for fixture in rawFixtures {
             let state = WearIveRunMiniBarModel.state(
                 todaysEntry: entry(place: fixture.raw),
-                moment: "Now",
+                moment: .now,
                 wasUpdatedThisSession: false)
             XCTAssertEqual(
-                state, .added(place: fixture.simple, moment: "Now"), fixture.raw)
+                state, .added(place: fixture.simple, moment: .now), fixture.raw)
             XCTAssertEqual(
                 WearIveRunNarration.line(for: state),
                 "Added \(fixture.simple), Now", fixture.raw)
@@ -164,7 +164,7 @@ final class SimplePlaceTests: XCTestCase {
         // the D-08 defect.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: entry(place: "New York, New York"),
-            moment: "Now",
+            moment: .now,
             wasUpdatedThisSession: false)
         let line = WearIveRunNarration.line(for: state) ?? ""
         XCTAssertTrue(line.hasSuffix(", Now"), line)
@@ -179,18 +179,18 @@ final class SimplePlaceTests: XCTestCase {
         // its place — NEVER its first kit item.
         let e = entry(place: "New York, New York",
                       items: ["Insulated Jacket", "Tights", "Gloves"])
-        XCTAssertEqual(e.narrationPayload, "New York, NY")
+        XCTAssertEqual(e.narrationPayload, .place("New York, NY"))
         let moved = WearIveRunEntry(
             dayStart: e.dayStart, placeName: "Miami, Florida",
             feelsLikeF: 78, actualF: 73, condition: "Clear",
             itemNames: ["Tank Top"], itemKeys: ["tank"],
             heroImageReference: "", sessionID: e.sessionID,
-            wasUpdatedInSession: true, momentReading: "Now",
-            updatePayload: "Miami, FL")
-        XCTAssertEqual(moved.narrationPayload, "Miami, FL")
+            wasUpdatedInSession: true, momentReading: .now,
+            updatePayload: .place("Miami, FL"))
+        XCTAssertEqual(moved.narrationPayload, .place("Miami, FL"))
         let state = WearIveRunMiniBarModel.state(
-            todaysEntry: moved, moment: "Now", wasUpdatedThisSession: true)
-        XCTAssertEqual(state, .updated(payload: "Miami, FL"))
+            todaysEntry: moved, moment: .now, wasUpdatedThisSession: true)
+        XCTAssertEqual(state, .updated(payload: .place("Miami, FL")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state),
             "Update to Miami, FL")
@@ -207,7 +207,7 @@ final class SimplePlaceTests: XCTestCase {
         // region + "Now" and nothing else.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: entry(place: "Rancho Santa Margarita, California"),
-            moment: "Now",
+            moment: .now,
             wasUpdatedThisSession: false)
         let line = WearIveRunNarration.line(for: state) ?? ""
         XCTAssertEqual(line, "Added Rancho Santa Margarita, CA, Now")

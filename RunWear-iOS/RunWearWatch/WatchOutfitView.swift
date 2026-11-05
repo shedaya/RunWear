@@ -28,11 +28,14 @@ struct WatchOutfitView: View {
 
     private var heroWeatherPage: some View {
         ZStack {
-            // Hero image background (circular crop for watch)
+            // GEN-5 (RW-29 FA-46): the hero fills the display's
+            // ACTUAL shape (frame 53) — build 25's circle clip
+            // centre-cropped the photo into a disc, cutting the
+            // runner's head and wasting the display's corners.
             heroImageBackground
 
             // Temperature tint overlay (30% opacity)
-            Circle()
+            Rectangle()
                 .fill(temperatureColor.opacity(0.3))
 
             // Content
@@ -80,44 +83,43 @@ struct WatchOutfitView: View {
             }
             .padding(12)
         }
-        .clipShape(Circle())
     }
 
     private var heroImageBackground: some View {
-        ZStack {
-            // Fallback image (immediate)
-            if let fallbackUrl = viewModel.fallbackImageUrl {
-                AsyncImage(url: URL(string: fallbackUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure, .empty:
-                        Color.black
-                    @unknown default:
-                        Color.black
+        // GEN-5 (RW-29 FA-46): full-bleed, TOP-anchored — the
+        // photo fills the display's shape with the head kept,
+        // the same crop discipline as the phone's hero surfaces.
+        GeometryReader { proxy in
+            ZStack {
+                // Fallback image (immediate)
+                if let fallbackUrl = viewModel.fallbackImageUrl {
+                    AsyncImage(url: URL(string: fallbackUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            HeroPhoto(image: image, width: proxy.size.width, height: proxy.size.height)
+                        case .failure, .empty:
+                            Color.black
+                        @unknown default:
+                            Color.black
+                        }
                     }
                 }
-            }
 
-            // AI image on top with crossfade
-            if let heroUrl = viewModel.heroImageUrl {
-                AsyncImage(url: URL(string: heroUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                    case .failure, .empty:
-                        EmptyView()
-                    @unknown default:
-                        EmptyView()
+                // AI image on top with crossfade
+                if let heroUrl = viewModel.heroImageUrl {
+                    AsyncImage(url: URL(string: heroUrl)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            HeroPhoto(image: image, width: proxy.size.width, height: proxy.size.height)
+                        case .failure, .empty:
+                            EmptyView()
+                        @unknown default:
+                            EmptyView()
+                        }
                     }
                 }
             }
         }
-        .clipShape(Circle())
     }
 
     private var temperatureColor: Color {
@@ -153,7 +155,9 @@ struct WatchOutfitView: View {
                     }
                 }
                 .buttonStyle(.bordered)
-                .tint(.blue)
+                // GEN-5 (cream map row 60): the outfit page's
+                // refresh tint is pine, not system blue.
+                .tint(AppTheme.primaryColor)
                 .padding(.top, 4)
             }
             .padding(.horizontal, 4)
@@ -295,7 +299,9 @@ struct WatchClothingRow: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color.white.opacity(0.05))
+        // GEN-5 (cream map row 60): the theme's own dark card
+        // fill, not a raw white composite.
+        .background(AppTheme.cardFillOnDark)
         .cornerRadius(8)
         .frame(minHeight: 44) // Minimum touch target
     }

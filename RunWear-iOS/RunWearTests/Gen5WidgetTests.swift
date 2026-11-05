@@ -1,5 +1,10 @@
 import XCTest
-@testable import RunWear
+
+// NOTE: no `@testable import RunWear` — the suite's standing
+// convention (see Gen3TrainDeltaTests): the test target compiles
+// the model-layer sources directly. (This file shipped with the
+// import in the first gen-5 CI run, 42036497425, and failed the
+// module scan with exactly the documented error.)
 
 /// GEN-5 (Addendum 7 — RW-10): the iOS home-screen widget.
 ///

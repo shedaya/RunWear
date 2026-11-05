@@ -19,6 +19,12 @@ struct GuidedSelfieCaptureView: View {
     /// The captured photo as JPEG data (orientation baked in).
     let onCapture: (Data) -> Void
     let onCancel: () -> Void
+    /// GEN-5 (RW-29 FA-53): the library door INSIDE the guided
+    /// surface — the guided capture is the primary intake
+    /// surface, and "Use a photo instead" is how a user who
+    /// prefers the library gets there. Absent in contexts that
+    /// present the capture standalone.
+    var onUsePhotoInstead: (() -> Void)? = nil
 
     @StateObject private var model = GuidedSelfieCameraModel()
 
@@ -127,7 +133,19 @@ struct GuidedSelfieCaptureView: View {
                         )
                 }
                 .disabled(!model.evaluation.allPassed)
-                .padding(.bottom, 34)
+                .padding(.bottom, 10)
+
+                // GEN-5 (RW-29 FA-53): the library door, inside
+                // the guided surface.
+                if let onUsePhotoInstead {
+                    Button("Use a photo instead") { onUsePhotoInstead() }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 4)
+                        .padding(.bottom, 30)
+                } else {
+                    Spacer().frame(height: 24)
+                }
             }
         }
     }
@@ -166,6 +184,13 @@ struct GuidedSelfieCaptureView: View {
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
+            // GEN-5 (RW-29 FA-53): the library door the copy
+            // promises, wired — the denied state is not a dead end.
+            if let onUsePhotoInstead {
+                Button("Use a photo instead") { onUsePhotoInstead() }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppTheme.pinePayload)
+            }
             Button("Not now") { onCancel() }
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(AppTheme.inkPrimary)

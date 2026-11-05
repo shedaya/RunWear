@@ -54,6 +54,137 @@ enum WearIveRunSession {
 /// are never adopted or merged into a later session's entry —
 /// each legacy row reads as the single entry of a session that
 /// predates the keying.
+// MARK: - Narration payload types (GEN-5 Addendum 8 — C-7 made structural)
+//
+// Sol's device proved the breach on Android: the mini bar read
+// "Update to Ear Warmer / Headband" — a GARMENT in the narration
+// payload. The iOS defence is not a display filter: the payload
+// is a TYPE whose cases cannot hold a garment at all.
+//
+// - A moment reading is one of: now, a clock reading (an hour
+//   number and an AM/PM flag), or a daypart (a day word —
+//   "Tomorrow" or a weekday name — plus one of four parts of
+//   day). There is no free-text case.
+// - An update payload is one of: a place (the entry's simple
+//   place name) or a moment reading. There is no third case.
+//
+// Both types persist as their rendered string, so stores written
+// by earlier builds keep loading: decoding parses the string
+// back into cases, and a legacy string that fits NO case (a
+// garment payload written by the gen-3/gen-4 defect) is dropped
+// at decode — the entry falls back to its place — rather than
+// carried forward as data the model can no longer produce.
+
+enum MomentReading: Equatable, Hashable {
+    case now
+    case clock(hour12: Int, isPM: Bool)
+    case daypart(dayWord: String, part: DayPart)
+
+    enum DayPart: String, Equatable, Hashable {
+        case morning, afternoon, evening, night
+
+        /// The part of day for a 24-hour clock hour (the
+        /// production site's settled bands).
+        static func forHour(_ hour: Int) -> DayPart {
+            switch hour {
+            case 5..<12: return .morning
+            case 12..<17: return .afternoon
+            case 17..<22: return .evening
+            default: return .night
+            }
+        }
+    }
+
+    var rendered: String {
+        switch self {
+        case .now:
+            return "Now"
+        case .clock(let hour12, let isPM):
+            return "\(hour12) \(isPM ? "p.m." : "a.m.")"
+        case .daypart(let dayWord, let part):
+            return "\(dayWord) \(part.rawValue)"
+        }
+    }
+
+    /// Parse a persisted rendered reading back into its case.
+    /// Returns nil for a string no case can render — stamped
+    /// forms and garment names alike.
+    init?(parsing string: String) {
+        let text = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text == "Now" {
+            self = .now
+            return
+        }
+        // Clock form: "9 p.m." / "12 a.m."
+        let clockParts = text.split(separator: " ")
+        if clockParts.count == 2,
+           let hour = Int(clockParts[0]), (1...12).contains(hour),
+           clockParts[1] == "p.m." || clockParts[1] == "a.m." {
+            self = .clock(hour12: hour, isPM: clockParts[1] == "p.m.")
+            return
+        }
+        // Daypart form: "{Tomorrow|Weekday} {morning|afternoon|evening|night}"
+        if clockParts.count == 2,
+           let part = DayPart(rawValue: String(clockParts[1])) {
+            let dayWord = String(clockParts[0])
+            let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            if dayWord == "Tomorrow" || weekdays.contains(dayWord) {
+                self = .daypart(dayWord: dayWord, part: part)
+                return
+            }
+        }
+        return nil
+    }
+}
+
+enum NarrationPayload: Equatable, Hashable {
+    case place(String)
+    case moment(MomentReading)
+
+    var rendered: String {
+        switch self {
+        case .place(let name): return name
+        case .moment(let reading): return reading.rendered
+        }
+    }
+}
+
+extension MomentReading: Codable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let string = try container.decode(String.self)
+        guard let parsed = MomentReading(parsing: string) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unrepresentable moment reading: \(string)"
+            )
+        }
+        self = parsed
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rendered)
+    }
+}
+
+extension NarrationPayload: Codable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let string = try container.decode(String.self)
+        if let reading = MomentReading(parsing: string) {
+            self = .moment(reading)
+        } else {
+            self = .place(string)
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rendered)
+    }
+}
+
 struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// Start-of-day (local) for the day the entry last settled.
     let dayStart: Date
@@ -95,12 +226,21 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// human reading ("Now", "9 p.m.", "Tomorrow evening") — the
     /// payload an in-session TIME change narrates. Never a stamped
     /// date, never a garment.
-    let momentReading: String
+    ///
+    /// GEN-5 (Addendum 8): the reading is a STRUCTURAL type, not
+    /// a string — see MomentReading below. A garment name has no
+    /// case to live in, so a garment payload is unrepresentable
+    /// in the model, not merely filtered at display time (the
+    /// Android device breach: "Update to Ear Warmer / Headband").
+    let momentReading: MomentReading
     /// GEN-5 (RW-28, C-7): the update narration's payload, computed
     /// at record time from the DIFF (the place that changed, or the
     /// moment reading that changed) and stored on the entry with
     /// the content it describes. Nil for a creation.
-    let updatePayload: String?
+    ///
+    /// GEN-5 (Addendum 8): likewise structural — NarrationPayload
+    /// below. Its only cases are a place and a moment reading.
+    let updatePayload: NarrationPayload?
     /// GEN-5 (RW-28 item 10): when this entry last settled — the
     /// TODAY card's "Last saved …" element. Legacy payloads decode
     /// it as the entry's day.
@@ -117,8 +257,8 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         heroImageReference: String,
         sessionID: String = "",
         wasUpdatedInSession: Bool = false,
-        momentReading: String = "Now",
-        updatePayload: String? = nil,
+        momentReading: MomentReading = .now,
+        updatePayload: NarrationPayload? = nil,
         lastSavedAt: Date? = nil
     ) {
         self.dayStart = dayStart
@@ -146,7 +286,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// GEN-5: a copy carrying the narration kind AND its payload,
     /// committed in the same store write as the content (Y-5
     /// atomicity, extended to the C-7 payload).
-    func settingNarration(wasUpdated: Bool, payload: String?) -> WearIveRunEntry {
+    func settingNarration(wasUpdated: Bool, payload: NarrationPayload?) -> WearIveRunEntry {
         WearIveRunEntry(
             dayStart: dayStart, placeName: placeName,
             feelsLikeF: feelsLikeF, actualF: actualF, condition: condition,
@@ -183,8 +323,34 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         heroImageReference = try container.decode(String.self, forKey: .heroImageReference)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID) ?? ""
         wasUpdatedInSession = try container.decodeIfPresent(Bool.self, forKey: .wasUpdatedInSession) ?? false
-        momentReading = try container.decodeIfPresent(String.self, forKey: .momentReading) ?? "Now"
-        updatePayload = try container.decodeIfPresent(String.self, forKey: .updatePayload)
+        // GEN-5 (Addendum 8): persisted readings are strings;
+        // they decode back into the structural cases. A legacy
+        // string no case can render (a stamped form) decodes as
+        // .now rather than failing the load.
+        if let rawMoment = try container.decodeIfPresent(String.self, forKey: .momentReading) {
+            momentReading = MomentReading(parsing: rawMoment) ?? .now
+        } else {
+            momentReading = .now
+        }
+        // The update payload, likewise: the entry's own place
+        // string decodes as .place, a moment form as .moment,
+        // and anything else — a garment payload written by the
+        // old defect — is DROPPED (nil), so the entry narrates
+        // from its place until its next settle stamps a payload
+        // the current model can produce.
+        if let rawPayload = try container.decodeIfPresent(String.self, forKey: .updatePayload) {
+            let simpleName = SimplePlace(rawDisplayName: placeName)?.displayName
+                ?? placeName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if rawPayload == simpleName {
+                updatePayload = .place(simpleName)
+            } else if let reading = MomentReading(parsing: rawPayload) {
+                updatePayload = .moment(reading)
+            } else {
+                updatePayload = nil
+            }
+        } else {
+            updatePayload = nil
+        }
         lastSavedAt = try container.decodeIfPresent(Date.self, forKey: .lastSavedAt) ?? dayStart
     }
 
@@ -210,12 +376,13 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// C-7 — supersedes the WS-4 garment payload): what CHANGED,
     /// computed at record time and stored on the entry — the new
     /// place when the place changed, the new moment reading when
-    /// the time changed. NEVER a garment (the gen-4 defect, on
-    /// both platforms: "Update to Tank Top / Singlet"). Falls back
-    /// to the entry's place for entries recorded before the
+    /// the time changed. NEVER a garment: the payload is the
+    /// structural NarrationPayload (Addendum 8), whose only
+    /// cases are a place and a moment reading. Falls back to
+    /// the entry's place for entries recorded before the
     /// payload was stored.
-    var narrationPayload: String {
-        updatePayload ?? placeDisplayName
+    var narrationPayload: NarrationPayload {
+        updatePayload ?? .place(placeDisplayName)
     }
 
     /// Place identity: the SimplePlace key — trimmed, case-folded,
@@ -254,14 +421,18 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
 /// updates — a kit-only settle never reaches here (it is silent
 /// and preserves the payload it found). Garments are never named.
 enum WearIveRunNarrationRules {
+    /// GEN-5 (Addendum 8): the payload is constructed ONLY as
+    /// a place case (from the entry's simple place name) or a
+    /// moment case (from the entry's structural moment
+    /// reading). No other value can be stamped.
     static func updatePayload(
         existing: WearIveRunEntry,
         incoming: WearIveRunEntry
-    ) -> String {
+    ) -> NarrationPayload {
         if existing.placeKey != incoming.placeKey {
-            return incoming.placeDisplayName
+            return .place(incoming.placeDisplayName)
         }
-        return incoming.momentReading
+        return .moment(incoming.momentReading)
     }
 }
 
@@ -428,9 +599,29 @@ enum WearIveRunCollection {
     /// The entry a session owns, if it has settled one yet —
     /// the dock's and the collection pin's lookup (GEN-3): by
     /// SESSION, never by date and never by the viewed place.
-    static func sessionEntry(from entries: [WearIveRunEntry], sessionID: String) -> WearIveRunEntry? {
-        guard !sessionID.isEmpty else { return nil }
-        return entries.first { $0.sessionID == sessionID }
+    ///
+    /// GEN-5 (RW-29 FA-36): the LEGACY fallback. An entry
+    /// written by a pre-session build carries no session
+    /// identity; on the first launch after upgrade the session
+    /// owns nothing yet, and build 25's pure session key left
+    /// today's legacy entry invisible to both the pin and the
+    /// dock until a new settle created a SECOND entry for the
+    /// same day. The lookup now falls back to a legacy entry
+    /// dated today; the session's first settle at the same
+    /// day+place supersedes it (see the collection model's
+    /// recordSettled).
+    static func sessionEntry(
+        from entries: [WearIveRunEntry],
+        sessionID: String,
+        today: Date = Date(),
+        calendar: Calendar = .current
+    ) -> WearIveRunEntry? {
+        if !sessionID.isEmpty, let owned = entries.first(where: { $0.sessionID == sessionID }) {
+            return owned
+        }
+        return entries.first {
+            $0.sessionID.isEmpty && calendar.isDate($0.dayStart, inSameDayAs: today)
+        }
     }
 
     /// Chapters for a filter: entries are filtered FIRST, then
@@ -577,6 +768,26 @@ enum WearIveRunDateFormatting {
     }
 }
 
+// MARK: - Tolerant array decoding (GEN-5, RW-29 FA-14)
+
+/// Record-by-record decoding for the UserDefaults-backed
+/// stores: the payload is split into its elements and each is
+/// decoded on its own, so one malformed record drops itself
+/// and only itself. A payload that is not a JSON array at all
+/// still reads as empty.
+enum TolerantArrayDecoding {
+    static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> [T] {
+        guard let raw = try? JSONSerialization.jsonObject(with: data),
+              let array = raw as? [Any] else { return [] }
+        return array.compactMap { element in
+            guard let elementData = try? JSONSerialization.data(withJSONObject: element) else {
+                return nil
+            }
+            return try? JSONDecoder().decode(T.self, from: elementData)
+        }
+    }
+}
+
 // MARK: - Collection persistence
 
 /// UserDefaults-backed store for the collection. The entry list is
@@ -591,11 +802,13 @@ final class WearIveRunStore {
     }
 
     var entries: [WearIveRunEntry] {
-        guard let data = defaults.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([WearIveRunEntry].self, from: data) else {
-            return []
-        }
-        return decoded
+        guard let data = defaults.data(forKey: key) else { return [] }
+        // GEN-5 (RW-29 FA-14): decode RECORD BY RECORD — build
+        // 25 decoded the whole array atomically, so one
+        // malformed record discarded the user's entire run
+        // history silently. A malformed record now drops only
+        // itself; its neighbours survive.
+        return TolerantArrayDecoding.decode(WearIveRunEntry.self, from: data)
     }
 
     /// Record a settled entry (automatic at the session's first
@@ -604,6 +817,21 @@ final class WearIveRunStore {
     /// which is the session for session entries).
     func record(_ entry: WearIveRunEntry) {
         save(WearIveRunCollection.upserting(entries, entry))
+    }
+
+    /// GEN-5 (RW-29 FA-36): remove the LEGACY twin of a
+    /// session's first settle — a pre-session entry for the
+    /// same day at the same place. A legacy entry at a
+    /// DIFFERENT place is the user's history and is never
+    /// touched by a settle elsewhere.
+    func removeLegacyTwin(of entry: WearIveRunEntry, calendar: Calendar = .current) {
+        let survivors = entries.filter { candidate in
+            !(candidate.sessionID.isEmpty
+                && candidate.id != entry.id
+                && candidate.placeKey == entry.placeKey
+                && calendar.isDate(candidate.dayStart, inSameDayAs: entry.dayStart))
+        }
+        if survivors.count != entries.count { save(survivors) }
     }
 
     /// The mini bar's trash: remove today's entry at a place.
@@ -759,11 +987,10 @@ final class RecentLocationsStore {
     }
 
     var recents: [RecentLocation] {
-        guard let data = defaults.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([RecentLocation].self, from: data) else {
-            return []
-        }
-        return decoded
+        guard let data = defaults.data(forKey: key) else { return [] }
+        // GEN-5 (RW-29 FA-14): per-record tolerant decoding, as
+        // in the collection store above.
+        return TolerantArrayDecoding.decode(RecentLocation.self, from: data)
     }
 
     func record(_ selection: RecentLocation) {
