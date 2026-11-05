@@ -651,9 +651,11 @@ private struct FirstLookView: View {
 
     /// Frame 34 — the first-look moment. The primary door is the
     /// run's clothing answer ("See My Outfit"), and the ONE soft
-    /// ask is the quiet second door ("See Premium") — once, never
-    /// a modal again. The band carries the two benefit concepts
-    /// in the §9 recommended pair, verbatim.
+    /// ask is the quiet second door ("Upgrade to Premium" —
+    /// GEN-3 first-look ruling, Nov 4: replaces "See Premium" on
+    /// THIS surface only) — once, never a modal again. The band
+    /// carries the two benefit concepts in the §9 recommended
+    /// pair, verbatim.
     ///
     /// GEN-2 I2 (W-16/W-18): the moment is STATEFUL, and every
     /// line it shows is gated on FirstLookPresentation. While the
@@ -763,6 +765,18 @@ private struct FirstLookView: View {
                 .offset(y: firstLookBandRevealed ? 0 : 12)
                 }
 
+                // GEN-3 FIRST-LOOK RULING 1 (Sol, Nov 4): the
+                // generating screen is NEVER a gate. This door is
+                // deliberately UNCONDITIONAL — no phase check, no
+                // disabled state — so it is visible and tappable
+                // at ALL times, including the whole making phase.
+                // Leaving mid-generation completes onboarding;
+                // generation continues in the background (the
+                // store's polling owns it, not this screen), and
+                // home's hero carries the state via the generating
+                // pill over the fallback photo until the look
+                // lands and swaps in. Waiting is the user's
+                // choice, never a requirement.
                 Button(action: onComplete) {
                     Text("See My Outfit")
                         .font(.system(size: 17, weight: .semibold))
@@ -776,11 +790,15 @@ private struct FirstLookView: View {
                 // so it too waits for the ready phase (W-16).
                 // Dismissing the ask IS continuing; this screen
                 // never returns as a modal.
+                // GEN-3 FIRST-LOOK RULING 2 (Sol, Nov 4): the
+                // finished surface's CTA reads "Upgrade to
+                // Premium" (replacing "See Premium") — this
+                // surface only; no other surface's wording moves.
                 if firstLookPresentation.showsPremiumBand {
                     Button {
                         showPremiumSheet = true
                     } label: {
-                        Text("See Premium")
+                        Text("Upgrade to Premium")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(AppTheme.inkSecondary)
                             .frame(maxWidth: .infinity)

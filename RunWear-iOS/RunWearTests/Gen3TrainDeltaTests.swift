@@ -69,4 +69,53 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertFalse(sheetBlock.contains(".medium"),
                        "Y-16: no medium rest the user must expand")
     }
+
+    // MARK: - First-look rulings · the generating screen is never a gate
+
+    func testFirstLookWayForwardIsUnconditional_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        let momentIdx = try XCTUnwrap(onboarding.range(of: "private var firstLookMomentView"))
+        let moment = onboarding[momentIdx.lowerBound...]
+        let doorIdx = try XCTUnwrap(moment.range(of: "Text(\"See My Outfit\")"))
+        // The door's button opens directly on onComplete and is
+        // not wrapped in any phase condition: the characters
+        // immediately before it are the ruling's own comment and
+        // the button declaration — no `if`, no `.disabled`.
+        let before = moment[moment.startIndex..<doorIdx.lowerBound].suffix(500)
+        XCTAssertTrue(before.hasSuffix("Button(action: onComplete) {\n                    "),
+                      "the way forward is a plain onComplete button, present in every phase")
+        XCTAssertFalse(before.contains(".disabled"),
+                       "the way forward is never disabled")
+        // …and the premium door (which IS phase-gated) is a
+        // different button, after it.
+        let premiumIdx = try XCTUnwrap(moment.range(of: "Text(\"Upgrade to Premium\")"))
+        XCTAssertTrue(doorIdx.lowerBound < premiumIdx.lowerBound)
+    }
+
+    func testLeavingMidGenerationLandsOnTheGeneratingPill() {
+        // The home landing state after leaving frame 34
+        // mid-generation: the shared store still reports the
+        // requested cell as making, no personal photo is on
+        // screen yet, and the hero pill resolves to .making —
+        // the generating pill over the fallback photo.
+        XCTAssertEqual(
+            .making,
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+                             isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
+            "leaving mid-generation must land on home with the generating pill active")
+    }
+
+    // MARK: - First-look rulings · finished CTA wording
+
+    func testFinishedCTAReadsUpgradeToPremium_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("Text(\"Upgrade to Premium\")"),
+                      "the first-look finished surface's CTA is 'Upgrade to Premium'")
+        XCTAssertFalse(onboarding.contains("Text(\"See Premium\")"),
+                       "'See Premium' is gone from the first-look surface")
+        // Scope: Settings' approved wording does not move.
+        let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(settings.contains("Text(\"Get Premium\")"),
+                      "Settings' 'Get Premium' is approved as mocked and stays")
+    }
 }
