@@ -420,21 +420,90 @@ enum ShareKitCardModel {
 
     static let disclosure = "As an Amazon Associate, RunWear earns from qualifying purchases."
 
+    // MARK: Grid layout — one geometry for view and verifier
+    //
+    // Large squares must FIT the canvas: at 360 pt wide a
+    // two-column grid of width-sized tiles plus name/note/shop
+    // labels overflows the 4:5 canvas from the second row on.
+    // The layout therefore computes the tile side from the
+    // canvas height, the row count, and the label block — and
+    // if the side would fall below the legibility floor, the
+    // NOTES yield (the design's yield rule, applied to the
+    // tight canvas) and the side is recomputed. KitCardView
+    // renders exactly this geometry; the verifier samples
+    // exactly these centres.
+
+    struct KitGridLayout: Equatable {
+        var tileSide: CGFloat
+        var showsNotes: Bool
+        var labelHeight: CGFloat
+        var rowPitch: CGFloat
+    }
+
+    /// Measured against KitCardView's real stack: header block
+    /// (24 pt script + title + weather line + grid spacing)
+    /// ≈ 84 pt below the top padding; the label block under a
+    /// tile is name (25) + note (16) + Shop › (19) = 60 with
+    /// notes, 44 without.
+    static let kitHeaderHeight: CGFloat = 84
+    static let kitFooterHeight: CGFloat = 44
+    static let kitVerticalPadding: CGFloat = 28
+    static let kitRowSpacing: CGFloat = 10
+    static let kitMaxTileSide: CGFloat = 148
+    static let kitMinTileSide: CGFloat = 44
+
+    /// The most garments a canvas can carry with name + Shop ›
+    /// labels and the foot intact — canvas geometry, not a
+    /// design preference: Square fits two rows, Feed three,
+    /// Stories four. The Studio's card (and its verifier
+    /// samples) cap at this; the caption's four headline
+    /// garments are unaffected.
+    static func maxItems(for format: ShareExportFormat) -> Int {
+        switch format {
+        case .feed: return 6
+        case .square: return 4
+        case .stories: return 8
+        }
+    }
+    /// Below this side the notes yield and the side recomputes.
+    static let kitNotesYieldBelow: CGFloat = 64
+
+    static func gridLayout(format: ShareExportFormat, itemCount: Int) -> KitGridLayout {
+        let rows = max(1, (max(1, itemCount) + 1) / 2)
+        let canvasHeight = format.canvasPointSize.height
+        func side(showsNotes: Bool) -> CGFloat {
+            let label: CGFloat = showsNotes ? 60 : 44
+            let available = canvasHeight - kitVerticalPadding - kitHeaderHeight - kitFooterHeight
+                - CGFloat(rows - 1) * kitRowSpacing - CGFloat(rows) * label
+            return available / CGFloat(rows)
+        }
+        var notes = showsNotes(format: format, itemCount: itemCount)
+        var tile = side(showsNotes: notes)
+        if tile < kitNotesYieldBelow && notes {
+            notes = false
+            tile = side(showsNotes: false)
+        }
+        let label: CGFloat = notes ? 60 : 44
+        let clamped = min(kitMaxTileSide, max(kitMinTileSide, tile))
+        return KitGridLayout(
+            tileSide: clamped, showsNotes: notes,
+            labelHeight: label, rowPitch: clamped + label + kitRowSpacing)
+    }
+
     /// Canvas-fraction centres of the grid's tiles, for the
-    /// raster verifier's per-tile samples. The grid geometry
-    /// mirrors KitCardView's layout: 20 pt side padding, two
-    /// columns, tiles starting below the header block.
+    /// raster verifier's per-tile samples — the same geometry
+    /// KitCardView renders.
     static func tileSamplePoints(format: ShareExportFormat, itemCount: Int) -> [CGPoint] {
         guard itemCount > 0 else { return [] }
         let canvas = format.canvasPointSize
-        let headerHeight: CGFloat = format == .stories ? 150 : 118
-        let tileSide: CGFloat = (canvas.width - 40 - 12) / 2
-        let rowPitch: CGFloat = tileSide + 52
+        let layout = gridLayout(format: format, itemCount: itemCount)
+        let columnWidth = (canvas.width - 40 - 12) / 2
+        let top = kitVerticalPadding / 2 + kitHeaderHeight
         return (0..<itemCount).map { index in
             let column = index % 2
             let row = index / 2
-            let x = 20 + tileSide / 2 + CGFloat(column) * (tileSide + 12)
-            let y = headerHeight + tileSide / 2 + CGFloat(row) * rowPitch
+            let x = 20 + columnWidth / 2 + CGFloat(column) * (columnWidth + 12)
+            let y = top + layout.tileSide / 2 + CGFloat(row) * layout.rowPitch
             return CGPoint(x: x / canvas.width, y: y / canvas.height)
         }
     }

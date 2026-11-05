@@ -614,8 +614,9 @@ struct WearIveRunDayView: View {
     /// state until retry or removal (RW-31 §7.2).
     private func renderKitImage(format: ShareExportFormat) async -> UIImage? {
         let thumbnails = await loadKitThumbnails()
-        let included = ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
+        let included = Array(ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
             .filter { !excludedKitKeys.contains($0.key) }
+            .prefix(ShareKitCardModel.maxItems(for: format)))
         let missing = included.filter { thumbnails[$0.key] == nil }
         await MainActor.run {
             exportContext.missingKitGarments = missing.map { MissingKitGarment(name: $0.name, key: $0.key) }
@@ -1082,8 +1083,9 @@ struct ShareStudioView: View {
         if selectedKind == .poster {
             points = [exportContext.posterAnchorCanvasPoint].compactMap { $0 }
         } else {
-            let count = ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
+            let uncapped = ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
                 .filter { !excludedKitKeys.contains($0.key) }.count
+            let count = min(uncapped, ShareKitCardModel.maxItems(for: format))
             points = ShareKitCardModel.tileSamplePoints(format: format, itemCount: count)
         }
         let verdict = ShareRasterVerifier.verify(image: image, format: format, samplePoints: points)
@@ -1351,9 +1353,13 @@ struct KitCardView: View {
     let genderPreference: GenderPreference
 
     private var canvas: CGSize { format.canvasPointSize }
-    private var showsNotes: Bool {
-        ShareKitCardModel.showsNotes(format: format, itemCount: items.count)
+    private var layout: ShareKitCardModel.KitGridLayout {
+        ShareKitCardModel.gridLayout(format: format, itemCount: items.count)
     }
+
+    /// Effective note visibility — the design rule plus the
+    /// layout's yield under canvas pressure.
+    private var showsNotes: Bool { layout.showsNotes }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1373,7 +1379,7 @@ struct KitCardView: View {
                     .foregroundColor(AppTheme.textSecondary)
             }
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 14) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: ShareKitCardModel.kitRowSpacing) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     VStack(spacing: 0) {
                         ZStack {
@@ -1386,7 +1392,7 @@ struct KitCardView: View {
                                     .padding(8)
                             }
                         }
-                        .aspectRatio(1, contentMode: .fit)
+                        .frame(width: layout.tileSide, height: layout.tileSide)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         Text(item.name)
                             .font(.system(size: 14, weight: .semibold))
@@ -1424,7 +1430,8 @@ struct KitCardView: View {
                 .font(.system(size: 9.5))
                 .foregroundColor(AppTheme.textSecondary)
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
         .background(AppTheme.cardBackground)
     }

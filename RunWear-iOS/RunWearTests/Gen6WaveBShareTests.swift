@@ -517,6 +517,32 @@ final class Gen6WaveBShareTests: XCTestCase {
                        "on Stories a tall kit drops its notes first — names stand alone")
     }
 
+    func testKitCard_gridLayout_fitsEveryCanvas_andYieldsNotesUnderPressure() {
+        // The effective layout: notes survive where geometry
+        // allows (Feed at 3 items; Square at 2), and yield on
+        // the Square canvas at 3 items, where two rows of
+        // width-class tiles plus full label blocks physically
+        // exceed 360 pt of height. Tiles stay inside the
+        // canvas on every format and count.
+        XCTAssertTrue(ShareKitCardModel.gridLayout(format: .feed, itemCount: 3).showsNotes)
+        XCTAssertTrue(ShareKitCardModel.gridLayout(format: .square, itemCount: 2).showsNotes)
+        XCTAssertFalse(ShareKitCardModel.gridLayout(format: .square, itemCount: 3).showsNotes,
+                       "Square yields notes at 3 items — the design's yield rule under real geometry")
+        for format in ShareExportFormat.allCases {
+            for count in 1...ShareKitCardModel.maxItems(for: format) {
+                let layout = ShareKitCardModel.gridLayout(format: format, itemCount: count)
+                let rows = CGFloat((count + 1) / 2)
+                let totalHeight = ShareKitCardModel.kitVerticalPadding
+                    + ShareKitCardModel.kitHeaderHeight + ShareKitCardModel.kitFooterHeight
+                    + rows * layout.tileSide + rows * layout.labelHeight
+                    + (rows - 1) * ShareKitCardModel.kitRowSpacing
+                XCTAssertLessThanOrEqual(totalHeight, format.canvasPointSize.height + 6,
+                                         "\(format) with \(count) items must fit its canvas")
+                XCTAssertGreaterThanOrEqual(layout.tileSide, 44)
+            }
+        }
+    }
+
     func testKitCard_weatherLineAndDisclosure_exact() {
         XCTAssertEqual(
             ShareKitCardModel.weatherLine(feelsDegrees: 88, condition: "Sunny", place: "Miami, FL", posterMoment: "This morning"),
@@ -527,8 +553,9 @@ final class Gen6WaveBShareTests: XCTestCase {
 
     func testKitCard_tileSamplePoints_coverEveryTileInsideTheCanvas() {
         for format in ShareExportFormat.allCases {
-            let points = ShareKitCardModel.tileSamplePoints(format: format, itemCount: 5)
-            XCTAssertEqual(points.count, 5, "\(format)")
+            let count = min(5, ShareKitCardModel.maxItems(for: format))
+            let points = ShareKitCardModel.tileSamplePoints(format: format, itemCount: count)
+            XCTAssertEqual(points.count, count, "\(format)")
             for point in points {
                 XCTAssertTrue(point.x > 0 && point.x < 1 && point.y > 0 && point.y < 1,
                               "\(format): sample \(point) lies inside the canvas")
