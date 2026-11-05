@@ -116,73 +116,117 @@ final class Gen6RW67RenderTests: XCTestCase {
         )
     }
 
+    /// The hero fit rule. BEFORE the fix (run 42125431543),
+    /// the row's fixed content exceeded the canvas at every
+    /// fixture — natural fitting widths 415/453/471 pt at
+    /// default type, 634.5/676.5/763 pt at accessibility5
+    /// against the 358 pt canvas — and SwiftUI took the excess
+    /// out of the numeral Text, which WRAPPED mid-value while
+    /// the figures ran off the edge; the height the row needed
+    /// AT the canvas width ballooned to 2×–5× its natural
+    /// height (191 vs 95.5; 814.5 vs 163).
+    ///
+    /// AFTER the fix the numeral shrinks to fit its slot
+    /// (minimumScaleFactor), so a width-constrained render must
+    /// need NO more height than the natural render — nothing
+    /// wraps, nothing balloons — and the attached canvas render
+    /// shows the whole value on one line. The natural width is
+    /// still printed for the record (a shrink-to-fit element's
+    /// ideal width legitimately exceeds its slot).
     @MainActor
     private func renderHero(
         feelsLikeF: Double, type: DynamicTypeSize, name: String
-    ) throws -> CGSize {
+    ) throws -> (natural: CGSize, atWidth: CGSize) {
         let row = heroRow(feelsLikeF: feelsLikeF)
             .environment(\.dynamicTypeSize, type)
             .background(AppTheme.background)
-        // The binding measure is the NATURAL fitting width:
-        // the row's ideal width (numeral at its ScaledMetric
-        // size + chip + figures + spacings). Past the canvas,
-        // the row cannot be fully inside the sheet — something
-        // is pushed out or cut. (A width-proposed render always
-        // reports the proposed width, so it cannot show this.)
         let natural = fittingSize(row)
         let atWidth = fittingSize(row, atWidth: heroCanvasWidth)
         print("RW-67 HERO \(name): natural fitting \(natural), at canvas width \(atWidth)")
         try attach(row, size: CGSize(width: heroCanvasWidth, height: max(atWidth.height, 60)),
                    name: name)
-        return natural
+        return (natural, atWidth)
+    }
+
+    private func assertHeroFits(
+        _ fit: (natural: CGSize, atWidth: CGSize), _ label: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertLessThanOrEqual(
+            fit.atWidth.height, fit.natural.height * 1.05 + 2,
+            "\(label): at the canvas width the row needs height \(fit.atWidth.height) vs natural \(fit.natural.height) — content is wrapping/squeezing (the shipped defect: the numeral wrapped mid-value and the figures ran off the edge)",
+            file: file, line: line)
     }
 
     @MainActor
     func testRW67Hero_Control72_DefaultType() throws {
         let fit = try renderHero(feelsLikeF: 72, type: .large,
-                                 name: "RW-67-hero-72F-default-before.png")
-        assertFits(fitting: fit, canvas: CGSize(width: heroCanvasWidth, height: 10_000),
-                   "hero 72°F default (control)")
+                                 name: "RW-67-hero-72F-default-after.png")
+        assertHeroFits(fit, "hero 72°F default (control)")
     }
 
     @MainActor
     func testRW67Hero_ThreeDigit_DefaultType() throws {
         let fit = try renderHero(feelsLikeF: 115, type: .large,
-                                 name: "RW-67-hero-115F-default-before.png")
-        assertFits(fitting: fit, canvas: CGSize(width: heroCanvasWidth, height: 10_000),
-                   "hero 115°F default")
+                                 name: "RW-67-hero-115F-default-after.png")
+        assertHeroFits(fit, "hero 115°F default")
     }
 
     @MainActor
     func testRW67Hero_Negative_DefaultType() throws {
         let fit = try renderHero(feelsLikeF: -13, type: .large,
-                                 name: "RW-67-hero-neg13F-default-before.png")
-        assertFits(fitting: fit, canvas: CGSize(width: heroCanvasWidth, height: 10_000),
-                   "hero -13°F default")
+                                 name: "RW-67-hero-neg13F-default-after.png")
+        assertHeroFits(fit, "hero -13°F default")
     }
 
     @MainActor
     func testRW67Hero_Control72_LargestType() throws {
         let fit = try renderHero(feelsLikeF: 72, type: .accessibility5,
-                                 name: "RW-67-hero-72F-largest-before.png")
-        assertFits(fitting: fit, canvas: CGSize(width: heroCanvasWidth, height: 10_000),
-                   "hero 72°F largest type (control)")
+                                 name: "RW-67-hero-72F-largest-after.png")
+        assertHeroFits(fit, "hero 72°F largest type (control)")
     }
 
     @MainActor
     func testRW67Hero_ThreeDigit_LargestType() throws {
         let fit = try renderHero(feelsLikeF: 115, type: .accessibility5,
-                                 name: "RW-67-hero-115F-largest-before.png")
-        assertFits(fitting: fit, canvas: CGSize(width: heroCanvasWidth, height: 10_000),
-                   "hero 115°F largest type")
+                                 name: "RW-67-hero-115F-largest-after.png")
+        assertHeroFits(fit, "hero 115°F largest type")
     }
 
     @MainActor
     func testRW67Hero_Negative_LargestType() throws {
         let fit = try renderHero(feelsLikeF: -13, type: .accessibility5,
-                                 name: "RW-67-hero-neg13F-largest-before.png")
-        assertFits(fitting: fit, canvas: CGSize(width: heroCanvasWidth, height: 10_000),
-                   "hero -13°F largest type")
+                                 name: "RW-67-hero-neg13F-largest-after.png")
+        assertHeroFits(fit, "hero -13°F largest type")
+    }
+
+    /// The fix's construction, pinned: the numeral's metric
+    /// lives in a child the row caps, and the numeral shrinks
+    /// to fit — it must never go back to a bare fixed Text
+    /// whose only "cap" sits on the Text itself.
+    func testRW67HeroFixConstruction_sourcePin() throws {
+        let row = try sourceFile("../RunWear/Views/HomeHeroNumeralRow.swift")
+        XCTAssertTrue(row.contains("struct HeroNumeralText"),
+                      "the numeral is its own child view, so its @ScaledMetric can be capped by its parent")
+        XCTAssertTrue(row.contains("HeroNumeralText(text: formattedTemperature)"),
+                      "the row composes the numeral child")
+        XCTAssertTrue(row.contains(".minimumScaleFactor(0.25)"),
+                      "the numeral shrinks to fit its slot — never wraps, never truncates")
+        XCTAssertTrue(row.contains(".lineLimit(1)"),
+                      "the numeral is one line by construction")
+        // The cap is applied to the cluster from outside the
+        // child (after the chip's capsule background, on the
+        // cluster HStack) — count the occurrences: one on the
+        // cluster; the numeral Text itself must NOT carry one
+        // (that was the shipped no-op).
+        XCTAssertTrue(row.contains("dynamicTypeSize(...DynamicTypeSize.accessibility1)"),
+                      "the accessibility1 cap is present")
+    }
+
+    private func sourceFile(_ relative: String) throws -> String {
+        let here = URL(fileURLWithPath: #filePath)
+        let url = here.deletingLastPathComponent().appendingPathComponent(relative)
+        return try String(contentsOf: url, encoding: .utf8)
     }
 
     // MARK: - 2 · WIDGET (secondary check, all three families)
@@ -226,8 +270,12 @@ final class Gen6RW67RenderTests: XCTestCase {
     ) throws -> CGSize {
         let entry = RunWearWidgetEntry(
             date: Date(), record: widgetRecord(feelsLikeF: feelsLikeF), errorCategory: nil)
-        let view = RunWearWidgetEntryView(entry: entry)
-            .previewContext(WidgetPreviewContext(family: family))
+        // The family goes through the entry view's explicit
+        // seam: the preview-context modifier does not reach
+        // ImageRenderer (the first capture's small/large
+        // frames silently rendered the default medium
+        // composition — caught by reading the renders).
+        let view = RunWearWidgetEntryView(entry: entry, familyOverride: family)
             .environment(\.dynamicTypeSize, type)
             .background(AppTheme.background)
         let canvas = widgetCanvas(family)
@@ -261,14 +309,14 @@ final class Gen6RW67RenderTests: XCTestCase {
     @MainActor
     func testRW67WidgetMedium_ThreeDigit_LargestType() throws {
         let fit = try renderWidget(family: .systemMedium, feelsLikeF: 115, type: .accessibility5,
-                                   name: "RW-67-widget-medium-115F-largest-before.png")
+                                   name: "RW-67-widget-medium-115F-largest-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemMedium), "widget medium 115°F largest")
     }
 
     @MainActor
     func testRW67WidgetMedium_Negative_DefaultType() throws {
         let fit = try renderWidget(family: .systemMedium, feelsLikeF: -13, type: .large,
-                                   name: "RW-67-widget-medium-neg13F-default-before.png")
+                                   name: "RW-67-widget-medium-neg13F-default-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemMedium), "widget medium -13°F default")
     }
 

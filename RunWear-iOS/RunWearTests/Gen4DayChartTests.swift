@@ -471,7 +471,11 @@ final class Gen4DayChartTests: XCTestCase {
     func testHomeSurfaces_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertTrue(view.contains("headlineLocationLine"), "the headline moment is the second entry")
-        XCTAssertTrue(view.contains("heroWeatherFigures"), "the right-justified figures beside the numeral")
+        // GEN-6 (RW-67): the figures moved with the numeral row
+        // into HomeHeroNumeralRow — pinned at their new home;
+        // the header composes that row.
+        XCTAssertTrue(view.contains("HomeHeroNumeralRow("), "the header composes the extracted numeral row")
+        XCTAssertTrue(try sourceFile("../RunWear/Views/HomeHeroNumeralRow.swift").contains("heroWeatherFigures"), "the right-justified figures beside the numeral")
         XCTAssertTrue(view.contains("DayChartBandView("), "the glance band below the outfit")
         XCTAssertTrue(view.contains("applyTimePickerCommit"), "Confirm lands through the one apply path")
         XCTAssertFalse(view.contains("WeatherPillsRow("), "the pills row is retired from home")

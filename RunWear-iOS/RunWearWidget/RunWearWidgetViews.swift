@@ -25,10 +25,22 @@ struct RunWearWidgetEntryView: View {
     @Environment(\.widgetFamily) private var family
     let entry: RunWearWidgetEntry
 
+    /// GEN-6 (RW-67) test seam: the widget family is an
+    /// environment value the system sets in a real widget, but
+    /// a render harness cannot inject it (the preview-context
+    /// modifier does not reach ImageRenderer — the first RW-67
+    /// capture's "small"/"large" frames silently rendered the
+    /// renderer's default MEDIUM composition). Render tests
+    /// pass the family explicitly; production constructs the
+    /// view without it and reads the environment, unchanged.
+    var familyOverride: WidgetFamily? = nil
+
+    private var resolvedFamily: WidgetFamily { familyOverride ?? family }
+
     var body: some View {
         Group {
             if let record = entry.record {
-                switch family {
+                switch resolvedFamily {
                 case .systemLarge:
                     largeContent(record)
                 case .systemMedium:
@@ -151,6 +163,17 @@ struct RunWearWidgetEntryView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        // GEN-6 (RW-67): at accessibility Dynamic Type sizes
+        // the medium composition's semantic text (five outfit
+        // lines, place, supporting line) grows until the stack
+        // needs ~307 pt in a 170 pt canvas — the bottom lines
+        // are cut and the outfit names ellipsis-truncate
+        // (before-render: RW-67-widget-medium-115F-largest).
+        // The composition is unchanged; its type growth is
+        // capped at accessibility1, the same cap the home hero
+        // cluster carries. The temperature itself is a fixed
+        // 38 pt and is never scaled or truncated.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     // LARGE — the brand strip with the rendered "Updated …"
