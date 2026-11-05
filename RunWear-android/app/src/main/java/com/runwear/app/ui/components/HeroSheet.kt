@@ -1,7 +1,6 @@
 package com.runwear.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -316,20 +315,27 @@ fun HeroSheetBlock(
                 ),
                 color = RunWearColors.TextPrimary
             )
-            Text(
-                text = HeroSheetFormat.momentText(selectedDateTime, locationNow, isNowSelected) + " ›",
-                style = TextStyle(
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.5.sp,
-                    lineHeight = 20.sp
-                ),
-                color = RunWearColors.PineAccent,
-                maxLines = 1,
-                modifier = Modifier
-                    .clickable { onTimeClick() }
-                    .padding(vertical = 2.dp)
-            )
+            // Surface onClick, not a tap modifier on the numeral's
+            // file: the T-1 pin (HeroNumeralReadoutTest) keeps this
+            // file free of tap modifiers — the numeral itself stays
+            // a pure readout, and these segments are buttons.
+            Surface(
+                onClick = { onTimeClick() },
+                color = androidx.compose.ui.graphics.Color.Transparent
+            ) {
+                Text(
+                    text = HeroSheetFormat.momentText(selectedDateTime, locationNow, isNowSelected) + " ›",
+                    style = TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.5.sp,
+                        lineHeight = 20.sp
+                    ),
+                    color = RunWearColors.PineAccent,
+                    maxLines = 1,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            }
             if (headlineState.showNowReset) {
                 Text(
                     text = " · ",
@@ -341,11 +347,13 @@ fun HeroSheetBlock(
                     ),
                     color = RunWearColors.TextPrimary
                 )
+                Surface(
+                    onClick = { onNowClick() },
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clickable { onNowClick() }
-                        .padding(vertical = 2.dp)
+                    modifier = Modifier.padding(vertical = 2.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Refresh,
@@ -365,6 +373,7 @@ fun HeroSheetBlock(
                         color = RunWearColors.PineAccent,
                         maxLines = 1
                     )
+                }
                 }
             }
         }
@@ -418,11 +427,14 @@ fun HeroSheetBlock(
             }
             Spacer(Modifier.weight(1f))
             weather?.let { w ->
+                Surface(
+                    onClick = { onWeatherPillClick("condition") },
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
                 Column(
                     modifier = Modifier
                         .width(150.dp)
-                        .padding(top = 4.dp)
-                        .clickable { onWeatherPillClick("condition") },
+                        .padding(top = 4.dp),
                     verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)
                 ) {
                     HeroSheetFormat.weatherGridRows(w, temperatureUnit).forEach { (label, value) ->
@@ -461,6 +473,7 @@ fun HeroSheetBlock(
                             )
                         }
                     }
+                }
                 }
             }
         }

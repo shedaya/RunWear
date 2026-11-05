@@ -68,7 +68,24 @@ class SheetDisciplinePinTest {
             states,
             occurrences(sheets, "rememberModalBottomSheetState(skipPartiallyExpanded = true)")
         )
-        assertTrue("BottomSheets must actually contain sheets", states >= 6)
+        // GEN-4: the time sheet moved out of BottomSheets into
+        // DayChartTimePicker.kt (the chart sheet) — BottomSheets now
+        // holds 5 sheets; the moved sheet is pinned by the next test.
+        assertTrue("BottomSheets must actually contain sheets", states >= 5)
+    }
+
+    @Test
+    fun `the GEN-4 chart sheet state is single-anchor`() {
+        val sheet = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/DayChartTimePicker.kt"
+        ).readText()
+        val states = occurrences(sheet, "rememberModalBottomSheetState(")
+        assertEquals(1, states)
+        assertEquals(
+            "the chart sheet must pass skipPartiallyExpanded = true",
+            states,
+            occurrences(sheet, "rememberModalBottomSheetState(skipPartiallyExpanded = true)")
+        )
     }
 
     @Test
@@ -97,6 +114,7 @@ class SheetDisciplinePinTest {
             .parentFile?.parentFile // java/com/runwear/app -> walk via known files below
         val files = listOf(
             "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt",
+            "app/src/main/java/com/runwear/app/ui/screens/DayChartTimePicker.kt",
             "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt",
             "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt"
         )
@@ -159,7 +177,11 @@ class SheetDisciplinePinTest {
     @Test
     fun `every sheet dismisses through onDismissRequest`() {
         for ((path, min) in listOf(
-            "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt" to 6,
+            // GEN-4: BottomSheets drops to 5 — the time sheet moved
+            // to DayChartTimePicker.kt, pinned in its own row here so
+            // the total sheet census is unchanged.
+            "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt" to 5,
+            "app/src/main/java/com/runwear/app/ui/screens/DayChartTimePicker.kt" to 1,
             "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt" to 2,
             "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt" to 1
         )) {
