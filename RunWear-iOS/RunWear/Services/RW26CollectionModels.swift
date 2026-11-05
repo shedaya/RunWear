@@ -245,6 +245,22 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// TODAY card's "Last saved …" element. Legacy payloads decode
     /// it as the entry's day.
     let lastSavedAt: Date
+    /// GEN-6 (RW-31 Wave B): the day's wind at settle time (mph),
+    /// for the poster's Tier 4 micro-line. Optional and decoded
+    /// null-safely — entries recorded before Wave B carry nil and
+    /// the poster composes without a fabricated wind figure.
+    let windMph: Double?
+    /// GEN-6 (RW-31 Wave B): the day's actual-temperature low /
+    /// high (Fahrenheit), for the Swing caption. Optional,
+    /// null-safe like `windMph`.
+    let dayLowF: Double?
+    let dayHighF: Double?
+    /// GEN-6 (RW-31 §4.3): the hero photograph's stored face
+    /// anchor, when generation/pool metadata exposes one.
+    /// Optional and null-safe; nil anchors resolve at render
+    /// time (Vision detection, then the default composition
+    /// point) — see ShareStudioModels.
+    let faceAnchor: ShareFaceAnchor?
 
     init(
         dayStart: Date,
@@ -259,7 +275,11 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         wasUpdatedInSession: Bool = false,
         momentReading: MomentReading = .now,
         updatePayload: NarrationPayload? = nil,
-        lastSavedAt: Date? = nil
+        lastSavedAt: Date? = nil,
+        windMph: Double? = nil,
+        dayLowF: Double? = nil,
+        dayHighF: Double? = nil,
+        faceAnchor: ShareFaceAnchor? = nil
     ) {
         self.dayStart = dayStart
         self.placeName = placeName
@@ -274,6 +294,10 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         self.momentReading = momentReading
         self.updatePayload = updatePayload
         self.lastSavedAt = lastSavedAt ?? dayStart
+        self.windMph = windMph
+        self.dayLowF = dayLowF
+        self.dayHighF = dayHighF
+        self.faceAnchor = faceAnchor
     }
 
     /// A copy of this entry carrying the given narration flag —
@@ -294,7 +318,9 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
             heroImageReference: heroImageReference,
             sessionID: sessionID, wasUpdatedInSession: wasUpdated,
             momentReading: momentReading, updatePayload: payload,
-            lastSavedAt: lastSavedAt
+            lastSavedAt: lastSavedAt,
+            windMph: windMph, dayLowF: dayLowF, dayHighF: dayHighF,
+            faceAnchor: faceAnchor
         )
     }
 
@@ -303,6 +329,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         case itemNames, itemKeys, heroImageReference, sessionID
         case wasUpdatedInSession
         case momentReading, updatePayload, lastSavedAt
+        case windMph, dayLowF, dayHighF, faceAnchor
     }
 
     /// Legacy-tolerant decoding: a payload written before the
@@ -352,6 +379,13 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
             updatePayload = nil
         }
         lastSavedAt = try container.decodeIfPresent(Date.self, forKey: .lastSavedAt) ?? dayStart
+        // GEN-6 (RW-31 Wave B): the share fields are null-safe —
+        // a payload written before they existed decodes them as
+        // nil rather than failing the load.
+        windMph = try container.decodeIfPresent(Double.self, forKey: .windMph)
+        dayLowF = try container.decodeIfPresent(Double.self, forKey: .dayLowF)
+        dayHighF = try container.decodeIfPresent(Double.self, forKey: .dayHighF)
+        faceAnchor = try container.decodeIfPresent(ShareFaceAnchor.self, forKey: .faceAnchor)
     }
 
     /// The entry's place as a SimplePlace (WS-4 / RC-4): the
