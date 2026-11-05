@@ -63,6 +63,7 @@ final class Gen4LocationNowTests: XCTestCase {
         return vm
     }
 
+    @MainActor
     private func selectedComponents(_ vm: WeatherViewModel) -> (Int, Int, Int) {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: vm.selectedDate)
         return (c.year!, c.month!, c.day!)
