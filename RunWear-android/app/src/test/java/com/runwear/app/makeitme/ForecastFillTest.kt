@@ -126,7 +126,7 @@ class ForecastFillTest {
     }
 
     @Test
-    fun `gate check 2 - an off-matrix cell is not in the fill; the substrate is`() {
+    fun `gate check 2 - an off-matrix cell is not in the fill and the substrate is`() {
         // HOT x RAIN x DUSK is off-matrix and (in winter) off-
         // forecast: no fill job banks it, so its serve must come
         // from the own-photo scaffold path (get-personal-hero,

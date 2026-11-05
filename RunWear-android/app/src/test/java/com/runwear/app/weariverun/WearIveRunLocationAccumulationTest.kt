@@ -88,17 +88,19 @@ class WearIveRunLocationAccumulationTest {
         // day counts count DISTINCT dates. New York: 5 entries over
         // 4 distinct days -> 4 stays; the Nov 2 stay holds both
         // sessions. Miami: 3 entries over 2 distinct days -> 2 stays.
-        assertEquals(4, ny.days.size)
+        assertEquals(4, ny.stays.size)
         assertEquals(4, ny.totalDaysUnfiltered)
         assertEquals(
             2,
-            ny.days.single { it.date == LocalDate.of(2026, 11, 2) }.days.size
+            ny.stays.single { it.start == LocalDate.of(2026, 11, 2) }.days.size
         )
-        assertEquals(2, mi.days.size)
+        assertEquals(5, ny.days.size)
+        assertEquals(2, mi.stays.size)
         assertEquals(
             2,
-            mi.days.single { it.date == LocalDate.of(2026, 11, 3) }.days.size
+            mi.stays.single { it.start == LocalDate.of(2026, 11, 3) }.days.size
         )
+        assertEquals(3, mi.days.size)
         assertTrue(mi.days.any { it.date == LocalDate.of(2025, 12, 25) })
         assertEquals(1, op.days.size)
     }
