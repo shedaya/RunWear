@@ -388,6 +388,15 @@ class WeatherViewModel: ObservableObject {
             )
         )
         restoredManualLocation = location
+        // GEN-6 (RW-42 / DA-09): the fetch is in flight from
+        // THIS instant — the same instant the place is named —
+        // not from whenever the Task below happens to start.
+        // Home's recording seam reads isLoading to refuse a
+        // settle assembled from the outgoing place's weather
+        // under this place's name; that refusal is only sound
+        // if there is no window where the new place is named
+        // while no fetch is yet marked in flight.
+        isLoading = true
         Task {
             await fetchWeather(for: location)
         }

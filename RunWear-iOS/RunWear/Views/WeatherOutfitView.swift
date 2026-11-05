@@ -348,6 +348,19 @@ struct WeatherOutfitView: View {
         .onChange(of: viewModel.selectedWeatherSnapshot?.feelsLikeFahrenheit) { _, _ in
             recordTodaysEntry()
         }
+        // GEN-6 (RW-42 / DA-09): the fetch-completion re-offer.
+        // While a fetch is in flight the recording gate refuses
+        // every trigger (a place can be named before its weather
+        // lands — see recordTodaysEntry); when the fetch lands,
+        // THIS trigger records the one solved selection — place,
+        // weather, kit, and hero from the same fetch — so a
+        // narrated update and the card it announces are a single
+        // settle, never a stale intermediate.
+        .onChange(of: viewModel.isLoading) { _, isLoading in
+            if !isLoading {
+                recordTodaysEntry()
+            }
+        }
         .sheet(isPresented: $showCollection) {
             NavigationStack {
                 WearIveRunCollectionView(
@@ -983,6 +996,20 @@ struct WeatherOutfitView: View {
         // session model's other side, not an accident.
         guard viewModel.isViewingLocationNow else { return }
         guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
+        // GEN-6 (RW-42 / DA-09): never record while a fetch is
+        // in flight. A manual place switch names the new place
+        // synchronously (setManualLocation) and fetches its
+        // weather asynchronously — so the place trigger used to
+        // file the OUTGOING place's feels-like, kit, and hero
+        // under the INCOMING place's name, classify it a place
+        // update, and ANNOUNCE it ("Update to Miami, FL, Now")
+        // while the expanded card still showed that stale
+        // outfit — matching neither adjacent recommendation,
+        // exactly the recording's bar/card split. The
+        // isLoading re-offer below records the settle once the
+        // fetch has landed, from the one solved selection, so
+        // the announced state and the card are the same entry.
+        guard !viewModel.isLoading else { return }
         // W-15: never record under a placeholder. Until the
         // reverse geocode (or a manual selection) derives a
         // SimplePlace, `placeDisplayName` is a non-place label
