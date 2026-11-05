@@ -1141,6 +1141,16 @@ struct WeatherOutfitView: View {
                 MakeItMeUpsellCard(currentCell: cell.combinationId)
             }
         }
+
+        // GEN-3 convergence band: below the outfit items (this
+        // section renders under the outfit in both home layouts),
+        // visible only while a subscribed user's bank is genuinely
+        // converging — ConvergenceBand carries the settled copy
+        // and the rule; the store carries the real counts.
+        if let band = ConvergenceBand.content(mode: personalStore.mode, coverage: personalStore.bankCoverage) {
+            ConvergenceBandView(content: band)
+                .padding(.top, 12)
+        }
     }
 
     // MARK: - Outfit Section

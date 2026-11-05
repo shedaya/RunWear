@@ -105,6 +105,62 @@ final class Gen3TrainDeltaTests: XCTestCase {
             "leaving mid-generation must land on home with the generating pill active")
     }
 
+    // MARK: - Convergence band · settled copy, real counts, spinner
+
+    func testConvergenceBandCopyIsSolSettledWordingVerbatim() {
+        XCTAssertEqual(ConvergenceBand.heading, "Making your looks")
+        XCTAssertEqual(ConvergenceBand.line,
+                       "We're generating your outfits across all running conditions, so it will be ready when you need it.")
+        // Plain-words progress with the real counts substituted —
+        // the pattern from Sol's settled wording, never a bare
+        // fraction and never "N of M ready".
+        XCTAssertEqual(ConvergenceBand.progressText(ready: 14, total: 24),
+                       "14 of your 24 looks are ready")
+        XCTAssertEqual(ConvergenceBand.progressText(ready: 0, total: 48),
+                       "0 of your 48 looks are ready")
+    }
+
+    func testConvergenceCoverageDerivation() {
+        // ready = banked set; total = banked ∪ ever-enqueued.
+        let cov = deriveBankCoverage(heroCells: ["a", "b"], jobCells: ["b", "c", "d"])
+        XCTAssertEqual(cov.ready, 2)
+        XCTAssertEqual(cov.total, 4)
+        // Before any fill: the union is just the banked set.
+        let preFill = deriveBankCoverage(heroCells: ["a"], jobCells: [])
+        XCTAssertEqual(preFill.ready, preFill.total)
+    }
+
+    func testConvergenceBandVisibilityRule() {
+        let partial = BankCoverage(ready: 14, total: 24)
+        let content = ConvergenceBand.content(mode: .subscribed, coverage: partial)
+        XCTAssertEqual(content?.heading, "Making your looks")
+        XCTAssertEqual(content?.progressText, "14 of your 24 looks are ready")
+        XCTAssertEqual(content?.fraction ?? -1, 14.0 / 24.0, accuracy: 0.0001)
+        // Complete bank → no band.
+        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 24, total: 24)))
+        // Unknown counts → no band (never an invented number).
+        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: nil))
+        // Not subscribed → no band.
+        XCTAssertNil(ConvergenceBand.content(mode: .free, coverage: partial))
+        XCTAssertNil(ConvergenceBand.content(mode: .stock, coverage: partial))
+        // Empty engagement → no band.
+        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 0, total: 0)))
+    }
+
+    func testConvergenceBandRendersWithThePillSpinner_sourcePin() throws {
+        let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(views.contains("struct ConvergenceBandView"),
+                      "the band's view exists")
+        XCTAssertTrue(views.contains("ProgressView()\n                    .controlSize(.mini)"),
+                      "ROUND 2: the band carries the generating pill's spinner device (ProgressView, mini)")
+        XCTAssertTrue(views.contains("ProgressView(value: content.fraction)"),
+                      "the band carries the simple progress bar")
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(home.contains("ConvergenceBand.content(mode: personalStore.mode, coverage: personalStore.bankCoverage)"),
+                      "the band is seated in the personal section from the store's real counts")
+        XCTAssertTrue(home.contains("ConvergenceBandView(content: band)"))
+    }
+
     // MARK: - First-look rulings · finished CTA wording
 
     func testFinishedCTAReadsUpgradeToPremium_sourcePin() throws {

@@ -861,6 +861,65 @@ enum HeroPill {
     }
 }
 
+// MARK: - Convergence band (GEN-3, Sol's settled wording Nov 4)
+
+/// The user's real bank coverage: `ready` = distinct cells with
+/// a verified banked hero (personal_heroes); `total` = distinct
+/// cells the server has engaged — banked heroes ∪ generation
+/// jobs of any status (personal_generation_jobs). The fill
+/// enqueues the whole missing matrix at once, so once a fill has
+/// run the union IS the fill set; before any fill it is just the
+/// banked set (ready == total, band hidden).
+struct BankCoverage: Equatable {
+    let ready: Int
+    let total: Int
+}
+
+/// Coverage from the two owner-read cell sets — ready is the
+/// banked set itself; total is every cell the server has engaged
+/// (banked ∪ ever-enqueued). Pure, so the band's counts are
+/// unit-pinned without a network.
+func deriveBankCoverage(heroCells: Set<String>, jobCells: Set<String>) -> BankCoverage {
+    BankCoverage(ready: heroCells.count, total: heroCells.union(jobCells).count)
+}
+
+struct ConvergenceBandContent: Equatable {
+    let heading: String
+    let line: String
+    let progressText: String
+    let fraction: Double
+}
+
+/// The convergence band's copy and visibility rule. The wording
+/// is Sol's settled copy (Nov 4), word for word — do not
+/// paraphrase. Progress is phrased in plain words with the REAL
+/// counts: "14 of your 24 looks are ready" — never a bare
+/// fraction, never "14 of 24 ready".
+///
+/// The band exists only while convergence is genuinely in
+/// progress: subscribed mode, a successful coverage read, and
+/// ready < total. When the bank is complete (or counts are
+/// unknown) there is no band — never an invented number.
+enum ConvergenceBand {
+    static let heading = "Making your looks"
+    static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
+
+    static func progressText(ready: Int, total: Int) -> String {
+        "\(ready) of your \(total) looks are ready"
+    }
+
+    static func content(mode: PersonalHeroStore.Mode, coverage: BankCoverage?) -> ConvergenceBandContent? {
+        guard mode == .subscribed, let coverage else { return nil }
+        guard coverage.total > 0, coverage.ready < coverage.total else { return nil }
+        return ConvergenceBandContent(
+            heading: heading,
+            line: line,
+            progressText: progressText(ready: coverage.ready, total: coverage.total),
+            fraction: Double(coverage.ready) / Double(coverage.total)
+        )
+    }
+}
+
 // MARK: - Upsell eligibility (spec §5)
 //
 // The 6th-cell card shows only when ALL of these hold: the user is on

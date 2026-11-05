@@ -158,6 +158,26 @@ actor PersonalHeroAPI {
         return rows.first
     }
 
+    /// GEN-3 (convergence band): the caller's REAL bank coverage,
+    /// from the two owner-read tables (personal_heroes ∪
+    /// personal_generation_jobs, by combination_id). Nil when
+    /// there is no session or either read fails — the band never
+    /// shows invented counts.
+    func fetchBankCoverage() async -> BankCoverage? {
+        guard let session = try? await requireSession() else { return nil }
+        func cells(table: String) async -> Set<String>? {
+            let path = "/rest/v1/\(table)?select=combination_id&user_id=eq.\(session.userId)"
+            guard let data = try? await authedGet(path: path, session: session) else { return nil }
+            struct Row: Decodable { let combinationId: String
+                enum CodingKeys: String, CodingKey { case combinationId = "combination_id" } }
+            guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+            return Set(rows.map { $0.combinationId })
+        }
+        guard let heroCells = await cells(table: "personal_heroes"),
+              let jobCells = await cells(table: "personal_generation_jobs") else { return nil }
+        return deriveBankCoverage(heroCells: heroCells, jobCells: jobCells)
+    }
+
     func fetchReferencePaths() async throws -> [String] {
         let session = try await requireSession()
         let path = "/rest/v1/personal_reference_photos?select=storage_path&user_id=eq.\(session.userId)&order=position.asc"

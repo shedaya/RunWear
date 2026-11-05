@@ -54,6 +54,10 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// Bumped whenever a new personalized hero lands, so views can
     /// react (the view model does the actual swap via awaitHero).
     @Published private(set) var landedHeroVersion = 0
+    /// GEN-3 (convergence band): the caller's real bank coverage
+    /// (ready/total), read with the profile refresh. Nil until a
+    /// read succeeds — the band shows only real counts.
+    @Published private(set) var bankCoverage: BankCoverage?
 
     let billing = MakeItMeBilling()
 
@@ -135,6 +139,12 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         if profile.personalizationOn {
             if mode == .stock { mode = billing.isSubscribed ? .subscribed : .free }
             referenceCount = (try? await api.fetchReferencePaths())?.count ?? referenceCount
+            // GEN-3 (convergence band): the coverage read rides
+            // the same refresh; a failed read leaves the previous
+            // value in place.
+            if let coverage = await api.fetchBankCoverage() {
+                bankCoverage = coverage
+            }
         } else if mode != .stock {
             mode = .stock
         }
@@ -443,6 +453,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         exhaustedCell = nil
         freeGenerationsUsed = 0
         referenceCount = 0
+        bankCoverage = nil
         mode = .stock
     }
 

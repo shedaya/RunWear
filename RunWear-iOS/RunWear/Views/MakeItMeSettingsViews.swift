@@ -621,3 +621,49 @@ struct MakeItMeUpsellCard: View {
         }
     }
 }
+
+// MARK: - Convergence band (GEN-3, Sol's settled wording Nov 4)
+
+/// The home-sheet band a SUBSCRIBED user sees while the bank of
+/// looks is still converging — seated in the personal section,
+/// below the outfit items, in the upsell card's sheet language.
+/// Copy is Sol's settled wording, word for word (ConvergenceBand
+/// carries the strings + the visibility rule). GEN-3 ROUND 2:
+/// the band carries the SAME animated spinner as the generating
+/// hero pill — the band represents active generation and visibly
+/// says so.
+struct ConvergenceBandView: View {
+    let content: ConvergenceBandContent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                // The generating hero pill's spinner (ProgressView,
+                // mini), in the sheet's pine — same device, sheet
+                // seat.
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(AppTheme.pinePayload)
+                Text(content.heading)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(AppTheme.inkPrimary)
+            }
+            Text(content.line)
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.inkSecondary)
+            ProgressView(value: content.fraction)
+                .progressViewStyle(.linear)
+                .tint(AppTheme.pinePayload)
+                .padding(.top, 6)
+            Text(content.progressText)
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.inkPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardOnSheet))
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(content.heading). \(content.line) \(content.progressText)")
+    }
+}
