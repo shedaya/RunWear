@@ -329,4 +329,37 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertFalse(home.contains("stock photo for now"),
                        "the failed label is never badged on home — it lives in the library")
     }
+
+    // MARK: - RW-63: the settled weather sheet
+
+    func testRW63SheetCarriesAllSevenMetricsWithHomeNumbers() throws {
+        XCTAssertEqual(WeatherMetricKind.allCases,
+                       [.feelsLike, .actual, .condition, .wind, .humidity, .uvIndex, .precipitation])
+        XCTAssertEqual(WeatherDetailType.feelsLike(value: "52°").summaryValue, "52°")
+        XCTAssertEqual(WeatherDetailType.actual(value: "55°").title, "Actual")
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(home.contains(".feelsLike(value: viewModel.temperatureUnit.format(viewModel.currentFeelsLike))"),
+                      "feels-like carries the home state's number, in its own formatting")
+        XCTAssertTrue(home.contains(".actual(value: viewModel.temperatureUnit.format(viewModel.currentTemperature))"),
+                      "actual carries the home state's number, unchanged")
+        let sheet = try sourceFile("../RunWear/Views/Modals/WeatherDetailSheet.swift")
+        // Context lines render in the compact (phone) layout:
+        // they appear in pickerLayout as well as the sidebar.
+        XCTAssertGreaterThanOrEqual(sheet.components(separatedBy: "ForEach(contextLines, id: \\.self)").count - 1, 2,
+                                    "context lines render in both layouts")
+        XCTAssertTrue(sheet.contains("Text(\"Running Tip\")"), "the Running tip line stands")
+    }
+
+    // MARK: - RW-64: shop doors + disclosure
+
+    func testRW64ShopSheetDoorsAndDisclosure_sourcePins() throws {
+        let shop = try sourceFile("../RunWear/Views/Modals/ShopModal.swift")
+        XCTAssertTrue(shop.contains("Text(\"Shop ›\")"), "the settled per-row door")
+        XCTAssertTrue(shop.contains("These links open Amazon."), "disclosure: links open Amazon")
+        XCTAssertTrue(shop.contains("RunWear may earn a commission"), "disclosure: commission")
+        XCTAssertTrue(shop.contains("It never changes the outfit we recommend."),
+                      "disclosure: the commission never changes the recommendation")
+        XCTAssertFalse(shop.contains("we may earn a small commission"),
+                       "the old partial disclosure must not return")
+    }
 }

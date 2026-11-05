@@ -1065,11 +1065,16 @@ struct WeatherOutfitView: View {
         }
     }
 
-    /// The five metric details the detail sheet tabs between —
-    /// the same values the pills below present.
+    /// The settled metric details the detail sheet tabs between
+    /// (GEN-6 RW-63; frames 40/41, §3.3): feels-like and actual
+    /// first — carrying the home state's numbers unchanged, in
+    /// the home state's own formatting — then condition, wind,
+    /// humidity, UV, and precipitation where carried.
     private var allWeatherDetails: [WeatherDetailType] {
         let snapshot = viewModel.selectedWeatherSnapshot
         return [
+            .feelsLike(value: viewModel.temperatureUnit.format(viewModel.currentFeelsLike)),
+            .actual(value: viewModel.temperatureUnit.format(viewModel.currentTemperature)),
             .condition(viewModel.currentCondition),
             .wind(
                 speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
@@ -1077,8 +1082,8 @@ struct WeatherOutfitView: View {
                 gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
             ),
             .humidity(percentage: snapshot?.humidity ?? 50),
-            .precipitation(percentage: snapshot?.precipitationProbability ?? 0),
-            .uvIndex(value: snapshot?.uvIndex ?? 0)
+            .uvIndex(value: snapshot?.uvIndex ?? 0),
+            .precipitation(percentage: snapshot?.precipitationProbability ?? 0)
         ]
     }
 
