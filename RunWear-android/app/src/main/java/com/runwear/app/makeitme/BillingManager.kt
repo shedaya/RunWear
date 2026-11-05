@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.awaitRestore
 import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.Purchases
