@@ -258,9 +258,9 @@ final class Gen4HeroFallbackTests: XCTestCase {
         XCTAssertEqual(8, HeroFallbackChain.garmentScore(requested: mittens, candidate: bare))
     }
 
-    // MARK: - Defect family 1: mittens → same-gender gloves (exact under the ruling; balaclava form scaffolds)
+    // MARK: - Defect family 1: mittens → same-gender gloves, exact under the ruling (both forms)
 
-    func testMittensPrescription_beanieFormExactServesSameGenderGloves_balaclavaFormScaffolds() {
+    func testMittensPrescription_exactServesSameGenderGloves_beanieAndBalaclavaForms() {
         for gender in [HeroGender.FEMALE, .MALE] {
             let suffix = gender == .FEMALE ? "female" : "male"
             // Sub-15°F: thermal + shell + thermal tights + beanie + MITTENS.
@@ -284,21 +284,21 @@ final class Gen4HeroFallbackTests: XCTestCase {
             XCTAssertEqual(res?.candidate.signature.hands, "gloves",
                            "under the substitution ruling a gloved photo of the same gender exact-serves a mittens prescription")
             XCTAssertEqual(res?.bundledAssetName, "cold_clear_\(suffix)")
-            // Balaclava + mittens (sub-5°F): NO bundled candidate
-            // wears a balaclava, so no gloves candidate matches the
-            // head slot and the amendment cannot exact-serve this
-            // form from the bundle — it still scaffolds to the
-            // nearest same-gender gloves photo, as before. (The
-            // replenishment top-up's balaclava+gloves rows are live
-            // pool stock: when one is in the live candidate set it
-            // exact-serves this form through the pool tier under
-            // the same ruling.)
+            // Balaclava + mittens (sub-5°F): the replenishment
+            // TOP-UP batch (RWPOOL-T27/T28, integrated on this
+            // train) bundled balaclava+gloves pg_* assets, so this
+            // form ALSO exact-serves under the ruling — the
+            // balaclava+gloves asset of the same gender, whose
+            // other slots all match. (Before the top-up landed, no
+            // bundled candidate wore a balaclava and this form
+            // scaffolded to freezing_clear; that pin is superseded
+            // by the top-up integration, not weakened.)
             let balaclava = outfit(top: "LONG_SLEEVE_THERMAL", outer: "INSULATED_JACKET", bottom: "THERMAL_TIGHTS", head: "BALACLAVA", hands: "MITTENS")
             let res2 = resolve(balaclava, bracket: .FREEZING, gender: gender, reachable: true)
-            XCTAssertEqual(res2?.tier, .scaffold)
+            XCTAssertEqual(res2?.tier, .exact)
             XCTAssertEqual(res2?.candidate.signature.hands, "gloves")
             XCTAssertEqual(res2?.candidate.gender, gender)
-            XCTAssertEqual(res2?.bundledAssetName, "freezing_clear_\(suffix)")
+            XCTAssertEqual(res2?.bundledAssetName, "pg_\(suffix)_long_o1_tights_balaclava_gloves")
         }
     }
 
@@ -453,11 +453,11 @@ final class Gen4HeroFallbackTests: XCTestCase {
     func testBundledFloorCompleteness_all50SignaturesPoolEmpty() {
         XCTAssertEqual(25, censusSignatures.count)
         // The bundled candidate set itself: paired for every
-        // gender × bracket family. GEN-4 TRAIN UPDATE: 64 —
-        // the 44 matrix assets plus the replenishment's 20
-        // point-grain assets.
+        // gender × bracket family. GEN-4 TRAIN UPDATE: 66 —
+        // the 44 matrix assets plus the replenishment's 22
+        // point-grain assets (20 main refill + 2 top-up).
         let bundled = FallbackImageProvider.bundledCandidates
-        XCTAssertEqual(64, bundled.count)
+        XCTAssertEqual(66, bundled.count)
         for gender in [HeroGender.FEMALE, .MALE] {
             for bracket in HeroTempBracket.allCases {
                 XCTAssertTrue(

@@ -2,9 +2,10 @@ import XCTest
 import Foundation
 
 /// GEN-4 train integration (2026-11-04): the pool replenishment's
-/// 20 bundled point-grain assets (RWPOOL-T07…T26) — the offline
-/// floor for 20 of the 26 GEN-3 census signatures the 44-asset
-/// matrix cannot serve. Each asset was rendered from the
+/// 22 bundled point-grain assets (RWPOOL-T07…T28 — the main
+/// refill's 20 plus the top-up batch's 2 balaclava+gloves assets)
+/// — the offline floor for 22 of the 26 GEN-3 census signatures
+/// the 44-asset matrix cannot serve. Each asset was rendered from the
 /// replenishment's own newly approved pool row and
 /// pixel-verified against it (bundled-pg/manifest.json is the
 /// record of source). These pins prove, per asset:
@@ -45,7 +46,7 @@ final class Gen4BundledReplenishmentTests: XCTestCase {
         let sourceRow: String
     }
 
-    /// The replenishment manifest, in target order T07…T26.
+    /// The replenishment manifest, in target order T07…T28.
     private let rows: [Row] = [
         Row(target: "RWPOOL-T07", asset: "pg_female_long_o0_shorts_cap_none", gender: .FEMALE, top: "long", outer: false, bottom: "shorts", head: "cap", hands: "none", combination: "FEMALE_CLEAR_COOL_MIDDAY_01285eec", sourceRow: "72f29634-32a3-4382-9dbe-8705a1e1e9bc"),
         Row(target: "RWPOOL-T08", asset: "pg_female_long_o0_shorts_none_none", gender: .FEMALE, top: "long", outer: false, bottom: "shorts", head: "none", hands: "none", combination: "FEMALE_CLEAR_COOL_DAWN_726beba2", sourceRow: "92c54e8c-1e58-4d40-acd8-ace41fc00678"),
@@ -67,6 +68,8 @@ final class Gen4BundledReplenishmentTests: XCTestCase {
         Row(target: "RWPOOL-T24", asset: "pg_male_short_o1_shorts_visor_none", gender: .MALE, top: "short", outer: true, bottom: "shorts", head: "visor", hands: "none", combination: "MALE_RAIN_WARM_MIDDAY_f8d85d23", sourceRow: "f7dd3cc1-4dd0-4767-8cab-ac1599d2abe1"),
         Row(target: "RWPOOL-T25", asset: "pg_male_sleeveless_o0_shorts_visor_none", gender: .MALE, top: "sleeveless", outer: false, bottom: "shorts", head: "visor", hands: "none", combination: "MALE_CLEAR_HOT_MIDDAY_c9b28fa9", sourceRow: "9d4b71bb-28ef-4eb1-83e8-6f2761bdbbbd"),
         Row(target: "RWPOOL-T26", asset: "pg_male_sleeveless_o1_shorts_visor_none", gender: .MALE, top: "sleeveless", outer: true, bottom: "shorts", head: "visor", hands: "none", combination: "MALE_RAIN_HOT_MIDDAY_87d183b5", sourceRow: "3643f7ec-59a2-4904-8aec-d1297e426857"),
+        Row(target: "RWPOOL-T27", asset: "pg_female_long_o1_tights_balaclava_gloves", gender: .FEMALE, top: "long", outer: true, bottom: "tights", head: "balaclava", hands: "gloves", combination: "FEMALE_CLEAR_FREEZING_DAWN_d547a549", sourceRow: "aaca3068-e4f9-4e53-816e-65a55583e7dc"),
+        Row(target: "RWPOOL-T28", asset: "pg_male_long_o1_tights_balaclava_gloves", gender: .MALE, top: "long", outer: true, bottom: "tights", head: "balaclava", hands: "gloves", combination: "MALE_CLEAR_FREEZING_DAWN_d547a549", sourceRow: "42c4b9b0-0fc9-482d-a3a5-4cf797db55e8"),
     ]
 
     // MARK: - Builders (the Gen4HeroFallbackTests seam)
@@ -112,11 +115,11 @@ final class Gen4BundledReplenishmentTests: XCTestCase {
 
     // MARK: - Registration
 
-    func testAll20TargetsAreRegisteredWithManifestProvenance() {
-        XCTAssertEqual(20, rows.count)
-        XCTAssertEqual(20, FallbackImageProvider.pointGrainGarmentsByAsset.count)
-        XCTAssertEqual(20, FallbackImageProvider.pointGrainProvenanceByAsset.count)
-        XCTAssertEqual(20, FallbackImageProvider.pointGrainAssetsBySignature.count)
+    func testAll22TargetsAreRegisteredWithManifestProvenance() {
+        XCTAssertEqual(22, rows.count)
+        XCTAssertEqual(22, FallbackImageProvider.pointGrainGarmentsByAsset.count)
+        XCTAssertEqual(22, FallbackImageProvider.pointGrainProvenanceByAsset.count)
+        XCTAssertEqual(22, FallbackImageProvider.pointGrainAssetsBySignature.count)
         for row in rows {
             let garments = FallbackImageProvider.pointGrainGarmentsByAsset[row.asset]
             XCTAssertEqual(
@@ -146,8 +149,8 @@ final class Gen4BundledReplenishmentTests: XCTestCase {
                 "\(row.target) missing from the chain's bundled candidate set"
             )
         }
-        XCTAssertEqual(64, FallbackImageProvider.bundledCandidates.count,
-                       "44 matrix + 20 point-grain candidates")
+        XCTAssertEqual(66, FallbackImageProvider.bundledCandidates.count,
+                       "44 matrix + 22 point-grain candidates")
     }
 
     func testNoMittensAssetIsRegistered() {

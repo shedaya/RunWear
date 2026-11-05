@@ -439,9 +439,11 @@ struct FallbackImageProvider {
 // MARK: - GEN-4 replenishment point-grain assets (train, 2026-11-04)
 
     /// GEN-4 (pool replenishment, integrated on the GEN-4 train):
-    /// the point-grain (`pg_*`) bundled assets for 20 of the 26
+    /// the point-grain (`pg_*`) bundled assets for 22 of the 26
     /// GEN-3 census signatures the 44-asset matrix cannot serve
-    /// (targets RWPOOL-T07…T26). Each is rendered at the RW-20
+    /// (targets RWPOOL-T07…T28: the main refill's 20 plus the
+    /// top-up batch's 2 balaclava+gloves assets, RWPOOL-T27/T28).
+    /// Each is rendered at the RW-20
     /// standard from the replenishment's own newly approved pool
     /// row (live in the approved pool; the bundled copy is the
     /// offline floor for the same signature, per Sol's
@@ -460,9 +462,11 @@ struct FallbackImageProvider {
     /// substitution ruling (2026-11-04 ~22:23 CST) a mittens
     /// prescription can still exact-serve a GLOVES candidate
     /// (pool row or bundled asset) whose other slots all match,
-    /// through the shared gate; the mittens forms no gloves
-    /// candidate matches (the balaclava forms, in the bundled
-    /// set) serve scaffold/floor through the chain.
+    /// through the shared gate. The top-up batch (RWPOOL-T27/T28)
+    /// added balaclava+gloves pg_* assets, so the balaclava
+    /// mittens forms exact-serve from the bundle under the ruling
+    /// too; any mittens form no gloves candidate matches serves
+    /// scaffold/floor through the chain.
     static let pointGrainGarmentsByAsset: [String: BundledGarments] = [
         "pg_female_long_o0_shorts_cap_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: "cap", hands: nil),
         "pg_female_long_o0_shorts_none_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: nil, hands: nil),
@@ -484,6 +488,8 @@ struct FallbackImageProvider {
         "pg_male_short_o1_shorts_visor_none": BundledGarments(topBase: "short", outer: true, bottom: "shorts", head: "visor", hands: nil),
         "pg_male_sleeveless_o0_shorts_visor_none": BundledGarments(topBase: "sleeveless", outer: false, bottom: "shorts", head: "visor", hands: nil),
         "pg_male_sleeveless_o1_shorts_visor_none": BundledGarments(topBase: "sleeveless", outer: true, bottom: "shorts", head: "visor", hands: nil),
+        "pg_female_long_o1_tights_balaclava_gloves": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "balaclava", hands: "gloves"),
+        "pg_male_long_o1_tights_balaclava_gloves": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "balaclava", hands: "gloves"),
     ]
 
     /// Provenance of the point-grain assets, from the
@@ -511,6 +517,8 @@ struct FallbackImageProvider {
         "pg_male_short_o1_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_RAIN_WARM_MIDDAY_f8d85d23", sourceRowId: "f7dd3cc1-4dd0-4767-8cab-ac1599d2abe1", rung: "PG"),
         "pg_male_sleeveless_o0_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_HOT_MIDDAY_c9b28fa9", sourceRowId: "9d4b71bb-28ef-4eb1-83e8-6f2761bdbbbd", rung: "PG"),
         "pg_male_sleeveless_o1_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_RAIN_HOT_MIDDAY_87d183b5", sourceRowId: "3643f7ec-59a2-4904-8aec-d1297e426857", rung: "PG"),
+        "pg_female_long_o1_tights_balaclava_gloves": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_FREEZING_DAWN_d547a549", sourceRowId: "aaca3068-e4f9-4e53-816e-65a55583e7dc", rung: "PG"),
+        "pg_male_long_o1_tights_balaclava_gloves": FallbackAssetProvenance(combinationId: "MALE_CLEAR_FREEZING_DAWN_d547a549", sourceRowId: "42c4b9b0-0fc9-482d-a3a5-4cf797db55e8", rung: "PG"),
     ]
 
     /// (gender, gate signature) → point-grain asset, for the
@@ -542,6 +550,8 @@ struct FallbackImageProvider {
         "MALE|short|true|shorts|visor|none": "pg_male_short_o1_shorts_visor_none",
         "MALE|sleeveless|false|shorts|visor|none": "pg_male_sleeveless_o0_shorts_visor_none",
         "MALE|sleeveless|true|shorts|visor|none": "pg_male_sleeveless_o1_shorts_visor_none",
+        "FEMALE|long|true|tights|balaclava|gloves": "pg_female_long_o1_tights_balaclava_gloves",
+        "MALE|long|true|tights|balaclava|gloves": "pg_male_long_o1_tights_balaclava_gloves",
     ]
 
     /// The garment census of ANY bundled asset (matrix or
