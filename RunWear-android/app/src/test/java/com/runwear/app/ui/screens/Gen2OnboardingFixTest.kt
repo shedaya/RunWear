@@ -20,11 +20,17 @@ import org.junit.Test
  * dropdown — was an iOS rendering (its Fit Preference step stands
  * alone). Android's onboarding presents Fit Preference INSIDE the
  * grouped Step 1 of 2, alongside Temperature and Body temperature,
- * as a TokenSegmentedControl whose options ("Male" / "Female",
- * neither-selected = no preference) are directly visible and
- * tappable in place. No dropdown or menu exists anywhere in
- * Android's onboarding screen. These pins record that as-found
- * state so it cannot silently regress into a collapsed control.
+ * directly visible and tappable in place. No dropdown or menu
+ * exists anywhere in Android's onboarding screen. These pins record
+ * that so it cannot silently regress into a collapsed control.
+ *
+ * OPTION SET SUPERSEDED by Sol's onboarding ruling (Nov 4): the fit
+ * control now carries ALL THREE options explicitly — "Men's" /
+ * "Women's" / "No preference" (the design frame's dropped third
+ * option is not followed; the old toggle-to-deselect is gone on
+ * this screen). The direct-visibility principle above is unchanged
+ * and strengthened. Full composition pins live in
+ * OnboardingCombinedScreenTest.
  */
 class Gen2OnboardingFixTest {
 
@@ -92,7 +98,9 @@ class Gen2OnboardingFixTest {
         // with both options spelled out, not behind any collapsed
         // control.
         assertTrue(fitBlock.contains("TokenSegmentedControl"))
-        assertTrue(fitBlock.contains("\"Male\", \"Female\""))
+        assertTrue(fitBlock.contains("OnboardingCopy.FIT_OPTION_MENS"))
+        assertTrue(fitBlock.contains("OnboardingCopy.FIT_OPTION_WOMENS"))
+        assertTrue(fitBlock.contains("OnboardingCopy.FIT_OPTION_NO_PREFERENCE"))
         // The step is the GROUPED step: Temperature and Body
         // temperature sections share it (the iOS one-question-per-
         // screen structure that motivated W-22 is not Android's).

@@ -82,6 +82,17 @@ object OnboardingCopy {
     const val FIT_SUB = "Whose fit should the outfits follow?"
     const val BODY_TITLE = "Body temperature"
     const val BODY_SUB = "Do you get cold easily, or overheat quickly?"
+    // Combined-screen option fidelity (Sol's onboarding ruling,
+    // Nov 4): temperature in FULL WORDS, all three fit options
+    // (the design frame's dropped "No preference" is NOT followed),
+    // and the body-temperature slider's end labels.
+    const val TEMP_OPTION_FAHRENHEIT = "Fahrenheit"
+    const val TEMP_OPTION_CELSIUS = "Celsius"
+    const val FIT_OPTION_MENS = "Men's"
+    const val FIT_OPTION_WOMENS = "Women's"
+    const val FIT_OPTION_NO_PREFERENCE = "No preference"
+    const val BODY_SLIDER_MIN_LABEL = "Runs Cold"
+    const val BODY_SLIDER_MAX_LABEL = "Runs Warm"
     const val SETUP_CTA = "Continue"
 
     // ── Frame 30 · Location step ────────────────────────────────
@@ -100,6 +111,30 @@ object OnboardingCopy {
  */
 enum class OnboardingStep {
     PROMISE, PREFERENCES, LOCATION, FORK, CONSENT, CAPTURE, FIRST_LOOK
+}
+
+/**
+ * The body-temperature slider's five stops (Sol's onboarding ruling,
+ * Nov 4): the combined preferences screen carries a 5-stop slider
+ * whose ends read "Runs Cold" / "Runs Warm", mapping one-to-one onto
+ * the five [com.runwear.shared.domain.model.ComfortPreference]
+ * values — the previous 3-option segmented control collapsed the
+ * two end stops away.
+ */
+object ComfortStops {
+    val stops: List<com.runwear.shared.domain.model.ComfortPreference> = listOf(
+        com.runwear.shared.domain.model.ComfortPreference.RUNS_VERY_COLD,
+        com.runwear.shared.domain.model.ComfortPreference.RUNS_COLD,
+        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL,
+        com.runwear.shared.domain.model.ComfortPreference.RUNS_WARM,
+        com.runwear.shared.domain.model.ComfortPreference.RUNS_VERY_WARM
+    )
+
+    fun indexOf(preference: com.runwear.shared.domain.model.ComfortPreference): Int =
+        stops.indexOf(preference).coerceAtLeast(0)
+
+    fun at(index: Int): com.runwear.shared.domain.model.ComfortPreference =
+        stops[index.coerceIn(0, stops.lastIndex)]
 }
 
 /**

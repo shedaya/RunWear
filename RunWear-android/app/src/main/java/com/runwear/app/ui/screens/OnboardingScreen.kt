@@ -36,6 +36,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import kotlin.math.roundToInt
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -324,8 +327,12 @@ private fun PreferencesStep(
             title = OnboardingCopy.TEMP_TITLE,
             sublabel = OnboardingCopy.TEMP_SUB
         ) {
+            // Sol's onboarding ruling (Nov 4): full words, not symbols.
             TokenSegmentedControl(
-                options = listOf("°F", "°C"),
+                options = listOf(
+                    OnboardingCopy.TEMP_OPTION_FAHRENHEIT,
+                    OnboardingCopy.TEMP_OPTION_CELSIUS
+                ),
                 selectedIndex = if (temperatureUnit == TemperatureUnit.FAHRENHEIT) 0 else 1,
                 onSelect = { index ->
                     onTemperatureUnitChange(
@@ -341,19 +348,28 @@ private fun PreferencesStep(
             title = OnboardingCopy.FIT_TITLE,
             sublabel = OnboardingCopy.FIT_SUB
         ) {
+            // Sol's onboarding ruling (Nov 4): ALL THREE options are
+            // explicit — "No preference" is a real choice (the design
+            // frame's two-option version is not followed), replacing
+            // the old toggle-to-deselect behaviour on this screen.
             TokenSegmentedControl(
-                options = listOf("Male", "Female"),
+                options = listOf(
+                    OnboardingCopy.FIT_OPTION_MENS,
+                    OnboardingCopy.FIT_OPTION_WOMENS,
+                    OnboardingCopy.FIT_OPTION_NO_PREFERENCE
+                ),
                 selectedIndex = when (genderPreference) {
                     GenderPreference.MALE -> 0
                     GenderPreference.FEMALE -> 1
-                    GenderPreference.UNISEX -> -1 // Neither selected
+                    GenderPreference.UNISEX -> 2
                 },
                 onSelect = { index ->
-                    val tapped = if (index == 0) GenderPreference.MALE else GenderPreference.FEMALE
-                    // Toggle behavior (same as Settings GenderToggle):
-                    // tapping the selected option deselects it
                     onGenderPreferenceChange(
-                        if (genderPreference == tapped) GenderPreference.UNISEX else tapped
+                        when (index) {
+                            0 -> GenderPreference.MALE
+                            1 -> GenderPreference.FEMALE
+                            else -> GenderPreference.UNISEX
+                        }
                     )
                 }
             )
@@ -365,25 +381,38 @@ private fun PreferencesStep(
             title = OnboardingCopy.BODY_TITLE,
             sublabel = OnboardingCopy.BODY_SUB
         ) {
-            TokenSegmentedControl(
-                options = listOf("Get cold", "Neither", "Overheat"),
-                selectedIndex = when (comfortPreference) {
-                    ComfortPreference.RUNS_VERY_COLD,
-                    ComfortPreference.RUNS_COLD -> 0
-                    ComfortPreference.NEUTRAL -> 1
-                    ComfortPreference.RUNS_WARM,
-                    ComfortPreference.RUNS_VERY_WARM -> 2
-                },
-                onSelect = { index ->
-                    onComfortPreferenceChange(
-                        when (index) {
-                            0 -> ComfortPreference.RUNS_COLD
-                            2 -> ComfortPreference.RUNS_WARM
-                            else -> ComfortPreference.NEUTRAL
-                        }
+            // Sol's onboarding ruling (Nov 4): the 5-stop slider with
+            // named ends, replacing the 3-option segmented control
+            // that collapsed the two end stops away.
+            Column {
+                Slider(
+                    value = ComfortStops.indexOf(comfortPreference).toFloat(),
+                    onValueChange = { value ->
+                        onComfortPreferenceChange(ComfortStops.at(value.roundToInt()))
+                    },
+                    valueRange = 0f..(ComfortStops.stops.size - 1).toFloat(),
+                    steps = ComfortStops.stops.size - 2,
+                    colors = SliderDefaults.colors(
+                        thumbColor = RunWearColors.Primary,
+                        activeTrackColor = RunWearColors.Primary
+                    )
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        OnboardingCopy.BODY_SLIDER_MIN_LABEL,
+                        fontSize = 12.sp,
+                        color = RunWearColors.TextSecondary
+                    )
+                    Text(
+                        OnboardingCopy.BODY_SLIDER_MAX_LABEL,
+                        fontSize = 12.sp,
+                        color = RunWearColors.TextSecondary
                     )
                 }
-            )
+            }
         }
 
         Spacer(Modifier.height(24.dp))
