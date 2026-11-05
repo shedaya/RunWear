@@ -118,27 +118,53 @@ actor HeroImageService {
         }
 
         // Level 8: Bundled fallback — GEN-3 (WS-A(1)): with an
-        // outfit, the terminus is the POINT-GRAIN GATED bundled
-        // resolution (FallbackImageProvider.gatedAssetName — the
-        // same gate the pool obeys, over the adjudicated garment
-        // census of the 44 bundled assets). When no bundled asset
-        // matches the prescription there is NO truthful bundled
-        // photo for it: the result carries an empty URL and the
-        // painting layer resolves its own gated fallback (the
-        // phone view model paints the gated asset it resolved at
-        // commit; the designed gradient is the terminus, never a
-        // garment-mismatched photo — the W-4 defect). Without an
-        // outfit there is no prescription to judge against, so the
-        // legacy bracket resolution stands (RW-26: gender-aware).
+        // outfit, the terminus was the POINT-GRAIN GATED bundled
+        // resolution: when no bundled asset matched the
+        // prescription the result carried an empty URL and the
+        // hero painted its gradient.
+        //
+        // GEN-4 (hero-fallback lane, 2026-11-04): Sol ruled the
+        // gradient terminus out — the gate governs what a photo
+        // may CLAIM, not whether a photo paints. The terminus is
+        // now the GEN-4 fallback chain (HeroFallbackChain, in
+        // FallbackImageProvider.swift): EXACT (the gated pool /
+        // bundled serve, unchanged) → SCAFFOLD (nearest covered
+        // same-gender photo, from a live gender-wide pool read
+        // through this service's existing read path, then the
+        // bundled set) → BUNDLED FLOOR (the pool read failed:
+        // nearest bundled asset under the same metric). The
+        // chain resolves from the live candidate set at serve
+        // time, so refreshed exact stock wins automatically.
+        // Without an outfit there is no prescription to judge
+        // against, so the legacy bracket resolution stands
+        // (RW-26: gender-aware).
         if let outfit {
-            if let gated = fallbackProvider.getGatedFallbackResult(
+            // The scaffold tier's live pool consultation: one
+            // gender-wide read through the existing path (the
+            // cascade above has already missed exactly, so this
+            // read's rows are scaffold candidates, ranked by the
+            // metric). A throw marks the pool unreachable at
+            // this layer and the chain falls to its bundled
+            // floor — it does not fail the serve.
+            var scaffoldPool: [GeneratedImage] = []
+            var poolReachable = false
+            do {
+                scaffoldPool = try await supabase.fetchGeneratedImages(
+                    pattern: "\(combination.gender.rawValue)_%"
+                )
+                poolReachable = true
+            } catch {
+                poolReachable = false
+            }
+            if let resolution = fallbackProvider.chainResolution(
                 temp: combination.temp,
                 weather: combination.weather,
-                isWatch: isWatch,
                 gender: combination.gender,
-                outfit: outfit
-            ) {
-                return gated
+                outfit: outfit,
+                poolCandidates: scaffoldPool,
+                poolReachable: poolReachable
+            ), let chained = fallbackProvider.result(for: resolution) {
+                return chained
             }
             return HeroImageResult.fromBundledFallback(
                 url: "",

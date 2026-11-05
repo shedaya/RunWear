@@ -186,6 +186,7 @@
 		C10002000000000000000039 /* HeroPointGrainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000030 /* HeroPointGrainTests.swift */; };
 		C1000200000000000000003A /* HeroFallbackGenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000100000000000000003B /* HeroFallbackGenderTests.swift */; };
 		C10002000000000000000091 /* Gen3HeroServingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000091 /* Gen3HeroServingTests.swift */; };
+		G40002000000000000000001 /* Gen4HeroFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000001 /* Gen4HeroFallbackTests.swift */; };
 		C10002000000000000000095 /* Gen3TrainDeltaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000095 /* Gen3TrainDeltaTests.swift */; };
 		C10002000000000000000036 /* MakeItMePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000027 /* MakeItMePresentationTests.swift */; };
 		C10002000000000000000037 /* PhotoIntakeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000028 /* PhotoIntakeTests.swift */; };
@@ -390,6 +391,7 @@
 		C10001000000000000000030 /* HeroPointGrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroPointGrainTests.swift; sourceTree = "<group>"; };
 		C1000100000000000000003B /* HeroFallbackGenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroFallbackGenderTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000091 /* Gen3HeroServingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3HeroServingTests.swift; sourceTree = "<group>"; };
+		G40001000000000000000001 /* Gen4HeroFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4HeroFallbackTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000095 /* Gen3TrainDeltaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3TrainDeltaTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -635,6 +637,7 @@
 				C10001000000000000000032 /* GreatVibesFontTests.swift */,
 				C1000100000000000000003B /* HeroFallbackGenderTests.swift */,
 				C10001000000000000000091 /* Gen3HeroServingTests.swift */,
+				G40001000000000000000001 /* Gen4HeroFallbackTests.swift */,
 				C10001000000000000000095 /* Gen3TrainDeltaTests.swift */,
 				N10001000000000000000002 /* HeroFallbackProvenanceTests.swift */,
 				N10001000000000000000003 /* HeroServeTelemetryTests.swift */,
@@ -983,6 +986,7 @@
 				C10002000000000000000041 /* GreatVibesFontTests.swift in Sources */,
 				C1000200000000000000003A /* HeroFallbackGenderTests.swift in Sources */,
 				C10002000000000000000091 /* Gen3HeroServingTests.swift in Sources */,
+				G40002000000000000000001 /* Gen4HeroFallbackTests.swift in Sources */,
 				C10002000000000000000095 /* Gen3TrainDeltaTests.swift in Sources */,
 				N10002000000000000000002 /* HeroServeTelemetry.swift in Sources */,
 				N10002000000000000000003 /* HeroFallbackProvenanceTests.swift in Sources */,

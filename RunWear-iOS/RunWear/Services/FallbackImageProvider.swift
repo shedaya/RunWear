@@ -546,3 +546,492 @@ struct FallbackImageProvider {
         return getFallbackResult(temp: temp, weather: weather, isWatch: isWatch)
     }
 }
+
+// MARK: - GEN-4 fallback chain (hero-fallback lane, 2026-11-04)
+//
+// Sol's ruling (2026-11-04, ~20:08 CST): the stock hero must
+// NEVER settle on the bare gradient. The GEN-3 point-grain gate
+// is a CLAIM rule — it governs what a photo may claim to be —
+// and under it 26 of the 50 gendered gate signatures in the
+// GEN-3 servability census resolve to no photo at all (mittens
+// vocabulary = 0 pool rows; long-sleeve + shorts with bare
+// head/hands; warm-point tights combinations; male/sleeveless
+// visor), so those prescriptions painted the gradient. The
+// chain below is the serving rule that sits UNDER the claim
+// rule, at the same single resolution point GEN-3 built
+// (HeroImageService's cascade terminus + WeatherViewModel's
+// atomic commit, whose resolution feeds the hero, the Wear
+// I've Run records, the collection/poster thumbnails and the
+// onboarding fork band through alwaysAvailableHeroReference):
+//
+//   1. EXACT — a candidate whose adjudicated garments PASS the
+//      shared point-grain gate for the prescription's signature
+//      (pool rows first, then bundled assets; today's behaviour,
+//      via HeroPointGrainPolicy / bundledAssetMatches).
+//   2. SCAFFOLD — no exact candidate exists and a live pool
+//      consultation happened: the NEAREST covered photo under
+//      the metric below, pool candidates and bundled assets in
+//      one candidate set (pool wins a tie). Recorded/presented
+//      as a scaffold (HeroServeSource.scaffold + tier), never
+//      as the exact photo, on any surface.
+//   3. BUNDLED FLOOR — no live pool consultation was available
+//      at this layer (the pool fetch failed, or the synchronous
+//      pre-paint commit, which must paint before any pool
+//      answer exists): the nearest BUNDLED asset under the same
+//      metric. The bundled matrix is paired for every gender ×
+//      bracket family, so the floor exists for EVERY
+//      prescription group — the gradient is no longer a
+//      reachable stock-hero state while a prescription exists.
+//
+// CONVERGENCE: the resolution is computed from the LIVE
+// candidate set at serve time — there is no per-signature
+// scaffold table. When refreshed exact stock lands in the pool
+// (the WS-A distribution path), the same prescription's next
+// resolution finds it at tier 1 through the unchanged gate and
+// the scaffold/floor steps aside automatically.
+//
+// THE METRIC (deterministic nearest neighbour over the
+// signature/condition space; the Android GEN-4 lane's semantics
+// under the same constraints):
+//   * HARD FILTER — gender: a gendered request only ever
+//     considers candidates of that gender. NEVER crossed, at
+//     any tier (the GEN-3 gated bundled walk's opposite-gender
+//     pass is not used by this chain).
+//   * Distance is a lexicographic tuple, lower wins:
+//       (a) bracket distance — |index(candidate bracket) −
+//           index(requested bracket)| in FREEZING…HOT order.
+//           Temperature/bracket distance DOMINATES garment
+//           detail: any same-bracket photo outranks any
+//           other-bracket photo, however close its garments.
+//       (b) weather distance — 0 exact; 1 within the dry pair
+//           (CLEAR/CLOUDY) or within the precipitation pair
+//           (RAIN/SNOW); 2 across the pairs; 2 when the
+//           candidate's weather is unreadable.
+//       (c) garment score — weighted signature distance:
+//           bottom family mismatch 40 (shorts family
+//           {shorts, short_shorts} vs tights family
+//           {tights, capris} — the gate's families); top-base
+//           ordinal distance × 15 (sleeveless < short < long;
+//           an unreadable base under a shell counts 7 — the
+//           policy likewise does not treat it as a visible
+//           contradiction); outer present/absent mismatch 20;
+//           head: exact 0, both-worn-but-different 5,
+//           worn-vs-bare 10; hands: exact 0,
+//           gloves-vs-mittens 4 (hand coverage present, class
+//           wrong — the mittens family's nearest truth),
+//           covered-vs-bare 8.
+//   * Tie-breaks, in order: pool before bundled; then the
+//     candidate's deterministic key (combination id / asset
+//     name) ascending. Same inputs → same photo, every time.
+//
+// A pool row is a chain candidate only when it is servable
+// (approved), single-person (person_count < 2 when recorded),
+// carries adjudicated garment classes a signature can be read
+// from, and its combination id parses to a gender / weather /
+// bracket the metric can rank. A row that cannot be ranked
+// cannot scaffold — the bundled floor still covers the serve.
+
+/// The point-grain gate signature of a prescription or a photo:
+/// (top-base class, outer present, bottom family, head class,
+/// hands class) — the signature space the GEN-3 servability
+/// census enumerated (50 gendered signatures).
+struct HeroGarmentSignature: Equatable {
+    /// "sleeveless" / "short" / "long"; nil = base unreadable
+    /// (beneath a present shell, per the census convention).
+    let topBase: String?
+    let outer: Bool
+    /// "shorts" (shorts + short_shorts) or "tights" (tights +
+    /// capris) — the point-grain policy's bottom families.
+    let bottomFamily: String
+    /// "none" when no head gear is worn/prescribed.
+    let head: String
+    /// "none" when hands are bare.
+    let hands: String
+
+    static func bottomFamily(forBottomClass bottom: String?) -> String? {
+        switch bottom {
+        case "shorts", "short_shorts": return "shorts"
+        case "tights", "capris": return "tights"
+        default: return nil
+        }
+    }
+
+    /// The signature a prescription asks for. The key → class
+    /// mapping is the shared point-grain policy's own
+    /// (HeroPoolPolicy.kt): TANK_TOP→sleeveless,
+    /// SHORT_SLEEVE→short, else long; VISOR→visor,
+    /// BASEBALL_CAP→cap, HEADBAND→headband, beanies→beanie,
+    /// BALACLAVA→balaclava; LIGHT/THERMAL_GLOVES→gloves,
+    /// MITTENS→mittens.
+    static func prescribed(from outfit: OutfitRecommendation) -> HeroGarmentSignature {
+        let top: String
+        switch outfit.topBase.key {
+        case "TANK_TOP": top = "sleeveless"
+        case "SHORT_SLEEVE": top = "short"
+        default: top = "long"
+        }
+        let head: String
+        switch outfit.head?.key {
+        case "VISOR": head = "visor"
+        case "BASEBALL_CAP": head = "cap"
+        case "HEADBAND": head = "headband"
+        case "LIGHT_BEANIE", "THERMAL_BEANIE": head = "beanie"
+        case "BALACLAVA": head = "balaclava"
+        default: head = "none"
+        }
+        let hands: String
+        switch outfit.hands?.key {
+        case "LIGHT_GLOVES", "THERMAL_GLOVES": hands = "gloves"
+        case "MITTENS": hands = "mittens"
+        default: hands = "none"
+        }
+        let bottom = (outfit.bottom.key == "SHORTS" || outfit.bottom.key == "SHORT_SHORTS") ? "shorts" : "tights"
+        return HeroGarmentSignature(
+            topBase: top,
+            outer: outfit.topOuter != nil,
+            bottomFamily: bottom,
+            head: head,
+            hands: hands
+        )
+    }
+
+    /// The signature a pool row's adjudicated classes record, or
+    /// nil when no signature can be read (no classes, or an
+    /// unreadable bottom — the bottom is the most visible
+    /// garment; a photo whose bottom cannot be read cannot be
+    /// ranked honestly).
+    static func from(garmentClasses classes: GarmentClasses) -> HeroGarmentSignature? {
+        guard let family = bottomFamily(forBottomClass: classes.bottom) else { return nil }
+        return HeroGarmentSignature(
+            topBase: classes.topBase,
+            outer: classes.outer ?? false,
+            bottomFamily: family,
+            head: classes.head ?? "none",
+            hands: classes.hands ?? "none"
+        )
+    }
+
+    /// The signature a bundled asset's census entry records.
+    static func from(bundledGarments garments: FallbackImageProvider.BundledGarments) -> HeroGarmentSignature {
+        HeroGarmentSignature(
+            topBase: garments.topBase,
+            outer: garments.outer,
+            bottomFamily: bottomFamily(forBottomClass: garments.bottom) ?? "shorts",
+            head: garments.head ?? "none",
+            hands: garments.hands ?? "none"
+        )
+    }
+}
+
+/// One ranked candidate in the GEN-4 chain: a live approved
+/// pool row, or a bundled asset.
+struct HeroFallbackCandidate {
+    enum Source: Equatable {
+        case pool
+        case bundled
+    }
+
+    let source: Source
+    let gender: HeroGender?
+    let bracket: HeroTempBracket?
+    let weather: HeroWeatherCondition?
+    let signature: HeroGarmentSignature
+    /// The pool row, when source == .pool.
+    let poolImage: GeneratedImage?
+    /// The bundled asset base name, when source == .bundled.
+    let bundledAssetName: String?
+
+    /// Deterministic tie-break key: combination id for a pool
+    /// row, asset name for a bundled asset.
+    var sortKey: String {
+        poolImage?.combinationId ?? bundledAssetName ?? ""
+    }
+}
+
+/// The chain's distance: a lexicographic tuple (bracket,
+/// weather, garment) — see the metric definition above.
+struct HeroFallbackDistance: Equatable, Comparable {
+    let bracket: Int
+    let weather: Int
+    let garment: Int
+
+    static func < (lhs: HeroFallbackDistance, rhs: HeroFallbackDistance) -> Bool {
+        if lhs.bracket != rhs.bracket { return lhs.bracket < rhs.bracket }
+        if lhs.weather != rhs.weather { return lhs.weather < rhs.weather }
+        return lhs.garment < rhs.garment
+    }
+}
+
+/// The GEN-4 chain's resolution: the tier it landed at, the
+/// candidate that serves, and how far that candidate sits from
+/// the prescription under the metric (zero garment distance for
+/// an exact serve is NOT required — exactness is the gate's
+/// verdict, not the metric's; the distance is reported for the
+/// scaffold/floor tiers).
+struct HeroFallbackResolution {
+    let tier: HeroFallbackTier
+    let candidate: HeroFallbackCandidate
+    let distance: HeroFallbackDistance
+
+    var isScaffold: Bool { tier == .scaffold }
+    var bundledAssetName: String? { candidate.bundledAssetName }
+}
+
+/// The GEN-4 fallback chain: pure resolution over a candidate
+/// set supplied at serve time (convergence — see the header).
+enum HeroFallbackChain {
+    /// Warmth order (coldest first) — the bracket axis.
+    static let bracketOrder: [HeroTempBracket] = [.FREEZING, .COLD, .COOL, .MILD, .WARM, .HOT]
+
+    static func bracketIndex(_ bracket: HeroTempBracket) -> Int {
+        bracketOrder.firstIndex(of: bracket) ?? 2
+    }
+
+    static func weatherDistance(
+        requested: HeroWeatherCondition,
+        candidate: HeroWeatherCondition?
+    ) -> Int {
+        guard let candidate else { return 2 }
+        if candidate == requested { return 0 }
+        let dry: Set<HeroWeatherCondition> = [.CLEAR, .CLOUDY]
+        if dry.contains(candidate) == dry.contains(requested) { return 1 }
+        return 2
+    }
+
+    /// Weighted garment-signature distance (metric step (c)).
+    static func garmentScore(
+        requested: HeroGarmentSignature,
+        candidate: HeroGarmentSignature
+    ) -> Int {
+        var score = 0
+        if candidate.bottomFamily != requested.bottomFamily { score += 40 }
+        let topOrder = ["sleeveless": 0, "short": 1, "long": 2]
+        if let candidateTop = candidate.topBase, let requestedTop = requested.topBase,
+           let ci = topOrder[candidateTop], let ri = topOrder[requestedTop] {
+            score += abs(ci - ri) * 15
+        } else if candidate.topBase == nil {
+            score += 7
+        }
+        if candidate.outer != requested.outer { score += 20 }
+        if candidate.head != requested.head {
+            score += (candidate.head != "none" && requested.head != "none") ? 5 : 10
+        }
+        if candidate.hands != requested.hands {
+            score += (candidate.hands != "none" && requested.hands != "none") ? 4 : 8
+        }
+        return score
+    }
+
+    static func distance(
+        requestedSignature: HeroGarmentSignature,
+        requestedBracket: HeroTempBracket,
+        requestedWeather: HeroWeatherCondition,
+        candidate: HeroFallbackCandidate
+    ) -> HeroFallbackDistance {
+        HeroFallbackDistance(
+            bracket: candidate.bracket.map { abs(bracketIndex($0) - bracketIndex(requestedBracket)) } ?? 99,
+            weather: weatherDistance(requested: requestedWeather, candidate: candidate.weather),
+            garment: garmentScore(requested: requestedSignature, candidate: candidate.signature)
+        )
+    }
+
+    /// Parse a pool row's combination id
+    /// ({GENDER}_{WEATHER}_{BRACKET}_…, RAINY/SNOWY are the
+    /// legacy weather spellings) into the metric's axes. Nil
+    /// when any axis is unreadable — an unrankable row.
+    static func combinationAxes(
+        _ combinationId: String
+    ) -> (gender: HeroGender, weather: HeroWeatherCondition, bracket: HeroTempBracket)? {
+        let tokens = combinationId.split(separator: "_").map(String.init)
+        guard tokens.count >= 3,
+              let gender = HeroGender(rawValue: tokens[0]),
+              let bracket = HeroTempBracket(rawValue: tokens[2]) else { return nil }
+        let weather: HeroWeatherCondition?
+        switch tokens[1] {
+        case "RAINY": weather = .RAIN
+        case "SNOWY": weather = .SNOW
+        default: weather = HeroWeatherCondition(rawValue: tokens[1])
+        }
+        guard let weather else { return nil }
+        return (gender, weather, bracket)
+    }
+
+    /// A pool row as a chain candidate, or nil when the row is
+    /// not rankable (unservable, multi-person, no readable
+    /// signature, unparseable combination).
+    static func poolCandidate(from image: GeneratedImage) -> HeroFallbackCandidate? {
+        guard HeroPoolPolicy.isServable(reviewStatus: image.reviewStatus),
+              (image.personCount ?? 1) < 2,
+              let classes = image.garmentClasses,
+              let signature = HeroGarmentSignature.from(garmentClasses: classes),
+              let axes = combinationAxes(image.combinationId) else { return nil }
+        return HeroFallbackCandidate(
+            source: .pool,
+            gender: axes.gender,
+            bracket: axes.bracket,
+            weather: axes.weather,
+            signature: signature,
+            poolImage: image,
+            bundledAssetName: nil
+        )
+    }
+
+    /// Resolve the chain for one prescription.
+    /// - Parameters:
+    ///   - poolCandidates: the live approved pool rows the app's
+    ///     read path returned for this serve (any cell — the
+    ///     metric ranks them), or empty.
+    ///   - poolReachable: whether a live pool consultation
+    ///     happened at this layer at all. False selects the
+    ///     bundled floor; true with no exact candidate selects
+    ///     a scaffold (pool and bundled candidates together).
+    ///   - bundledCandidates: the bundled candidate set
+    ///     (FallbackImageProvider.bundledCandidates).
+    static func resolve(
+        requestedBracket: HeroTempBracket,
+        requestedWeather: HeroWeatherCondition,
+        gender: HeroGender?,
+        outfit: OutfitRecommendation,
+        poolCandidates: [GeneratedImage],
+        poolReachable: Bool,
+        bundledCandidates: [HeroFallbackCandidate]
+    ) -> HeroFallbackResolution? {
+        let requestedSignature = HeroGarmentSignature.prescribed(from: outfit)
+        func genderOK(_ candidateGender: HeroGender?) -> Bool {
+            guard let gender else { return true }
+            return candidateGender == gender
+        }
+        let pool = poolCandidates
+            .compactMap(poolCandidate(from:))
+            .filter { genderOK($0.gender) }
+            .sorted { $0.sortKey < $1.sortKey }
+        let bundled = bundledCandidates
+            .filter { genderOK($0.gender) }
+            .sorted { $0.sortKey < $1.sortKey }
+
+        func ranked(_ candidate: HeroFallbackCandidate) -> HeroFallbackDistance {
+            distance(
+                requestedSignature: requestedSignature,
+                requestedBracket: requestedBracket,
+                requestedWeather: requestedWeather,
+                candidate: candidate
+            )
+        }
+
+        // Tier 1 — EXACT: the gate's verdict, pool first, then
+        // bundled (today's behaviour).
+        for candidate in pool {
+            if let image = candidate.poolImage,
+               HeroPointGrainPolicy.matches(image: image, outfit: outfit) {
+                return HeroFallbackResolution(tier: .exact, candidate: candidate, distance: ranked(candidate))
+            }
+        }
+        for candidate in bundled {
+            if let name = candidate.bundledAssetName,
+               FallbackImageProvider.bundledAssetMatches(assetName: name, outfit: outfit) {
+                return HeroFallbackResolution(tier: .exact, candidate: candidate, distance: ranked(candidate))
+            }
+        }
+
+        // Tier 2 — SCAFFOLD (a live pool consultation happened):
+        // nearest covered photo across pool + bundled, pool
+        // winning a tie.
+        if poolReachable {
+            let all = pool + bundled
+            guard let best = all.min(by: { a, b in
+                let da = ranked(a), db = ranked(b)
+                if da != db { return da < db }
+                if a.source != b.source { return a.source == .pool }
+                return a.sortKey < b.sortKey
+            }) else { return nil }
+            return HeroFallbackResolution(tier: .scaffold, candidate: best, distance: ranked(best))
+        }
+
+        // Tier 3 — BUNDLED FLOOR: nearest bundled asset.
+        guard let best = bundled.min(by: { a, b in
+            let da = ranked(a), db = ranked(b)
+            if da != db { return da < db }
+            return a.sortKey < b.sortKey
+        }) else { return nil }
+        return HeroFallbackResolution(tier: .bundledFloor, candidate: best, distance: ranked(best))
+    }
+}
+
+extension FallbackImageProvider {
+    /// The bundled candidate set for the GEN-4 chain: every
+    /// paired asset with a garment-census entry, keyed by its
+    /// cell (gender × bracket × weather). Completeness audit:
+    /// the paired matrix covers every gender × bracket family
+    /// (22 cells × 2 genders — HOT×SNOW and WARM×SNOW are
+    /// non-cells with no bracket-family gap), so under the
+    /// metric every prescription group has a bundled floor
+    /// candidate of its own gender; Gen4HeroFallbackTests pins
+    /// all 50 census signatures against this set.
+    static var bundledCandidates: [HeroFallbackCandidate] {
+        var candidates: [HeroFallbackCandidate] = []
+        for (bracket, conditions) in pairedAssets {
+            for (weather, genders) in conditions {
+                for (gender, name) in genders {
+                    guard let garments = garmentsByAsset[name] else { continue }
+                    candidates.append(HeroFallbackCandidate(
+                        source: .bundled,
+                        gender: gender,
+                        bracket: bracket,
+                        weather: weather,
+                        signature: HeroGarmentSignature.from(bundledGarments: garments),
+                        poolImage: nil,
+                        bundledAssetName: name
+                    ))
+                }
+            }
+        }
+        return candidates.sorted { $0.sortKey < $1.sortKey }
+    }
+
+    /// Resolve the GEN-4 chain through this provider's bundled
+    /// candidate set. See HeroFallbackChain.resolve.
+    func chainResolution(
+        temp: HeroTempBracket,
+        weather: HeroWeatherCondition,
+        gender: HeroGender?,
+        outfit: OutfitRecommendation,
+        poolCandidates: [GeneratedImage] = [],
+        poolReachable: Bool = false
+    ) -> HeroFallbackResolution? {
+        HeroFallbackChain.resolve(
+            requestedBracket: temp,
+            requestedWeather: weather,
+            gender: gender,
+            outfit: outfit,
+            poolCandidates: poolCandidates,
+            poolReachable: poolReachable,
+            bundledCandidates: Self.bundledCandidates
+        )
+    }
+
+    /// The chain resolution as a HeroImageResult: a pool exact
+    /// or scaffold carries the row's own identity; a bundled
+    /// exact/scaffold/floor carries the asset, its provenance
+    /// and the tier (fromBundledFallback maps the tier onto the
+    /// serve source — scaffold results are labelled scaffold,
+    /// never bundled-fallback/exact).
+    func result(for resolution: HeroFallbackResolution) -> HeroImageResult? {
+        switch resolution.candidate.source {
+        case .pool:
+            guard let image = resolution.candidate.poolImage else { return nil }
+            if resolution.tier == .exact {
+                return HeroImageResult.fromMatch(image: image, fallbackLevel: 2)
+            }
+            return HeroImageResult.fromScaffoldPool(image: image)
+        case .bundled:
+            guard let name = resolution.candidate.bundledAssetName else { return nil }
+            let url = bundledURLString(assetName: name) ?? ""
+            return HeroImageResult.fromBundledFallback(
+                url: url,
+                assetFile: name,
+                provenance: Self.provenanceByAsset[name],
+                tier: resolution.tier
+            )
+        }
+    }
+}

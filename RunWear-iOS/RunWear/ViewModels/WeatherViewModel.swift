@@ -152,6 +152,16 @@ class WeatherViewModel: ObservableObject {
     /// Nil until the first hero resolution commits.
     @Published private(set) var heroOwnerPlaceKey: String?
 
+    /// GEN-4: the fallback-chain tier the currently committed
+    /// fallback resolution landed at (exact / scaffold /
+    /// bundled-floor), and the bundled asset it named, when the
+    /// paint is a bundled one. Written in the same atomic commit
+    /// as fallbackImageUrl; a scaffold paint is labelled by this
+    /// tier on every surface that reads the resolution — it is
+    /// never presented as the exact photo.
+    @Published private(set) var heroFallbackTier: HeroFallbackTier?
+    @Published private(set) var heroFallbackAssetName: String?
+
     /// Whether the resolved hero may paint under the place the UI
     /// currently labels (HeroDisplayGate). False during a place
     /// switch's in-flight window — the hero zone skeletons rather
@@ -715,28 +725,45 @@ class WeatherViewModel: ObservableObject {
         // (the same gate the pool obeys; Android GEN-2 A2 parity).
         // WS-6 (D-20) stands: the resolution carries the user's fit
         // preference (a unisex preference passes nil and walks the
-        // legacy view first). When NO bundled asset matches the
-        // prescription there is no truthful bundled photo for it:
-        // the fallback is EMPTY and the hero paints its designed
-        // gradient until the pool serve lands (the pool cascade
-        // below is the servable layer for those prescriptions —
-        // the GEN-3 servability census carries the genuinely
-        // unservable remainder with row-level evidence). Without a
-        // recommendation there is no prescription to judge, so the
-        // legacy bracket resolution paints, exactly as before.
-        let gatedAssetName: String?
+        // legacy view first).
+        //
+        // GEN-4 (hero-fallback lane, 2026-11-04): the GEN-3 commit
+        // resolved EMPTY when no bundled asset passed the gate —
+        // the hero painted its gradient for the census's 26
+        // unservable signatures. Sol ruled that out: the commit
+        // now resolves through the GEN-4 fallback chain
+        // (HeroFallbackChain) at its BUNDLED FLOOR layer — no
+        // live pool consultation exists at this synchronous
+        // instant, so the chain returns the exact bundled asset
+        // when the gate passes one, and otherwise the nearest
+        // bundled asset under the chain metric, labelled by its
+        // tier (heroFallbackTier). The fallback is empty only
+        // when there is no prescription at all and the legacy
+        // resolution cannot run — with a recommendation, a photo
+        // ALWAYS commits in this write. The pool cascade below
+        // then re-resolves through the full chain (exact →
+        // scaffold → floor) with the live pool set. Without a
+        // recommendation there is no prescription to judge, so
+        // the legacy bracket resolution paints, exactly as before.
+        let chainResolution: HeroFallbackResolution?
         if let recommendation {
-            gatedAssetName = fallbackProvider.gatedAssetName(
+            chainResolution = fallbackProvider.chainResolution(
                 temp: tempBracket,
                 weather: weatherCondition,
                 gender: genderPreference.fallbackHeroGender,
-                outfit: recommendation
+                outfit: recommendation,
+                poolCandidates: [],
+                poolReachable: false
             )
-            fallbackImageUrl = gatedAssetName.map {
+            heroFallbackTier = chainResolution?.tier
+            heroFallbackAssetName = chainResolution?.bundledAssetName
+            fallbackImageUrl = chainResolution?.bundledAssetName.map {
                 fallbackProvider.imageURL(forAssetName: $0)
             } ?? ""
         } else {
-            gatedAssetName = nil
+            chainResolution = nil
+            heroFallbackTier = nil
+            heroFallbackAssetName = nil
             fallbackImageUrl = fallbackProvider.getImageURL(
                 temp: tempBracket,
                 weather: weatherCondition,
@@ -744,6 +771,7 @@ class WeatherViewModel: ObservableObject {
                 gender: genderPreference.fallbackHeroGender
             )
         }
+        let gatedAssetName = chainResolution?.bundledAssetName
 
         // Fetch AI hero image — with the actual outfit, so a
         // replenishment prompt describes what the engine recommended
@@ -771,35 +799,59 @@ class WeatherViewModel: ObservableObject {
         // serve telemetry.
         let personalAppliedForThisCell = currentPersonalHeroId != nil
             && previousRequestedCombinationId == requestedCombination.fullId
-        if result.fallbackLevel < 8 {
+        // GEN-4: a scaffold POOL serve (fallback level 9) paints
+        // through the same slot as an exact pool serve — but it
+        // keeps its scaffold tier (heroFallbackTier and the serve
+        // record below), and its identity is the row's OWN
+        // combination, never the requested cell's.
+        let isScaffoldPoolPaint = result.fallbackLevel == 9
+        if result.fallbackLevel < 8 || isScaffoldPoolPaint {
             if !personalAppliedForThisCell {
                 heroImageUrl = result.imageUrl
                 heroImageRowId = result.imageRowId
                 heroServedCombinationId = result.combinationId
             }
+            if isScaffoldPoolPaint {
+                heroFallbackTier = .scaffold
+                heroFallbackAssetName = nil
+            }
         } else {
             heroImageUrl = nil // Will use fallback
             heroImageRowId = nil
             heroServedCombinationId = nil
+            // GEN-4: a bundled result from the service's full
+            // chain (exact / scaffold / floor over the live pool
+            // set) names its asset and tier — adopt them so the
+            // paint and its record carry the chain's labelling,
+            // not just the commit's floor labelling. (The metric
+            // over the static bundled set makes this the same
+            // asset the commit painted; the adoption keeps the
+            // record honest if the sets ever diverge.)
+            if let asset = result.fallbackAssetFile, !asset.isEmpty {
+                heroFallbackTier = result.fallbackTier ?? heroFallbackTier
+                heroFallbackAssetName = asset
+                let url = fallbackProvider.imageURL(forAssetName: asset)
+                if !url.isEmpty { fallbackImageUrl = url }
+            }
         }
 
         // WS-7 / RW-26(c): the bundled asset the screen will paint
-        // if the pool missed — the gated fallback resolved at the
+        // if the pool missed — the fallback resolved at the
         // atomic commit above is the paint in that case (the
         // cascade's own level-8 result is not what renders), so the
         // serve record names THIS asset. GEN-3: the name is the
         // gated resolution itself — complete in every host, even
         // where bundle URLs cannot resolve (a logic-test host's
-        // empty URL string). When the gate found no truthful
-        // bundled asset (gatedAssetName nil under a live
-        // prescription), no bundled serve is recorded: nothing
-        // bundled painted. The no-prescription path keeps the
-        // legacy derivation from the painted URL.
+        // empty URL string). GEN-4: the name is the chain
+        // resolution's asset (the service's adopted asset when it
+        // named one, else the commit's), and its tier rides the
+        // record. The no-prescription path keeps the legacy
+        // derivation from the painted URL.
         let paintedBundledAsset: String?
-        if result.fallbackLevel < 8 {
+        if result.fallbackLevel < 8 || isScaffoldPoolPaint {
             paintedBundledAsset = nil
         } else if recommendation != nil {
-            paintedBundledAsset = gatedAssetName
+            paintedBundledAsset = result.fallbackAssetFile.flatMap { $0.isEmpty ? nil : $0 } ?? gatedAssetName
         } else {
             paintedBundledAsset = fallbackImageUrl.map { url in
                 url.isEmpty
@@ -832,17 +884,41 @@ class WeatherViewModel: ObservableObject {
                     gender: genderPreference,
                     trigger: "pool-cascade"
                 )
-            } else if let paintedBundledAsset {
+            } else if isScaffoldPoolPaint {
+                // GEN-4: the scaffold pool serve records as a
+                // scaffold — its own row identity, tier labelled —
+                // never as the exact pool serve it is not.
                 recordHeroServe(
                     HeroServeRecord(
-                        source: .bundledFallback,
+                        source: .scaffold,
+                        requestedCombinationId: heroRequestedCombinationId,
+                        servedCombinationId: result.combinationId,
+                        imageRowId: result.imageRowId,
+                        tempBracket: tempBracket,
+                        weatherCondition: weatherCondition,
+                        gender: genderPreference,
+                        trigger: "hero-fallback-chain",
+                        fallbackTier: .scaffold
+                    )
+                )
+            } else if let paintedBundledAsset {
+                // GEN-4: the bundled paint's source follows its
+                // chain tier — scaffold when the chain labelled
+                // it scaffold, bundled-fallback otherwise (the
+                // exact and floor tiers, and the legacy
+                // no-prescription path whose tier is nil).
+                let isScaffoldTier = heroFallbackTier == .scaffold
+                recordHeroServe(
+                    HeroServeRecord(
+                        source: isScaffoldTier ? .scaffold : .bundledFallback,
                         requestedCombinationId: heroRequestedCombinationId,
                         tempBracket: tempBracket,
                         weatherCondition: weatherCondition,
                         gender: genderPreference,
                         fallbackAssetFile: paintedBundledAsset,
                         fallbackProvenance: FallbackImageProvider.provenance(forAssetName: paintedBundledAsset),
-                        trigger: "bundled-fallback"
+                        trigger: isScaffoldTier ? "hero-fallback-chain" : "bundled-fallback",
+                        fallbackTier: heroFallbackTier
                     )
                 )
             }
@@ -978,26 +1054,32 @@ class WeatherViewModel: ObservableObject {
     /// surface is fed by (hero, Wear I've Run entry thumbnails,
     /// the TODAY card, chapter rows, the Morning Poster
     /// thumbnail): the personal/pool photo when one is displayed,
-    /// otherwise the committed gated fallback. When the entry is
+    /// otherwise the committed fallback. When the entry is
     /// recorded before the hero load commits (a settle racing the
-    /// cascade), the gated fallback for the CURRENT frame is
-    /// derived on the spot — the same resolution loadHeroImage
-    /// commits — so a recorded entry never falls back to an
-    /// unrelated bracket's stock photo. Nil only when no frame
-    /// exists yet or no truthful bundled asset matches the live
-    /// prescription (the census's unservable remainder).
+    /// cascade), the fallback for the CURRENT frame is derived
+    /// on the spot — the same resolution loadHeroImage commits —
+    /// so a recorded entry never falls back to an unrelated
+    /// bracket's stock photo.
+    /// GEN-4: the on-the-spot derivation is the chain's bundled
+    /// floor (exact bundled when the gate passes, otherwise the
+    /// nearest bundled asset under the metric), so a recorded
+    /// entry exists for EVERY prescription — nil only when no
+    /// frame exists yet (or bundle URLs cannot resolve, as in a
+    /// logic-test host).
     func alwaysAvailableHeroReference() -> String? {
         if let heroImageUrl { return heroImageUrl }
         if let fallbackImageUrl, !fallbackImageUrl.isEmpty { return fallbackImageUrl }
         guard let frame = prepareHeroFrame(), let recommendation else { return nil }
         let tempBracket = HeroTempBracket.from(feelsLikeTemperature: frame.feelsLikeF)
         let weatherCondition = HeroWeatherCondition.from(weatherCode: frame.weatherCode)
-        guard let name = fallbackProvider.gatedAssetName(
+        guard let name = fallbackProvider.chainResolution(
             temp: tempBracket,
             weather: weatherCondition,
             gender: genderPreference.fallbackHeroGender,
-            outfit: recommendation
-        ) else { return nil }
+            outfit: recommendation,
+            poolCandidates: [],
+            poolReachable: false
+        )?.bundledAssetName else { return nil }
         let url = fallbackProvider.imageURL(forAssetName: name)
         return url.isEmpty ? nil : url
     }
