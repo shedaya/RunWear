@@ -67,6 +67,117 @@ final class Gen6WaveATests: XCTestCase {
                       "W-18 stands: a landing still re-reads the one counter")
     }
 
+    // MARK: - Item 4 · Counter truth — the counter-sequence test (DA-08)
+
+    /// THE COUNTER-SEQUENCE TEST the gen-5 gate lacked: drive
+    /// REAL successive completions in sequence — request →
+    /// in-flight → complete, repeatedly to exhaustion — asserting
+    /// the used count and the in-flight count at EACH step and
+    /// that their sum never exceeds the allowance of 5. The
+    /// harness mirrors the shipped semantics exactly: a request
+    /// puts its cell into MAKING + the user-initiated pending set
+    /// (startUserInitiatedGeneration); a completion charges the
+    /// delivered count on landing (W-18, "charged on delivery")
+    /// and clears the cell's making state (noteLookState). The
+    /// meter read at every step is the one Settings renders:
+    /// settingsLine(used) + settingsPendingLine(cappedInFlight).
+    func testCounterSequence_SuccessiveCompletionsToExhaustion_NeverExceedsAllowance() {
+        let allowance = 5
+        var used = 0
+        var lookStates: [String: PersonalLookState] = [:]
+        var pending: Set<String> = []
+
+        func assertMeter(step: String, file: StaticString = #filePath, line: UInt = #line) {
+            let making = FreeLooksMeter.cappedInFlightCount(
+                used: used, allowance: allowance,
+                lookStates: lookStates, userInitiatedPending: pending)
+            XCTAssertLessThanOrEqual(used + making, allowance,
+                                     "\(step): used \(used) + making \(making) must never exceed \(allowance)", file: file, line: line)
+            // The composed Settings block itself.
+            let line1 = FreeLooksMeter.settingsLine(used: used, allowance: allowance)
+            XCTAssertTrue(line1.contains("\(used) of \(allowance)"),
+                          "\(step): meter line reads the delivered truth: \(line1)", file: file, line: line)
+            if making > 0 {
+                XCTAssertEqual(FreeLooksMeter.settingsPendingLine(inFlight: making),
+                               making == 1 ? "Making your look…" : "Making \(making) looks…",
+                               "\(step): pending line carries exactly the capped count", file: file, line: line)
+            } else {
+                XCTAssertNil(FreeLooksMeter.settingsPendingLine(inFlight: making),
+                             "\(step): no pending line when nothing is in flight", file: file, line: line)
+            }
+        }
+
+        assertMeter(step: "initial")
+        XCTAssertEqual(used, 0)
+
+        // Five successive request → in-flight → complete cycles.
+        for i in 1...allowance {
+            let cell = "cell-\(i)"
+            // Request: the cell enters MAKING + pending.
+            lookStates[cell] = .making
+            pending.insert(cell)
+            assertMeter(step: "request \(i) in flight")
+            XCTAssertEqual(
+                FreeLooksMeter.cappedInFlightCount(used: used, allowance: allowance,
+                                                   lookStates: lookStates, userInitiatedPending: pending),
+                1, "request \(i): exactly one look in flight")
+            // Complete: charged on delivery, making clears.
+            used += 1
+            lookStates[cell] = .ready
+            pending.remove(cell)
+            assertMeter(step: "completion \(i)")
+            XCTAssertEqual(used, i)
+        }
+
+        // Exhaustion: the meter reads the settled exhausted line,
+        // and further in-flight work — including a delivered cell
+        // REGENERATING (the DA-08 double-count: counted in used
+        // AND raw-making at once) — can never push the composed
+        // block past the allowance.
+        XCTAssertEqual(FreeLooksMeter.settingsLine(used: used, allowance: allowance),
+                       "All 5 free looks used")
+        lookStates["cell-1"] = .making          // delivered cell regenerating
+        lookStates["cell-6"] = .making          // fresh cell making past the allowance
+        pending.insert("cell-6")
+        let rawMaking = FreeLooksMeter.inFlightCount(lookStates: lookStates, userInitiatedPending: pending)
+        XCTAssertEqual(rawMaking, 2, "the RAW union does double-count here — this is the DA-08 mechanism")
+        XCTAssertGreaterThan(used + rawMaking, allowance,
+                             "raw composition would read 5 used + 2 making = 7 > 5: the impossibility, unguarded")
+        assertMeter(step: "exhausted with regenerating + extra making cells")
+        XCTAssertEqual(
+            FreeLooksMeter.cappedInFlightCount(used: used, allowance: allowance,
+                                               lookStates: lookStates, userInitiatedPending: pending),
+            0, "at exhaustion the meter shows no making room — the sum stays at the allowance")
+    }
+
+    /// The mid-sequence double-count: used = 2, four cells making
+    /// (one of them a delivered cell regenerating) — raw reads
+    /// 2 + 4 = 6 > 5 (the register's exact example shape); the
+    /// capped meter reads 2 + 3.
+    func testCounterCap_MidSequenceDoubleCountIsCapped() {
+        let states: [String: PersonalLookState] = [
+            "delivered-a": .making,   // already counted in used
+            "fresh-b": .making,
+            "fresh-c": .making,
+            "fresh-d": .making,
+        ]
+        XCTAssertEqual(FreeLooksMeter.inFlightCount(lookStates: states, userInitiatedPending: []), 4)
+        XCTAssertEqual(
+            FreeLooksMeter.cappedInFlightCount(used: 2, allowance: 5,
+                                               lookStates: states, userInitiatedPending: []),
+            3, "used 2 + making capped 3 = 5 — never the impossible 6")
+        XCTAssertEqual(
+            FreeLooksMeter.cappedInFlightCount(used: 0, allowance: 5,
+                                               lookStates: states, userInitiatedPending: []),
+            4, "with the full allowance free, the raw count passes through uncapped")
+    }
+
+    func testCounterCap_StoreSurfaceUsesTheCappedForm_sourcePin() throws {
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("FreeLooksMeter.cappedInFlightCount("),
+                      "the store's meter-facing in-flight count is the capped form")
+    }
+
     // MARK: - Item 6 · Pill policy — the full approved state table (RW-34)
 
     func testPillTable_Generating_FreeCarriesGreenLine_PremiumStaysClean() {

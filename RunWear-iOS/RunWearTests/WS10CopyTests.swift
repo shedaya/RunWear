@@ -735,8 +735,8 @@ final class Gen3SettingsTruthTests: XCTestCase {
         XCTAssertTrue(section.contains("FreeLooksMeter.settingsPendingLine(inFlight: store.looksInFlight)"),
                       "the Settings status block composes its pending line from the store's in-flight state through the seam")
         let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
-        XCTAssertTrue(store.contains("FreeLooksMeter.inFlightCount("),
-                      "the store derives its in-flight count through the same seam the tests pin")
+        XCTAssertTrue(store.contains("FreeLooksMeter.cappedInFlightCount("),
+                      "the store derives its in-flight count through the same seam the tests pin (GEN-6 Wave A: the capped form — used + making never exceeds the allowance)")
     }
 
     // MARK: - X-16 · casing audit over every app surface

@@ -91,7 +91,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// an in-flight look as pending instead of printing a settled
     /// meter the flow contradicts.
     var looksInFlight: Int {
-        FreeLooksMeter.inFlightCount(
+        // GEN-6 Wave A (DA-08): the meter's in-flight count is
+        // the CAPPED form — used + making can never exceed the
+        // free allowance on any surface reading this property.
+        // (The raw union stays available on FreeLooksMeter for
+        // non-meter diagnostics.)
+        FreeLooksMeter.cappedInFlightCount(
+            used: freeGenerationsUsed,
+            allowance: Self.freeAllowance,
             lookStates: lookStates,
             userInitiatedPending: userInitiatedPending
         )

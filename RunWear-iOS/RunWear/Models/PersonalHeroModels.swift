@@ -862,6 +862,29 @@ enum FreeLooksMeter {
         return cells.count
     }
 
+    /// GEN-6 Wave A (DA-08): the count the FREE meter may ever
+    /// show as "being made" — capped at the allowance remaining
+    /// after the used count. The raw in-flight count can exceed
+    /// the remainder: a cell regenerating after its look was
+    /// already delivered (and counted in `used`) is counted
+    /// AGAIN by the raw union, and bank/other in-flight work can
+    /// push the raw pair past the allowance — composing the
+    /// impossible "2 of 5 used · 4 being made" across the
+    /// Settings block. On the free meter the pair must NEVER
+    /// exceed the allowance: used + capped ≤ allowance, always.
+    static func cappedInFlightCount(
+        used: Int,
+        allowance: Int,
+        lookStates: [String: PersonalLookState],
+        userInitiatedPending: Set<String>
+    ) -> Int {
+        let remaining = max(0, allowance - used)
+        return min(
+            inFlightCount(lookStates: lookStates, userInitiatedPending: userInitiatedPending),
+            remaining
+        )
+    }
+
     /// The status block's pending line, or nil when nothing is in
     /// flight (the block then carries the settled meter alone,
     /// which is true). One look reads as the singular making line
