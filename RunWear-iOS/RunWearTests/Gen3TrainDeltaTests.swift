@@ -144,19 +144,34 @@ final class Gen3TrainDeltaTests: XCTestCase {
             "leaving mid-generation must land on home with the generating pill active")
     }
 
-    // MARK: - Convergence band · settled copy, real counts, spinner
+    // MARK: - Convergence band · settled copy, bar-only progress (count HELD), spinner
 
     func testConvergenceBandCopyIsSolSettledWordingVerbatim() {
         XCTAssertEqual(ConvergenceBand.heading, "Making your looks")
         XCTAssertEqual(ConvergenceBand.line,
                        "We're generating your outfits across all running conditions, so it will be ready when you need it.")
-        // Plain-words progress with the real counts substituted —
-        // the pattern from Sol's settled wording, never a bare
-        // fraction and never "N of M ready".
-        XCTAssertEqual(ConvergenceBand.progressText(ready: 14, total: 24),
-                       "14 of your 24 looks are ready")
-        XCTAssertEqual(ConvergenceBand.progressText(ready: 0, total: 48),
-                       "0 of your 48 looks are ready")
+    }
+
+    /// HOLD (Sol, Nov 4): the numeric count is NOT built — the
+    /// earlier "N of your M looks are ready" wording is
+    /// superseded. No progress-text API, no count phrasing, and
+    /// no hard-coded total anywhere in the band's model or view;
+    /// progress is the bar, driven by the real banking fraction.
+    func testConvergenceBandCarriesNoNumericCount_sourcePin() throws {
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        let bandStart = try XCTUnwrap(models.range(of: "enum ConvergenceBand")?.lowerBound)
+        let bandSlice = String(models[bandStart...].prefix(1500))
+        XCTAssertFalse(bandSlice.contains("progressText"),
+                       "HOLD: no progress-text copy in the band model")
+        XCTAssertFalse(bandSlice.contains("looks are ready"),
+                       "HOLD: the superseded count sentence must not exist")
+        XCTAssertFalse(bandSlice.contains("of your"),
+                       "HOLD: no 'N of your M' count phrasing")
+        let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertFalse(views.contains("progressText"),
+                       "HOLD: the band view renders no numeric count text")
+        XCTAssertTrue(views.contains("ProgressView(value: content.fraction)"),
+                      "progress is the bar, from the real banking fraction")
     }
 
     func testConvergenceCoverageDerivation() {
@@ -170,16 +185,19 @@ final class Gen3TrainDeltaTests: XCTestCase {
     }
 
     func testConvergenceBandVisibilityRule() {
-        let partial = BankCoverage(ready: 14, total: 24)
+        // Fixture numbers are internal banking state only (the
+        // bar's fraction) — they are never rendered as a count.
+        let partial = BankCoverage(ready: 2, total: 5)
         let content = ConvergenceBand.content(mode: .subscribed, coverage: partial)
         XCTAssertEqual(content?.heading, "Making your looks")
-        XCTAssertEqual(content?.progressText, "14 of your 24 looks are ready")
-        XCTAssertEqual(content?.fraction ?? -1, 14.0 / 24.0, accuracy: 0.0001)
+        XCTAssertEqual(content?.fraction ?? -1, 2.0 / 5.0, accuracy: 0.0001)
         // Complete bank → no band.
-        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 24, total: 24)))
-        // Unknown counts → no band (never an invented number).
+        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 5, total: 5)))
+        // Unknown banking state → no band.
         XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: nil))
-        // Not subscribed → no band.
+        // PREMIUM CONTEXT ONLY: the .free state IS the free /
+        // in-trial 5-look allowance — no bank, no band. Stock
+        // (never opted in) likewise.
         XCTAssertNil(ConvergenceBand.content(mode: .free, coverage: partial))
         XCTAssertNil(ConvergenceBand.content(mode: .stock, coverage: partial))
         // Empty engagement → no band.
@@ -196,7 +214,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
                       "the band carries the simple progress bar")
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertTrue(home.contains("ConvergenceBand.content(mode: personalStore.mode, coverage: personalStore.bankCoverage)"),
-                      "the band is seated in the personal section from the store's real counts")
+                      "the band is seated in the personal section from the store's real banking state")
         XCTAssertTrue(home.contains("ConvergenceBandView(content: band)"))
     }
 

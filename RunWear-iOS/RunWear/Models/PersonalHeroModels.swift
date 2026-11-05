@@ -886,27 +886,31 @@ func deriveBankCoverage(heroCells: Set<String>, jobCells: Set<String>) -> BankCo
 struct ConvergenceBandContent: Equatable {
     let heading: String
     let line: String
-    let progressText: String
     let fraction: Double
 }
 
-/// The convergence band's copy and visibility rule. The wording
-/// is Sol's settled copy (Nov 4), word for word — do not
-/// paraphrase. Progress is phrased in plain words with the REAL
-/// counts: "14 of your 24 looks are ready" — never a bare
-/// fraction, never "14 of 24 ready".
+/// The convergence band's copy and visibility rule. The heading
+/// and line are Sol's settled copy (Nov 4), word for word — do
+/// not paraphrase.
 ///
-/// The band exists only while convergence is genuinely in
-/// progress: subscribed mode, a successful coverage read, and
-/// ready < total. When the bank is complete (or counts are
-/// unknown) there is no band — never an invented number.
+/// NUMERIC COUNT: HELD by Sol (Nov 4, later ruling). An earlier
+/// instruction's "N of your M looks are ready" line is NOT
+/// built: the example total had no basis in the generation
+/// model, and no total (24, 48, or any other) is hard-coded or
+/// rendered anywhere. Progress shows as the BAR only; the bar's
+/// fraction comes from the real banking state (BankCoverage).
+/// If Sol rules a replacement treatment, it lands here.
+///
+/// PREMIUM CONTEXT ONLY: banking is premium-only behaviour —
+/// free / in-trial users (the .free 5-look allowance state) get
+/// on-demand looks and no bank, so the band never renders for
+/// them. The band exists only while convergence is genuinely
+/// in progress: subscribed mode, a successful coverage read,
+/// and ready < total. When the bank is complete (or the state
+/// is unknown) there is no band.
 enum ConvergenceBand {
     static let heading = "Making your looks"
     static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
-
-    static func progressText(ready: Int, total: Int) -> String {
-        "\(ready) of your \(total) looks are ready"
-    }
 
     static func content(mode: PersonalHeroStore.Mode, coverage: BankCoverage?) -> ConvergenceBandContent? {
         guard mode == .subscribed, let coverage else { return nil }
@@ -914,7 +918,6 @@ enum ConvergenceBand {
         return ConvergenceBandContent(
             heading: heading,
             line: line,
-            progressText: progressText(ready: coverage.ready, total: coverage.total),
             fraction: Double(coverage.ready) / Double(coverage.total)
         )
     }

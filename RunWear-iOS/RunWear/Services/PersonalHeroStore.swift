@@ -56,7 +56,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     @Published private(set) var landedHeroVersion = 0
     /// GEN-3 (convergence band): the caller's real bank coverage
     /// (ready/total), read with the profile refresh. Nil until a
-    /// read succeeds — the band shows only real counts.
+    /// read succeeds — the band shows only the real banking state.
     @Published private(set) var bankCoverage: BankCoverage?
 
     let billing = MakeItMeBilling()

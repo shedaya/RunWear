@@ -699,19 +699,19 @@ struct ConvergenceBandView: View {
             Text(content.line)
                 .font(.system(size: 13))
                 .foregroundColor(AppTheme.inkSecondary)
+            // Progress BAR only — the numeric count is HELD
+            // (Sol, Nov 4): no total is rendered or hard-coded;
+            // the fraction comes from the real banking state.
             ProgressView(value: content.fraction)
                 .progressViewStyle(.linear)
                 .tint(AppTheme.pinePayload)
                 .padding(.top, 6)
-            Text(content.progressText)
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.inkPrimary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardOnSheet))
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(content.heading). \(content.line) \(content.progressText)")
+        .accessibilityLabel("\(content.heading). \(content.line)")
     }
 }
