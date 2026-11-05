@@ -112,33 +112,6 @@ object ShareRasterVerifier {
         return statsOf(values)
     }
 
-    /** Sample a pre-extracted ARGB pixel array (row-major). */
-    private fun samplePixels(
-        pixels: IntArray,
-        width: Int,
-        height: Int,
-        x: Int,
-        y: Int
-    ): RegionStats {
-        if (width <= 0 || height <= 0) return RegionStats(0.0, 0.0)
-        val edge = max(2, min(width, height) / 90)
-        val step = max(1, edge / 6)
-        val half = edge / 2
-        val values = ArrayList<Double>()
-        var py = y - half
-        while (py <= y + half) {
-            var px = x - half
-            while (px <= x + half) {
-                val cx = px.coerceIn(0, width - 1)
-                val cy = py.coerceIn(0, height - 1)
-                values += luminanceOf(pixels[cy * width + cx])
-                px += step
-            }
-            py += step
-        }
-        return statsOf(values)
-    }
-
     /** A uniform BLACK region — the black-square signature. The
      * grid scan uses this form only: the Kit Card's cream ground
      * is a designed uniform field, and whole-raster blankness is
@@ -224,11 +197,23 @@ object ShareRasterVerifier {
         }
 
         // Specific samples: the face anchor and each garment tile
-        // must hold real image data.
+        // must hold real image data. These are sampled on the FULL
+        // raster, NOT on the working grid: on the 48-wide grid the
+        // sample patch's edge collapses to max(2, 48 / 90) = 2 grid
+        // px, and every grid pixel is a downscale average of a
+        // ~22.5 × 22.5 source block, so a 64 × 64 black square at
+        // a tile centre mixes with the surrounding pattern in the
+        // neighbouring grid pixels (replicated arithmetic: patch
+        // mean ≈ 36, deviation ≈ 42) and escapes the uniform check.
+        // On the full raster the patch edge is min(w, h) / 90
+        // (12 px at Feed size, step 2), the whole patch sits inside
+        // the square, and it reads mean 0 / deviation 0 — flagged.
         for (labeled in samplePoints) {
-            val cx = (labeled.point.x * GRID_WIDTH).toInt().coerceIn(0, GRID_WIDTH - 1)
-            val cy = (labeled.point.y * gridHeight).toInt().coerceIn(0, gridHeight - 1)
-            val stats = samplePixels(gridPixels, GRID_WIDTH, gridHeight, cx, cy)
+            val cx = (labeled.point.x * bitmap.width).toInt()
+                .coerceIn(0, bitmap.width - 1)
+            val cy = (labeled.point.y * bitmap.height).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            val stats = sample(bitmap, cx, cy)
             if (isUniformDead(stats)) {
                 return ShareRasterResult.Invalid(
                     ShareRasterFailure.UniformRegion(labeled.label)

@@ -32,9 +32,10 @@ import java.io.FileOutputStream
  * GEN-6 Wave B (stage 2): the bitmap that arrives here is the
  * OFFSCREEN EXPORT RENDER ([ShareExportRenderer]) at exact export
  * pixels, already inspected by [ShareRasterVerifier] — the gen-5
- * graphics-layer capture of the on-screen preview
- * (ShareCaptureHandle) is retired from the share path and deleted:
- * nothing in the app captures a preview for sharing any more.
+ * graphics-layer capture of the on-screen preview and the gen-5
+ * preview-capture handle are retired from the share path and
+ * deleted: nothing in the app captures a preview for sharing
+ * any more.
  */
 
 /** Which designed artifact a collection card shares. */

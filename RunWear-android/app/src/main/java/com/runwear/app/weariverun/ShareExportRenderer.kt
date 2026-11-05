@@ -8,6 +8,7 @@ import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Recomposer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
@@ -28,6 +29,7 @@ import com.runwear.shared.domain.model.GenderPreference
 import com.runwear.shared.domain.service.ClothingThumbnailService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -39,8 +41,11 @@ import kotlin.math.roundToInt
  * is retired from the share path).
  *
  * The render runs on a [ComposeView] that is NOT attached to any
- * window, with manually installed lifecycle / saved-state owners,
- * composed at the format's canvas point size under a density of
+ * window, with manually installed lifecycle / saved-state owners
+ * and a render-owned [Recomposer] installed as the parent
+ * composition context before content is set (an unattached view
+ * has no windowRecomposer to resolve), composed at the format's
+ * canvas point size under a density of
  * exactly the format's render scale (3×), then measured and laid
  * out at the exact export pixels and drawn into a bitmap of
  * exactly [ShareExportFormat.exportPixelSize]. This is the one
@@ -146,70 +151,88 @@ object ShareExportRenderer {
 
         val bitmap = withContext(Dispatchers.Main) {
             val owners = ShareRenderOwners()
-            val composeView = ComposeView(context)
-            composeView.setViewTreeLifecycleOwner(owners)
-            composeView.setViewTreeSavedStateRegistryOwner(owners)
-            composeView.setContent {
-                CompositionLocalProvider(
-                    LocalDensity provides Density(
-                        density = format.renderScale.toFloat(),
-                        fontScale = 1f
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier.size(
-                            format.canvasPointSize.width.dp,
-                            format.canvasPointSize.height.dp
+            // One Recomposer owned by this render: an unattached
+            // ComposeView has no window, so there is no
+            // windowRecomposer to resolve (measure() threw
+            // "Cannot locate windowRecomposer" before this).
+            // Install it as the parent composition context BEFORE
+            // setContent and drive it for the render's duration;
+            // close it and cancel its job once the draw is done
+            // so nothing leaks past the render.
+            val recomposer = Recomposer(Dispatchers.Main)
+            val recomposeJob = launch {
+                recomposer.runRecomposeAndApplyChanges()
+            }
+            try {
+                val composeView = ComposeView(context)
+                composeView.setParentCompositionContext(recomposer)
+                composeView.setViewTreeLifecycleOwner(owners)
+                composeView.setViewTreeSavedStateRegistryOwner(owners)
+                composeView.setContent {
+                    CompositionLocalProvider(
+                        LocalDensity provides Density(
+                            density = format.renderScale.toFloat(),
+                            fontScale = 1f
                         )
                     ) {
-                        when (kind) {
-                            ShareArtifactKind.MORNING_POSTER -> MorningPoster(
-                                entry = entry,
-                                input = input,
-                                posterMoment = posterMoment,
-                                format = format,
-                                heroBitmap = croppedHero,
-                                faceAnchor = faceAnchor
+                        Box(
+                            modifier = Modifier.size(
+                                format.canvasPointSize.width.dp,
+                                format.canvasPointSize.height.dp
                             )
-                            ShareArtifactKind.KIT_CARD -> KitCard(
-                                entry = entry,
-                                input = input,
-                                posterMoment = posterMoment,
-                                format = format,
-                                items = tiles
-                            )
+                        ) {
+                            when (kind) {
+                                ShareArtifactKind.MORNING_POSTER -> MorningPoster(
+                                    entry = entry,
+                                    input = input,
+                                    posterMoment = posterMoment,
+                                    format = format,
+                                    heroBitmap = croppedHero,
+                                    faceAnchor = faceAnchor
+                                )
+                                ShareArtifactKind.KIT_CARD -> KitCard(
+                                    entry = entry,
+                                    input = input,
+                                    posterMoment = posterMoment,
+                                    format = format,
+                                    items = tiles
+                                )
+                            }
                         }
                     }
                 }
-            }
-            val widthSpec = View.MeasureSpec.makeMeasureSpec(
-                pixelSize.width, View.MeasureSpec.EXACTLY
-            )
-            val heightSpec = View.MeasureSpec.makeMeasureSpec(
-                pixelSize.height, View.MeasureSpec.EXACTLY
-            )
-            // Let the composition apply and settle over several
-            // frame opportunities (the main looper drives the
-            // unattached view's recomposer), measuring and laying
-            // out at the exact export size each pass.
-            repeat(8) {
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(
+                    pixelSize.width, View.MeasureSpec.EXACTLY
+                )
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(
+                    pixelSize.height, View.MeasureSpec.EXACTLY
+                )
+                // Let the composition apply and settle over several
+                // frame opportunities (the render's own recomposer
+                // drives it), measuring and laying out at the exact
+                // export size each pass.
+                repeat(8) {
+                    composeView.measure(widthSpec, heightSpec)
+                    composeView.layout(0, 0, pixelSize.width, pixelSize.height)
+                    delay(50)
+                }
                 composeView.measure(widthSpec, heightSpec)
                 composeView.layout(0, 0, pixelSize.width, pixelSize.height)
-                delay(50)
+                val out = Bitmap.createBitmap(
+                    pixelSize.width, pixelSize.height, Bitmap.Config.ARGB_8888
+                )
+                // Warm draw, then the real one — the harness pattern:
+                // the first draw can still carry a pending layout pass.
+                composeView.draw(Canvas(out))
+                val finished = Bitmap.createBitmap(
+                    pixelSize.width, pixelSize.height, Bitmap.Config.ARGB_8888
+                )
+                composeView.draw(Canvas(finished))
+                finished
+            } finally {
+                recomposer.close()
+                recomposeJob.cancel()
             }
-            composeView.measure(widthSpec, heightSpec)
-            composeView.layout(0, 0, pixelSize.width, pixelSize.height)
-            val out = Bitmap.createBitmap(
-                pixelSize.width, pixelSize.height, Bitmap.Config.ARGB_8888
-            )
-            // Warm draw, then the real one — the harness pattern:
-            // the first draw can still carry a pending layout pass.
-            composeView.draw(Canvas(out))
-            val finished = Bitmap.createBitmap(
-                pixelSize.width, pixelSize.height, Bitmap.Config.ARGB_8888
-            )
-            composeView.draw(Canvas(finished))
-            finished
         }
         return bitmap to metadata
     }
