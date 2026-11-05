@@ -2,6 +2,7 @@ package com.runwear.app.weariverun
 
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

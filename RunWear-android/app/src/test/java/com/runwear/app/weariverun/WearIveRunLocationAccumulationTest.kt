@@ -92,12 +92,12 @@ class WearIveRunLocationAccumulationTest {
         assertEquals(4, ny.totalDaysUnfiltered)
         assertEquals(
             2,
-            ny.days.single { it.date == LocalDate.of(2026, 11, 2) }.entries.size
+            ny.days.single { it.date == LocalDate.of(2026, 11, 2) }.days.size
         )
         assertEquals(2, mi.days.size)
         assertEquals(
             2,
-            mi.days.single { it.date == LocalDate.of(2026, 11, 3) }.entries.size
+            mi.days.single { it.date == LocalDate.of(2026, 11, 3) }.days.size
         )
         assertTrue(mi.days.any { it.date == LocalDate.of(2025, 12, 25) })
         assertEquals(1, op.days.size)

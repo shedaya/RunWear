@@ -77,14 +77,15 @@ class WearIveRunSimplePlaceTest {
             today
         )
         val narration = mini(holder).narration
-        // GEN-5 (C-7): the update payload is the changed dimension —
-        // the simple place in its "{place}, {day}" form. The
-        // entry's own payload field still carries its first kit
-        // item for the expanded card's content, but the NARRATION
-        // never names a garment.
+        // GEN-5 (C-7 + Addendum 8 item 2): the update payload is
+        // the changed dimension — the simple place in its
+        // "{place}, {day}" form. The bar entry no longer carries a
+        // kit-fed payload field at all (that field is what the
+        // gen-4 device build rendered as a garment narration), so
+        // there is nothing garment-shaped left to assert on the
+        // entry; the narration assertions below are the contract.
         assertEquals("Update to New York, NY, Now", narration.text)
         assertEquals("New York, NY, Now", narration.payload)
-        assertEquals("Thermal Tights", mini(holder).entry.payload)
         assertFalse(narration.text.contains("Thermal Tights"))
         assertFalse(narration.text.contains("Today"))
     }
