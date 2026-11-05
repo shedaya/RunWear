@@ -732,6 +732,14 @@ final class Gen3SettingsTruthTests: XCTestCase {
     /// app target — not in a rendered string, a plist, or a
     /// comment that documents a surface. The wordmark is
     /// "Make It Me" wherever it appears.
+    ///
+    /// GEN-6 (RW-52) supersession, one designed exception: the
+    /// fork's Option-A door label is the settled verb phrase
+    /// "Make it me" (design-spec §10.1: doors "Make it me / Use
+    /// my photos") — an action label in the "Use my photos"
+    /// voice, NOT the wordmark. The census therefore allows
+    /// exactly that one rendered door and bans the casing
+    /// everywhere else, comments included.
     func testNoAppSurfaceSaysMakeItMeWithALowercaseIt() throws {
         let testsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let appDir = testsDir.deletingLastPathComponent().appendingPathComponent("RunWear")
@@ -742,7 +750,13 @@ final class Gen3SettingsTruthTests: XCTestCase {
         for case let url as URL in enumerator
         where ["swift", "plist"].contains(url.pathExtension) {
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            if text.contains("Make it me") { offenders.append(url.lastPathComponent) }
+            for line in text.components(separatedBy: "\n") where line.contains("Make it me") {
+                let isTheSettledDoor = url.lastPathComponent == "MakeItMeFlowViews.swift"
+                    && line.contains("Text(\"Make it me\")")
+                if !isTheSettledDoor {
+                    offenders.append("\(url.lastPathComponent): \(line.trimmingCharacters(in: .whitespaces))")
+                }
+            }
         }
         XCTAssertEqual(offenders, [], "X-16: lowercase-it casing survives in \(offenders)")
     }
@@ -756,8 +770,12 @@ final class Gen3SettingsTruthTests: XCTestCase {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
         XCTAssertTrue(flow.contains("Settings → Make It Me → Delete my photos"),
                       "Y-12: the consent copy names the section with the wordmark casing")
-        XCTAssertTrue(flow.contains("You can switch to Make It Me any time in Settings."),
-                      "the fork's body copy carries the same casing")
+        // GEN-6 (RW-52): the fork sentence this pin's second half
+        // covered ("You can switch to Make It Me any time in
+        // Settings.") lived inside the Option-B card description
+        // line the register orders REMOVED as unlisted copy —
+        // the assertion is retired with the line, not satisfied
+        // by keeping settled-out copy alive.
     }
 
     // MARK: - WS-E → GEN-3 ROUND 2 · the welcome's name-led points

@@ -246,6 +246,28 @@ struct SettingsModal: View {
                 currentCombination: currentCombination
             )
 
+        case .support:
+            // R-15: the always-available feedback + rating doors.
+            Section {
+                Button {
+                    showFeedback = true
+                } label: {
+                    Label("Send feedback", systemImage: "envelope")
+                }
+
+                Link(destination: Self.reviewURL) {
+                    Label("Rate RunWear", systemImage: "star")
+                }
+            } header: {
+                settingsSectionHeader("Support")
+            }
+
+        case .about:
+            Section {
+                LabeledContent("Version", value: appVersion)
+            } header: {
+                settingsSectionHeader("About")
+            }
         case .dangerZone:
             // GEN-6 (RW-56): ONE quarantined "Danger zone"
             // section, seated LAST in the inventory, carrying
@@ -280,28 +302,6 @@ struct SettingsModal: View {
                 settingsSectionHeader("Danger zone")
             }
 
-        case .support:
-            // R-15: the always-available feedback + rating doors.
-            Section {
-                Button {
-                    showFeedback = true
-                } label: {
-                    Label("Send feedback", systemImage: "envelope")
-                }
-
-                Link(destination: Self.reviewURL) {
-                    Label("Rate RunWear", systemImage: "star")
-                }
-            } header: {
-                settingsSectionHeader("Support")
-            }
-
-        case .about:
-            Section {
-                LabeledContent("Version", value: appVersion)
-            } header: {
-                settingsSectionHeader("About")
-            }
         }
     }
 

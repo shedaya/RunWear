@@ -250,7 +250,7 @@ final class Gen6WaveCTests: XCTestCase {
 
     func testRW59BundleCarriesVersionDeviceAndSettings() throws {
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(modal.contains("\"Device\": \\(UIDevice.current.model)"),
+        XCTAssertTrue(modal.contains("\"Device\": \"\\(UIDevice.current.model)"),
                       "the bundle carries the device, as disclosed")
         XCTAssertTrue(modal.contains("\"Settings\": \"Fit: \\(fit) · Units: \\(unit) · Body temperature: \\(comfort)\""),
                       "the bundle carries the user's settings, as disclosed")

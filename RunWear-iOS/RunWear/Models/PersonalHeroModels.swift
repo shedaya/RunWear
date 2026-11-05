@@ -1441,8 +1441,8 @@ struct PhotoCheckReport: Equatable {
 
 // MARK: - Intake copy (RW-16.14)
 //
-// GEN-6 (DA-23): the dead `fullBodyGuidance` constant is DELETED
-// — full-body guidance for an intake settled as face-only
+// GEN-6 (DA-23): the dead full-body guidance constant is
+// DELETED — guidance for an intake settled as face-only
 // (design-spec §10), with zero call sites since gen-5 removed it
 // from the intake rendering.
 enum MakeItMeCopy {

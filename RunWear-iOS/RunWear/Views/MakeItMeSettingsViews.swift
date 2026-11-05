@@ -609,85 +609,6 @@ private struct ReferencePhotoTileView: View {
     }
 }
 
-// MARK: - Your looks — the looks library (GEN-6 RW-61; frame 21 / §17)
-//
-// The designed library surface: every look the store knows
-// about, as a titled cell. A gate-failed cell is labelled
-// "…stock photo for now" and carries the "Why am I seeing a
-// stock photo?" door, which speaks the policy's explanation
-// verbatim (PersonalServePolicy.failedExplanation — wired here,
-// not rewritten). Reached one tap away from the failed cell's
-// home line ("See all your looks"); never badged on home.
-struct YourLooksLibraryView: View {
-    @EnvironmentObject var store: PersonalHeroStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var showFailedExplanation = false
-
-    private var cells: [LooksLibrary.Cell] {
-        LooksLibrary.cells(from: store.lookStates)
-    }
-
-    var body: some View {
-        ScrollView {
-            if cells.isEmpty {
-                Text("Your looks will appear here as they're made.")
-                    .font(.system(size: 15))
-                    .foregroundColor(AppTheme.inkSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 48)
-                    .padding(.horizontal, 32)
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 16) {
-                    ForEach(cells) { cell in
-                        libraryCell(cell)
-                    }
-                }
-                .padding(16)
-            }
-        }
-        .background(AppTheme.background.ignoresSafeArea())
-        .navigationTitle("Your looks")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
-            }
-        }
-        .alert("Why am I seeing a stock photo?", isPresented: $showFailedExplanation) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(PersonalServePolicy.failedExplanation)
-        }
-    }
-
-    private func libraryCell(_ cell: LooksLibrary.Cell) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(AppTheme.cardOnSheet)
-                .aspectRatio(0.8, contentMode: .fit)
-                .overlay {
-                    Image(systemName: cell.isFailed ? "photo" : "person.crop.rectangle")
-                        .font(.system(size: 28))
-                        .foregroundColor(AppTheme.inkSecondary)
-                }
-            Text(cell.titleLine)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(AppTheme.inkPrimary)
-            Text(cell.statusLine)
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.inkSecondary)
-            if cell.isFailed {
-                Button("Why am I seeing a stock photo?") {
-                    showFailedExplanation = true
-                }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(AppTheme.inkPrimary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 // MARK: - Subscription sheet — the paywall (frame 22; notes §§5–6)
 //
 // ONE design at every price: the price is a parameterized slot
@@ -1000,3 +921,83 @@ struct ConvergenceBandView: View {
         .accessibilityLabel("\(content.heading). \(content.line)")
     }
 }
+
+// MARK: - Your looks — the looks library (GEN-6 RW-61; frame 21 / §17)
+//
+// The designed library surface: every look the store knows
+// about, as a titled cell. A gate-failed cell is labelled
+// "…stock photo for now" and carries the "Why am I seeing a
+// stock photo?" door, which speaks the policy's explanation
+// verbatim (PersonalServePolicy.failedExplanation — wired here,
+// not rewritten). Reached one tap away from the failed cell's
+// home line ("See all your looks"); never badged on home.
+struct YourLooksLibraryView: View {
+    @EnvironmentObject var store: PersonalHeroStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var showFailedExplanation = false
+
+    private var cells: [LooksLibrary.Cell] {
+        LooksLibrary.cells(from: store.lookStates)
+    }
+
+    var body: some View {
+        ScrollView {
+            if cells.isEmpty {
+                Text("Your looks will appear here as they're made.")
+                    .font(.system(size: 15))
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 48)
+                    .padding(.horizontal, 32)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 16) {
+                    ForEach(cells) { cell in
+                        libraryCell(cell)
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .navigationTitle("Your looks")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }
+            }
+        }
+        .alert("Why am I seeing a stock photo?", isPresented: $showFailedExplanation) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(PersonalServePolicy.failedExplanation)
+        }
+    }
+
+    private func libraryCell(_ cell: LooksLibrary.Cell) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(AppTheme.cardOnSheet)
+                .aspectRatio(0.8, contentMode: .fit)
+                .overlay {
+                    Image(systemName: cell.isFailed ? "photo" : "person.crop.rectangle")
+                        .font(.system(size: 28))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+            Text(cell.titleLine)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(AppTheme.inkPrimary)
+            Text(cell.statusLine)
+                .font(.system(size: 13))
+                .foregroundColor(AppTheme.inkSecondary)
+            if cell.isFailed {
+                Button("Why am I seeing a stock photo?") {
+                    showFailedExplanation = true
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppTheme.inkPrimary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+

@@ -897,6 +897,8 @@ struct WeatherOutfitView: View {
         showSettings || showDatePicker || showTimePicker || showShop
             || showLocationPicker || selectedWeatherDetail != nil
             || showCollection || showFeedbackSheet
+            // GEN-6 (RW-61): the looks library is a home sheet too.
+            || showLooksLibrary
     }
 
     /// The mini bar dock: the session's entry drives the bar —

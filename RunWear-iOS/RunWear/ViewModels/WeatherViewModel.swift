@@ -1489,9 +1489,9 @@ class WeatherViewModel: ObservableObject {
         selectedWeatherSnapshot?.condition ?? weatherData?.currentWeather.condition ?? .unknown
     }
 
-    // GEN-6 (DA-23): the consumerless emoji-led `shareText`
-    // computation (and its sole-use rawFeelsLikeFahrenheit helper)
-    // is DELETED — it had no call site since the home ShareLink
+    // GEN-6 (DA-23): the consumerless emoji-led share-text
+    // computation (and its sole-use raw-feels-like helper) is
+    // DELETED — it had no call site since the home ShareLink
     // was removed (T-4), and its wording violates RW-31 §5.3 on
     // its face. Sharing lives in the collection's designed card
     // path (Wave B territory), not in a view-model string.
