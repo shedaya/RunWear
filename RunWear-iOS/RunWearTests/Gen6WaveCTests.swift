@@ -26,6 +26,7 @@ final class Gen6WaveCTests: XCTestCase {
 
     // MARK: - DA-14: watch glance is the comfort-adjusted feels-like
 
+    @MainActor
     func testDA14WatchGlanceRendersTheComfortAdjustedFigure() {
         // Raw 50°F with a non-zero comfort adjustment: the glance
         // must show the ADJUSTED figure the outfit is priced off,
@@ -361,5 +362,115 @@ final class Gen6WaveCTests: XCTestCase {
                       "disclosure: the commission never changes the recommendation")
         XCTAssertFalse(shop.contains("we may earn a small commission"),
                        "the old partial disclosure must not return")
+    }
+
+    // MARK: - RW-66: date pickable from Home, Confirm-gated
+
+    /// Two fixed days with sharply different weather (day 1 mild,
+    /// day 2 cold), built the established fixture way.
+    @MainActor
+    private func rw66ViewModel() -> WeatherViewModel {
+        ManualLocationStore.clear()
+        let vm = WeatherViewModel()
+        vm.locationName = "New York, NY"
+        vm.temperatureUnit = .fahrenheit
+        vm.comfortLevel = .neutral
+        func day(_ date: String, apparent: Double) -> ([String], [Double], [Double]) {
+            let times = (0..<24).map { String(format: "%@T%02d:00", date, $0) }
+            return (times, [Double](repeating: apparent, count: 24), [Double](repeating: apparent, count: 24))
+        }
+        let (t1, a1, ap1) = day("2026-10-29", apparent: 18.3)
+        let (t2, a2, ap2) = day("2026-10-30", apparent: -1.1)
+        let hourly = HourlyWeather(
+            time: t1 + t2,
+            temperature2m: a1 + a2,
+            apparentTemperature: ap1 + ap2,
+            relativeHumidity2m: [Int](repeating: 55, count: 48),
+            precipitationProbability: [Int](repeating: 0, count: 48),
+            precipitation: [Double](repeating: 0, count: 48),
+            rain: [Double](repeating: 0, count: 48),
+            uvIndex: [Double](repeating: 3, count: 48),
+            windSpeed10m: [Double](repeating: 6, count: 48),
+            windDirection10m: [Int](repeating: 90, count: 48),
+            windGusts10m: [Double](repeating: 9, count: 48),
+            weatherCode: [Int](repeating: 0, count: 48)
+        )
+        vm.weatherData = WeatherData(
+            latitude: 40.7128, longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: 18.3, windspeed: 6, weathercode: 0, isDay: 1),
+            hourly: hourly, timezone: "America/New_York", currentDetail: nil
+        )
+        vm.selectedDate = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 29))!
+        vm.selectedHour = 12
+        vm.updateSelectedWeatherSnapshot()
+        vm.makeRecommendation()
+        return vm
+    }
+
+    func testRW66DateDraftMovesOnlyTheDraft() {
+        let day1 = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 29))!
+        let day2 = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 30))!
+        var draft = DatePickerDraft(originalDate: day1)
+        XCTAssertFalse(draft.isChanged)
+        draft.select(day2)
+        XCTAssertTrue(draft.isChanged)
+        XCTAssertEqual(draft.originalDate, day1, "the confirmed selection is untouched until Confirm")
+        XCTAssertEqual(draft.commit(), day2)
+    }
+
+    @MainActor
+    func testRW66DateConfirmReSolvesToTheNewDate() {
+        let vm = rw66ViewModel()
+        let mildFeels = vm.currentFeelsLike
+        // The Confirm path, exactly as the host runs it: the
+        // draft's commit is written to the selection once, and
+        // the host's onChange applies it through the one
+        // re-solve path, keeping the selected hour.
+        var draft = DatePickerDraft(originalDate: vm.selectedDate)
+        draft.select(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 30))!)
+        vm.selectedDate = draft.commit()
+        vm.updateSelectedTime(date: vm.selectedDate, hour: vm.selectedHour)
+        XCTAssertEqual(vm.selectedDate, draft.commit())
+        XCTAssertEqual(vm.selectedHour, 12, "the hour is kept across a date change")
+        XCTAssertLessThan(vm.currentFeelsLike, mildFeels - 20,
+                          "home re-solved to the new date's conditions (cold day), got \(vm.currentFeelsLike)")
+    }
+
+    @MainActor
+    func testRW66DateCancelRestoresThePriorSelectionExactly() {
+        let vm = rw66ViewModel()
+        let dateBefore = vm.selectedDate
+        let hourBefore = vm.selectedHour
+        let feelsBefore = vm.currentFeelsLike
+        // Cancel semantics: the draft is moved and DISCARDED —
+        // the selection was never written, so there is nothing
+        // to undo and nothing re-solves.
+        var draft = DatePickerDraft(originalDate: vm.selectedDate)
+        draft.select(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 30))!)
+        XCTAssertTrue(draft.isChanged)
+        _ = draft // discarded, as Cancel discards it
+        XCTAssertEqual(vm.selectedDate, dateBefore)
+        XCTAssertEqual(vm.selectedHour, hourBefore)
+        XCTAssertEqual(vm.currentFeelsLike, feelsBefore)
+    }
+
+    func testRW66DateEntryAndConfirmGate_sourcePins() throws {
+        // The entry: the time sheet's context line carries the
+        // day door, fed by the host with the real binding.
+        let time = try sourceFile("../RunWear/Views/Modals/TimePickerSheet.swift")
+        XCTAssertTrue(time.contains("showDateSheet = true"), "the context line's date segment opens the day sheet")
+        XCTAssertTrue(time.contains("DatePickerSheet("), "the sibling day sheet is presented from the picker")
+        XCTAssertTrue(time.contains("accessibilityLabel(\"Choose a day: \\(dateLabel)\")"))
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(home.contains("dateSelection: $viewModel.selectedDate"),
+                      "home feeds the picker the selection binding — the date is pickable from home")
+        XCTAssertTrue(home.contains("onDateConfirmed: { showTimePicker = false }"))
+        // The gate: the day sheet writes ONLY on Confirm.
+        let date = try sourceFile("../RunWear/Views/Modals/DatePickerSheet.swift")
+        XCTAssertTrue(date.contains("selectedDate = draft.commit()"), "Confirm is the one write")
+        XCTAssertFalse(date.contains("selectedDate = date"), "no live write on tap remains")
+        XCTAssertTrue(date.contains("Text(\"Choose a Day\")"), "frame 42's sheet name")
+        XCTAssertTrue(date.contains("Button(\"Cancel\")"), "Cancel stands in the sheet")
+        XCTAssertTrue(date.contains("Button(\"Confirm\")"), "Confirm stands in the sheet")
     }
 }

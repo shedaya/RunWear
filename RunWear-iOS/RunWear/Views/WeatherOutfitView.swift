@@ -237,7 +237,16 @@ struct WeatherOutfitView: View {
                     openedInNowState: viewModel.isNowSelection,
                     nowHour: viewModel.dayChartNowHour,
                     isPresented: $showTimePicker,
-                    onConfirm: { viewModel.applyTimePickerCommit($0) }
+                    onConfirm: { viewModel.applyTimePickerCommit($0) },
+                    // GEN-6 (RW-66): the day picker's door inside
+                    // the sheet (its context line's date segment).
+                    // Confirm writes the view model's selectedDate
+                    // — the .onChange on the date-sheet modifier
+                    // above re-solves home exactly once, keeping
+                    // the selected hour — and dismisses this sheet
+                    // too, landing home on the new day.
+                    dateSelection: $viewModel.selectedDate,
+                    onDateConfirmed: { showTimePicker = false }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

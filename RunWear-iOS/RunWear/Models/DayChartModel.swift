@@ -357,6 +357,39 @@ struct TimePickerDraft: Equatable {
     }
 }
 
+// MARK: - Date-picker draft (GEN-6 RW-66)
+
+/// The day picker's draft, the date-side mirror of
+/// TimePickerDraft's semantics (design-spec §6 mechanics applied
+/// to the frame-42 sibling sheet): opening snapshots the
+/// selection; tapping days moves the DRAFT only — the confirmed
+/// selection is written exactly once, by Confirm, through the
+/// host's existing re-solve path. Cancel (or swipe-dismiss)
+/// discards the draft, so the prior selection is restored
+/// exactly because it was never written.
+struct DatePickerDraft: Equatable {
+    /// The selection as it was when the sheet opened.
+    let originalDate: Date
+    private(set) var draftDate: Date
+
+    init(originalDate: Date) {
+        self.originalDate = originalDate
+        self.draftDate = originalDate
+    }
+
+    mutating func select(_ date: Date) {
+        draftDate = date
+    }
+
+    /// True when the drafted day differs from the confirmed day.
+    var isChanged: Bool {
+        !Calendar.current.isDate(draftDate, inSameDayAs: originalDate)
+    }
+
+    /// The date Confirm writes to the selection.
+    func commit() -> Date { draftDate }
+}
+
 // MARK: - Headline-line state
 
 /// The headline line's way back to now (GEN-4 Concept 1): the

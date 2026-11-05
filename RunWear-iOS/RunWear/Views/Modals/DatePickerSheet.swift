@@ -3,7 +3,28 @@ import SwiftUI
 struct DatePickerSheet: View {
     @Binding var selectedDate: Date
     @Binding var isPresented: Bool
+    /// GEN-6 (RW-66): fired after Confirm writes the selection —
+    /// a host presenting this sheet inside the time picker uses
+    /// it to dismiss the parent sheet, since the moment (day +
+    /// kept hour) has been committed and home has re-solved.
+    var onConfirm: (() -> Void)? = nil
 
+    /// GEN-6 (RW-66): the sheet works on a DRAFT, exactly like
+    /// its sibling the time picker (§6 mechanics): tapping a day
+    /// moves the draft only; Confirm writes the selection once
+    /// (the host's onChange re-solves home exactly once); Cancel
+    /// and swipe-dismiss write nothing, so the prior selection
+    /// stands restored exactly. (The pre-GEN-6 form bound the
+    /// selection live and auto-dismissed on tap — a date change
+    /// re-solved instantly with no way back.)
+    @State private var draft: DatePickerDraft
+
+    init(selectedDate: Binding<Date>, isPresented: Binding<Bool>, onConfirm: (() -> Void)? = nil) {
+        self._selectedDate = selectedDate
+        self._isPresented = isPresented
+        self.onConfirm = onConfirm
+        _draft = State(initialValue: DatePickerDraft(originalDate: selectedDate.wrappedValue))
+    }
 
     private let calendar = Calendar.current
     /// The forecast horizon is 7 days (WeatherService forecast_days).
@@ -25,13 +46,31 @@ struct DatePickerSheet: View {
     // owns the backdrop, drag handle, and dismissal.
     var body: some View {
         VStack(spacing: 20) {
-            // Title
-            Text("Select Date")
+            // Title — frame 42's own name for the sheet, the
+            // sibling of the time picker's "Choose a Time".
+            Text("Choose a Day")
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
 
-            // Date grid
+            // Date grid (draft selection)
             dateGrid
+
+            // GEN-6 (RW-66): the settled Confirm gate, in the
+            // time picker's own button treatment — nothing
+            // re-solves until Confirm; Cancel restores exactly.
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(AppTheme.inkSecondary)
+                Spacer()
+                Button("Confirm") {
+                    selectedDate = draft.commit()
+                    onConfirm?()
+                    dismiss()
+                }
+                .font(.appSecondary.weight(.bold))
+                .foregroundColor(AppTheme.pinePayload)
+            }
 
             Spacer().frame(height: 16)
         }
@@ -39,7 +78,7 @@ struct DatePickerSheet: View {
         .frame(maxWidth: .infinity)
         .background(AppTheme.background.ignoresSafeArea())
         // RW-6.10: one selection tick per change — nothing more.
-        .sensoryFeedback(.selection, trigger: selectedDate)
+        .sensoryFeedback(.selection, trigger: draft.draftDate)
     }
 
 
@@ -51,13 +90,10 @@ struct DatePickerSheet: View {
                 DateButton(
                     date: date,
                     isBeyondForecast: Self.isBeyondForecast(dayIndex: index),
-                    isSelected: calendar.isDate(date, inSameDayAs: selectedDate),
+                    isSelected: calendar.isDate(date, inSameDayAs: draft.draftDate),
                     action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedDate = date
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            dismiss()
+                            draft.select(date)
                         }
                     }
                 )

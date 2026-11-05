@@ -32,8 +32,22 @@ struct TimePickerSheet: View {
     /// Confirm's commit — the host applies it through the view
     /// model's one apply path.
     var onConfirm: (TimePickerDraft.Commit) -> Void = { _ in }
+    /// GEN-6 (RW-66): the day picker's binding + confirm hook.
+    /// The date segment of the context line is the door into the
+    /// sibling "Choose a Day" sheet (frame 42) — this is the
+    /// designed date entry: home's Concept 1 headline opens THIS
+    /// sheet, and the day is pickable inside the same picker
+    /// family. (Before RW-66 the day picker's only home wiring
+    /// was the hero's onDateTapped, which never renders with the
+    /// hero's top controls off — the date was unreachable from
+    /// home, as Sol's build-26 walkthrough found.) When the date
+    /// is confirmed, the host dismisses this sheet too: the new
+    /// day is committed and home has re-solved to it.
+    var dateSelection: Binding<Date>? = nil
+    var onDateConfirmed: () -> Void = {}
 
     @State private var draft: TimePickerDraft
+    @State private var showDateSheet = false
 
     init(
         chart: DayChartModel?,
@@ -44,7 +58,9 @@ struct TimePickerSheet: View {
         openedInNowState: Bool,
         nowHour: Int?,
         isPresented: Binding<Bool>,
-        onConfirm: @escaping (TimePickerDraft.Commit) -> Void = { _ in }
+        onConfirm: @escaping (TimePickerDraft.Commit) -> Void = { _ in },
+        dateSelection: Binding<Date>? = nil,
+        onDateConfirmed: @escaping () -> Void = {}
     ) {
         self.chart = chart
         self.dateLabel = dateLabel
@@ -52,6 +68,8 @@ struct TimePickerSheet: View {
         self.unit = unit
         self._isPresented = isPresented
         self.onConfirm = onConfirm
+        self.dateSelection = dateSelection
+        self.onDateConfirmed = onDateConfirmed
         // Default draft: the currently selected hour; in the NOW
         // state on the location's today the host passes the
         // location's current hour as the initial hour, so the
@@ -70,10 +88,7 @@ struct TimePickerSheet: View {
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
 
-            Text("\(dateLabel) · \(placeName) · Feels-like by hour")
-                .font(.appSecondary)
-                .foregroundColor(AppTheme.inkSecondary)
-                .lineLimit(1)
+            contextLine
 
             if let chart {
                 readoutRow(chart: chart)
@@ -142,6 +157,53 @@ struct TimePickerSheet: View {
         // SNAPPED draft hour, so it fires exactly once per hour
         // the handle crosses, never per drag event.
         .sensoryFeedback(.selection, trigger: draft.draftHour)
+        // GEN-6 (RW-66): the sibling day sheet, presented over
+        // this one from the context line's date door.
+        .sheet(isPresented: $showDateSheet) {
+            if let dateSelection {
+                DatePickerSheet(
+                    selectedDate: dateSelection,
+                    isPresented: $showDateSheet,
+                    onConfirm: onDateConfirmed
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+    }
+
+    /// The context line — "{Date} · {Place} · Feels-like by
+    /// hour" — with the date segment as the day picker's door
+    /// (GEN-6 RW-66): pine, bold, chevron, the headline moment's
+    /// own treatment (Concept 1), because it is the same kind of
+    /// entry. Without a date binding (previews) the line is the
+    /// plain settled text it always was.
+    @ViewBuilder
+    private var contextLine: some View {
+        if dateSelection != nil {
+            HStack(spacing: 0) {
+                Button { showDateSheet = true } label: {
+                    HStack(spacing: 3) {
+                        Text(dateLabel)
+                        Text("›")
+                    }
+                    .font(.appSecondary.weight(.bold))
+                    .foregroundColor(AppTheme.pinePayload)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Choose a day: \(dateLabel)")
+
+                Text(" · \(placeName) · Feels-like by hour")
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkSecondary)
+            }
+            .lineLimit(1)
+        } else {
+            Text("\(dateLabel) · \(placeName) · Feels-like by hour")
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
+                .lineLimit(1)
+        }
     }
 
     // MARK: - Readout + steppers
