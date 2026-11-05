@@ -385,10 +385,16 @@ final class Gen5FidelityTests: XCTestCase {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
         XCTAssertFalse(flow.contains("1 to 3 photos"))
         XCTAssertFalse(flow.contains("body to land on"))
-        XCTAssertTrue(flow.contains("✓ That's exactly what we need"))
+        // The settled passing copy (item 17): the check is a
+        // drawn SF Symbol glyph + the words — the pair renders
+        // as the design's "✓ That's exactly what we need" with
+        // no emoji-class character in copy (WS-10 census).
+        XCTAssertTrue(flow.contains("Image(systemName: \"checkmark\")"))
+        XCTAssertTrue(flow.contains("Text(\"That's exactly what we need\")"))
         XCTAssertTrue(flow.contains("maxPhotos = 1"))
         let capture = try sourceFile("../RunWear/Views/GuidedSelfieCaptureView.swift")
-        XCTAssertTrue(capture.contains("✓ That's exactly what we need"))
+        XCTAssertTrue(capture.contains("Image(systemName: \"checkmark\")"))
+        XCTAssertTrue(capture.contains("Text(\"That's exactly what we need\")"))
     }
 
     func testSettingsSource_DangerZoneAndVerbatimLines() throws {
