@@ -301,8 +301,8 @@ struct HeroImageView: View {
             .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.exhaustedCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
         // GEN-6 Wave A (RW-34): NO scaffold case exists — a
         // scaffold serve is silent (HeroPill.resolve returns
-        // .hidden for it); the removed "Your photo" label was
-        // ruled not an approved pill (Sol, Nov 5, 2026).
+        // .hidden for it); the removed scaffold label was ruled
+        // not an approved pill (Sol, Nov 5, 2026).
         case .freeLook(let used, let allowance):
             Button(action: onPillGetUnlimited) {
                 HStack(spacing: 6) {
