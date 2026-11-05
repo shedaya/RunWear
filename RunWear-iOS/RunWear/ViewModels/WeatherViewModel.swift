@@ -1096,7 +1096,7 @@ class WeatherViewModel: ObservableObject {
         // served. The bundled fallback painted at the atomic
         // commit remains the always-available floor throughout
         // (WS-A(1)).
-        var deferredPoolPaint: (url: String, rowId: Int?, combinationId: String)?
+        var deferredPoolPaint: (url: String, rowId: String?, combinationId: String)?
         var deferredBundledAdoption: (tier: HeroFallbackTier?, asset: String, url: String)?
         if result.fallbackLevel < 8 || isScaffoldPoolPaint {
             if !personalAppliedForThisCell {

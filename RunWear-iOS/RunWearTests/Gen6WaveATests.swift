@@ -263,8 +263,9 @@ final class Gen6WaveATests: XCTestCase {
         // meter line carry no seconds promise.
         XCTAssertFalse(MakeItMeCopy.progressSubline.contains("second"))
         XCTAssertFalse(MakeItMeCopy.progressTitle.contains("second"))
-        XCTAssertFalse(FreeLooksMeter.subscriptionLine.contains("second"))
-        XCTAssertTrue(FreeLooksMeter.subscriptionLine.contains("about a minute"),
+        let meterLine = FreeLooksMeter.subscriptionLine(used: 0, allowance: 5)
+        XCTAssertFalse(meterLine.contains("second"))
+        XCTAssertTrue(meterLine.contains("about a minute"),
                       "the settled §14 meter line stands: first ones take about a minute")
     }
 
