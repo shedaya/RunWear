@@ -1052,7 +1052,7 @@ func deriveBankCoverage(heroCells: Set<String>, targetCells: Set<String>) -> Ban
 /// keyed through the SAME PersonalCombination.make the displayed
 /// cell uses (comfort-adjusted feels-like frame), so a named
 /// cell is exactly the cell its frame will ask for.
-struct ForecastCellFrame: Equatable {
+struct ForecastCellFrame {
     /// The forecast day, yyyy-MM-dd in the forecast's own
     /// (location-local) frame — half of the cluster key.
     let date: String
