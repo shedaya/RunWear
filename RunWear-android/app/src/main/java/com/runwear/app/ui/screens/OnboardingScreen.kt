@@ -51,11 +51,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.components.HapticSpec
@@ -257,24 +254,27 @@ private fun PromiseStep(onGetStarted: () -> Unit) {
  */
 @Composable
 private fun PromiseRow(point: OnboardingCopy.WelcomePoint) {
-    Text(
-        text = buildAnnotatedString {
-            withStyle(
-                SpanStyle(
-                    color = RunWearColors.PineAccent,
-                    fontWeight = FontWeight.Bold
-                )
-            ) {
-                append(point.name)
-            }
-            append(" ")
-            append(point.phrase)
-        },
-        fontSize = 17.sp,
-        lineHeight = 23.sp,
-        color = RunWearColors.TextPrimary,
-        modifier = Modifier.fillMaxWidth()
-    )
+    // GEN-5 (RW-28 item 27): the name-led HEADLINE ("Name —
+    // headline phrase", pine bold) on its own line, the body line
+    // separate beneath it — the gen-4 build ran the name straight
+    // into the body sentence (A-1).
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = point.headlineLine,
+            fontSize = 17.sp,
+            lineHeight = 23.sp,
+            fontWeight = FontWeight.Bold,
+            color = RunWearColors.PineAccent,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = point.phrase,
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
+            color = RunWearColors.TextPrimary,
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+        )
+    }
 }
 
 /**
@@ -321,7 +321,10 @@ private fun PreferencesStep(
             sub = OnboardingCopy.SETUP_SUB,
             onBack = onBack
         )
-        Spacer(Modifier.height(24.dp))
+        // GEN-5 (RW-28 item 28): tightened so the Body temperature
+        // card — the step's last card — arrives FULLY visible above
+        // the pinned Continue, not cut off by it (A-2).
+        Spacer(Modifier.height(16.dp))
 
         PreferenceSection(
             title = OnboardingCopy.TEMP_TITLE,
@@ -385,16 +388,30 @@ private fun PreferencesStep(
             // named ends, replacing the 3-option segmented control
             // that collapsed the two end stops away.
             Column {
+                // GEN-5 (C-1): the slider carries iOS's shared
+                // ComfortLevelControl behaviour — a selection
+                // haptic each time the STOP changes, and the tint
+                // shifting blue → pine → orange across the stops
+                // (comfortStopTint, the same policy as Settings).
+                val sliderHaptic = LocalHapticFeedback.current
+                var lastStopIndex by remember {
+                    mutableStateOf(ComfortStops.indexOf(comfortPreference))
+                }
                 Slider(
                     value = ComfortStops.indexOf(comfortPreference).toFloat(),
                     onValueChange = { value ->
-                        onComfortPreferenceChange(ComfortStops.at(value.roundToInt()))
+                        val stopIndex = value.roundToInt()
+                        if (stopIndex != lastStopIndex) {
+                            lastStopIndex = stopIndex
+                            sliderHaptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onComfortPreferenceChange(ComfortStops.at(stopIndex))
                     },
                     valueRange = 0f..(ComfortStops.stops.size - 1).toFloat(),
                     steps = ComfortStops.stops.size - 2,
                     colors = SliderDefaults.colors(
-                        thumbColor = RunWearColors.Primary,
-                        activeTrackColor = RunWearColors.Primary
+                        thumbColor = comfortStopTint(comfortPreference),
+                        activeTrackColor = comfortStopTint(comfortPreference)
                     )
                 )
                 Row(

@@ -71,12 +71,24 @@ object ConvergenceBandPolicy {
         // Premium context only — never free, never in-trial.
         if (mode != MakeItMeMode.SUBSCRIBED) return null
         if (inTrial) return null
-        val cov = coverage ?: return null
-        if (cov.total <= 0 || cov.ready >= cov.total) return null
+        // GEN-5 (RW-28 item 22, B-11/B-12): the band renders FROM
+        // THE MOMENT OF SUBSCRIPTION. A paying subscriber's bank is
+        // converging until a coverage read proves it complete, so
+        // an unknown coverage read (fresh subscription, first open)
+        // shows the band at zero rather than nothing — the gen-4
+        // build showed nothing for minutes after subscribing
+        // because it waited for a completed read. Only a read that
+        // proves the bank complete (ready >= total) retires it.
+        val cov = coverage
+        if (cov != null && (cov.total <= 0 || cov.ready >= cov.total)) return null
         return ConvergenceBandContent(
             heading = MakeItMeStrings.BAND_MAKING_HEADING,
             line = MakeItMeStrings.BAND_MAKING_LINE,
-            fraction = cov.ready.toFloat() / cov.total.toFloat()
+            fraction = if (cov != null && cov.total > 0) {
+                cov.ready.toFloat() / cov.total.toFloat()
+            } else {
+                0f
+            }
         )
     }
 }

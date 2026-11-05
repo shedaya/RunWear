@@ -81,12 +81,17 @@ class SettingsConvergenceBandTest {
         assertTrue(section.contains("inTrial = state.inTrial"))
         // Rendered with the shared composable.
         assertTrue(section.contains("ConvergenceBand(content = settingsBand)"))
-        // Seated in the subscribed/Premium area: after the Premium
-        // offer card, before the destructive group.
-        val cardAt = section.indexOf("premiumOfferCard(")
+        // GEN-5 (RW-28 item 22): the band occupies the STATUS SLOT —
+        // it is resolved and rendered BEFORE the status block and
+        // the offer card, and the offer card renders only when the
+        // band does not (in place of, never beneath). The
+        // destructive rows no longer live in this section at all
+        // (item 25's Danger zone quarantine).
         val bandAt = section.indexOf("ConvergenceBand(content = settingsBand)")
-        val destructiveAt = section.indexOf("S10_DELETE_ROW")
-        assertTrue(cardAt >= 0 && bandAt > cardAt && destructiveAt > bandAt)
+        val cardAt = section.indexOf("premiumOfferCard(")
+        assertTrue(bandAt >= 0 && cardAt > bandAt)
+        assertTrue(section.contains("if (settingsBand == null)"))
+        assertTrue(!section.contains("S10_DELETE_ROW"))
 
         // Home renders the identical composable (one element, two
         // seats — a future count ruling lands in both at once).

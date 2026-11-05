@@ -312,6 +312,20 @@ fun TimePickerSheet(
                         }
                 ) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
+                        // GEN-5 (item 15): night shading under
+                        // everything — the settled fixed night
+                        // window (20:00–05:59; the forecast carries
+                        // no sunrise/sunset to shade by).
+                        for ((nightStart, nightEnd) in
+                            com.runwear.app.ui.components.DayChartBandPolicy.NIGHT_RANGES) {
+                            val left = DayChartGeometry.cellLeftFraction(nightStart) * size.width
+                            val right = DayChartGeometry.cellLeftFraction(nightEnd) * size.width
+                            drawRect(
+                                color = RunWearColors.TextPrimary.copy(alpha = 0.07f),
+                                topLeft = Offset(left, 0f),
+                                size = Size(right - left, size.height)
+                            )
+                        }
                         // Bracket bands.
                         for (band in model.bands) {
                             val left = DayChartGeometry.cellLeftFraction(band.startHour) * size.width
@@ -410,6 +424,28 @@ fun TimePickerSheet(
                                 .align(Alignment.BottomEnd)
                                 .padding(end = 6.dp, bottom = 4.dp)
                         )
+                    }
+                    // GEN-5 (item 15): the per-hour condition
+                    // glyphs along the chart's top — the hour's own
+                    // weather code icon, at the hour's axis position.
+                    for (point in model.hours) {
+                        if (point.weatherCode !=
+                            com.runwear.shared.domain.model.WeatherCode.UNKNOWN
+                        ) {
+                            Text(
+                                text = point.weatherCode.icon,
+                                fontSize = 9.sp,
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(
+                                        start = (
+                                            DayChartGeometry.xFraction(point.hour) *
+                                                maxWidth.value - 5
+                                            ).dp.coerceAtLeast(0.dp),
+                                        top = 1.dp
+                                    )
+                            )
+                        }
                     }
                 }
 

@@ -78,9 +78,15 @@ class DayChartBandAndHeadlineTest {
             "Now",
             HeroSheetFormat.momentText(now, now, isNowSelected = true)
         )
+        // GEN-5 (RW-28 item 12, B-13): today's moment is the bare
+        // simple form — no "Today," prefix.
         assertEquals(
-            "Today, 6:00 PM",
+            "6:00 PM",
             HeroSheetFormat.momentText(LocalDateTime.of(2026, 11, 4, 18, 0), now, isNowSelected = false)
+        )
+        assertEquals(
+            "Tomorrow, 6:00 PM",
+            HeroSheetFormat.momentText(LocalDateTime.of(2026, 11, 5, 18, 0), now, isNowSelected = false)
         )
         assertEquals("Kansas City", HeroSheetFormat.placeText("Kansas City"))
         // The composed line is unchanged: place · moment.
@@ -88,6 +94,55 @@ class DayChartBandAndHeadlineTest {
             "Kansas City · Now",
             HeroSheetFormat.locationLine("Kansas City", now, now, isNowSelected = true)
         )
+    }
+
+    // ── One-frame rule (GEN-5 item 11, B-3) ─────────────────────
+
+    @Test
+    fun `numeral and bracket read the same adjusted frame the chart uses`() {
+        // The Miami shape from the walkthrough: the picked hour's
+        // raw feels-like is 78, the user's comfort adjustment is
+        // +5 (RUNS_WARM), and the picker readout — built in the
+        // adjusted frame — said 83. The numeral and the bracket
+        // chip must read 83 / the 83 bracket too, in the same
+        // frame, or two feels-likes coexist for one moment.
+        val weather = WeatherConditions(
+            dateTime = KotlinLocalDateTime(2026, 11, 4, 21, 0),
+            temperature = 72.0,
+            feelsLike = 78.0,
+            humidity = 70,
+            windSpeed = 3.0,
+            windGusts = 5.0,
+            precipitationProbability = 1,
+            precipitation = 0.0,
+            isRaining = false,
+            isSnowing = false,
+            cloudCover = 10,
+            uvIndex = 0.0,
+            weatherCode = WeatherCode.CLEAR_SKY
+        )
+        val unit = com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
+        val warm = com.runwear.shared.domain.model.ComfortPreference.RUNS_WARM
+        assertEquals(
+            "83°",
+            HeroSheetFormat.heroNumeral(weather, unit, warm)
+        )
+        assertEquals(
+            com.runwear.shared.domain.model.TempBracket.fromFahrenheit(83.0),
+            HeroSheetFormat.bracketFor(weather, warm)
+        )
+        // Neutral comfort: the frames coincide, as before.
+        assertEquals(
+            "78°",
+            HeroSheetFormat.heroNumeral(
+                weather, unit,
+                com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
+            )
+        )
+        // The DayChart point for the same hour is built in exactly
+        // this frame (raw + adjustment) — one frame, every surface.
+        val chartPoint = 78.0 + warm.tempAdjustment
+        assertEquals(83.0, chartPoint, 0.001)
     }
 
     // ── Right-justified weather grid ──────────────────────────────

@@ -53,14 +53,17 @@ class Gen3SettingsTest {
     }
 
     @Test
-    fun `paywall meter shares the seam and the in-flight truth`() {
-        assertTrue(
+    fun `paywall meter is the verbatim settled string in every state`() {
+        // GEN-5 (RW-28 item 29): the meter is the verbatim string —
+        // no in-flight prose is appended to it any more; the
+        // generating state is carried by the pill and the band.
+        assertEquals(
+            MakeItMeStrings.u2MeterLine(0),
             FreeLooksMeter.paywallLine(0, lookMaking = true)
-                .contains("One look is being made right now.")
         )
-        assertFalse(
-            FreeLooksMeter.paywallLine(0, lookMaking = false)
-                .contains("being made")
+        assertEquals(
+            "2 of 5 used · Free looks never expire — and your first ones take about a minute to make.",
+            FreeLooksMeter.paywallLine(2, lookMaking = false)
         )
     }
 
@@ -70,17 +73,27 @@ class Gen3SettingsTest {
     fun `offer card carries name, parameterized price with term, benefit and a real CTA`() {
         val card = MakeItMeStrings.premiumOfferCard(annualFormatted = "$9.99", subscribed = false)
         assertEquals("Premium", card.title)
-        assertEquals("$9.99 / year", card.priceLine)
+        // GEN-5 (RW-28 item 26): the compact term form "$9.99/yr".
+        assertEquals("$9.99/yr", card.priceLine)
         assertEquals(MakeItMeStrings.S18_SETTINGS_PREMIUM_LINE, card.benefitLine)
         assertEquals("Get Premium", card.ctaLabel)
         assertFalse(card.subscribed)
         // Parameterized: another arm's fetched price flows through.
         assertEquals(
-            "$29.99 / year",
+            "$29.99/yr",
             MakeItMeStrings.premiumOfferCard("$29.99", subscribed = false).priceLine
         )
         // Unresolved offering: no price line yet, never a hardcoded one.
         assertNull(MakeItMeStrings.premiumOfferCard(null, subscribed = false).priceLine)
+        // C-5: the monthly price rides the card when the offering
+        // carries it; absent until then, never hardcoded.
+        assertEquals(
+            "Monthly — $0.99/month",
+            MakeItMeStrings.premiumOfferCard(
+                "$9.99", subscribed = false, monthlyFormatted = "$0.99"
+            ).monthlyLine
+        )
+        assertNull(card.monthlyLine)
     }
 
     @Test
@@ -94,11 +107,17 @@ class Gen3SettingsTest {
     }
 
     @Test
-    fun `settings structure is status, photos, premium card, destructive last`() {
+    fun `settings structure is status, photos, premium card - destructive quarantined in the danger zone`() {
         val rows = MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.FREE)
         assertEquals(MakeItMeStrings.S6_PHOTOS_ROW, rows.first())
         assertEquals("Premium", rows[1])
-        assertEquals(MakeItMeStrings.S10_DELETE_ROW, rows.last())
+        // GEN-5 (RW-28 item 25): no destructive row inside the
+        // section; the Danger zone carries both, data last.
+        assertFalse(rows.contains(MakeItMeStrings.S10_DELETE_ROW))
+        assertEquals(
+            MakeItMeStrings.S20_DELETE_DATA_ROW,
+            MakeItMeSettingsPresentation.dangerZoneRowTitles(MakeItMeMode.FREE).last()
+        )
     }
 
     // ── X-16 — casing audit over the whole deck ────────────────

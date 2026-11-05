@@ -77,8 +77,14 @@ class ConvergenceBandCopyTest {
                 inTrial = false
             )
         )
-        // State unknown: no band (never an invented fraction).
-        assertNull(ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, null, inTrial = false))
+        // GEN-5 (RW-28 item 22): state unknown for a SUBSCRIBER
+        // means the bank is still converging — the band renders
+        // from the moment of subscription at fraction zero (the
+        // bar is unlabelled; no count is invented). Only a read
+        // proving the bank complete retires it.
+        val unknown = ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, null, inTrial = false)
+        assertEquals("Making your looks", unknown?.heading)
+        assertEquals(0f, unknown?.fraction)
         // Empty engaged set: no band.
         assertNull(
             ConvergenceBandPolicy.content(

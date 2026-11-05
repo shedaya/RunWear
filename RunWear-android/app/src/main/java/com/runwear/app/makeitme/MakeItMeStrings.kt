@@ -26,7 +26,9 @@ object MakeItMeStrings {
     // frozen final design package carries that sentence only on
     // frame 28's promise row (and a paywall proof row); frame 32's
     // fork carries none — this matches the design and iOS verbatim.
-    const val F4_OPTION_A_BODY = "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at."
+    // GEN-5 (RW-28 item 18): the settled intake is ONE photo, face
+    // only — the copy says so everywhere the fork describes it.
+    const val F4_OPTION_A_BODY = "Upload one photo of just your face, and RunWear makes your outfit photos from it — starting with the one you're looking at."
     const val F5_OPTION_A_BUTTON = "Use my photos"
     const val F6_OPTION_B_TITLE = "Use the standard photos"
     const val F7_OPTION_B_BODY = "Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make It Me any time in Settings."
@@ -39,8 +41,11 @@ object MakeItMeStrings {
     const val C1C_ATTESTATION = "These photos are of me, and I am 18 or older."
     const val C1D_CONTINUE = "Continue"
     const val C1E_NOT_NOW = "Not now"
-    const val C2A_CAPTURE_TITLE = "Add 1 to 3 photos of you"
-    const val C2B_CAPTURE_GUIDANCE = "Front-facing works best: head and shoulders or half body, good light, no sunglasses. The outfit needs a body to land on."
+    const val C2A_CAPTURE_TITLE = "Add a photo of you"
+    // GEN-5 (RW-28 item 18): one-photo, face-only guidance — the
+    // old "outfit needs a body to land on" line is retired with the
+    // multi-photo intake it described.
+    const val C2B_CAPTURE_GUIDANCE = "One photo of just your face: look at the camera, good light, no sunglasses. Your look is made from your face."
     // C2D–C2G added Oct 31, 2026 (RW-16.14, Sol's directives — spec §7
     // amended by dated note): the full-body guidance (guidance only,
     // never a validation rule) and the camera/library source choice.
@@ -150,7 +155,9 @@ object MakeItMeStrings {
     const val S28_SUBSCRIBED_STATE = "You're subscribed."
     // RW-26 §H: subscribed = management only, NO sales copy — this is
     // a state fact, not a benefit line.
-    const val S5_STATE_C_SUB = "Subscribed — your photo is ready before you open the app."
+    // GEN-5 (RW-28 item 26): the verbatim subscribed line — middot
+    // separator, capital Y, everywhere it renders.
+    const val S5_STATE_C_SUB = "Subscribed · Your photo is ready before you open the app."
     // RW-26 §9 (frame 35 settings line, verbatim): the two benefit
     // CONCEPTS (readiness, no cap) in crafted language — the concept
     // labels themselves never print.
@@ -196,6 +203,9 @@ object MakeItMeStrings {
     // two facts the photos copy doesn't carry: the account itself
     // goes, and deleting data does NOT cancel a store subscription.
     const val S20_DELETE_DATA_ROW = "Delete my data"
+    // GEN-5 (RW-28 item 25): the destructive rows' own heading,
+    // quarantined at the very end of Settings.
+    const val S29_DANGER_ZONE_HEADING = "Danger zone"
     const val S21_DELETE_DATA_CONFIRM_TITLE = "Delete all your data?"
     const val S22_DELETE_DATA_CONFIRM_BODY = "Everything RunWear holds for you will be deleted from our server and this phone: your photos, every picture made from them, and your account itself. This can't be undone. Deleting your data does not cancel a subscription — you can manage that from your store account."
     const val S23_DELETE_DATA_CONFIRM = "Delete my data"
@@ -234,8 +244,10 @@ object MakeItMeStrings {
     const val U2B_MONTHLY = "Monthly"
     const val U2B_ANNUAL = "Annual"
 
-    /** U2 monthly row, from the offering's formatted price. */
-    fun monthlyRowLabel(monthlyFormatted: String): String = "$monthlyFormatted / month"
+    /** U2 monthly row, from the offering's formatted price.
+     * GEN-5 (RW-28 item 29): the row names the plan and reads
+     * "$0.99/month" — the compact term form of record. */
+    fun monthlyRowLabel(monthlyFormatted: String): String = "Monthly — $monthlyFormatted/month"
 
     /**
      * U2 annual row, from the offering's formatted price. Gen-3
@@ -248,7 +260,7 @@ object MakeItMeStrings {
         annualFormatted: String,
         annualAmountMicros: Long,
         monthlyAmountMicros: Long?
-    ): String = "$annualFormatted / year"
+    ): String = "Annual — $annualFormatted/yr"
 
     /** Runs per year behind the per-run framing: 4.5 runs/week × 52. */
     const val RUNS_PER_YEAR_BASIS = 4.5 * 52.0
@@ -266,9 +278,14 @@ object MakeItMeStrings {
     fun perRunLine(annualFormatted: String, annualAmountMicros: Long): String =
         "At four to five runs a week, $annualFormatted/year works out to only about ${perRunCents(annualAmountMicros)}¢ per run."
 
-    /** The paywall fine print: the per-run framing + the settled U2C text. */
+    /**
+     * The paywall fine print. GEN-5 (RW-28 item 29): the per-run
+     * line moved OUT of the fine print to directly under the annual
+     * price; the fine print is the settled U2C text alone. Kept as
+     * a function so every surface resolves the same text.
+     */
     fun finePrint(annualFormatted: String, annualAmountMicros: Long): String =
-        "${perRunLine(annualFormatted, annualAmountMicros)} ${U2C_FINE_PRINT}"
+        U2C_FINE_PRINT
 
     /**
      * Gen-3 WS-D: the Settings Premium offer card's content, built
@@ -283,10 +300,18 @@ object MakeItMeStrings {
         val priceLine: String?,
         val benefitLine: String,
         val ctaLabel: String?,
-        val subscribed: Boolean
+        val subscribed: Boolean,
+        // GEN-5 (C-5/C-6): the Settings card also carries the
+        // monthly price as a modest, tappable element under the
+        // annual headline — never a co-equal button.
+        val monthlyLine: String? = null
     )
 
-    fun premiumOfferCard(annualFormatted: String?, subscribed: Boolean): PremiumOfferCardContent =
+    fun premiumOfferCard(
+        annualFormatted: String?,
+        subscribed: Boolean,
+        monthlyFormatted: String? = null
+    ): PremiumOfferCardContent =
         if (subscribed) {
             PremiumOfferCardContent(
                 title = U2G_CARD_TITLE,
@@ -298,14 +323,19 @@ object MakeItMeStrings {
         } else {
             PremiumOfferCardContent(
                 title = U2G_CARD_TITLE,
-                priceLine = annualFormatted?.let { "$it / year" },
+                // GEN-5 (RW-28 item 26): the price reads "$9.99/yr"
+                // in the compact term form, everywhere.
+                priceLine = annualFormatted?.let { "$it/yr" },
                 benefitLine = S18_SETTINGS_PREMIUM_LINE,
                 ctaLabel = S27_GET_PREMIUM,
-                subscribed = false
+                subscribed = false,
+                monthlyLine = monthlyFormatted?.let { "Monthly — $it/month" }
             )
         }
 
-    const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions."
+    // GEN-5 (RW-28 item 29): the Android fine print names the
+    // store this build is actually sold through — Google Play.
+    const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your Google Play subscriptions."
 
     // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4 — word
     // for word; do not paraphrase): the home-sheet band a Premium

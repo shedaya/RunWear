@@ -39,8 +39,9 @@ class PaywallMonthlyRowTest {
 
     @Test
     fun `the monthly label renders the fetched product price - never a literal`() {
-        assertEquals("$0.99 / month", MakeItMeStrings.monthlyRowLabel("$0.99"))
-        assertEquals("$1.49 / month", MakeItMeStrings.monthlyRowLabel("$1.49"))
+        // GEN-5 (item 29): "Monthly — $0.99/month" form of record.
+        assertEquals("Monthly — $0.99/month", MakeItMeStrings.monthlyRowLabel("$0.99"))
+        assertEquals("Monthly — $1.49/month", MakeItMeStrings.monthlyRowLabel("$1.49"))
         // The fallback label and the row label builder carry no
         // price of their own.
         assertEquals("Monthly", MakeItMeStrings.U2B_MONTHLY)
@@ -57,7 +58,7 @@ class PaywallMonthlyRowTest {
         // follows the row.
         val annualCtaAt = sheet.indexOf("buy(annual)")
         val monthlyRowAt = sheet.indexOf("PaywallPriceRow(")
-        val finePrintAt = sheet.indexOf("MakeItMeStrings.finePrint")
+        val finePrintAt = sheet.indexOf("MakeItMeStrings.U2C_FINE_PRINT")
         assertTrue("annual CTA present", annualCtaAt >= 0)
         assertTrue("monthly row under the annual card", monthlyRowAt > annualCtaAt)
         assertTrue("fine print below the monthly row", finePrintAt > monthlyRowAt)
@@ -88,10 +89,26 @@ class PaywallMonthlyRowTest {
     }
 
     @Test
-    fun `the per-run fine print is unchanged`() {
+    fun `the fine print names the store this build is sold through`() {
+        // GEN-5 (item 29): Android's fine print names Google Play
+        // only — the gen-4 text named both stores on both platforms.
         assertEquals(
-            "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your App Store or Google Play subscriptions.",
+            "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your Google Play subscriptions.",
             MakeItMeStrings.U2C_FINE_PRINT
         )
+        assertFalse(MakeItMeStrings.U2C_FINE_PRINT.contains("App Store"))
+    }
+
+    @Test
+    fun `the per-run line renders directly under the annual price`() {
+        // GEN-5 (item 29): the per-run line left the fine print
+        // and sits under the price inside the Premium card.
+        val sheet = paywallSheet()
+        val priceAt = sheet.indexOf("annual?.label ?: MakeItMeStrings.U2B_ANNUAL")
+        val perRunAt = sheet.indexOf("MakeItMeStrings.perRunLine")
+        val ctaAt = sheet.indexOf("buy(annual)")
+        assertTrue("price present", priceAt >= 0)
+        assertTrue("per-run line under the price", perRunAt > priceAt)
+        assertTrue("per-run line above the CTA", perRunAt < ctaAt)
     }
 }

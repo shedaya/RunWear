@@ -55,7 +55,12 @@ data class DayChartHour(
     val rawFeelsLikeF: Double,
     val bracket: TempBracket,
     /** The drafted hour's outfit preview items (display names). */
-    val outfitItems: List<String>
+    val outfitItems: List<String>,
+    /** GEN-5 (item 15): the hour's condition, for the picker
+     * chart's per-hour condition glyphs. Defaults keep the older
+     * fixtures compiling; the builder always passes the real code. */
+    val weatherCode: com.runwear.shared.domain.model.WeatherCode =
+        com.runwear.shared.domain.model.WeatherCode.UNKNOWN
 ) {
     /** Identity of the outfit at this hour, for change detection. */
     val outfitSignature: String get() = outfitItems.joinToString("|")
@@ -128,7 +133,8 @@ object DayChartBuilder {
                     feelsLikeF = adjusted,
                     rawFeelsLikeF = h.feelsLike,
                     bracket = TempBracket.fromFahrenheit(adjusted),
-                    outfitItems = DayChartOutfitPreview.itemsFor(h, comfort)
+                    outfitItems = DayChartOutfitPreview.itemsFor(h, comfort),
+                    weatherCode = h.weatherCode
                 )
             }
         val changes = mutableListOf<Int>()
@@ -249,15 +255,28 @@ object DayChartBandPolicy {
     /** Tapping Change opens the Choose-a-Time sheet — the band's
      * only action. */
     fun changeAction(): ChangeAction = ChangeAction.OPEN_TIME_SHEET
+
+    /**
+     * GEN-5 (item 15): night shading for the picker chart. The
+     * hourly forecast carries no sunrise/sunset, so the settled
+     * fixed night window is 20:00–05:59, expressed as contiguous
+     * (startHour, endHourExclusive) ranges.
+     */
+    val NIGHT_RANGES: List<Pair<Int, Int>> = listOf(0 to 6, 20 to 24)
+
+    fun isNightHour(hour: Int): Boolean = NIGHT_RANGES.any { (start, end) -> hour in start until end }
 }
 
 /**
  * GEN-4: the home glance band — below the outfit list. The feels-like
  * curve over shaded prescription-bracket bands; day low/high labels
  * at the band's ends; a NOW marker on the location's today only; a
- * dot at the selected hour; beneath it, an axis row naming the
- * selected hour with the Change button beside it. No separate
- * "Change time" row exists beyond this axis row.
+ * dot at the selected hour.
+ *
+ * GEN-5 (RW-28 item 14, B-8): the selected hour is named ON THE
+ * BAND'S OWN AXIS — a label inside the band at the dot's position —
+ * and "Change ›" sits at the band's own foot. The separate
+ * hour/Change row that used to sit beneath the band is gone.
  */
 @Composable
 fun DayChartGlanceBand(
@@ -358,28 +377,34 @@ fun DayChartGlanceBand(
                         )
                 )
             }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            // GEN-5 (item 14): the selected hour named ON THE BAND'S
+            // OWN AXIS — inside the band at the dot's x, clamped so
+            // it never leaves the band at the day's edges.
             Text(
                 text = DayChartFormat.axisLabel(dotHour),
-                fontSize = 15.5.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = RunWearColors.TextPrimary
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(
+                        start = (
+                            DayChartGeometry.xFraction(dotHour) * maxWidth.value - 16
+                            ).dp.coerceIn(4.dp, (maxWidth - 44.dp).coerceAtLeast(4.dp)),
+                        bottom = 4.dp
+                    )
             )
-            Spacer(Modifier.weight(1f))
+            // "Change ›" at the band's own foot — the band's only
+            // action, opening the Choose-a-Time sheet.
             Text(
                 text = "Change ›",
-                fontSize = 14.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = RunWearColors.PineAccent,
                 modifier = Modifier
+                    .align(Alignment.BottomEnd)
                     .clickable { onChangeClick() }
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
             )
         }
     }

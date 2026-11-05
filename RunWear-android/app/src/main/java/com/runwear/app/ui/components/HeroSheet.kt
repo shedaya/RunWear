@@ -92,15 +92,17 @@ object HeroSheetFormat {
     fun simplePlaceName(locationName: String): String =
         com.runwear.shared.domain.model.SimplePlace.fromRawDisplayString(locationName).display
 
-    /** The non-NOW moment label, in DateTimePill's human formats. */
+    /** The non-NOW moment label. GEN-5 (RW-28 item 12, B-13):
+     * for the location's TODAY the moment reads in the bare simple
+     * form — "9:00 PM", no "Today," prefix. Other days keep their
+     * day word, which carries information the time alone cannot. */
     fun momentLabel(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String {
-        val dateText = when {
-            selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> "Today"
-            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "Tomorrow"
-            else -> selectedDateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
-        }
         val timeText = selectedDateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
-        return "$dateText, $timeText"
+        return when {
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> timeText
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "Tomorrow, $timeText"
+            else -> "${selectedDateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))}, $timeText"
+        }
     }
 
     /**
@@ -125,9 +127,37 @@ object HeroSheetFormat {
      * tween, and no tap target: the value on screen is always the
      * current state, never an intermediate count toward it.
      */
-    fun heroNumeral(weather: WeatherConditions, unit: TemperatureUnit): String {
-        return "${unit.displayValue(weather.effectiveTemperature)}°"
+    fun heroNumeral(weather: WeatherConditions, unit: TemperatureUnit): String =
+        heroNumeral(weather, unit, com.runwear.shared.domain.model.ComfortPreference.NEUTRAL)
+
+    /**
+     * GEN-5 (RW-28 item 11, B-3): the ONE-FRAME RULE. The numeral
+     * reads the picked hour's feels-like in the RW-23
+     * comfort-adjusted frame — the SAME frame the day chart, the
+     * picker readout and the outfit engine all use. The gen-4
+     * build read the raw feels-like here while the chart read the
+     * adjusted one, so after a Confirm the sheet said 83° and the
+     * numeral kept 78°: two feels-likes for one moment on one
+     * screen. The comfort adjustment is applied ONCE, here at the
+     * readout (and at the bracket chip), never to the stored
+     * conditions — the outfit engine applies its own.
+     */
+    fun heroNumeral(
+        weather: WeatherConditions,
+        unit: TemperatureUnit,
+        comfort: com.runwear.shared.domain.model.ComfortPreference
+    ): String {
+        return "${unit.displayValue(weather.effectiveTemperature + comfort.tempAdjustment)}°"
     }
+
+    /** The bracket for the sheet's chip, in the same adjusted frame. */
+    fun bracketFor(
+        weather: WeatherConditions,
+        comfort: com.runwear.shared.domain.model.ComfortPreference
+    ): com.runwear.shared.domain.model.TempBracket =
+        com.runwear.shared.domain.model.TempBracket.fromFahrenheit(
+            weather.feelsLikeInFahrenheit + comfort.tempAdjustment
+        )
 
     /** The wind pill's text, projected through [unit] like every other figure. */
     fun windText(weather: WeatherConditions, unit: TemperatureUnit): String {
@@ -255,7 +285,14 @@ fun HeroSheetBlock(
      * store through this ONE preference value in the same composition
      * pass, so a unit change swaps the whole sheet atomically.
      */
-    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /**
+     * GEN-5 (RW-28 item 11): the comfort frame for the numeral and
+     * the bracket chip — the RW-23 adjusted frame, shared with the
+     * day chart (see HeroSheetFormat.heroNumeral).
+     */
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
 ) {
     val shape = if (overlapsPhoto) {
         RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
@@ -263,7 +300,7 @@ fun HeroSheetBlock(
         RoundedCornerShape(28.dp)
     }
 
-    val bracket = weather?.let { TempBracket.fromFahrenheit(it.feelsLikeInFahrenheit) }
+    val bracket = weather?.let { HeroSheetFormat.bracketFor(it, comfortPreference) }
 
     Column(
         modifier = modifier
@@ -388,7 +425,9 @@ fun HeroSheetBlock(
         // GEN-2 A2 (W-7): the rendered string passes through
         // HeroNumeralPolicy — held whole during a transition, swapped
         // whole at the commit, never a partial or blended rendering.
-        val candidateNumeral = weather?.let { HeroSheetFormat.heroNumeral(it, temperatureUnit) }
+        val candidateNumeral = weather?.let {
+            HeroSheetFormat.heroNumeral(it, temperatureUnit, comfortPreference)
+        }
         var heldNumeral by remember { mutableStateOf<String?>(null) }
         val shownNumeral = HeroNumeralPolicy.shown(
             held = heldNumeral,
@@ -488,18 +527,14 @@ fun HeroSheetBlock(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-
-        // (d) Date/Time pill, flat on the sheet
-        DateTimePill(
-            dateTime = selectedDateTime,
-            referenceNow = locationNow,
-            isNowSelected = isNowSelected,
-            onDateClick = onDateClick,
-            onTimeClick = onTimeClick,
-            onNowClick = onNowClick,
-            onSheet = true
-        )
+        // GEN-5 (RW-28 item 12, A-22/B-13): the duplicate
+        // DateTimePill "Today | Now" segmented row is GONE. The
+        // moment lives in exactly one place — the headline line
+        // above, whose moment segment opens Choose-a-Time and
+        // whose compact refresh + "Now" way-back appears in the
+        // same line in the changed state. (onDateClick is retained
+        // in the signature for the split-pane header's legacy
+        // wiring; nothing in this block renders a date row.)
 
         // GEN-4: no weather row below the headline — the figures
         // are in the right-justified grid beside the numeral above.

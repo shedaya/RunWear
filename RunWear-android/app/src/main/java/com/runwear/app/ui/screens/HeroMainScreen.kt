@@ -367,7 +367,13 @@ fun HeroMainScreen(
                             uiState.selectedDateTime
                         )
                     },
-                    feelsLikeF = weather.feelsLikeInFahrenheit,
+                    // GEN-5 (RW-28 item 11): the entry records the
+                    // RW-23 comfort-adjusted feels-like — the same
+                    // number the hero numeral shows for this moment
+                    // (B-3: the card kept the raw 78° while the
+                    // picked hour read 83°).
+                    feelsLikeF = weather.feelsLikeInFahrenheit +
+                        uiState.comfortPreference.tempAdjustment,
                     conditionLabel = weather.weatherCode.description,
                     isSnowing = weather.isSnowing,
                     isRaining = weather.isRaining,
@@ -625,8 +631,13 @@ fun HeroMainScreen(
                                         )
                                     }
                                 }
-                                // GEN-3: the convergence band, below the
-                                // outfit in the same scroll.
+                                // GEN-5 (Addendum 4): the convergence
+                                // band sits DIRECTLY BELOW THE OUTFIT
+                                // AREA — above the day chart, the Pro
+                                // Tip and the feedback row — inside
+                                // the first screenful, so a user who
+                                // has just subscribed sees what is
+                                // happening without scrolling.
                                 if (convergenceBand != null) {
                                     item {
                                         com.runwear.app.makeitme.ConvergenceBand(
@@ -635,10 +646,16 @@ fun HeroMainScreen(
                                         )
                                     }
                                 }
-                                // GEN-4: the day-chart glance band, below the outfit list.
+                                // GEN-4: the day-chart glance band.
                                 if (!dayChartModel.isEmpty) {
                                 item { dayChartBandContent() }
                                 }
+                                // GEN-5 (C-3): Pro Tip + feedback,
+                                // below the chart.
+                                homeTrailingListItems(
+                                    uiState = uiState,
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                )
                             }
                         }
                         AdaptiveLayout.MEDIUM -> {
@@ -712,6 +729,9 @@ fun HeroMainScreen(
                                         )
                                     }
                                 }
+                                // GEN-5 (Addendum 4): band directly
+                                // below the outfit area, above the
+                                // chart and the Pro Tip.
                                 if (convergenceBand != null) {
                                     item(span = { GridItemSpan(maxLineSpan) }) {
                                         com.runwear.app.makeitme.ConvergenceBand(
@@ -720,10 +740,16 @@ fun HeroMainScreen(
                                         )
                                     }
                                 }
-                                // GEN-4: the day-chart glance band, below the outfit list.
+                                // GEN-4: the day-chart glance band.
                                 if (!dayChartModel.isEmpty) {
                                 item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
                                 }
+                                // GEN-5 (C-3): Pro Tip + feedback,
+                                // below the chart.
+                                homeTrailingGridItems(
+                                    uiState = uiState,
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                )
                             }
                         }
                         AdaptiveLayout.EXPANDED -> {
@@ -815,6 +841,8 @@ fun HeroMainScreen(
                                             )
                                         }
                                     }
+                                    // GEN-5 (Addendum 4): band
+                                    // directly below the outfit area.
                                     if (convergenceBand != null) {
                                         item(span = { GridItemSpan(maxLineSpan) }) {
                                             com.runwear.app.makeitme.ConvergenceBand(
@@ -823,10 +851,16 @@ fun HeroMainScreen(
                                             )
                                         }
                                     }
-                                    // GEN-4: the day-chart glance band, below the outfit list.
+                                    // GEN-4: the day-chart glance band.
                                     if (!dayChartModel.isEmpty) {
                                     item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
                                     }
+                                    // GEN-5 (C-3): Pro Tip + feedback,
+                                    // below the chart.
+                                    homeTrailingGridItems(
+                                        uiState = uiState,
+                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                    )
                                 }
                             }
                         }
@@ -1370,7 +1404,10 @@ private fun HeroSheetContent(
             temperatureUnit = uiState.temperatureUnit,
             // GEN-2 A2 (W-7): hold the hero numeral whole while a
             // fetch/switch is in flight; it swaps at the commit.
-            holdNumeral = uiState.isLoading
+            holdNumeral = uiState.isLoading,
+            // GEN-5 (RW-28 item 11): the RW-23 comfort-adjusted
+            // frame for the numeral and the bracket chip.
+            comfortPreference = uiState.comfortPreference
         )
     }
 }
@@ -1574,7 +1611,32 @@ private fun LazyListScope.outfitListItems(
         )
     }
 
-    // Pro Tip Section
+    // GEN-5 (C-3 + Addendum 4): the Pro Tip and the feedback row
+    // NO LONGER live inside the outfit list. The settled home
+    // order is hero/headline → outfit → convergence band (while
+    // generating) → day-chart glance band → Pro Tip → Wear I've
+    // Run, so the trailing elements are emitted by
+    // homeTrailingListItems AFTER the band and the chart at each
+    // layout's call site.
+
+    // WS-8 (D-26): the hardcoded "v3.12" PWA version footer is
+    // removed — no design frame carries it; the real version lives
+    // in Settings → About.
+}
+
+/**
+ * GEN-5 (C-3): the home scroll's trailing elements for the list
+ * layout — the Pro Tip, then the contextual feedback entry —
+ * emitted after the convergence band and the day-chart glance
+ * band in the settled home order.
+ */
+private fun LazyListScope.homeTrailingListItems(
+    uiState: MainUiState,
+    onFeedbackClick: () -> Unit
+) {
+    val outfit = uiState.outfit ?: return
+
+    // Pro Tip Section — below the day chart (C-3).
     if (outfit.tips.isNotEmpty()) {
         item {
             TipsSection(
@@ -1603,10 +1665,6 @@ private fun LazyListScope.outfitListItems(
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
     }
-
-    // WS-8 (D-26): the hardcoded "v3.12" PWA version footer is
-    // removed — no design frame carries it; the real version lives
-    // in Settings → About.
 }
 
 /**
@@ -1650,6 +1708,23 @@ private fun LazyGridScope.outfitGridItems(
         )
     }
 
+    // GEN-5 (C-3 + Addendum 4): Pro Tip + feedback moved out to
+    // homeTrailingGridItems, emitted after the band and the chart.
+
+    // WS-8 (D-26): grid presentation carries no version footer either.
+}
+
+/**
+ * GEN-5 (C-3): the grid layouts' trailing elements — Pro Tip,
+ * then the feedback entry, both full-span — emitted after the
+ * convergence band and the day-chart glance band.
+ */
+private fun LazyGridScope.homeTrailingGridItems(
+    uiState: MainUiState,
+    onFeedbackClick: () -> Unit
+) {
+    val outfit = uiState.outfit ?: return
+
     // Pro Tip Section (spans the pane, as in the PWA rail)
     if (outfit.tips.isNotEmpty()) {
         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1676,8 +1751,6 @@ private fun LazyGridScope.outfitGridItems(
                 .padding(vertical = 10.dp)
         )
     }
-
-    // WS-8 (D-26): grid presentation carries no version footer either.
 }
 
 // ============================================================================

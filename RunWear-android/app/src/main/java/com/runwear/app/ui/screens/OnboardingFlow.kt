@@ -44,30 +44,37 @@ object OnboardingCopy {
     // plain copy, unchanged; points 2 and 3 carry Sol's final
     // wording verbatim.
     const val PROMISE_1_NAME = "RunWear"
+    // GEN-5 (RW-28 item 27, design §1): each point's HEADLINE is
+    // "Name — headline phrase" in pine bold; the body line beneath
+    // is separate. The headline phrases are the settled ones.
+    const val PROMISE_1_HEADLINE = "The right outfit for the weather"
     const val PROMISE_1_PHRASE =
         "One recommendation for the run you're about to take — feels-like, wind, and rain included."
     const val PROMISE_2_NAME = "Make It Me"
+    const val PROMISE_2_HEADLINE = "See yourself in every outfit"
     // GEN-3 WELCOME UPDATE (Sol, Nov 4): point 2's final phrase,
     // word for word (supersedes "Put yourself in the photos.").
     const val PROMISE_2_PHRASE = "Picture yourself at the start line with the perfect outfit ready to go."
     const val PROMISE_3_NAME = "Wear I've Run"
+    const val PROMISE_3_HEADLINE = "Remember every run"
     const val PROMISE_3_PHRASE =
         "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
 
-    /** One name-led welcome point: [name] in pine bold, then [phrase]. */
-    data class WelcomePoint(val name: String, val phrase: String)
+    /** One name-led welcome point: the [headlineLine] in pine bold,
+     * the [phrase] as the separate body line beneath it. */
+    data class WelcomePoint(val name: String, val headline: String, val phrase: String) {
+        val headlineLine: String get() = "$name — $headline"
+    }
 
     /** The three welcome points, in display order. */
     val WELCOME_POINTS: List<WelcomePoint> = listOf(
-        WelcomePoint(PROMISE_1_NAME, PROMISE_1_PHRASE),
-        WelcomePoint(PROMISE_2_NAME, PROMISE_2_PHRASE),
-        WelcomePoint(PROMISE_3_NAME, PROMISE_3_PHRASE)
+        WelcomePoint(PROMISE_1_NAME, PROMISE_1_HEADLINE, PROMISE_1_PHRASE),
+        WelcomePoint(PROMISE_2_NAME, PROMISE_2_HEADLINE, PROMISE_2_PHRASE),
+        WelcomePoint(PROMISE_3_NAME, PROMISE_3_HEADLINE, PROMISE_3_PHRASE)
     )
     const val PROMISE_CTA = "Get Started"
-    // W-21 (Sol, Nov 4 walkthrough): the app is free forever —
-    // premium features are the upsell — so the footer states the
-    // model plainly, in Sol's replacement wording, verbatim.
-    const val PROMISE_FOOTER = "Free forever · Premium is optional"
+    // GEN-5 (RW-28 item 27, design §1): the settled footer line.
+    const val PROMISE_FOOTER = "Free to start · Set up in under a minute"
 
     /** The A1 promise sentence — sanctioned on frame 28 ONLY. */
     const val FREE_LOOKS_PROMISE = "Your first 5 looks are free."

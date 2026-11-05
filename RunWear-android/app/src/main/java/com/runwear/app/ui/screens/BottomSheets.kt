@@ -427,7 +427,10 @@ fun SettingsSheetContent(
                             color = RunWearColors.TextPrimary
                         )
                         Text(
-                            text = "Tap to select, tap again to deselect",
+                            // GEN-5 (RW-28 item 24): "No preference"
+                            // is an explicit third choice now, not a
+                            // tap-again deselect gesture.
+                            text = "Whose fit should your recommendations shop for?",
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
@@ -458,12 +461,17 @@ fun SettingsSheetContent(
                     SettingsDivider()
                 }
                 SettingsSectionId.DELETE_MY_DATA -> item(key = section.name) {
-                    // WS-5 (D-14): Delete-my-data is its OWN section,
-                    // reachable without the Make It Me section's
-                    // emission — a stock-mode user still has an
-                    // account to delete (RW-16.30 decision 5a).
-                    com.runwear.app.makeitme.DeleteMyDataSettingsRow(
+                    // WS-5 (D-14): the destructive section is its
+                    // OWN section, reachable without the Make It Me
+                    // section's emission — a stock-mode user still
+                    // has an account to delete (RW-16.30 decision
+                    // 5a). GEN-5 (RW-28 item 25): it is now the
+                    // headed DANGER ZONE, quarantined as the last
+                    // section of the sheet, holding both destructive
+                    // rows together.
+                    com.runwear.app.makeitme.DangerZoneSettingsSection(
                         viewModel = makeItMeViewModel,
+                        state = makeItMeState,
                         onDeleted = onMakeItMeDeleted
                     )
                     SettingsDivider()
@@ -661,7 +669,8 @@ private fun UnitToggle(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "°F",
+                // GEN-5 (RW-28 item 24): full words, not symbols.
+                text = "Fahrenheit",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (!isCelsius) Color.White else RunWearColors.TextSecondary
@@ -683,7 +692,7 @@ private fun UnitToggle(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "°C",
+                text = "Celsius",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isCelsius) Color.White else RunWearColors.TextSecondary
@@ -743,6 +752,19 @@ private fun AppearanceSelector(
 }
 
 /**
+ * GEN-5 (C-1): the body-temperature tint shift, matching iOS's
+ * shared ComfortLevelControl — blue for the cold stops, pine for
+ * neutral, orange for the warm stops. One policy for the Settings
+ * selector and the onboarding slider, so the two surfaces can
+ * never drift apart.
+ */
+internal fun comfortStopTint(pref: ComfortPreference): Color = when (pref) {
+    ComfortPreference.RUNS_VERY_COLD, ComfortPreference.RUNS_COLD -> RunWearColors.TempCold
+    ComfortPreference.NEUTRAL -> RunWearColors.Primary
+    ComfortPreference.RUNS_WARM, ComfortPreference.RUNS_VERY_WARM -> RunWearColors.TempWarm
+}
+
+/**
  * PWA v2.9 Comfort Selector - 5 options in a row
  */
 @Composable
@@ -766,7 +788,9 @@ private fun ComfortSelector(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
+                    // C-1: the selected stop carries its tint
+                    // (blue → pine → orange across the stops).
+                    .background(if (isSelected) comfortStopTint(pref) else Color.Transparent)
                     .clickable {
                         if (!isSelected) {
                             haptic.performHapticFeedback(HapticSpec.SELECTION)
@@ -798,9 +822,19 @@ private fun GenderToggleSettings(
     selected: GenderPreference,
     onSelect: (GenderPreference) -> Unit
 ) {
-    // §1.7 (WS-9 fix, P-2): preference selection tick — every tap
-    // here changes the selection (select, or tap-again to deselect).
+    // §1.7 (WS-9 fix, P-2): preference selection tick, on change.
     val haptic = LocalHapticFeedback.current
+    // GEN-5 (RW-28 item 24, A-15): full-word labels and ALL THREE
+    // options explicit — "Men's" / "Women's" / "No preference" —
+    // exactly the onboarding set, in the onboarding order. No
+    // preference is a real selectable value (UNISEX), not a
+    // tap-again-to-deselect gesture, so the stored value carries
+    // losslessly between the two surfaces.
+    val options = listOf(
+        "Men's" to GenderPreference.MALE,
+        "Women's" to GenderPreference.FEMALE,
+        "No preference" to GenderPreference.UNISEX
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -809,48 +843,30 @@ private fun GenderToggleSettings(
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        // Male
-        val isMale = selected == GenderPreference.MALE
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isMale) RunWearColors.Primary else Color.Transparent)
-                .clickable {
-                    haptic.performHapticFeedback(HapticSpec.SELECTION)
-                    onSelect(if (isMale) GenderPreference.UNISEX else GenderPreference.MALE)
-                }
-                .padding(vertical = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Male",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isMale) Color.White else RunWearColors.TextSecondary
-            )
-        }
-
-        // Female
-        val isFemale = selected == GenderPreference.FEMALE
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isFemale) RunWearColors.Primary else Color.Transparent)
-                .clickable {
-                    haptic.performHapticFeedback(HapticSpec.SELECTION)
-                    onSelect(if (isFemale) GenderPreference.UNISEX else GenderPreference.FEMALE)
-                }
-                .padding(vertical = 12.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = "Female",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isFemale) Color.White else RunWearColors.TextSecondary
-            )
+        options.forEach { (label, pref) ->
+            val isSelected = selected == pref
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
+                    .clickable {
+                        if (!isSelected) {
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        }
+                        onSelect(pref)
+                    }
+                    .padding(vertical = 12.dp, horizontal = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isSelected) Color.White else RunWearColors.TextSecondary,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

@@ -38,8 +38,9 @@ class MakeItMePriceLabelTest {
 
     @Test
     fun `monthly label renders the offering price`() {
-        assertEquals("$19.99 / month", MakeItMeStrings.monthlyRowLabel("$19.99"))
-        assertEquals("$0.99 / month", MakeItMeStrings.monthlyRowLabel("$0.99"))
+        // GEN-5 (item 29): "Monthly — $X/month" form of record.
+        assertEquals("Monthly — $19.99/month", MakeItMeStrings.monthlyRowLabel("$19.99"))
+        assertEquals("Monthly — $0.99/month", MakeItMeStrings.monthlyRowLabel("$0.99"))
     }
 
     @Test
@@ -50,7 +51,8 @@ class MakeItMePriceLabelTest {
             "$9.99" to micros(9.99), "$19.99" to micros(19.99), "$29.99" to micros(29.99)
         )) {
             val label = MakeItMeStrings.annualRowLabel(formatted, annual, micros(0.99))
-            assertEquals("$formatted / year", label)
+            // GEN-5 (items 26/29): "Annual — $X/yr" form of record.
+            assertEquals("Annual — $formatted/yr", label)
             assertFalse(label.contains("less than paying monthly"))
         }
     }
@@ -76,10 +78,13 @@ class MakeItMePriceLabelTest {
     }
 
     @Test
-    fun `fine print leads with the derived per-run line and keeps the settled text`() {
+    fun `fine print is the settled U2C text alone - the per-run line moved under the price`() {
+        // GEN-5 (item 29): the per-run line renders directly under
+        // the annual price in the card; the fine print no longer
+        // carries it.
         val fp = MakeItMeStrings.finePrint("$9.99", micros(9.99))
-        assertTrue(fp.startsWith("At four to five runs a week, $9.99/year works out to only about 4¢ per run."))
-        assertTrue(fp.contains(MakeItMeStrings.U2C_FINE_PRINT))
+        assertEquals(MakeItMeStrings.U2C_FINE_PRINT, fp)
+        assertFalse(fp.contains("per run"))
         assertFalse(fp.contains("less than paying monthly"))
     }
 }

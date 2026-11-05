@@ -7,35 +7,40 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * GEN-3 ROUND 2 (Sol, Nov 4): the name-led welcome — Sol CHOSE the
- * name-led proposal, superseding the A-SETTINGS title+body welcome
- * and the earlier "no name-led variant" instruction. Each point's
- * headline leads with its feature name in PINE BOLD, followed by
- * the plain phrase in regular weight; no phrase repeats its name.
- * These pins hold the composition and the exact strings.
+ * GEN-5 (RW-28 item 27, design §1): the settled name-led welcome.
+ * Each point's HEADLINE is "Name — headline phrase" rendered in
+ * pine bold on its own line; the body line beneath is separate.
+ * The body phrases are Sol's Nov 4 verbatim lines; the headline
+ * phrases and the footer are the design's settled text (the gen-4
+ * build ran the name straight into the body sentence and carried
+ * a different footer — census A-1).
  */
 class WelcomeNameLedTest {
 
     @Test
-    fun `the three points carry the settled names and phrases verbatim, in order`() {
+    fun `the three points carry the settled names, headlines and phrases verbatim, in order`() {
         val points = OnboardingCopy.WELCOME_POINTS
         assertEquals(3, points.size)
 
         assertEquals("RunWear", points[0].name)
+        assertEquals("The right outfit for the weather", points[0].headline)
+        assertEquals("RunWear — The right outfit for the weather", points[0].headlineLine)
         assertEquals(
             "One recommendation for the run you're about to take — feels-like, wind, and rain included.",
             points[0].phrase
         )
 
         assertEquals("Make It Me", points[1].name)
-        // Sol's final point-2 phrase (Nov 4 welcome update,
-        // superseding "Put yourself in the photos.").
+        assertEquals("See yourself in every outfit", points[1].headline)
+        assertEquals("Make It Me — See yourself in every outfit", points[1].headlineLine)
         assertEquals(
             "Picture yourself at the start line with the perfect outfit ready to go.",
             points[1].phrase
         )
 
         assertEquals("Wear I've Run", points[2].name)
+        assertEquals("Remember every run", points[2].headline)
+        assertEquals("Wear I've Run — Remember every run", points[2].headlineLine)
         assertEquals(
             "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.",
             points[2].phrase
@@ -43,7 +48,7 @@ class WelcomeNameLedTest {
     }
 
     @Test
-    fun `no phrase repeats its feature name`() {
+    fun `no body phrase repeats its feature name`() {
         for (point in OnboardingCopy.WELCOME_POINTS) {
             assertFalse(
                 "phrase repeats its name: ${point.name}",
@@ -53,14 +58,11 @@ class WelcomeNameLedTest {
     }
 
     @Test
-    fun `the superseded WS-E composition is gone`() {
-        // "Remember every run" was the WS-E third-point headline;
-        // the name-led composition replaces it entirely.
-        val phrasesAndNames = OnboardingCopy.WELCOME_POINTS
-            .flatMap { listOf(it.name, it.phrase) }
-        assertFalse(phrasesAndNames.any { it.contains("Remember every run") })
-        assertFalse(phrasesAndNames.any { it.contains("See yourself in every outfit") })
-        assertFalse(phrasesAndNames.any { it.contains("The right outfit for the weather") })
+    fun `the footer is the settled line`() {
+        assertEquals(
+            "Free to start · Set up in under a minute",
+            OnboardingCopy.PROMISE_FOOTER
+        )
     }
 
     private fun sourceFile(androidRootRelative: String): File {
@@ -76,16 +78,16 @@ class WelcomeNameLedTest {
     }
 
     @Test
-    fun `the promise row renders the name in pine bold leading the phrase`() {
+    fun `the promise row renders the headline line in pine bold with the body separate beneath`() {
         val screen = sourceFile(
             "app/src/main/java/com/runwear/app/ui/screens/OnboardingScreen.kt"
         ).readText()
         val row = screen.substringAfter("private fun PromiseRow")
             .substringBefore("\n/**")
-        assertTrue("name span must be pine", row.contains("RunWearColors.PineAccent"))
-        assertTrue("name span must be bold", row.contains("FontWeight.Bold"))
-        assertTrue("name leads", row.contains("append(point.name)"))
-        assertTrue("phrase follows", row.contains("append(point.phrase)"))
+        assertTrue("headline must be pine", row.contains("RunWearColors.PineAccent"))
+        assertTrue("headline must be bold", row.contains("FontWeight.Bold"))
+        assertTrue("headline line leads", row.contains("point.headlineLine"))
+        assertTrue("body line follows separately", row.contains("point.phrase"))
         // The settled screen structure is otherwise untouched: the
         // script logo and the headline still head the step.
         assertTrue(screen.contains("OnboardingCopy.HEADLINE"))

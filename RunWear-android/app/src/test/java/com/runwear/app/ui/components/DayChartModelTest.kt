@@ -141,4 +141,22 @@ class DayChartModelTest {
         // The cold dawn and the mild peak prescribe differently.
         assertTrue(model.point(6)!!.outfitSignature != model.point(15)!!.outfitSignature)
     }
+
+    @Test
+    fun `every hour carries its condition for the picker glyphs - GEN-5 item 15`() {
+        val model = DayChartBuilder.build(sampleDay(), date, ComfortPreference.NEUTRAL)
+        assertTrue(model.hours.all { it.weatherCode == WeatherCode.CLEAR_SKY })
+        assertEquals("☀️", model.point(12)!!.weatherCode.icon)
+    }
+
+    @Test
+    fun `night shading window is 20-00 to 05-59 - GEN-5 item 15`() {
+        assertEquals(listOf(0 to 6, 20 to 24), DayChartBandPolicy.NIGHT_RANGES)
+        assertTrue(DayChartBandPolicy.isNightHour(0))
+        assertTrue(DayChartBandPolicy.isNightHour(5))
+        assertFalse(DayChartBandPolicy.isNightHour(6))
+        assertFalse(DayChartBandPolicy.isNightHour(19))
+        assertTrue(DayChartBandPolicy.isNightHour(20))
+        assertTrue(DayChartBandPolicy.isNightHour(23))
+    }
 }

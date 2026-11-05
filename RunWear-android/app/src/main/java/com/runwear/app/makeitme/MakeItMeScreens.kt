@@ -1531,6 +1531,20 @@ fun MakeItMePaywallSheet(
                         color = RunWearColors.TextPrimary,
                         modifier = Modifier.padding(top = 10.dp)
                     )
+                    // GEN-5 (RW-28 item 29): the per-run line sits
+                    // DIRECTLY UNDER the annual price (it used to
+                    // live only inside the fine print at the sheet's
+                    // foot). Derived from the displayed product,
+                    // basis stated in the line.
+                    annual?.let {
+                        Text(
+                            text = MakeItMeStrings.perRunLine(it.formatted, it.amountMicros),
+                            fontSize = 12.5.sp,
+                            lineHeight = 17.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                     Button(
                         onClick = { buy(annual) },
@@ -1581,13 +1595,11 @@ fun MakeItMePaywallSheet(
 
             Spacer(Modifier.height(16.dp))
             Text(
-                // WS-F: the per-run framing is DERIVED from the
-                // displayed annual product (basis stated in the
-                // line); until the offering resolves, the settled
-                // fine print stands alone.
-                text = annual?.let {
-                    MakeItMeStrings.finePrint(it.formatted, it.amountMicros)
-                } ?: MakeItMeStrings.U2C_FINE_PRINT,
+                // GEN-5 (item 29): the fine print is the settled
+                // U2C text alone now — the per-run line moved up
+                // under the annual price, and the store named is
+                // the one this build is sold through.
+                text = MakeItMeStrings.U2C_FINE_PRINT,
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
                 color = RunWearColors.TextSecondary
@@ -1605,19 +1617,40 @@ private class PackagePrice(
 
 @Composable
 private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit) {
-    Button(
+    // GEN-5 (C-6): the monthly element is "a little bit clickable"
+    // — a quiet outlined text row, visibly a door (border, pine
+    // chevron) but modest and clearly subordinate to the annual
+    // hero card: no filled button, no primary colour.
+    Surface(
         onClick = onClick,
         enabled = enabled,
+        shape = RoundedCornerShape(12.dp),
+        color = Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, RunWearColors.TextSecondary.copy(alpha = 0.45f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = RunWearColors.BgCard,
-            contentColor = RunWearColors.TextPrimary
-        )
+            .height(42.dp)
     ) {
-        Text(label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                label,
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.5.sp,
+                color = if (enabled) RunWearColors.TextPrimary else RunWearColors.TextSecondary
+            )
+            Text(
+                " ›",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.5.sp,
+                color = RunWearColors.PineAccent
+            )
+        }
     }
 }
 
@@ -1648,16 +1681,33 @@ object MakeItMeSettingsPresentation {
             MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S2_STATE_A_ROW)
             // Gen-3 WS-D: status group (not a row title — composed
             // from FreeLooksMeter), then Your photos, then the
-            // Premium offer card, then the destructive row last.
+            // Premium offer card. GEN-5 (RW-28 item 25): the
+            // destructive row moved OUT of this section into the
+            // quarantined Danger zone at the end of Settings —
+            // see dangerZoneRowTitles.
             MakeItMeMode.FREE -> listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.U2G_CARD_TITLE,
-                MakeItMeStrings.S10_DELETE_ROW
+                MakeItMeStrings.U2G_CARD_TITLE
             )
             MakeItMeMode.SUBSCRIBED -> listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.U2G_CARD_TITLE,
-                MakeItMeStrings.S10_DELETE_ROW
+                MakeItMeStrings.U2G_CARD_TITLE
+            )
+        }
+
+    /**
+     * GEN-5 (RW-28 item 25): the Danger zone's rows, in order —
+     * Delete my photos (only for modes that hold photos), then
+     * Delete my data (every mode: a stock-mode user still has an
+     * account). Rendered by [DangerZoneSettingsSection] as the
+     * LAST section of Settings, under its own heading.
+     */
+    fun dangerZoneRowTitles(mode: MakeItMeMode): List<String> =
+        when (mode) {
+            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S20_DELETE_DATA_ROW)
+            MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> listOf(
+                MakeItMeStrings.S10_DELETE_ROW,
+                MakeItMeStrings.S20_DELETE_DATA_ROW
             )
         }
 }
@@ -1672,8 +1722,8 @@ fun MakeItMeSettingsSection(
     onManageSubscriptionClick: () -> Unit,
     onDeleted: () -> Unit
 ) {
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var deletedNotice by remember { mutableStateOf(false) }
+    // GEN-5: the delete-photos dialog state moved to
+    // DangerZoneSettingsSection with the row itself.
 
     // Gen-3 WS-D/X-9: Settings re-reads the profile on open (the
     // gen-2 Android section never did — its only reads were at
@@ -1688,29 +1738,30 @@ fun MakeItMeSettingsSection(
     // The offer card's price, from the fetched store offering —
     // parameterized, never a literal (design §6).
     var offerAnnualFormatted by remember { mutableStateOf<String?>(null) }
+    var offerMonthlyFormatted by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(state.mode) {
         if (state.mode == MakeItMeMode.FREE && viewModel != null) {
-            offerAnnualFormatted = viewModel.offering()?.annual?.product?.price?.formatted
+            val offering = viewModel.offering()
+            offerAnnualFormatted = offering?.annual?.product?.price?.formatted
+            // C-5: the monthly price rides the same fetched offering.
+            offerMonthlyFormatted = offering?.monthly?.product?.price?.formatted
         }
     }
 
     Column {
+        // GEN-5 (RW-28 item 23): the section heading is the Make
+        // It Me SCRIPT wordmark — the same Great Vibes mark that
+        // leads every hero pill state — not a plain text label.
         Text(
             text = MakeItMeStrings.S1_SECTION_HEADER,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
+            fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+            fontSize = 30.sp,
             color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(10.dp))
 
-        if (deletedNotice && state.mode == MakeItMeMode.STOCK) {
-            Text(
-                text = MakeItMeStrings.S14_POST_DELETE,
-                fontSize = 13.sp,
-                color = RunWearColors.TextPrimary,
-                modifier = Modifier.padding(bottom = 10.dp)
-            )
-        }
+        // GEN-5: the post-delete notice (S14) renders in the
+        // Danger zone section, where the deletion now happens.
 
         // WS-5 (D-14): with the feature flag OFF the section still
         // renders — the plain not-started row the design specifies
@@ -1734,15 +1785,29 @@ fun MakeItMeSettingsSection(
                 MakeItMeSettingsRow(
                     title = MakeItMeStrings.S2_STATE_A_ROW,
                     sub = MakeItMeStrings.S2_STATE_A_SUB,
-                    onClick = {
-                        deletedNotice = false
-                        onOptInClick()
-                    }
+                    onClick = onOptInClick
                 )
             }
 
             MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> {
                 val subscribed = state.mode == MakeItMeMode.SUBSCRIBED
+
+                // GEN-5 (RW-28 item 22): while a subscriber's bank
+                // is generating, the convergence band occupies the
+                // STATUS SLOT — in place of the status block and the
+                // Premium offer card below (design §13). Resolved by
+                // the same ConvergenceBandPolicy, from the same
+                // state, as the home band; from the moment of
+                // subscription (an unknown coverage read still shows
+                // the band — see the policy).
+                val settingsBand = ConvergenceBandPolicy.content(
+                    mode = state.mode,
+                    coverage = state.bankCoverage,
+                    inTrial = state.inTrial
+                )
+                if (settingsBand != null) {
+                    ConvergenceBand(content = settingsBand)
+                } else {
 
                 // ── Status group (WS-D group 2): status line +
                 // free-look meter composed as ONE block from the
@@ -1773,6 +1838,7 @@ fun MakeItMeSettingsSection(
                         )
                     }
                 }
+                }
                 Spacer(Modifier.height(14.dp))
 
                 // ── Your photos group (WS-D group 3).
@@ -1790,8 +1856,10 @@ fun MakeItMeSettingsSection(
                 // subscriber sees the subscribed state instead.
                 val card = MakeItMeStrings.premiumOfferCard(
                     annualFormatted = offerAnnualFormatted,
-                    subscribed = subscribed
+                    subscribed = subscribed,
+                    monthlyFormatted = offerMonthlyFormatted
                 )
+                if (settingsBand == null) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = RunWearColors.BgCard,
@@ -1849,59 +1917,53 @@ fun MakeItMeSettingsSection(
                                     color = Color.White
                                 )
                             }
+                            // C-5 + C-6: the monthly price, present
+                            // on the card and "a little bit
+                            // clickable" — a quiet text door under
+                            // the annual CTA, clearly subordinate,
+                            // opening the same Premium offer.
+                            card.monthlyLine?.let { monthlyLine ->
+                                TextButton(
+                                    onClick = onSubscribeClick,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        monthlyLine,
+                                        fontSize = 13.sp,
+                                        color = RunWearColors.PineAccent
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-
-                // GEN-3 WS-D ADDITION (Sol, Nov 4): while a PREMIUM
-                // user's bank is still generating, the subscribed
-                // state says so — with the SAME shared element the
-                // home band renders (ConvergenceBand, resolved by
-                // the same ConvergenceBandPolicy from the same
-                // state; not a re-implementation — whatever count
-                // treatment is ruled later applies to both places
-                // at once; until then, the bar without a numeric
-                // count per the final count ruling). The policy itself
-                // gates it to subscribed + not-in-trial +
-                // mid-convergence, so free users and completed
-                // banks never see it here either. It sits in the
-                // offer card's subscribed-state area, directly
-                // beneath the card.
-                val settingsBand = ConvergenceBandPolicy.content(
-                    mode = state.mode,
-                    coverage = state.bankCoverage,
-                    inTrial = state.inTrial
-                )
-                if (settingsBand != null) {
-                    Spacer(Modifier.height(14.dp))
-                    ConvergenceBand(content = settingsBand)
+                } else {
+                    // While generating, the offer card is replaced
+                    // by the band above; Manage subscription stands
+                    // as its own row here (design §13: Your photos /
+                    // Manage subscription / Danger zone unchanged
+                    // below the band).
+                    OutlinedButton(
+                        onClick = onManageSubscriptionClick,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                    }
                 }
 
-                // ── Destructive group (WS-D group 5): last and
-                // visually separated from the offer, so no mis-tap
-                // travels between them. Delete my data follows as
-                // its own Settings section below.
-                Spacer(Modifier.height(22.dp))
-                MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S10_DELETE_ROW,
-                    sub = null,
-                    destructive = true,
-                    onClick = { showDeleteDialog = true }
-                )
+                // GEN-5 (RW-28 item 25): the destructive rows no
+                // longer live in this section — they are
+                // quarantined together at the very end of Settings
+                // under their own "Danger zone" heading
+                // (DangerZoneSettingsSection, hosted by the sheet's
+                // final inventory entry).
             }
         }
-    }
-
-    if (showDeleteDialog && viewModel != null) {
-        MakeItMeDeleteDialog(
-            viewModel = viewModel,
-            onDismiss = { showDeleteDialog = false },
-            onDeleted = {
-                showDeleteDialog = false
-                deletedNotice = true
-                onDeleted()
-            }
-        )
     }
 }
 
@@ -1945,6 +2007,73 @@ fun DeleteMyDataSettingsRow(
             onDeleted = {
                 showDeleteDataDialog = false
                 dataDeletedNotice = true
+                onDeleted()
+            }
+        )
+    }
+}
+
+/**
+ * GEN-5 (RW-28 item 25): the Danger zone — the LAST section of
+ * Settings, under its own heading, holding both destructive rows
+ * together (Delete my photos, then Delete my data) so no mis-tap
+ * travels between an offer and an erasure, and neither row sits
+ * unheaded in the middle of the sheet (gen-4 finding B-16). The
+ * delete-my-data half keeps its own independent dialog state via
+ * [DeleteMyDataSettingsRow]'s rendering below; the photos half
+ * owns its dialog here. Hosted by the sheet's final inventory
+ * entry in EVERY mode (a stock-mode user still has an account to
+ * delete).
+ */
+@Composable
+fun DangerZoneSettingsSection(
+    viewModel: MakeItMeViewModel?,
+    state: MakeItMeUiState,
+    onDeleted: () -> Unit
+) {
+    var showDeletePhotosDialog by remember { mutableStateOf(false) }
+    var photosDeletedNotice by remember { mutableStateOf(false) }
+    val holdsPhotos = state.mode == MakeItMeMode.FREE ||
+        state.mode == MakeItMeMode.SUBSCRIBED
+
+    Column {
+        Text(
+            text = MakeItMeStrings.S29_DANGER_ZONE_HEADING,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = RunWearColors.TextPrimary
+        )
+        Spacer(Modifier.height(10.dp))
+        if (photosDeletedNotice && state.mode == MakeItMeMode.STOCK) {
+            Text(
+                text = MakeItMeStrings.S14_POST_DELETE,
+                fontSize = 13.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+        }
+        if (holdsPhotos) {
+            MakeItMeSettingsRow(
+                title = MakeItMeStrings.S10_DELETE_ROW,
+                sub = null,
+                destructive = true,
+                onClick = { showDeletePhotosDialog = true }
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+        DeleteMyDataSettingsRow(
+            viewModel = viewModel,
+            onDeleted = onDeleted
+        )
+    }
+
+    if (showDeletePhotosDialog && viewModel != null) {
+        MakeItMeDeleteDialog(
+            viewModel = viewModel,
+            onDismiss = { showDeletePhotosDialog = false },
+            onDeleted = {
+                showDeletePhotosDialog = false
+                photosDeletedNotice = true
                 onDeleted()
             }
         )

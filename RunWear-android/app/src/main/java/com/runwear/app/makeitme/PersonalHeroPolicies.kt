@@ -537,9 +537,12 @@ object FreeLooksMeter {
         return if (lookMaking) "$base · 1 look is being made" else base
     }
 
-    /** The paywall's meter line, from the same seam and inputs. */
-    fun paywallLine(deliveredUsed: Int, lookMaking: Boolean): String {
-        val base = MakeItMeStrings.u2MeterLine(deliveredUsed)
-        return if (lookMaking) "$base One look is being made right now." else base
-    }
+    /**
+     * The paywall's meter line, from the same seam and inputs.
+     * GEN-5 (RW-28 item 29): the line is the VERBATIM settled
+     * string — the in-flight state is carried by the hero pill and
+     * the generating states, never by appending prose to the meter.
+     */
+    fun paywallLine(deliveredUsed: Int, lookMaking: Boolean): String =
+        MakeItMeStrings.u2MeterLine(deliveredUsed)
 }

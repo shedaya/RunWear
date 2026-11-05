@@ -35,17 +35,24 @@ enum class SettingsSectionId {
 
 object SettingsInventory {
 
-    /** The full designed inventory, in designed order. */
+    /**
+     * The full designed inventory, in designed order. GEN-5
+     * (RW-28 items 24/25): the preferences follow the onboarding
+     * order — Temperature unit, Fit preference, Body temperature
+     * (A-18) — and the destructive section (DELETE_MY_DATA, now
+     * rendered as the headed Danger zone) is quarantined LAST,
+     * after About (B-16).
+     */
     val SECTIONS: List<SettingsSectionId> = listOf(
         SettingsSectionId.APPEARANCE,
         SettingsSectionId.TEMPERATURE_UNIT,
-        SettingsSectionId.BODY_TEMPERATURE,
         SettingsSectionId.FIT_PREFERENCE,
+        SettingsSectionId.BODY_TEMPERATURE,
         SettingsSectionId.MAKE_IT_ME,
-        SettingsSectionId.DELETE_MY_DATA,
         SettingsSectionId.SEND_FEEDBACK,
         SettingsSectionId.HELP_IMPROVE,
-        SettingsSectionId.ABOUT
+        SettingsSectionId.ABOUT,
+        SettingsSectionId.DELETE_MY_DATA
     )
 
     /**

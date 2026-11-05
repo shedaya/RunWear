@@ -25,6 +25,29 @@ class TimePickerDraftTest {
     }
 
     @Test
+    fun `reopening after a confirmed change lands on the changed hour, not Now - B-9`() {
+        // GEN-5 (RW-28 item 13): the walkthrough's sequence — from
+        // NOW (hour 6), confirm 19; home now shows the changed
+        // state; reopening the picker must open on 19, the
+        // selection home is showing, never back on the Now hour.
+        val first = TimePickerDraftPolicy.open(
+            selectedHour = 6, isNowSelected = true, isToday = true,
+            nowHour = 6, selectableHours = allHours
+        )
+        val moved = TimePickerDraftPolicy.moveTo(first, 19)
+        val confirm = TimePickerDraftPolicy.confirm(moved)
+        assertEquals(19, confirm.hour)
+        assertFalse(confirm.keepNow)
+
+        val reopened = TimePickerDraftPolicy.open(
+            selectedHour = confirm.hour, isNowSelected = false, isToday = true,
+            nowHour = 6, selectableHours = allHours
+        )
+        assertEquals(19, reopened.draftHour)
+        assertEquals(19, reopened.originalHour)
+    }
+
+    @Test
     fun `default draft in NOW state on today starts on the NOW hour`() {
         val s = TimePickerDraftPolicy.open(
             selectedHour = 16, isNowSelected = true, isToday = true,

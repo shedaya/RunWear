@@ -18,17 +18,20 @@ class SettingsInventoryTest {
 
     @Test
     fun `the registry is the designed inventory in designed order`() {
+        // GEN-5 (RW-28 items 24/25): preferences in the onboarding
+        // order (unit, fit, body temperature); the Danger zone
+        // section quarantined last, after About.
         assertEquals(
             listOf(
                 SettingsSectionId.APPEARANCE,
                 SettingsSectionId.TEMPERATURE_UNIT,
-                SettingsSectionId.BODY_TEMPERATURE,
                 SettingsSectionId.FIT_PREFERENCE,
+                SettingsSectionId.BODY_TEMPERATURE,
                 SettingsSectionId.MAKE_IT_ME,
-                SettingsSectionId.DELETE_MY_DATA,
                 SettingsSectionId.SEND_FEEDBACK,
                 SettingsSectionId.HELP_IMPROVE,
-                SettingsSectionId.ABOUT
+                SettingsSectionId.ABOUT,
+                SettingsSectionId.DELETE_MY_DATA
             ),
             SettingsInventory.SECTIONS
         )
@@ -48,10 +51,14 @@ class SettingsInventoryTest {
     }
 
     @Test
-    fun `delete-my-data is its own section, after Make It Me and before Support`() {
+    fun `the danger zone section is quarantined last, after About`() {
+        // GEN-5 (RW-28 item 25, B-16): the destructive section is
+        // its own section still (reachable in every mode), but it
+        // now sits at the very end of the sheet under its own
+        // heading — never above Send feedback.
         val sections = SettingsInventory.SECTIONS
-        assertTrue(sections.indexOf(SettingsSectionId.DELETE_MY_DATA) > sections.indexOf(SettingsSectionId.MAKE_IT_ME))
-        assertTrue(sections.indexOf(SettingsSectionId.DELETE_MY_DATA) < sections.indexOf(SettingsSectionId.SEND_FEEDBACK))
+        assertEquals(SettingsSectionId.DELETE_MY_DATA, sections.last())
+        assertTrue(sections.indexOf(SettingsSectionId.DELETE_MY_DATA) > sections.indexOf(SettingsSectionId.ABOUT))
     }
 
     @Test
@@ -83,23 +90,42 @@ class SettingsInventoryTest {
             listOf(MakeItMeStrings.S2_STATE_A_ROW),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.STOCK)
         )
-        // Gen-3 WS-D: photos group, then the Premium offer card,
-        // then the destructive row last (both active modes).
+        // Gen-3 WS-D: photos group, then the Premium offer card.
+        // GEN-5 (RW-28 item 25): the destructive rows live in the
+        // Danger zone presentation now, not in this section.
         assertEquals(
             listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.U2G_CARD_TITLE,
-                MakeItMeStrings.S10_DELETE_ROW
+                MakeItMeStrings.U2G_CARD_TITLE
             ),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.FREE)
         )
         assertEquals(
             listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.U2G_CARD_TITLE,
-                MakeItMeStrings.S10_DELETE_ROW
+                MakeItMeStrings.U2G_CARD_TITLE
             ),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.SUBSCRIBED)
+        )
+        // The Danger zone: photos deletion only for modes holding
+        // photos; data deletion in every mode, last.
+        assertEquals(
+            listOf(MakeItMeStrings.S20_DELETE_DATA_ROW),
+            MakeItMeSettingsPresentation.dangerZoneRowTitles(MakeItMeMode.STOCK)
+        )
+        assertEquals(
+            listOf(
+                MakeItMeStrings.S10_DELETE_ROW,
+                MakeItMeStrings.S20_DELETE_DATA_ROW
+            ),
+            MakeItMeSettingsPresentation.dangerZoneRowTitles(MakeItMeMode.FREE)
+        )
+        assertEquals(
+            listOf(
+                MakeItMeStrings.S10_DELETE_ROW,
+                MakeItMeStrings.S20_DELETE_DATA_ROW
+            ),
+            MakeItMeSettingsPresentation.dangerZoneRowTitles(MakeItMeMode.SUBSCRIBED)
         )
     }
 
