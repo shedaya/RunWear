@@ -431,6 +431,12 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         requestedCells.removeAll()
         exhaustedCell = nil
         await refreshProfile()
+        // GEN-5 (Addendum 8, second follow-up): a fresh photo set
+        // is a new selfie epoch — a subscribed user's fill is
+        // re-named for it (the server stamps the jobs with the
+        // new epoch and supersedes the old epoch's unprocessed
+        // jobs in the worker).
+        if mode == .subscribed { kickFillWithRetry() }
     }
 
     /// §3 photo replacement: same attestation + quality check in the
@@ -450,6 +456,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             requestedCells.remove(currentCombination.combinationId)
             startUserInitiatedGeneration(for: currentCombination)
         }
+        // GEN-5 (Addendum 8, second follow-up): replacing the
+        // references is a selfie-epoch change — a subscribed
+        // user's fill is re-named for the new epoch, same as at
+        // opt-in.
+        if mode == .subscribed { kickFillWithRetry() }
     }
 
     // MARK: - Personal-hero flag (RW-14 acceptance (19))
@@ -526,31 +537,35 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     // MARK: - Subscription fill (server-gated)
 
-    /// GEN-5 (Addendum 8 follow-up, Defects 1 + 2): the priority
-    /// cells this client names to the fill — the current 7-day
-    /// forecast's distinct personal cells, in forecast order,
-    /// supplied by WeatherViewModel on every forecast load. The
-    /// set is ALSO the convergence band's target set (Defect 2):
-    /// coverage is banked ∩ named over named. Persisted so the
-    /// denominator survives a relaunch before the next forecast
-    /// load lands.
+    /// GEN-5 (Addendum 8 follow-up, Defects 1 + 2, as corrected
+    /// by the second follow-up): the cells this client names to
+    /// the fill — the composed set (forecast cluster cells first,
+    /// then the canonical core matrix), supplied by
+    /// WeatherViewModel on every forecast load. The set is ALSO
+    /// the convergence band's target set (Defect 2): coverage is
+    /// banked ∩ named over named — the fill set actually owed
+    /// (core matrix + current forecast horizon), so the bar
+    /// cannot reach 100% while owed cells are missing. Persisted
+    /// so the denominator survives a relaunch before the next
+    /// forecast load lands.
     private static let namedFillCellsKey = "rw.gen5.namedFillCells"
-    private(set) var forecastPriorityCells: [String] = (UserDefaults.standard.stringArray(forKey: PersonalHeroStore.namedFillCellsKey) ?? [])
+    private(set) var namedFillCells: [String] = (UserDefaults.standard.stringArray(forKey: PersonalHeroStore.namedFillCellsKey) ?? [])
     /// The set the last successful fill call named — a forecast
     /// refresh re-sends the fill only when the set changed (the
     /// function is designed to make re-calling harmless).
     private var lastSentFillCells: [String] = []
 
-    /// PersonalHeroResolving: receive the forecast's priority
-    /// cells. While subscribed, a CHANGED set re-kicks the fill
-    /// immediately (forecast refresh is a designed fill trigger);
-    /// the subscription-grant kick reads whatever set is current.
+    /// PersonalHeroResolving: receive the composed fill set.
+    /// While subscribed, a CHANGED set re-kicks the fill
+    /// immediately (a forecast refresh — including a NEW PLACE's
+    /// forecast — is a designed fill trigger); the
+    /// subscription-grant kick reads whatever set is current.
     func updateForecastPriorityCells(_ cells: [String]) {
-        guard cells != forecastPriorityCells else {
+        guard cells != namedFillCells else {
             // Same set: still the denominator of record.
             return
         }
-        forecastPriorityCells = cells
+        namedFillCells = cells
         UserDefaults.standard.set(cells, forKey: Self.namedFillCellsKey)
         if mode == .subscribed, !cells.isEmpty {
             kickFillWithRetry()
@@ -567,7 +582,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// showing a fraction against the wrong whole.
     private func readCoverage() async -> BankCoverage? {
         guard let banked = await api.fetchBankedCells() else { return nil }
-        return deriveBankCoverage(heroCells: banked, targetCells: Set(forecastPriorityCells))
+        return deriveBankCoverage(heroCells: banked, targetCells: Set(namedFillCells))
     }
 
     /// On entitlement, ask the server to pre-generate the matrix.
@@ -580,10 +595,10 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             guard let self else { return }
             for attempt in 0..<6 {
                 do {
-                    // Defect 1: name the forecast cells — an
+                    // Defect 1: name the composed fill set — an
                     // unnamed call enqueues nothing at all under
                     // the deployed convergence contract.
-                    let cells = self.forecastPriorityCells
+                    let cells = self.namedFillCells
                     _ = try await self.api.startPersonalFill(priorityCells: cells)
                     self.lastSentFillCells = cells
                     // GEN-5 (RW-29 EX-15): the fill starting is
@@ -629,5 +644,70 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         var dismissed = Set(defaults.stringArray(forKey: Self.upsellDismissedCellsKey) ?? [])
         dismissed.insert(currentCell)
         defaults.set(Array(dismissed), forKey: Self.upsellDismissedCellsKey)
+    }
+}
+
+// MARK: - The canonical core matrix (GEN-5, Addendum 8 second follow-up)
+
+/// The 20-cell canonical core matrix — the scaffold substrate
+/// every entitled user's bank must hold: every temperature
+/// bracket (FREEZING, COLD, COOL, MILD, WARM, HOT) at CLEAR ×
+/// DAWN, CLEAR × DUSK, and RAIN × DAWN, plus WARM and HOT at
+/// CLEAR × MIDDAY, each at the bracket's canonical outfit. This
+/// is the RW-16.30 production fill's original matrix
+/// (start-personal-fill v9), restored to the caller-named
+/// contract: a forecast-only fill in winter would bank no
+/// hot-weather photo at all, leaving nothing to scaffold from
+/// when the user travels somewhere hot.
+///
+/// The ids are DERIVED, never hand-mirrored: each cell replays
+/// its representative frame through the same shared engine the
+/// serve path uses (the deployed fill's canonical table was
+/// itself generated from engine outputs at these frames —
+/// comfort NEUTRAL so adjusted == raw; calm wind; RAIN measured
+/// rain at 1.0 mm; UV 2 at DAWN/DUSK dry, 1 in RAIN, 4 at
+/// MIDDAY; hours 8 / 13 / 18; representative adjusted temps
+/// FREEZING 12, COLD 27, COOL 42, MILD 57, WARM 72, HOT 85 °F),
+/// so a derived id is by construction a launch-set cell id the
+/// server will intersect, and engine drift moves both together.
+enum CoreMatrixCells {
+    private static let brackets: [(bracket: HeroTempBracket, feelsLikeF: Double)] = [
+        (.FREEZING, 12), (.COLD, 27), (.COOL, 42),
+        (.MILD, 57), (.WARM, 72), (.HOT, 85),
+    ]
+
+    static func ids(genderPreference: GenderPreference) -> [String] {
+        brackets.flatMap { entry in
+            var cells = [
+                cell(genderPreference: genderPreference, weatherCode: 0,
+                     feelsLikeF: entry.feelsLikeF, hour: 8, uvIndex: 2, precipitation: 0),
+                cell(genderPreference: genderPreference, weatherCode: 0,
+                     feelsLikeF: entry.feelsLikeF, hour: 18, uvIndex: 2, precipitation: 0),
+                cell(genderPreference: genderPreference, weatherCode: 61,
+                     feelsLikeF: entry.feelsLikeF, hour: 8, uvIndex: 1, precipitation: 1.0),
+            ]
+            if entry.bracket == .WARM || entry.bracket == .HOT {
+                cells.append(cell(genderPreference: genderPreference, weatherCode: 0,
+                                  feelsLikeF: entry.feelsLikeF, hour: 13, uvIndex: 4, precipitation: 0))
+            }
+            return cells
+        }
+    }
+
+    private static func cell(genderPreference: GenderPreference, weatherCode: Int,
+                             feelsLikeF: Double, hour: Int, uvIndex: Double,
+                             precipitation: Double) -> String {
+        let outfit = OutfitRecommendationService.shared.getRecommendation(
+            for: feelsLikeF, rawTemperature: feelsLikeF,
+            isRaining: precipitation > 0, windSpeed: 2, humidity: 50,
+            uvIndex: uvIndex, precipitation: precipitation, hour: hour
+        )
+        return PersonalCombination.make(
+            genderPreference: genderPreference,
+            weatherCode: weatherCode,
+            feelsLikeFahrenheit: feelsLikeF,
+            hour: hour,
+            outfit: outfit
+        ).combinationId
     }
 }

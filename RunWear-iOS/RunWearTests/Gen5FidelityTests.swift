@@ -629,11 +629,11 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(content?.fraction, 8.0 / 48.0)
     }
 
-    /// Defect 1: the priority cells are the forecast's distinct
-    /// personal cells in forecast order, keyed exactly as the
-    /// displayed cell is keyed — including cells the user has
-    /// never opened (the fill's whole point).
-    func testForecastPriorityCells_DistinctInForecastOrder() {
+    /// Defect 1: the named forecast cells are one representative
+    /// frame per (day, daypart) cluster — the cluster's first
+    /// forecast hour — in forecast order, deduped by cell id
+    /// (Android's ForecastFillCells selection, mirrored).
+    func testForecastPriorityCells_ClusterRepresentativesInForecastOrder() {
         // Real engine outfits, as the view model's derivation
         // assembles them per forecast hour.
         let mild = OutfitRecommendationService.shared.getRecommendation(
@@ -642,21 +642,131 @@ final class Gen5FidelityTests: XCTestCase {
         let warm = OutfitRecommendationService.shared.getRecommendation(
             for: 78, rawTemperature: 78, isRaining: false, windSpeed: 5,
             humidity: 50, uvIndex: 5, precipitation: 0, hour: 12)
-        let hours = [
-            ForecastCellInput(weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild),
-            ForecastCellInput(weatherCode: 0, feelsLikeFahrenheit: 78, hour: 12, outfit: warm),
-            // The same cell recurring later in the 7-day forecast
-            // (cell ids carry no date) must not be named twice.
-            ForecastCellInput(weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild),
+        let frames = [
+            // Day 1 DAWN cluster: two hours, one representative.
+            ForecastCellFrame(date: "2026-11-06", weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild),
+            ForecastCellFrame(date: "2026-11-06", weatherCode: 0, feelsLikeFahrenheit: 62, hour: 7, outfit: mild),
+            // Day 1 MIDDAY cluster.
+            ForecastCellFrame(date: "2026-11-06", weatherCode: 0, feelsLikeFahrenheit: 78, hour: 12, outfit: warm),
+            // Day 2 DAWN cluster prescribes day 1's dawn cell again
+            // (cell ids carry no date) — named once.
+            ForecastCellFrame(date: "2026-11-07", weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild),
         ]
-        let ids = ForecastPriorityCells.ids(genderPreference: .male, hours: hours)
-        XCTAssertEqual(ids.count, 2, "recurring forecast cells are named once")
+        let ids = ForecastPriorityCells.ids(genderPreference: .male, frames: frames)
+        XCTAssertEqual(ids.count, 2, "cluster representatives only, deduped by cell id")
         XCTAssertEqual(ids[0], PersonalCombination.make(
             genderPreference: .male, weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild
-        ).combinationId, "forecast order: the first hour's cell leads")
+        ).combinationId, "forecast order: the first cluster's cell leads")
         XCTAssertEqual(ids[1], PersonalCombination.make(
             genderPreference: .male, weatherCode: 0, feelsLikeFahrenheit: 78, hour: 12, outfit: warm
         ).combinationId)
+    }
+
+    /// The corrected fill set (second follow-up): the core
+    /// matrix is 20 cells with the settled segment structure —
+    /// every bracket at CLEAR DAWN, CLEAR DUSK, RAIN DAWN, plus
+    /// WARM/HOT at CLEAR MIDDAY and nothing else — and the
+    /// derived ids carry the deployed canonical table's outfits
+    /// at the representative frames (the drift-guard property:
+    /// HOT × CLEAR × MIDDAY is the canonical
+    /// VISOR/TANK_TOP/SHORT_SHORTS/SUNGLASSES cell).
+    func testCoreMatrix_TwentySettledCells() {
+        let ids = CoreMatrixCells.ids(genderPreference: .male)
+        XCTAssertEqual(ids.count, 20)
+        XCTAssertEqual(Set(ids).count, 20, "all twenty ids distinct")
+        for bracket in ["FREEZING", "COLD", "COOL", "MILD", "WARM", "HOT"] {
+            XCTAssertTrue(ids.contains { $0.hasPrefix("MALE_CLEAR_\(bracket)_DAWN_") }, "\(bracket) CLEAR DAWN named")
+            XCTAssertTrue(ids.contains { $0.hasPrefix("MALE_CLEAR_\(bracket)_DUSK_") }, "\(bracket) CLEAR DUSK named")
+            XCTAssertTrue(ids.contains { $0.hasPrefix("MALE_RAIN_\(bracket)_DAWN_") }, "\(bracket) RAIN DAWN named")
+        }
+        XCTAssertTrue(ids.contains { $0.hasPrefix("MALE_CLEAR_WARM_MIDDAY_") })
+        XCTAssertTrue(ids.contains { $0.hasPrefix("MALE_CLEAR_HOT_MIDDAY_") })
+        XCTAssertFalse(ids.contains { $0.hasPrefix("MALE_CLEAR_FREEZING_MIDDAY_") },
+                       "no other bracket gets a MIDDAY core cell")
+        XCTAssertFalse(ids.contains { $0.contains("_NIGHT_") }, "the matrix has no NIGHT cells")
+        let canonicalHotMidday = PersonalCombination(
+            genderSegment: "MALE", weather: .CLEAR, temp: .HOT, time: .MIDDAY,
+            outfitItems: ["VISOR", "TANK_TOP", "SHORT_SHORTS", "SUNGLASSES"]).combinationId
+        XCTAssertTrue(ids.contains(canonicalHotMidday),
+                      "the derived HOT MIDDAY id is the deployed canonical cell")
+    }
+
+    /// The composed fill set: forecast cells first (queued
+    /// ahead), core cells behind, no duplicates — the exact list
+    /// a fresh subscription names without the user opening
+    /// anything (the coordinator's gate check 3, client half).
+    func testFillComposition_ForecastFirstThenCore() {
+        let core = CoreMatrixCells.ids(genderPreference: .male)
+        let forecast = ["MALE_CLEAR_COOL_DAWN_00000000", core[0], "MALE_RAIN_MILD_NIGHT_11111111"]
+        let named = FillSetComposition.named(forecastCells: forecast, coreCells: core)
+        XCTAssertEqual(Array(named.prefix(2)), [forecast[0], forecast[2]],
+                       "forecast cells lead, in order, core overlap deduped")
+        XCTAssertEqual(Set(named), Set(forecast).union(core))
+        XCTAssertEqual(named.count, Set(named).count, "no cell is named twice")
+        XCTAssertTrue(Set(core).isSubset(of: Set(named)),
+                      "the whole substrate is named even when the forecast never touches it")
+    }
+
+    /// Gate check 1 (client half): a winter subscriber who has
+    /// never generated a hot cell opens HOT × CLEAR × MIDDAY.
+    /// Under the matrix that cell is banked, so the serve is
+    /// EXACT: the lookup for the core cell resolves to SHOW and
+    /// the presentation is .exact, not scaffold.
+    func testGateCheck1_CoreHotMiddayServesExact() throws {
+        let core = CoreMatrixCells.ids(genderPreference: .male)
+        let hotMidday = try XCTUnwrap(core.first { $0.hasPrefix("MALE_CLEAR_HOT_MIDDAY_") })
+        let json = """
+        {"found": true, "combination_id": "\(hotMidday)",
+         "hero_id": "hero-hot", "variant": 1,
+         "image_url": "https://example.invalid/hot-midday.jpg",
+         "version": 1, "replenishment_queued": 0,
+         "look_state": "ready", "look_reason": null}
+        """
+        let lookup = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(json.utf8))
+        var cache = PersonalCellCache()
+        guard case .show = cache.resolve(lookup: lookup, now: Date()) else {
+            return XCTFail("a banked core cell must resolve to SHOW")
+        }
+        XCTAssertEqual(
+            PersonalServePolicy.presentation(hasPersonalPhoto: true,
+                                             lookState: PersonalLookState.from(lookup: lookup)),
+            .exact, "a banked matrix cell serves exact, never scaffold")
+    }
+
+    /// Gate check 2 (client half): the same subscriber opens an
+    /// OFF-matrix cell — HOT × RAIN × DUSK is not one of the
+    /// twenty. The serve is his OWN banked same-prescription
+    /// photo as scaffold (the deployed serve answers found=true
+    /// with look_state "making" and queues the exact job
+    /// server-side) — never a stock photo: the resolution is
+    /// SHOW of his own photo, classified scaffold.
+    func testGateCheck2_OffMatrixCellServesOwnScaffold() throws {
+        let core = Set(CoreMatrixCells.ids(genderPreference: .male))
+        let outfit = OutfitRecommendationService.shared.getRecommendation(
+            for: 85, rawTemperature: 85, isRaining: true, windSpeed: 2,
+            humidity: 50, uvIndex: 2, precipitation: 1.0, hour: 18)
+        let offMatrix = PersonalCombination.make(
+            genderPreference: .male, weatherCode: 61,
+            feelsLikeFahrenheit: 85, hour: 18, outfit: outfit)
+        XCTAssertFalse(core.contains(offMatrix.combinationId),
+                       "HOT RAIN DUSK is off-matrix by construction")
+        let json = """
+        {"found": true, "combination_id": "\(offMatrix.combinationId)",
+         "hero_id": "hero-scaffold", "variant": 1,
+         "image_url": "https://example.invalid/own-scaffold.jpg",
+         "version": 2, "replenishment_queued": 0,
+         "look_state": "making", "look_reason": null}
+        """
+        let lookup = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(json.utf8))
+        var cache = PersonalCellCache()
+        guard case .show(let url) = cache.resolve(lookup: lookup, now: Date()) else {
+            return XCTFail("the scaffold payload must resolve to SHOW — never a stock fall-through")
+        }
+        XCTAssertEqual(url, "https://example.invalid/own-scaffold.jpg")
+        XCTAssertEqual(
+            PersonalServePolicy.presentation(hasPersonalPhoto: true,
+                                             lookState: PersonalLookState.from(lookup: lookup)),
+            .scaffold(badge: PersonalServePolicy.scaffoldBadge))
     }
 
     /// Defect 1's contract, end to end at the client level: the
@@ -677,6 +787,12 @@ final class Gen5FidelityTests: XCTestCase {
                       "every forecast load publishes its cells")
         XCTAssertTrue(vm.contains("ForecastPriorityCells.ids(genderPreference: genderPreference"),
                       "the derivation runs over the loaded 7-day forecast")
+        XCTAssertTrue(vm.contains("CoreMatrixCells.ids(genderPreference: genderPreference"),
+                      "the composed set includes the canonical core matrix")
+        XCTAssertTrue(vm.contains("FillSetComposition.named("),
+                      "forecast cells lead and the substrate fills behind them")
+        XCTAssertTrue(store.contains("if mode == .subscribed { kickFillWithRetry() }"),
+                      "selfie-epoch changes (opt-in and replace) re-name the fill")
     }
 
     /// Item 3, the exact state: an entitled user opens a cell he

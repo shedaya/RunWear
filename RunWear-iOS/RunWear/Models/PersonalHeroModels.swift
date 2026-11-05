@@ -124,10 +124,11 @@ protocol PersonalHeroResolving: AnyObject {
     /// the exact look is still making, personal when it is ready).
     func lookState(for combination: PersonalCombination) -> PersonalLookState
     /// GEN-5 (Addendum 8 follow-up, Defect 1): hand the resolver
-    /// the priority cells derived from the current 7-day
-    /// forecast, so a subscription fill can name them. Called on
-    /// every forecast load; the resolver re-sends the fill when
-    /// the named set changes under a live subscription.
+    /// the composed fill set — the forecast's cluster cells
+    /// first, then the canonical core matrix — so a subscription
+    /// fill can name it. Called on every forecast load; the
+    /// resolver re-sends the fill when the named set changes
+    /// under a live subscription.
     func updateForecastPriorityCells(_ cells: [String])
 }
 
@@ -1042,17 +1043,19 @@ func deriveBankCoverage(heroCells: Set<String>, targetCells: Set<String>) -> Ban
     )
 }
 
-/// GEN-5 (Addendum 8 follow-up, Defect 1): the priority cells a
-/// start-personal-fill call names — the distinct personal cells
-/// of the user's 7-day forecast, in forecast order. The deployed
-/// fill (start-personal-fill v13, the RW-16.30 convergence
-/// model) enqueues ONLY the cells the caller names; gen-4 named
-/// none, so no fill ever ran ahead and banks held only the cells
-/// the user personally opened. One input per forecast hour,
+/// GEN-5 (Addendum 8 follow-up, Defect 1; corrected by the
+/// second follow-up, Nov 5, 2026): one frame of the 7-day
+/// forecast for fill naming. The named forecast cells are ONE
+/// REPRESENTATIVE FRAME PER (DAY, DAYPART) CLUSTER — the first
+/// forecast hour of each cluster, in forecast order (Android's
+/// ForecastFillCells selection, mirrored for parity) — each
 /// keyed through the SAME PersonalCombination.make the displayed
 /// cell uses (comfort-adjusted feels-like frame), so a named
-/// cell is exactly the cell its hour will ask for.
-struct ForecastCellInput: Equatable {
+/// cell is exactly the cell its frame will ask for.
+struct ForecastCellFrame: Equatable {
+    /// The forecast day, yyyy-MM-dd in the forecast's own
+    /// (location-local) frame — half of the cluster key.
+    let date: String
     let weatherCode: Int
     let feelsLikeFahrenheit: Double
     let hour: Int
@@ -1060,22 +1063,46 @@ struct ForecastCellInput: Equatable {
 }
 
 enum ForecastPriorityCells {
-    static func ids(genderPreference: GenderPreference, hours: [ForecastCellInput]) -> [String] {
+    static func ids(genderPreference: GenderPreference, frames: [ForecastCellFrame]) -> [String] {
         var seen = Set<String>()
         var ids: [String] = []
-        for input in hours {
+        var lastCluster: String? = nil
+        for frame in frames {
+            // The night daypart forms two clusters per calendar
+            // day (00:00–04:59 and 20:00–23:59); the consecutive
+            // key change is what separates them — both are named.
+            let cluster = "\(frame.date)|\(HeroTimeOfDay.from(hour: frame.hour).rawValue)"
+            if cluster == lastCluster { continue }
+            lastCluster = cluster
             let combination = PersonalCombination.make(
                 genderPreference: genderPreference,
-                weatherCode: input.weatherCode,
-                feelsLikeFahrenheit: input.feelsLikeFahrenheit,
-                hour: input.hour,
-                outfit: input.outfit
+                weatherCode: frame.weatherCode,
+                feelsLikeFahrenheit: frame.feelsLikeFahrenheit,
+                hour: frame.hour,
+                outfit: frame.outfit
             )
             if seen.insert(combination.combinationId).inserted {
                 ids.append(combination.combinationId)
             }
         }
         return ids
+    }
+}
+
+/// The fill set a start-personal-fill call names, composed:
+/// the forecast cells FIRST (they are queued ahead — imminent
+/// conditions land first), then the canonical core matrix cells
+/// the forecast did not already name (the scaffold substrate
+/// fills behind them). Pure; the composition the grant call,
+/// the forecast-refresh re-kick, and the epoch re-kick all send.
+enum FillSetComposition {
+    static func named(forecastCells: [String], coreCells: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for id in forecastCells + coreCells where seen.insert(id).inserted {
+            out.append(id)
+        }
+        return out
     }
 }
 

@@ -508,10 +508,25 @@ class WeatherViewModel: ObservableObject {
         let fingerprint = "\(hourly.time.first ?? "")|\(hourly.time.count)|\(genderPreference.rawValue)|\(comfortLevel.rawValue)"
         guard fingerprint != priorityCellsFingerprint else { return }
         priorityCellsFingerprint = fingerprint
-        var inputs: [ForecastCellInput] = []
-        inputs.reserveCapacity(hourly.time.count)
+        // Frames from the current hour forward (the forecast's
+        // own location-local frame), one per (day, daypart)
+        // cluster — only cluster-first frames need an engine
+        // outfit; ForecastPriorityCells applies the same
+        // selection formally.
+        let nowPrefix = {
+            let c = locationCalendar.dateComponents([.year, .month, .day, .hour], from: Date())
+            return String(format: "%04d-%02d-%02dT%02d",
+                          c.year ?? 0, c.month ?? 0, c.day ?? 0, c.hour ?? 0)
+        }()
+        var frames: [ForecastCellFrame] = []
+        var lastCluster: String? = nil
         for index in hourly.time.indices {
+            let stamp = hourly.time[index]
+            if stamp < nowPrefix { continue }
             guard let snap = HourlyWeatherSnapshot.from(hourly: hourly, at: index) else { continue }
+            let cluster = "\(String(stamp.prefix(10)))|\(HeroTimeOfDay.from(hour: snap.hour).rawValue)"
+            if cluster == lastCluster { continue }
+            lastCluster = cluster
             let outfit = outfitService.getRecommendation(
                 for: comfortLevel.adjustTemperature(snap.feelsLikeFahrenheit),
                 rawTemperature: snap.feelsLikeFahrenheit,
@@ -522,15 +537,23 @@ class WeatherViewModel: ObservableObject {
                 precipitation: snap.precipitation,
                 hour: snap.hour
             )
-            inputs.append(ForecastCellInput(
+            frames.append(ForecastCellFrame(
+                date: String(stamp.prefix(10)),
                 weatherCode: snap.weatherCode,
                 feelsLikeFahrenheit: comfortLevel.adjustTemperature(snap.feelsLikeFahrenheit),
                 hour: snap.hour,
                 outfit: outfit
             ))
         }
-        let cells = ForecastPriorityCells.ids(genderPreference: genderPreference, hours: inputs)
-        personalStore?.updateForecastPriorityCells(cells)
+        let forecastCells = ForecastPriorityCells.ids(genderPreference: genderPreference, frames: frames)
+        // The composed fill set: forecast first (queued ahead),
+        // then the canonical core matrix — the scaffold
+        // substrate — behind it.
+        let named = FillSetComposition.named(
+            forecastCells: forecastCells,
+            coreCells: CoreMatrixCells.ids(genderPreference: genderPreference)
+        )
+        personalStore?.updateForecastPriorityCells(named)
     }
 
     // MARK: - Widget last-good (GEN-5, Addendum 7)
