@@ -152,7 +152,7 @@ object GuidedSelfieChecks {
         m != null && evaluate(m).all { it.passed } &&
             PhotoQualityPolicy.decide(
                 m.faceCount, m.largestFaceWidthFraction, m.meanLuminance,
-                m.subjectHeadRollDegrees
+                m.subjectHeadRollDegrees, m.maxAbsHeadTurnDegrees
             ) == null
 
     /** The settled passing line (design §10.3 verbatim). */

@@ -572,13 +572,24 @@ internal fun MakeItMeUploadFlow(
     // GEN-5 (item 21): entering through the "Choose a Different
     // Photo" door opens the library picker as soon as the capture
     // step arrives (once — the door is an entry, not a state).
+    // GEN-6 WAVE A (RW-49): the intake OPENS on the guided capture
+    // as its primary surface (design frames 15–18) — arriving at
+    // the photos step with no photos yet presents the guided
+    // capture directly for the standard and guided-selfie doors,
+    // instead of landing on a photo-list step whose primary action
+    // is a "Take a guided selfie" button. The library door stays
+    // the explicit LIBRARY entry (and the secondary door inside
+    // the step). Once only: dismissing the capture never reopens
+    // it — the user chose to leave it.
     var entryDoorConsumed by remember { mutableStateOf(false) }
     LaunchedEffect(step) {
-        if (step == UploadStep.PHOTOS &&
-            entryDoor == MakeItMeEntryDoor.LIBRARY && !entryDoorConsumed
-        ) {
+        if (step == UploadStep.PHOTOS && !entryDoorConsumed && photos.isEmpty()) {
             entryDoorConsumed = true
-            launchPicker()
+            when (entryDoor) {
+                MakeItMeEntryDoor.LIBRARY -> launchPicker()
+                MakeItMeEntryDoor.STANDARD,
+                MakeItMeEntryDoor.GUIDED_SELFIE -> showGuidedCapture = true
+            }
         }
     }
 

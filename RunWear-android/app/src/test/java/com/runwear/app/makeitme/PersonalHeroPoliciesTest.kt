@@ -307,6 +307,68 @@ class PersonalHeroPoliciesTest {
         )
     }
 
+    @Test
+    fun `face too small is its own rejection class with the settled copy (RW-50)`() {
+        // GEN-6 (RW-50): the gen-5 enum had NO face-too-small
+        // class, so §10.4's settled copy could never render. A face
+        // below the guided checks' own minimum fraction (0.18) now
+        // rejects as FACE_TOO_SMALL.
+        assertEquals(
+            PhotoRejection.FACE_TOO_SMALL,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.10f, meanLuminance = 0.5
+            )
+        )
+        // At the threshold exactly: acceptable.
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1,
+                largestFaceWidthFraction = GuidedSelfieChecks.MIN_FACE_WIDTH_FRACTION,
+                meanLuminance = 0.5
+            )
+        )
+        assertEquals(
+            "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…",
+            PhotoQualityPolicy.stringFor(PhotoRejection.FACE_TOO_SMALL)
+        )
+    }
+
+    @Test
+    fun `head turned away is judged on upload with the settled copy (RW-50)`() {
+        // GEN-6 (RW-50): §10.4 judges head-turn on upload, against
+        // the guided capture's straight-on gate (18 degrees).
+        assertEquals(
+            PhotoRejection.TURNED_AWAY,
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5, maxAbsHeadTurnDegrees = 30f
+            )
+        )
+        assertNull(
+            PhotoQualityPolicy.decide(
+                faceCount = 1, largestFaceWidthFraction = 0.35f,
+                meanLuminance = 0.5,
+                maxAbsHeadTurnDegrees = GuidedSelfieChecks.MAX_HEAD_TURN_DEGREES
+            )
+        )
+        assertEquals(
+            MakeItMeStrings.C3C_REJECT_TOO_DARK,
+            PhotoQualityPolicy.stringFor(PhotoRejection.TURNED_AWAY)
+        )
+    }
+
+    @Test
+    fun `too dark and too close carry the settled section 10-4 wording (RW-50)`() {
+        assertEquals(
+            "Try facing a window or light, looking at the camera.",
+            PhotoQualityPolicy.stringFor(PhotoRejection.TOO_DARK)
+        )
+        assertEquals(
+            "Hold the phone at arm's length, so your whole face fits with space around it.",
+            PhotoQualityPolicy.stringFor(PhotoRejection.TOO_CLOSE)
+        )
+    }
+
     // ── Billing identity link (acceptance 17) ───────────────────────
 
     private val supabaseUid = "381d4f7d-0000-4000-8000-000000000000"

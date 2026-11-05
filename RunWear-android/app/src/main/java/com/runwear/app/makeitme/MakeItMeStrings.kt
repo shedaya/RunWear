@@ -39,7 +39,10 @@ object MakeItMeStrings {
 
     // C — Consent, attestation, capture (spec §2.3)
     const val C1A_CONSENT_TITLE = "Before you add photos"
-    const val C1B_CONSENT_BODY = "RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.\n\nYour photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.\n\nPictures made from your photos are kept only for you, so your outfits are ready when you open the app.\n\nYou can delete your photos and every picture made from them at any time: Settings → Make It Me → Delete my photos. Deleting is permanent and takes effect right away."
+    // GEN-6 WAVE A (RW-48): the body's closing sentence restored —
+    // "Nothing else is done with them." (§10.2's settled close;
+    // it was absent from the shipped body).
+    const val C1B_CONSENT_BODY = "RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.\n\nYour photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.\n\nPictures made from your photos are kept only for you, so your outfits are ready when you open the app.\n\nYou can delete your photos and every picture made from them at any time: Settings → Make It Me → Delete my photos. Deleting is permanent and takes effect right away.\n\nNothing else is done with them."
     const val C1C_ATTESTATION = "These photos are of me, and I am 18 or older."
     const val C1D_CONTINUE = "Continue"
     const val C1E_NOT_NOW = "Not now"
@@ -67,8 +70,15 @@ object MakeItMeStrings {
     const val C2J_SAVE_CONFIRMED = "Your photos are saved."
     const val C3A_REJECT_FACE_UNCLEAR = "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow."
     const val C3B_REJECT_MULTIPLE = "This photo has more than one person in it. Pick one that's just you."
-    const val C3C_REJECT_TOO_DARK = "This one is too dark to use. Try a photo in brighter light."
-    const val C3D_REJECT_TOO_CLOSE = "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+    // GEN-6 WAVE A (RW-50): C3C/C3D restored to design-spec
+    // §10.4's settled wording (the shipped substitutes are out);
+    // §10.4 groups dim and turned-away under one line, so C3I
+    // carries the same settled sentence for the turned-away class;
+    // C3H is §10.4's face-too-small line, verbatim.
+    const val C3C_REJECT_TOO_DARK = "Try facing a window or light, looking at the camera."
+    const val C3D_REJECT_TOO_CLOSE = "Hold the phone at arm's length, so your whole face fits with space around it."
+    const val C3H_REJECT_FACE_TOO_SMALL = "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…"
+    const val C3I_REJECT_TURNED_AWAY = "Try facing a window or light, looking at the camera."
     // C3E/C3F added Nov 2, 2026 (RW-26 guided-selfie follow-up): the
     // retake prompts the guided capture and the upload door share —
     // same checks, same strings, camera offered first.
@@ -120,14 +130,20 @@ object MakeItMeStrings {
         "$freeGenerationsUsed of 5 looks"
 
     const val G1_PROGRESS = "Making this outfit yours…"
-    // GEN-3 A-HERO (X-8 copy audit): the pre-fix line promised "the
-    // standard photo stays up until yours is done" — false in the
-    // walkthrough's Overland Park frames, where no standard photo
-    // ever stayed up (X-3). The claim is removed rather than
-    // re-promised: WS-A(1)'s fallback makes a photo stay up wherever
-    // one is truthfully servable, and the line now claims only what
-    // is true in every state.
-    const val G2_PROGRESS_SUB = "This usually takes a few minutes. Your recommendation is ready either way."
+    // GEN-6 WAVE A (RW-47): the settled §11 honesty line is
+    // RESTORED verbatim, per the owner's Nov 5 conformance ruling.
+    // History: the gen-3 builder replaced it (X-8) claiming it was
+    // false in the Overland Park walkthrough state, where no
+    // standard photo stayed up (X-3). That state's root cause was
+    // the pre-WS-A(1) empty-hero path; the bundled-fallback floor
+    // (GEN-4) plus the compose-in-one-write serve means a photo —
+    // the standard/fallback one — stays up wherever one is
+    // truthfully servable, which is every prescription. The
+    // falsity did NOT reproduce in any state reachable in this
+    // lane's work (code audit + state tests); per the ruling the
+    // line is restored regardless, and any future reproducing
+    // state is a defect to fix in the serve path, not in the copy.
+    const val G2_PROGRESS_SUB = "This usually takes a few minutes — the standard photo stays up until yours is done."
     // G5/G6 added Nov 1, 2026 (RW-16.16 — spec §7 amended by dated
     // note). One failure line for every reason class in this build;
     // the class travels in the payload for a later class-specific

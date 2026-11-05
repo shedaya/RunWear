@@ -149,7 +149,12 @@ object PhotoQualityChecker {
                     faceCount = faces.size,
                     largestFaceWidthFraction = subject?.widthFraction ?: 0f,
                     meanLuminance = meanLuminance(bitmap),
-                    subjectHeadRollDegrees = subject?.headEulerZ ?: 0f
+                    subjectHeadRollDegrees = subject?.headEulerZ ?: 0f,
+                    // GEN-6 (RW-50): head-turn is judged on upload
+                    // too (§10.4) — the subject face's yaw against
+                    // the guided capture's straight-on gate.
+                    maxAbsHeadTurnDegrees = subject?.headEulerY
+                        ?.let { kotlin.math.abs(it) } ?: 0f
                 )
                 if (rejection != null) {
                     CheckResult(rejection, null)

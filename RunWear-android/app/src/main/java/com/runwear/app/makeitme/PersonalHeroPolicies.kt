@@ -259,7 +259,7 @@ object MakeItMeUpsellRules {
     }
 }
 
-/** The four in-flow rejection classes (spec §7 C3a–C3d). */
+/** The in-flow rejection classes (spec §7 C3a–C3d + §10.4). */
 enum class PhotoRejection {
     FACE_UNCLEAR,
     MULTIPLE_PEOPLE,
@@ -268,7 +268,17 @@ enum class PhotoRejection {
     /** WS-6 (F-1): the subject face's in-plane roll is beyond the
      *  gate and was not a correctable quarter-turn — the photo is
      *  sideways/tilted and must be retaken upright. */
-    ROTATED
+    ROTATED,
+
+    /** GEN-6 WAVE A (RW-50): the face is too small in the frame —
+     *  design-spec §10.4's class, which the gen-5 enum lacked, so
+     *  the settled copy could never render. */
+    FACE_TOO_SMALL,
+
+    /** GEN-6 WAVE A (RW-50): the head is turned away beyond the
+     *  guided capture's straight-on gate — §10.4 judges head-turn
+     *  on upload as well as in the guided checks. */
+    TURNED_AWAY
 }
 
 /**
@@ -283,6 +293,14 @@ enum class PhotoRejection {
  * judged darkness before face count; iOS judged count before darkness;
  * both now use this order. PhotoIntakePolicy defines routing only (no
  * check order), so the harmonized order lives here.
+ *
+ * GEN-6 WAVE A (RW-50): the order gains the two §10.4 judgements
+ * the gen-5 gate never made on upload — head-turn (after the roll
+ * gate, against the guided capture's own straight-on threshold)
+ * and face-too-small (after darkness, against the guided capture's
+ * own minimum face fraction) — so the upload door and the guided
+ * door judge a photo by the same checks, and every §10.4 rejection
+ * class is reachable.
  */
 object PhotoQualityPolicy {
 
@@ -296,7 +314,8 @@ object PhotoQualityPolicy {
         faceCount: Int,
         largestFaceWidthFraction: Float,
         meanLuminance: Double,
-        subjectHeadRollDegrees: Float = 0f
+        subjectHeadRollDegrees: Float = 0f,
+        maxAbsHeadTurnDegrees: Float = 0f
     ): PhotoRejection? {
         if (faceCount == 0) return PhotoRejection.FACE_UNCLEAR
         if (faceCount > 1) return PhotoRejection.MULTIPLE_PEOPLE
@@ -309,18 +328,30 @@ object PhotoQualityPolicy {
         if (!IntakeOrientation.rollWithinGate(subjectHeadRollDegrees)) {
             return PhotoRejection.ROTATED
         }
+        // GEN-6 (RW-50): head-turn, judged on upload per §10.4 with
+        // the guided capture's straight-on gate as the threshold.
+        if (maxAbsHeadTurnDegrees > GuidedSelfieChecks.MAX_HEAD_TURN_DEGREES) {
+            return PhotoRejection.TURNED_AWAY
+        }
         if (meanLuminance < MIN_MEAN_LUMINANCE) return PhotoRejection.TOO_DARK
+        // GEN-6 (RW-50): face-too-small — the §10.4 class the gen-5
+        // enum lacked; the threshold is the guided checks' own.
+        if (largestFaceWidthFraction < GuidedSelfieChecks.MIN_FACE_WIDTH_FRACTION) {
+            return PhotoRejection.FACE_TOO_SMALL
+        }
         if (largestFaceWidthFraction > MAX_FACE_WIDTH_FRACTION) return PhotoRejection.TOO_CLOSE
         return null
     }
 
-    /** The spec §7 C3 string for a rejection. */
+    /** The spec §7 C3 / §10.4 string for a rejection. */
     fun stringFor(rejection: PhotoRejection): String = when (rejection) {
         PhotoRejection.FACE_UNCLEAR -> MakeItMeStrings.C3A_REJECT_FACE_UNCLEAR
         PhotoRejection.MULTIPLE_PEOPLE -> MakeItMeStrings.C3B_REJECT_MULTIPLE
         PhotoRejection.TOO_DARK -> MakeItMeStrings.C3C_REJECT_TOO_DARK
         PhotoRejection.TOO_CLOSE -> MakeItMeStrings.C3D_REJECT_TOO_CLOSE
         PhotoRejection.ROTATED -> MakeItMeStrings.C3G_REJECT_ROTATED
+        PhotoRejection.FACE_TOO_SMALL -> MakeItMeStrings.C3H_REJECT_FACE_TOO_SMALL
+        PhotoRejection.TURNED_AWAY -> MakeItMeStrings.C3I_REJECT_TURNED_AWAY
     }
 }
 

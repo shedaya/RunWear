@@ -112,22 +112,24 @@ class LookStatusPolicyTest {
     @Test
     fun `progress sub-line no longer promises ten seconds`() {
         assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("10 seconds"))
+        // GEN-6 (RW-47): the settled §11 line, restored verbatim
+        // per the owner's Nov 5 conformance ruling.
         assertEquals(
-            "This usually takes a few minutes. Your recommendation is ready either way.",
+            "This usually takes a few minutes — the standard photo stays up until yours is done.",
             MakeItMeStrings.G2_PROGRESS_SUB
         )
     }
 
     @Test
-    fun `progress sub-line makes no photo claim - GEN-3 X-8 copy audit`() {
-        // The pre-GEN-3 line ended "— the standard photo stays up
-        // until yours is done": a claim that was false in exactly
-        // the frames the gen-2 walkthrough recorded (no photo up at
-        // all). The generating state now lives on the hero photo
-        // itself (the WS-A(2) pill), and the sub-line promises only
-        // what is always true — the recommendation is ready.
-        assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("photo"))
-        assertFalse(MakeItMeStrings.G2_PROGRESS_SUB.contains("stays up"))
+    fun `progress sub-line carries the settled photo claim - GEN-6 RW-47 supersedes X-8`() {
+        // The gen-3 X-8 audit removed this claim as false in the
+        // Overland Park frames (no photo up at all). That state's
+        // root cause — the empty-hero path — was closed by the
+        // WS-A(1)/GEN-4 fallback floor, and the owner restored the
+        // settled line in the Nov 5 conformance sweep (RW-47). The
+        // claim is now pinned as PRESENT; if a no-photo state ever
+        // recurs it is a serve-path defect, not a copy edit.
+        assertTrue(MakeItMeStrings.G2_PROGRESS_SUB.contains("the standard photo stays up"))
     }
 
     @Test
