@@ -221,12 +221,18 @@ final class SimplePlaceTests: XCTestCase {
         let e = entry(place: "New York, New York, United States",
                       items: ["Insulated Jacket", "Tights", "Gloves", "Hat", "Socks"])
         let expanded = WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "41°")
-        XCTAssertEqual(expanded, "New York, NY · Today — 41° feels like · 5 items")
+        // GEN-5 supersession (FA-34): the expanded line names
+        // the outfit's items rather than counting them.
+        XCTAssertEqual(expanded, "New York, NY · Today — 41° feels like · Insulated Jacket · Tights · Gloves · Hat · Socks")
         // The expanded subtitle must not duplicate either
         // narration payload: not the Added payload ("{place},
-        // Now") and not the Update payload (first kit item).
+        // Now") and not the Update payload. Under C-7 the
+        // payloads are place/moment only, so the kit names the
+        // FA-34 line carries can no longer collide with a
+        // payload — the gen-3 guard against that collision is
+        // superseded with it.
         XCTAssertFalse(expanded.contains("Now"), expanded)
-        XCTAssertFalse(expanded.contains("Insulated Jacket"), expanded)
+        XCTAssertTrue(expanded.contains("Insulated Jacket"), expanded)
         XCTAssertFalse(expanded.contains("United States"), expanded)
     }
 
@@ -234,7 +240,8 @@ final class SimplePlaceTests: XCTestCase {
         let e = entry(place: "Rancho Santa Margarita, California", items: ["Tee"])
         XCTAssertEqual(
             WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "72°"),
-            "Rancho Santa Margarita, CA · Today — 72° feels like · 1 item")
+            // GEN-5 supersession (FA-34): items are named.
+            "Rancho Santa Margarita, CA · Today — 72° feels like · Tee")
     }
 
     // MARK: - Collection chapter covers + entry identity

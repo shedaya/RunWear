@@ -273,7 +273,9 @@ final class Gen5FidelityTests: XCTestCase {
 
     func testNarrationMomentComesFromTheEntry_FA3() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("moment: todays?.momentReading ?? \"Now\""),
+        // GEN-5 supersession (Addendum 8): the entry's moment is
+        // a typed MomentReading now, so the fallback is .now.
+        XCTAssertTrue(view.contains("moment: todays?.momentReading ?? .now"),
                       "FA-3: the narration moment derives from the ENTRY, per C-7")
         XCTAssertFalse(view.contains("moment: viewModel.sheetMoment"),
                        "FA-3: the live home view's moment never feeds the narration")
@@ -470,7 +472,9 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertTrue(settings.contains("Retake Selfie"))
         XCTAssertTrue(settings.contains("Choose a Different Photo"))
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(modal.contains("Text(\"Danger zone\")"))
+        // GEN-5 supersession (cream design pass): the modal's
+        // headers render through the .ssec helper, same words.
+        XCTAssertTrue(modal.contains("settingsSectionHeader(\"Danger zone\")"))
     }
 
     func testLocationSource_SettledSearchField() throws {
@@ -700,8 +704,13 @@ final class Gen5FidelityTests: XCTestCase {
         let core = CoreMatrixCells.ids(genderPreference: .male)
         let forecast = ["MALE_CLEAR_COOL_DAWN_00000000", core[0], "MALE_RAIN_MILD_NIGHT_11111111"]
         let named = FillSetComposition.named(forecastCells: forecast, coreCells: core)
-        XCTAssertEqual(Array(named.prefix(2)), [forecast[0], forecast[2]],
-                       "forecast cells lead, in order, core overlap deduped")
+        // The forecast lead keeps its full order — including a
+        // cell that is also a core cell (the dedupe applies to
+        // the core tail, which must not name it twice).
+        XCTAssertEqual(Array(named.prefix(3)), forecast,
+                       "forecast cells lead, in order")
+        XCTAssertEqual(named.count, 3 + core.count - 1,
+                       "the core tail adds every core cell but the one the forecast already named")
         XCTAssertEqual(Set(named), Set(forecast).union(core))
         XCTAssertEqual(named.count, Set(named).count, "no cell is named twice")
         XCTAssertTrue(Set(core).isSubset(of: Set(named)),

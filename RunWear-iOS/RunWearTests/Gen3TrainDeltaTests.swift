@@ -323,8 +323,12 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let sectionStart = try XCTUnwrap(views.range(of: "struct MakeItMeSettingsSection")?.lowerBound)
         let sectionEnd = try XCTUnwrap(views.range(of: "struct MakeItMePhotosView")?.lowerBound)
         let section = String(views[sectionStart..<sectionEnd])
-        XCTAssertTrue(section.contains("ConvergenceBand.content("),
-                      "the Settings seat is driven by the shared content rule over the store's banking state")
+        // GEN-5 supersession (FA-4): both seats now read the
+        // store's ONE band gate, `convergenceBand`, which carries
+        // the trial distinction — the Settings seat no longer
+        // calls the content rule inline.
+        XCTAssertTrue(section.contains("store.convergenceBand"),
+                      "the Settings seat is driven by the store's single band gate over its banking state")
         XCTAssertTrue(section.contains("ConvergenceBandView(content: band)"),
                       "Settings renders the SHARED ConvergenceBandView — not a re-implementation")
         // GEN-5 (RW-28 item 22 + addendum 5.2b) RELOCATES the
@@ -362,7 +366,9 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertTrue(views.contains("ProgressView(value: content.fraction)"),
                       "the band carries the simple progress bar")
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains("ConvergenceBand.content(isSubscribed: personalStore.mode == .subscribed, coverage: personalStore.bankCoverage)"),
+        // GEN-5 supersession (FA-4): the home seat reads the
+        // store's single band gate, like Settings.
+        XCTAssertTrue(home.contains("personalStore.convergenceBand"),
                       "the band is seated in the personal section from the store's real banking state")
         XCTAssertTrue(home.contains("ConvergenceBandView(content: band)"))
     }

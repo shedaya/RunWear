@@ -72,6 +72,8 @@ final class WearIveRunElementMachineTests: XCTestCase {
         case (.mini, .userCausedUpdate), (.expanded, .userCausedUpdate): return .cue
         case (.cue, .cueTimedOut): return .mini
         case (.mini, .tapMiniBarBody), (.cue, .tapMiniBarBody): return .expanded
+        // GEN-5 (FA-33): a body tap in EXPANDED collapses to mini.
+        case (.expanded, .tapMiniBarBody): return .mini
         case (.mini, .tapToggleControl): return .expanded
         case (.expanded, .tapToggleControl), (.cue, .tapToggleControl): return .mini
         case (.mini, .scrolledToEnd): return .expanded
@@ -285,13 +287,16 @@ final class WearIveRunElementMachineTests: XCTestCase {
         XCTAssertTrue(machine.toggleIsExpand)
     }
 
+    // GEN-5 supersession (FA-33): a body tap in EXPANDED now
+    // collapses the element to mini — the test's second half
+    // asserts the new driver.
     func testBodyTapExpandsMiniOnly() {
         var machine = WearIveRunElementMachine(state: .mini)
         machine.send(.tapMiniBarBody)
         XCTAssertEqual(machine.state, .expanded)
-        // A body tap in EXPANDED is not a collapse driver.
+        // A body tap in EXPANDED collapses to mini (FA-33).
         XCTAssertEqual(machine.send(.tapMiniBarBody), [])
-        XCTAssertEqual(machine.state, .expanded)
+        XCTAssertEqual(machine.state, .mini)
     }
 
     func testTrashInBothRestingStates() {
@@ -1188,7 +1193,9 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             WearIveRunNarration.line(for: narration), "Update to Miami, FL")
         XCTAssertEqual(
             WearIveRunNarration.expandedLine(for: settled, formattedFeelsLike: "90°"),
-            "Miami, FL · Today — 90° feels like · 2 items")
+            // GEN-5 supersession (FA-34): the expanded line names
+            // the outfit's items rather than counting them.
+            "Miami, FL · Today — 90° feels like · Tank Top · Shorts")
     }
 
     @MainActor

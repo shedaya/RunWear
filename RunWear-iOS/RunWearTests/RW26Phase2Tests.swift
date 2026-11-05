@@ -114,7 +114,9 @@ final class RW26Phase2Tests: XCTestCase {
         let e = entry(day(2026, 11, 2), place: "New York", feels: 41, items: ["A", "B", "C", "D", "E"])
         XCTAssertEqual(
             WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "41°"),
-            "New York · Today — 41° feels like · 5 items"
+            // GEN-5 supersession (FA-34): the expanded line names
+            // the outfit's items rather than counting them.
+            "New York · Today — 41° feels like · A · B · C · D · E"
         )
     }
 

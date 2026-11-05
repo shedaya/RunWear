@@ -313,7 +313,13 @@ final class PersonalHeroTests: XCTestCase {
         // The shared reasons mirror the pool menu's labels and the
         // pool vocabulary's codes (HeroFlagReason).
         XCTAssertEqual(PersonalHeroFlagReason.looksBroken.code, HeroFlagReason.looksBroken.code)
-        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.label, HeroFlagReason.looksBroken.label)
+        // GEN-5 supersession (FA-18, frame 45): the personal
+        // sheet's presentation labels are its own settled set —
+        // looksBroken presents as "Something else" on the
+        // personal sheet while the pool sheet keeps
+        // "Unflattering photo"; the CODES still mirror.
+        XCTAssertEqual(PersonalHeroFlagReason.looksBroken.label, "Something else")
+        XCTAssertEqual(HeroFlagReason.looksBroken.label, "Unflattering photo")
         XCTAssertEqual(PersonalHeroFlagReason.inappropriate.code, HeroFlagReason.inappropriate.code)
         XCTAssertEqual(PersonalHeroFlagReason.inappropriate.label, HeroFlagReason.inappropriate.label)
         XCTAssertEqual(PersonalHeroFlagReason.outfitMismatch.code, HeroFlagReason.outfitMismatch.code)

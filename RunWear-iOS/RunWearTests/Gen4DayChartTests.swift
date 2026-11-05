@@ -458,7 +458,9 @@ final class Gen4DayChartTests: XCTestCase {
         let sheet = try sourceFile("../RunWear/Views/Modals/TimePickerSheet.swift")
         XCTAssertTrue(sheet.contains("Choose a Time"))
         XCTAssertTrue(sheet.contains("DayChartView("), "the chart replaces the grid")
-        XCTAssertTrue(sheet.contains("Drag to pick an hour."), "the one instruction line")
+        // GEN-5 supersession (FA-57): the settled instruction
+        // line is the day-chart research form.
+        XCTAssertTrue(sheet.contains("Every hour can be chosen — the handle snaps hour to hour."), "the one instruction line")
         XCTAssertTrue(sheet.contains("\"Confirm\""))
         XCTAssertTrue(sheet.contains("\"Cancel\""))
         XCTAssertTrue(sheet.contains("TimePickerDraft"), "the draft owns the selection until Confirm")
