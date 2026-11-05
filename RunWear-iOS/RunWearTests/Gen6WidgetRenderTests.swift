@@ -110,7 +110,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
             "a fresh record's eyebrow states its save clock time")
         XCTAssertFalse(WidgetFreshness.isStale(record(), now: entry.date))
         let view = RunWearWidgetEntryView(entry: entry)
-            .environment(\.widgetFamily, .systemSmall)
+            .previewContext(WidgetPreviewContext(family: .systemSmall))
         try render(view, size: CGSize(width: 170, height: 170), name: "widget-small.png")
     }
 
@@ -119,7 +119,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
         let entry = RunWearWidgetEntry(
             date: savedAt.addingTimeInterval(25 * 60), record: record(), errorCategory: nil)
         let view = RunWearWidgetEntryView(entry: entry)
-            .environment(\.widgetFamily, .systemMedium)
+            .previewContext(WidgetPreviewContext(family: .systemMedium))
         try render(view, size: CGSize(width: 364, height: 170), name: "widget-medium.png")
     }
 
@@ -131,7 +131,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
             WidgetFreshness.updatedLabel(record(), now: entry.date).hasPrefix("Updated "),
             "the Large brand strip renders its Updated label in clock form while recent")
         let view = RunWearWidgetEntryView(entry: entry)
-            .environment(\.widgetFamily, .systemLarge)
+            .previewContext(WidgetPreviewContext(family: .systemLarge))
         try render(view, size: CGSize(width: 364, height: 382), name: "widget-large.png")
     }
 
@@ -146,7 +146,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
                        "the stale eyebrow speaks in age form, never a bare clock time")
         let entry = RunWearWidgetEntry(date: staleDate, record: record(), errorCategory: nil)
         let view = RunWearWidgetEntryView(entry: entry)
-            .environment(\.widgetFamily, .systemSmall)
+            .previewContext(WidgetPreviewContext(family: .systemSmall))
         try render(view, size: CGSize(width: 170, height: 170), name: "widget-small-stale.png")
     }
 
@@ -158,7 +158,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
         XCTAssertEqual(WidgetErrorCategory.weather.reason, "Couldn't reach the weather service")
         let entry = RunWearWidgetEntry(date: savedAt, record: nil, errorCategory: .weather)
         let view = RunWearWidgetEntryView(entry: entry)
-            .environment(\.widgetFamily, .systemMedium)
+            .previewContext(WidgetPreviewContext(family: .systemMedium))
         try render(view, size: CGSize(width: 364, height: 170), name: "widget-medium-error.png")
     }
 }
