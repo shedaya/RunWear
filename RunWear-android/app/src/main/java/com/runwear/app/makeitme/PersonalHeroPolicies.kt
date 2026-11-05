@@ -513,6 +513,33 @@ object SessionGuardPolicy {
  */
 object FreeLooksMeter {
 
+    /** The free allowance every surface meters against. */
+    const val ALLOWANCE: Int = MakeItMeUpsellRules.FREE_ALLOWANCE
+
+    /**
+     * GEN-6 WAVE A (DA-08): the displayed used count, clamped to
+     * the allowance. The server counter is delivered-truth, but a
+     * surface must never print "7 of 5".
+     */
+    fun displayedUsed(deliveredUsed: Int): Int =
+        deliveredUsed.coerceIn(0, ALLOWANCE)
+
+    /**
+     * GEN-6 WAVE A (DA-08): the displayed in-flight count. The two
+     * meter inputs double-count: the repository's per-cell status
+     * map still says Making for a cell whose delivery has ALREADY
+     * incremented the delivered counter whenever the delivery was
+     * learned through a counter refresh (bank fill, another
+     * surface) rather than through that cell's own status read —
+     * so raw used + raw making printed 6 and 7 against an
+     * allowance of 5 in the owner's recording. The in-flight count
+     * a surface may show is bounded by the allowance the delivered
+     * count has not already consumed: used + making ≤ allowance on
+     * EVERY surface, by construction.
+     */
+    fun displayedMaking(deliveredUsed: Int, looksMaking: Int): Int =
+        looksMaking.coerceIn(0, ALLOWANCE - displayedUsed(deliveredUsed))
+
     /** The status block's lines, composed as ONE block: status
      *  line first, meter line second. Subscribed users carry no
      *  meter — their settled subscribed line stands instead. */
@@ -520,7 +547,10 @@ object FreeLooksMeter {
         if (subscribed) {
             listOf(MakeItMeStrings.S3_STATUS, MakeItMeStrings.S5_STATE_C_SUB)
         } else {
-            listOf(statusLine(looksMaking > 0), meterLine(deliveredUsed, looksMaking))
+            listOf(
+                statusLine(displayedMaking(deliveredUsed, looksMaking) > 0),
+                meterLine(deliveredUsed, looksMaking)
+            )
         }
 
     fun statusLine(lookMaking: Boolean): String =
@@ -530,7 +560,8 @@ object FreeLooksMeter {
      * The meter line: the DELIVERED count, and — while looks are
      * generating — the in-flight looks stated as pending in the
      * same line, so the number can never read as settled truth
-     * the flow contradicts.
+     * the flow contradicts. Both numbers pass through the DA-08
+     * clamp above, so their sum can never exceed the allowance.
      *
      * GEN-5 (RW-29 FA-10): the pending count is the REAL
      * in-flight count from the repository's per-cell status map.
@@ -539,11 +570,12 @@ object FreeLooksMeter {
      * actually in flight.
      */
     fun meterLine(deliveredUsed: Int, looksMaking: Int): String {
-        val base = MakeItMeStrings.s4FreeUsed(deliveredUsed)
+        val base = MakeItMeStrings.s4FreeUsed(displayedUsed(deliveredUsed))
+        val making = displayedMaking(deliveredUsed, looksMaking)
         return when {
-            looksMaking <= 0 -> base
-            looksMaking == 1 -> "$base · 1 look is being made"
-            else -> "$base · $looksMaking looks are being made"
+            making <= 0 -> base
+            making == 1 -> "$base · 1 look is being made"
+            else -> "$base · $making looks are being made"
         }
     }
 
@@ -552,7 +584,8 @@ object FreeLooksMeter {
      * GEN-5 (RW-28 item 29): the line is the VERBATIM settled
      * string — the in-flight state is carried by the hero pill and
      * the generating states, never by appending prose to the meter.
+     * GEN-6 (DA-08): the used count is the clamped display count.
      */
     fun paywallLine(deliveredUsed: Int, lookMaking: Boolean): String =
-        MakeItMeStrings.u2MeterLine(deliveredUsed)
+        MakeItMeStrings.u2MeterLine(displayedUsed(deliveredUsed))
 }

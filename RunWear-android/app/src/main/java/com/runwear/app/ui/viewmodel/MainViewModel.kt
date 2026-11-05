@@ -793,9 +793,15 @@ class MainViewModel @Inject constructor(
         private const val SEED_COORD_TOLERANCE_DEG = 0.05
         /** Time box for the AI hero lookup; past it the session keeps the default hero. */
         private const val HERO_RESOLVE_TIMEOUT_MS = 2_000L
-        /** RW-14: personal-generation poll cadence + bound (~4.5 min total, matching the backend's 2–4 min job time). */
+        /**
+         * GEN-6 WAVE A (DA-02): the personal-generation poll schedule
+         * moved to [PersonalPollPolicy] — backoff to a 20-minute
+         * horizon (the gen-5 18 × 15 s ≈ 4.5 min bound stranded the
+         * MAKING pill mid-job). The names below remain only as a
+         * pointer for older references.
+         */
+        @Deprecated("GEN-6: schedule lives in PersonalPollPolicy")
         private const val PERSONAL_POLL_INTERVAL_MS = 15_000L
-        private const val PERSONAL_POLL_MAX_ATTEMPTS = 18
     }
     
     fun fetchCurrentLocation() {
@@ -1526,12 +1532,34 @@ class MainViewModel @Inject constructor(
      * On expiry the last server-reported status STAYS on screen —
      * it is durable state, not a spinner to dismiss (RW-16.16).
      */
-    private suspend fun pollForPersonalHero(cell: String) {
+    private suspend fun pollForPersonalHero(cell: String): PersonalPollOutcome {
         var attempts = 0
-        while (attempts < PERSONAL_POLL_MAX_ATTEMPTS) {
-            delay(PERSONAL_POLL_INTERVAL_MS)
+        while (true) {
+            val currentStatus = _uiState.value.personalLookStatus
+            if (!PersonalPollPolicy.shouldPollAgain(currentStatus, attempts)) {
+                return if (PersonalPollPolicy.isTerminal(currentStatus)) {
+                    if (currentStatus is com.runwear.app.makeitme.PersonalLookStatus.Failed) {
+                        PersonalPollOutcome.Failed
+                    } else {
+                        PersonalPollOutcome.Delivered
+                    }
+                } else {
+                    // GEN-6 WAVE A (DA-02): the horizon expired with
+                    // the job still in flight server-side. One final
+                    // truth re-read, then leave the honest state:
+                    // the MAKING pill stays (it IS the server truth)
+                    // over the fallback photo — the screen remains
+                    // usable, and foreground / refresh / cell revisit
+                    // re-enters this poll through the overlay path.
+                    // Never the gen-5 silent strand, never a faked
+                    // failure or a cleared-into-silence status.
+                    runCatching { personalHeroRepository.refreshFromServer() }
+                    PersonalPollOutcome.StillMakingHorizonExpired
+                }
+            }
+            delay(PersonalPollPolicy.delayBeforeAttemptMs(attempts))
             attempts++
-            if (personalCellInView != cell) return
+            if (personalCellInView != cell) return PersonalPollOutcome.CellChanged
             val look = runCatching { personalHeroRepository.cellLookFor(cell) }.getOrNull()
                 ?: continue
             val hit = look.hit
@@ -1575,7 +1603,7 @@ class MainViewModel @Inject constructor(
                 }
                 is com.runwear.app.makeitme.PersonalLookStatus.Failed -> {
                     _uiState.update { it.copy(personalLookStatus = look.status) }
-                    return
+                    return PersonalPollOutcome.Failed
                 }
                 else -> {
                     // READY (the delivery above, or a hero that was
@@ -1588,14 +1616,10 @@ class MainViewModel @Inject constructor(
                                 else look.status
                         )
                     }
-                    return
+                    return PersonalPollOutcome.Delivered
                 }
             }
         }
-        // Wait expired with the look still in flight server-side:
-        // the MAKING status remains rendered (it is the server's
-        // truth, re-read on the next overlay run) instead of the old
-        // G4 behavior of clearing the line into silence.
     }
 
     /**
