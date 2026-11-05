@@ -286,7 +286,7 @@ struct HeroImageView: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                 // GEN-3 DESIGN DELTA 2: the mock's device is the
-                // lock, not the crown I-HERO shipped.
+                // lock, not the glyph I-HERO shipped.
                 Image(systemName: "lock.fill")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white)
