@@ -39,7 +39,77 @@
     <link rel="preload" as="image" href="hero_fallback/cool_clear.webp">
     <link rel="preload" as="image" href="hero_fallback/cold_clear.webp">
     <link rel="preload" as="image" href="hero_fallback/freezing_clear.webp">
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Great+Vibes&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        // App-landing gate decision, made before first paint: installed PWA
+        // launches, returning web-app users, and query-string deep links go
+        // straight to the web app; everyone else meets the landing first.
+        (function () {
+            try {
+                var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+                var returning = false;
+                try { returning = window.localStorage.getItem('rw_entry') === 'webapp'; } catch (e) {}
+                if (standalone || returning || window.location.search.length > 1) {
+                    document.documentElement.classList.add('rw-skip-landing');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <style id="rw-landing-style">
+        /* ===== RunWear app landing (runwear.ai entry gate) =====
+           Brand system: cream #F5F1E8 / card #FDFBF6 / warm charcoal
+           #26221C / pine #175E4C. Shown to browser visitors at the root;
+           the web app lives on underneath, untouched. */
+        #rwLanding {
+            position: fixed; inset: 0; z-index: 9999; overflow-y: auto;
+            background: #F5F1E8; color: #26221C;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex; align-items: flex-start; justify-content: center;
+        }
+        .rw-skip-landing #rwLanding { display: none; }
+        .rw-landing-inner {
+            width: 100%; max-width: 580px; margin: auto; text-align: center;
+            padding: clamp(32px, 6vh, 64px) clamp(20px, 5vw, 40px) 40px;
+        }
+        .rw-script {
+            font-family: 'Great Vibes', cursive; font-weight: 400;
+            font-size: clamp(64px, 14vw, 96px); line-height: 1.05; color: #26221C;
+        }
+        .rw-tagline {
+            margin-top: 2px; font-size: clamp(17px, 3.4vw, 20px);
+            font-weight: 600; color: #175E4C; letter-spacing: 0.01em;
+        }
+        .rw-lines { margin: 22px auto 0; max-width: 46ch; }
+        .rw-lines p {
+            font-size: 15.5px; line-height: 1.55; color: rgba(38, 34, 28, 0.82);
+            margin: 0 0 10px;
+        }
+        .rw-lines p strong { color: #26221C; }
+        .rw-badges {
+            margin-top: 28px; display: flex; flex-wrap: wrap; gap: 14px;
+            align-items: center; justify-content: center;
+        }
+        .rw-badges a { display: inline-block; line-height: 0; border-radius: 9px; }
+        .rw-badges img { height: 56px; width: auto; }
+        .rw-landing--ios .rw-badge-apple img, .rw-landing--android .rw-badge-play img { height: 64px; }
+        .rw-landing--ios .rw-badge-play, .rw-landing--android .rw-badge-apple { opacity: 0.82; }
+        .rw-qr { margin-top: 30px; }
+        .rw-qr img {
+            width: 148px; height: 148px; border-radius: 14px;
+            border: 1px solid rgba(38, 34, 28, 0.14);
+        }
+        .rw-qr p { margin-top: 8px; font-size: 13px; color: rgba(38, 34, 28, 0.62); }
+        @media (max-width: 719px) { .rw-qr { display: none; } }
+        .rw-webapp { margin-top: 34px; }
+        .rw-webapp button {
+            appearance: none; cursor: pointer; font: inherit; font-weight: 700;
+            font-size: 16px; color: #175E4C; background: transparent;
+            border: 2px solid #175E4C; border-radius: 999px; padding: 12px 28px;
+        }
+        .rw-webapp button:hover { background: #175E4C; color: #FDFBF6; }
+        .rw-webapp p { margin-top: 10px; font-size: 13px; color: rgba(38, 34, 28, 0.62); }
+        .rw-foot { margin-top: 36px; font-size: 12.5px; color: rgba(38, 34, 28, 0.5); }
+    </style>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -2725,6 +2795,50 @@
     </style>
 </head>
 <body>
+    <!-- App landing: native apps first-class for browser arrivals at the
+         root. Installed PWAs, returning web-app users, and deep links skip
+         it (see the gate script in <head>). The web app is untouched. -->
+    <div id="rwLanding" role="dialog" aria-label="Get the RunWear app">
+        <div class="rw-landing-inner">
+            <div class="rw-script">RunWear</div>
+            <div class="rw-tagline">Run, weather or not.</div>
+            <div class="rw-lines">
+                <p><strong>Exactly what to wear for your run</strong>, called from the feels-like temperature where you are &mdash; not the number on the thermometer.</p>
+                <p><strong>Make It Me</strong> puts you in the outfit before you step outside, and <strong>Wear I&rsquo;ve Run</strong> keeps the scrapbook of what you wore, and where.</p>
+                <p>Get the full experience in the native app:</p>
+            </div>
+            <div class="rw-badges">
+                <a class="rw-badge-apple" href="https://apps.apple.com/app/id6827973343" aria-label="Download RunWear on the App Store"><img src="badges/app-store-badge.svg" alt="Download on the App Store"></a>
+                <a class="rw-badge-play" href="https://play.google.com/store/apps/details?id=com.runwear.wear" aria-label="Get RunWear on Google Play"><img src="badges/google-play-badge.png" alt="Get it on Google Play"></a>
+            </div>
+            <div class="rw-qr">
+                <img src="badges/app-qr.png" alt="QR code linking to runwear.ai/app">
+                <p>Point your phone camera here to get the app.</p>
+            </div>
+            <div class="rw-webapp">
+                <button type="button" id="rwOpenWeb">Open the web app</button>
+                <p>No download needed &mdash; the full outfit guide, right in your browser.</p>
+            </div>
+            <div class="rw-foot">RunWear for iPhone and Android &middot; runwear.ai</div>
+        </div>
+    </div>
+    <script>
+        (function () {
+            var landing = document.getElementById('rwLanding');
+            if (!landing) return;
+            if (document.documentElement.classList.contains('rw-skip-landing')) { return; }
+            var ua = navigator.userAgent || '';
+            if (/iPhone|iPad|iPod/i.test(ua)) landing.classList.add('rw-landing--ios');
+            else if (/Android/i.test(ua)) landing.classList.add('rw-landing--android');
+            document.body.style.overflow = 'hidden';
+            document.getElementById('rwOpenWeb').addEventListener('click', function () {
+                try { window.localStorage.setItem('rw_entry', 'webapp'); } catch (e) {}
+                landing.style.display = 'none';
+                document.body.style.overflow = '';
+                window.scrollTo(0, 0);
+            });
+        })();
+    </script>
     <div class="container" id="app">
         <!-- Content injected by JS -->
     </div>
