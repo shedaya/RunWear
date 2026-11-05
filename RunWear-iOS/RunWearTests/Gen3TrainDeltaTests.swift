@@ -204,6 +204,36 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 0, total: 0)))
     }
 
+    /// WS-D ADDITION (Sol, Nov 4): the Settings Make It Me
+    /// section's subscribed state renders the SAME shared band
+    /// element while the bank is generating — one element, two
+    /// seats, driven by the one content rule (the behavioural
+    /// half of the rule — subscribed+generating renders,
+    /// subscribed+complete doesn't, free never — is pinned by
+    /// testConvergenceBandVisibilityRule above, which both seats
+    /// share).
+    func testConvergenceBandRendersInSettingsSubscribedState_sourcePin() throws {
+        let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        let sectionStart = try XCTUnwrap(views.range(of: "struct MakeItMeSettingsSection")?.lowerBound)
+        let sectionEnd = try XCTUnwrap(views.range(of: "struct MakeItMePhotosView")?.lowerBound)
+        let section = String(views[sectionStart..<sectionEnd])
+        XCTAssertTrue(section.contains("ConvergenceBand.content(mode: store.mode, coverage: store.bankCoverage)"),
+                      "the Settings seat is driven by the shared content rule over the store's banking state")
+        XCTAssertTrue(section.contains("ConvergenceBandView(content: band)"),
+                      "Settings renders the SHARED ConvergenceBandView — not a re-implementation")
+        // The seat sits inside the subscribed branch of the
+        // OFFER group specifically (anchored at offerSection:
+        // after its subscribed branch opens, before the offer
+        // card's else) — free users never reach it.
+        let offerStart = try XCTUnwrap(section.range(of: "private var offerSection")?.lowerBound)
+        let offerSlice = String(section[offerStart...])
+        let branch = try XCTUnwrap(offerSlice.range(of: "if store.mode == .subscribed")?.lowerBound)
+        let seat = try XCTUnwrap(offerSlice.range(of: "ConvergenceBand.content(mode: store.mode")?.lowerBound)
+        let offerCard = try XCTUnwrap(offerSlice.range(of: "MakeItMePremiumOfferCard")?.lowerBound)
+        XCTAssertTrue(branch < seat && seat < offerCard,
+                      "the band seat is inside the offer group's subscribed branch, before the free-state offer card")
+    }
+
     func testConvergenceBandRendersWithThePillSpinner_sourcePin() throws {
         let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertTrue(views.contains("struct ConvergenceBandView"),

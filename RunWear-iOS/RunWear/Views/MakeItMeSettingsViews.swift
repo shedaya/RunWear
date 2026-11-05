@@ -181,6 +181,21 @@ struct MakeItMeSettingsSection: View {
                         .font(.system(size: 14))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
+                // GEN-3 (WS-D addition, Sol Nov 4): while the
+                // bank is still generating, the subscribed state
+                // carries the SAME "Making your looks" element as
+                // home — the shared ConvergenceBandView, driven by
+                // the shared ConvergenceBand.content rule over the
+                // store's banking state (this section's .task
+                // refreshes it via refreshProfile). One element,
+                // two seats: any treatment Sol rules for the band
+                // applies in both places at once. Subscribed +
+                // generating → renders; subscribed + complete →
+                // the rule returns nil; free users never reach
+                // this branch at all.
+                if let band = ConvergenceBand.content(mode: store.mode, coverage: store.bankCoverage) {
+                    ConvergenceBandView(content: band)
+                }
                 settingsRow(
                     title: MakeItMeSettingsRow.manageSubscription.title,
                     subtitle: nil,
