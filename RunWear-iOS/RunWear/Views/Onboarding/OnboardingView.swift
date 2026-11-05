@@ -128,10 +128,10 @@ struct OnboardingView: View {
     /// Frame 28 as designed: the script logo at specimen size, the
     /// headline (A2 — Sol's pick, character for character, from
     /// OnboardingCopy), one promise per row, nothing to decide
-    /// yet. This screen is the ONLY place in onboarding where the
-    /// free-looks promise may appear (A1) — it is stated here,
-    /// inside the Make It Me promise row, as one of the screen's
-    /// product truths; no price appears anywhere in onboarding.
+    /// yet. No price appears anywhere in onboarding. (A1's
+    /// free-looks promise placement on this screen was superseded
+    /// by Sol's GEN-3 round-2 final point-2 copy — see
+    /// OnboardingCopy.freeLooksPromise.)
     private var welcomeScreen: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -146,24 +146,15 @@ struct OnboardingView: View {
                     .foregroundStyle(AppTheme.inkSecondary)
             }
 
+            // GEN-3 ROUND 2: the name-led composition — each
+            // point's headline leads with its feature name in
+            // pine bold, the plain phrase in regular weight after
+            // it (OnboardingCopy.welcomePoints carries the exact
+            // strings). The settled layout and icons stand.
             VStack(alignment: .leading, spacing: 24) {
-                promiseRow(
-                    icon: "cloud",
-                    title: "The right outfit for the weather",
-                    detail: "One recommendation for the run you're about to take — feels-like, wind, and rain included."
-                )
-                promiseRow(
-                    icon: "person",
-                    title: "See yourself in every outfit",
-                    detail: "Make It Me puts you in the photos. \(OnboardingCopy.freeLooksPromise)"
-                )
-                // GEN-3 (WS-E): the third feature point — the
-                // collection the first two points produce.
-                promiseRow(
-                    icon: "rectangle.stack",
-                    title: "Remember every run",
-                    detail: "Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
-                )
+                welcomePointRow(icon: "cloud", point: OnboardingCopy.welcomePoints[0])
+                welcomePointRow(icon: "person", point: OnboardingCopy.welcomePoints[1])
+                welcomePointRow(icon: "rectangle.stack", point: OnboardingCopy.welcomePoints[2])
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 52)
@@ -192,21 +183,25 @@ struct OnboardingView: View {
         .background(AppTheme.background.ignoresSafeArea())
     }
 
-    private func promiseRow(icon: String, title: String, detail: String) -> some View {
+    /// One frame-28 welcome point (GEN-3 ROUND 2): the name-led
+    /// headline — the feature name in PINE BOLD leading, the
+    /// plain phrase in regular weight after it, one composed
+    /// line over the settled icon seat.
+    private func welcomePointRow(icon: String, point: OnboardingCopy.WelcomePoint) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: icon)
                 .font(.system(size: 20))
                 .foregroundStyle(AppTheme.pinePayload)
                 .frame(width: 28)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.appSectionTitle)
-                    .foregroundStyle(AppTheme.inkPrimary)
-                Text(detail)
-                    .font(.appSecondary)
-                    .foregroundStyle(AppTheme.inkSecondary)
-            }
+            (Text(point.name)
+                .fontWeight(.bold)
+                .foregroundColor(AppTheme.pinePayload)
+             + Text(" ")
+             + Text(point.phrase))
+                .font(.system(size: 17))
+                .foregroundStyle(AppTheme.inkPrimary)
+                .lineSpacing(6)
         }
     }
 

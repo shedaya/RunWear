@@ -118,10 +118,15 @@ final class WS10CopyTests: XCTestCase {
                       "the script logo at frame 28's specimen size")
         XCTAssertTrue(onboarding.contains("Text(OnboardingCopy.welcomeHeadline)"),
                       "the headline slot renders the decided line")
-        XCTAssertTrue(onboarding.contains("\"The right outfit for the weather\""),
-                      "promise row 1, as designed")
-        XCTAssertTrue(onboarding.contains("\"See yourself in every outfit\""),
-                      "promise row 2, as designed")
+        // GEN-3 ROUND 2: the welcome rows are the name-led
+        // points, rendered from the model (exact strings pinned
+        // behaviourally in Gen3TrainDeltaTests).
+        XCTAssertTrue(onboarding.contains("OnboardingCopy.welcomePoints[0]"),
+                      "welcome point 1 renders from the name-led model")
+        XCTAssertTrue(onboarding.contains("OnboardingCopy.welcomePoints[1]"),
+                      "welcome point 2 renders from the name-led model")
+        XCTAssertTrue(onboarding.contains("OnboardingCopy.welcomePoints[2]"),
+                      "welcome point 3 renders from the name-led model")
         XCTAssertTrue(onboarding.contains("Text(OnboardingCopy.welcomeFooter)"),
                       "frame 28's quiet footer renders the decided line (W-21)")
         XCTAssertFalse(onboarding.contains("Free to start"),
@@ -132,8 +137,11 @@ final class WS10CopyTests: XCTestCase {
 
     func testFreeLooksPromiseAppearsOnlyOnFrame28() throws {
         // The promise STRING exists exactly once in app code: its
-        // definition in OnboardingCopy. The welcome screen renders
-        // it through the constant; nothing else may spell it out.
+        // definition in OnboardingCopy; nothing else may spell it
+        // out. GEN-3 ROUND 2 (Sol, Nov 4): Sol's final point-2
+        // copy superseded the promise's welcome RENDERING — the
+        // canonical wording stays defined, and A1's ban on every
+        // other surface (setup form, fork) stands untouched.
         let lines = try appCodeLines()
         let hits = lines.filter { $0.text.contains(OnboardingCopy.freeLooksPromise) }
         XCTAssertEqual(hits.count, 1,
@@ -141,16 +149,8 @@ final class WS10CopyTests: XCTestCase {
         XCTAssertEqual(hits.first?.file, "OnboardingSequence.swift")
 
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
-        XCTAssertEqual(occurrences(onboarding, "OnboardingCopy.freeLooksPromise"), 1,
-                       "the welcome screen references the promise exactly once")
-        // …and that reference sits INSIDE the welcome screen (after
-        // its declaration, before the question screens begin).
-        let welcomeStart = try XCTUnwrap(onboarding.range(of: "private var welcomeScreen"))
-        let promiseUse = try XCTUnwrap(onboarding.range(of: "OnboardingCopy.freeLooksPromise"))
-        let questionsStart = try XCTUnwrap(onboarding.range(of: "private func questionScreen"))
-        XCTAssertTrue(welcomeStart.lowerBound < promiseUse.lowerBound
-                      && promiseUse.lowerBound < questionsStart.lowerBound,
-                      "the promise renders on frame 28's screen and nowhere later")
+        XCTAssertEqual(occurrences(onboarding, "OnboardingCopy.freeLooksPromise"), 0,
+                       "round 2: the welcome no longer renders the promise (Sol's final point-2 copy governs)")
 
         let fork = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
         XCTAssertFalse(fork.contains(OnboardingCopy.freeLooksPromise),
@@ -752,17 +752,19 @@ final class Gen3SettingsTruthTests: XCTestCase {
                       "the fork's body copy carries the same casing")
     }
 
-    // MARK: - WS-E · the welcome screen's third feature point
+    // MARK: - WS-E → GEN-3 ROUND 2 · the welcome's name-led points
 
     func testWelcomeCarriesTheThirdFeaturePointUnderTheExistingTwo_sourcePin() throws {
+        // Superseded composition (WS-E's "Remember every run"
+        // headline + line) replaced by Sol's chosen name-led
+        // composition: the third point still sits UNDER the
+        // existing two, rendered third from the model.
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
-        let second = try XCTUnwrap(onboarding.range(of: "\"See yourself in every outfit\""))
-        let thirdTitle = try XCTUnwrap(onboarding.range(of: "\"Remember every run\""))
-        let thirdLine = try XCTUnwrap(onboarding.range(
-            of: "\"Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.\""))
-        XCTAssertTrue(second.lowerBound < thirdTitle.lowerBound,
-                      "WS-E: the third point sits UNDER the existing two")
-        XCTAssertTrue(thirdTitle.lowerBound < thirdLine.lowerBound,
-                      "WS-E: the headline carries its line beneath it, like the other points")
+        let second = try XCTUnwrap(onboarding.range(of: "OnboardingCopy.welcomePoints[1]"))
+        let third = try XCTUnwrap(onboarding.range(of: "OnboardingCopy.welcomePoints[2]"))
+        XCTAssertTrue(second.lowerBound < third.lowerBound,
+                      "ROUND 2: the third point sits UNDER the existing two")
+        XCTAssertFalse(onboarding.contains("\"Remember every run\""),
+                       "the WS-E headline is superseded by the name-led composition")
     }
 }

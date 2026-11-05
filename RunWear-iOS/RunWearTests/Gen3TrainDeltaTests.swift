@@ -70,6 +70,45 @@ final class Gen3TrainDeltaTests: XCTestCase {
                        "Y-16: no medium rest the user must expand")
     }
 
+    // MARK: - Round 2 · the name-led welcome (Sol's chosen composition)
+
+    func testWelcomePointsAreNameLedWithSolFinalWording() {
+        let points = OnboardingCopy.welcomePoints
+        XCTAssertEqual(points.count, 3)
+        // Point 1: name + its existing plain phrase, unchanged.
+        XCTAssertEqual(points[0].name, "RunWear")
+        XCTAssertEqual(points[0].phrase,
+                       "One recommendation for the run you're about to take — feels-like, wind, and rain included.")
+        // Point 2: Sol's FINAL wording (last ruling, Nov 4).
+        XCTAssertEqual(points[1].name, "Make It Me")
+        XCTAssertEqual(points[1].phrase,
+                       "Picture yourself at the start line with the perfect outfit ready to go.")
+        // Point 3: the round-2 phrase (the name-led form of the
+        // WS-E line — the name no longer repeats inside it).
+        XCTAssertEqual(points[2].name, "Wear I've Run")
+        XCTAssertEqual(points[2].phrase,
+                       "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.")
+        // No phrase repeats its feature name.
+        for point in points {
+            XCTAssertFalse(point.phrase.contains(point.name),
+                           "the phrase must not repeat its feature name: \(point.name)")
+        }
+    }
+
+    func testWelcomeRowRendersNameInPineBold_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("welcomePointRow(icon: \"cloud\", point: OnboardingCopy.welcomePoints[0])"))
+        XCTAssertTrue(onboarding.contains("welcomePointRow(icon: \"person\", point: OnboardingCopy.welcomePoints[1])"))
+        XCTAssertTrue(onboarding.contains("welcomePointRow(icon: \"rectangle.stack\", point: OnboardingCopy.welcomePoints[2])"),
+                      "the settled layout and icons stand, in order")
+        XCTAssertTrue(onboarding.contains(".fontWeight(.bold)"),
+                      "the feature name leads in bold")
+        XCTAssertTrue(onboarding.contains(".foregroundColor(AppTheme.pinePayload)"),
+                      "the feature name leads in pine")
+        XCTAssertFalse(onboarding.contains("Remember every run"),
+                       "the superseded WS-E headline is gone")
+    }
+
     // MARK: - First-look rulings · the generating screen is never a gate
 
     func testFirstLookWayForwardIsUnconditional_sourcePin() throws {

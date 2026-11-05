@@ -61,11 +61,45 @@ enum OnboardingCopy {
     static let welcomeHeadline = "Run, weather or not."
 
     /// The free-looks promise. By A1 it lives ONLY on frame 28's
-    /// own screen (inside the "See yourself in every outfit"
-    /// promise row) — never on the setup form, never on the fork.
+    /// own screen — never on the setup form, never on the fork.
     /// Frame 34's meter ("look 1 of your 5 free looks") is
     /// accounting copy, not this promise, and is not governed here.
+    /// GEN-3 ROUND 2 (Sol, Nov 4): Sol's final point-2 copy (the
+    /// name-led phrase below) supersedes the promise's welcome
+    /// placement — the sentence remains defined here as the
+    /// canonical free-looks wording but is no longer rendered on
+    /// the welcome screen.
     static let freeLooksPromise = "Your first 5 looks are free."
+
+    /// GEN-3 ROUND 2 (Sol, Nov 4 — the name-led welcome, CHOSEN by
+    /// Sol; supersedes the I-SETTINGS/WS-E title+detail composition
+    /// and the earlier "no name-led variant" instruction): each
+    /// point's headline leads with its feature name in PINE BOLD,
+    /// followed by the plain phrase in regular weight. No phrase
+    /// repeats its feature name. Point 1's phrase is its existing
+    /// plain copy, unchanged; points 2 and 3 carry Sol's final
+    /// wording verbatim (point 2 as amended by his last ruling:
+    /// "Picture yourself at the start line with the perfect outfit
+    /// ready to go.").
+    struct WelcomePoint: Equatable {
+        let name: String
+        let phrase: String
+    }
+
+    static let welcomePoints: [WelcomePoint] = [
+        WelcomePoint(
+            name: "RunWear",
+            phrase: "One recommendation for the run you're about to take — feels-like, wind, and rain included."
+        ),
+        WelcomePoint(
+            name: "Make It Me",
+            phrase: "Picture yourself at the start line with the perfect outfit ready to go."
+        ),
+        WelcomePoint(
+            name: "Wear I've Run",
+            phrase: "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+        ),
+    ]
 
     /// W-21 (GEN-2 walkthrough, 2026-11-04): frame 28's quiet
     /// footer, verbatim. Sol struck the previous line ("Free to
