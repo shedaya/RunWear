@@ -158,6 +158,28 @@ enum DayChartNowMarker {
     }
 }
 
+// MARK: - Beyond-forecast naming (GEN-6, DA-21)
+
+/// Design-spec §6 / frame 42: territory past the forecast is
+/// NAMED as beyond the forecast, never left as silent empty
+/// space. The date cells already carry the name ("Beyond
+/// forecast", DatePickerSheet); a PARTIAL day in the time picker
+/// — a day whose forecast covers only part of the 24-hour scale —
+/// carries the same name for its truncated region. A full day
+/// (forecast covering hours 0…23) has no beyond-forecast region
+/// and names nothing.
+enum DayChartBeyondForecast {
+    static let label = "Beyond forecast"
+
+    /// The caption for a chart, or nil when the day is fully
+    /// covered by the forecast.
+    static func caption(for model: DayChartModel) -> String? {
+        let coversFullDay = model.firstHour <= DayChartGeometry.dayFirstHour
+            && model.lastHour >= DayChartGeometry.dayLastHour
+        return coversFullDay ? nil : label
+    }
+}
+
 // MARK: - Chart geometry (pure, so the mapping is pinnable)
 
 /// The chart's coordinate mapping, shared by the glance band and

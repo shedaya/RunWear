@@ -697,6 +697,10 @@ struct WeatherOutfitView: View {
                     Text(sheetMoment)
                     Text("›")
                 }
+                // GEN-6 (RW-54, iOS half): the design specifies
+                // the moment in pine BOLD — the line's inherited
+                // semibold rendered it a weight light.
+                .font(.system(size: 15.5, weight: .bold))
                 .foregroundColor(AppTheme.pinePayload)
             }
             .buttonStyle(.plain)
@@ -1519,7 +1523,9 @@ struct DarkClothingItemCard: View {
                 Text(item.description)
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
-                    .lineLimit(2)
+                    // GEN-6 (RW-54, iOS half): the design settles
+                    // a ONE-line outfit-row note.
+                    .lineLimit(1)
             }
 
             Spacer()

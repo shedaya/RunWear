@@ -163,6 +163,7 @@
 		G40002000000000000000004 /* Gen4DayChartTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000003 /* Gen4DayChartTests.swift */; };
 		G41002000000000000000001 /* Gen4LocationNowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G41001000000000000000001 /* Gen4LocationNowTests.swift */; };
 		G51002000000000000000001 /* Gen5FidelityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G51001000000000000000001 /* Gen5FidelityTests.swift */; };
+		G61002000000000000000001 /* Gen6WaveCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61001000000000000000001 /* Gen6WaveCTests.swift */; };
 		G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */; };
 		K10002000000000000000003 /* HomeCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000002 /* HomeCompositionTests.swift */; };
 		L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
@@ -396,6 +397,7 @@
 		G40001000000000000000003 /* Gen4DayChartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4DayChartTests.swift; sourceTree = "<group>"; };
 		G41001000000000000000001 /* Gen4LocationNowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4LocationNowTests.swift; sourceTree = "<group>"; };
 		G51001000000000000000001 /* Gen5FidelityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen5FidelityTests.swift; sourceTree = "<group>"; };
+		G61001000000000000000001 /* Gen6WaveCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WaveCTests.swift; sourceTree = "<group>"; };
 		G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4BundledReplenishmentTests.swift; sourceTree = "<group>"; };
 		K10001000000000000000002 /* HomeCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCompositionTests.swift; sourceTree = "<group>"; };
 		L10001000000000000000001 /* WearIveRunElementMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachine.swift; sourceTree = "<group>"; };
@@ -690,6 +692,7 @@
 				G40001000000000000000003 /* Gen4DayChartTests.swift */,
 				G41001000000000000000001 /* Gen4LocationNowTests.swift */,
 				G51001000000000000000001 /* Gen5FidelityTests.swift */,
+				G61001000000000000000001 /* Gen6WaveCTests.swift */,
 				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
 				W50001000000000000000002 /* SettingsInventoryTests.swift */,
@@ -1076,6 +1079,7 @@
 				G40002000000000000000004 /* Gen4DayChartTests.swift in Sources */,
 				G41002000000000000000001 /* Gen4LocationNowTests.swift in Sources */,
 				G51002000000000000000001 /* Gen5FidelityTests.swift in Sources */,
+				G61002000000000000000001 /* Gen6WaveCTests.swift in Sources */,
 				G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */,
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000002 /* SettingsInventory.swift in Sources */,

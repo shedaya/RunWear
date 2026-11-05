@@ -408,12 +408,19 @@ struct WearIveRunDayView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        Rectangle().fill(AppTheme.cardOnSheet)
+                // GEN-6 (DA-05, iOS instance): the day-view hero
+                // renders through the protected HeroPhoto crop
+                // (top-anchored, face-preserving) like every other
+                // hero surface — the bare centre fill here was the
+                // one hero-class surface still centre-cropping.
+                GeometryReader { geo in
+                    AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
+                        switch phase {
+                        case .success(let image):
+                            HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
+                        default:
+                            Rectangle().fill(AppTheme.cardOnSheet)
+                        }
                     }
                 }
                 .frame(height: 300)

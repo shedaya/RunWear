@@ -49,8 +49,10 @@ class WatchViewModel: NSObject, ObservableObject {
 
     private var currentLocation: CLLocation?
     private var currentWeather: WeatherData?
-    /// GEN-5 (RW-29 FA-56): the measured feels-like (°F) from
-    /// the last fetch — the glance's number.
+    /// GEN-5 (RW-29 FA-56): the measured RAW feels-like (°F) from
+    /// the last fetch. The glance does NOT render this value
+    /// directly — GEN-6 (DA-14) it renders the comfort-adjusted
+    /// figure derived from it (see `displayTemperature`).
     private(set) var currentFeelsLikeF: Double?
 
     override init() {
@@ -242,18 +244,40 @@ class WatchViewModel: NSObject, ObservableObject {
 
     // MARK: - Computed Properties
 
+    /// GEN-6 (DA-14, design-spec §0.4/§17 one-frame rule): the
+    /// glance number is the COMFORT-ADJUSTED feels-like — the
+    /// number the outfit is priced off, because the
+    /// recommendation in `fetchWeather` keys on
+    /// `comfortLevel.adjustTemperature(rawFeelsLikeF)`. Rendering
+    /// the raw feels-like here (the gen-5 code) made the watch
+    /// numeral disagree with the phone's and with its own outfit
+    /// whenever the comfort adjustment was non-zero. Pure and
+    /// static so the gate pins the adjustment without a host.
+    static func glanceTemperatureString(
+        rawFeelsLikeF: Double,
+        comfortLevel: ComfortLevel,
+        unit: TemperatureUnit
+    ) -> String {
+        let adjustedF = comfortLevel.adjustTemperature(rawFeelsLikeF)
+        let temp = unit == .fahrenheit
+            ? adjustedF
+            : (adjustedF - 32) * 5 / 9
+        return "\(Int(round(temp)))°"
+    }
+
     var displayTemperature: String {
         guard let weather = currentWeather else { return "--°" }
-        // GEN-5 (RW-29 FA-56): the glance number is the
-        // FEELS-LIKE — the number the outfit is priced off —
-        // not the actual temperature build 25 showed. Falls
-        // back to the actual temperature only when no
-        // feels-like was measured.
-        let feelsLikeF = currentFeelsLikeF ?? weather.currentWeather.temperatureFahrenheit
-        let temp = temperatureUnit == .fahrenheit
-            ? feelsLikeF
-            : (feelsLikeF - 32) * 5 / 9
-        return "\(Int(round(temp)))°"
+        // GEN-6 (DA-14): the glance renders the comfort-adjusted
+        // feels-like (see glanceTemperatureString). Falls back to
+        // the actual temperature as the raw surrogate only when
+        // no feels-like was measured — the same surrogate the
+        // fetch path uses, adjusted the same way.
+        let rawFeelsLikeF = currentFeelsLikeF ?? weather.currentWeather.temperatureFahrenheit
+        return Self.glanceTemperatureString(
+            rawFeelsLikeF: rawFeelsLikeF,
+            comfortLevel: comfortLevel,
+            unit: temperatureUnit
+        )
     }
 }
 

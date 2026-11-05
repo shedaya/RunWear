@@ -87,6 +87,17 @@ struct TimePickerSheet: View {
                 )
                 .frame(height: 168)
 
+                // GEN-6 (DA-21): a PARTIAL day's truncated curve
+                // names its beyond-forecast region with the same
+                // words the date cells use — the wholly-empty day
+                // is named by the branch below, and a full day
+                // names nothing.
+                if let beyondCaption = DayChartBeyondForecast.caption(for: chart) {
+                    Text(beyondCaption)
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+
                 // GEN-5 (RW-29 FA-57): the settled instruction
                 // sentence from the day-chart research mock —
                 // build 25's paraphrase omitted both facts it
