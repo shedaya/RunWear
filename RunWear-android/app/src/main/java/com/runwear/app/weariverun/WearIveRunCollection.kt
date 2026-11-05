@@ -403,3 +403,36 @@ object WearIveRunCollectionLogic {
         if (date == today) "Now"
         else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
 }
+
+/**
+ * GEN-6 (DA-09 / RW-42): whether a settled entry may be RECORDED
+ * from the current home state. A recorded entry is one solved
+ * state — its place/moment label and its feels-like/kit must come
+ * from the SAME solve. A confirmed selection writes the selection
+ * into home state immediately (MainViewModel.setDateTime) while
+ * its weather/outfit still show the PREVIOUS moment's solve until
+ * the fetch commits; recording inside that window minted an entry
+ * named for the new moment but carrying the old solve, so the bar
+ * announced the update while its own card showed a solve that was
+ * neither the outgoing nor the incoming recommendation. The
+ * record therefore waits until the weather in state IS the
+ * selection's solve: at the Now moment the current conditions are
+ * the solve by definition; at an explicit moment the weather's
+ * own timestamp must be the selected date and hour (the fetch
+ * commits selection + conditions in one write, so a match is the
+ * commit's signature).
+ */
+object WearIveRunRecordPolicy {
+
+    fun shouldRecord(
+        isNowSelected: Boolean,
+        weatherMoment: kotlinx.datetime.LocalDateTime?,
+        selectedMoment: java.time.LocalDateTime
+    ): Boolean {
+        if (isNowSelected) return true
+        val weather = weatherMoment ?: return false
+        return weather.date == kotlinx.datetime.LocalDate(
+            selectedMoment.year, selectedMoment.monthValue, selectedMoment.dayOfMonth
+        ) && weather.hour == selectedMoment.hour
+    }
+}

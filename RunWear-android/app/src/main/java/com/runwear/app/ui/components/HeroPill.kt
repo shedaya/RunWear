@@ -1,11 +1,13 @@
 package com.runwear.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
@@ -18,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.makeitme.MakeItMeMode
@@ -159,6 +162,13 @@ object HeroPillPolicy {
  * optional spinner, the optional Make It Me script mark (Great
  * Vibes, states (b)(c)(d) per the Nov 4 design delta), the optional
  * trailing action, and the PREMIUM lock glyph.
+ *
+ * GEN-6 DA-15(b): the pill is width-capped to the space its host
+ * actually offers (BoxWithConstraints + widthIn) and script-led
+ * states get extra leading padding — in Sol's recording the
+ * capsule's shape clip cut the script's opening swash at the
+ * pill's left edge ("› Make It Me"). The main text ellipsizes on
+ * one line rather than pushing the capsule past its host.
  */
 @Composable
 fun HeroPill(
@@ -166,69 +176,78 @@ fun HeroPill(
     onAction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = if (content.wholePillAction) {
-            modifier.clickable { onAction() }
-        } else {
-            modifier
-        },
-        shape = RoundedCornerShape(100.dp),
-        color = Color.Black.copy(alpha = 0.45f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = modifier) {
+        Surface(
+            modifier = (if (content.wholePillAction) {
+                Modifier.clickable { onAction() }
+            } else {
+                Modifier
+            }).widthIn(max = maxWidth),
+            shape = RoundedCornerShape(100.dp),
+            color = Color.Black.copy(alpha = 0.45f)
         ) {
-            if (content.showSpinner) {
-                CircularProgressIndicator(
-                    color = com.runwear.app.ui.theme.PhotoInk,
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp
-                )
-                Spacer(Modifier.width(6.dp))
-            }
-            if (content.showScriptMark) {
+            Row(
+                modifier = Modifier.padding(
+                    start = if (content.showScriptMark) 15.dp else 10.dp,
+                    end = 10.dp,
+                    top = 6.dp,
+                    bottom = 6.dp
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (content.showSpinner) {
+                    CircularProgressIndicator(
+                        color = com.runwear.app.ui.theme.PhotoInk,
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (content.showScriptMark) {
+                    Text(
+                        text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
+                        fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+                        fontSize = 15.sp,
+                        color = com.runwear.app.ui.theme.PhotoInk
+                    )
+                    Spacer(Modifier.width(7.dp))
+                }
                 Text(
-                    text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
-                    fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-                    fontSize = 15.sp,
-                    color = com.runwear.app.ui.theme.PhotoInk
-                )
-                Spacer(Modifier.width(7.dp))
-            }
-            Text(
-                text = content.text,
-                fontSize = 12.sp,
-                color = com.runwear.app.ui.theme.PhotoInk
-            )
-            if (content.showLock) {
-                Spacer(Modifier.width(5.dp))
-                Icon(
-                    imageVector = Icons.Filled.Lock,
-                    contentDescription = null,
-                    tint = com.runwear.app.ui.theme.PhotoInk,
-                    modifier = Modifier.size(11.dp)
-                )
-            }
-            if (content.upsellText != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = content.upsellText,
+                    text = content.text,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = com.runwear.app.ui.theme.PineAccentOnDark,
-                    modifier = Modifier.clickable { onAction() }
-                )
-            }
-            if (content.actionText != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = content.actionText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
                     color = com.runwear.app.ui.theme.PhotoInk,
-                    modifier = Modifier.clickable { onAction() }
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+                if (content.showLock) {
+                    Spacer(Modifier.width(5.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = com.runwear.app.ui.theme.PhotoInk,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
+                if (content.upsellText != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = content.upsellText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = com.runwear.app.ui.theme.PineAccentOnDark,
+                        modifier = Modifier.clickable { onAction() }
+                    )
+                }
+                if (content.actionText != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = content.actionText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = com.runwear.app.ui.theme.PhotoInk,
+                        modifier = Modifier.clickable { onAction() }
+                    )
+                }
             }
         }
     }
