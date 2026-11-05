@@ -113,11 +113,25 @@ data class MainUiState(
      * surface paints from a scene's first frame (the hero band's base
      * layer, the collection/poster thumbnails via [effectiveHeroUrl])
      * while the async pool/personal resolution runs, and the photo
-     * that stays up while a personal photo generates or fails. Null
-     * only when no truthful photo is servable for the prescription
-     * (the servability census's documented defect signatures).
+     * that stays up while a personal photo generates or fails.
+     * GEN-4: the bundled chain's floor makes this non-null for every
+     * prescription — for the census's exact-uncovered signatures it
+     * is the nearest bundled scaffold, labelled by [heroIsScaffold].
      */
     val heroFallbackUrl: String? = null,
+    /**
+     * GEN-4 (Sol's ruling, 2026-11-04): true iff the photo
+     * [effectiveHeroUrl] currently resolves to is a SCAFFOLD/FLOOR
+     * serve of the hero fallback chain (or a personal scaffold) —
+     * the nearest covered photo, NOT the prescription's exact photo.
+     * Every surface inheriting the single resolution (hero, Wear
+     * I've Run record, thumbnails, poster) inherits this label with
+     * it, so a scaffold is never recorded or presented as exact.
+     * Stock scaffolds carry no home badge (the STOCK_QUIET
+     * convention: stock non-exact serves are quiet on home); this
+     * state and the SCAFFOLD serve record are their honest label.
+     */
+    val heroIsScaffold: Boolean = false,
     /**
      * Identity of the hero photo on screen, for flag reports: the
      * Supabase pool row id when [heroImageUrl] came from the pool
@@ -257,7 +271,8 @@ internal fun MainUiState.withFetchedConditions(
     pendingPlace: com.runwear.shared.domain.model.SimplePlace?,
     locationNowAnchor: LocalDateTime,
     nowSelected: Boolean,
-    heroFallbackUrl: String? = null
+    heroFallbackUrl: String? = null,
+    heroFallbackIsScaffold: Boolean = false
 ): MainUiState {
     val weatherNow = weather.dateTime.toJavaLocalDateTime()
     val switchingPlace = pendingPlace != null
@@ -282,6 +297,9 @@ internal fun MainUiState.withFetchedConditions(
         // fallback in this same write, and the personal layer resets
         // to the new cell's truth (re-derived by resolveHeroImage).
         heroImageUrl = if (switchingPlace) heroFallbackUrl else heroImageUrl,
+        // GEN-4: when the switch makes the fallback the hero, the
+        // scaffold label follows it in the same write.
+        heroIsScaffold = if (switchingPlace) heroFallbackIsScaffold else heroIsScaffold,
         heroImageRowId = if (switchingPlace) null else heroImageRowId,
         heroCombinationId = if (switchingPlace) null else heroCombinationId,
         heroCandidates = if (switchingPlace) emptyList() else heroCandidates,
@@ -313,10 +331,23 @@ internal fun bundledFallbackUrlFor(
     outfit: OutfitRecommendation,
     gender: com.runwear.shared.domain.model.GenderPreference,
     comfort: ComfortPreference
-): String? = com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
+): String? = bundledFallbackFor(weather, outfit, gender, comfort).imageUrl
+
+/**
+ * GEN-4: the full synchronous bundled-chain result (URL + scaffold
+ * label) for one set of conditions — the one computation every
+ * commit path uses.
+ */
+internal fun bundledFallbackFor(
+    weather: WeatherConditions,
+    outfit: OutfitRecommendation,
+    gender: com.runwear.shared.domain.model.GenderPreference,
+    comfort: ComfortPreference
+): com.runwear.shared.domain.model.HeroImageResult =
+    com.runwear.shared.domain.model.HeroImageSelector.getFallbackImage(
     weather, outfit, gender,
     frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, comfort)
-).imageUrl
+)
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -474,6 +505,7 @@ class MainViewModel @Inject constructor(
                     simplePlace = seededPlace,
                     heroImageUrl = seededHero.imageUrl,
                     heroFallbackUrl = seededHero.imageUrl,
+                    heroIsScaffold = seededHero.isScaffold,
                     heroImageRowId = null,
                     heroCombinationId = seededHero.combinationId
                 )
@@ -897,6 +929,11 @@ class MainViewModel @Inject constructor(
                     // in the same state write, so no rendered frame can pair
                     // the new place with the old place's weather.
                     val placeToCommit = pendingPlace
+                    val fetchFallback = bundledFallbackFor(
+                        weather, outfit,
+                        _uiState.value.genderPreference,
+                        _uiState.value.comfortPreference
+                    )
                     _uiState.update {
                         it.withFetchedConditions(
                             weather = weather,
@@ -905,11 +942,8 @@ class MainViewModel @Inject constructor(
                             pendingPlace = placeToCommit,
                             locationNowAnchor = now,
                             nowSelected = nowSelected,
-                            heroFallbackUrl = bundledFallbackUrlFor(
-                                weather, outfit,
-                                _uiState.value.genderPreference,
-                                _uiState.value.comfortPreference
-                            )
+                            heroFallbackUrl = fetchFallback.imageUrl,
+                            heroFallbackIsScaffold = fetchFallback.isScaffold
                         )
                     }
                     if (placeToCommit != null) pendingPlace = null
@@ -985,9 +1019,10 @@ class MainViewModel @Inject constructor(
         // fallback for these exact conditions (a comfort/gender change
         // reaches here without a fetch commit, and the fallback must
         // follow the prescription it serves).
-        val fallbackUrl = bundledFallbackUrlFor(
+        val fallbackResult = bundledFallbackFor(
             weather, outfit, gender, _uiState.value.comfortPreference
         )
+        val fallbackUrl = fallbackResult.imageUrl
         heroResolveJob?.cancel()
         heroResolveJob = viewModelScope.launch {
             val result = runCatching {
@@ -1009,9 +1044,10 @@ class MainViewModel @Inject constructor(
                     weather, outfit, gender,
                     frameFeelsLikeF = GetOutfitRecommendationUseCase.adjustedFeelsLikeF(weather, _uiState.value.comfortPreference)
                 ).also { selectorHero ->
-                    // GEN-2 A2: the gated selector may resolve to NO
-                    // photo (no bundled asset matches the prescription):
-                    // that is not a serve and files no serve record.
+                    // GEN-4: the selector now resolves through the
+                    // fallback chain, so a photo always lands; a floor
+                    // serve records its SCAFFOLD source, an exact
+                    // bundled serve its BUNDLED_FALLBACK source.
                     if (selectorHero.imageUrl == null) return@also
                     // WS-7 / RW-26(c): the resolve-timeout substitution
                     // is a bundled serve the repository never emitted a
@@ -1019,7 +1055,8 @@ class MainViewModel @Inject constructor(
                     // (RW-26(b)'s 2,000 ms budget itself is unchanged.)
                     recordHeroServe(
                         com.runwear.shared.domain.model.HeroServeRecord(
-                            source = com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
+                            source = selectorHero.serveSource
+                                ?: com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
                             requestedCombinationId = selectorHero.combinationId,
                             gender = gender,
                             fallbackAssetFile = selectorHero.fallbackAssetFile,
@@ -1100,6 +1137,8 @@ class MainViewModel @Inject constructor(
                         heroRequestedCombinationId = chosen.combinationId,
                         heroIsPersonal = true,
                         heroServeKind = hit.serveKind,
+                        heroIsScaffold = hit.serveKind ==
+                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
                         personalHeroId = hit.heroId,
                         personalHeroImageUrl = hit.imageUrl,
                         personalLookStatus = status,
@@ -1132,7 +1171,14 @@ class MainViewModel @Inject constructor(
      */
     private fun recordHeroServe(record: com.runwear.shared.domain.model.HeroServeRecord) {
         HeroServeTelemetry.emit(record)
-        if (record.source == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK) {
+        // GEN-4: a bundled FLOOR scaffold files too — like every
+        // bundled serve it has no server-side trace (a POOL scaffold
+        // is attributable by its row id and does not file, exactly as
+        // HeroServeDiagnostics documents for scaffold serves).
+        if (record.source == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK ||
+            (record.source == com.runwear.shared.domain.model.HeroServeSource.SCAFFOLD &&
+                record.fallbackAssetFile != null)
+        ) {
             viewModelScope.launch {
                 runCatching {
                     val payload = HeroServeDiagnostics.payload(
@@ -1152,8 +1198,8 @@ class MainViewModel @Inject constructor(
         // WS-7: a bundled paint from the pool layer files its
         // diagnostics record at paint time (the repository emitted the
         // serve record when it resolved; this is the remote filing).
-        // GEN-2 A2: a null URL is a resolved NO-photo (the garment
-        // gate exhausted) — nothing was served, nothing is filed.
+        // GEN-4: a null URL is now unreachable on the chain paths (the
+        // floor always serves) — the guard stays for synthetic results.
         val chosenUrl = chosen.imageUrl
         if (chosenUrl != null &&
             (chosen.serveSource == com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK ||
@@ -1165,6 +1211,8 @@ class MainViewModel @Inject constructor(
             it.copy(
                 heroImageUrl = chosen.imageUrl,
                 heroFallbackUrl = fallbackUrl,
+                // GEN-4: the scaffold label of the displayed hero.
+                heroIsScaffold = chosen.isScaffold,
                 heroImageRowId = chosen.imageRowId,
                 heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
                 heroCandidates = chosen.candidates,
@@ -1181,7 +1229,13 @@ class MainViewModel @Inject constructor(
     /** File a bundled serve's diagnostics record without re-emitting its HeroServe record. */
     private fun recordHeroServeDiagnosticsOnly(chosen: com.runwear.shared.domain.model.HeroImageResult) {
         val record = com.runwear.shared.domain.model.HeroServeRecord(
-            source = com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
+            // GEN-4: a floor/scaffold paint records SCAFFOLD, never
+            // the exact bundled-fallback label.
+            source = if (chosen.isScaffold) {
+                com.runwear.shared.domain.model.HeroServeSource.SCAFFOLD
+            } else {
+                com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK
+            },
             requestedCombinationId = chosen.combinationId,
             servedCombinationId = chosen.servedCombinationId,
             fallbackAssetFile = chosen.fallbackAssetFile,
@@ -1351,6 +1405,8 @@ class MainViewModel @Inject constructor(
                         heroImageRowId = null,
                         heroIsPersonal = true,
                         heroServeKind = hit.serveKind,
+                        heroIsScaffold = hit.serveKind ==
+                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
                         personalHeroId = hit.heroId,
                         personalHeroImageUrl = hit.imageUrl,
                         showMakeItMeUpsell = false

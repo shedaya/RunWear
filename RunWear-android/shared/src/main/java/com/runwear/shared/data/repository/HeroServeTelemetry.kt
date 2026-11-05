@@ -89,7 +89,13 @@ object HeroServeTelemetry {
     fun emitForResult(result: HeroImageResult, combination: OutfitCombination?, trigger: String) {
         val url = result.imageUrl ?: return
         val isBundled = url.startsWith(BUNDLED_ASSET_PREFIX)
-        val source = if (isBundled) {
+        // GEN-4: a SCAFFOLD serve keeps its label — a bundled FLOOR
+        // scaffold is a bundled URL, but relabelling it
+        // bundled-fallback would record a non-exact serve as an
+        // ordinary fallback and hide the chain tier that served it.
+        val source = if (result.serveSource == HeroServeSource.SCAFFOLD) {
+            HeroServeSource.SCAFFOLD
+        } else if (isBundled) {
             HeroServeSource.BUNDLED_FALLBACK
         } else {
             result.serveSource ?: HeroServeSource.POOL
