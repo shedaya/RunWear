@@ -67,6 +67,159 @@ final class Gen6WaveATests: XCTestCase {
                       "W-18 stands: a landing still re-reads the one counter")
     }
 
+    // MARK: - Item 2 · First-look parity verification (DA-03)
+    //
+    // The state-sequence test DA-03 asks for: drive the exact
+    // fork → intake → submit → generating path as a sequence of
+    // states and assert the iOS first-look moment raises
+    // correctly at each step — the moment raises on the COMMIT
+    // (OptInFinish completes synchronously, before any generation
+    // outcome), generation from the fork path lands in the
+    // making phase, the pill covering the generation window is
+    // the policy's generating pill (never a pill-less window),
+    // and READY waits for the personal photo to be displayed AND
+    // loaded before the crossfade/haptic/band sequence can run.
+
+    func testFirstLookSequence_ForkToGeneratingToReady() {
+        // Step 1 — FORK → INTAKE → SUBMIT → COMMIT: the fork's
+        // commit completes (OptInFinish.perform runs complete()
+        // synchronously inside dismiss; the generation kick is
+        // deferred into a Task) — the moment raises on the COMMIT
+        // (showFirstLookMoment = true in the completion), whatever
+        // the kick later does. From here the moment's phases are
+        // resolved by FirstLookPresentation from the store's
+        // folded look state + the photo's display/load facts.
+
+        // Step 2 — GENERATING: the fork-path kick requested the
+        // first cell's generation; its look state is MAKING. The
+        // moment is in its making phase: progress copy ON the
+        // photo, NO caption, NO meter, NO Premium band.
+        let making = FirstLookPresentation.resolve(
+            lookState: .making, personalPhotoDisplayed: false, personalImageLoaded: false,
+            freeGenerationsUsed: 0, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(making.phase, .making,
+                       "generation from the fork path raises the making phase")
+        XCTAssertEqual(making.photoOverlayTitle, MakeItMeCopy.progressTitle)
+        XCTAssertEqual(making.photoOverlayDetail, MakeItMeCopy.progressSubline,
+                       "the making phase carries the settled §11 honesty line (RW-47)")
+        XCTAssertNil(making.caption, "nothing about a delivered look may be claimed while making")
+        XCTAssertNil(making.meterLine, "no debit is presented before delivery")
+        XCTAssertFalse(making.showsPremiumBand, "the Premium band waits for the look")
+        // No pill-less window: during the same generation, the
+        // home pill policy resolves the generating pill — free
+        // tier with the C-4 green line, Premium clean.
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+                             isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
+            .makingWithUpsell)
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+                             isSubscribed: true, freeGenerationsUsed: 0, freeAllowance: 5),
+            .making)
+
+        // Step 3 — the photo ARRIVES (server says ready, photo
+        // displayed) but has not LOADED: the moment must NOT flip
+        // to ready — the claim never precedes the photo (the
+        // reveal sequence — 0.4 s crossfade, one haptic, band at
+        // 0.52 s — runs off the ready phase only).
+        let arrivedNotLoaded = FirstLookPresentation.resolve(
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: false,
+            freeGenerationsUsed: 1, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(arrivedNotLoaded.phase, .making,
+                       "displayed-but-unloaded stays making")
+        XCTAssertNil(arrivedNotLoaded.caption)
+
+        // Step 4 — READY: displayed AND loaded → the ready phase:
+        // the settled caption, the meter composed from the
+        // delivered count (W-16/W-18 seam), the band may show,
+        // and the reveal constants are the settled ones.
+        let ready = FirstLookPresentation.resolve(
+            lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
+            freeGenerationsUsed: 1, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(ready.phase, .ready)
+        XCTAssertEqual(ready.caption, MakeItMeCopy.firstLookReadyCaption)
+        XCTAssertEqual(ready.caption, "You're in the photo now.")
+        XCTAssertEqual(ready.meterLine,
+                       "That was look 1 of your 5 free looks — 4 remain, whenever you want them.")
+        XCTAssertTrue(ready.showsPremiumBand)
+        XCTAssertEqual(FirstLookReveal.photoCrossfadeSeconds, 0.4)
+        XCTAssertEqual(FirstLookReveal.bandStartSeconds, 0.52)
+        XCTAssertEqual(FirstLookReveal.successHapticCount, 1, "exactly one success haptic per reveal")
+    }
+
+    func testFirstLookSequence_FailedGenerationShowsTheFailurePhase() {
+        let failed = FirstLookPresentation.resolve(
+            lookState: .failed(reason: .serviceRefused), personalPhotoDisplayed: false, personalImageLoaded: false,
+            freeGenerationsUsed: 0, freeAllowance: 5, isSubscribed: false)
+        XCTAssertEqual(failed.phase, .failed)
+        XCTAssertEqual(failed.failureLine, MakeItMeCopy.firstLookFailed)
+        XCTAssertNil(failed.caption)
+        XCTAssertNil(failed.meterLine, "nothing was charged — no meter on failure")
+    }
+
+    func testFirstLookRaise_IsCommitDrivenAndPolicyPilled_sourcePins() throws {
+        // The raise: the moment flag is set by the commit's
+        // completion, which OptInFinish performs synchronously —
+        // NOT gated on the generation kick or its outcome.
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("complete: { showFirstLookMoment = true }"),
+                      "the first-look moment raises on the opt-in commit's completion")
+        XCTAssertTrue(onboarding.contains("showFirstLookMoment"),
+                      "the moment renders off that flag (first-photo only surface)")
+        XCTAssertTrue(onboarding.contains("Button(action: onComplete)"),
+                      "'See My Outfit' is the unconditional door — rendered in every phase, never gated on generation")
+        // The making pill on home is the POLICY's pill (the
+        // DA-12 hand-built-bypass check): home resolves through
+        // HeroPill.resolve and renders HeroPillView; no view
+        // hand-builds a making pill from raw labels.
+        let outfit = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(outfit.contains("HeroPill.resolve("),
+                      "home's pill comes from the single pill policy")
+        let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        XCTAssertTrue(hero.contains("HeroPill.getInstantlyLabel"),
+                      "the C-4 green line renders from the policy's label")
+        XCTAssertTrue(hero.contains("HeroPill.scriptMarkImageName"),
+                      "every pill leads with the Make It Me script mark asset")
+    }
+
+    // MARK: - Item 3 · Cold start (DA-07 class): serve order + place persistence
+
+    func testColdStart_PersonalResolvesBeforePoolPublishes_sourcePin() throws {
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        // The pool fetch happens (its result feeds the deferred
+        // paint and the telemetry), then the personal layer
+        // resolves, and only inside the !personalServed branch
+        // does the pool paint publish.
+        let fetchAt = try XCTUnwrap(vm.range(of: "let result = await heroImageService.getHeroImage(")?.lowerBound)
+        let personalAt = try XCTUnwrap(vm.range(of: "let personalServed = await applyPersonalHero(frame: frame)")?.lowerBound)
+        let publishAt = try XCTUnwrap(vm.range(of: "if let paint = deferredPoolPaint")?.lowerBound)
+        XCTAssertTrue(fetchAt < personalAt && personalAt < publishAt,
+                      "serve order: pool fetched → personal resolved → pool published only if personal did not serve")
+        XCTAssertTrue(vm.contains("if !personalServed {"),
+                      "the deferred pool paint publishes only when no personal photo served")
+        // The same-cell guard survives: a reload with a personal
+        // photo applied never republishes the pool URL.
+        XCTAssertTrue(vm.contains("personalAppliedForThisCell"),
+                      "the Y-1 same-cell no-republish guard stands")
+        XCTAssertTrue(vm.contains("currentPersonalServeIsScaffold = lookState == .making"),
+                      "the scaffold fact is recorded at personal paint time (pill silence, RW-34)")
+    }
+
+    func testColdStart_PlacePersistenceAndLaunchOrder_sourcePins() throws {
+        // The picked place persists (UserDefaults-backed store)
+        // and launch restores it before any GPS fetch.
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("ManualLocationStore.save("),
+                      "a manual pick is persisted")
+        XCTAssertTrue(vm.contains("restoredManualLocation"),
+                      "launch restores the saved place")
+        let content = try sourceFile("../RunWear/Views/ContentView.swift")
+        XCTAssertTrue(content.contains("if let manual = viewModel.restoredManualLocation"),
+                      "ContentView fetches the restored place on appear")
+        XCTAssertTrue(content.contains("guard viewModel.isUsingGPS, let location = newLocation else { return }"),
+                      "GPS updates never stomp a restored manual place")
+    }
+
     // MARK: - Item 5 · Paywall honesty (DA-11 figure · DA-10 entitlement · readiness gate)
 
     func testReadinessClaim_GatedOnActualBankCoverage() {

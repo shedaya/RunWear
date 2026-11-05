@@ -1082,20 +1082,31 @@ class WeatherViewModel: ObservableObject {
         // record below), and its identity is the row's OWN
         // combination, never the requested cell's.
         let isScaffoldPoolPaint = result.fallbackLevel == 9
+        // GEN-6 Wave A (DA-07 class, cold-start serve order): the
+        // pool resolution is NOT published yet. Gen-5 published
+        // the pool photo here and let the personal layer overwrite
+        // it a network round-trip later, so a relaunching user
+        // with a banked own photo watched the bundled fallback, a
+        // POOL STOCK STRANGER, and only then their own photo —
+        // the exact serve order DA-07 censused on the sibling
+        // platform. Now the pool paint (and the bundled-result
+        // adoption) is computed into deferred values, the
+        // personal layer resolves FIRST (below), and the deferred
+        // pool paint publishes only when no personal photo
+        // served. The bundled fallback painted at the atomic
+        // commit remains the always-available floor throughout
+        // (WS-A(1)).
+        var deferredPoolPaint: (url: String, rowId: Int?, combinationId: String)?
+        var deferredBundledAdoption: (tier: HeroFallbackTier?, asset: String, url: String)?
         if result.fallbackLevel < 8 || isScaffoldPoolPaint {
             if !personalAppliedForThisCell {
-                heroImageUrl = result.imageUrl
-                heroImageRowId = result.imageRowId
-                heroServedCombinationId = result.combinationId
+                deferredPoolPaint = (result.imageUrl, result.imageRowId, result.combinationId)
             }
             if isScaffoldPoolPaint {
                 heroFallbackTier = .scaffold
                 heroFallbackAssetName = nil
             }
         } else {
-            heroImageUrl = nil // Will use fallback
-            heroImageRowId = nil
-            heroServedCombinationId = nil
             // GEN-4: a bundled result from the service's full
             // chain (exact / scaffold / floor over the live pool
             // set) names its asset and tier — adopt them so the
@@ -1103,12 +1114,16 @@ class WeatherViewModel: ObservableObject {
             // not just the commit's floor labelling. (The metric
             // over the static bundled set makes this the same
             // asset the commit painted; the adoption keeps the
-            // record honest if the sets ever diverge.)
+            // record honest if the sets ever diverge.) The
+            // adoption is deferred with the pool paint (GEN-6
+            // Wave A): the committed floor asset already paints,
+            // and the adoption names that same asset in practice.
             if let asset = result.fallbackAssetFile, !asset.isEmpty {
-                heroFallbackTier = result.fallbackTier ?? heroFallbackTier
-                heroFallbackAssetName = asset
-                let url = fallbackProvider.imageURL(forAssetName: asset)
-                if !url.isEmpty { fallbackImageUrl = url }
+                deferredBundledAdoption = (
+                    tier: result.fallbackTier ?? heroFallbackTier,
+                    asset: asset,
+                    url: fallbackProvider.imageURL(forAssetName: asset)
+                )
             }
         }
 
@@ -1141,10 +1156,35 @@ class WeatherViewModel: ObservableObject {
             }
         }
 
-        // RW-14: the personal layer runs after the pool paints, on
-        // the same keying frame (prepareHeroFrame), so the
-        // personalized photo is keyed to the outfit on screen.
+        // RW-14: the personal layer runs on the same keying
+        // frame (prepareHeroFrame), so the personalized photo is
+        // keyed to the outfit on screen. GEN-6 Wave A: it now
+        // runs BEFORE the pool paint publishes (see the deferred
+        // pool paint above) — serve order on every load, cold
+        // start included, is: bundled floor → the user's own
+        // banked photo when one serves → the pool photo only when
+        // no personal photo serves. Never the pool stranger
+        // flashing in ahead of the user's own photo.
         let personalServed = await applyPersonalHero(frame: frame)
+
+        if !personalServed {
+            // Publish the deferred pool resolution now that the
+            // personal layer has had its first claim on the slot.
+            if let paint = deferredPoolPaint {
+                heroImageUrl = paint.url
+                heroImageRowId = paint.rowId
+                heroServedCombinationId = paint.combinationId
+            } else if result.fallbackLevel >= 8 && !isScaffoldPoolPaint {
+                heroImageUrl = nil // Will use fallback
+                heroImageRowId = nil
+                heroServedCombinationId = nil
+                if let adoption = deferredBundledAdoption {
+                    heroFallbackTier = adoption.tier
+                    heroFallbackAssetName = adoption.asset
+                    if !adoption.url.isEmpty { fallbackImageUrl = adoption.url }
+                }
+            }
+        }
 
         // WS-7 / RW-26(c): record the serve that is actually on
         // screen (D-18's attribution fix). A personal serve records
