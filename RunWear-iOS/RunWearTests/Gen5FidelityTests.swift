@@ -577,6 +577,7 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(decoded.narrationPayload.rendered, "Miami, FL")
     }
 
+    @MainActor
     func testChangedHeadwearSettle_ProducesNoNarration() {
         // The Addendum 8 state-sequence proof: two settles
         // differing ONLY in the headwear item. The classifier
@@ -892,6 +893,7 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(Set(decoded.map(\.placeDisplayName)), ["Miami, FL", "Kansas City, MO"])
     }
 
+    @MainActor
     func testLegacyFallbackAndSupersede_FA36() {
         // FA-36: a legacy (session-less) entry dated today is
         // the pin/dock's entry until the session settles; the
