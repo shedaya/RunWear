@@ -82,7 +82,13 @@ data class DayChartModel(
     /** Hours where the outfit/bracket changes vs the previous hour. */
     val changeHours: List<Int>,
     /** Last hour with forecast data, or null when the day has none. */
-    val horizonLastHour: Int?
+    val horizonLastHour: Int?,
+    /** RW-53(ii): this date's sunrise/sunset as minutes after local
+     * midnight, from the forecast payload's daily block. Null when
+     * the payload carried none — the night shading then falls back
+     * to [DayChartBandPolicy.NIGHT_RANGES]. */
+    val sunriseMinutes: Int? = null,
+    val sunsetMinutes: Int? = null
 ) {
     val selectableHours: Set<Int> get() = hours.map { it.hour }.toSet()
     val isEmpty: Boolean get() = hours.isEmpty()
@@ -119,7 +125,8 @@ object DayChartBuilder {
     fun build(
         hourly: List<HourlyForecast>,
         date: LocalDate,
-        comfort: ComfortPreference
+        comfort: ComfortPreference,
+        sunTimes: List<com.runwear.shared.domain.model.DaySunTimes> = emptyList()
     ): DayChartModel {
         val dayHours = hourly
             .map { it to it.dateTime.toJavaLocalDateTime() }
@@ -145,13 +152,18 @@ object DayChartBuilder {
                 changes += cur.hour
             }
         }
+        val daySun = sunTimes.firstOrNull {
+            it.date == kotlinx.datetime.LocalDate(date.year, date.monthValue, date.dayOfMonth)
+        }
         return DayChartModel(
             date = date,
             hours = dayHours,
             low = dayHours.minByOrNull { it.feelsLikeF },
             high = dayHours.maxByOrNull { it.feelsLikeF },
             changeHours = changes,
-            horizonLastHour = dayHours.lastOrNull()?.hour
+            horizonLastHour = dayHours.lastOrNull()?.hour,
+            sunriseMinutes = daySun?.sunriseMinutes,
+            sunsetMinutes = daySun?.sunsetMinutes
         )
     }
 }
@@ -257,14 +269,35 @@ object DayChartBandPolicy {
     fun changeAction(): ChangeAction = ChangeAction.OPEN_TIME_SHEET
 
     /**
-     * GEN-5 (item 15): night shading for the picker chart. The
-     * hourly forecast carries no sunrise/sunset, so the settled
-     * fixed night window is 20:00–05:59, expressed as contiguous
-     * (startHour, endHourExclusive) ranges.
+     * GEN-5 (item 15): night shading for the picker chart, from the
+     * fixed fallback window 20:00–05:59, expressed as contiguous
+     * (startHour, endHourExclusive) ranges. RW-53(ii): used only
+     * when the forecast payload carried no sunrise/sunset for the
+     * day — see [nightRanges].
      */
     val NIGHT_RANGES: List<Pair<Int, Int>> = listOf(0 to 6, 20 to 24)
 
     fun isNightHour(hour: Int): Boolean = NIGHT_RANGES.any { (start, end) -> hour in start until end }
+
+    /**
+     * RW-53(ii): night shading follows the day's actual sunrise and
+     * sunset when the model carries them (minutes after midnight,
+     * ranges in the same unit): night is [0, sunrise) ∪ [sunset,
+     * 1440). Falls back to [NIGHT_RANGES] scaled to minutes when
+     * either is missing.
+     */
+    fun nightRanges(model: DayChartModel): List<Pair<Int, Int>> {
+        val rise = model.sunriseMinutes
+        val set = model.sunsetMinutes
+        if (rise == null || set == null || set <= rise) {
+            return NIGHT_RANGES.map { (s, e) -> (s * 60) to (e * 60) }
+        }
+        return listOf(0 to rise, set to (24 * 60))
+    }
+
+    /** Is the given minute of the day inside a shaded night range? */
+    fun isNightMinute(model: DayChartModel, minutes: Int): Boolean =
+        nightRanges(model).any { (start, end) -> minutes in start until end }
 }
 
 /**
@@ -306,12 +339,14 @@ fun DayChartGlanceBand(
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 // GEN-5 (RW-29 EX-13): night shading on the
-                // glance band too — the same fixed night window
-                // and wash the picker chart draws (item 15 landed
-                // it on the picker only).
-                for ((start, end) in DayChartBandPolicy.NIGHT_RANGES) {
-                    val left = DayChartGeometry.cellLeftFraction(start) * size.width
-                    val right = DayChartGeometry.cellLeftFraction(end) * size.width
+                // glance band too — the same night window and
+                // wash the picker chart draws (item 15 landed
+                // it on the picker only). RW-53(ii): the window
+                // is the day's sunrise–sunset when the payload
+                // carried them (ranges in minutes here).
+                for ((startMin, endMin) in DayChartBandPolicy.nightRanges(model)) {
+                    val left = startMin / (24f * 60f) * size.width
+                    val right = endMin / (24f * 60f) * size.width
                     drawRect(
                         color = RunWearColors.TextPrimary.copy(alpha = 0.07f),
                         topLeft = Offset(left, 0f),
@@ -409,7 +444,7 @@ fun DayChartGlanceBand(
                     .padding(
                         start = (
                             DayChartGeometry.xFraction(dotPoint.hour) * maxWidth.value - 16
-                            ).dp.coerceIn(4.dp, (maxWidth - 44.dp).coerceAtLeast(4.dp)),
+                            ).dp.coerceIn(4.dp, (maxWidth - 52.dp - 72.dp).coerceAtLeast(4.dp)),
                         bottom = 4.dp
                     )
             )
@@ -423,7 +458,7 @@ fun DayChartGlanceBand(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .clickable { onChangeClick() }
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
             )
         }
     }

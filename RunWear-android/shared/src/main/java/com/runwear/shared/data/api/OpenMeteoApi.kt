@@ -18,7 +18,11 @@ interface OpenMeteoApi {
         @Query("temperature_unit") temperatureUnit: String = "fahrenheit",
         @Query("wind_speed_unit") windSpeedUnit: String = "mph",
         @Query("timezone") timezone: String = "auto",
-        @Query("forecast_days") forecastDays: Int = 7
+        @Query("forecast_days") forecastDays: Int = 7,
+        // RW-53(ii): sunrise/sunset for the day chart's night
+        // shading. Declared LAST so existing test doubles'
+        // overrides keep matching positionally.
+        @Query("daily") daily: String = "sunrise,sunset"
     ): OpenMeteoResponse
 
     /**

@@ -98,7 +98,14 @@ object TimePickerDraftPolicy {
         nowHour: Int?,
         selectableHours: Set<Int>
     ): TimePickerSession {
-        val wanted = if (isNowSelected && isToday && nowHour != null) nowHour else selectedHour
+        // GEN-6 WAVE C (RW-53(iii) / FA-32): on a day that is NOT
+        // today the handle opens on that day's FIRST forecast hour
+        // — the carried-over selected hour belonged to another day.
+        val wanted = when {
+            isNowSelected && isToday && nowHour != null -> nowHour
+            !isToday -> selectableHours.minOrNull() ?: selectedHour
+            else -> selectedHour
+        }
         val draft = snap(wanted, selectableHours) ?: wanted
         return TimePickerSession(
             originalHour = selectedHour,
@@ -183,7 +190,15 @@ fun TimePickerSheet(
     temperatureUnit: TemperatureUnit,
     locationName: String,
     onConfirm: (TimePickerDraftPolicy.Confirm) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /**
+     * GEN-6 WAVE C (RW-53, date-path fix): the day door — the
+     * context line's day word opens the sibling Choose-a-Day
+     * sheet (design-spec §6: the day picker "remains its
+     * sibling"). Without it the date was unreachable from the
+     * phone layout in every state.
+     */
+    onDayClick: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptic = LocalHapticFeedback.current
@@ -235,17 +250,35 @@ fun TimePickerSheet(
                 style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary
             )
-            Text(
-                text = "${dayLabel(model.date, locationNow.toLocalDate())} · " +
-                    "${com.runwear.app.ui.components.HeroSheetFormat.simplePlaceName(locationName)}" +
-                    " · Feels-like by hour",
-                fontSize = 12.5.sp,
-                color = RunWearColors.TextSecondary,
+            // Context line — the day word is the Choose-a-Day
+            // door (RW-53): "Today › · {Place} · Feels-like by hour".
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(top = 2.dp)
-            )
+            ) {
+                androidx.compose.material3.Surface(
+                    onClick = onDayClick,
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    Text(
+                        text = "${dayLabel(model.date, locationNow.toLocalDate())} ›",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = RunWearColors.PineAccent
+                    )
+                }
+                Text(
+                    text = " · ${com.runwear.app.ui.components.HeroSheetFormat.simplePlaceName(locationName)}" +
+                        " · Feels-like by hour",
+                    fontSize = 12.5.sp,
+                    color = RunWearColors.TextSecondary
+                )
+            }
             // At most ONE short instruction line.
             Text(
-                text = "Drag to pick an hour.",
+                // RW-53(i): the settled instruction line
+                // (design-spec §6; iOS carries it verbatim).
+                text = "Every hour can be chosen — the handle snaps hour to hour.",
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 8.dp)
@@ -330,10 +363,13 @@ fun TimePickerSheet(
                         // everything — the settled fixed night
                         // window (20:00–05:59; the forecast carries
                         // no sunrise/sunset to shade by).
-                        for ((nightStart, nightEnd) in
-                            com.runwear.app.ui.components.DayChartBandPolicy.NIGHT_RANGES) {
-                            val left = DayChartGeometry.cellLeftFraction(nightStart) * size.width
-                            val right = DayChartGeometry.cellLeftFraction(nightEnd) * size.width
+                        // RW-53(ii): sunrise–sunset shading;
+                        // the fixed window only when the model
+                        // carries no sun times.
+                        for ((nightStartMinute, nightEndMinute) in
+                            com.runwear.app.ui.components.DayChartBandPolicy.nightRanges(model)) {
+                            val left = size.width * (nightStartMinute / (24f * 60f))
+                            val right = size.width * (nightEndMinute / (24f * 60f))
                             drawRect(
                                 color = RunWearColors.TextPrimary.copy(alpha = 0.07f),
                                 topLeft = Offset(left, 0f),

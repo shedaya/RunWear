@@ -96,6 +96,25 @@ object HeroSheetFormat {
      * for the location's TODAY the moment reads in the bare simple
      * form — "9:00 PM", no "Today," prefix. Other days keep their
      * day word, which carries information the time alone cannot. */
+    /**
+     * GEN-6 WAVE C (RW-53, date-path fix): the headline moment's
+     * DATE segment text — "Today" / "Tomorrow" / "EEE, MMM d".
+     * The changed-state headline renders this as its OWN tappable
+     * segment opening the date sheet, beside the time segment;
+     * concatenated with ", " + [timeSegmentText] it reproduces
+     * [momentLabel] exactly, so the line reads as it always did.
+     */
+    fun dateSegmentText(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String =
+        when {
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> "Today"
+            selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "Tomorrow"
+            else -> selectedDateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+        }
+
+    /** The headline moment's TIME segment text ("7:00 AM"). */
+    fun timeSegmentText(selectedDateTime: LocalDateTime): String =
+        selectedDateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+
     fun momentLabel(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String {
         val timeText = selectedDateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
         return when {
@@ -364,22 +383,80 @@ fun HeroSheetBlock(
             // file: the T-1 pin (HeroNumeralReadoutTest) keeps this
             // file free of tap modifiers — the numeral itself stays
             // a pure readout, and these segments are buttons.
-            Surface(
-                onClick = { onTimeClick() },
-                color = androidx.compose.ui.graphics.Color.Transparent
-            ) {
-                Text(
-                    text = HeroSheetFormat.momentText(selectedDateTime, locationNow, isNowSelected) + " ›",
-                    style = TextStyle(
-                        fontFamily = FontFamily.Default,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.5.sp,
-                        lineHeight = 20.sp
-                    ),
-                    color = RunWearColors.PineAccent,
-                    maxLines = 1,
-                    modifier = Modifier.padding(vertical = 2.dp)
-                )
+            //
+            // GEN-6 WAVE C (RW-53 — the date-path break): gen-5
+            // (RW-28 item 12) removed the duplicate DateTimePill row
+            // and left this moment segment as the headline's ONLY
+            // entry — wired to the TIME sheet alone. onDateClick
+            // dangled unrendered, so on the phone layout the date
+            // picker was UNREACHABLE from Home (device-confirmed:
+            // "can change the time but not the date"). The moment
+            // is now TWO segments in the changed state — the date
+            // part opens the date sheet, the time part opens
+            // Choose-a-Time — reading as the same single line.
+            // The NOW state keeps its single "Now" segment (its
+            // date is today by definition).
+            if (isNowSelected) {
+                Surface(
+                    onClick = { onTimeClick() },
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    Text(
+                        text = HeroSheetFormat.momentText(selectedDateTime, locationNow, isNowSelected) + " ›",
+                        style = TextStyle(
+                            fontFamily = FontFamily.Default,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.5.sp,
+                            lineHeight = 20.sp
+                        ),
+                        color = RunWearColors.PineAccent,
+                        maxLines = 1,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+            } else {
+                // The date segment renders when the moment NAMES
+                // a day (tomorrow / a later date). For an explicit
+                // TODAY pick the settled reading is the bare time
+                // (gen-5 B-13: no "Today," prefix) — that state's
+                // date door is the day word in Choose-a-Time's
+                // context line, one tap inside the same entry.
+                if (selectedDateTime.toLocalDate() != locationNow.toLocalDate()) {
+                Surface(
+                    onClick = { onDateClick() },
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    Text(
+                        text = HeroSheetFormat.dateSegmentText(selectedDateTime, locationNow) + ", ",
+                        style = TextStyle(
+                            fontFamily = FontFamily.Default,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.5.sp,
+                            lineHeight = 20.sp
+                        ),
+                        color = RunWearColors.PineAccent,
+                        maxLines = 1,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+                }
+                Surface(
+                    onClick = { onTimeClick() },
+                    color = androidx.compose.ui.graphics.Color.Transparent
+                ) {
+                    Text(
+                        text = HeroSheetFormat.timeSegmentText(selectedDateTime) + " ›",
+                        style = TextStyle(
+                            fontFamily = FontFamily.Default,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.5.sp,
+                            lineHeight = 20.sp
+                        ),
+                        color = RunWearColors.PineAccent,
+                        maxLines = 1,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
             }
             if (headlineState.showNowReset) {
                 Text(
@@ -538,11 +615,12 @@ fun HeroSheetBlock(
         // GEN-5 (RW-28 item 12, A-22/B-13): the duplicate
         // DateTimePill "Today | Now" segmented row is GONE. The
         // moment lives in exactly one place — the headline line
-        // above, whose moment segment opens Choose-a-Time and
-        // whose compact refresh + "Now" way-back appears in the
-        // same line in the changed state. (onDateClick is retained
-        // in the signature for the split-pane header's legacy
-        // wiring; nothing in this block renders a date row.)
+        // above: its DATE segment opens the date sheet and its
+        // TIME segment opens Choose-a-Time (GEN-6 WAVE C RW-53:
+        // gen-5 left only the time segment rendered, stranding
+        // the date entry — see the segment block above), and the
+        // compact refresh + "Now" way-back appears in the same
+        // line in the changed state.
 
         // GEN-4: no weather row below the headline — the figures
         // are in the right-justified grid beside the numeral above.

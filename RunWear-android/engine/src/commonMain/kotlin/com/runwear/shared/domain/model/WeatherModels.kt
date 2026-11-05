@@ -1,5 +1,7 @@
 package com.runwear.shared.domain.model
 
+import kotlinx.datetime.LocalDate
+
 import kotlinx.datetime.LocalDateTime
 
 /**
@@ -169,3 +171,16 @@ enum class GenderPreference(val label: String) {
     FEMALE("Female"),
     UNISEX("") // Empty label - this is the "deselected" state
 }
+
+/**
+ * GEN-6 WAVE C (RW-53(ii)): one day's sunrise/sunset, in minutes
+ * since local midnight, parsed from the forecast payload's `daily`
+ * block (sunrise,sunset). The day chart's night shading follows
+ * these; the fixed 20:00–06:00 ranges remain only as the fallback
+ * when a payload carries no daily block.
+ */
+data class DaySunTimes(
+    val date: LocalDate,
+    val sunriseMinutes: Int,
+    val sunsetMinutes: Int
+)

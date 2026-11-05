@@ -61,7 +61,8 @@ class WeatherRepositoryGeocodePrecisionTest {
             temperatureUnit: String,
             windSpeedUnit: String,
             timezone: String,
-            forecastDays: Int
+            forecastDays: Int,
+            daily: String
         ): OpenMeteoResponse = throw UnsupportedOperationException("not used by these tests")
 
         override suspend fun getTimeZone(

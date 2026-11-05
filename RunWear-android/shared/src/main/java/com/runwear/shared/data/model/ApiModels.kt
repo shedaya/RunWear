@@ -9,7 +9,18 @@ data class OpenMeteoResponse(
     val longitude: Double,
     val timezone: String,
     val current: CurrentWeather? = null,
-    val hourly: HourlyWeather? = null
+    val hourly: HourlyWeather? = null,
+    // GEN-6 WAVE C (RW-53(ii)): the daily block (sunrise,sunset) —
+    // the same forecast payload already carries it; the app simply
+    // never requested or parsed it before.
+    val daily: DailyWeather? = null
+)
+
+@Serializable
+data class DailyWeather(
+    val time: List<String> = emptyList(),
+    val sunrise: List<String> = emptyList(),
+    val sunset: List<String> = emptyList()
 )
 
 @Serializable
