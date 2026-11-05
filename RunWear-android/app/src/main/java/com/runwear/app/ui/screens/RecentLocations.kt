@@ -92,9 +92,12 @@ class RecentLocationsStore(private val context: Context) {
 
         fun decode(json: String?): List<RecentLocation> {
             if (json.isNullOrBlank()) return emptyList()
-            return runCatching {
-                val array = JSONArray(json)
-                (0 until array.length()).map { i ->
+            // GEN-5 (RW-29 FA-14): per-record tolerance, as in the
+            // collection store — one malformed record is skipped
+            // instead of emptying the whole recents list.
+            val array = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
+            return (0 until array.length()).mapNotNull { i ->
+                runCatching {
                     val o = array.getJSONObject(i)
                     RecentLocation(
                         // WS-4: recents render place names; normalize
@@ -104,8 +107,8 @@ class RecentLocationsStore(private val context: Context) {
                         latitude = o.getDouble("lat"),
                         longitude = o.getDouble("lon")
                     )
-                }
-            }.getOrDefault(emptyList())
+                }.getOrNull()
+            }
         }
     }
 }

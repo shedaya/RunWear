@@ -61,13 +61,16 @@ class WearIveRunCollectionRenderTest : WearElementHarness() {
             "view button present",
             all.contains("View Kansas City, MO chapter")
         )
+        // GEN-5 (RW-29 FA-66): the cover's share door NAMES the
+        // day it will share — the gen-4 bare "share a day" door
+        // silently picked the most recent day.
         assertTrue(
-            "share button present",
-            all.contains("Share a day from Kansas City, MO")
+            "share door names the day it shares",
+            all.contains("Share Nov 4 from Kansas City, MO")
         )
         clickByDescription(r.root, "View Kansas City, MO chapter")
         assertEquals(1, views)
-        clickByDescription(r.root, "Share a day from Kansas City, MO")
+        clickByDescription(r.root, "Share Nov 4 from Kansas City, MO")
         assertNotNull("share must hand over a day", shared)
         assertEquals("the chapter's most recent day is shared", today, shared!!.date)
         assertEquals("Kansas City, MO", shared!!.place)

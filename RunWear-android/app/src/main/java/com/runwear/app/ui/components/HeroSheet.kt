@@ -340,7 +340,15 @@ fun HeroSheetBlock(
                     lineHeight = 20.sp
                 ),
                 color = RunWearColors.TextPrimary,
-                maxLines = 1
+                maxLines = 1,
+                // GEN-5 (RW-29 FA-47): the place segment carries
+                // the row's weight and ellipsizes ITSELF — the
+                // gen-4 row measured the place at full width, so
+                // a long place name pushed the moment segment and
+                // the refresh + "Now" way-back off the sheet
+                // entirely, stranding a changed-time user.
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
             )
             Text(
                 text = " · ",

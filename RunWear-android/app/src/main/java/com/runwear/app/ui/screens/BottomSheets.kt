@@ -527,7 +527,7 @@ fun SettingsSheetContent(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = RunWearColors.Primary,
                                     uncheckedThumbColor = RunWearColors.TextSecondary,
-                                    uncheckedTrackColor = RunWearColors.BgCardLight
+                                    uncheckedTrackColor = RunWearColors.Hairline
                                 )
                             )
                         }
@@ -601,7 +601,10 @@ fun SettingsSheetContent(
 
 @Composable
 private fun SettingsDivider() {
-    HorizontalDivider(color = RunWearColors.BgCardLight, modifier = Modifier.padding(vertical = 16.dp))
+    // GEN-5 (RW-29 cream map): the divider is the Hairline
+    // token — BgCardLight equals the sheet in light mode, so
+    // every Settings structure line vanished there.
+    HorizontalDivider(color = RunWearColors.Hairline, modifier = Modifier.padding(vertical = 16.dp))
 }
 
 @Composable
@@ -650,7 +653,7 @@ private fun UnitToggle(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -718,7 +721,7 @@ private fun AppearanceSelector(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -778,7 +781,7 @@ private fun ComfortSelector(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -839,7 +842,7 @@ private fun GenderToggleSettings(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(RunWearColors.BgCardLight)
+            .background(RunWearColors.Hairline)
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -924,7 +927,7 @@ internal fun LocationSearchResultRows(
                     )
                 }
             }
-            HorizontalDivider(color = RunWearColors.BgCardLight)
+            HorizontalDivider(color = RunWearColors.Hairline)
         }
     }
 }
@@ -1114,14 +1117,14 @@ fun LocationPickerSheet(
                     .padding(vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
+                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.Hairline)
                 Text(
                     text = "or",
                     fontSize = 13.sp,
                     color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
-                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.BgCardLight)
+                HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.Hairline)
             }
 
             // Use Current Location Option (GPS)
@@ -1284,11 +1287,19 @@ fun LocationPickerSheet(
                             )
                         }
                     }
-                    HorizontalDivider(color = RunWearColors.BgCardLight)
+                    HorizontalDivider(color = RunWearColors.Hairline)
                 }
             }
 
-            SnackbarHost(hostState = recentSnackbar)
+            // GEN-5 (cream map): styled snackbar, as on home.
+            SnackbarHost(hostState = recentSnackbar) { data ->
+                androidx.compose.material3.Snackbar(
+                    snackbarData = data,
+                    containerColor = RunWearColors.BgCard,
+                    contentColor = RunWearColors.TextPrimary,
+                    actionColor = RunWearColors.PineAccent
+                )
+            }
 
             // Currently using indicator
             // GEN-3 X-13: label and place name are ONE line of one

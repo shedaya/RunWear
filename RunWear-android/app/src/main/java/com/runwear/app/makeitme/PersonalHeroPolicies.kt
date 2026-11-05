@@ -516,25 +516,35 @@ object FreeLooksMeter {
     /** The status block's lines, composed as ONE block: status
      *  line first, meter line second. Subscribed users carry no
      *  meter — their settled subscribed line stands instead. */
-    fun block(deliveredUsed: Int, lookMaking: Boolean, subscribed: Boolean): List<String> =
+    fun block(deliveredUsed: Int, looksMaking: Int, subscribed: Boolean): List<String> =
         if (subscribed) {
             listOf(MakeItMeStrings.S3_STATUS, MakeItMeStrings.S5_STATE_C_SUB)
         } else {
-            listOf(statusLine(lookMaking), meterLine(deliveredUsed, lookMaking))
+            listOf(statusLine(looksMaking > 0), meterLine(deliveredUsed, looksMaking))
         }
 
     fun statusLine(lookMaking: Boolean): String =
         if (lookMaking) MakeItMeStrings.S26_MAKING_STATUS else MakeItMeStrings.S3_STATUS
 
     /**
-     * The meter line: the DELIVERED count, and — while a look is
-     * generating — the in-flight look stated as pending in the
+     * The meter line: the DELIVERED count, and — while looks are
+     * generating — the in-flight looks stated as pending in the
      * same line, so the number can never read as settled truth
      * the flow contradicts.
+     *
+     * GEN-5 (RW-29 FA-10): the pending count is the REAL
+     * in-flight count from the repository's per-cell status map.
+     * The gen-4 seam took a single Boolean, so the line always
+     * read "1 look is being made" however many looks were
+     * actually in flight.
      */
-    fun meterLine(deliveredUsed: Int, lookMaking: Boolean): String {
+    fun meterLine(deliveredUsed: Int, looksMaking: Int): String {
         val base = MakeItMeStrings.s4FreeUsed(deliveredUsed)
-        return if (lookMaking) "$base · 1 look is being made" else base
+        return when {
+            looksMaking <= 0 -> base
+            looksMaking == 1 -> "$base · 1 look is being made"
+            else -> "$base · $looksMaking looks are being made"
+        }
     }
 
     /**

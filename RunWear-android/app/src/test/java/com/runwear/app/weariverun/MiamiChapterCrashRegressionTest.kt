@@ -113,7 +113,11 @@ class MiamiChapterCrashRegressionTest : WearElementHarness() {
         // Pre-fix this read 2 stays with the same start date — the
         // duplicate-key setup. One day at one place is one stay.
         assertEquals(1, miami.stayCount)
-        assertEquals(2, miami.dayCount)
+        // RW-29 FA-23: two entries on ONE calendar day count as
+        // ONE day (the gen-4 count read "2 days" for this shape —
+        // the very line in Sol's recording).
+        assertEquals(1, miami.dayCount)
+        assertEquals(2, miami.days.size)
         assertNull(miami.cover?.heroRef)
         val kc = chapters.first { it.place == "Kansas City, MO" }
         assertEquals(2, kc.stayCount)

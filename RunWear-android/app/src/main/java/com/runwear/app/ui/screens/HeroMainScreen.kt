@@ -939,12 +939,22 @@ fun HeroMainScreen(
         }
 
         // Hero-flag confirmation ("Thanks — we'll review this photo").
+        // GEN-5 (RW-29 cream map): snackbars render in the app's
+        // own tokens — the default takes the inverseSurface role
+        // and read as a foreign dark bar on the cream sheet.
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 24.dp)
-        )
+        ) { data ->
+            androidx.compose.material3.Snackbar(
+                snackbarData = data,
+                containerColor = RunWearColors.BgCard,
+                contentColor = RunWearColors.TextPrimary,
+                actionColor = RunWearColors.PineAccent
+            )
+        }
 
         // (WS-3: the Wear I've Run element no longer lives here — it
         // docks in the content branch's Column above, in the layout
@@ -1959,15 +1969,23 @@ private fun HeroErrorScreen(
                 color = RunWearColors.TextPrimary
             )
             Spacer(Modifier.height(8.dp))
+            // GEN-5 (RW-29 FA-15): the error body is AUTHORED
+            // (design frame 47) — it names the failure and what
+            // is safe. The gen-4 screen printed the exception's
+            // own message here ("Unable to resolve host
+            // api.open-meteo.com: No address associated with
+            // hostname" in Sol's field recordings). The raw
+            // message stays in state for diagnostics; it is
+            // never rendered.
             Text(
-                error,
+                "The weather service didn't answer.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Your saved outfits and your Wear I've Run collection are safe on this phone.",
+                "Your places, settings, and photos stay on this phone — nothing is lost.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center

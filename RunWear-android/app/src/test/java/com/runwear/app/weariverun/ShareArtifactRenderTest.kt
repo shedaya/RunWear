@@ -45,7 +45,7 @@ import org.robolectric.annotation.GraphicsMode
  *    script "RunWear" with "#RunAnyWear" and the "Wear I've Run"
  *    foot; the Kit Card carries every item name and "#RunAnyWear";
  *  - the designed shape, by pixels: the Poster occupies exactly
- *    420 dp of height (content above the line, theme ground below)
+ *    450 dp of height at 360 wide (the settled 4:5; content above the line, theme ground below)
  *    and neither artifact is a blank frame;
  *  - the payload end: a raster round-trips through
  *    [ShareArtifacts.writePng] to a decodable PNG of the same
@@ -175,7 +175,9 @@ class ShareArtifactRenderTest {
         val bitmap = rendered.bitmap
         val density = rendered.density
         val posterW = (360 * density).toInt()
-        val posterH = (420 * density).toInt()
+        // GEN-5 (FA-21): the settled poster aspect is 4:5 —
+        // at 360dp wide the poster is 450dp tall.
+        val posterH = (450 * density).toInt()
         // The designed lockup, read as a user would: script wordmark,
         // hashtag directly in the same artifact, the foot wordmark.
         val texts = texts(rendered.root)
@@ -183,17 +185,24 @@ class ShareArtifactRenderTest {
         assertTrue(texts.any { it == "#RunAnyWear" })
         assertTrue(texts.any { it.contains("Wear I've Run") })
         assertTrue(texts.any { it.contains("41°") })
+        // GEN-5 (RW-29 FA-21): the poster names its moment and
+        // carries the runwear.ai footer line.
+        assertTrue(
+            "poster carries a human moment line",
+            texts.any { it == posterMomentLine(entry) }
+        )
+        assertTrue(texts.any { it == "runwear.ai" })
         // Non-blank, real variance (scrim gradient, lockup, body).
         assertTrue(
             "poster must not be a blank frame",
             distinctColors(bitmap, 0 until posterW, 0 until posterH).size > 8
         )
-        // The designed shape: content ends at 420 dp — the center
+        // The designed shape: content ends at the 4:5 height — the center
         // column just above the line is poster (dark foot gradient),
         // just below it is the theme ground the sheet sits on.
         val above = bitmap.getPixel(posterW / 2, posterH - 4)
         val below = bitmap.getPixel(posterW / 2, posterH + 12)
-        assertTrue("poster content must end at its designed 420dp height", above != below)
+        assertTrue("poster content must end at its designed 4:5 height (450dp at 360 wide)", above != below)
     }
 
     @Test
@@ -209,6 +218,29 @@ class ShareArtifactRenderTest {
         }
         assertTrue(texts.any { it == "#RunAnyWear" })
         assertTrue(texts.any { it.contains("New York, NY") })
+        // GEN-5 (RW-29 FA-17): the settled Kit Card anatomy —
+        // the Wear I've Run script header, a per-item note, the
+        // single shop CTA, and the Amazon disclosure microcopy.
+        assertTrue(
+            "kit card carries the Wear I've Run script header",
+            texts.any { it.contains("Wear I've Run") }
+        )
+        assertTrue(
+            "kit card carries the single shop call to action",
+            texts.any { it == "Shop this kit →" }
+        )
+        assertTrue(
+            "kit card carries the Amazon Associates disclosure",
+            texts.any { it.contains("Amazon Associate") }
+        )
+        val notedItems = entry.items.count { name ->
+            clothingItemForDisplayName(name)?.description?.isNotBlank() == true &&
+                texts.any { it == clothingItemForDisplayName(name)?.description }
+        }
+        assertTrue(
+            "kit card carries per-item notes for the items that have them",
+            notedItems > 0
+        )
         assertTrue(
             "kit card must not be a blank frame",
             distinctColors(rendered.bitmap, 0 until rendered.bitmap.width, 0 until 400).size > 8
@@ -224,7 +256,7 @@ class ShareArtifactRenderTest {
         }
         val density = rendered.density
         val artifact = Bitmap.createBitmap(
-            rendered.bitmap, 0, 0, (360 * density).toInt(), (420 * density).toInt()
+            rendered.bitmap, 0, 0, (360 * density).toInt(), (450 * density).toInt()
         )
         val context = RuntimeEnvironment.getApplication()
         val uri = ShareArtifacts.writePng(context, artifact, ShareArtifactKind.MORNING_POSTER)

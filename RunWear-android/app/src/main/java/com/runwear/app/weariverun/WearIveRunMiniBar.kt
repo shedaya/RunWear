@@ -289,12 +289,17 @@ private fun MorphBarContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
-                    // The body tap: MINI expands; EXPANDED's body is
-                    // the collection doorway (a navigation, not a
-                    // state driver); a touch on a CUEING element
-                    // cancels the timer and lands in EXPANDED.
+                    // The body tap: MINI expands; a touch on a
+                    // CUEING element cancels the timer and lands in
+                    // EXPANDED.
+                    // GEN-5 (RW-29 FA-33): EXPANDED's body tap
+                    // settles back to the mini bar — the gen-4 body
+                    // tap opened the collection outright, so the
+                    // card's largest surface was a navigation with
+                    // no inverse. The way INTO the collection is
+                    // the labeled "View collection" door below.
                     when (kind) {
-                        WearIveRunElementKind.EXPANDED -> onOpenCollection()
+                        WearIveRunElementKind.EXPANDED -> onCollapseClick()
                         else -> onExpandClick()
                     }
                 },
@@ -327,8 +332,13 @@ private fun MorphBarContent(
                     Spacer(Modifier.width(12.dp))
                     NarrationText(
                         narration = state.narration,
+                        // GEN-5 (RW-29 FA-48): the mini narration
+                        // gets TWO lines — C-7 payloads are
+                        // unbounded place names, and one line
+                        // ellipsised exactly the payload the
+                        // narration exists to carry.
                         maxLines = if (kind == WearIveRunElementKind.MINI) {
-                            1
+                            2
                         } else {
                             Int.MAX_VALUE
                         },
@@ -403,8 +413,12 @@ private fun MorphBarContent(
                             // ONLY once decoded (Success); until then
                             // the slot is a plain tinted box.
                             Box(
+                                // GEN-5 (RW-29 FA-41/L-5): the
+                                // expanded bar's thumbnail takes
+                                // the design's experimental-data
+                                // geometry, 52x64 portrait.
                                 modifier = Modifier
-                                    .size(56.dp)
+                                    .width(52.dp).height(64.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(RunWearColors.BgCard),
                                 contentAlignment = Alignment.Center
@@ -415,6 +429,9 @@ private fun MorphBarContent(
                                         model = url,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
+                                        // GEN-5 (sharing fix): top-
+                                        // anchored, as everywhere.
+                                        alignment = Alignment.TopCenter,
                                         onState = { painterState ->
                                             if (painterState is AsyncImagePainter.State.Success) {
                                                 decoded = true

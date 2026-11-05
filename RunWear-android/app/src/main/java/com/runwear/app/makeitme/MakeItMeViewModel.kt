@@ -22,6 +22,8 @@ data class MakeItMeUiState(
     val freeGenerationsUsed: Int = 0,
     /** Gen-3 X-9: any look currently generating (the meter seam's in-flight input). */
     val anyLookMaking: Boolean = false,
+    /** GEN-5 (RW-29 FA-10): the real in-flight count behind [anyLookMaking]. */
+    val looksMakingCount: Int = 0,
     val referenceCount: Int = 0,
     val forkDecided: Boolean = false,
     /** RevenueCat-side entitlement (drives the subscribed UI state). */
@@ -63,6 +65,7 @@ class MakeItMeViewModel @Inject constructor(
             personalizationOn = personal.personalizationOn,
             freeGenerationsUsed = personal.freeGenerationsUsed,
             anyLookMaking = personal.anyLookMaking,
+            looksMakingCount = personal.looksMakingCount,
             referenceCount = personal.referenceCount,
             forkDecided = personal.forkDecided,
             rcEntitled = rcActive,
@@ -78,6 +81,9 @@ class MakeItMeViewModel @Inject constructor(
 
     init {
         billing.configure()
+        // GEN-5 (EX-15): the band watch runs for the ViewModel's
+        // life; it only spends a refresh while the band shows.
+        startBandWatch()
         viewModelScope.launch {
             repository.initialize()
             billing.refreshCustomerInfo()
@@ -229,6 +235,43 @@ class MakeItMeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * GEN-5 (RW-29 EX-15): while the convergence band is showing
+     * (subscribed, bank not yet fully ready), coverage is
+     * re-read on a slow loop so a bank that completes mid-session
+     * retires the band without the user leaving and returning.
+     * The gen-4 read rode only unrelated profile refreshes, so a
+     * completed bank could leave the band up for the whole
+     * session. The loop idles cheaply when no band is showing.
+     */
+    fun startBandWatch() {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(30_000)
+                val state = uiState.value
+                val coverage = state.bankCoverage
+                val bandShowing = state.mode == MakeItMeMode.SUBSCRIBED &&
+                    (coverage == null || coverage.ready < coverage.total)
+                if (bandShowing) refresh()
+            }
+        }
+    }
+
     /** The current RevenueCat offering ("default"), or null when unreachable. */
     suspend fun offering(): com.revenuecat.purchases.Offering? = billing.currentOffering()
+
+    /**
+     * GEN-5 (RW-29 FA-7): the paywall's Restore door. A restore
+     * that lands the entitlement activates the subscription state
+     * exactly like a purchase does.
+     */
+    fun restorePurchases(onResult: (BillingManager.PurchaseOutcome) -> Unit) {
+        viewModelScope.launch {
+            val outcome = billing.restorePurchases()
+            if (outcome == BillingManager.PurchaseOutcome.Success) {
+                onSubscriptionActivated()
+            }
+            onResult(outcome)
+        }
+    }
 }

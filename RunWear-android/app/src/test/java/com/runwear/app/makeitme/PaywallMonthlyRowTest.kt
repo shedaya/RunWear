@@ -53,31 +53,40 @@ class PaywallMonthlyRowTest {
         val sheet = paywallSheet()
         // ONE monthly row in the whole sheet.
         assertEquals(1, sheet.split("PaywallPriceRow(").size - 1)
-        // Position: the annual hero card (with its buy(annual) CTA)
-        // comes first; the monthly row follows it; the fine print
-        // follows the row.
-        val annualCtaAt = sheet.indexOf("buy(annual)")
+        // GEN-5 (RW-29 FA-9): the settled order — annual card,
+        // monthly row, ONE call to action below both, fine print.
+        val annualCardAt = sheet.indexOf("RunWearColors.PaywallTint")
         val monthlyRowAt = sheet.indexOf("PaywallPriceRow(")
+        val ctaAt = sheet.indexOf("buy(if (annualSelected) annual else monthly)")
         val finePrintAt = sheet.indexOf("MakeItMeStrings.U2C_FINE_PRINT")
-        assertTrue("annual CTA present", annualCtaAt >= 0)
-        assertTrue("monthly row under the annual card", monthlyRowAt > annualCtaAt)
+        assertTrue("annual card present", annualCardAt >= 0)
+        assertTrue("monthly row under the annual card", monthlyRowAt > annualCardAt)
+        assertTrue("the one CTA sits below both plans", ctaAt > monthlyRowAt)
         assertTrue("fine print below the monthly row", finePrintAt > monthlyRowAt)
-        // The row is fed from the fetched offering and buys monthly
-        // only on its own tap; it is inert until the product loads.
+        // The row is fed from the fetched offering; tapping it
+        // SELECTS monthly (FA-9) — it no longer purchases.
         assertTrue(sheet.contains("label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY"))
         assertTrue(sheet.contains("enabled = monthly != null && !purchasing"))
-        assertTrue(sheet.contains("onClick = { buy(monthly) }"))
+        assertTrue(sheet.contains("onClick = { annualSelected = false }"))
+        assertFalse(sheet.contains("onClick = { buy(monthly) }"))
     }
 
     @Test
     fun `annual remains the hero and the default selection`() {
         val sheet = paywallSheet()
-        // The ONE highlighted card: Primary border, annual price
-        // slot, and the sheet's only primary Button — buying annual.
-        assertTrue(sheet.contains("BorderStroke(1.5.dp, RunWearColors.Primary)"))
+        // The ONE highlighted card: the design's pale pine tint
+        // (cream map) inside a pine border, annual selected by
+        // default, and the sheet's only primary Button — below
+        // both plans, buying the selected one (FA-9).
+        assertTrue(sheet.contains("color = RunWearColors.PaywallTint"))
+        assertTrue(sheet.contains("annualSelected by remember { mutableStateOf(true) }"))
         assertTrue(sheet.contains("text = annual?.label ?: MakeItMeStrings.U2B_ANNUAL"))
-        assertTrue(sheet.contains("onClick = { buy(annual) }"))
-        assertTrue(sheet.contains("enabled = annual != null && !purchasing"))
+        assertTrue(sheet.contains("buy(if (annualSelected) annual else monthly)"))
+        assertTrue(
+            sheet.contains(
+                "enabled = (if (annualSelected) annual else monthly) != null && !purchasing"
+            )
+        )
         // The monthly row is a plain (non-primary) row composable,
         // not a second hero: it renders as a TextButton-style row.
         val row = sourceFile(
@@ -106,7 +115,7 @@ class PaywallMonthlyRowTest {
         val sheet = paywallSheet()
         val priceAt = sheet.indexOf("annual?.label ?: MakeItMeStrings.U2B_ANNUAL")
         val perRunAt = sheet.indexOf("MakeItMeStrings.perRunLine")
-        val ctaAt = sheet.indexOf("buy(annual)")
+        val ctaAt = sheet.indexOf("buy(if (annualSelected) annual else monthly)")
         assertTrue("price present", priceAt >= 0)
         assertTrue("per-run line under the price", perRunAt > priceAt)
         assertTrue("per-run line above the CTA", perRunAt < ctaAt)

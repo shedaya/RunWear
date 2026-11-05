@@ -101,7 +101,7 @@ private val WearColorScheme = ColorScheme(
     surfaceContainer = RunWearColors.SurfaceElevated,
     onSurfaceVariant = RunWearColors.TextSecondary,
     outline = RunWearColors.TextMuted,
-    outlineVariant = Color(0xFF3A342A),
+    outlineVariant = Color(0xFF36322C),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005)
 )

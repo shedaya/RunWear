@@ -69,7 +69,24 @@ data class RunWearPalette(
     val GlassBackgroundHover: Color,
     /** RW-26: the mini bar's container tint base (sheet in light,
      * card in dark); the bar applies the policy alpha over it. */
-    val MiniBarContainer: Color
+    val MiniBarContainer: Color,
+    /**
+     * GEN-5 (RW-29 cream map): the design's structure line — the
+     * ink at ~10% (light #17191C, dark #F5F1EA). The gen-4 code
+     * painted dividers and tracks in BgCardLight, which EQUALS
+     * the sheet colour in the light appearance, so Settings lost
+     * every structure line there. Hairlines are this token,
+     * never a fill colour.
+     */
+    val Hairline: Color,
+    /**
+     * GEN-5 (RW-29 cream map): the paywall's highlighted-card
+     * fill — the design's pale pine tint #F2F8F5 inside a 2px
+     * pine border (mockups .pw.hero). The dark value is the same
+     * tint idea on the charcoal card (the mockups draw no dark
+     * paywall hero; derived as pine over #2A251E).
+     */
+    val PaywallTint: Color
 )
 
 // Pine seed (RW-25 rebrand): replaces the legacy teal primary family in
@@ -151,7 +168,9 @@ val DarkPalette = RunWearPalette(
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
     GlassBackgroundHover = GlassBackgroundHoverHex,
-    MiniBarContainer = Color(0xFF2A251E)
+    MiniBarContainer = Color(0xFF2A251E),
+    Hairline = Color(0x1AF5F1EA),
+    PaywallTint = Color(0xFF1E2B24)
 )
 
 val LightPalette = RunWearPalette(
@@ -183,7 +202,9 @@ val LightPalette = RunWearPalette(
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
     GlassBackgroundHover = GlassBackgroundHoverHex,
-    MiniBarContainer = Color(0xFFFDFBF6)
+    MiniBarContainer = Color(0xFFFDFBF6),
+    Hairline = Color(0x1A17191C),
+    PaywallTint = Color(0xFFF2F8F5)
 )
 
 /**
@@ -236,6 +257,8 @@ object RunWearColors {
     val GlassBorder: Color get() = activePalette.GlassBorder
     val GlassBackgroundHover: Color get() = activePalette.GlassBackgroundHover
     val MiniBarContainer: Color get() = activePalette.MiniBarContainer
+    val Hairline: Color get() = activePalette.Hairline
+    val PaywallTint: Color get() = activePalette.PaywallTint
 }
 
 // WS-8 (RC-8): the pre-RW-25 legacy alias colors (NeoMint,
@@ -335,8 +358,20 @@ internal val DarkColorScheme = darkColorScheme(
     onSurface = DarkPalette.TextPrimary,
     surfaceVariant = DarkPalette.SurfaceElevated,
     onSurfaceVariant = DarkPalette.TextSecondary,
+    // GEN-5 (RW-29 cream map): claim the container family so
+    // defaulting components (chips, menus, segmented controls)
+    // render in the warm charcoal steps instead of the Material
+    // baseline's lavender-grey; outlineVariant is the pre-blended
+    // hairline on the sheet, not an invented hex.
+    surfaceContainerLowest = DarkPalette.Background,
+    surfaceContainerLow = DarkPalette.Surface,
+    surfaceContainer = DarkPalette.Surface,
+    surfaceContainerHigh = DarkPalette.SurfaceElevated,
+    surfaceContainerHighest = DarkPalette.SurfaceElevated,
+    inverseSurface = DarkPalette.TextPrimary,
+    inverseOnSurface = DarkPalette.Background,
     outline = DarkPalette.TextSecondary,
-    outlineVariant = Color(0xFF3A342A),
+    outlineVariant = Color(0xFF36322C),
     error = Color(0xFFFFB4AB),
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
@@ -362,8 +397,18 @@ internal val LightColorScheme = lightColorScheme(
     onSurface = LightPalette.TextPrimary,
     surfaceVariant = LightPalette.BgCard,
     onSurfaceVariant = LightPalette.TextSecondary,
+    // GEN-5 (RW-29 cream map): as the dark scheme — container
+    // family claimed in the cream steps; outlineVariant is the
+    // pre-blended hairline on the sheet.
+    surfaceContainerLowest = LightPalette.BgCard,
+    surfaceContainerLow = LightPalette.Background,
+    surfaceContainer = LightPalette.Surface,
+    surfaceContainerHigh = LightPalette.BgCard,
+    surfaceContainerHighest = LightPalette.BgCard,
+    inverseSurface = LightPalette.TextPrimary,
+    inverseOnSurface = LightPalette.Surface,
     outline = LightPalette.TextSecondary,
-    outlineVariant = Color(0xFFDAD3C4),
+    outlineVariant = Color(0xFFEAE5D8),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),

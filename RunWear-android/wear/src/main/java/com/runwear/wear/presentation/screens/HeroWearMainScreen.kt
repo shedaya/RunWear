@@ -190,15 +190,19 @@ internal fun HeroWeatherPage(
             .fillMaxSize()
             .background(RunWearColors.Background)
     ) {
-        // Hero image (circular crop for round watches)
+        // Hero image — GEN-5 (RW-29 FA-46): the hero fills the
+        // display's ACTUAL shape (design frame 53) with a
+        // TOP-anchored crop. The gen-4 layer clipped to a circle
+        // of its own and centre-cropped, cutting the runner's
+        // head on the watch just as the phone poster did; the
+        // display's own shape is the only mask here.
         heroImageUrl?.let { url ->
             AsyncImage(
                 model = url,
                 contentDescription = "Runner",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize()
             )
         }
 

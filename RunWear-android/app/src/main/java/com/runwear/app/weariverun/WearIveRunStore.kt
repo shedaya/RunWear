@@ -89,9 +89,14 @@ class WearIveRunStore(private val context: Context) {
 
         fun decode(json: String?): List<WearIveRunDayEntry> {
             if (json.isNullOrBlank()) return emptyList()
-            return runCatching {
-                val array = JSONArray(json)
-                (0 until array.length()).map { i ->
+            // GEN-5 (RW-29 FA-14): PER-RECORD tolerance — one
+            // malformed or type-shifted record is skipped, never
+            // allowed to empty the whole scrapbook. The gen-4
+            // decoder threw inside a whole-list fallback, so a
+            // single bad record silently discarded every entry.
+            val array = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
+            return (0 until array.length()).mapNotNull { i ->
+                runCatching {
                     val o = array.getJSONObject(i)
                     val items = o.optJSONArray("items") ?: JSONArray()
                     WearIveRunDayEntry(
@@ -117,8 +122,8 @@ class WearIveRunStore(private val context: Context) {
                         items = (0 until items.length()).map { items.optString(it) },
                         heroRef = o.optString("heroRef").takeIf { it.isNotBlank() }
                     )
-                }
-            }.getOrDefault(emptyList())
+                }.getOrNull()
+            }
         }
     }
 }

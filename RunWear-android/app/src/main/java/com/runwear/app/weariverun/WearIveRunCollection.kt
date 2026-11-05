@@ -109,7 +109,15 @@ object WearIveRunCollectionLogic {
 
     /** Hometown-scale threshold: at/above this many days a chapter
      *  presents year -> month groups instead of one naive scroll. */
-    const val HOMETOWN_SCALE_DAYS = 60
+    /**
+     * GEN-5 (RW-29 FA-38): the hometown grouping threshold counts
+     * DISTINCT calendar days and matches the iOS rule (month
+     * groups when the chapter's distinct day count exceeds 31) —
+     * the gen-4 Android constant counted 60 ENTRIES, so the same
+     * collection grouped on one platform and stayed flat on the
+     * other. No design source fixes an exact number; parity does.
+     */
+    const val HOMETOWN_SCALE_DAYS = 32
 
     fun matches(entry: WearIveRunDayEntry, filter: WearWeatherFilter): Boolean = when (filter) {
         WearWeatherFilter.ALL -> true
@@ -158,7 +166,13 @@ object WearIveRunCollectionLogic {
         val rest = if (entry.sessionId.isNotBlank()) {
             entries.filterNot {
                 (it.sessionId.isNotBlank() && it.sessionId == entry.sessionId) ||
-                    (it.sessionId.isBlank() && it.date == entry.date)
+                    // GEN-5 (RW-29 FA-37): the legacy supersede is
+                    // scoped to the SAME PLACE — the gen-4 rule
+                    // deleted the day's legacy entries at EVERY
+                    // place, silently erasing the second place of
+                    // a legacy travel day.
+                    (it.sessionId.isBlank() && it.date == entry.date &&
+                        it.place == entry.place)
             }
         } else {
             entries.filterNot { it.date == entry.date && it.place == entry.place }
@@ -206,7 +220,12 @@ object WearIveRunCollectionLogic {
     data class Stay(val days: List<WearIveRunDayEntry>) {
         val start: LocalDate get() = days.minOf { it.date }
         val end: LocalDate get() = days.maxOf { it.date }
-        val dayCount: Int get() = days.size
+        /**
+         * GEN-5 (RW-29 FA-23): calendar DAYS, not entries — two
+         * sessions on one day are one day (iOS counts distinct day
+         * starts; the gen-4 count read "2 days" for one Miami day).
+         */
+        val dayCount: Int get() = days.map { it.date }.distinct().size
     }
 
     /** Stays of one place's days, newest-first; days newest-first within. */
@@ -246,10 +265,11 @@ object WearIveRunCollectionLogic {
         val cover: WearIveRunDayEntry?,
         val feelsMinF: Double?,
         val feelsMaxF: Double?,
-        /** Unfiltered day count — decides hometown-scale grouping. */
+        /** Unfiltered DISTINCT day count — decides hometown-scale grouping. */
         val totalDaysUnfiltered: Int
     ) {
-        val dayCount: Int get() = days.size
+        /** GEN-5 (FA-23): distinct calendar days, never entry count. */
+        val dayCount: Int get() = days.map { it.date }.distinct().size
         val stayCount: Int get() = stays.size
         val isMultiStay: Boolean get() = stays.size > 1
         val isHometownScale: Boolean get() = totalDaysUnfiltered >= HOMETOWN_SCALE_DAYS
@@ -295,7 +315,7 @@ object WearIveRunCollectionLogic {
                 cover = days.firstOrNull(),
                 feelsMinF = days.minOfOrNull { it.feelsLikeF },
                 feelsMaxF = days.maxOfOrNull { it.feelsLikeF },
-                totalDaysUnfiltered = placeEntries.size
+                totalDaysUnfiltered = placeEntries.map { it.date }.distinct().size
             )
         }.sortedByDescending { it.cover?.date ?: LocalDate.MIN }
     }

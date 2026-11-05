@@ -374,7 +374,9 @@ class OnboardingSequenceTest {
         assertTrue(hapticDelayAt in 0 until hapticCallAt)
         assertTrue(hapticCallAt in 0 until bandSettleAt)
         assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_BAND_READINESS"))
-        assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_COUNT_LINE"))
+        // GEN-5 (FA-6): the moment composes its count line from
+        // the shared meter via firstLookCountLine.
+        assertTrue(moment.contains("MakeItMeStrings.firstLookCountLine("))
         assertFalse(
             "frame 34 is a full-screen moment, not an AlertDialog",
             moment.contains("AlertDialog")

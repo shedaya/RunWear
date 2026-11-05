@@ -100,7 +100,7 @@ class WearViewModel @Inject constructor(
                     fetchWeather()
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Location error") }
+                    _uiState.update { it.copy(isLoading = false, error = "Location unavailable — set it in the phone app.") }
                 }
             )
         }
@@ -143,7 +143,7 @@ class WearViewModel @Inject constructor(
                     _uiState.update { it.copy(heroImageUrl = heroResult.imageUrl) }
                 },
                 onFailure = { e ->
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
+                    _uiState.update { it.copy(isLoading = false, error = "Weather unavailable — tap Retry.") }
                 }
             )
         }

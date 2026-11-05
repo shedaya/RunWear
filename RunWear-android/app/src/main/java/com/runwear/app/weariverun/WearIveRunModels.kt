@@ -33,7 +33,10 @@ data class WearIveRunEntry(
     /** WS-4: the entry's settled feels-like, for the expanded subtitle. */
     val feelsLikeF: Double? = null,
     /** WS-4: the entry's kit size, for the expanded subtitle. */
-    val itemCount: Int = 0
+    val itemCount: Int = 0,
+    /** GEN-5 (RW-29 FA-34): the entry's kit item names, for the
+     * expanded subtitle's outfit line. */
+    val itemNames: List<String> = emptyList()
 )
 
 /**
@@ -47,14 +50,31 @@ data class WearIveRunEntry(
  */
 object WearIveRunSubtitle {
 
-    /** "41° feels like · 5 items" — null when the entry has no weather. */
+    /**
+     * "41° feels like · 5 items · Light Long Sleeve · Light
+     * Tights" — null when the entry has no weather.
+     *
+     * GEN-5 (RW-29 FA-34): the outfit line (the kit's item
+     * names) joins the subtitle — the settled expanded anatomy
+     * (design-spec §8.1) carries it, and the gen-4 line stopped
+     * at the count. Place and day remain where WS-4 put them —
+     * in the narration directly above this line — rather than
+     * being repeated here.
+     */
     fun detail(entry: WearIveRunEntry): String? {
         val feels = entry.feelsLikeF ?: return null
         val items = when (entry.itemCount) {
             1 -> "1 item"
             else -> "${entry.itemCount} items"
         }
-        return "${feels.toInt()}° feels like · $items"
+        val outfit = entry.itemNames.filter { it.isNotBlank() }.take(3)
+        return buildString {
+            append("${feels.toInt()}° feels like · $items")
+            if (outfit.isNotEmpty()) {
+                append(" · ")
+                append(outfit.joinToString(" · "))
+            }
+        }
     }
 }
 
@@ -500,7 +520,8 @@ class WearIveRunBarStateHolder {
             payload = entry.items.firstOrNull()?.takeIf { it.isNotBlank() },
             thumbnailUrl = entry.heroRef,
             feelsLikeF = entry.feelsLikeF,
-            itemCount = entry.items.size
+            itemCount = entry.items.size,
+            itemNames = entry.items
         )
     }
 

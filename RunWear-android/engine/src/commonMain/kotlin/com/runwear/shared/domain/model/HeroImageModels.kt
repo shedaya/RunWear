@@ -763,6 +763,21 @@ object HeroImageSelector {
     fun pointGrainFallbackUrl(gender: GenderPreference, outfit: OutfitRecommendation): String? {
         if (gender == GenderPreference.UNISEX) return null
         val asset = POINT_GRAIN_FALLBACK["${gender.name}|${pointGrainSignature(outfit)}"]
+            // GEN-5 (RW-28): the handwear substitution (Sol's
+            // ruling, 2026-11-04) applies at NOMINATION too, not
+            // only at the gate — a mittens prescription nominates
+            // the gloves asset (one direction only), which the
+            // gate then verifies. Without this, the bundled
+            // balaclava+gloves top-up assets (RWPOOL-T27/T28)
+            // could never be nominated by the mittens
+            // prescriptions they exist to serve.
+            ?: if (outfit.hands == ClothingItem.MITTENS) {
+                val substituted = pointGrainSignature(outfit)
+                    .replace("|mittens", "|gloves")
+                POINT_GRAIN_FALLBACK["${gender.name}|$substituted"]
+            } else {
+                null
+            }
             ?: return null
         return "file:///android_asset/hero_fallback/$asset.webp"
     }

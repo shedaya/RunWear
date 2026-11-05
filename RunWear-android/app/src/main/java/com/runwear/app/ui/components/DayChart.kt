@@ -305,6 +305,19 @@ fun DayChartGlanceBand(
                 .background(RunWearColors.Background)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
+                // GEN-5 (RW-29 EX-13): night shading on the
+                // glance band too — the same fixed night window
+                // and wash the picker chart draws (item 15 landed
+                // it on the picker only).
+                for ((start, end) in DayChartBandPolicy.NIGHT_RANGES) {
+                    val left = DayChartGeometry.cellLeftFraction(start) * size.width
+                    val right = DayChartGeometry.cellLeftFraction(end) * size.width
+                    drawRect(
+                        color = RunWearColors.TextPrimary.copy(alpha = 0.07f),
+                        topLeft = Offset(left, 0f),
+                        size = Size(right - left, size.height)
+                    )
+                }
                 // Bracket bands.
                 for (band in model.bands) {
                     val left = DayChartGeometry.cellLeftFraction(band.startHour) * size.width
@@ -380,8 +393,14 @@ fun DayChartGlanceBand(
             // GEN-5 (item 14): the selected hour named ON THE BAND'S
             // OWN AXIS — inside the band at the dot's x, clamped so
             // it never leaves the band at the day's edges.
+            // GEN-5 (RW-29 FA-31): the label names the DOT'S hour
+            // (dotPoint.hour) — when the selected hour has no
+            // forecast point the dot falls back to the last hour
+            // at or before it, and the gen-5 label kept printing
+            // the raw selected hour, naming a moment the dot was
+            // not on.
             Text(
-                text = DayChartFormat.axisLabel(dotHour),
+                text = DayChartFormat.axisLabel(dotPoint.hour),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = RunWearColors.TextPrimary,
@@ -389,7 +408,7 @@ fun DayChartGlanceBand(
                     .align(Alignment.BottomStart)
                     .padding(
                         start = (
-                            DayChartGeometry.xFraction(dotHour) * maxWidth.value - 16
+                            DayChartGeometry.xFraction(dotPoint.hour) * maxWidth.value - 16
                             ).dp.coerceIn(4.dp, (maxWidth - 44.dp).coerceAtLeast(4.dp)),
                         bottom = 4.dp
                     )

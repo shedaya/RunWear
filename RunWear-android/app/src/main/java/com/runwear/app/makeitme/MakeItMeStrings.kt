@@ -383,6 +383,26 @@ object MakeItMeStrings {
     const val FIRST_LOOK_COUNT_LINE =
         "That was look 1 of your 5 free looks — 4 remain, whenever you want them."
 
+    /**
+     * GEN-5 (RW-29 FA-6): the first-look count line COMPOSED from
+     * the shared free-look meter — the gen-4 surface rendered the
+     * hard-coded "look 1 of 5" constant whatever the meter said,
+     * so a user whose first-look moment arrived on a later look
+     * was told a count that was not theirs. [FIRST_LOOK_COUNT_LINE]
+     * remains the canonical wording for the first look itself
+     * (used = 1); every other count composes from the same words.
+     */
+    fun firstLookCountLine(used: Int, total: Int = 5): String {
+        val shownUsed = used.coerceIn(1, total)
+        val remaining = (total - shownUsed).coerceAtLeast(0)
+        val remainClause = if (remaining == 1) {
+            "1 remains, whenever you want it."
+        } else {
+            "$remaining remain, whenever you want them."
+        }
+        return "That was look $shownUsed of your $total free looks — $remainClause"
+    }
+
     /** Frame 34's heading: "Your first look · Today, New York". */
     fun firstLookHeading(simplePlace: String?): String =
         if (simplePlace.isNullOrBlank()) {

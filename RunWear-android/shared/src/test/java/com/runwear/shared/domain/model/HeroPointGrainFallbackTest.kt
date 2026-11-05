@@ -274,7 +274,9 @@ class HeroPointGrainFallbackTest {
         val garments = HeroImageSelector.pointGrainGarmentsTable()
         val provenance = HeroImageSelector.pointGrainProvenanceTable()
         val nominations = HeroImageSelector.pointGrainFallbackTable()
-        assertEquals(30, garments.size)
+        // GEN-5 (RW-28): 32 with the balaclava top-up pair
+        // (RWPOOL-T27/T28) integrated, mirroring iOS gen-4 275f84f.
+        assertEquals(32, garments.size)
         assertEquals(garments.keys, provenance.keys)
         assertEquals(garments.keys, nominations.values.toSet())
         // Every PG asset carries the PG rung and a pool row id.

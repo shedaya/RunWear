@@ -1,6 +1,8 @@
 package com.runwear.app.weariverun
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -100,8 +103,17 @@ fun WearIveRunCollectionScreen(
     val todayEntry = remember(entries) {
         WearIveRunCollectionLogic.todaysEntry(entries, today)
     }
+    // GEN-5 (RW-29 FA-35): the pinned TODAY card answers to the
+    // weather filter like everything else in the collection —
+    // the gen-4 pin ignored the filter, so filtering to Rain
+    // still pinned a clear-day TODAY card over the filtered list.
+    val pinnedTodayEntry = remember(todayEntry, filter) {
+        todayEntry?.takeIf {
+            WearIveRunCollectionLogic.matches(it, filter)
+        }
+    }
     val listChapters = remember(entries, filter, todayEntry) {
-        val rest = if (todayEntry != null) {
+        val rest = if (pinnedTodayEntry != null) {
             entries.filterNot {
                 WearIveRunCollectionLogic.sameIdentity(it, todayEntry)
             }
@@ -165,7 +177,7 @@ fun WearIveRunCollectionScreen(
                         modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (todayEntry != null) {
+                        if (pinnedTodayEntry != null) {
                             item(key = "today") {
                                 Column {
                                     Text(
@@ -175,14 +187,14 @@ fun WearIveRunCollectionScreen(
                                     )
                                     Spacer(Modifier.height(6.dp))
                                     DayCard(
-                                        entry = todayEntry,
+                                        entry = pinnedTodayEntry,
                                         today = today,
-                                        onShare = { shareEntry = todayEntry },
+                                        onShare = { shareEntry = pinnedTodayEntry },
                                         // W-10: the pinned TODAY card names
                                         // its place and shows its photo,
                                         // like the chapter cards below it.
-                                        place = todayEntry.place,
-                                        thumbnailRef = todayEntry.heroRef,
+                                        place = pinnedTodayEntry.place,
+                                        thumbnailRef = pinnedTodayEntry.heroRef,
                                         // GEN-5 (item 10 / B-18): the
                                         // TODAY card carries its "Last
                                         // saved …" line, and the same
@@ -193,15 +205,15 @@ fun WearIveRunCollectionScreen(
                                         // chapter for the place does.
                                         lastSavedLabel = WearIveRunCollectionLogic
                                             .lastSavedLabel(
-                                                todayEntry,
+                                                pinnedTodayEntry,
                                                 System.currentTimeMillis()
                                             ),
                                         onView = if (
                                             listChapters.any {
-                                                it.place == todayEntry.place
+                                                it.place == pinnedTodayEntry.place
                                             }
                                         ) {
-                                            { openChapter = todayEntry.place }
+                                            { openChapter = pinnedTodayEntry.place }
                                         } else {
                                             null
                                         }
@@ -262,13 +274,18 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
             Text(
-                text = "Nothing here yet",
+                // GEN-5 (RW-29 FA-16): the settled empty state
+                // (design frame 10) — the gen-4 copy was invented
+                // ("Nothing here yet") and spoke of sessions where
+                // the frame speaks of days, and it dropped the
+                // no-backfill statement entirely.
+                text = "Your scrapbook starts with today's run",
                 style = MaterialTheme.typography.titleMedium,
                 color = RunWearColors.TextPrimary
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Your first outfit of a session adds itself here — one entry per session, kept as its last settled version.",
+                text = "Each day's outfit is saved here automatically — one card per day, in the places you run. Days before today aren't backfilled; the collection grows from here.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = RunWearColors.TextSecondary
             )
@@ -289,7 +306,13 @@ internal fun ChapterCover(
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp))
+                // GEN-5 (RW-29 FA-41): the settled chapter cover
+                // geometry — the design's chapter row carries a
+                // 58x72 PORTRAIT thumbnail with a top-anchored
+                // crop (mockups .chap img), not the gen-4 64dp
+                // square stamp and not iOS's wide banner.
+                modifier = Modifier.width(58.dp).height(72.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(RunWearColors.Surface),
                 contentAlignment = Alignment.Center
             ) {
@@ -346,14 +369,34 @@ internal fun ChapterCover(
                     tint = RunWearColors.TextSecondary
                 )
             }
-            IconButton(
+            // GEN-5 (RW-29 FA-66): the cover's share door must
+            // make plain WHICH day it shares — the gen-4 bare icon
+            // read as sharing the chapter while silently selecting
+            // its most recent day. The door now names that day.
+            TextButton(
                 onClick = { chapter.cover?.let { onShare(it) } },
-                enabled = chapter.cover != null
+                enabled = chapter.cover != null,
+                modifier = Modifier.semantics {
+                    contentDescription = chapter.cover?.let {
+                        "Share ${
+                            WearIveRunCollectionLogic.spanLabel(it.date, it.date)
+                        } from ${chapter.place}"
+                    } ?: "Share"
+                }
             ) {
                 Icon(
                     Icons.Outlined.Share,
-                    contentDescription = "Share a day from ${chapter.place}",
-                    tint = RunWearColors.TextSecondary
+                    contentDescription = null,
+                    tint = RunWearColors.TextSecondary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = chapter.cover?.let {
+                        WearIveRunCollectionLogic.spanLabel(it.date, it.date)
+                    } ?: "Share",
+                    fontSize = 12.sp,
+                    color = RunWearColors.TextSecondary
                 )
             }
         }
@@ -516,7 +559,12 @@ internal fun DayCard(
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     Box(
-                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp))
+                        // GEN-5 (RW-29 FA-41/L-5): the day-row
+                        // thumbnail takes the design's 46x58
+                        // portrait geometry with the top-anchored
+                        // crop (.dayrow img), not a centre square.
+                        modifier = Modifier.width(46.dp).height(58.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(RunWearColors.Surface),
                         contentAlignment = Alignment.Center
                     ) {
@@ -695,6 +743,20 @@ private fun ShareChoiceSheet(
                 // a state of its own — surfaced as an error with a
                 // way back, Share withheld — never a finished card.
                 var previewFailed by remember(chosen) { mutableStateOf(false) }
+                // GEN-5 (RW-29 FA-26): a render that neither
+                // succeeds nor errors must not hold the rendering
+                // pill forever — after the timeout the preview
+                // lands on the same honest failure surface.
+                var renderTimedOut by remember(chosen) { mutableStateOf(false) }
+                LaunchedEffect(chosen) {
+                    kotlinx.coroutines.delay(20_000)
+                    if (!previewReady && !previewFailed) renderTimedOut = true
+                }
+                // GEN-5 (RW-29 FA-26): a failed SHARE (capture or
+                // PNG write throwing) lands on an honest failure
+                // surface too — the gen-4 tap let the exception
+                // escape the coroutine with no surface at all.
+                var shareFailed by remember(chosen) { mutableStateOf(false) }
                 Box {
                     Box(modifier = capture.recordModifier()) {
                         when (chosen) {
@@ -711,9 +773,20 @@ private fun ShareChoiceSheet(
                             )
                         }
                     }
-                    if (previewFailed) {
+                    if (shareFailed) {
                         ShareRenderErrorNotice(
-                            label = "Couldn't render this card — its photo couldn't be loaded.",
+                            label = "Couldn't share this card — try again.",
+                            onClose = onDismiss,
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                        )
+                    } else if (previewFailed || renderTimedOut) {
+                        ShareRenderErrorNotice(
+                            label = if (renderTimedOut && !previewFailed) {
+                                "Couldn't render this card — it took too long."
+                            } else {
+                                "Couldn't render this card — its photo couldn't be loaded."
+                            },
                             onClose = onDismiss,
                             modifier = Modifier.align(Alignment.TopCenter)
                                 .padding(top = 12.dp, start = 16.dp, end = 16.dp)
@@ -733,12 +806,22 @@ private fun ShareChoiceSheet(
                         // Share only ever captures a SETTLED,
                         // non-failed render (pre-fix it could fire
                         // mid-render and share an unfinished card).
-                        enabled = previewReady && !previewFailed,
+                        enabled = previewReady && !previewFailed && !renderTimedOut,
                         onClick = {
                             scope.launch {
-                                val bitmap = capture.captureBitmap()
-                                ShareArtifacts.share(context, bitmap, chosen)
-                                onDismiss()
+                                // GEN-5 (FA-26): capture + write +
+                                // hand-off run guarded — a throw
+                                // lands on the failure surface and
+                                // the sheet stays open; only a clean
+                                // share dismisses.
+                                runCatching {
+                                    val bitmap = capture.captureBitmap()
+                                    ShareArtifacts.share(context, bitmap, chosen)
+                                }.onSuccess {
+                                    onDismiss()
+                                }.onFailure {
+                                    shareFailed = true
+                                }
                             }
                         }
                     ) {
@@ -842,8 +925,15 @@ internal object ArtifactThumbnailGeometry {
     /** The width every share artifact is composed at, thumbnail and preview alike. */
     const val NATURAL_WIDTH_DP = 340
 
-    /** The thumbnail frame's height; the scaled artifact is top-anchored and clipped to it. */
-    const val FRAME_HEIGHT_DP = 150
+    /**
+     * GEN-5 (RW-29 FA-28): there is NO fixed frame height any
+     * more. The gen-3/gen-4 frame clipped the scaled poster to
+     * 150 dp, cutting off its entire bottom information band
+     * (feels-like · condition · place, the item line, the Wear
+     * I've Run footer) — the thumbnail the user chooses from
+     * showed a head and no data. The frame now takes the scaled
+     * artifact's full height.
+     */
 
     /** Layer scale for an artifact of [naturalWidthPx] shown in a frame [frameWidthPx] wide. */
     fun scaleFor(frameWidthPx: Int, naturalWidthPx: Int): Float =
@@ -927,7 +1017,10 @@ internal fun ShareThumbnailChoice(
             .padding(8.dp)
     ) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(ArtifactThumbnailGeometry.FRAME_HEIGHT_DP.dp)
+            // GEN-5 (FA-28): no fixed height — the box wraps the
+            // scaler's full scaled height so the whole artifact,
+            // including the poster's bottom band, is the thumbnail.
+            modifier = Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
                 .background(RunWearColors.Surface)
         ) {
@@ -1007,7 +1100,12 @@ fun MorningPoster(
         SideEffect { reportPosterRendered(failed = false) }
     }
     Box(
-        modifier = modifier.fillMaxWidth().height(420.dp).clip(RoundedCornerShape(16.dp))
+        // GEN-5 (RW-29 FA-21): the settled poster aspect is 4:5
+        // (1080x1350) — the gen-4 poster fixed its height at
+        // 420dp and took whatever width the sheet offered, so
+        // the exported aspect wandered with the device.
+        modifier = modifier.fillMaxWidth().aspectRatio(4f / 5f)
+            .clip(RoundedCornerShape(16.dp))
             .background(RunWearColors.Background)
     ) {
         if (entry.heroRef != null) {
@@ -1068,6 +1166,14 @@ fun MorningPoster(
                 )
                 .padding(16.dp)
         ) {
+            // GEN-5 (RW-29 FA-21): a human moment line — the
+            // gen-4 poster named no moment at all, so the shared
+            // card never said WHEN the run was.
+            Text(
+                text = posterMomentLine(entry),
+                style = MaterialTheme.typography.bodyMedium,
+                color = com.runwear.app.ui.theme.PhotoInk
+            )
             Text(
                 text = "${entry.feelsLikeF.toInt()}° · ${entry.conditionLabel} · ${entry.place}",
                 style = MaterialTheme.typography.titleMedium,
@@ -1085,6 +1191,13 @@ fun MorningPoster(
                 color = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.padding(top = 6.dp)
             )
+            // GEN-5 (FA-21): the settled footer attribution.
+            Text(
+                text = "runwear.ai",
+                style = MaterialTheme.typography.labelSmall,
+                color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.85f),
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }
@@ -1092,6 +1205,50 @@ fun MorningPoster(
 /** The engine item behind an entry's display name, when it is one. */
 internal fun clothingItemForDisplayName(displayName: String): ClothingItem? =
     ClothingItem.entries.firstOrNull { it.displayName == displayName }
+
+/**
+ * GEN-5 (RW-29 FA-21): the Morning Poster's human moment line —
+ * the entry's recorded moment reading when it carries one
+ * ("Wednesday · 9 p.m."), else the day part of its settled
+ * moment ("Wednesday morning"), else the bare weekday for
+ * legacy entries that recorded neither.
+ */
+internal fun posterMomentLine(entry: WearIveRunDayEntry): String {
+    val weekday = entry.date.dayOfWeek.getDisplayName(
+        java.time.format.TextStyle.FULL, java.util.Locale.US
+    )
+    val moment = entry.momentLabel
+    if (!moment.isNullOrBlank()) return "$weekday · $moment"
+    if (entry.settledAtMillis > 0L) {
+        val hour = java.time.Instant.ofEpochMilli(entry.settledAtMillis)
+            .atZone(java.time.ZoneId.systemDefault()).hour
+        val part = when (hour) {
+            in 5..11 -> "morning"
+            in 12..16 -> "afternoon"
+            in 17..21 -> "evening"
+            else -> "night"
+        }
+        return "$weekday $part"
+    }
+    return weekday
+}
+
+/**
+ * GEN-5 (RW-29 cream map): the Kit Card is a FIXED cream
+ * artifact — the design draws it in the light system (#FDFBF6
+ * sheet, charcoal ink, pine accent) with no dark variant,
+ * because the card leaves the app as an image. It renders from
+ * these fixed tokens in both appearances; the gen-4 card took
+ * the live theme, so a dark-mode phone exported a charcoal
+ * card the design never drew.
+ */
+internal object KitCardPalette {
+    val Sheet = Color(0xFFFDFBF6)
+    val Ink = Color(0xFF17191C)
+    val Muted = Color(0xFF5F5B52)
+    val Pine = Color(0xFF175E4C)
+    val TileBorder = Color(0xFF17191C).copy(alpha = 0.10f)
+}
 
 /**
  * The Kit Card artifact (frame 13): the day's kit as the app's REAL
@@ -1135,18 +1292,30 @@ fun KitCard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = RunWearColors.BgCard
+        // GEN-5 (cream map): fixed cream artifact — see
+        // KitCardPalette. Never the live theme.
+        color = KitCardPalette.Sheet
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // GEN-5 (RW-29 FA-17): the settled Kit Card header is
+            // the Wear I've Run SCRIPT wordmark; the gen-4 card
+            // opened with the place name in the UI sans and never
+            // carried the collection's script at all.
+            Text(
+                text = WearIveRunNarrationFormatter.WORDMARK,
+                fontFamily = GreatVibesFontFamily,
+                fontSize = 26.sp,
+                color = KitCardPalette.Ink
+            )
             Text(
                 text = entry.place,
                 style = MaterialTheme.typography.titleMedium,
-                color = RunWearColors.TextPrimary
+                color = KitCardPalette.Ink
             )
             Text(
                 text = "${entry.feelsLikeF.toInt()}° feels like · ${entry.conditionLabel}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = RunWearColors.TextSecondary
+                color = KitCardPalette.Muted
             )
             Spacer(Modifier.height(10.dp))
             entry.items.forEach { itemName ->
@@ -1184,22 +1353,65 @@ fun KitCard(
                                     onRendered?.invoke()
                                 }
                             },
-                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp))
+                            // GEN-5 (FA-64 check, Android):
+                            // the tile carries the fixed cream
+                            // backing + hairline, so a garment
+                            // render reads on the sheet colour in
+                            // both appearances — the card is a
+                            // fixed artifact (KitCardPalette), so
+                            // the iOS charcoal-on-black collapse
+                            // has no Android twin here.
+                            modifier = Modifier.size(44.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(KitCardPalette.Sheet)
+                                .border(
+                                    1.dp, KitCardPalette.TileBorder,
+                                    RoundedCornerShape(10.dp)
+                                )
                         )
                         Spacer(Modifier.width(10.dp))
                     }
-                    Text(
-                        text = itemName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RunWearColors.TextPrimary
-                    )
+                    Column {
+                        Text(
+                            text = itemName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = KitCardPalette.Ink
+                        )
+                        // GEN-5 (RW-29 FA-17): each item carries
+                        // its note (the engine item's description)
+                        // — the gen-4 card named garments only.
+                        item?.description?.takeIf { it.isNotBlank() }?.let { note ->
+                            Text(
+                                text = note,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = KitCardPalette.Muted
+                            )
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))
+            // GEN-5 (RW-29 FA-17): exactly ONE call to action.
+            Text(
+                text = "Shop this kit →",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = KitCardPalette.Pine
+            )
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = "#RunAnyWear",
                 style = MaterialTheme.typography.labelLarge,
-                color = RunWearColors.PineAccent
+                color = KitCardPalette.Pine
+            )
+            // GEN-5 (RW-29 FA-17): the Amazon Associates
+            // disclosure rides the card's footer microcopy —
+            // the shop door must never travel without it.
+            Text(
+                text = "Links go to Amazon. As an Amazon Associate, RunWear earns from qualifying purchases.",
+                style = MaterialTheme.typography.labelSmall,
+                color = KitCardPalette.Muted,
+                modifier = Modifier.padding(top = 4.dp)
             )
         }
     }

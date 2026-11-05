@@ -45,7 +45,7 @@ import org.robolectric.annotation.GraphicsMode
  * The thumbnail collision was a thumbnail-rendering defect: the
  * chooser composed the artifact INSIDE the thumbnail frame, whose
  * constraints (~134 dp wide × 150 dp high) coerced the poster's
- * fixed 420 dp height and 340 dp width down to the frame before
+ * fixed 425 dp height (4:5) and 340 dp width down to the frame before
  * the 0.42 layer scale applied — top lockup and bottom column
  * laid out in a ≤150 dp box cannot both fit, so they overlapped.
  * The fix composes at natural size and scales the composed layer
@@ -175,10 +175,10 @@ class PosterThumbnailGeometryTest {
             "at full size the bands are widely separated (gap=${(weather.top - wordmark.bottom) / dpPx}dp)",
             weather.top - wordmark.bottom > 150 * dpPx
         )
-        // And both live inside the designed 420 dp poster height.
+        // And both live inside the designed 425 dp poster height (4:5).
         assertTrue(
-            "weather line must end within the poster's 420dp (ends ${(weather.bottom - (wordmark.top - 16 * dpPx)) / dpPx}dp from poster top)",
-            weather.bottom - (wordmark.top - 16 * dpPx) <= 420 * dpPx + 1
+            "weather line must end within the poster's 425dp (4:5 at 340 wide; ends ${(weather.bottom - (wordmark.top - 16 * dpPx)) / dpPx}dp from poster top)",
+            weather.bottom - (wordmark.top - 16 * dpPx) <= 425 * dpPx + 1
         )
     }
 
@@ -230,15 +230,29 @@ class PosterThumbnailGeometryTest {
     @Test
     fun `thumbnail geometry - scale fits the natural width to the frame width`() {
         assertEquals(340, ArtifactThumbnailGeometry.NATURAL_WIDTH_DP)
-        assertEquals(150, ArtifactThumbnailGeometry.FRAME_HEIGHT_DP)
         // A 144dp-wide frame at xhdpi (288px) showing a 340dp-wide
         // (680px) artifact: scale 288/680.
         val scale = ArtifactThumbnailGeometry.scaleFor(frameWidthPx = 288, naturalWidthPx = 680)
         assertEquals(288f / 680f, scale, 0.0001f)
-        // The 420dp poster (840px) scales to ~356px ≈ 178dp on
-        // screen — taller than the 150dp frame, top-anchored and
-        // clipped by design (the frame shows the poster's top).
-        assertEquals(356, ArtifactThumbnailGeometry.scaledHeightPx(840, scale))
+        // The poster at the settled 4:5 (340x425dp, see FA-21) is
+        // 850px tall at xhdpi and scales to 360px ≈ 180dp on
+        // screen. GEN-5 (FA-28): the frame takes this FULL scaled
+        // height — the gen-4 frame clipped it to 150dp and cut
+        // the poster's bottom band off the thumbnail the user
+        // chooses from.
+        assertEquals(360, ArtifactThumbnailGeometry.scaledHeightPx(850, scale))
         assertEquals(1f, ArtifactThumbnailGeometry.scaleFor(frameWidthPx = 100, naturalWidthPx = 0), 0f)
+    }
+
+    @Test
+    fun `thumbnail frame carries no fixed height clip`() {
+        val source = listOf(
+            "src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt",
+            "app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"
+        ).map { java.io.File(it) }.first { it.exists() }.readText()
+        assertTrue(
+            "the chooser thumbnail must not clip the artifact to a fixed frame height",
+            !source.contains("FRAME_HEIGHT_DP")
+        )
     }
 }

@@ -19,7 +19,7 @@ class Gen3SettingsTest {
 
     @Test
     fun `in-flight block shows delivered count plus pending state, never a settled number`() {
-        val block = FreeLooksMeter.block(deliveredUsed = 0, lookMaking = true, subscribed = false)
+        val block = FreeLooksMeter.block(deliveredUsed = 0, looksMaking = 1, subscribed = false)
         assertEquals(2, block.size)
         // The status line carries the in-flight state…
         assertEquals(MakeItMeStrings.S26_MAKING_STATUS, block[0])
@@ -34,17 +34,25 @@ class Gen3SettingsTest {
     fun `settled block is the status line plus the delivered count`() {
         assertEquals(
             listOf("You're in your photos.", "1 of 5 free looks used"),
-            FreeLooksMeter.block(deliveredUsed = 1, lookMaking = false, subscribed = false)
+            FreeLooksMeter.block(deliveredUsed = 1, looksMaking = 0, subscribed = false)
         )
         assertEquals(
             listOf("You're in your photos.", "All 5 free looks used"),
-            FreeLooksMeter.block(deliveredUsed = 5, lookMaking = false, subscribed = false)
+            FreeLooksMeter.block(deliveredUsed = 5, looksMaking = 0, subscribed = false)
         )
     }
 
     @Test
+    fun `in-flight block counts the looks actually being made`() {
+        // GEN-5 (RW-29 FA-10): three looks in flight read as
+        // three — the gen-4 Boolean seam always printed one.
+        val block = FreeLooksMeter.block(deliveredUsed = 2, looksMaking = 3, subscribed = false)
+        assertEquals("2 of 5 free looks used · 3 looks are being made", block[1])
+    }
+
+    @Test
     fun `subscribed block carries no meter`() {
-        val block = FreeLooksMeter.block(deliveredUsed = 3, lookMaking = false, subscribed = true)
+        val block = FreeLooksMeter.block(deliveredUsed = 3, looksMaking = 0, subscribed = true)
         assertEquals(
             listOf(MakeItMeStrings.S3_STATUS, MakeItMeStrings.S5_STATE_C_SUB),
             block

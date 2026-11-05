@@ -174,6 +174,34 @@ class BillingManager @Inject constructor(
         data class Failed(val message: String) : PurchaseOutcome
     }
 
+    /**
+     * GEN-5 (RW-29 FA-7): restore purchases — the gen-4 build had
+     * NO restore path anywhere, so a subscriber who reinstalled
+     * or switched devices met a paywall with no way back to the
+     * subscription they already own. Restores through RevenueCat
+     * and reports whether the entitlement came back active.
+     */
+    suspend fun restorePurchases(): PurchaseOutcome {
+        if (!configured) return PurchaseOutcome.Failed("Billing is unavailable.")
+        return suspendCancellableCoroutine { cont ->
+            Purchases.sharedInstance.restorePurchasesWith(
+                onError = { error -> cont.resume(PurchaseOutcome.Failed(error.message)) },
+                onSuccess = { info ->
+                    applyCustomerInfo(info)
+                    cont.resume(
+                        if (info.entitlements[ENTITLEMENT_ID]?.isActive == true) {
+                            PurchaseOutcome.Success
+                        } else {
+                            PurchaseOutcome.Failed(
+                                "No active subscription found for this account."
+                            )
+                        }
+                    )
+                }
+            )
+        }
+    }
+
     suspend fun purchase(activity: Activity, packageToPurchase: Package): PurchaseOutcome {
         if (!configured) return PurchaseOutcome.Failed("Billing is unavailable.")
         return suspendCancellableCoroutine { cont ->

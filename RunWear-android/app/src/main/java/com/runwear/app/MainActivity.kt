@@ -380,7 +380,10 @@ class MainActivity : ComponentActivity() {
                             onSeePremium = {
                                 showFirstLookMoment = false
                                 showFirstLookPaywall = true
-                            }
+                            },
+                            // GEN-5 (RW-29 FA-6): the count line
+                            // composes from the shared meter.
+                            freeLooksUsed = makeItMeState.freeGenerationsUsed
                         )
                     }
                     if (showFirstLookPaywall) {
@@ -456,6 +459,11 @@ class MainActivity : ComponentActivity() {
         // locations are never overwritten; the check is debounced and
         // distance-gated inside the ViewModel.
         viewModel.onForegrounded()
+        // GEN-5 (RW-29 EX-15): foregrounding also re-reads the
+        // Make It Me profile + bank coverage, so a bank that
+        // completed while the app was away retires its band on
+        // return instead of waiting for an unrelated refresh.
+        makeItMeViewModel.refresh()
     }
 
     /**

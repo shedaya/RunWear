@@ -855,6 +855,10 @@ internal fun MakeItMeUploadFlow(
                 }
                 if (showSourceChoice) {
                     AlertDialog(
+                        // GEN-5 (RW-29 cream map): dialogs sit on
+                        // the design's dialog surface (BgCard),
+                        // never the Material baseline.
+                        containerColor = RunWearColors.BgCard,
                         onDismissRequest = { showSourceChoice = false },
                         title = { Text(MakeItMeStrings.C2E_SOURCE_DIALOG_TITLE) },
                         text = {
@@ -1616,15 +1620,48 @@ fun MakeItMePaywallSheet(
             )
             Spacer(Modifier.height(16.dp))
 
+            // GEN-5 (RW-29 FA-9): the settled plan structure —
+            // the annual card (selectable, NO call to action
+            // inside it), the monthly row as a selectable row
+            // beneath it, and ONE call to action below both that
+            // purchases the SELECTED plan. The gen-4 sheet bought
+            // on tap: the annual card carried its own CTA and the
+            // monthly row purchased immediately, so plan choice
+            // and purchase were the same gesture.
+            // GEN-5 (RW-29 FA-8): an already-subscribed user meets
+            // a plain subscribed state here — no purchase CTAs at
+            // all; Restore stays available below.
+            val subscribed = mimState.mode == MakeItMeMode.SUBSCRIBED
+            var annualSelected by remember { mutableStateOf(true) }
+            if (subscribed) {
+                Text(
+                    text = "You're subscribed — your photo is ready before you open the app.",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 21.sp,
+                    color = RunWearColors.TextPrimary
+                )
+            } else {
             // The ONE highlighted card: "Premium" / "All of Make It
             // Me." Its price slot is the ONLY price on the card and it
             // renders from the fetched Offering (parameterized —
             // design §6); the CTA carries no price. No Founding /
             // Limited-time / struck-through elements anywhere.
+            // GEN-5 (cream map): the highlighted card's fill is the
+            // design's pale pine tint inside a 2px pine border
+            // (mockups .pw.hero), not the plain card fill.
             Surface(
+                onClick = { annualSelected = true },
                 shape = RoundedCornerShape(16.dp),
-                color = RunWearColors.BgCard,
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, RunWearColors.Primary),
+                color = RunWearColors.PaywallTint,
+                border = androidx.compose.foundation.BorderStroke(
+                    if (annualSelected) 2.dp else 1.dp,
+                    if (annualSelected) {
+                        RunWearColors.Primary
+                    } else {
+                        RunWearColors.Hairline
+                    }
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -1661,32 +1698,37 @@ fun MakeItMePaywallSheet(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Button(
-                        onClick = { buy(annual) },
-                        enabled = annual != null && !purchasing,
-                        modifier = Modifier.fillMaxWidth().height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
-                    ) {
-                        Text(
-                            MakeItMeStrings.U2I_CTA,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            color = com.runwear.app.ui.theme.PhotoInk
-                        )
-                    }
                 }
             }
             Spacer(Modifier.height(10.dp))
 
-            // The monthly product, as a quiet row (price from the
-            // same Offering object, never a literal).
+            // The monthly product, as a quiet SELECTABLE row
+            // (price from the same Offering object, never a literal).
             PaywallPriceRow(
                 label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY,
                 enabled = monthly != null && !purchasing,
-                onClick = { buy(monthly) }
+                selected = !annualSelected,
+                onClick = { annualSelected = false }
             )
+            Spacer(Modifier.height(14.dp))
+
+            // The sheet's ONE call to action — purchases the
+            // selected plan.
+            Button(
+                onClick = { buy(if (annualSelected) annual else monthly) },
+                enabled = (if (annualSelected) annual else monthly) != null && !purchasing,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+            ) {
+                Text(
+                    MakeItMeStrings.U2I_CTA,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = com.runwear.app.ui.theme.PhotoInk
+                )
+            }
+            }
 
             if (purchasing) {
                 Spacer(Modifier.height(14.dp))
@@ -1720,6 +1762,35 @@ fun MakeItMePaywallSheet(
                 lineHeight = 17.sp,
                 color = RunWearColors.TextSecondary
             )
+
+            // GEN-5 (RW-29 FA-7): Restore purchases — present in
+            // every state of this sheet, subscribed included. A
+            // restore that lands the entitlement completes like a
+            // purchase; one that finds nothing says so honestly.
+            var restoring by remember { mutableStateOf(false) }
+            TextButton(
+                onClick = {
+                    restoring = true
+                    purchaseError = null
+                    viewModel.restorePurchases { outcome ->
+                        restoring = false
+                        when (outcome) {
+                            BillingManager.PurchaseOutcome.Success -> onPurchased()
+                            BillingManager.PurchaseOutcome.Cancelled -> Unit
+                            is BillingManager.PurchaseOutcome.Failed ->
+                                purchaseError = outcome.message
+                        }
+                    }
+                },
+                enabled = !restoring && !purchasing,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    if (restoring) "Restoring…" else "Restore purchases",
+                    fontSize = 13.5.sp,
+                    color = RunWearColors.PineAccent
+                )
+            }
         }
     }
 }
@@ -1732,18 +1803,32 @@ private class PackagePrice(
 )
 
 @Composable
-private fun PaywallPriceRow(label: String, enabled: Boolean, onClick: () -> Unit) {
+private fun PaywallPriceRow(
+    label: String,
+    enabled: Boolean,
+    selected: Boolean = false,
+    onClick: () -> Unit
+) {
     // GEN-5 (C-6): the monthly element is "a little bit clickable"
     // — a quiet outlined text row, visibly a door (border, pine
     // chevron) but modest and clearly subordinate to the annual
     // hero card: no filled button, no primary colour.
+    // GEN-5 (RW-29 FA-9): the row SELECTS the monthly plan — it
+    // no longer purchases on tap; the sheet's one CTA below both
+    // plans buys the selected one. Selected, its border firms up
+    // to pine; unselected it stays the quiet hairline door.
     Surface(
         onClick = onClick,
         enabled = enabled,
         shape = RoundedCornerShape(12.dp),
         color = Color.Transparent,
         border = androidx.compose.foundation.BorderStroke(
-            1.dp, RunWearColors.TextSecondary.copy(alpha = 0.45f)
+            if (selected) 1.5.dp else 1.dp,
+            if (selected) {
+                RunWearColors.PineAccent
+            } else {
+                RunWearColors.TextSecondary.copy(alpha = 0.45f)
+            }
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -1937,7 +2022,9 @@ fun MakeItMeSettingsSection(
                     Column(modifier = Modifier.padding(14.dp)) {
                         val block = FreeLooksMeter.block(
                             deliveredUsed = state.freeGenerationsUsed,
-                            lookMaking = state.anyLookMaking,
+                            // GEN-5 (FA-10): the real in-flight
+                            // count, not the Boolean.
+                            looksMaking = state.looksMakingCount,
                             subscribed = subscribed
                         )
                         Text(
@@ -1976,10 +2063,37 @@ fun MakeItMeSettingsSection(
                     monthlyFormatted = offerMonthlyFormatted
                 )
                 if (settingsBand == null) {
+                if (subscribed) {
+                    // GEN-5 (RW-29 FA-50): the subscribed state has
+                    // NO offer card at all (design-spec §13's
+                    // subscribed panel: status block · Your photos ·
+                    // Manage subscription · Danger zone — no
+                    // benefit or pitch copy). The gen-4 composition
+                    // kept the bordered offer card's frame and pitch
+                    // line around a Manage button, so a subscriber's
+                    // Settings still read as a sales surface. The
+                    // status block above already states the state;
+                    // here only the manage door stands, exactly as
+                    // it does while the band is showing.
+                    OutlinedButton(
+                        onClick = onManageSubscriptionClick,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = RunWearColors.BgCard,
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, RunWearColors.Primary),
+                    // GEN-5 (cream map): the Settings offer card
+                    // takes the paywall's highlighted treatment —
+                    // pale pine tint inside a 2px pine border.
+                    color = RunWearColors.PaywallTint,
+                    border = androidx.compose.foundation.BorderStroke(2.dp, RunWearColors.Primary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -1996,20 +2110,7 @@ fun MakeItMeSettingsSection(
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 2.dp)
                         )
-                        if (subscribed) {
-                            Spacer(Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = onManageSubscriptionClick,
-                                modifier = Modifier.fillMaxWidth().height(48.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Text(
-                                    MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        } else {
+
                             card.priceLine?.let {
                                 Text(
                                     text = it,
@@ -2050,8 +2151,9 @@ fun MakeItMeSettingsSection(
                                     )
                                 }
                             }
-                        }
+
                     }
+                }
                 }
                 } else {
                     // While generating, the offer card is replaced
@@ -2245,6 +2347,7 @@ fun MakeItMeDeleteDialog(
     var deleting by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     AlertDialog(
+        containerColor = RunWearColors.BgCard,
         onDismissRequest = { if (!deleting) onDismiss() },
         title = { Text(MakeItMeStrings.S11_DELETE_CONFIRM_TITLE) },
         text = {
@@ -2311,7 +2414,13 @@ fun FirstLookMoment(
      * the only state that may claim "You're in the photo now";
      * FAILED is the honest terminal state (no look was used).
      */
-    state: FirstLookState = FirstLookState.READY
+    state: FirstLookState = FirstLookState.READY,
+    /**
+     * GEN-5 (RW-29 FA-6): the shared free-look meter's count at
+     * this moment — the READY count line composes from it rather
+     * than asserting "look 1 of 5" for every user.
+     */
+    freeLooksUsed: Int = 1
 ) {
     // Dismissing the ask IS continuing (design §9) — Back takes the
     // primary door, never traps the user at onboarding's end.
@@ -2401,6 +2510,10 @@ fun FirstLookMoment(
                     model = photoUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    // GEN-5 (RW-29 FA-44): top-anchored like every
+                    // other hero surface — the gen-4 centre anchor
+                    // cropped the head on this surface alone.
+                    alignment = Alignment.TopCenter,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -2443,7 +2556,7 @@ fun FirstLookMoment(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = MakeItMeStrings.FIRST_LOOK_COUNT_LINE,
+                        text = MakeItMeStrings.firstLookCountLine(freeLooksUsed),
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
                         color = RunWearColors.TextSecondary
@@ -2592,6 +2705,7 @@ fun MakeItMeDeleteDataDialog(
     var deleting by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     AlertDialog(
+        containerColor = RunWearColors.BgCard,
         onDismissRequest = { if (!deleting) onDismiss() },
         title = { Text(MakeItMeStrings.S21_DELETE_DATA_CONFIRM_TITLE) },
         text = {

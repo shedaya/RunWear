@@ -133,9 +133,14 @@ fun OutfitCard(
                 .fillMaxWidth()
                 .offset(x = if (isPressed) 4.dp else 0.dp) // translateX on press
                 .clip(RoundedCornerShape(16.dp))
+                // GEN-5 (RW-29 cream map): the design's outfit
+                // rows are PLAIN ROWS on the sheet — no card fill
+                // of their own; only the garment tile carries the
+                // card fill + hairline. The press state washes the
+                // row with the hairline tint instead.
                 .background(
-                    if (isPressed) RunWearColors.BgCardLight  // #262626 on press
-                    else RunWearColors.BgCard                  // #1A1A1A normal
+                    if (isPressed) RunWearColors.Hairline
+                    else Color.Transparent
                 )
                 .clickable(
                     interactionSource = interactionSource,
@@ -146,12 +151,15 @@ fun OutfitCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Thumbnail container - 48dp, border-radius 14dp per PWA v3.12
+            // Thumbnail container — GEN-5 (cream map): the
+            // design's 44dp garment tile, the one element of the
+            // row that carries the card fill + a hairline border.
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(categoryColor.copy(alpha = 0.15f)),
+                    .background(RunWearColors.BgCard)
+                    .border(1.dp, RunWearColors.Hairline, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 // Category SVG icon (shown as fallback or while thumbnail loads)
@@ -322,12 +330,27 @@ fun OutfitSection(
  * - border-radius: 16px, padding: 18px
  * - label: "Pro Tip" (title case), tap toggles additional tips
  */
+/**
+ * GEN-5 (RW-29 COR-8 / B-20): the engine authors its tips WITH a
+ * leading emoji (the 🌡️/☀️ class). iOS strips it at its bridge;
+ * Android rendered it raw — the app's settled surfaces carry no
+ * emoji in body copy. The strip happens HERE, at the Android
+ * render seam, so the shared engine text stays untouched.
+ */
+internal fun stripTipEmoji(tip: String): String =
+    tip.replace(
+        Regex("^[\\u2600-\\u27BF\\uFE0F\\u200D\\uD83C-\\uDBFF\\uDC00-\\uDFFF]+\\s*"),
+        ""
+    )
+
 @Composable
 fun TipsSection(
     tips: List<String>,
     modifier: Modifier = Modifier
 ) {
-    if (tips.isEmpty()) return
+    // GEN-5 (COR-8): every tip renders emoji-free (see above).
+    val displayTips = tips.map { stripTipEmoji(it) }
+    if (displayTips.isEmpty()) return
 
     var expanded by remember { mutableStateOf(false) }
 
@@ -335,22 +358,17 @@ fun TipsSection(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        RunWearColors.CategoryTop.copy(alpha = 0.15f),
-                        RunWearColors.CategoryTop.copy(alpha = 0.05f)
-                    ),
-                    start = Offset(0f, 0f),
-                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                )
-            )
+            // GEN-5 (RW-29 cream map): the Pro Tip card is a
+            // system card — sheet fill + hairline — not the
+            // legacy teal gradient wash it kept from the
+            // pre-redesign palette.
+            .background(RunWearColors.BgCard)
             .border(
                 width = 1.dp,
-                color = RunWearColors.CategoryTop.copy(alpha = 0.2f),
+                color = RunWearColors.Hairline,
                 shape = RoundedCornerShape(16.dp)
             )
-            .clickable { if (tips.size > 1) expanded = !expanded }
+            .clickable { if (displayTips.size > 1) expanded = !expanded }
             .padding(18.dp)
     ) {
         // Header Row
@@ -387,7 +405,7 @@ fun TipsSection(
             )
 
             // Expand indicator when there are more tips
-            if (tips.size > 1) {
+            if (displayTips.size > 1) {
                 Spacer(Modifier.weight(1f))
                 Icon(
                     imageVector = if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
@@ -400,7 +418,7 @@ fun TipsSection(
 
         // First tip always visible
         Text(
-            text = tips[0],
+            text = displayTips[0],
             style = TextStyle(
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
@@ -410,7 +428,7 @@ fun TipsSection(
 
         // Additional tips revealed on expand
         if (expanded) {
-            tips.drop(1).forEach { tip ->
+            displayTips.drop(1).forEach { tip ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = tip,

@@ -228,21 +228,27 @@ class WeatherRepository @Inject constructor(
             throw Exception("No forecast data for the selected time")
         }
 
+        // GEN-5 (RW-29 FA-15): every parallel-array read is
+        // bounded. The gen-4 parser indexed the sibling arrays
+        // directly, so a truncated series from the service threw
+        // IndexOutOfBounds and the whole forecast became the
+        // error screen; now a short array degrades to its last
+        // value (or the type's zero) and the forecast survives.
         return WeatherConditions(
             dateTime = dateTime,
-            temperature = hourly.temperature[index],
-            feelsLike = hourly.apparentTemperature[index],
-            humidity = hourly.humidity[index],
-            windSpeed = hourly.windSpeed[index],
-            windGusts = hourly.windGusts[index],
+            temperature = hourly.temperature.atOrLast(index),
+            feelsLike = hourly.apparentTemperature.atOrLast(index),
+            humidity = hourly.humidity.atOrLast(index),
+            windSpeed = hourly.windSpeed.atOrLast(index),
+            windGusts = hourly.windGusts.atOrLast(index),
             windDirection = hourly.windDirection.getOrElse(index) { 0 },
-            precipitationProbability = hourly.precipitationProbability[index],
-            precipitation = hourly.precipitation[index],
-            isRaining = hourly.rain[index] > 0,
-            isSnowing = hourly.snowfall[index] > 0,
-            cloudCover = hourly.cloudCover[index],
-            uvIndex = hourly.uvIndex[index],
-            weatherCode = WeatherCode.fromCode(hourly.weatherCode[index])
+            precipitationProbability = hourly.precipitationProbability.atOrLast(index),
+            precipitation = hourly.precipitation.atOrLast(index),
+            isRaining = hourly.rain.atOrLast(index) > 0,
+            isSnowing = hourly.snowfall.atOrLast(index) > 0,
+            cloudCover = hourly.cloudCover.atOrLast(index),
+            uvIndex = hourly.uvIndex.atOrLast(index),
+            weatherCode = WeatherCode.fromCode(hourly.weatherCode.atOrLast(index))
         )
     }
 
@@ -265,13 +271,14 @@ class WeatherRepository @Inject constructor(
         return hourly.time.mapIndexed { index, time ->
             HourlyForecast(
                 dateTime = parseApiLocalDateTime(time),
-                temperature = hourly.temperature[index],
-                feelsLike = hourly.apparentTemperature[index],
-                humidity = hourly.humidity[index],
-                windSpeed = hourly.windSpeed[index],
-                precipitationProbability = hourly.precipitationProbability[index],
-                weatherCode = WeatherCode.fromCode(hourly.weatherCode[index]),
-                uvIndex = hourly.uvIndex[index]
+                // GEN-5 (FA-15): bounded reads, as above.
+                temperature = hourly.temperature.atOrLast(index),
+                feelsLike = hourly.apparentTemperature.atOrLast(index),
+                humidity = hourly.humidity.atOrLast(index),
+                windSpeed = hourly.windSpeed.atOrLast(index),
+                precipitationProbability = hourly.precipitationProbability.atOrLast(index),
+                weatherCode = WeatherCode.fromCode(hourly.weatherCode.atOrLast(index)),
+                uvIndex = hourly.uvIndex.atOrLast(index)
             )
         }
     }
@@ -347,3 +354,15 @@ class WeatherRepository @Inject constructor(
         isUSA = isUSA
     )
 }
+
+/**
+ * GEN-5 (RW-29 FA-15): a bounded parallel-array read — the value
+ * at [index] when the series is that long, else the series' last
+ * value, else the zero for the element type. A truncated series
+ * degrades; it never throws.
+ */
+private fun List<Double>.atOrLast(index: Int): Double =
+    getOrElse(index) { lastOrNull() ?: 0.0 }
+
+private fun List<Int>.atOrLast(index: Int): Int =
+    getOrElse(index) { lastOrNull() ?: 0 }

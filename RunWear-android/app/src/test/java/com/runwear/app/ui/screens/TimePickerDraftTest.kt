@@ -153,6 +153,24 @@ class TimePickerDraftTest {
     }
 
     @Test
+    fun `steppers cross forecast gaps to the next selectable hour`() {
+        // GEN-5 (RW-29 FA-39): with a gap in the forecast, the
+        // stepper steps to the next SELECTABLE hour instead of
+        // dead-ending on the gap's edge.
+        val gapped = setOf(5, 6, 10, 11)
+        val opened = TimePickerDraftPolicy.open(
+            selectedHour = 6, isNowSelected = false, isToday = true,
+            nowHour = 8, selectableHours = gapped
+        )
+        assertTrue(TimePickerDraftPolicy.canStep(opened, +1))
+        val stepped = TimePickerDraftPolicy.step(opened, +1)
+        assertEquals(10, stepped.draftHour)
+        assertEquals(6, TimePickerDraftPolicy.step(stepped, -1).draftHour)
+        val last = TimePickerDraftPolicy.moveTo(opened, 11)
+        assertFalse(TimePickerDraftPolicy.canStep(last, +1))
+    }
+
+    @Test
     fun `steppers stop at the day edges`() {
         val opened = TimePickerDraftPolicy.open(
             selectedHour = 0, isNowSelected = false, isToday = true,

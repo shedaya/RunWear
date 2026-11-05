@@ -120,12 +120,13 @@ class WearIveRunSimplePlaceTest {
         holder.onEvent(WearIveRunElementEvent.TAP_BODY)
         val expanded = holder.state.value as WearIveRunBarState.Expanded
         val subtitle = WearIveRunSubtitle.detail(expanded.entry)
-        assertEquals("41° feels like · 2 items", subtitle)
-        // Not the place, not the day form, not the narration's payload.
+        // GEN-5 (RW-29 FA-34): the outfit line joins the subtitle
+        // (the gen-3 line stopped at the count). Place and day
+        // still live in the narration only — not repeated here.
+        assertEquals("41° feels like · 2 items · Light Tights · Wind Shell", subtitle)
         assertFalse(subtitle!!.contains("New York"))
         assertFalse(subtitle.contains("Now"))
         assertFalse(subtitle.contains("Today"))
-        assertFalse(subtitle.contains("Light Tights"))
     }
 
     @Test

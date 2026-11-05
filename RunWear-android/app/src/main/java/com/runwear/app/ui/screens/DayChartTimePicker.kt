@@ -122,12 +122,26 @@ object TimePickerDraftPolicy {
         )
     }
 
-    fun step(session: TimePickerSession, delta: Int): TimePickerSession =
-        moveTo(session, session.draftHour + delta)
+    /**
+     * GEN-5 (RW-29 FA-39): stepping moves through the SELECTABLE
+     * hours by index — the gen-4 step walked clock hours, so at
+     * a forecast gap the plus/minus dead-ended (the adjacent
+     * clock hour was unselectable and the snap pulled the draft
+     * straight back), stranding the user mid-day. The ends of
+     * the selectable list stop, as the ends of the day did.
+     */
+    fun step(session: TimePickerSession, delta: Int): TimePickerSession {
+        val sorted = session.selectableHours.sorted()
+        val index = sorted.indexOf(session.draftHour)
+        if (index < 0) return session
+        val next = sorted.getOrNull(index + delta) ?: return session
+        return moveTo(session, next)
+    }
 
     fun canStep(session: TimePickerSession, delta: Int): Boolean {
-        val target = session.draftHour + delta
-        return target in session.selectableHours
+        val sorted = session.selectableHours.sorted()
+        val index = sorted.indexOf(session.draftHour)
+        return index >= 0 && (index + delta) in sorted.indices
     }
 
     fun confirm(session: TimePickerSession): Confirm {

@@ -397,12 +397,14 @@ class WearIveRunElementTapTest : WearElementHarness() {
         assertEquals(1, collapses)
         clickByDescription(r.root, "Remove from Wear I've Run")
         assertEquals(1, removes)
-        // The expanded body is the collection doorway (a navigation,
-        // not a state driver): it neither expands nor collapses.
+        // GEN-5 (RW-29 FA-33): the expanded body tap settles back
+        // to the mini bar — the collection is reached through the
+        // labeled "View collection" door only. (Gen-3's body-tap
+        // doorway is superseded by the register.)
         clickBody(r.root, "Added New York, NY, Now")
-        assertEquals(1, collections)
+        assertEquals(0, collections)
         assertEquals(0, expands)
-        assertEquals(1, collapses)
+        assertEquals(2, collapses)
     }
 
     @Test

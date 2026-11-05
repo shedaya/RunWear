@@ -48,6 +48,12 @@ class PersonalHeroRepository @Inject constructor(
          */
         val anyLookMaking: Boolean = false,
         /**
+         * GEN-5 (RW-29 FA-10): the REAL in-flight count, from the
+         * same per-cell status map — the Settings meter line
+         * counts the looks actually being made, not a Boolean.
+         */
+        val looksMakingCount: Int = 0,
+        /**
          * GEN-3 (convergence band): the caller's real bank coverage
          * (ready/total), read with the profile refresh. Null until a
          * read succeeds — the band shows only real counts.
@@ -178,7 +184,8 @@ class PersonalHeroRepository @Inject constructor(
     fun noteLookStatus(combinationId: String, status: PersonalLookStatus) {
         lastKnownStatus[combinationId] = status
         _state.value = _state.value.copy(
-            anyLookMaking = lastKnownStatus.values.any { it == PersonalLookStatus.Making }
+            anyLookMaking = lastKnownStatus.values.any { it == PersonalLookStatus.Making },
+            looksMakingCount = lastKnownStatus.values.count { it == PersonalLookStatus.Making }
         )
     }
 
