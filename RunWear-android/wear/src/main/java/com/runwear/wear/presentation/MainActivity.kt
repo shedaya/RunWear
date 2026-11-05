@@ -29,6 +29,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Addendum 10 (Wear branded launch): the activity launches
+        // in the Splash theme (48x48dp dark app icon on black as the
+        // window background); switch to the plain app theme before
+        // the first frame so the splash shows only during startup.
+        setTheme(com.runwear.wear.R.style.Theme_RunWear_Wear)
+
         setContent {
             RunWearWatchTheme {
                 val uiState by viewModel.uiState.collectAsState()

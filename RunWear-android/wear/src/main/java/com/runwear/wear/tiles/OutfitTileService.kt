@@ -38,8 +38,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
 // GEN-5: bumped for the design-pass palette change so installed
-// tiles re-render in the Warm Charcoal pair.
-private const val RESOURCES_VERSION = "3"
+// tiles re-render in the Warm Charcoal pair. Addendum 10: bumped
+// again for the safe-area padding + large-font layout changes so
+// installed tiles re-render in the compliant layout.
+private const val RESOURCES_VERSION = "4"
 
 // Tile palette mirrors the phone app's kit — GEN-5 design pass:
 // the Warm Charcoal pair (warm ink #F5F1EA, muted #B8AEA0) and the
@@ -208,6 +210,19 @@ class OutfitTileService : SuspendingTileService() {
             .setModifiers(
                 ModifiersBuilders.Modifiers.Builder()
                     .setClickable(clickable)
+                    // Addendum 10 (WATCH SHAPES): safe-area padding
+                    // on the root keeps every text row and control
+                    // inside the round display's usable chord —
+                    // full-bleed rows were clipped by the curved
+                    // edge on round faces.
+                    .setPadding(
+                        ModifiersBuilders.Padding.Builder()
+                            .setStart(dp(18f))
+                            .setEnd(dp(18f))
+                            .setTop(dp(10f))
+                            .setBottom(dp(10f))
+                            .build()
+                    )
                     .build()
             )
             .addContent(
@@ -254,7 +269,10 @@ class OutfitTileService : SuspendingTileService() {
                                     .setColor(argb(TILE_TEXT_SECONDARY))
                                     .build()
                             )
-                            .setMaxLines(1)
+                            // Addendum 10 (LARGE FONT): wraps to
+                            // two lines instead of ellipsising at
+                            // the largest font scale.
+                            .setMaxLines(2)
                             .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                             .build()
                     )
@@ -292,16 +310,24 @@ class OutfitTileService : SuspendingTileService() {
         items.add(outfit.bottom)
         outfit.head?.let { items.add(it) }
 
-        val displayItems = items.take(4)
+        // Addendum 10 (LARGE FONT): three rows instead of four.
+        // The tile host does not report the system font scale to
+        // providers (DeviceParameters in tiles 1.4 carries no font
+        // scale), so the layout must be safe at the largest scale
+        // by construction: with names now wrapping to two lines,
+        // four rows could push the summary off the round display
+        // at fontScale 1.30; three cannot. The full outfit remains
+        // one tap away in the app, per the tile's own door.
+        val displayItems = items.take(3)
 
         return Column.Builder()
-            .setWidth(wrap())
+            .setWidth(expand())
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_START)
             .apply {
                 displayItems.forEach { item ->
                     addContent(
                         Row.Builder()
-                            .setWidth(wrap())
+                            .setWidth(expand())
                             .setVerticalAlignment(LayoutElementBuilders.VERTICAL_ALIGN_CENTER)
                             .addContent(
                                 LayoutElementBuilders.Image.Builder()
@@ -322,7 +348,11 @@ class OutfitTileService : SuspendingTileService() {
                                             .setColor(argb(TILE_TEXT_PRIMARY))
                                             .build()
                                     )
-                                    .setMaxLines(1)
+                                    // Addendum 10 (LARGE FONT):
+                                    // item names wrap to two lines
+                                    // inside the padded row instead
+                                    // of truncating mid-name.
+                                    .setMaxLines(2)
                                     .setOverflow(LayoutElementBuilders.TEXT_OVERFLOW_ELLIPSIZE_END)
                                     .build()
                             )
