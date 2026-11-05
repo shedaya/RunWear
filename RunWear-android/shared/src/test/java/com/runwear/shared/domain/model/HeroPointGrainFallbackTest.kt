@@ -386,7 +386,7 @@ class HeroPointGrainFallbackTest {
     }
 
     @Test
-    fun `handwear substitution - beanie mittens serves the bundled gloves photo, balaclava mittens still has none`() {
+    fun `handwear substitution - beanie mittens serves the bundled gloves photo, balaclava mittens serves the top-up balaclava gloves asset`() {
         // The pool holds zero true-mittens rows and no mittens asset
         // was fabricated (RWPOOL-T01..T06). Under the HANDWEAR
         // SUBSTITUTION (Sol's ruling, 2026-11-04 ~22:23 CST, extended
@@ -421,18 +421,28 @@ class HeroPointGrainFallbackTest {
                 GenderPreference.UNISEX, mittens
             )
         )
-        // Sub-5°F: balaclava + mittens — STILL unservable by the
-        // gated walk: no bundled asset wears a balaclava at all, and
-        // the substitution covers only the hands slot, never head.
+        // Sub-5°F: balaclava + mittens — GEN-5 (RW-28): the
+        // top-up batch (RWPOOL-T27/T28) bundled balaclava+GLOVES
+        // assets for both genders, so under the same handwear
+        // substitution the gated walk now serves them (mirrors
+        // iOS gen-4 275f84f, whose test re-pinned identically).
         val balaclavaMittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.INSULATED_JACKET, ClothingItem.BALACLAVA,
             ClothingItem.MITTENS
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o1_tights_balaclava_gloves.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.FREEZING, HeroWeatherCondition.SNOW,
                 GenderPreference.FEMALE, balaclavaMittens
+            )
+        )
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_male_long_o1_tights_balaclava_gloves.webp",
+            HeroImageSelector.gatedFallbackUrl(
+                TempBracket.FREEZING, HeroWeatherCondition.SNOW,
+                GenderPreference.MALE, balaclavaMittens
             )
         )
     }

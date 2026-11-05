@@ -416,8 +416,9 @@ class HeroFallbackChainTest {
         // signature at the exact gate — so the bundled chain serves
         // freezing_clear_female EXACT (BUNDLED_FALLBACK, not
         // scaffold). This case previously pinned FLOOR/scaffold and
-        // is re-pinned under the ruling. (The balaclava mittens
-        // signatures still floor: no balaclava bundled asset exists.)
+        // is re-pinned under the ruling. (GEN-5: the balaclava
+        // mittens signatures now exact-serve the top-up balaclava+
+        // gloves bundled assets, RWPOOL-T27/T28.)
         val mittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.INSULATED_JACKET, ClothingItem.THERMAL_BEANIE,
