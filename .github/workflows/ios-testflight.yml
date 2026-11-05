@@ -61,8 +61,9 @@
 # exactly 17 historical runs; any failed or archive-only dispatch
 # would have burned the number and silently skipped it. The
 # archive now takes the `build_number` dispatch input (default
-# 22 — the GEN-3 train build; the last uploaded TestFlight build
-# was 21, and the project file also carries 22 on
+# 23 — the GEN-3 train build WITH Sol's design deltas; build 22
+# was the pre-delta GEN-3 upload and its number is consumed in
+# App Store Connect, and the project file also carries 23 on
 # every target). Bump the input's default when the train ships.
 # Set `upload_to_testflight` to false for an archive-only run:
 # the signed IPA is kept as a workflow artifact and NOTHING is
@@ -84,7 +85,7 @@ on:
       build_number:
         description: "Build number (CURRENT_PROJECT_VERSION) the archive will carry"
         required: true
-        default: "22"
+        default: "23"
       upload_to_testflight:
         description: "Upload the exported IPA to App Store Connect / TestFlight (false = archive only, IPA kept as an artifact)"
         type: boolean
