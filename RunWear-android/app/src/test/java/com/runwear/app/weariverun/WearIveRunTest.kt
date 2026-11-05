@@ -38,10 +38,21 @@ class WearIveRunNarrationFormatterTest {
 
     @Test
     fun `update line names the payload`() {
-        val narration = WearIveRunNarrationFormatter.update(payload = "Wind jacket")
-        assertEquals("Update to Wind jacket", narration.text)
-        assertEquals("Wind jacket", narration.payload)
+        // GEN-5 (Addendum 8 item 2): the payload is a sealed type.
+        // This test's gen-4 form passed a garment string ("Wind
+        // jacket") straight into the formatter — the exact device
+        // defect ("Update to Ear Warmer / Headband"). That call no
+        // longer compiles; only a Place or a Moment can be named.
+        val narration = WearIveRunNarrationFormatter.update(
+            payload = WearIveRunNarrationPayload.Place("Aspen, CO", "Now")
+        )
+        assertEquals("Update to Aspen, CO, Now", narration.text)
+        assertEquals("Aspen, CO, Now", narration.payload)
         assertEquals("Update to ".length, narration.payloadStart)
+        val moment = WearIveRunNarrationFormatter.update(
+            payload = WearIveRunNarrationPayload.Moment("9 p.m.")
+        )
+        assertEquals("Update to 9 p.m.", moment.text)
     }
 }
 

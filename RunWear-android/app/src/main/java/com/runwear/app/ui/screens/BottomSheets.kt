@@ -818,8 +818,20 @@ private fun ComfortSelector(
 }
 
 /**
- * PWA v2.9 Gender Toggle for Settings - Full width Male/Female toggleable
+ * GEN-5 (RW-28 item 24 + Addendum 8 item 3): the Settings fit
+ * options — ALL THREE, full-word labels, in the onboarding order.
+ * "No preference" is a real selectable value (UNISEX), not a
+ * tap-again-to-deselect gesture, so a stored No preference shows
+ * SELECTED here and survives the round trip (the gen-4 Settings
+ * control offered Male/Female only and silently unexpressed it —
+ * the N-8 root cause, device-proven on the gen-4 build).
  */
+internal val FitPreferenceOptions: List<Pair<String, GenderPreference>> = listOf(
+    "Men's" to GenderPreference.MALE,
+    "Women's" to GenderPreference.FEMALE,
+    "No preference" to GenderPreference.UNISEX
+)
+
 @Composable
 private fun GenderToggleSettings(
     selected: GenderPreference,
@@ -827,17 +839,7 @@ private fun GenderToggleSettings(
 ) {
     // §1.7 (WS-9 fix, P-2): preference selection tick, on change.
     val haptic = LocalHapticFeedback.current
-    // GEN-5 (RW-28 item 24, A-15): full-word labels and ALL THREE
-    // options explicit — "Men's" / "Women's" / "No preference" —
-    // exactly the onboarding set, in the onboarding order. No
-    // preference is a real selectable value (UNISEX), not a
-    // tap-again-to-deselect gesture, so the stored value carries
-    // losslessly between the two surfaces.
-    val options = listOf(
-        "Men's" to GenderPreference.MALE,
-        "Women's" to GenderPreference.FEMALE,
-        "No preference" to GenderPreference.UNISEX
-    )
+    val options = FitPreferenceOptions
     Row(
         modifier = Modifier
             .fillMaxWidth()

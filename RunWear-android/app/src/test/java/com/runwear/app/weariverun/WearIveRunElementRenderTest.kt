@@ -52,7 +52,6 @@ abstract class WearElementHarness {
     protected val entry = WearIveRunEntry(
         place = "New York, NY",
         timeLabel = "Now",
-        payload = "Light Tights",
         thumbnailUrl = null,
         feelsLikeF = 41.0,
         itemCount = 2

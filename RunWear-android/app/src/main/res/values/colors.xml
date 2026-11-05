@@ -6,6 +6,6 @@
     <!-- GEN-5 (RW-29 cream map): the splash ground is the
          design's cream ground in the light appearance (the
          values-night copy carries Warm Charcoal). The gen-4
-         value was the retired near-black #0A0A0A. -->
+         value was a retired near-black. -->
     <color name="runwear_background">#FFF5F1E8</color>
 </resources>

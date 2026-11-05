@@ -131,8 +131,12 @@ class SettingsInventoryRenderTest {
         "SETTINGS",
         "Appearance",
         "Temperature Unit",
-        "Body Temperature",
+        // GEN-5 (RW-29 FA-49): design-spec §13's order — Fit
+        // Preference before Body Temperature, matching the
+        // SettingsInventory registry the sheet renders from. This
+        // checklist's older swap predates the §13 verification.
         "Fit Preference",
+        "Body Temperature",
         MakeItMeStrings.S1_SECTION_HEADER,
         MakeItMeStrings.S2_STATE_A_ROW,
         MakeItMeStrings.S20_DELETE_DATA_ROW,

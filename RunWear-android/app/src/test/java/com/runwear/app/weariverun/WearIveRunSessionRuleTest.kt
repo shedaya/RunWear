@@ -116,24 +116,36 @@ class WearIveRunSessionRuleTest {
 
     @Test
     fun `a session entry supersedes same-day legacy rows but never wipes other days`() {
+        // GEN-5 (RW-29 FA-37): the supersede reaches only the
+        // incoming entry's OWN place — frame 8 preserves a travel
+        // day's second place. The gen-3 form of this test expected
+        // every same-day legacy row to collapse into the session
+        // entry, which silently deleted other places' chapters.
         val legacyTodayA = entry(
             place = "Overland Park, KS", sessionId = "", settledAt = 0L
         )
         val legacyTodayB = entry(
             place = "New York, NY", sessionId = "", settledAt = 0L
         )
+        val legacyMiami = entry(
+            place = "Miami, FL", sessionId = "", settledAt = 0L
+        )
         val legacyYesterday = entry(
             place = "Aspen, CO", sessionId = "", settledAt = 0L,
             date = today.minusDays(1)
         )
-        var entries = listOf(legacyTodayA, legacyTodayB, legacyYesterday)
+        var entries = listOf(legacyTodayA, legacyTodayB, legacyMiami, legacyYesterday)
         entries = WearIveRunCollectionLogic.upsert(
             entries, entry(place = "Miami, FL", settledAt = 5L)
         )
-        // Today's two legacy chapters collapse into the session
-        // entry; yesterday's legacy history is untouched.
-        assertEquals(2, entries.size)
+        // Miami's own legacy row is superseded by the Miami session
+        // entry; the other places' same-day legacy chapters and
+        // yesterday's legacy history are untouched.
+        assertEquals(4, entries.size)
         assertTrue(entries.contains(legacyYesterday))
+        assertTrue(entries.contains(legacyTodayA))
+        assertTrue(entries.contains(legacyTodayB))
+        assertFalse(entries.contains(legacyMiami))
         assertEquals(
             "Miami, FL",
             WearIveRunCollectionLogic.todaysEntry(entries, today)?.place

@@ -384,6 +384,12 @@ class MainViewModel @Inject constructor(
     /** The in-flight hero-image resolution (see [resolveHeroImage]). */
     private var heroResolveJob: Job? = null
 
+    // GEN-5 (RW-28 Addendum 8, Defect 1): the most recent forecast
+    // fill derivation, and the last set actually sent — the fill
+    // call re-fires only when the named set changes.
+    private var lastForecastFillCells: List<String> = emptyList()
+    private var lastSentFillCells: List<String> = emptyList()
+
     /**
      * GEN-2 A2 (W-6): a place the user has switched to whose weather
      * has not landed yet. selectLocation / selectManualLocation record
@@ -525,6 +531,22 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             telemetryClient.flushPendingFeedback()
             telemetryClient.flushEvents()
+        }
+
+        // GEN-5 (RW-28 Addendum 8, Defect 1): the entitlement
+        // transition is a fill trigger — when a grant lands (a
+        // purchase or a restore completing in the Make It Me flow),
+        // the most recent forecast derivation is named to
+        // start-personal-fill immediately, without waiting for the
+        // next weather load.
+        viewModelScope.launch {
+            var wasEntitled = personalHeroRepository.state.value.entitled
+            personalHeroRepository.state.collect { personal ->
+                if (personal.entitled && !wasEntitled) {
+                    sendForecastFillIfNeeded()
+                }
+                wasEntitled = personal.entitled
+            }
         }
 
         // Load affiliate partner
@@ -948,6 +970,13 @@ class MainViewModel @Inject constructor(
                     }
                     if (placeToCommit != null) pendingPlace = null
 
+                    // GEN-5 (RW-28 Addendum 8, Defect 1): every
+                    // forecast load re-derives the fill cells (and
+                    // the coverage target); an entitled user's new
+                    // or changed set is named to start-personal-fill
+                    // here — the fill trigger of record.
+                    onForecastDerived(response, forecast, now)
+
                     // Widget write-through (redesign spec §B.3.3): the app
                     // just loaded in the foreground, where location always
                     // succeeds — the home-screen widget inherits the result
@@ -1023,6 +1052,23 @@ class MainViewModel @Inject constructor(
             weather, outfit, gender, _uiState.value.comfortPreference
         )
         val fallbackUrl = fallbackResult.imageUrl
+        // GEN-5 (RW-28 Addendum 8, Item 3): the serve-path
+        // engagement for this cell is guaranteed HERE, in the
+        // view model's own scope — not inside the cancellable
+        // hero job below, where a superseded resolution could drop
+        // it behind the pool fetch without a trace (the 07:43 CST
+        // serve class). The deployed get-personal-hero queues the
+        // priority-15 convergence job for an entitled user's
+        // unowned cell as a side effect of the call itself.
+        if (com.runwear.app.makeitme.MakeItMeAvailability.personalLayerEngages(
+                personalHeroRepository.state.value.personalizationOn
+            )
+        ) {
+            val (engagementCell, _) = personalCombinationFor(weather, outfit)
+            viewModelScope.launch {
+                personalHeroRepository.ensureEngagement(engagementCell)
+            }
+        }
         heroResolveJob?.cancel()
         heroResolveJob = viewModelScope.launch {
             val result = runCatching {
@@ -1266,6 +1312,64 @@ class MainViewModel @Inject constructor(
         val weather = _uiState.value.weather ?: return null
         val outfit = _uiState.value.outfit ?: return null
         return personalCombinationFor(weather, outfit)
+    }
+
+    /**
+     * GEN-5 (RW-28 Addendum 8, Defect 1): derive the forecast fill
+     * cells from a freshly fetched forecast and, when entitled,
+     * name them to start-personal-fill. One representative frame
+     * per (day, daypart) cluster — the cluster's first forecast
+     * hour at or after the current hour — each derived by the
+     * serve path's own derivation, so a named cell is a cell the
+     * serve path will request when that frame arrives. The
+     * derivation also notes the bank's target set (Defect 2's
+     * denominator) into the repository on every forecast load,
+     * entitled or not. GEN-5 gate note: this is the mechanism
+     * that lets a fresh subscription converge WITHOUT the user
+     * opening cells one by one — grant → these cells named →
+     * the worker banks them ahead of need.
+     */
+    private fun onForecastDerived(
+        response: com.runwear.shared.data.model.OpenMeteoResponse,
+        forecast: List<com.runwear.shared.domain.model.HourlyForecast>,
+        now: java.time.LocalDateTime
+    ) {
+        val comfort = _uiState.value.comfortPreference
+        val frames = mutableListOf<com.runwear.app.makeitme.FillFrame>()
+        var lastKey: Pair<java.time.LocalDate, com.runwear.shared.domain.model.TimeOfDay>? = null
+        val nowHour = now.withMinute(0).withSecond(0).withNano(0)
+        for (entry in forecast) {
+            val entryJava = entry.dateTime.toJavaLocalDateTime()
+            if (entryJava.isBefore(nowHour)) continue
+            val daypart = com.runwear.shared.domain.model.TimeOfDay.fromHour(entryJava.hour)
+            val key = entryJava.toLocalDate() to daypart
+            if (key == lastKey) continue
+            lastKey = key
+            val frameWeather = runCatching {
+                weatherRepository.parseWeatherForDateTime(response, entry.dateTime)
+            }.getOrNull() ?: continue
+            val frameOutfit = getOutfitRecommendation.execute(frameWeather, comfort)
+            val (combinationId, _) = personalCombinationFor(frameWeather, frameOutfit)
+            frames += com.runwear.app.makeitme.FillFrame(
+                entryJava.toLocalDate(), daypart, combinationId
+            )
+        }
+        val cells = com.runwear.app.makeitme.ForecastFillCells.select(frames)
+        lastForecastFillCells = cells
+        personalHeroRepository.noteFillTarget(cells)
+        sendForecastFillIfNeeded()
+    }
+
+    /** Send the fill when entitled and the named set has changed. */
+    private fun sendForecastFillIfNeeded() {
+        val cells = lastForecastFillCells
+        if (cells.isEmpty() || cells == lastSentFillCells) return
+        if (!personalHeroRepository.state.value.entitled) return
+        viewModelScope.launch {
+            if (personalHeroRepository.startPersonalFill(cells)) {
+                lastSentFillCells = cells
+            }
+        }
     }
 
     private fun personalCombinationFor(

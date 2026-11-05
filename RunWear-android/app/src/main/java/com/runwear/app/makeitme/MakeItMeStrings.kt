@@ -26,9 +26,11 @@ object MakeItMeStrings {
     // frozen final design package carries that sentence only on
     // frame 28's promise row (and a paywall proof row); frame 32's
     // fork carries none — this matches the design and iOS verbatim.
-    // GEN-5 (RW-28 item 18): the settled intake is ONE photo, face
-    // only — the copy says so everywhere the fork describes it.
-    const val F4_OPTION_A_BODY = "Upload one photo of just your face, and RunWear makes your outfit photos from it — starting with the one you're looking at."
+    // GEN-5 note: a wave-B edit rewrote this line to a one-photo
+    // claim; the gate caught it — no settlement changes the fork's
+    // description of the reference-photo intake (1 to 3 photos),
+    // and the gen-4 wording stands.
+    const val F4_OPTION_A_BODY = "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at."
     const val F5_OPTION_A_BUTTON = "Use my photos"
     const val F6_OPTION_B_TITLE = "Use the standard photos"
     const val F7_OPTION_B_BODY = "Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make It Me any time in Settings."

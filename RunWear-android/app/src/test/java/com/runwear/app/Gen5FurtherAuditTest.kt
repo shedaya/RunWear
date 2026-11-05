@@ -9,6 +9,8 @@ import com.runwear.app.weariverun.WearIveRunDayEntry
 import java.io.File
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import com.runwear.app.ui.screens.FitPreferenceOptions
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -231,5 +233,70 @@ class Gen5FurtherAuditTest {
             "app/src/main/res/drawable/widget_background.xml"
         ).map { File(it) }.first { it.exists() }.readText()
         assertTrue(widgetBg.contains("#16130F"))
+    }
+
+    // ── Addendum 8: convergence + narration + fit ───────────────
+
+    @Test
+    fun `A8 defect 1 - the fill call names forecast priority cells`() {
+        val service = source("com/runwear/app/makeitme/PersonalHeroService.kt")
+        assertTrue(service.contains("fillRequestBody(priorityCells)"))
+        assertTrue(service.contains("\"priority_cells\""))
+        assertFalse(service.contains("callFunction(\"start-personal-fill\", \"{}\")"))
+        val mainVm = source("com/runwear/app/ui/viewmodel/MainViewModel.kt")
+        assertTrue(mainVm.contains("onForecastDerived(response, forecast, now)"))
+        assertTrue(mainVm.contains("personalHeroRepository.startPersonalFill(cells)"))
+        assertTrue(mainVm.contains("noteFillTarget(cells)"))
+        // The grant path in the Make It Me view model no longer
+        // fires a cell-less fill call.
+        val mimVm = source("com/runwear/app/makeitme/MakeItMeViewModel.kt")
+        assertFalse(mimVm.contains("repository.startPersonalFill()"))
+    }
+
+    @Test
+    fun `A8 defect 2 - coverage is measured against the target set`() {
+        val service = source("com/runwear/app/makeitme/PersonalHeroService.kt")
+        assertTrue(service.contains("targetCells: Set<String>"))
+        assertTrue(service.contains("heroCells.count { it in targetCells }"))
+    }
+
+    @Test
+    fun `A8 item 3 - the serve engagement is guaranteed outside the hero job`() {
+        val repo = source("com/runwear/app/makeitme/PersonalHeroRepository.kt")
+        assertTrue(repo.contains("suspend fun ensureEngagement"))
+        val mainVm = source("com/runwear/app/ui/viewmodel/MainViewModel.kt")
+        assertTrue(mainVm.contains("personalHeroRepository.ensureEngagement(engagementCell)"))
+    }
+
+    @Test
+    fun `A8 item 2 - a garment payload is unrepresentable in the narration model`() {
+        val models = source("com/runwear/app/weariverun/WearIveRunModels.kt")
+        assertTrue(models.contains("sealed interface WearIveRunNarrationPayload"))
+        assertTrue(models.contains("fun update(payload: WearIveRunNarrationPayload)"))
+        assertFalse(models.contains("fun update(payload: String)"))
+        // The bar entry carries no payload field fed from the kit.
+        assertFalse(models.contains("payload = entry.items.firstOrNull()"))
+    }
+
+    @Test
+    fun `A8 item 3 - settings fit preference carries all three options`() {
+        assertEquals(
+            listOf("Men's", "Women's", "No preference"),
+            FitPreferenceOptions.map { it.first }
+        )
+        assertEquals(
+            listOf(
+                com.runwear.shared.domain.model.GenderPreference.MALE,
+                com.runwear.shared.domain.model.GenderPreference.FEMALE,
+                com.runwear.shared.domain.model.GenderPreference.UNISEX
+            ),
+            FitPreferenceOptions.map { it.second }
+        )
+        // The stored value round-trips: UNISEX is ordinal 2, the
+        // repository's default when nothing is stored.
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.UNISEX,
+            com.runwear.shared.domain.model.GenderPreference.entries[2]
+        )
     }
 }

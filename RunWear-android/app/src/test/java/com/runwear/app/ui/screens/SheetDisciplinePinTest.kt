@@ -155,7 +155,11 @@ class SheetDisciplinePinTest {
         val contentStart = sheets.indexOf("fun SettingsSheetContent(")
         val content = sheets.substring(contentStart)
         assertTrue(content.contains("MakeItMeSettingsSection("))
-        assertTrue(content.contains("DeleteMyDataSettingsRow("))
+        // GEN-5 (RW-28 item 25): the Delete-my-data row is composed
+        // through the Danger zone section, which hosts it (with the
+        // photos row) as its own registered section — still
+        // unconditional, one level down.
+        assertTrue(content.contains("DangerZoneSettingsSection("))
         assertFalse(
             "the Make It Me section may not be gated on a non-null view model (D-14)",
             content.contains("if (makeItMeViewModel != null)")

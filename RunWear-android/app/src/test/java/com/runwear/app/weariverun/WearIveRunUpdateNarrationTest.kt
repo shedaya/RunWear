@@ -39,7 +39,7 @@ class WearIveRunUpdateNarrationTest {
         val previous = entry(listOf("Light Long Sleeve", "Light Tights"))
         val next = entry(listOf("Light Long Sleeve", "Running Shorts (5-7\")"))
         assertEquals(
-            "Kansas City, MO",
+            WearIveRunNarrationPayload.Place("Kansas City, MO", "Now"),
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
@@ -53,7 +53,7 @@ class WearIveRunUpdateNarrationTest {
         val previous = entry(listOf("Light Long Sleeve"), place = "Kansas City, MO")
         val next = entry(listOf("Tank Top"), place = "Miami, FL")
         assertEquals(
-            "Miami, FL",
+            WearIveRunNarrationPayload.Place("Miami, FL", "Now"),
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
@@ -68,7 +68,7 @@ class WearIveRunUpdateNarrationTest {
         val previous = entry(listOf("Light Long Sleeve"), momentLabel = null)
         val next = entry(listOf("Tank Top"), momentLabel = "9 p.m.")
         assertEquals(
-            "9 p.m.",
+            WearIveRunNarrationPayload.Moment("9 p.m."),
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
@@ -82,7 +82,7 @@ class WearIveRunUpdateNarrationTest {
         val previous = entry(listOf("Tank Top"), momentLabel = "9 p.m.")
         val next = entry(listOf("Light Long Sleeve"), momentLabel = null)
         assertEquals(
-            "Now",
+            WearIveRunNarrationPayload.Moment("Now"),
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
@@ -96,7 +96,7 @@ class WearIveRunUpdateNarrationTest {
         val previous = entry(listOf("Light Long Sleeve"), momentLabel = "9 p.m.")
         val next = entry(listOf("Tank Top"), momentLabel = "9 p.m.")
         assertEquals(
-            "9 p.m.",
+            WearIveRunNarrationPayload.Moment("9 p.m."),
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
     }
@@ -122,7 +122,7 @@ class WearIveRunUpdateNarrationTest {
         val previous = entry(listOf("Light Tights"))
         val next = entry(emptyList())
         assertEquals(
-            "Kansas City, MO",
+            WearIveRunNarrationPayload.Place("Kansas City, MO", "Now"),
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
     }
@@ -183,6 +183,42 @@ class WearIveRunUpdateNarrationTest {
         assertEquals(WearIveRunElementKind.MINI, present.kind)
         assertEquals("Added Kansas City, MO, Now", present.narration.text)
         assertEquals(0, holder.cueSequence.value)
+    }
+
+    @Test
+    fun `gen-5 addendum 8 - a changed-headwear settle can never narrate the garment`() {
+        // The device-proven breach, as a state sequence: a session
+        // settles, then re-settles with ONLY the headwear changed
+        // (an ear warmer appears). The gen-4 bar read "Update to
+        // Ear Warmer / Headband". Under the sealed payload the
+        // holder's narration for this sequence is the place form —
+        // and the garment's name appears nowhere in it.
+        val holder = WearIveRunBarStateHolder()
+        holder.onEntriesChanged(
+            listOf(entry(listOf("Light Long Sleeve", "Light Tights"))), today
+        )
+        holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
+        holder.onEntriesChanged(
+            listOf(
+                entry(
+                    listOf("Light Long Sleeve", "Light Tights", "Ear Warmer / Headband")
+                )
+            ),
+            today
+        )
+        val present = holder.state.value as WearIveRunBarState.Present
+        assertEquals("Update to Kansas City, MO, Now", present.narration.text)
+        assertFalse(present.narration.text.contains("Ear Warmer"))
+        // The payload type itself: a kit-only change resolves to a
+        // Place payload, never a string the kit could fill.
+        val payload = WearIveRunUpdateNarration.changedPayload(
+            entry(listOf("Light Long Sleeve")),
+            entry(listOf("Light Long Sleeve", "Ear Warmer / Headband"))
+        )
+        assertEquals(
+            WearIveRunNarrationPayload.Place("Kansas City, MO", "Now"),
+            payload
+        )
     }
 
     @Test

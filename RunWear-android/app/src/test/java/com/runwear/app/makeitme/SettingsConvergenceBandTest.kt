@@ -71,8 +71,12 @@ class SettingsConvergenceBandTest {
             "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt"
         ).readText()
         val section = screens.substringAfter("fun MakeItMeSettingsSection(")
-            .substringBefore("\n// ===========================================================================\n// Delete-my-data")
+            .substringBefore("\n/**\n * WS-5 (D-14): Delete-my-data as its OWN settings row")
 
+        // GEN-5 fix: the slice now ends at the section's real extent
+        // (the next top-level declaration) — the wave-B/C file layout
+        // put other S10-carrying compositions between the section
+        // and the old end-of-file delimiter.
         // Resolved through the shared policy from the section's own
         // state (the same inputs home uses).
         assertTrue(section.contains("ConvergenceBandPolicy.content("))
@@ -110,7 +114,7 @@ class SettingsConvergenceBandTest {
             "app/src/main/java/com/runwear/app/makeitme/MakeItMeScreens.kt"
         ).readText()
         val section = screens.substringAfter("fun MakeItMeSettingsSection(")
-            .substringBefore("\n// ===========================================================================\n// Delete-my-data")
+            .substringBefore("\n/**\n * WS-5 (D-14): Delete-my-data as its OWN settings row")
         assertTrue(section.contains("FreeLooksMeter.block("))
     }
 }

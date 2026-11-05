@@ -354,9 +354,20 @@ class PersonalHeroService @Inject constructor(
 
     // ── Subscriber fill / delete ───────────────────────────────────────
 
-    /** Enqueue the 20-cell matrix for the (entitled) caller. */
-    suspend fun startPersonalFill(): Boolean =
-        callFunction("start-personal-fill", "{}") is FunctionResult.Ok
+    /**
+     * GEN-5 (RW-28 Addendum 8, Defect 1 — convergence diagnosis,
+     * Nov 5, 2026): ask the deployed start-personal-fill (v13,
+     * RW-16.30 convergence model) to enqueue the forecast-imminent
+     * cells THIS caller names in [priorityCells] — combination ids
+     * derived from the user's own 7-day forecast, in forecast order.
+     * The deployed function enqueues ONLY named cells (intersected
+     * server-side with the canonical launch set); the gen-4 client
+     * called it with an empty body, so no fill was ever requested
+     * and the bank grew only by cells the user personally opened.
+     * Re-calling with the same cells is harmless by design.
+     */
+    suspend fun startPersonalFill(priorityCells: List<String>): Boolean =
+        callFunction("start-personal-fill", fillRequestBody(priorityCells)) is FunctionResult.Ok
 
     /**
      * Entitlement reconciliation (the RW-16.12 backstop): ask the
@@ -364,13 +375,20 @@ class PersonalHeroService @Inject constructor(
      * RevenueCat's record. The client asserts nothing — the function
      * derives the user from this session's JWT and verifies the
      * subscriber state against RevenueCat itself before acting; on a
-     * grant it also kicks start-personal-fill server-side. Silent and
-     * idempotent by design (the function writes only on a real
-     * transition). True when the call completed; the caller re-reads
-     * the profile afterwards to mirror any change.
+     * grant it also kicks start-personal-fill server-side — under
+     * the deployed convergence contract that kick names no cells
+     * and enqueues nothing, so the fill trigger of record is the
+     * client's own startPersonalFill call with forecast cells
+     * (Defect 1). Silent and idempotent by design (the function
+     * writes only on a real transition). True when the call
+     * completed; the caller re-reads the profile afterwards to
+     * mirror any change.
      */
     suspend fun reconcileEntitlement(): Boolean =
-        callFunction("reconcile-personal-entitlement", "{}") is FunctionResult.Ok
+        // GEN-5 (RW-28 Addendum 8, Item 4a): name this client's
+        // platform so the function's RevenueCat lookup queries the
+        // matching storefront view instead of a hard-coded one.
+        callFunction("reconcile-personal-entitlement", "{\"platform\":\"android\"}") is FunctionResult.Ok
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 
@@ -445,20 +463,21 @@ class PersonalHeroService @Inject constructor(
 
     /**
      * GEN-3 (convergence band): the caller's REAL bank coverage.
-     * [ready] = distinct cells with a verified banked hero
-     * (personal_heroes); [total] = distinct cells the server has
-     * engaged for the caller — banked heroes ∪ generation jobs of
-     * any status (personal_generation_jobs). start-personal-fill
-     * enqueues the whole missing matrix at once, so once a fill has
-     * run the union IS the fill set; before any fill it is just the
-     * banked set (ready == total, band hidden). Both tables are
-     * owner-read under RLS (the jobs policy exists "for progress
-     * UI"). Null when there is no session or either read fails —
-     * the band never shows invented counts.
+     * GEN-5 (RW-28 Addendum 8, Defect 2 — convergence diagnosis,
+     * Nov 5, 2026): [total] is the BANK'S TARGET SET — the forecast
+     * cells the fill is working toward (the same set the client
+     * names in priority_cells), never the engaged set. The gen-4
+     * denominator (banked ∪ ever-enqueued cells) manufactured
+     * ~90% at 8-of-48 true coverage and would have read 100% with
+     * 40 target cells still missing. [ready] counts only banked
+     * cells that belong to the target. Both tables are owner-read
+     * under RLS (the jobs policy exists "for progress UI"). Null
+     * when there is no session or either read fails — the band
+     * never shows invented counts.
      */
     data class BankCoverage(val ready: Int, val total: Int)
 
-    suspend fun fetchBankCoverage(): BankCoverage? {
+    suspend fun fetchBankCoverage(targetCells: Set<String>): BankCoverage? {
         val session = session() ?: return null
         suspend fun cells(table: String): Set<String>? = runCatching {
             val response = http.get(
@@ -474,7 +493,7 @@ class PersonalHeroService @Inject constructor(
         }.onFailure { Log.w(TAG, "bank coverage read failed ($table)", it) }.getOrNull()
         val heroCells = cells("personal_heroes") ?: return null
         val jobCells = cells("personal_generation_jobs") ?: return null
-        return deriveBankCoverage(heroCells, jobCells)
+        return deriveBankCoverage(heroCells, jobCells, targetCells)
     }
 
     /** The caller's registered reference-photo storage paths, in order. */
@@ -548,15 +567,42 @@ class PersonalHeroService @Inject constructor(
 
 /**
  * GEN-3 (convergence band): coverage from the two owner-read cell
- * sets — ready is the banked set itself; total is every cell the
- * server has engaged (banked ∪ ever-enqueued). Pure, so the band's
- * counts are unit-pinned without a network.
+ * sets. GEN-5 (RW-28 Addendum 8, Defect 2): when the fill's target
+ * set is known (the forecast cells the client names — see
+ * [fillRequestBody]), total IS that set and ready counts only
+ * banked cells inside it, so the bar cannot reach 100% while
+ * target cells are missing. Before any target has been derived
+ * this session (the transient before the first forecast load),
+ * the engaged union is the fallback denominator — the only state
+ * in which it can still appear, and it self-corrects on the first
+ * derivation. Pure, so the band's counts are unit-pinned without
+ * a network.
  */
 internal fun deriveBankCoverage(
     heroCells: Set<String>,
-    jobCells: Set<String>
+    jobCells: Set<String>,
+    targetCells: Set<String> = emptySet()
 ): PersonalHeroService.BankCoverage =
-    PersonalHeroService.BankCoverage(
-        ready = heroCells.size,
-        total = (heroCells union jobCells).size
-    )
+    if (targetCells.isNotEmpty()) {
+        PersonalHeroService.BankCoverage(
+            ready = heroCells.count { it in targetCells },
+            total = targetCells.size
+        )
+    } else {
+        PersonalHeroService.BankCoverage(
+            ready = heroCells.size,
+            total = (heroCells union jobCells).size
+        )
+    }
+
+/**
+ * GEN-5 (RW-28 Addendum 8, Defect 1): the start-personal-fill
+ * request body — the forecast-derived priority cells, in forecast
+ * order, deduplicated. Pure, so the contract the gate checks
+ * (grant → fill requested for forecast cells) is unit-pinned.
+ */
+internal fun fillRequestBody(priorityCells: List<String>): String {
+    val cells = priorityCells.distinct()
+    val joined = cells.joinToString(",") { "\"$it\"" }
+    return """{"priority_cells":[$joined]}"""
+}

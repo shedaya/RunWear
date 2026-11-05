@@ -2,6 +2,7 @@ package com.runwear.app.makeitme
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -45,12 +46,65 @@ class ConvergenceBandCopyTest {
 
     @Test
     fun `coverage derives from the banked set and the engaged set`() {
+        // The pre-target fallback (no forecast derivation yet this
+        // session): engaged-union denominator, as gen-3 pinned it.
         val cov = deriveBankCoverage(
             heroCells = setOf("a", "b", "c"),
             jobCells = setOf("c", "d", "e", "f")
         )
         assertEquals(3, cov.ready)
         assertEquals(6, cov.total)
+    }
+
+    @Test
+    fun `gen-5 defect 2 - against the target set the bar cannot fake convergence`() {
+        // Sol's Nov 5 numbers, exactly as the diagnosis reproduces
+        // them: 8 banked cells, 1 further engaged cell, a 48-cell
+        // settled bank. The gen-4 formula read 8/9 = 89%.
+        val target = (1..48).map { "cell-$it" }.toSet()
+        val cov = deriveBankCoverage(
+            heroCells = (1..8).map { "cell-$it" }.toSet(),
+            jobCells = (1..9).map { "cell-$it" }.toSet(),
+            targetCells = target
+        )
+        assertEquals(8, cov.ready)
+        assertEquals(48, cov.total)
+        val content = ConvergenceBandPolicy.content(
+            MakeItMeMode.SUBSCRIBED, cov, inTrial = false
+        )!!
+        assertEquals(8f / 48f, content.fraction)
+        // Off-target banked cells never inflate readiness, and the
+        // band retires only when every target cell is banked.
+        val withExtras = deriveBankCoverage(
+            heroCells = target + setOf("elsewhere-1", "elsewhere-2"),
+            jobCells = emptySet(),
+            targetCells = target
+        )
+        assertEquals(48, withExtras.ready)
+        assertEquals(48, withExtras.total)
+        assertNull(
+            ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, withExtras, inTrial = false)
+        )
+        val oneMissing = deriveBankCoverage(
+            heroCells = target - "cell-48",
+            jobCells = emptySet(),
+            targetCells = target
+        )
+        assertEquals(47, oneMissing.ready)
+        assertNotNull(
+            ConvergenceBandPolicy.content(MakeItMeMode.SUBSCRIBED, oneMissing, inTrial = false)
+        )
+    }
+
+    @Test
+    fun `gen-5 defect 1 - the fill request names the forecast cells`() {
+        // The request body is the contract: priority_cells, in
+        // forecast order, deduplicated — never the gen-4 "{}".
+        assertEquals(
+            """{"priority_cells":["a","b","c"]}""",
+            fillRequestBody(listOf("a", "b", "a", "c"))
+        )
+        assertEquals("""{"priority_cells":[]}""", fillRequestBody(emptyList()))
     }
 
     @Test

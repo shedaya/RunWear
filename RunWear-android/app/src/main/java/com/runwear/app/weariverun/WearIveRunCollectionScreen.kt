@@ -280,7 +280,7 @@ private fun HonestEmptyState(modifier: Modifier = Modifier) {
             Text(
                 // GEN-5 (RW-29 FA-16): the settled empty state
                 // (design frame 10) — the gen-4 copy was invented
-                // ("Nothing here yet") and spoke of sessions where
+                // (an invented placeholder line) and spoke of sessions where
                 // the frame speaks of days, and it dropped the
                 // no-backfill statement entirely.
                 text = "Your scrapbook starts with today's run",

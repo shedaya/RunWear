@@ -1,5 +1,18 @@
 // Supabase Edge Function: start-personal-fill (RW-14, 2026-10-31)
 //
+// GEN-5 CONTRACT NOTE (RW-28 Addendum 8, Defect 1, Nov 5, 2026):
+// this repository copy predates the deployed convergence model.
+// Production runs v13 (RW-16.30), which enqueues ONLY the cells
+// the caller names in the request body's `priority_cells`
+// (combination ids from the user's 7-day forecast, in forecast
+// order), intersected with the canonical launch set. The shipped
+// clients now send priority_cells (Android in gen-5; the gen-4
+// empty-body call was the defect that left banks unconverged).
+// This copy still implements the older fixed-matrix contract
+// below; bringing the repository copy to the v13 contract is
+// named server-side work in the gen-5 report — production
+// behaviour is NOT changed by anything in this file today.
+//
 // Subscriber initial fill: enqueues the 20-cell core matrix for an
 // ENTITLED user — every temperature bracket x CLEAR x DAWN, x CLEAR x
 // DUSK, x RAIN x DAWN, plus WARM/HOT x CLEAR x MIDDAY — each cell at

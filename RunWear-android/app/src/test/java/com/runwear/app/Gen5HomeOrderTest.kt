@@ -75,8 +75,8 @@ class Gen5HomeOrderTest {
             "private fun LazyListScope.homeTrailingListItems",
             "private fun LazyGridScope.outfitGridItems"
         )
-        val tipAt = trailing.indexOf("ProTipCard(")
-        val feedbackAt = trailing.indexOf("OutfitFeedbackRow(")
+        val tipAt = trailing.indexOf("TipsSection(")
+        val feedbackAt = trailing.indexOf("Not what you'd wear? Tell us")
         assertTrue("Pro Tip in the list trailing block", tipAt >= 0)
         assertTrue("feedback row follows the Pro Tip", feedbackAt > tipAt)
 
@@ -87,11 +87,11 @@ class Gen5HomeOrderTest {
         )
         assertTrue(
             "Pro Tip in the grid trailing block",
-            gridTrailing.contains("ProTipCard(")
+            gridTrailing.contains("TipsSection(")
         )
         assertTrue(
             "feedback row in the grid trailing block",
-            gridTrailing.contains("OutfitFeedbackRow(")
+            gridTrailing.contains("Not what you'd wear? Tell us")
         )
     }
 

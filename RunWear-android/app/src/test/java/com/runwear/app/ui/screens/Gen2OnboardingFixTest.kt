@@ -58,10 +58,16 @@ class Gen2OnboardingFixTest {
 
     // ── W-21 ────────────────────────────────────────────────────
 
+    // GEN-5 SUPERSESSION (RW-28 census item 27 / A-1, Nov 5): the
+    // gen-4 walkthrough census records the DESIGN footer as "Free
+    // to start · Set up in under a minute" (design-spec §1) and
+    // flags the W-21 line below as the deviation — the later
+    // settlement reverses W-21. These pins now record the census
+    // settlement; the W-21 history stays in this file's header.
     @Test
     fun `W-21 - the welcome footer is Sol's replacement, verbatim`() {
         assertEquals(
-            "Free forever · Premium is optional",
+            "Free to start · Set up in under a minute",
             OnboardingCopy.PROMISE_FOOTER
         )
     }
@@ -71,8 +77,8 @@ class Gen2OnboardingFixTest {
         val flow = sourceFile(
             "app/src/main/java/com/runwear/app/ui/screens/OnboardingFlow.kt"
         ).readText()
-        assertFalse(flow.contains("Free to start"))
-        assertFalse(onboardingScreen().contains("Free to start"))
+        assertFalse(flow.contains("Free forever · Premium is optional"))
+        assertFalse(onboardingScreen().contains("Free forever · Premium is optional"))
         // And the footer slot on the promise step still renders the
         // pinned copy constant (the pin is on the rendered slot).
         assertTrue(onboardingScreen().contains("OnboardingCopy.PROMISE_FOOTER"))

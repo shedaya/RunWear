@@ -102,7 +102,7 @@ class PersonalHeroRepository @Inject constructor(
         // GEN-3 (convergence band): the coverage read rides the same
         // refresh; a failed read leaves the previous value in place.
         val coverage = if (profile.personalizationOn) {
-            service.fetchBankCoverage() ?: _state.value.bankCoverage
+            service.fetchBankCoverage(fillTargetCells) ?: _state.value.bankCoverage
         } else {
             _state.value.bankCoverage
         }
@@ -391,8 +391,47 @@ class PersonalHeroRepository @Inject constructor(
         return outcome
     }
 
-    /** Subscriber matrix fill (server refuses non-entitled users). */
-    suspend fun startPersonalFill(): Boolean = service.startPersonalFill()
+    /**
+     * GEN-5 (RW-28 Addendum 8, Defects 1 + 2): the bank's target
+     * set — the forecast cells the fill names. Noted by the main
+     * view model on every forecast derivation (entitled or not),
+     * consumed by the coverage read as its denominator and by the
+     * fill call as its request. In-memory: it is re-derived from
+     * the live forecast on the first weather load of every
+     * session, which is also when the band first needs it.
+     */
+    @Volatile
+    var fillTargetCells: Set<String> = emptySet()
+        private set
+
+    fun noteFillTarget(cells: List<String>) {
+        fillTargetCells = cells.toSet()
+    }
+
+    /** Subscriber forecast fill (server refuses non-entitled users). */
+    suspend fun startPersonalFill(priorityCells: List<String>): Boolean =
+        service.startPersonalFill(priorityCells)
+
+    /**
+     * GEN-5 (RW-28 Addendum 8, Item 3): the serve-path engagement
+     * guarantee. The deployed get-personal-hero queues the
+     * priority-15 convergence job for an entitled user's unowned
+     * cell as a side effect of being CALLED — but the hero
+     * resolution runs that call inside a cancellable job, behind
+     * the pool fetch, so a superseded resolution can drop the
+     * engagement for a cell without a trace (the 07:43 CST serve
+     * class). This entry point performs the same lookup from the
+     * caller's own scope, once per cell per process, so the
+     * engagement does not depend on the hero job's lifetime. The
+     * lookup's result is discarded here — the resolution's own
+     * lookup still owns what renders.
+     */
+    private val engagementEnsured = mutableSetOf<String>()
+
+    suspend fun ensureEngagement(combinationId: String) {
+        if (!engagementEnsured.add(combinationId)) return
+        runCatching { cellLookFor(combinationId) }
+    }
 
     // ── Delete ─────────────────────────────────────────────────────────
 

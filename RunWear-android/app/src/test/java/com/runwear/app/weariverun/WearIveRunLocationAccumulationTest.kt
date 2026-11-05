@@ -82,10 +82,23 @@ class WearIveRunLocationAccumulationTest {
         val op = chapters.first { it.place == "Overland Park" }
         // Inside a location, ALL of its sessions — including both
         // Nov 2 New York sessions and the year-old Miami session.
-        assertEquals(5, ny.days.size)
-        assertEquals(5, ny.totalDaysUnfiltered)
-        assertEquals(2, ny.days.count { it.date == LocalDate.of(2026, 11, 2) })
-        assertEquals(3, mi.days.size)
+        // GEN-5 (RW-29 FA-13/FA-23/FA-38): chapter days are STAYS —
+        // same-day sessions at one place merge into one stay holding
+        // every entry (the Miami duplicate-key crash fix), and the
+        // day counts count DISTINCT dates. New York: 5 entries over
+        // 4 distinct days -> 4 stays; the Nov 2 stay holds both
+        // sessions. Miami: 3 entries over 2 distinct days -> 2 stays.
+        assertEquals(4, ny.days.size)
+        assertEquals(4, ny.totalDaysUnfiltered)
+        assertEquals(
+            2,
+            ny.days.single { it.date == LocalDate.of(2026, 11, 2) }.entries.size
+        )
+        assertEquals(2, mi.days.size)
+        assertEquals(
+            2,
+            mi.days.single { it.date == LocalDate.of(2026, 11, 3) }.entries.size
+        )
         assertTrue(mi.days.any { it.date == LocalDate.of(2025, 12, 25) })
         assertEquals(1, op.days.size)
     }

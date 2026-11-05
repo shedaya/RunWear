@@ -21,14 +21,37 @@ import kotlinx.coroutines.flow.asStateFlow
  * silently (see [WearIveRunBarStateHolder.onEntriesChanged]).
  */
 
+/**
+ * GEN-5 (RW-28 Addendum 8, item 2): the ONLY things an "Update
+ * to […]" narration may name — a place (with its day form) or a
+ * moment reading. The payload is a sealed type, not a string, so
+ * a garment payload is UNREPRESENTABLE: the gen-4 device build
+ * read "Update to Ear Warmer / Headband" because the payload
+ * channel was a free string fed from the kit. There is no
+ * constructor here a garment name can flow through.
+ */
+sealed interface WearIveRunNarrationPayload {
+    /** What renders in pine after "Update to ". */
+    fun render(): String
+
+    /** "Update to {place}, {day}" — the place form. */
+    data class Place(val place: String, val dayForm: String) :
+        WearIveRunNarrationPayload {
+        override fun render(): String = "$place, $dayForm"
+    }
+
+    /** "Update to {reading}" — a clock reading ("9 p.m.") or "Now". */
+    data class Moment(val reading: String) : WearIveRunNarrationPayload {
+        override fun render(): String = reading
+    }
+}
+
 /** One collection entry, as the expanded bar presents it. */
 data class WearIveRunEntry(
     /** The SIMPLE place form ("New York, NY") — never a raw geocode string. */
     val place: String,
     /** The narration day form ("Now" for today) — never the collection's "Today". */
     val timeLabel: String,
-    /** The variable payload of an "Update to …" narration, if any. */
-    val payload: String? = null,
     val thumbnailUrl: String? = null,
     /** WS-4: the entry's settled feels-like, for the expanded subtitle. */
     val feelsLikeF: Double? = null,
@@ -289,21 +312,39 @@ object WearIveRunUpdateNarration {
     fun momentReading(entry: WearIveRunDayEntry): String =
         entry.momentLabel ?: "Now"
 
-    /** The changed dimension an "Update to […]" line names, if any. */
+    /**
+     * The changed dimension an "Update to […]" line names, if any
+     * — as a [WearIveRunNarrationPayload], so the answer is a
+     * place or a moment BY CONSTRUCTION (Addendum 8 item 2: a kit
+     * change resolves to the entry's moment when it is a changed
+     * moment, else its place; the garment itself has no
+     * representation in the result type).
+     */
     fun changedPayload(
         previous: WearIveRunDayEntry,
-        next: WearIveRunDayEntry
-    ): String? {
+        next: WearIveRunDayEntry,
+        today: java.time.LocalDate = next.date
+    ): WearIveRunNarrationPayload? {
         val simplePlace = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(next.place).display
         if (previous.place != next.place || previous.date != next.date) {
-            return simplePlace
+            return WearIveRunNarrationPayload.Place(
+                simplePlace,
+                WearIveRunCollectionLogic.narrationDayForm(next.date, today)
+            )
         }
         if (previous.momentLabel != next.momentLabel) {
-            return momentReading(next)
+            return WearIveRunNarrationPayload.Moment(momentReading(next))
         }
         if (previous.items != next.items) {
-            return if (next.momentLabel != null) momentReading(next) else simplePlace
+            return if (next.momentLabel != null) {
+                WearIveRunNarrationPayload.Moment(momentReading(next))
+            } else {
+                WearIveRunNarrationPayload.Place(
+                    simplePlace,
+                    WearIveRunCollectionLogic.narrationDayForm(next.date, today)
+                )
+            }
         }
         return null
     }
@@ -314,23 +355,8 @@ object WearIveRunUpdateNarration {
         next: WearIveRunDayEntry,
         today: java.time.LocalDate = next.date
     ): WearIveRunNarration? =
-        changedPayload(previous, next)?.let { payload ->
-            // A place payload renders in the settled "{place}, {day}"
-            // form; a moment payload stands alone ("Update to
-            // 9 p.m."). The two are told apart by which dimension
-            // changed, recomputed here so the narration and its
-            // payload can never disagree about the entry they name.
-            val simplePlace = com.runwear.shared.domain.model.SimplePlace
-                .fromRawDisplayString(next.place).display
-            if (payload == simplePlace) {
-                WearIveRunNarrationFormatter.update(
-                    "$simplePlace, ${
-                        WearIveRunCollectionLogic.narrationDayForm(next.date, today)
-                    }"
-                )
-            } else {
-                WearIveRunNarrationFormatter.update(payload)
-            }
+        changedPayload(previous, next, today)?.let { payload ->
+            WearIveRunNarrationFormatter.update(payload)
         }
 }
 
@@ -369,13 +395,19 @@ object WearIveRunNarrationFormatter {
         )
     }
 
-    /** "Update to {payload}" — the payload renders in pine. */
-    fun update(payload: String): WearIveRunNarration {
+    /**
+     * "Update to {payload}" — the payload renders in pine. The
+     * payload is a [WearIveRunNarrationPayload]: there is no
+     * overload that takes a free string, so no caller can name a
+     * garment (Addendum 8 item 2).
+     */
+    fun update(payload: WearIveRunNarrationPayload): WearIveRunNarration {
         val prefix = "Update to "
+        val rendered = payload.render()
         return WearIveRunNarration(
-            text = prefix + payload,
+            text = prefix + rendered,
             payloadStart = prefix.length,
-            payloadEnd = prefix.length + payload.length
+            payloadEnd = prefix.length + rendered.length
         )
     }
 }
@@ -507,8 +539,11 @@ class WearIveRunBarStateHolder {
         }
     }
 
-    /** WS-4 content construction: simple place, narration day form,
-     * the entry's real payload (its first kit item). */
+    /** WS-4 content construction: simple place, narration day form.
+     * GEN-5 (Addendum 8 item 2): the bar entry no longer carries a
+     * payload at all — the gen-4 construction stored the entry's
+     * first kit item here, and that string is what the device
+     * build rendered as "Update to Ear Warmer / Headband". */
     private fun barEntryOf(entry: WearIveRunDayEntry): WearIveRunEntry {
         val simplePlace = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(entry.place).display
@@ -517,7 +552,6 @@ class WearIveRunBarStateHolder {
             timeLabel = WearIveRunCollectionLogic.narrationDayForm(
                 entry.date, knownDay ?: entry.date
             ),
-            payload = entry.items.firstOrNull()?.takeIf { it.isNotBlank() },
             thumbnailUrl = entry.heroRef,
             feelsLikeF = entry.feelsLikeF,
             itemCount = entry.items.size,
@@ -582,7 +616,10 @@ class WearIveRunBarStateHolder {
         val simplePlace = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(entry.place).display
         return WearIveRunNarrationFormatter.update(
-            "$simplePlace, ${WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)}"
+            WearIveRunNarrationPayload.Place(
+                simplePlace,
+                WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)
+            )
         )
     }
 

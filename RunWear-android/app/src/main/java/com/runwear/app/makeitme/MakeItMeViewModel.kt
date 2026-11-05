@@ -214,16 +214,19 @@ class MakeItMeViewModel @Inject constructor(
     /**
      * After a successful purchase: sync identity + entitlement first —
      * the reconcile backstop verifies the purchase against RevenueCat
-     * server-side, flips the flag, and kicks the matrix fill itself on
-     * a grant. The direct fill call stays as the second trigger (it is
-     * also the correct one when the webhook landed the flag first);
-     * the function refuses non-entitled users, so it is a harmless
-     * no-op in every other state.
+     * server-side and flips the flag. GEN-5 (RW-28 Addendum 8,
+     * Defect 1): there is deliberately NO direct fill call here any
+     * longer — under the deployed convergence contract a fill call
+     * without forecast cells enqueues nothing (that empty call was
+     * the defect), and this view model holds no forecast. The fill
+     * trigger of record is the main view model's forecast path: it
+     * names the 7-day forecast cells on the entitlement transition
+     * this sync produces and on every forecast refresh while
+     * entitled.
      */
     private fun onSubscriptionActivated() {
         viewModelScope.launch {
             repository.syncBillingIdentity()
-            runCatching { repository.startPersonalFill() }
             repository.refreshFromServer()
         }
     }
