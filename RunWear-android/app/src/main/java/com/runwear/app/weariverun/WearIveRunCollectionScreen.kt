@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -180,7 +182,29 @@ fun WearIveRunCollectionScreen(
                                         // its place and shows its photo,
                                         // like the chapter cards below it.
                                         place = todayEntry.place,
-                                        thumbnailRef = todayEntry.heroRef
+                                        thumbnailRef = todayEntry.heroRef,
+                                        // GEN-5 (item 10 / B-18): the
+                                        // TODAY card carries its "Last
+                                        // saved …" line, and the same
+                                        // view action the chapter rows
+                                        // carry — one action set for
+                                        // one entry type. The view
+                                        // action exists only when a
+                                        // chapter for the place does.
+                                        lastSavedLabel = WearIveRunCollectionLogic
+                                            .lastSavedLabel(
+                                                todayEntry,
+                                                System.currentTimeMillis()
+                                            ),
+                                        onView = if (
+                                            listChapters.any {
+                                                it.place == todayEntry.place
+                                            }
+                                        ) {
+                                            { openChapter = todayEntry.place }
+                                        } else {
+                                            null
+                                        }
                                     )
                                 }
                             }
@@ -276,6 +300,19 @@ internal fun ChapterCover(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+                } else {
+                    // GEN-5 (Miami crash addendum): a thumbnail-less
+                    // entry's designed treatment — the tinted slot
+                    // carries the run glyph, never a bare blank that
+                    // reads as a broken photo. Opening the place is
+                    // unaffected by the missing photo (the detail
+                    // path never dereferences it).
+                    Icon(
+                        Icons.Outlined.DirectionsRun,
+                        contentDescription = null,
+                        tint = RunWearColors.TextSecondary,
+                        modifier = Modifier.size(26.dp)
+                    )
                 }
             }
             Spacer(Modifier.width(12.dp))
@@ -320,7 +357,7 @@ internal fun ChapterCover(
 }
 
 @Composable
-private fun ChapterDetail(
+internal fun ChapterDetail(
     chapter: WearIveRunCollectionLogic.Chapter,
     today: LocalDate,
     onShare: (WearIveRunDayEntry) -> Unit,
@@ -384,8 +421,15 @@ private fun ChapterDetail(
             }
         } else {
             // Stays newest-first, days newest-first within the stay.
-            chapter.stays.forEach { stay ->
-                item(key = "stay-${stay.start}") {
+            // GEN-5 (Miami crash fix): lazy keys carry the stay and
+            // day INDICES, so they are unique for ANY data shape —
+            // including two entries for the same date at the same
+            // place (two sessions, one day), whose (date, place)
+            // keys collided pre-fix and threw
+            // IllegalArgumentException ("Key ... was already used")
+            // the moment the place detail composed.
+            chapter.stays.forEachIndexed { stayIndex, stay ->
+                item(key = "stay-$stayIndex-${stay.start}") {
                     Text(
                         text = WearIveRunCollectionLogic.spanLabel(stay.start, stay.end),
                         style = MaterialTheme.typography.titleSmall,
@@ -393,7 +437,12 @@ private fun ChapterDetail(
                         modifier = Modifier.padding(top = 6.dp)
                     )
                 }
-                items(stay.days, key = { "d-${it.date}-${it.place}" }) { day ->
+                itemsIndexed(
+                    stay.days,
+                    key = { dayIndex, day ->
+                        "d-$stayIndex-$dayIndex-${day.date}-${day.place}"
+                    }
+                ) { _, day ->
                     DayCard(entry = day, today = today, onShare = { onShare(day) })
                 }
             }
@@ -403,7 +452,12 @@ private fun ChapterDetail(
 }
 
 @Composable
-private fun DayRow(entry: WearIveRunDayEntry, today: LocalDate, onShare: () -> Unit) {
+private fun DayRow(
+    entry: WearIveRunDayEntry,
+    today: LocalDate,
+    onShare: () -> Unit,
+    onView: (() -> Unit)? = null
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -420,6 +474,15 @@ private fun DayRow(entry: WearIveRunDayEntry, today: LocalDate, onShare: () -> U
                 color = RunWearColors.TextSecondary
             )
         }
+        if (onView != null) {
+            IconButton(onClick = onView) {
+                Icon(
+                    Icons.Outlined.Visibility,
+                    "View ${entry.place} chapter",
+                    tint = RunWearColors.TextSecondary
+                )
+            }
+        }
         IconButton(onClick = onShare) {
             Icon(Icons.Outlined.Share, "Share this day", tint = RunWearColors.TextSecondary)
         }
@@ -434,7 +497,12 @@ internal fun DayCard(
     /** W-10: when set (the pinned TODAY card), the card names its
      * place and shows its photo thumbnail, like the chapter cards. */
     place: String? = null,
-    thumbnailRef: String? = null
+    thumbnailRef: String? = null,
+    /** GEN-5 (item 10 / B-18): the "Last saved …" line (TODAY card). */
+    lastSavedLabel: String? = null,
+    /** GEN-5 (B-18): the view action chapter rows carry — the same
+     * action set for the same entry type. Null = no chapter to view. */
+    onView: (() -> Unit)? = null
 ) {
     Surface(shape = RoundedCornerShape(14.dp), color = RunWearColors.BgCard) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -455,6 +523,13 @@ internal fun DayCard(
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        } else {
+                            Icon(
+                                Icons.Outlined.DirectionsRun,
+                                contentDescription = null,
+                                tint = RunWearColors.TextSecondary,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
                     Spacer(Modifier.width(12.dp))
@@ -465,7 +540,14 @@ internal fun DayCard(
                     )
                 }
             }
-            DayRow(entry = entry, today = today, onShare = onShare)
+            DayRow(entry = entry, today = today, onShare = onShare, onView = onView)
+            if (lastSavedLabel != null) {
+                Text(
+                    text = lastSavedLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = RunWearColors.TextSecondary
+                )
+            }
             if (entry.items.isNotEmpty()) {
                 Text(
                     text = entry.items.joinToString(" · "),

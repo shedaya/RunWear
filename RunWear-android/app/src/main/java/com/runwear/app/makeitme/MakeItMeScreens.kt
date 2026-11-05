@@ -15,6 +15,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlin.math.roundToInt
 import com.runwear.app.ui.theme.GreatVibesFontFamily
 import com.runwear.app.ui.theme.RunWearColors
 
@@ -120,25 +123,85 @@ internal object ForkBackPolicy {
  */
 internal object ForkBandGeometry {
 
-    /** The band's height — see the class doc for why it stays. */
+    /** The band's height — part of the composition, not a free knob. */
     const val BAND_HEIGHT_DP = 300
 
-    /** Top-anchored, as home: the slice starts at source y = 0. */
-    val IMAGE_ALIGNMENT: Alignment = Alignment.TopCenter
+    // GEN-5 (RW-28, ruling C-2): the fork band is ONE purpose-designed
+    // hard-coded image (res/drawable-nodpi/mim_fork_hero.webp,
+    // 2048 x 1152, 16:9) — it no longer shows the home hero serve.
+    // Anchoring rule of record (asset lane README, binding): plain
+    // centre-crop is ruled OUT (the head has only 3.2% headroom).
+    //  - Band aspect <= image aspect: full image height is shown;
+    //    the horizontal window is centred on the face centre
+    //    (x = 0.507), clamped to the image edges.
+    //  - Band aspect > image aspect: full image width is shown; the
+    //    vertical window is anchored to the TOP of the image.
+    const val IMAGE_WIDTH_PX = 2048f
+    const val IMAGE_HEIGHT_PX = 1152f
+    const val FACE_CENTRE_X_FRACTION = 0.507f
+
+    /** The dashed face box, in image-normalised coordinates. */
+    const val FACE_BOX_X = 0.400f
+    const val FACE_BOX_Y = 0.018f
+    const val FACE_BOX_WIDTH = 0.214f
+    const val FACE_BOX_HEIGHT = 0.478f
+
+    /** A rectangle in band coordinates (px). */
+    data class RectF(val left: Float, val top: Float, val width: Float, val height: Float)
 
     /**
-     * True when the top-anchored Crop slice for a display box of
-     * [displayWidthPx] × [displayHeightPx] reaches the bottom of
-     * the audited head band — i.e. the FULL head is in frame.
-     * Pure delegation to home's [com.runwear.app.ui.components
-     * .HeroImageGeometry] math (one geometry of record, two
-     * surfaces).
+     * The displayed image rect for a band of [bandWidthPx] x
+     * [bandHeightPx] under the anchoring rule: the image is scaled
+     * to fill (cover), then positioned per the rule. The rect may
+     * extend past the band on the cropped axis (negative left/top).
      */
-    fun headBandFullyVisible(displayWidthPx: Float, displayHeightPx: Float): Boolean =
-        com.runwear.app.ui.components.HeroImageGeometry.sliceHeightSourcePx(
-            displayWidthPx, displayHeightPx
-        ) >= com.runwear.app.ui.components.HeroImageGeometry.HEAD_BAND_BOTTOM_FRACTION *
-            com.runwear.app.ui.components.HeroImageGeometry.SOURCE_HEIGHT_PX
+    fun displayedImageRect(bandWidthPx: Float, bandHeightPx: Float): RectF {
+        val bandAspect = bandWidthPx / bandHeightPx
+        val imageAspect = IMAGE_WIDTH_PX / IMAGE_HEIGHT_PX
+        val scale = maxOf(bandWidthPx / IMAGE_WIDTH_PX, bandHeightPx / IMAGE_HEIGHT_PX)
+        val displayedW = IMAGE_WIDTH_PX * scale
+        val displayedH = IMAGE_HEIGHT_PX * scale
+        val left: Float
+        val top: Float
+        if (bandAspect <= imageAspect) {
+            // Full height shown; window centred on the face centre.
+            val desired = FACE_CENTRE_X_FRACTION * displayedW - bandWidthPx / 2f
+            val offsetX = desired.coerceIn(0f, (displayedW - bandWidthPx).coerceAtLeast(0f))
+            left = -offsetX
+            top = 0f
+        } else {
+            // Full width shown; window anchored to the top.
+            left = 0f
+            top = 0f
+        }
+        return RectF(left, top, displayedW, displayedH)
+    }
+
+    /** The face box in band coordinates, from the displayed rect. */
+    fun faceBoxRect(bandWidthPx: Float, bandHeightPx: Float): RectF {
+        val img = displayedImageRect(bandWidthPx, bandHeightPx)
+        return RectF(
+            left = img.left + FACE_BOX_X * img.width,
+            top = img.top + FACE_BOX_Y * img.height,
+            width = FACE_BOX_WIDTH * img.width,
+            height = FACE_BOX_HEIGHT * img.height
+        )
+    }
+
+    /**
+     * True when the FULL head (measured box y 0.032..0.482, x
+     * 0.414..0.600) is inside the band window under the anchoring
+     * rule — pinned across the form-factor matrix in tests.
+     */
+    fun headFullyVisible(bandWidthPx: Float, bandHeightPx: Float): Boolean {
+        val img = displayedImageRect(bandWidthPx, bandHeightPx)
+        val headLeft = img.left + 0.414f * img.width
+        val headRight = img.left + 0.600f * img.width
+        val headTop = img.top + 0.032f * img.height
+        val headBottom = img.top + 0.482f * img.height
+        return headLeft >= 0f && headRight <= bandWidthPx &&
+            headTop >= 0f && headBottom <= bandHeightPx
+    }
 }
 
 @Composable
@@ -171,48 +234,63 @@ fun MakeItMeForkScreen(
         // (verticalScroll on the root), so the whole fork — both
         // option cards, the "Use standard photos" button included —
         // is reachable however tall the content runs.
-        Box(
+        // GEN-5 (RW-28, C-2): the hard-coded fork hero — one
+        // purpose-designed bundled image, cover-cropped under the
+        // asset lane's anchoring rule (ForkBandGeometry), with the
+        // dashed face box drawn as a code overlay in image space so
+        // it stays registered to the face at every form factor. The
+        // band's placeholder is the designed cream, never white
+        // (A-5). Both doors below are fully visible on arrival: the
+        // root column scrolls AND the band is exactly one band tall
+        // (A-4's clip came from the old serve's composition; the
+        // settled fork keeps both cards reachable without a scroll
+        // cue hunt — the scroll remains for small screens).
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(ForkBandGeometry.BAND_HEIGHT_DP.dp)
-                .background(RunWearColors.BgCard)
+                .background(RunWearColors.Background)
+                .clip(androidx.compose.ui.graphics.RectangleShape)
         ) {
-            if (heroImageUrl != null) {
-                AsyncImage(
-                    model = heroImageUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = ForkBandGeometry.IMAGE_ALIGNMENT,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                // GEN-3 A-HERO (WS-B): the fork band must never
-                // render empty. The caller now passes the scene's
-                // effective photo (bundled fallback included), so a
-                // null URL means no truthful photo is servable for
-                // this cell at all — the band then carries the
-                // designed placeholder (gradient + glyph), never a
-                // bare flat box that reads as a broken photo.
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            androidx.compose.ui.graphics.Brush.verticalGradient(
-                                listOf(
-                                    RunWearColors.BgCard,
-                                    RunWearColors.PineAccent.copy(alpha = 0.35f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DirectionsRun,
-                        contentDescription = null,
-                        tint = RunWearColors.TextSecondary,
-                        modifier = Modifier.size(44.dp)
+            val density = androidx.compose.ui.platform.LocalDensity.current
+            val bandWidthPx = with(density) { maxWidth.toPx() }
+            val bandHeightPx = with(density) { maxHeight.toPx() }
+            val imgRect = ForkBandGeometry.displayedImageRect(bandWidthPx, bandHeightPx)
+            val boxRect = ForkBandGeometry.faceBoxRect(bandWidthPx, bandHeightPx)
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(
+                    com.runwear.app.R.drawable.mim_fork_hero
+                ),
+                contentDescription = null,
+                contentScale = ContentScale.None,
+                modifier = Modifier
+                    .offset {
+                        androidx.compose.ui.unit.IntOffset(
+                            imgRect.left.roundToInt(), imgRect.top.roundToInt()
+                        )
+                    }
+                    .size(
+                        width = with(density) { imgRect.width.toDp() },
+                        height = with(density) { imgRect.height.toDp() }
                     )
-                }
+            )
+            // The dashed face box — same dashed language as the
+            // guided capture's face oval, pine on the light image.
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRoundRect(
+                    color = RunWearColors.PineAccent,
+                    topLeft = androidx.compose.ui.geometry.Offset(boxRect.left, boxRect.top),
+                    size = androidx.compose.ui.geometry.Size(boxRect.width, boxRect.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(
+                        boxRect.height * 0.12f, boxRect.height * 0.12f
+                    ),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.5.dp.toPx(),
+                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
+                            floatArrayOf(10.dp.toPx(), 7.dp.toPx())
+                        )
+                    )
+                )
             }
         }
 

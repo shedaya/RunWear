@@ -98,11 +98,14 @@ class HeroFallbackImagesTest {
         // point-grain tables) — 10 gen-3 + 20 replenishment
         // (RWPOOL-T07..T26); the pinned total is 44 paired + 30
         // point-grain, nothing else. Pin raised 54 -> 74 by the
-        // replenishment integration (deliberate: 20 new assets).
+        // replenishment integration (deliberate: 20 new assets), and
+        // 74 -> 76 by GEN-5 (RW-28): the top-up batch's 2
+        // balaclava+gloves assets (RWPOOL-T27/T28), mirroring iOS
+        // gen-4 commit 275f84f.
         val pointGrain = HeroImageSelector.pointGrainGarmentsTable().keys
             .map { "$it.webp" }.toSet()
-        assertEquals(30, pointGrain.size)
-        assertEquals(74, names.size)
+        assertEquals(32, pointGrain.size)
+        assertEquals(76, names.size)
         assertEquals(expected + pointGrain, names)
         // None of the 21 legacy ungendered names survives (D-21: the
         // set that shipped the 5 re-adjudication-rejected sources).

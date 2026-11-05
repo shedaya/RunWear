@@ -75,6 +75,7 @@ class WearIveRunStore(private val context: Context) {
                     put("place", e.place)
                     put("sessionId", e.sessionId)
                     put("settledAtMillis", e.settledAtMillis)
+                    e.momentLabel?.let { put("momentLabel", it) }
                     put("feelsLikeF", e.feelsLikeF)
                     put("condition", e.conditionLabel)
                     put("snowing", e.isSnowing)
@@ -102,6 +103,7 @@ class WearIveRunStore(private val context: Context) {
                         // wipe: history decodes exactly as stored.
                         sessionId = o.optString("sessionId"),
                         settledAtMillis = o.optLong("settledAtMillis", 0L),
+                        momentLabel = o.optString("momentLabel").takeIf { it.isNotBlank() },
                         // WS-4: entries recorded before the simple-place
                         // model carry raw geocode strings; normalize on
                         // read so every downstream surface (narration,

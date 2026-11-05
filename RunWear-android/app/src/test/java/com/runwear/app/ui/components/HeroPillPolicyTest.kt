@@ -32,10 +32,60 @@ class HeroPillPolicyTest {
         assertEquals(MakeItMeStrings.HERO_PILL_MAKING, pill?.text)
         assertTrue(pill?.showSpinner == true)
         assertNull(pill?.actionText)
-        // The Nov 4 design delta leaves (a) untouched: no script
-        // mark, no lock in the generating state.
-        assertTrue(pill?.showScriptMark == false)
+        // GEN-5 (RW-28): EVERY pill status leads with the script —
+        // the generating pill included (A-13/B-14).
+        assertTrue(pill?.showScriptMark == true)
         assertTrue(pill?.showLock == false)
+        // GEN-5 C-4 AMENDED: the FREE-tier generating pill carries
+        // the one small green upsell line, verbatim.
+        assertEquals(MakeItMeStrings.HERO_PILL_MAKING_UPSELL, pill?.upsellText)
+        assertEquals("Get it instantly next time", pill?.upsellText)
+    }
+
+    @Test
+    fun `a subscriber's generating pill carries no upsell`() {
+        // C-4 AMENDED scope limit: Premium generating states have
+        // nothing left to sell — no upsell line.
+        val pill = HeroPillPolicy.resolve(
+            lookStatus = PersonalLookStatus.Making,
+            serveKind = PersonalServeKind.EXACT,
+            heroIsPersonal = false,
+            mode = MakeItMeMode.SUBSCRIBED,
+            freeGenerationsUsed = 5
+        )
+        assertEquals(HeroPillKind.MAKING, pill?.kind)
+        assertNull(pill?.upsellText)
+        assertTrue(pill?.showScriptMark == true)
+    }
+
+    @Test
+    fun `gen-5 exhausted - at exactly 5 of 5 the free pill becomes the upsell status`() {
+        val pill = HeroPillPolicy.resolve(
+            lookStatus = PersonalLookStatus.Ready,
+            serveKind = PersonalServeKind.EXACT,
+            heroIsPersonal = true,
+            mode = MakeItMeMode.FREE,
+            freeGenerationsUsed = 5
+        )
+        assertEquals(HeroPillKind.EXHAUSTED, pill?.kind)
+        assertEquals("5 of 5 used", pill?.text)
+        assertEquals(MakeItMeStrings.HERO_PILL_GET_UNLIMITED, pill?.actionText)
+        assertTrue(pill?.showScriptMark == true)
+        assertTrue(pill?.wholePillAction == true)
+        assertNull(pill?.upsellText)
+    }
+
+    @Test
+    fun `gen-5 exhausted - at 4 of 5 the pill is still the ordinary free status`() {
+        val pill = HeroPillPolicy.resolve(
+            lookStatus = PersonalLookStatus.Ready,
+            serveKind = PersonalServeKind.EXACT,
+            heroIsPersonal = true,
+            mode = MakeItMeMode.FREE,
+            freeGenerationsUsed = 4
+        )
+        assertEquals(HeroPillKind.EXACT_FREE, pill?.kind)
+        assertEquals("4 of 5 looks", pill?.text)
     }
 
     @Test

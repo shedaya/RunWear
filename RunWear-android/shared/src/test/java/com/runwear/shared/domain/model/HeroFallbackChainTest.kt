@@ -537,7 +537,7 @@ class HeroFallbackChainTest {
     @Test
     fun `bundled candidate census covers both genders for every bracket family`() {
         val candidates = HeroImageSelector.bundledPhotoCandidates()
-        assertEquals(74, candidates.size)  // 54 -> 74: +20 GEN-4 replenishment pg_* assets (RWPOOL-T07..T26)
+        assertEquals(76, candidates.size)  // 54 -> 74: +20 GEN-4 replenishment pg_* assets (RWPOOL-T07..T26); 74 -> 76 GEN-5 top-up balaclava+gloves (RWPOOL-T27/T28)
         for (gender in listOf(GenderPreference.FEMALE, GenderPreference.MALE)) {
             val brackets = candidates.filter { it.gender == gender }.map { it.bracket }.toSet()
             assertEquals(

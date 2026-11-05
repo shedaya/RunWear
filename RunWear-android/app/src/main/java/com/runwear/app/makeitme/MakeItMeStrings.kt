@@ -97,6 +97,16 @@ object MakeItMeStrings {
     const val HERO_PILL_SCAFFOLD = "Your photo"
     const val HERO_PILL_PREMIUM = "Premium"
     const val HERO_PILL_GET_UNLIMITED = "Get unlimited"
+    // GEN-5 C-4 AMENDED (Sol, Nov 5, 2026 ~06:28 CST): the FREE-tier
+    // generating pill carries ONE small green upsell line, verbatim.
+    // Premium generating states carry NO upsell (nothing left to
+    // sell). Its truth: Premium looks are banked ahead, so next time
+    // the look is already there — instant.
+    const val HERO_PILL_MAKING_UPSELL = "Get it instantly next time"
+    // GEN-5 ADDENDUM (Sol, Nov 5, 2026 ~06:30 CST): the EXHAUSTED
+    // pill status — a free user who has used all 5 free looks. The
+    // used-up count, stated honestly; the upsell is the main message.
+    const val HERO_PILL_EXHAUSTED_COUNT = "5 of 5 used"
 
     /** The script mark the pill carries in states (b)(c)(d). */
     const val HERO_PILL_SCRIPT_MARK = "Make It Me"

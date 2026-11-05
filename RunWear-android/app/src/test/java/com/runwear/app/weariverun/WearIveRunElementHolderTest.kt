@@ -183,7 +183,7 @@ class WearIveRunElementHolderTest {
     }
 
     @Test
-    fun `a kit change is a real update - it cues exactly once with the first kit item`() {
+    fun `a kit change is a real update - it cues exactly once and names the place, never a garment`() {
         val holder = WearIveRunBarStateHolder()
         holder.onEntriesChanged(listOf(entry()), today)
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
@@ -192,7 +192,10 @@ class WearIveRunElementHolderTest {
         )
         assertEquals(WearIveRunElementKind.CUE, kind(holder))
         assertEquals(2, holder.cueSequence.value)
-        assertEquals("Update to Thermal Tights", present(holder).narration.text)
+        // GEN-5 (C-7): the payload names the dimension that
+        // changed — at the same place and moment, the place
+        // reading. A garment can never be named.
+        assertEquals("Update to New York, NY, Now", present(holder).narration.text)
         // The same update re-delivered does not cue a second time.
         holder.onEntriesChanged(
             listOf(entry(items = listOf("Thermal Tights", "Headband"))), today

@@ -634,7 +634,13 @@ object HeroImageSelector {
         "pg_male_short_o0_shorts_visor_none" to FallbackGarments("short", false, "shorts", "visor", null),
         "pg_male_short_o1_shorts_visor_none" to FallbackGarments("short", true, "shorts", "visor", null),
         "pg_male_sleeveless_o0_shorts_visor_none" to FallbackGarments("sleeveless", false, "shorts", "visor", null),
-        "pg_male_sleeveless_o1_shorts_visor_none" to FallbackGarments("sleeveless", true, "shorts", "visor", null)
+        "pg_male_sleeveless_o1_shorts_visor_none" to FallbackGarments("sleeveless", true, "shorts", "visor", null),
+        // GEN-5 (RW-28, top-up RWPOOL-T27/T28 — mirrors iOS gen-4
+        // 275f84f keying exactly): balaclava + gloves assets; under
+        // Sol's handwear substitution they also serve the balaclava +
+        // MITTENS prescriptions at the exact gate.
+        "pg_female_long_o1_tights_balaclava_gloves" to FallbackGarments("long", true, "tights", "balaclava", "gloves"),
+        "pg_male_long_o1_tights_balaclava_gloves" to FallbackGarments("long", true, "tights", "balaclava", "gloves")
     )
 
     /** GEN-3 A-HERO: provenance of the point-grain assets (rung "PG"). */
@@ -668,7 +674,9 @@ object HeroImageSelector {
         "pg_male_short_o0_shorts_visor_none" to FallbackAssetProvenance("MALE_CLEAR_WARM_MIDDAY_83b3d617", "c682b3cc-fd5c-415b-8ca2-c69762de383f", "PG"),
         "pg_male_short_o1_shorts_visor_none" to FallbackAssetProvenance("MALE_RAIN_WARM_MIDDAY_f8d85d23", "f7dd3cc1-4dd0-4767-8cab-ac1599d2abe1", "PG"),
         "pg_male_sleeveless_o0_shorts_visor_none" to FallbackAssetProvenance("MALE_CLEAR_HOT_MIDDAY_c9b28fa9", "9d4b71bb-28ef-4eb1-83e8-6f2761bdbbbd", "PG"),
-        "pg_male_sleeveless_o1_shorts_visor_none" to FallbackAssetProvenance("MALE_RAIN_HOT_MIDDAY_87d183b5", "3643f7ec-59a2-4904-8aec-d1297e426857", "PG")
+        "pg_male_sleeveless_o1_shorts_visor_none" to FallbackAssetProvenance("MALE_RAIN_HOT_MIDDAY_87d183b5", "3643f7ec-59a2-4904-8aec-d1297e426857", "PG"),
+        "pg_female_long_o1_tights_balaclava_gloves" to FallbackAssetProvenance("FEMALE_CLEAR_FREEZING_DAWN_d547a549", "aaca3068-e4f9-4e53-816e-65a55583e7dc", "PG"),
+        "pg_male_long_o1_tights_balaclava_gloves" to FallbackAssetProvenance("MALE_CLEAR_FREEZING_DAWN_d547a549", "42c4b9b0-0fc9-482d-a3a5-4cf797db55e8", "PG")
     )
 
     /**
@@ -711,7 +719,9 @@ object HeroImageSelector {
         "MALE|short|false|shorts|visor|none" to "pg_male_short_o0_shorts_visor_none",
         "MALE|short|true|shorts|visor|none" to "pg_male_short_o1_shorts_visor_none",
         "MALE|sleeveless|false|shorts|visor|none" to "pg_male_sleeveless_o0_shorts_visor_none",
-        "MALE|sleeveless|true|shorts|visor|none" to "pg_male_sleeveless_o1_shorts_visor_none"
+        "MALE|sleeveless|true|shorts|visor|none" to "pg_male_sleeveless_o1_shorts_visor_none",
+        "FEMALE|long|true|tights|balaclava|gloves" to "pg_female_long_o1_tights_balaclava_gloves",
+        "MALE|long|true|tights|balaclava|gloves" to "pg_male_long_o1_tights_balaclava_gloves"
     )
 
     /**

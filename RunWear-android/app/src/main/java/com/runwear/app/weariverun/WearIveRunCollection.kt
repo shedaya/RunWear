@@ -66,7 +66,14 @@ data class WearIveRunDayEntry(
      * alphabetical place comparison (the X-5 stale-TODAY bug: the
      * pinned card picked the alphabetically-last place and stayed
      * on Overland Park while he stood in Miami). */
-    val settledAtMillis: Long = 0L
+    val settledAtMillis: Long = 0L,
+    /** GEN-5 (RW-28, census item 9 + C-7): the settled moment's
+     * simple clock reading ("9 p.m.") when the entry was settled
+     * at a CONFIRMED changed moment; null = the Now moment. The
+     * Wear card re-solves with a confirmed hour change, and the
+     * narration names this reading when the time is what changed.
+     * Entries recorded before GEN-5 carry null (Now). */
+    val momentLabel: String? = null
 )
 
 /** The collection's weather filter (design §1). */
@@ -208,7 +215,18 @@ object WearIveRunCollectionLogic {
         val stays = mutableListOf<MutableList<WearIveRunDayEntry>>()
         for (entry in sorted) {
             val last = stays.lastOrNull()
-            if (last != null && last.last().date.plusDays(1) == entry.date) {
+            // GEN-5 (Miami crash fix): two entries for the SAME date
+            // at one place (two sessions on one day — e.g. Miami
+            // visited in two Nov 5 sessions) belong to the SAME
+            // stay. The pre-fix rule split them into two stays with
+            // the same start date, and ChapterDetail keyed its lazy
+            // items by that start date — duplicate keys, an
+            // IllegalArgumentException, and the app died opening
+            // the place. Same day = same stay.
+            if (last != null &&
+                (last.last().date == entry.date ||
+                    last.last().date.plusDays(1) == entry.date)
+            ) {
                 last.add(entry)
             } else {
                 stays.add(mutableListOf(entry))
@@ -323,6 +341,29 @@ object WearIveRunCollectionLogic {
             start.year == end.year && start.month == end.month ->
                 "${start.format(monthDay)}–${end.dayOfMonth}"
             else -> "${start.format(monthDay)} – ${end.format(monthDay)}"
+        }
+    }
+
+    /**
+     * GEN-5 (RW-28, census item 10 / B-18): the TODAY card's
+     * "Last saved …" element, from the entry's settle instant —
+     * "Last saved just now" inside a minute, then minutes/hours,
+     * then the day form. Legacy entries (settledAtMillis 0) carry
+     * no honest save time and render no label.
+     */
+    fun lastSavedLabel(entry: WearIveRunDayEntry, nowMillis: Long): String? {
+        if (entry.settledAtMillis <= 0L) return null
+        val ageMs = nowMillis - entry.settledAtMillis
+        if (ageMs < 0L) return "Last saved just now"
+        val minutes = ageMs / 60_000L
+        return when {
+            minutes < 1L -> "Last saved just now"
+            minutes < 60L -> "Last saved $minutes min ago"
+            minutes < 60L * 24L -> {
+                val hours = minutes / 60L
+                if (hours == 1L) "Last saved 1 hr ago" else "Last saved $hours hr ago"
+            }
+            else -> "Last saved ${dayForm(entry.date, entry.date)}"
         }
     }
 

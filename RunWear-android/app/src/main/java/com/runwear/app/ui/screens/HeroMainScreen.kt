@@ -290,11 +290,24 @@ fun HeroMainScreen(
     val wearIveRunEntries by wearIveRunStore.entriesFlow.collectAsState(initial = emptyList())
     var showWearIveRunCollection by remember { mutableStateOf(false) }
 
+    // GEN-5 (RW-28, B-1): the FIRST emission in this process is
+    // the stored collection restoring — it primes the holder at
+    // rest (no cue, no announcement for entries an earlier process
+    // settled). Later emissions are live landings.
+    var wearPrimed by remember { mutableStateOf(false) }
     LaunchedEffect(wearIveRunEntries) {
-        wearIveRunHolder.onEntriesChanged(
-            wearIveRunEntries,
-            uiState.locationNow.toLocalDate()
-        )
+        if (!wearPrimed) {
+            wearPrimed = true
+            wearIveRunHolder.primeRestore(
+                wearIveRunEntries,
+                uiState.locationNow.toLocalDate()
+            )
+        } else {
+            wearIveRunHolder.onEntriesChanged(
+                wearIveRunEntries,
+                uiState.locationNow.toLocalDate()
+            )
+        }
     }
 
     // Day rollover: the local day at the presented place changing is
@@ -312,10 +325,20 @@ fun HeroMainScreen(
     // or a kit change) — a re-recording with the same kit (a weather
     // refresh, a hero URL landing, a location re-render) updates the
     // entry's content silently and never moves the element.
-    LaunchedEffect(uiState.outfit, uiState.weather, uiState.locationName, uiState.effectiveHeroUrl) {
+    LaunchedEffect(
+        uiState.outfit, uiState.weather, uiState.locationName,
+        uiState.effectiveHeroUrl, uiState.isNowSelected, uiState.selectedDateTime
+    ) {
         val outfit = uiState.outfit
         val weather = uiState.weather
-        if (outfit != null && weather != null && uiState.isNowSelected) {
+        // GEN-5 (RW-28, census item 9): a CONFIRMED changed moment
+        // also settles the session's entry — the Wear card
+        // re-solves (feels-like, count, thumbnail) with the rest of
+        // home and the narration names the moment that changed.
+        // uiState only carries CONFIRMED moments (the picker's
+        // draft never reaches this state), so recording here can
+        // never be moved by mere browsing of the picker.
+        if (outfit != null && weather != null) {
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
                     // GEN-3 (WS-C): stamped with THIS process
@@ -334,6 +357,16 @@ fun HeroMainScreen(
                     place = uiState.simplePlace?.display
                         ?: com.runwear.shared.domain.model.SimplePlace
                             .fromRawDisplayString(uiState.locationName).display,
+                    // GEN-5: the entry's moment — null at Now, else
+                    // the confirmed moment's simple clock reading
+                    // ("9 p.m."), the C-7 time payload.
+                    momentLabel = if (uiState.isNowSelected) {
+                        null
+                    } else {
+                        com.runwear.app.weariverun.WearMomentLabel.of(
+                            uiState.selectedDateTime
+                        )
+                    },
                     feelsLikeF = weather.feelsLikeInFahrenheit,
                     conditionLabel = weather.weatherCode.description,
                     isSnowing = weather.isSnowing,

@@ -70,20 +70,23 @@ class WearIveRunSimplePlaceTest {
     }
 
     @Test
-    fun `update narration payload is the entry's first kit item`() {
+    fun `update narration payload names the place - never a garment`() {
         val holder = holderWith(entry(place = "New York, New York"))
         holder.onEntriesChanged(
             listOf(entry(place = "New York, New York", items = listOf("Thermal Tights", "Headband"))),
             today
         )
         val narration = mini(holder).narration
-        assertEquals("Update to Thermal Tights", narration.text)
-        assertEquals("Thermal Tights", narration.payload)
+        // GEN-5 (C-7): the update payload is the changed dimension —
+        // the simple place in its "{place}, {day}" form. The
+        // entry's own payload field still carries its first kit
+        // item for the expanded card's content, but the NARRATION
+        // never names a garment.
+        assertEquals("Update to New York, NY, Now", narration.text)
+        assertEquals("New York, NY, Now", narration.payload)
         assertEquals("Thermal Tights", mini(holder).entry.payload)
-        // No place, no day form, no raw string in an update line.
-        assertFalse(narration.text.contains("New York"))
+        assertFalse(narration.text.contains("Thermal Tights"))
         assertFalse(narration.text.contains("Today"))
-        assertFalse(narration.text.contains("Now"))
     }
 
     @Test

@@ -240,54 +240,93 @@ object WearIveRunElementMachine {
 }
 
 /**
- * GEN-2 (W-11): the update narration is computed from the DIFF
- * between the previous settled entry and the new one — it names an
- * item that ACTUALLY changed, never an unchanged one. (The walkthrough
- * case: the kit changed Light Tights -> Running Shorts while Light
- * Long Sleeve stayed, and the bar still read "Update to Light Long
- * Sleeve" — the old code named the entry's first item, changed or
- * not.) Pure — unit-tested.
+ * GEN-5 (RW-28, ruling C-7 — the ORIGINAL Nov 2 concept governs):
+ * the update narration names WHATEVER CHANGED — never a garment.
+ * The gen-2 W-11 rule (name the changed kit item) is SUPERSEDED:
+ * the walkthrough's "Update to Tank Top / Singlet" and "Update to
+ * Light Long Sleeve" lines are defects against the settled forms.
  *
- * The payload, in priority order:
- * - the first ADDED item (an item present in the new kit that was
- *   not in the old, in new-kit order) — a substitution names the
- *   item that arrived, not the one that stayed or the one that left;
- * - else, for a pure reorder, the first item whose position changed;
- * - else, for a pure removal, the new kit's lead item — the settled
- *   kit the update lands on (there is no arrived item to name);
- * - null when the kits are identical (weather/hero/condition-only
- *   landings announce nothing — the abolished-drivers rule), or when
- *   the new kit is empty (the holder falls back to the settled
- *   place reading, as before).
+ * The payload, in priority order (place outranks time — a place
+ * change is the bigger move, and its form already carries the day):
+ * - the place changed (or the day rolled within the session) ->
+ *   the new simple place (the holder renders it in its
+ *   "{place}, {day}" form);
+ * - else the MOMENT changed -> the new moment's simple reading: a
+ *   clock reading ("9 p.m.") for a confirmed changed moment, or
+ *   "Now" when the update returns to Now (C-7 nuance, closed
+ *   Nov 5: a clock reading is in-spec);
+ * - else the kit changed at the same place and moment (e.g. a
+ *   body-temperature change re-solved the outfit) -> the entry's
+ *   own moment reading when it is a changed moment, else its
+ *   place (the holder renders the "{place}, {day}" form);
+ * - null when nothing the narration may name changed (weather /
+ *   hero-only landings announce nothing — the abolished-drivers
+ *   rule), or when the new kit is empty.
  */
 object WearIveRunUpdateNarration {
 
-    /** The changed item an "Update to […]" line should name, if any. */
+    /** The new entry's moment reading: its clock label, or "Now". */
+    fun momentReading(entry: WearIveRunDayEntry): String =
+        entry.momentLabel ?: "Now"
+
+    /** The changed dimension an "Update to […]" line names, if any. */
     fun changedPayload(
         previous: WearIveRunDayEntry,
         next: WearIveRunDayEntry
     ): String? {
-        if (previous.items == next.items) return null
-        // Multiset difference: items in the new kit beyond the old
-        // kit's occurrences of them, in new-kit order.
-        val unmatched = previous.items.toMutableList()
-        val added = next.items.filter { !unmatched.remove(it) }
-        if (added.isNotEmpty()) return added.first()
-        // Pure reorder: the first item that moved.
-        val moved = next.items.firstOrNull {
-            previous.items.indexOf(it) != next.items.indexOf(it)
+        val simplePlace = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(next.place).display
+        if (previous.place != next.place || previous.date != next.date) {
+            return simplePlace
         }
-        if (moved != null) return moved
-        // Pure removal: the update lands on the new kit as it stands.
-        return next.items.firstOrNull()
+        if (previous.momentLabel != next.momentLabel) {
+            return momentReading(next)
+        }
+        if (previous.items != next.items) {
+            return if (next.momentLabel != null) momentReading(next) else simplePlace
+        }
+        return null
     }
 
     /** The full "Update to […]" narration for an entry update. */
     fun narration(
         previous: WearIveRunDayEntry,
-        next: WearIveRunDayEntry
+        next: WearIveRunDayEntry,
+        today: java.time.LocalDate = next.date
     ): WearIveRunNarration? =
-        changedPayload(previous, next)?.let { WearIveRunNarrationFormatter.update(it) }
+        changedPayload(previous, next)?.let { payload ->
+            // A place payload renders in the settled "{place}, {day}"
+            // form; a moment payload stands alone ("Update to
+            // 9 p.m."). The two are told apart by which dimension
+            // changed, recomputed here so the narration and its
+            // payload can never disagree about the entry they name.
+            val simplePlace = com.runwear.shared.domain.model.SimplePlace
+                .fromRawDisplayString(next.place).display
+            if (payload == simplePlace) {
+                WearIveRunNarrationFormatter.update(
+                    "$simplePlace, ${
+                        WearIveRunCollectionLogic.narrationDayForm(next.date, today)
+                    }"
+                )
+            } else {
+                WearIveRunNarrationFormatter.update(payload)
+            }
+        }
+}
+
+/**
+ * GEN-5 (RW-28, C-7): a moment's simple clock reading — "9 p.m.",
+ * "12 a.m." — the in-spec time payload for update narrations.
+ * Lowercase meridiem with periods, matching the ruling's example
+ * verbatim ("Update to 9 p.m.").
+ */
+object WearMomentLabel {
+    fun of(moment: java.time.LocalDateTime): String = ofHour(moment.hour)
+
+    fun ofHour(hour: Int): String {
+        val h = ((hour + 11) % 12) + 1
+        return if (hour in 0..11) "$h a.m." else "$h p.m."
+    }
 }
 
 /** Pure narration composition for the bar's one line. */
@@ -474,18 +513,10 @@ class WearIveRunBarStateHolder {
         )
     }
 
-    private fun updateNarration(entry: WearIveRunDayEntry): WearIveRunNarration {
-        val firstItem = entry.items.firstOrNull()?.takeIf { it.isNotBlank() }
-        return if (firstItem != null) {
-            WearIveRunNarrationFormatter.update(firstItem)
-        } else {
-            val simplePlace = com.runwear.shared.domain.model.SimplePlace
-                .fromRawDisplayString(entry.place).display
-            WearIveRunNarrationFormatter.update(
-                "$simplePlace, ${WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)}"
-            )
-        }
-    }
+    private fun updateNarration(entry: WearIveRunDayEntry): WearIveRunNarration =
+        // GEN-5 (C-7): the fallback update line is the place form —
+        // a garment payload can no longer be produced here either.
+        updatePlaceNarration(entry)
 
     /** Dispatch one machine event — the UI's only way to move the element. */
     fun onEvent(event: WearIveRunElementEvent) {
@@ -534,7 +565,47 @@ class WearIveRunBarStateHolder {
         )
     }
 
+    /**
+     * GEN-5 (RW-28, census item 7 / B-1): whether the next delivery
+     * is the process's FIRST contact with the stored collection.
+     * That delivery is a RESTORE, not a landing: the entries were
+     * settled by an earlier process, and merely opening the app
+     * must never fire the cue or mint an announcement for them.
+     * The host primes the holder with the first emission; every
+     * later delivery is a live landing and behaves as before.
+     */
+    private var awaitingRestorePrime = true
+
+    /** Prime with the stored collection's first emission (rest). */
+    fun primeRestore(entries: List<WearIveRunDayEntry>, today: java.time.LocalDate) {
+        if (!awaitingRestorePrime) {
+            onEntriesChanged(entries, today)
+            return
+        }
+        awaitingRestorePrime = false
+        knownDay = today
+        val todays = WearIveRunCollectionLogic.todaysEntry(entries, today)
+        val next = todays ?: entries.maxByOrNull { it.date }
+        if (next == null) {
+            current = null
+            narration = null
+            kind = WearIveRunElementKind.ABSENT
+            emit()
+            return
+        }
+        if (next.date == today) awaitingTodaysGeneration = false
+        current = next
+        narration = addedNarration(next)
+        kind = WearIveRunElementKind.MINI
+        emit()
+    }
+
     fun onEntriesChanged(entries: List<WearIveRunDayEntry>, today: java.time.LocalDate) {
+        // Any live delivery also consumes the restore prime: a
+        // holder that was never primed treats its first live
+        // delivery as before (the unit-test surface), while the
+        // app's host always primes first.
+        awaitingRestorePrime = false
         // A new day arriving at this seam is a rollover too.
         if (knownDay != null && knownDay != today) {
             onDayRollover(today)
@@ -642,19 +713,28 @@ class WearIveRunBarStateHolder {
                 // condition) is an async landing: content updates in
                 // place, state does not move, the cue does not
                 // re-fire (the abolished-drivers rule).
-                val kitChanged = previous.items != next.items
+                // GEN-5 (C-7): an announced update names the
+                // dimension that changed — place, else moment, else
+                // (kit-only, e.g. a body-temperature re-solve) the
+                // entry's moment/place reading — NEVER a garment.
+                // A confirmed hour change (moment) now cues and
+                // re-solves the card with the rest of home (census
+                // item 9); weather/hero-only landings stay silent.
                 val placeChanged = previous.place != next.place ||
                     previous.date != next.date
+                val momentChanged = previous.momentLabel != next.momentLabel
+                val kitChanged = previous.items != next.items
                 current = next
-                if (kitChanged) {
-                    narration = WearIveRunUpdateNarration.narration(previous, next)
-                        ?: updateNarration(next)
+                if (placeChanged) {
+                    narration = updatePlaceNarration(next)
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )
                     _cueSequence.value = _cueSequence.value + 1
-                } else if (placeChanged) {
-                    narration = updatePlaceNarration(next)
+                } else if (momentChanged || kitChanged) {
+                    narration = WearIveRunUpdateNarration.narration(
+                        previous, next, knownDay ?: next.date
+                    ) ?: updateNarration(next)
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )

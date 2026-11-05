@@ -53,7 +53,7 @@ import com.runwear.app.makeitme.ScaffoldRenderPolicy
  * and neither does a failed look (its durable line + retry live in
  * the sheet, unchanged).
  */
-enum class HeroPillKind { MAKING, SCAFFOLD, EXACT_FREE, PREMIUM }
+enum class HeroPillKind { MAKING, SCAFFOLD, EXACT_FREE, PREMIUM, EXHAUSTED }
 
 data class HeroPillContent(
     val kind: HeroPillKind,
@@ -64,7 +64,14 @@ data class HeroPillContent(
     /** GEN-3 DESIGN DELTA: the Make It Me script mark leads states (b)(c)(d). */
     val showScriptMark: Boolean = false,
     /** GEN-3 DESIGN DELTA: the lock glyph trails the PREMIUM state. */
-    val showLock: Boolean = false
+    val showLock: Boolean = false,
+    /** GEN-5 C-4 AMENDED: the small green upsell line on the
+     *  FREE-tier generating pill only ("Get it instantly next
+     *  time"); its tap goes to the same Premium offer as the free
+     *  pill's "Get unlimited". Null on every other state. */
+    val upsellText: String? = null,
+    /** GEN-5: the whole pill is the tap target (EXHAUSTED state). */
+    val wholePillAction: Boolean = false
 )
 
 object HeroPillPolicy {
@@ -82,10 +89,36 @@ object HeroPillPolicy {
         // made — the X-2 fix (the state must be visible for the look
         // actually requested, on the photo).
         if (lookStatus == PersonalLookStatus.Making) {
+            // GEN-5 (RW-28): EVERY pill status leads with the Make
+            // It Me script — the generating pill included (A-13/B-14).
+            // C-4 AMENDED: the free-tier generating state also
+            // carries the one small green upsell line; a subscriber's
+            // generating state stays clean.
             return HeroPillContent(
                 kind = HeroPillKind.MAKING,
                 text = MakeItMeStrings.HERO_PILL_MAKING,
-                showSpinner = true
+                showSpinner = true,
+                showScriptMark = true,
+                upsellText = if (mode == MakeItMeMode.FREE) {
+                    MakeItMeStrings.HERO_PILL_MAKING_UPSELL
+                } else {
+                    null
+                }
+            )
+        }
+        // GEN-5 (Sol, Nov 5 ~06:30 CST): EXHAUSTED — a free user who
+        // has used all 5 free looks gets an upsell pill status of
+        // its own: script lead, the honest used-up count, "Get
+        // unlimited" as the MAIN message, whole pill tappable to the
+        // Premium offer. Driven by the same single meter as every
+        // other surface, so it flips at exactly 5.
+        if (mode == MakeItMeMode.FREE && freeGenerationsUsed >= 5) {
+            return HeroPillContent(
+                kind = HeroPillKind.EXHAUSTED,
+                text = MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT,
+                actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED,
+                showScriptMark = true,
+                wholePillAction = true
             )
         }
         if (!heroIsPersonal) return null
@@ -134,7 +167,11 @@ fun HeroPill(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
+        modifier = if (content.wholePillAction) {
+            modifier.clickable { onAction() }
+        } else {
+            modifier
+        },
         shape = RoundedCornerShape(100.dp),
         color = Color.Black.copy(alpha = 0.45f)
     ) {
@@ -171,6 +208,16 @@ fun HeroPill(
                     contentDescription = null,
                     tint = com.runwear.app.ui.theme.PhotoInk,
                     modifier = Modifier.size(11.dp)
+                )
+            }
+            if (content.upsellText != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = content.upsellText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = com.runwear.app.ui.theme.PineAccentOnDark,
+                    modifier = Modifier.clickable { onAction() }
                 )
             }
             if (content.actionText != null) {

@@ -207,9 +207,10 @@ class WearIveRunSessionRuleTest {
         assertEquals("New York, NY", present(holder).entry.place)
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
 
-        // Place + kit change: the W-11 diff narration names the
-        // item that changed; the bar's entry is Miami, the latest
-        // commit — never a place home has moved past.
+        // Place + kit change: under C-7 the narration names the
+        // PLACE that changed (gen-2's garment payload is the
+        // defect); the bar's entry is Miami, the latest commit —
+        // never a place home has moved past.
         holder.onEntriesChanged(
             listOf(
                 entry(
@@ -220,7 +221,7 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Update to Running Shorts (5-7\")", narrations.last())
+        assertEquals("Update to Miami, FL, Now", narrations.last())
         assertEquals("Miami, FL", present(holder).entry.place)
         assertEquals(90.0, present(holder).entry.feelsLikeF!!, 0.001)
 

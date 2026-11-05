@@ -108,9 +108,9 @@ class WearIveRunAbsentStateTest {
         assertEquals(2, holder.cueSequence.value)
         assertTrue(holder.state.value is WearIveRunBarState.Cue)
         val narration = (holder.state.value as WearIveRunBarState.Cue).narration
-        // WS-4 (D-08): the update payload is the entry's REAL payload —
-        // its first kit item — not "place, Today".
-        assertEquals("Update to Jacket", narration.text)
-        assertEquals("Jacket", narration.payload)
+        // GEN-5 (C-7): the update payload names the changed
+        // dimension — the place reading — never the garment.
+        assertEquals("Update to New York, Now", narration.text)
+        assertEquals("New York, Now", narration.payload)
     }
 }
