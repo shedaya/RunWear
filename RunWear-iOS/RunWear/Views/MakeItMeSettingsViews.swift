@@ -193,7 +193,7 @@ struct MakeItMeSettingsSection: View {
                 // generating → renders; subscribed + complete →
                 // the rule returns nil; free users never reach
                 // this branch at all.
-                if let band = ConvergenceBand.content(mode: store.mode, coverage: store.bankCoverage) {
+                if let band = ConvergenceBand.content(isSubscribed: store.mode == .subscribed, coverage: store.bankCoverage) {
                     ConvergenceBandView(content: band)
                 }
                 settingsRow(

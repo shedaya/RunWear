@@ -912,8 +912,14 @@ enum ConvergenceBand {
     static let heading = "Making your looks"
     static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
 
-    static func content(mode: PersonalHeroStore.Mode, coverage: BankCoverage?) -> ConvergenceBandContent? {
-        guard mode == .subscribed, let coverage else { return nil }
+    /// The premium-context input is a plain Bool, deliberately:
+    /// this model file is compiled into BOTH the app and the
+    /// unit-test targets, while PersonalHeroStore is app-only —
+    /// the seats map their mode at the call site
+    /// (`mode == .subscribed`), so the rule itself stays
+    /// testable in the model layer like everything else here.
+    static func content(isSubscribed: Bool, coverage: BankCoverage?) -> ConvergenceBandContent? {
+        guard isSubscribed, let coverage else { return nil }
         guard coverage.total > 0, coverage.ready < coverage.total else { return nil }
         return ConvergenceBandContent(
             heading: heading,

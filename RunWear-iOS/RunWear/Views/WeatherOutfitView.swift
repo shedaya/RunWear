@@ -1147,7 +1147,7 @@ struct WeatherOutfitView: View {
         // visible only while a subscribed user's bank is genuinely
         // converging — ConvergenceBand carries the settled copy
         // and the rule; the store carries the real banking state.
-        if let band = ConvergenceBand.content(mode: personalStore.mode, coverage: personalStore.bankCoverage) {
+        if let band = ConvergenceBand.content(isSubscribed: personalStore.mode == .subscribed, coverage: personalStore.bankCoverage) {
             ConvergenceBandView(content: band)
                 .padding(.top, 12)
         }

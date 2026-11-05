@@ -1,5 +1,12 @@
 import XCTest
-@testable import RunWear
+
+// NOTE: no `@testable import RunWear` here — deliberately, like
+// every other file in this suite. The test target compiles the
+// model-layer sources directly; an app-module import makes the
+// build's module scan depend on the app target's emission and
+// failed the GEN-3 gate twice (41940827083, 41942526225:
+// "unable to resolve module dependency: 'RunWear'"). Do not
+// re-add it.
 
 /// GEN-3 TRAIN DESIGN DELTAS (Sol's mockup review rounds 1–2,
 /// Nov 4): pins for the deltas applied on the train AFTER the four
@@ -251,21 +258,24 @@ final class Gen3TrainDeltaTests: XCTestCase {
     func testConvergenceBandVisibilityRule() {
         // Fixture numbers are internal banking state only (the
         // bar's fraction) — they are never rendered as a count.
+        // The rule's premium input is the seats' subscribed flag
+        // (both seats pass `mode == .subscribed` — pinned at the
+        // seats below): subscribed is the one true case; every
+        // non-subscribed mode (free / stock) maps to false.
         let partial = BankCoverage(ready: 2, total: 5)
-        let content = ConvergenceBand.content(mode: .subscribed, coverage: partial)
+        let content = ConvergenceBand.content(isSubscribed: true, coverage: partial)
         XCTAssertEqual(content?.heading, "Making your looks")
         XCTAssertEqual(content?.fraction ?? -1, 2.0 / 5.0, accuracy: 0.0001)
         // Complete bank → no band.
-        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 5, total: 5)))
+        XCTAssertNil(ConvergenceBand.content(isSubscribed: true, coverage: BankCoverage(ready: 5, total: 5)))
         // Unknown banking state → no band.
-        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: nil))
-        // PREMIUM CONTEXT ONLY: the .free state IS the free /
-        // in-trial 5-look allowance — no bank, no band. Stock
-        // (never opted in) likewise.
-        XCTAssertNil(ConvergenceBand.content(mode: .free, coverage: partial))
-        XCTAssertNil(ConvergenceBand.content(mode: .stock, coverage: partial))
+        XCTAssertNil(ConvergenceBand.content(isSubscribed: true, coverage: nil))
+        // PREMIUM CONTEXT ONLY: not subscribed — the free /
+        // in-trial 5-look allowance state and the stock state
+        // alike — no bank, no band.
+        XCTAssertNil(ConvergenceBand.content(isSubscribed: false, coverage: partial))
         // Empty engagement → no band.
-        XCTAssertNil(ConvergenceBand.content(mode: .subscribed, coverage: BankCoverage(ready: 0, total: 0)))
+        XCTAssertNil(ConvergenceBand.content(isSubscribed: true, coverage: BankCoverage(ready: 0, total: 0)))
     }
 
     /// WS-D ADDITION (Sol, Nov 4): the Settings Make It Me
@@ -281,7 +291,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let sectionStart = try XCTUnwrap(views.range(of: "struct MakeItMeSettingsSection")?.lowerBound)
         let sectionEnd = try XCTUnwrap(views.range(of: "struct MakeItMePhotosView")?.lowerBound)
         let section = String(views[sectionStart..<sectionEnd])
-        XCTAssertTrue(section.contains("ConvergenceBand.content(mode: store.mode, coverage: store.bankCoverage)"),
+        XCTAssertTrue(section.contains("ConvergenceBand.content(isSubscribed: store.mode == .subscribed, coverage: store.bankCoverage)"),
                       "the Settings seat is driven by the shared content rule over the store's banking state")
         XCTAssertTrue(section.contains("ConvergenceBandView(content: band)"),
                       "Settings renders the SHARED ConvergenceBandView — not a re-implementation")
@@ -292,7 +302,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let offerStart = try XCTUnwrap(section.range(of: "private var offerSection")?.lowerBound)
         let offerSlice = String(section[offerStart...])
         let branch = try XCTUnwrap(offerSlice.range(of: "if store.mode == .subscribed")?.lowerBound)
-        let seat = try XCTUnwrap(offerSlice.range(of: "ConvergenceBand.content(mode: store.mode")?.lowerBound)
+        let seat = try XCTUnwrap(offerSlice.range(of: "ConvergenceBand.content(isSubscribed: store.mode")?.lowerBound)
         let offerCard = try XCTUnwrap(offerSlice.range(of: "MakeItMePremiumOfferCard")?.lowerBound)
         XCTAssertTrue(branch < seat && seat < offerCard,
                       "the band seat is inside the offer group's subscribed branch, before the free-state offer card")
@@ -307,7 +317,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertTrue(views.contains("ProgressView(value: content.fraction)"),
                       "the band carries the simple progress bar")
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains("ConvergenceBand.content(mode: personalStore.mode, coverage: personalStore.bankCoverage)"),
+        XCTAssertTrue(home.contains("ConvergenceBand.content(isSubscribed: personalStore.mode == .subscribed, coverage: personalStore.bankCoverage)"),
                       "the band is seated in the personal section from the store's real banking state")
         XCTAssertTrue(home.contains("ConvergenceBandView(content: band)"))
     }
