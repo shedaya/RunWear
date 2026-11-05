@@ -61,6 +61,10 @@ class ShareArtifactsTest {
         "app/src/main/java/com/runwear/app/weariverun/ShareArtifacts.kt"
     ).readText()
 
+    private fun shareStudioComponents() = sourceFile(
+        "app/src/main/java/com/runwear/app/weariverun/ShareStudioComponents.kt"
+    ).readText()
+
     private fun heroMainScreen() = sourceFile(
         "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt"
     ).readText()
@@ -107,19 +111,40 @@ class ShareArtifactsTest {
 
     @Test
     fun `the collection share sends the rasterized artifact, never text`() {
+        // GEN-6 Wave B (stage 2): the payload is the OFFSCREEN
+        // EXPORT RENDER, verified before the share fires. The
+        // collection screen opens the Share Studio; the Studio
+        // renders via ShareExportRenderer, gates on
+        // ShareRasterVerifier, and hands the verified bitmap to
+        // ShareArtifacts.share. The gen-5 preview capture
+        // (ShareCaptureHandle / captureBitmap) is deleted — the
+        // share path must not contain it anywhere.
         val screen = collectionScreen()
         assertFalse(screen.contains("fireShare"))
         assertFalse(screen.contains("text/plain"))
-        assertTrue(screen.contains("ShareArtifacts.share"))
-        assertTrue(screen.contains("captureBitmap()"))
+        assertTrue(
+            "the collection's share doors open the Share Studio",
+            screen.contains("ShareStudioSheet")
+        )
+        assertFalse(
+            "the old chooser sheet is deleted",
+            screen.contains("ShareChoiceSheet")
+        )
+        val studio = shareStudioComponents()
+        assertTrue(studio.contains("ShareExportRenderer"))
+        assertTrue(studio.contains("ShareRasterVerifier"))
+        assertTrue(studio.contains("ShareArtifacts.share"))
+        assertFalse(studio.contains("captureBitmap"))
         val artifacts = shareArtifacts()
         assertTrue(artifacts.contains("Intent.EXTRA_STREAM"))
         assertTrue(artifacts.contains("Bitmap.CompressFormat.PNG"))
         assertTrue(artifacts.contains("FileProvider.getUriForFile"))
-        // The capture readback itself (GraphicsLayer.toImageBitmap —
-        // the device path; its Robolectric snapshot fallback is the
-        // library's own limitation, see ShareArtifactRenderTest).
-        assertTrue(artifacts.contains("toImageBitmap()"))
+        assertFalse(
+            "the capture handle is retired from the payload path",
+            artifacts.contains("ShareCaptureHandle")
+        )
+        assertFalse(artifacts.contains("captureBitmap"))
+        assertFalse(artifacts.contains("toImageBitmap()"))
     }
 
     @Test
@@ -136,9 +161,14 @@ class ShareArtifactsTest {
 
     @Test
     fun `the share choice is an M3 sheet on the one full anchor`() {
+        // GEN-6 Wave B: the ONE share surface is the Studio's M3
+        // modal sheet (in ShareStudioComponents.kt); the
+        // collection screen itself hosts no second sheet.
+        val studio = shareStudioComponents()
+        assertTrue(studio.contains("ModalBottomSheet"))
+        assertTrue(studio.contains("skipPartiallyExpanded = true"))
         val screen = collectionScreen()
-        assertTrue(screen.contains("ModalBottomSheet"))
-        assertTrue(screen.contains("skipPartiallyExpanded = true"))
+        assertFalse(screen.contains("ModalBottomSheet"))
         assertFalse(screen.contains("ShareChoiceDialog"))
     }
 

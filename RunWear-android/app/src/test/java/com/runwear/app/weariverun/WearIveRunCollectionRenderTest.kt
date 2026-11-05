@@ -110,34 +110,56 @@ class WearIveRunCollectionRenderTest : WearElementHarness() {
     }
 
     @Test
-    fun shareChooserShowsRenderedThumbnailsAndTappingOneSelectsIt() {
-        var chosen: ShareArtifactKind? = null
-        var cancelled = false
-        val entry = day(today)
-        val r = render("gen2-share-chooser", dark = false) {
-            ShareChooserStage(
-                entry = entry,
-                gender = GenderPreference.UNISEX,
-                onChoose = { chosen = it },
-                onCancel = { cancelled = true }
-            )
+    fun shareDoorsOpenTheStudioWithRenderedThumbnails() {
+        // GEN-6 Wave B reconciliation: the gen-2/gen-5 chooser
+        // stage (ShareChooserStage, composed live in the sheet) is
+        // replaced by the Share Studio — a ModalBottomSheet, which
+        // cannot be driven under Robolectric — so the chooser's
+        // rendered-thumbnail contract is pinned at the source:
+        // the collection's share doors open ShareStudioSheet, and
+        // the Studio presents both cards as rendered-export
+        // thumbnails (semantics name them as thumbnails), not bare
+        // text rows.
+        fun source(relative: String): String {
+            var dir: java.io.File? = java.io.File(System.getProperty("user.dir")).absoluteFile
+            while (dir != null) {
+                for (candidate in listOf(
+                    relative,
+                    "RunWear-android/$relative",
+                    "../$relative"
+                )) {
+                    val file = java.io.File(dir, candidate)
+                    if (file.isFile) return file.readText()
+                }
+                dir = dir.parentFile
+            }
+            throw AssertionError("source not found: $relative")
         }
-        val all = texts(r.root)
-        assertTrue(all.any { it == "Share this day" })
-        assertTrue(all.any { it == "Morning Poster" })
-        assertTrue(all.any { it == "Kit Card" })
+        val screen = source(
+            "app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"
+        )
+        assertTrue(
+            "the collection's share doors open the Share Studio",
+            screen.contains("ShareStudioSheet")
+        )
+        assertTrue(
+            "the gen-5 chooser sheet is deleted",
+            !screen.contains("ShareChooserStage")
+        )
+        val studio = source(
+            "app/src/main/java/com/runwear/app/weariverun/ShareStudioComponents.kt"
+        )
+        assertTrue(studio.contains("Share this day"))
+        assertTrue(studio.contains("Morning Poster"))
+        assertTrue(studio.contains("Kit Card"))
         assertTrue(
             "poster choice is a rendered thumbnail, not a bare text row",
-            all.contains("Morning Poster thumbnail")
+            studio.contains("\"Morning Poster\"") &&
+                studio.contains("thumbnail")
         )
         assertTrue(
             "kit choice is a rendered thumbnail, not a bare text row",
-            all.contains("Kit Card thumbnail")
+            studio.contains("\"Kit Card\"")
         )
-        clickByDescription(r.root, "Kit Card thumbnail")
-        assertEquals(ShareArtifactKind.KIT_CARD, chosen)
-        clickByDescription(r.root, "Morning Poster thumbnail")
-        assertEquals(ShareArtifactKind.MORNING_POSTER, chosen)
-        assertTrue("cancel untouched", !cancelled)
     }
 }

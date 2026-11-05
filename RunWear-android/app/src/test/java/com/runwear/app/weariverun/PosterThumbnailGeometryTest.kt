@@ -16,10 +16,11 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
 import com.runwear.app.ui.theme.RunWearTheme
+import com.runwear.shared.domain.model.TemperatureUnit
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,29 +31,22 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * GEN-3 X-11: the Morning Poster share THUMBNAIL rendered with
- * overlapping, mutually illegible text (walkthrough f_080 — the
- * weather/place line over the wordmark), while the Kit Card
- * thumbnail was clean.
+ * GEN-3 X-11 → GEN-6 Wave B reconciliation: the gen-3/gen-5
+ * subject of this file — the chooser thumbnail's natural-size
+ * scaler (ArtifactThumbnailScaler / ArtifactThumbnailGeometry) —
+ * is DELETED with the preview-capture flow it served. The Share
+ * Studio's thumbnails are the actual export renders, so there is
+ * no thumbnail composition geometry left to pin.
  *
- * FULL-SIZE VERDICT (this file is the evidence): the poster does
- * NOT collide at full size. Composed at its natural size, the top
- * lockup (script "RunWear" + hashtag) ends ~80 dp from the top and
- * the bottom info column (weather/place line, items, foot
- * wordmark) starts ~300 dp from the top — a ~220 dp gap. The
- * first test below pins exactly that on the production composable.
+ * What remains worth pinning, and what this file now pins:
  *
- * The thumbnail collision was a thumbnail-rendering defect: the
- * chooser composed the artifact INSIDE the thumbnail frame, whose
- * constraints (~134 dp wide × 150 dp high) coerced the poster's
- * fixed 425 dp height (4:5) and 340 dp width down to the frame before
- * the 0.42 layer scale applied — top lockup and bottom column
- * laid out in a ≤150 dp box cannot both fit, so they overlapped.
- * The fix composes at natural size and scales the composed layer
- * (ArtifactThumbnailScaler); the second test composes the
- * production thumbnail and asserts the same non-overlap in the
- * artifact's own layout coordinates, plus a vertical separation
- * only natural-size composition can produce.
+ *  - the export canvas geometry that replaced it: the Feed
+ *    canvas is 360×450 pt at 3× (1080×1350 px), the poster's
+ *    settled 4:5;
+ *  - the X-11 full-size verdict on the NEW Morning Poster:
+ *    composed at its canvas size, the top lockup and the bottom
+ *    informative block do not collide — the numeral sits far
+ *    below the wordmark, inside the 450 pt canvas.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -60,7 +54,7 @@ import org.robolectric.annotation.GraphicsMode
 class PosterThumbnailGeometryTest {
 
     // The walkthrough's own day (f_080): Overland Park, photo-less
-    // poster (the hero never resolved — X-10), 3 items.
+    // poster, 3 items.
     private val entry = WearIveRunDayEntry(
         date = LocalDate.of(2026, 11, 4),
         place = "Overland Park, KS",
@@ -71,6 +65,18 @@ class PosterThumbnailGeometryTest {
         items = listOf("Light Long Sleeve", "Windbreaker", "Running Shorts (5-7\")"),
         heroRef = null
     )
+
+    private val input = ShareCaptionInput.forEntry(
+        entry, TemperatureUnit.FAHRENHEIT,
+        today = entry.date, now = LocalDateTime.of(2026, 11, 4, 9, 0)
+    )
+    private val posterMoment = ShareMomentResolver.forms(
+        reading = ShareMomentResolver.readingFor(entry),
+        dayStart = entry.date,
+        lastSavedAt = LocalDateTime.of(2026, 11, 4, 7, 0),
+        now = LocalDateTime.of(2026, 11, 4, 9, 0),
+        today = entry.date
+    ).poster
 
     private class Rendered(val root: SemanticsNode, val density: Float)
 
@@ -107,12 +113,6 @@ class PosterThumbnailGeometryTest {
         var found: SemanticsNode? = null
         fun collect(v: View) {
             if (found == null && v is androidx.compose.ui.platform.ViewRootForTest) {
-                // The UNMERGED root: the chooser card's clickable
-                // merges descendant semantics into one node, which
-                // would attribute the whole card's bounds to every
-                // text inside it (run 41918046077's failure read
-                // exactly that). Layout bounds live on the unmerged
-                // tree.
                 found = v.semanticsOwner.unmergedRootSemanticsNode
             }
             if (v is android.view.ViewGroup) {
@@ -140,11 +140,6 @@ class PosterThumbnailGeometryTest {
     }
 
     private fun boundsOf(texts: List<Pair<String, Rect>>, needle: String): Rect {
-        // The real laid-out node, not a zero-bounds shadow: in the
-        // thumbnail composition a same-text node with an empty rect
-        // (top=0.0) preceded the real one in walk order in run
-        // 41919186433. Among same-text nodes, the genuine text has
-        // a non-empty rect and sits lowest on the artifact.
         val candidates = texts.filter { it.first.contains(needle) && it.second.height > 0f }
         assertTrue(
             "no laid-out text node containing \"$needle\"; all nodes: " +
@@ -155,101 +150,60 @@ class PosterThumbnailGeometryTest {
     }
 
     @Test
-    fun `full size poster - the weather line and the wordmark do not collide`() {
+    fun `feed canvas - the settled 4-5 geometry at exact export pixels`() {
+        assertEquals(360.0, ShareExportFormat.FEED.canvasPointSize.width, 0.0001)
+        assertEquals(450.0, ShareExportFormat.FEED.canvasPointSize.height, 0.0001)
+        assertEquals(0.8, ShareExportFormat.FEED.aspect, 0.0001)
+        assertEquals(SharePixelSize(1080, 1350), ShareExportFormat.FEED.exportPixelSize)
+        assertEquals(3.0, ShareExportFormat.FEED.renderScale, 0.0001)
+    }
+
+    @Test
+    fun `full size poster - the numeral and the wordmark do not collide`() {
         val rendered = render {
             Box(modifier = Modifier.width(360.dp)) {
-                MorningPoster(entry = entry)
+                MorningPoster(
+                    entry = entry,
+                    input = input,
+                    posterMoment = posterMoment,
+                    format = ShareExportFormat.FEED,
+                    heroBitmap = null,
+                    faceAnchor = ShareFaceAnchor.DEFAULT_UPPER_MIDDLE
+                )
             }
         }
         val texts = textBounds(rendered.root)
         val wordmark = boundsOf(texts, "RunWear")
-        val weather = boundsOf(texts, "48°")
+        val numeral = boundsOf(texts, "48°")
         val dpPx = rendered.density
-        // Vertical order: the weather/place line belongs to the
-        // poster's BOTTOM column, far below the top lockup.
+        // Vertical order: the Tier 1 numeral belongs to the
+        // poster's BOTTOM block, far below the top lockup.
         assertTrue(
-            "weather line (top=${weather.top}) must start below the wordmark (bottom=${wordmark.bottom})",
-            weather.top >= wordmark.bottom
+            "numeral (top=${numeral.top}) must start below the wordmark (bottom=${wordmark.bottom})",
+            numeral.top >= wordmark.bottom
         )
         assertTrue(
-            "at full size the bands are widely separated (gap=${(weather.top - wordmark.bottom) / dpPx}dp)",
-            weather.top - wordmark.bottom > 150 * dpPx
+            "at canvas size the bands are widely separated (gap=${(numeral.top - wordmark.bottom) / dpPx}dp)",
+            numeral.top - wordmark.bottom > 150 * dpPx
         )
-        // And both live inside the designed 425 dp poster height (4:5).
+        // And both live inside the designed 450 pt poster height.
         assertTrue(
-            "weather line must end within the poster's 425dp (4:5 at 340 wide; ends ${(weather.bottom - (wordmark.top - 16 * dpPx)) / dpPx}dp from poster top)",
-            weather.bottom - (wordmark.top - 16 * dpPx) <= 425 * dpPx + 1
-        )
-    }
-
-    @Test
-    fun `poster thumbnail - composed at natural size, the bands still do not collide`() {
-        // The production scaler, composed WITHOUT the chooser
-        // frame around it. Why not through ShareThumbnailChoice:
-        // semantics bounds are clipped by the frame's clip
-        // ancestor, and in the real thumbnail the poster's bottom
-        // column legitimately sits below the 150 dp frame (the
-        // thumbnail is top-anchored) — run 41920668266's node dump
-        // shows the bottom texts at Rect(0,0,0,0) through the
-        // clipped choice card while the top texts read natural
-        // coordinates. The geometry question — was the artifact
-        // composed at natural size, so its bands cannot collide —
-        // is a property of the scaler + artifact, asserted here
-        // unclipped; the frame's clip itself is stock Compose.
-        val rendered = render {
-            Box(modifier = Modifier.width(144.dp)) {
-                ArtifactThumbnailScaler {
-                    MorningPoster(
-                        entry = entry,
-                        modifier = Modifier.width(ArtifactThumbnailGeometry.NATURAL_WIDTH_DP.dp),
-                        onRendered = {}
-                    )
-                }
-            }
-        }
-        val texts = textBounds(rendered.root)
-        val wordmark = boundsOf(texts, "RunWear")
-        val weather = boundsOf(texts, "48°")
-        val dpPx = rendered.density
-        assertTrue(
-            "thumbnail: weather line (top=${weather.top}) must not overlap the wordmark (bottom=${wordmark.bottom})",
-            weather.top >= wordmark.bottom
-        )
-        // The discriminator for natural-size composition: inside a
-        // ≤150dp-coerced layout the two bands are <150dp apart by
-        // construction; at natural size they are ~284dp apart
-        // (wordmark top 16dp, weather line ~300dp). Semantics
-        // bounds are layout coordinates (the layer scale is a draw
-        // transform), so this reads the composition size directly.
-        assertTrue(
-            "thumbnail: band separation ${(weather.top - wordmark.top) / dpPx}dp proves natural-size composition",
-            weather.top - wordmark.top > 200 * dpPx
+            "numeral must end within the poster's 450pt (ends ${(numeral.bottom - (wordmark.top - 14 * dpPx)) / dpPx}dp from poster top)",
+            numeral.bottom - (wordmark.top - 14 * dpPx) <= 450 * dpPx + 1
         )
     }
 
     @Test
-    fun `thumbnail geometry - scale fits the natural width to the frame width`() {
-        assertEquals(340, ArtifactThumbnailGeometry.NATURAL_WIDTH_DP)
-        // A 144dp-wide frame at xhdpi (288px) showing a 340dp-wide
-        // (680px) artifact: scale 288/680.
-        val scale = ArtifactThumbnailGeometry.scaleFor(frameWidthPx = 288, naturalWidthPx = 680)
-        assertEquals(288f / 680f, scale, 0.0001f)
-        // The poster at the settled 4:5 (340x425dp, see FA-21) is
-        // 850px tall at xhdpi and scales to 360px ≈ 180dp on
-        // screen. GEN-5 (FA-28): the frame takes this FULL scaled
-        // height — the gen-4 frame clipped it to 150dp and cut
-        // the poster's bottom band off the thumbnail the user
-        // chooses from.
-        assertEquals(360, ArtifactThumbnailGeometry.scaledHeightPx(850, scale))
-        assertEquals(1f, ArtifactThumbnailGeometry.scaleFor(frameWidthPx = 100, naturalWidthPx = 0), 0f)
-    }
-
-    @Test
-    fun `thumbnail frame carries no fixed height clip`() {
+    fun `the capture-era thumbnail geometry is gone from the collection screen`() {
         val source = listOf(
             "src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt",
             "app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"
         ).map { java.io.File(it) }.first { it.exists() }.readText()
+        assertTrue(
+            "the preview-capture thumbnail scaler is deleted with the capture flow",
+            !source.contains("ArtifactThumbnailScaler") &&
+                !source.contains("ArtifactThumbnailGeometry")
+        )
         assertTrue(
             "the chooser thumbnail must not clip the artifact to a fixed frame height",
             !source.contains("FRAME_HEIGHT_DP")

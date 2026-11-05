@@ -77,18 +77,35 @@ class ShareCropPolicyTest {
 
     @Test
     fun `poster and thumbnails render the top-anchored crop`() {
-        val source = sourceFile()
-        assertTrue(source.contains("alignment = Alignment.TopCenter"))
+        // GEN-6 Wave B reconciliation: the gen-5 mechanism (Coil
+        // Alignment.TopCenter on the poster and thumbnails) is
+        // superseded by the anchor crop — the poster and the
+        // collection covers now draw a bitmap pre-cropped by
+        // ShareAnchorCrop.cropBitmap from the face anchor (whose
+        // default IS the upper-middle composition point, and whose
+        // placement rule keeps the face in the upper third with
+        // headroom — the headless-poster fix, strengthened). The
+        // pin follows the mechanism to its new homes.
+        val screen = sourceFile("WearIveRunCollectionScreen.kt")
+        assertTrue(
+            "collection covers crop through the face anchor",
+            screen.contains("ShareAnchorCrop.cropBitmap")
+        )
+        val renderer = sourceFile("ShareExportRenderer.kt")
+        assertTrue(
+            "the export render crops through the face anchor",
+            renderer.contains("ShareAnchorCrop.cropBitmap")
+        )
     }
 
-    private fun sourceFile(): String {
+    private fun sourceFile(name: String): String {
         val candidates = listOf(
-            File("src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"),
-            File("app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt"),
-            File("../app/src/main/java/com/runwear/app/weariverun/WearIveRunCollectionScreen.kt")
+            File("src/main/java/com/runwear/app/weariverun/$name"),
+            File("app/src/main/java/com/runwear/app/weariverun/$name"),
+            File("../app/src/main/java/com/runwear/app/weariverun/$name")
         )
         val file = candidates.firstOrNull { it.exists() }
-            ?: error("WearIveRunCollectionScreen.kt not found from ${File(".").absolutePath}")
+            ?: error("$name not found from ${File(".").absolutePath}")
         return file.readText()
     }
 }
