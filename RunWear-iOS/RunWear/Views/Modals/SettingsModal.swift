@@ -216,6 +216,8 @@ struct SettingsModal: View {
             // vanished whenever that section emitted nothing;
             // now Settings hosts it directly, and its
             // confirmation rides the same single alert slot.
+            // GEN-5 (RW-28 item 25): the account delete is
+            // quarantined under its own "Danger zone" heading.
             Section {
                 Button(role: .destructive) {
                     makeItMePresentation.alert = .confirmDeleteData
@@ -224,6 +226,8 @@ struct SettingsModal: View {
                         .font(.system(size: 16, weight: .medium))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            } header: {
+                Text("Danger zone")
             }
 
         case .support:

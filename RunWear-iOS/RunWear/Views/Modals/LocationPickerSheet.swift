@@ -29,12 +29,16 @@ struct LocationPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // Search on top.
+                // Search on top. GEN-5 (RW-28 item 31): the
+                // field carries a visible box border whether or
+                // not it is focused — the gen-4 census (A-25/N-10)
+                // caught the unfocused field floating borderless
+                // on the sheet.
                 Section {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(AppTheme.inkMuted)
-                        TextField("Search for a city", text: $searchText)
+                        TextField("Search a place", text: $searchText)
                             .autocorrectionDisabled()
                             .onChange(of: searchText) { _, newValue in
                                 if newValue.count >= 2 {
@@ -50,6 +54,12 @@ struct LocationPickerSheet: View {
                             ProgressView()
                         }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardFill))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.pinePayload, lineWidth: 1))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
 
                 // Current location row.
@@ -88,7 +98,7 @@ struct LocationPickerSheet: View {
                             Text("Places you pick will be kept here")
                                 .font(.appSecondary.weight(.semibold))
                                 .foregroundColor(AppTheme.inkPrimary)
-                            Text("Search above and choose a place, and it will be one tap away next time.")
+                            Text("Your recent places will wait here — pick a place once and it joins a short list — home, the office, trip cities — so jumping back takes one tap. Nothing is saved until you choose a place.")
                                 .font(.appFootnote)
                                 .foregroundColor(AppTheme.inkSecondary)
                         }

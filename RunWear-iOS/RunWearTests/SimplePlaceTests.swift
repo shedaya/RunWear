@@ -172,24 +172,31 @@ final class SimplePlaceTests: XCTestCase {
     }
 
     func testUpdatedNarrationIsFedTheEntrysRealPayload() {
-        // The entry's real payload is its FIRST KIT ITEM (the
-        // design's pattern; Android's holder computed it and
-        // never used it — D-08). Not the place, not the day form,
-        // not a count/temperature summary.
+        // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment pin
+        // below's predecessor: the payload is what CHANGED. An
+        // entry carrying a stored update payload narrates it
+        // verbatim; an entry without one (legacy) falls back to
+        // its place — NEVER its first kit item.
         let e = entry(place: "New York, New York",
                       items: ["Insulated Jacket", "Tights", "Gloves"])
-        XCTAssertEqual(e.narrationPayload, "Insulated Jacket")
+        XCTAssertEqual(e.narrationPayload, "New York, NY")
+        let moved = WearIveRunEntry(
+            dayStart: e.dayStart, placeName: "Miami, Florida",
+            feelsLikeF: 78, actualF: 73, condition: "Clear",
+            itemNames: ["Tank Top"], itemKeys: ["tank"],
+            heroImageReference: "", sessionID: e.sessionID,
+            wasUpdatedInSession: true, momentReading: "Now",
+            updatePayload: "Miami, FL")
+        XCTAssertEqual(moved.narrationPayload, "Miami, FL")
         let state = WearIveRunMiniBarModel.state(
-            todaysEntry: e, moment: "Now", wasUpdatedThisSession: true)
-        XCTAssertEqual(state, .updated(payload: "Insulated Jacket"))
+            todaysEntry: moved, moment: "Now", wasUpdatedThisSession: true)
+        XCTAssertEqual(state, .updated(payload: "Miami, FL"))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state),
-            "Update to Insulated Jacket")
-        // The superseded iOS summary form must not reappear.
+            "Update to Miami, FL")
         let line = WearIveRunNarration.line(for: state) ?? ""
         XCTAssertFalse(line.contains("items"), line)
-        XCTAssertFalse(line.contains("°"), line)
-        XCTAssertFalse(line.contains("New York"), line)
+        XCTAssertFalse(line.contains("Tank"), line)
     }
 
     func testMiniNarrationIsShortByConstruction() {

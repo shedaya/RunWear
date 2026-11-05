@@ -84,7 +84,9 @@ struct GuidedSelfieCaptureView: View {
                 .padding(.top, 18)
 
                 // ONE coaching line — the first failing check's.
-                Text(model.evaluation.coachingLine ?? "That's it — hold still.")
+                // GEN-5 (RW-28 item 17): the passing moment
+                // speaks the settled line (frame 16).
+                Text(model.evaluation.coachingLine ?? "✓ That's exactly what we need")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)

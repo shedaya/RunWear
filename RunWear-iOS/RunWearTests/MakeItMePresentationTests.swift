@@ -146,8 +146,8 @@ final class MakeItMePriceLabelTests: XCTestCase {
     }
 
     func testMonthlyLabelRendersTheOfferingPrice() {
-        XCTAssertEqual("$19.99 / month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$19.99"))
-        XCTAssertEqual("$0.99 / month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"))
+        XCTAssertEqual("Monthly — $19.99/month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$19.99"))
+        XCTAssertEqual("Monthly — $0.99/month", MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"))
     }
 
     // MARK: - WS-F · the monthly comparison is gone at every price
@@ -159,7 +159,7 @@ final class MakeItMePriceLabelTests: XCTestCase {
                 annual: Decimal(string: amount),
                 monthly: Decimal(string: "0.99")
             )
-            XCTAssertEqual("\(priceString) / year", label)
+            XCTAssertEqual("\(priceString)/yr", label)
             XCTAssertFalse(label.contains("less than paying monthly"),
                            "WS-F: the monthly comparison is removed, not reworded")
             XCTAssertFalse(label.contains("%"),
@@ -168,7 +168,7 @@ final class MakeItMePriceLabelTests: XCTestCase {
         // Even with the monthly price unknown, the row is the same
         // plain price + term.
         XCTAssertEqual(
-            "$9.99 / year",
+            "$9.99/yr",
             MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99",
                                                annual: Decimal(string: "9.99"),
                                                monthly: nil)
@@ -216,9 +216,9 @@ final class MakeItMePriceLabelTests: XCTestCase {
     // MARK: - WS-D · the Settings offer card's price line
 
     func testSettingsOfferPriceLineIsTheProductPriceWithTerm() {
-        XCTAssertEqual("$9.99 / year",
+        XCTAssertEqual("$9.99/yr",
                        MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$9.99"))
-        XCTAssertEqual("$19.99 / year",
+        XCTAssertEqual("$19.99/yr",
                        MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$19.99"))
         XCTAssertNil(MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: nil),
                      "unresolved offering → the card carries no price, never a hardcoded one")

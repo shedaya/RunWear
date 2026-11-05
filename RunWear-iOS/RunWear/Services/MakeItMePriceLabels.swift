@@ -35,21 +35,42 @@ enum MakeItMePriceLabels {
     /// The selection the paywall opens with: annual, always.
     static let defaultPlan: PaywallPlan = .annual
 
+    /// GEN-5 (RW-28 item 29): the settled monthly row form —
+    /// "Monthly — $0.99/month" (the gen-4 build's "$0.99 / month"
+    /// with no label deviated on both platforms).
     static func monthlyRowLabel(priceString: String?) -> String {
-        priceString.map { "\($0) / month" } ?? "Monthly"
+        priceString.map { "Monthly — \($0)/month" } ?? "Monthly"
     }
 
     static func annualRowLabel(annualPriceString: String?, annual: Decimal?, monthly: Decimal?) -> String {
         guard let annualPriceString else { return "Annual" }
-        return "\(annualPriceString) / year"
+        return "\(annualPriceString)/yr"
     }
 
     /// The Settings Premium offer card's price line (GEN-3, WS-D):
     /// the store product's annual price with its term, or nil while
     /// the offering is unresolved — the card then carries no price
     /// rather than a wrong one. Never a hardcoded string.
+    /// GEN-5 (RW-28 item 26): the settled compact form "$9.99/yr"
+    /// (the gen-4 "$9.99 / year" deviated).
     static func settingsOfferPriceLine(annualPriceString: String?) -> String? {
-        annualPriceString.map { "\($0) / year" }
+        annualPriceString.map { "\($0)/yr" }
+    }
+
+    /// GEN-5 (RW-28 items 26/29 + C-5): the Settings card's modest
+    /// monthly element label — the same settled row form as the
+    /// paywall's, so the price reads identically in both places.
+    static func settingsMonthlyLabel(monthlyPriceString: String?) -> String? {
+        monthlyPriceString.map { "Monthly — \($0)/month" }
+    }
+
+    /// GEN-5 (RW-28 item 29): the per-run line that sits DIRECTLY
+    /// under the annual price on the paywall's hero card —
+    /// "only about 4¢ per run", derived from the displayed price
+    /// at the stated basis (never hardcoded, never a second price).
+    static func perRunLine(annual: Decimal?) -> String? {
+        guard let cents = perRunCents(annual: annual) else { return nil }
+        return "only about \(cents)¢ per run"
     }
 
     /// Runs per year at the stated basis: four to five runs a week,

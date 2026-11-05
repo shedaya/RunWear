@@ -91,6 +91,20 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     /// The collection model stamps it at record time; callers
     /// constructing a settle pass the default.
     let wasUpdatedInSession: Bool
+    /// GEN-5 (RW-28, C-7): the entry's settled moment as a simple
+    /// human reading ("Now", "9 p.m.", "Tomorrow evening") — the
+    /// payload an in-session TIME change narrates. Never a stamped
+    /// date, never a garment.
+    let momentReading: String
+    /// GEN-5 (RW-28, C-7): the update narration's payload, computed
+    /// at record time from the DIFF (the place that changed, or the
+    /// moment reading that changed) and stored on the entry with
+    /// the content it describes. Nil for a creation.
+    let updatePayload: String?
+    /// GEN-5 (RW-28 item 10): when this entry last settled — the
+    /// TODAY card's "Last saved …" element. Legacy payloads decode
+    /// it as the entry's day.
+    let lastSavedAt: Date
 
     init(
         dayStart: Date,
@@ -102,7 +116,10 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         itemKeys: [String],
         heroImageReference: String,
         sessionID: String = "",
-        wasUpdatedInSession: Bool = false
+        wasUpdatedInSession: Bool = false,
+        momentReading: String = "Now",
+        updatePayload: String? = nil,
+        lastSavedAt: Date? = nil
     ) {
         self.dayStart = dayStart
         self.placeName = placeName
@@ -114,18 +131,30 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         self.heroImageReference = heroImageReference
         self.sessionID = sessionID
         self.wasUpdatedInSession = wasUpdatedInSession
+        self.momentReading = momentReading
+        self.updatePayload = updatePayload
+        self.lastSavedAt = lastSavedAt ?? dayStart
     }
 
     /// A copy of this entry carrying the given narration flag —
     /// how the collection model commits the narration kind WITH
     /// the entry it describes, as one value (Y-5 atomicity).
     func settingWasUpdatedInSession(_ value: Bool) -> WearIveRunEntry {
+        settingNarration(wasUpdated: value, payload: updatePayload)
+    }
+
+    /// GEN-5: a copy carrying the narration kind AND its payload,
+    /// committed in the same store write as the content (Y-5
+    /// atomicity, extended to the C-7 payload).
+    func settingNarration(wasUpdated: Bool, payload: String?) -> WearIveRunEntry {
         WearIveRunEntry(
             dayStart: dayStart, placeName: placeName,
             feelsLikeF: feelsLikeF, actualF: actualF, condition: condition,
             itemNames: itemNames, itemKeys: itemKeys,
             heroImageReference: heroImageReference,
-            sessionID: sessionID, wasUpdatedInSession: value
+            sessionID: sessionID, wasUpdatedInSession: wasUpdated,
+            momentReading: momentReading, updatePayload: payload,
+            lastSavedAt: lastSavedAt
         )
     }
 
@@ -133,6 +162,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         case dayStart, placeName, feelsLikeF, actualF, condition
         case itemNames, itemKeys, heroImageReference, sessionID
         case wasUpdatedInSession
+        case momentReading, updatePayload, lastSavedAt
     }
 
     /// Legacy-tolerant decoding: a payload written before the
@@ -153,6 +183,9 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         heroImageReference = try container.decode(String.self, forKey: .heroImageReference)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID) ?? ""
         wasUpdatedInSession = try container.decodeIfPresent(Bool.self, forKey: .wasUpdatedInSession) ?? false
+        momentReading = try container.decodeIfPresent(String.self, forKey: .momentReading) ?? "Now"
+        updatePayload = try container.decodeIfPresent(String.self, forKey: .updatePayload)
+        lastSavedAt = try container.decodeIfPresent(Date.self, forKey: .lastSavedAt) ?? dayStart
     }
 
     /// The entry's place as a SimplePlace (WS-4 / RC-4): the
@@ -173,13 +206,16 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
             ?? placeName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// The narration's real payload for an update (WS-4): the
-    /// entry's first kit item — the design's pattern, and the
-    /// field Android's holder computed and never used (D-08).
-    /// Falls back to the condition when the entry carries no
-    /// items (a recorded entry always carries its kit).
+    /// The narration's payload for an update (GEN-5, RW-28,
+    /// C-7 — supersedes the WS-4 garment payload): what CHANGED,
+    /// computed at record time and stored on the entry — the new
+    /// place when the place changed, the new moment reading when
+    /// the time changed. NEVER a garment (the gen-4 defect, on
+    /// both platforms: "Update to Tank Top / Singlet"). Falls back
+    /// to the entry's place for entries recorded before the
+    /// payload was stored.
     var narrationPayload: String {
-        itemNames.first ?? condition
+        updatePayload ?? placeDisplayName
     }
 
     /// Place identity: the SimplePlace key — trimmed, case-folded,
@@ -210,6 +246,26 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
 /// hero carries; an entry can belong to several categories (a 30°
 /// snow day is both Cold and Snow) and matches a filter when the
 /// filter is in its set.
+/// GEN-5 (RW-28, C-7): the update payload from the settle diff —
+/// the original Nov 2 concept: name whatever changed. Place beats
+/// moment (a move is the bigger change); a moment change names the
+/// new simple reading (a clock reading like "9 p.m." is in-spec
+/// per Sol's Nov 5 nuance ruling); a kit-only change (the outfit
+/// re-solved because the moment's weather moved within the same
+/// reading) names the moment it settled at. Garments are never
+/// named.
+enum WearIveRunNarrationRules {
+    static func updatePayload(
+        existing: WearIveRunEntry,
+        incoming: WearIveRunEntry
+    ) -> String {
+        if existing.placeKey != incoming.placeKey {
+            return incoming.placeDisplayName
+        }
+        return incoming.momentReading
+    }
+}
+
 enum WearIveRunWeatherFilter: String, CaseIterable, Equatable {
     case all
     case cold
@@ -492,6 +548,19 @@ enum WearIveRunDateFormatting {
         let fromText = formatter("MMM d", calendar: calendar).string(from: start)
         let toText = formatter("MMM d", calendar: calendar).string(from: end)
         return "\(fromText) – \(toText)"
+    }
+
+    /// GEN-5 (RW-28 item 10): the TODAY card's "Last saved …"
+    /// element — "just now" inside the minute, a clock reading
+    /// today, a day label before that. Never a stamped date-time.
+    static func lastSavedLine(savedAt: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        if now.timeIntervalSince(savedAt) < 60 {
+            return "Last saved just now"
+        }
+        if calendar.isDate(savedAt, inSameDayAs: now) {
+            return "Last saved \(formatter("h:mm a", calendar: calendar).string(from: savedAt))"
+        }
+        return "Last saved \(dayLabel(savedAt, calendar: calendar))"
     }
 
     /// "Mar 11" style single-day label.
@@ -1109,10 +1178,10 @@ enum SelfieCheck: String, CaseIterable, Equatable {
 
     var passedLabel: String {
         switch self {
-        case .faceFound: return "Face found"
-        case .faceLargeEnough: return "Face fills the guide"
-        case .faceFrontal: return "Facing the camera"
-        case .wellLit: return "Light looks good"
+        case .faceFound: return "In frame"
+        case .faceLargeEnough: return "Face size"
+        case .faceFrontal: return "Straight on"
+        case .wellLit: return "Light"
         }
     }
 

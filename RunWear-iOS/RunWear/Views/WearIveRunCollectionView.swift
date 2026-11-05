@@ -1,5 +1,6 @@
 import SwiftUI
 import RunWearEngine
+import Vision
 
 // MARK: - "Wear I've Run" Collection (RW-26, checklist §C; notes §8-K)
 //
@@ -173,6 +174,11 @@ struct WearIveRunCollectionView: View {
                 Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
+                // GEN-5 (RW-28 item 10): the TODAY card's settled
+                // "Last saved …" element (frame 9 form).
+                Text(WearIveRunDateFormatting.lastSavedLine(savedAt: entry.lastSavedAt))
+                    .font(.appFootnote)
+                    .foregroundColor(AppTheme.inkSecondary)
             }
             Spacer()
         }
@@ -182,12 +188,24 @@ struct WearIveRunCollectionView: View {
 
     @ViewBuilder
     private func entryImage(_ entry: WearIveRunEntry) -> some View {
-        AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().aspectRatio(contentMode: .fill)
-            default:
-                Rectangle().fill(AppTheme.cardOnSheet)
+        // GEN-5 (RW-28 sharing fix + addendum 2): a missing or
+        // unresolved reference renders the designed treatment — a
+        // card-fill placeholder with the photo glyph — never a
+        // blank, never a crash; a resolved photo renders through
+        // HeroPhoto's TOP-anchored crop, so a thumbnail can never
+        // present the runner headless the way a center fill did.
+        GeometryReader { geo in
+            AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
+                switch phase {
+                case .success(let image):
+                    HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
+                default:
+                    ZStack {
+                        Rectangle().fill(AppTheme.cardOnSheet)
+                        Image(systemName: "photo")
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+                }
             }
         }
     }
@@ -512,9 +530,34 @@ struct WearIveRunDayView: View {
               let image = UIImage(data: data) else { return nil }
         // Downscale to the poster's rendered size OFF the main
         // actor, so the render never pays full-resolution decode.
-        return await Task.detached(priority: .userInitiated) {
+        let downscaled = await Task.detached(priority: .userInitiated) {
             ShareCardImagePrep.downscaledForPoster(image)
         }.value
+        // GEN-5 (RW-28 sharing fix): crop to the poster's 4:5
+        // window FACE-PRESERVING (Vision face rect when one is
+        // found; the top-anchored head band otherwise) — the
+        // gen-4 poster center-cropped the face off entirely.
+        return await Task.detached(priority: .userInitiated) {
+            ShareCardCrop.facePreservingCropped(
+                downscaled,
+                faceRectTopLeftNormalized: Self.detectedFaceRect(in: downscaled)
+            )
+        }.value
+    }
+
+    /// Vision face detection for the poster crop: the largest
+    /// face's rect in top-left-normalised coordinates, or nil —
+    /// the crop then falls back to its top anchor (the head band
+    /// every RunWear hero portrait keeps at the top).
+    nonisolated private static func detectedFaceRect(in image: UIImage) -> CGRect? {
+        guard let cg = image.cgImage else { return nil }
+        let request = VNDetectFaceRectanglesRequest()
+        let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+        guard (try? handler.perform([request])) != nil,
+              let face = request.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width })
+        else { return nil }
+        let box = face.boundingBox // Vision space: y-up
+        return CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
     }
 }
 
@@ -607,9 +650,15 @@ struct MorningPosterView: View {
     var body: some View {
         ZStack(alignment: .top) {
             if let hero {
-                Image(uiImage: hero)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                // GEN-5: the hero arrives already face-cropped to
+                // the poster aspect (loadHeroUIImage); HeroPhoto's
+                // top anchor is the second line of defence — a
+                // bare center fill never renders this poster.
+                HeroPhoto(
+                    image: Image(uiImage: hero),
+                    width: MorningPosterMetrics.canvasWidth,
+                    height: MorningPosterMetrics.canvasHeight
+                )
             } else {
                 AppTheme.darkBackground
             }

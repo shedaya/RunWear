@@ -809,9 +809,23 @@ enum FreeLooksMeter {
 // section, as before. Not opted in renders no pill.
 enum HeroPillState: Equatable {
     case hidden
+    /// Generating, subscribed (or otherwise not sellable): the
+    /// clean pill — script + spinner + "Making this you…".
     case making
+    /// GEN-5 (RW-28, C-4 AMENDED — Sol, Nov 5, 2026): generating
+    /// on the FREE tier, where the user is actually waiting on
+    /// demand — the same clean pill PLUS one small green upsell
+    /// line, "Get it instantly next time" (Premium looks are
+    /// banked ahead, so next time the look is already there).
+    /// Gated to the free generating state ONLY.
+    case makingWithUpsell
     case scaffold
     case freeLook(used: Int, allowance: Int)
+    /// GEN-5 (RW-28, Sol Nov 5, 2026): OUT OF FREE LOOKS — the
+    /// free tier's exhausted status: script lead, the used-up
+    /// count stated honestly, and "Get unlimited" as the pill's
+    /// MAIN message; the whole pill taps to the Premium offer.
+    case exhausted(used: Int, allowance: Int)
     case premium
 }
 
@@ -821,6 +835,15 @@ enum HeroPill {
     static let scaffoldLabel = "Your photo"
     static let premiumLabel = "Premium"
     static let getUnlimitedLabel = "Get unlimited"
+    /// GEN-5 (C-4 AMENDED): the free generating pill's green
+    /// upsell line — verbatim, unembellished.
+    static let getInstantlyLabel = "Get it instantly next time"
+
+    /// The exhausted pill's honest count, in the free pill's
+    /// count family: "5 of 5 looks used".
+    static func exhaustedCountLabel(used: Int, allowance: Int) -> String {
+        "\(min(used, allowance)) of \(allowance) looks used"
+    }
     /// The Make It Me script mark the pill carries in states
     /// (b)(c)(d) — rendered in Great Vibes wherever the pill is
     /// drawn (GEN-3 DESIGN DELTA 2).
@@ -848,6 +871,13 @@ enum HeroPill {
             // that photo is the banked scaffold (PersonalServePolicy).
             if lookState == .making { return .scaffold }
             if isSubscribed { return .premium }
+            // GEN-5: the exhausted status takes over the free pill
+            // the moment the shared counter reaches the allowance —
+            // exactly at the allowance, driven by the same one
+            // meter (no second bookkeeping).
+            if freeGenerationsUsed >= freeAllowance {
+                return .exhausted(used: freeGenerationsUsed, allowance: freeAllowance)
+            }
             // The exact photo is displayed: the count may show
             // only once the shared counter confirms the delivery
             // (W-18) — until then the pill waits, hidden.
@@ -856,8 +886,85 @@ enum HeroPill {
         }
         // No personal photo on screen: the pill speaks only while
         // THIS cell's look is making (over the fallback photo).
-        if lookState == .making { return .making }
+        // GEN-5 (C-4 AMENDED): a free user's generating pill
+        // carries the green instantly line; a subscriber's stays
+        // clean — nothing left to sell.
+        if lookState == .making {
+            return isSubscribed ? .making : .makingWithUpsell
+        }
         return .hidden
+    }
+}
+
+// MARK: - Fork hero asset (GEN-5, RW-28, ruling C-2)
+
+/// The purpose-designed, hard-coded fork image
+/// (`mim-fork-hero`, 2048 × 1152, bundled — asset lane spec:
+/// rw-gen5-assets/README.md) and its code-drawn dashed face box.
+/// Anchoring rule (binding): bands narrower than the image show
+/// the FULL image height with the horizontal window centred on
+/// the face centre (x = 0.507), clamped to the edges; bands wider
+/// than the image show the full width anchored to the TOP. Plain
+/// centre-crop is ruled out — the head has only 3.2% headroom.
+enum ForkHeroSpec {
+    static let assetName = "mim-fork-hero"
+    static let imageSize = CGSize(width: 2048, height: 1152)
+    /// Face centre, fraction of image width.
+    static let faceCentreX: CGFloat = 0.507
+    /// Measured head: x 0.414–0.600, y 0.032–0.482.
+    static let headRectNormalized = CGRect(x: 0.414, y: 0.032, width: 0.186, height: 0.450)
+    /// Draw box (measured head + padding), image-normalised.
+    static let faceBoxNormalized = CGRect(x: 0.400, y: 0.018, width: 0.214, height: 0.478)
+    /// Shoulders: x 0.306–0.714 — must stay in frame with the face.
+    static let shouldersXRange: ClosedRange<CGFloat> = 0.306...0.714
+
+    /// The visible source rect (image coordinates) for a band of
+    /// `frameSize`, per the anchoring rule.
+    static func visibleRect(imageSize: CGSize, frameSize: CGSize) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0,
+              frameSize.width > 0, frameSize.height > 0 else { return .zero }
+        let frameAspect = frameSize.width / frameSize.height
+        let imageAspect = imageSize.width / imageSize.height
+        if frameAspect <= imageAspect {
+            // Narrower band: full height; window centred on the
+            // face centre, clamped.
+            let width = imageSize.height * frameAspect
+            let centre = faceCentreX * imageSize.width
+            let x = min(max(centre - width / 2, 0), imageSize.width - width)
+            return CGRect(x: x, y: 0, width: width, height: imageSize.height)
+        }
+        // Wider band: full width, anchored to the top.
+        let height = imageSize.width / frameAspect
+        return CGRect(x: 0, y: 0, width: imageSize.width, height: height)
+    }
+
+    /// The face box in frame points, transformed with the SAME
+    /// crop the image receives — registered to the face at every
+    /// form factor.
+    static func faceBoxRectInFrame(imageSize: CGSize, frameSize: CGSize) -> CGRect {
+        let visible = visibleRect(imageSize: imageSize, frameSize: frameSize)
+        guard visible.width > 0, visible.height > 0 else { return .zero }
+        let scaleX = frameSize.width / visible.width
+        let scaleY = frameSize.height / visible.height
+        return CGRect(
+            x: (faceBoxNormalized.minX * imageSize.width - visible.minX) * scaleX,
+            y: (faceBoxNormalized.minY * imageSize.height - visible.minY) * scaleY,
+            width: faceBoxNormalized.width * imageSize.width * scaleX,
+            height: faceBoxNormalized.height * imageSize.height * scaleY
+        )
+    }
+
+    /// True when the whole draw box (and therefore the head) is
+    /// inside the visible rect — the C-2 form-factor guarantee.
+    static func faceBoxFullyVisible(imageSize: CGSize, frameSize: CGSize) -> Bool {
+        let visible = visibleRect(imageSize: imageSize, frameSize: frameSize)
+        let box = CGRect(
+            x: faceBoxNormalized.minX * imageSize.width,
+            y: faceBoxNormalized.minY * imageSize.height,
+            width: faceBoxNormalized.width * imageSize.width,
+            height: faceBoxNormalized.height * imageSize.height
+        )
+        return visible.contains(box)
     }
 }
 

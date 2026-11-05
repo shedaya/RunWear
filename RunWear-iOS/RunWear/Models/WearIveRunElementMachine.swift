@@ -248,6 +248,12 @@ enum WearIveRunLandingClassification: Equatable {
     case created
     /// The entry existed and its kit (names or keys) changed.
     case kitUpdated
+    /// GEN-5 (RW-28, C-7): the entry existed and its settled
+    /// MOMENT changed (a confirmed hour change re-solves the
+    /// entry) with place and kit otherwise as they were — a
+    /// user-caused settle that narrates "Update to [reading]"
+    /// and cues, like a kit change.
+    case momentUpdated
     /// The entry existed and MOVED to a different place (GEN-3
     /// session rule): within a session the one entry updates in
     /// place through every location change, and the move is a
@@ -273,13 +279,30 @@ enum WearIveRunLandingClassifier {
         incoming: WearIveRunEntry
     ) -> WearIveRunLandingClassification {
         guard let existing else { return .created }
-        if existing == incoming { return .identical }
+        // GEN-5: identity of CONTENT, ignoring the volatile
+        // bookkeeping fields (lastSavedAt moves on every settle;
+        // updatePayload is derived at record time) — otherwise no
+        // settle could ever classify identical again and every
+        // weather tick would rewrite the store.
+        let sameContent = existing.dayStart == incoming.dayStart
+            && existing.placeKey == incoming.placeKey
+            && existing.feelsLikeF == incoming.feelsLikeF
+            && existing.actualF == incoming.actualF
+            && existing.condition == incoming.condition
+            && existing.itemNames == incoming.itemNames
+            && existing.itemKeys == incoming.itemKeys
+            && existing.heroImageReference == incoming.heroImageReference
+            && existing.momentReading == incoming.momentReading
+        if sameContent { return .identical }
+        if existing.placeKey != incoming.placeKey {
+            return .placeUpdated
+        }
+        if existing.momentReading != incoming.momentReading {
+            return .momentUpdated
+        }
         if existing.itemNames != incoming.itemNames
             || existing.itemKeys != incoming.itemKeys {
             return .kitUpdated
-        }
-        if existing.placeKey != incoming.placeKey {
-            return .placeUpdated
         }
         return .silentUpdate
     }

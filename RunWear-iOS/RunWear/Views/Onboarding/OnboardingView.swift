@@ -162,14 +162,27 @@ struct OnboardingView: View {
                 .foregroundStyle(AppTheme.pinePayload)
                 .frame(width: 28)
 
-            (Text(point.name)
-                .fontWeight(.bold)
-                .foregroundColor(AppTheme.pinePayload)
-             + Text(" ")
-             + Text(point.phrase))
-                .font(.system(size: 17))
-                .foregroundStyle(AppTheme.inkPrimary)
-                .lineSpacing(6)
+            // GEN-5 (RW-28 item 27): headline = "Name — phrase"
+            // (name pine bold, phrase regular), body line separate
+            // underneath and never repeating the name. The gen-4
+            // composition ran the body in as the phrase, so the
+            // settled headline phrases appeared nowhere.
+            VStack(alignment: .leading, spacing: 4) {
+                (Text(point.name)
+                    .fontWeight(.bold)
+                    .foregroundColor(AppTheme.pinePayload)
+                 + Text(" — ")
+                    .foregroundColor(AppTheme.inkPrimary)
+                 + Text(point.phrase))
+                    .font(.system(size: 17))
+                    .foregroundStyle(AppTheme.inkPrimary)
+                    .lineSpacing(4)
+
+                Text(point.body)
+                    .font(.appSecondary)
+                    .foregroundStyle(AppTheme.inkSecondary)
+                    .lineSpacing(4)
+            }
         }
     }
 
@@ -218,6 +231,11 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 24)
             .padding(.top, 32)
+            // GEN-5 (RW-28 item 28): bottom room so the Body
+            // temperature card — slider AND its Runs Cold / Runs
+            // Warm endpoint labels — is fully visible above the
+            // pinned Continue, never cut off by it.
+            .padding(.bottom, 32)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(AppTheme.background.ignoresSafeArea())

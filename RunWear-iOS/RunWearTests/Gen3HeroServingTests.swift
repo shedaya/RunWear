@@ -232,8 +232,12 @@ final class Gen3HeroServingTests: XCTestCase {
     func testPillMakingState_BindsToTheRequestedCell() {
         // (a) personal photo generating for THIS cell, none on
         // screen yet → the pill rides the fallback photo.
+        // GEN-5 (C-4 AMENDED): a FREE user's generating pill is
+        // its own state — it carries the green instantly line. A
+        // subscriber's generating pill stays .making (pinned in
+        // the gen-5 suite).
         XCTAssertEqual(
-            .making,
+            .makingWithUpsell,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5)
         )

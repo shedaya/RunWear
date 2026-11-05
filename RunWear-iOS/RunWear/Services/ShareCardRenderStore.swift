@@ -180,6 +180,81 @@ final class ShareCardSlot: ObservableObject {
     }
 }
 
+// MARK: - Face-preserving poster crop (GEN-5, RW-28 sharing fix)
+
+/// Sol's Nov 5 sharing test: the Morning Poster center-cropped
+/// the photo and cut the user's face off entirely — the runner
+/// rendered headless. The crop contract that replaces the bare
+/// center fill: the poster's 4:5 window must CONTAIN the face
+/// (subject-aware when a face rect is known — Vision on the render
+/// path; otherwise the head band at the top of the frame, where
+/// every RunWear hero portrait keeps its head). Pure geometry, so
+/// the gate pins the contract itself.
+enum ShareCardCrop {
+    /// The poster's aspect (width / height) — MorningPosterMetrics'
+    /// canvas is 4:5.
+    static let posterAspect: CGFloat = 4.0 / 5.0
+
+    /// The crop rect (image coordinates) of aspect `posterAspect`
+    /// that keeps `faceRectNormalized` (y-up Vision space, or a
+    /// top-left-normalised rect converted by the caller through
+    /// `flipY`) in frame with headroom. Without a face, the window
+    /// anchors to the TOP of the image.
+    static func cropRect(
+        imageSize: CGSize,
+        faceRectTopLeftNormalized: CGRect?
+    ) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+        // Window size: the largest rect of the poster aspect that
+        // fits the image.
+        var windowWidth = imageSize.width
+        var windowHeight = windowWidth / posterAspect
+        if windowHeight > imageSize.height {
+            windowHeight = imageSize.height
+            windowWidth = windowHeight * posterAspect
+        }
+        // Start top-anchored, horizontally centred on the face
+        // centre (or the image centre).
+        var originX = (imageSize.width - windowWidth) / 2
+        var originY: CGFloat = 0
+        if let face = faceRectTopLeftNormalized {
+            let faceRect = CGRect(
+                x: face.minX * imageSize.width,
+                y: face.minY * imageSize.height,
+                width: face.width * imageSize.width,
+                height: face.height * imageSize.height
+            )
+            // Centre the window on the face, then clamp — and if
+            // clamping would push the face out, pin the window so
+            // the face's top keeps 4% headroom instead.
+            originX = min(max(faceRect.midX - windowWidth / 2, 0), imageSize.width - windowWidth)
+            originY = min(max(faceRect.midY - windowHeight / 2, 0), imageSize.height - windowHeight)
+            if faceRect.minY < originY {
+                originY = max(faceRect.minY - imageSize.height * 0.04, 0)
+            }
+            if faceRect.maxY > originY + windowHeight {
+                originY = min(faceRect.maxY - windowHeight, imageSize.height - windowHeight)
+            }
+        }
+        return CGRect(x: originX, y: originY, width: windowWidth, height: windowHeight)
+    }
+
+    /// Crop a UIImage to the poster window. Returns the input when
+    /// cropping is impossible (the poster then renders the photo
+    /// through HeroPhoto's top anchor — never a center crop).
+    static func facePreservingCropped(
+        _ image: UIImage,
+        faceRectTopLeftNormalized: CGRect?
+    ) -> UIImage {
+        guard let cg = image.cgImage else { return image }
+        let imageSize = CGSize(width: cg.width, height: cg.height)
+        let rect = cropRect(imageSize: imageSize, faceRectTopLeftNormalized: faceRectTopLeftNormalized)
+        guard rect.width > 0, rect.height > 0,
+              let cropped = cg.cropping(to: rect.integral) else { return image }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+    }
+}
+
 // MARK: - Hero preparation for the poster
 
 enum ShareCardImagePrep {

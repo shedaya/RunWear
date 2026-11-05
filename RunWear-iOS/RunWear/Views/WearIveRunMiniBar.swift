@@ -44,8 +44,10 @@ enum WearIveRunMiniBarModel {
     /// WS-4: both payloads derive from the ENTRY, never from a
     /// caller-assembled string — "Added" carries the entry's
     /// place in its simple form (city + abbreviated region), and
-    /// "Update to" carries the entry's real payload, its first
-    /// kit item. (The pre-WS-4 iOS caller fed "Update to" a
+    /// "Update to" carries the entry's stored payload (GEN-5:
+    /// what changed — the place or the moment reading; the WS-4
+    /// first-kit-item payload was the gen-4 garment defect).
+    /// (The pre-WS-4 iOS caller fed "Update to" a
     /// "{n} items · {temp}" summary the entry never said; the
     /// Android holder fed it the raw place + "Today" — D-08 on
     /// both sides, different strings.)
@@ -220,22 +222,32 @@ final class WearIveRunCollectionModel: ObservableObject {
         // others. A silent settle preserves the kind it found
         // (weather moving under a settled narration does not
         // rewrite the narration).
+        // GEN-5 (RW-28, C-7): the payload is computed from the
+        // DIFF and stamped with the kind — place name on a move,
+        // the new moment reading on a time change, the settled
+        // moment on a kit-only re-solve. Never a garment.
         let narrationUpdated: Bool
+        let narrationPayload: String?
         switch classification {
         case .created:
             narrationUpdated = false
-        case .kitUpdated, .placeUpdated:
+            narrationPayload = nil
+        case .kitUpdated, .placeUpdated, .momentUpdated:
             narrationUpdated = true
+            narrationPayload = existing.map {
+                WearIveRunNarrationRules.updatePayload(existing: $0, incoming: entry)
+            }
         case .silentUpdate, .identical:
             narrationUpdated = existing?.wasUpdatedInSession ?? false
+            narrationPayload = existing?.updatePayload
         }
-        store.record(entry.settingWasUpdatedInSession(narrationUpdated))
+        store.record(entry.settingNarration(wasUpdated: narrationUpdated, payload: narrationPayload))
         entries = store.entries
         switch classification {
         case .created:
             narratedEntryID = entry.id
             cueCount += 1
-        case .kitUpdated, .placeUpdated:
+        case .kitUpdated, .placeUpdated, .momentUpdated:
             cueCount += 1
         case .silentUpdate, .identical:
             break

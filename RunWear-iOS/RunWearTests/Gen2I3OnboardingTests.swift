@@ -162,10 +162,10 @@ final class Gen2I3OnboardingTests: XCTestCase {
         // The four labels as the user must be able to read them —
         // the truncated forms on camera were these strings cut
         // mid-word, so pin them whole.
-        XCTAssertEqual(SelfieCheck.faceFound.passedLabel, "Face found")
-        XCTAssertEqual(SelfieCheck.faceLargeEnough.passedLabel, "Face fills the guide")
-        XCTAssertEqual(SelfieCheck.faceFrontal.passedLabel, "Facing the camera")
-        XCTAssertEqual(SelfieCheck.wellLit.passedLabel, "Light looks good")
+        XCTAssertEqual(SelfieCheck.faceFound.passedLabel, "In frame")
+        XCTAssertEqual(SelfieCheck.faceLargeEnough.passedLabel, "Face size")
+        XCTAssertEqual(SelfieCheck.faceFrontal.passedLabel, "Straight on")
+        XCTAssertEqual(SelfieCheck.wellLit.passedLabel, "Light")
     }
 
     func testCaptureViewRendersChipsByRowsAtFullWidth_sourcePin() throws {

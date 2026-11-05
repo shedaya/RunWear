@@ -425,7 +425,11 @@ struct WeatherOutfitView: View {
                                 }
                                 outfitSection
                                     .padding(.top, 24)
+                                homeBandSection
+                                    .padding(.top, 24)
                                 dayChartBand
+                                    .padding(.top, 24)
+                                proTipSection
                                     .padding(.top, 24)
                                 personalSection
                                     .padding(.top, 24)
@@ -548,8 +552,18 @@ struct WeatherOutfitView: View {
                     .padding(.top, 16)
             }
             outfit()
+            // GEN-5: the convergence band directly below the
+            // outfit, above the glance band (see homeBandSection).
+            homeBandSection
+                .padding(.top, 24)
             // GEN-4: the glance band sits below the outfit list.
             dayChartBand
+                .padding(.top, 24)
+            // GEN-5 (RW-28, C-3 settlement): the Pro Tip sits
+            // BELOW the hourly band — the bottom of the normal
+            // elements; only Wear I've Run (the pinned dock and
+            // the personal section's content) sits below it.
+            proTipSection
                 .padding(.top, 24)
             personalSection
                 .padding(.top, 24)
@@ -638,8 +652,10 @@ struct WeatherOutfitView: View {
             .font(.appSecondary)
             .foregroundColor(AppTheme.inkSecondary)
 
-            // (d) Date/time pills, flat on the sheet.
-            sheetDateTimePills
+            // GEN-5 (RW-28 item 12): the duplicate date/time pill
+            // row that sat here is REMOVED — one moment system
+            // only (the headline line above is the entry; the
+            // glance band's Change is the other).
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
@@ -773,8 +789,44 @@ struct WeatherOutfitView: View {
     /// "Now" when viewing now (sentence case — the location line
     /// is a sentence-case piece, notes §7.2); otherwise the same
     /// date + hour strings the hero's pills used.
+    /// GEN-5 (RW-28 item 12): the changed-state moment in the
+    /// bare simple form — "9:00 PM" on the viewed day, a simple
+    /// day word + the hour beyond it; never the gen-4 build's
+    /// "Today, 9:00 PM" stamped form.
     private var sheetMoment: String {
-        isViewingNow ? "Now" : "\(navDateString) \(heroHourString)"
+        if isViewingNow { return "Now" }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(viewModel.selectedDate) {
+            return heroHourString
+        }
+        if calendar.isDateInTomorrow(viewModel.selectedDate) {
+            return "Tomorrow \(heroHourString)"
+        }
+        return "\(navDateString) \(heroHourString)"
+    }
+
+    /// GEN-5 (RW-28, C-7): the entry's moment as a simple human
+    /// reading for the Wear I've Run narration — "Now" at now,
+    /// a clock reading ("9 p.m.") for a picked hour today,
+    /// "Tomorrow evening"-family readings beyond. Never a stamp.
+    private var entryMomentReading: String {
+        if isViewingNow { return "Now" }
+        let calendar = Calendar.current
+        let hour = viewModel.selectedHour
+        let clock: String = {
+            let display = hour % 12 == 0 ? 12 : hour % 12
+            return "\(display) \(hour >= 12 ? "p.m." : "a.m.")"
+        }()
+        if calendar.isDateInToday(viewModel.selectedDate) { return clock }
+        if calendar.isDateInTomorrow(viewModel.selectedDate) {
+            switch hour {
+            case 5..<12: return "Tomorrow morning"
+            case 12..<17: return "Tomorrow afternoon"
+            case 17..<22: return "Tomorrow evening"
+            default: return "Tomorrow night"
+            }
+        }
+        return sheetMoment
     }
 
     private var heroHourString: String {
@@ -791,37 +843,6 @@ struct WeatherOutfitView: View {
     /// row's Now segment all read this one state).
     private var isViewingNow: Bool {
         viewModel.isViewingLocationNow
-    }
-
-    /// The hero's date/time pills, restyled flat on the sheet:
-    /// sheet-tonal fill + ink text; the Now pill's selected state
-    /// uses the pine tint. Same actions as the hero pills had.
-    private var sheetDateTimePills: some View {
-        HStack(spacing: 12) {
-            Button { showDatePicker = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar").font(.appPillLabel)
-                    Text(navDateString).font(.appPillLabel)
-                }
-                .flatSheetPill()
-            }
-            Button { showTimePicker = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock").font(.appPillLabel)
-                    Text(heroHourString).font(.appPillLabel).monospacedDigit()
-                }
-                .flatSheetPill()
-            }
-            if !isViewingNow {
-                Button { viewModel.resetToNow() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.counterclockwise").font(.appPillLabel)
-                        Text("Now").font(.appPillLabel)
-                    }
-                    .flatSheetPill(isSelected: true)
-                }
-            }
-        }
     }
 
     /// WS-3 (D-11): the sheet-open seam the element consumes for
@@ -863,7 +884,7 @@ struct WeatherOutfitView: View {
         // the rest of the session.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: todays,
-            moment: sheetMoment,
+            moment: todays?.momentReading ?? "Now",
             wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
         )
         if state != .preAdd {
@@ -944,7 +965,9 @@ struct WeatherOutfitView: View {
             // "honestly empty before first resolution" sub-rule is
             // the one element that yields in this merge.
             heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference() ?? "",
-            sessionID: collectionModel.sessionID
+            sessionID: collectionModel.sessionID,
+            momentReading: entryMomentReading,
+            lastSavedAt: Date()
         )
         collectionModel.recordSettled(entry)
     }
@@ -1253,14 +1276,20 @@ struct WeatherOutfitView: View {
             }
         }
 
-        // GEN-3 convergence band: below the outfit items (this
-        // section renders under the outfit in both home layouts),
-        // visible only while a subscribed user's bank is genuinely
-        // converging — ConvergenceBand carries the settled copy
-        // and the rule; the store carries the real banking state.
+    }
+
+    /// GEN-5 (RW-28 item 22, band placement clarified Nov 5):
+    /// the "Making your looks" band on home — DIRECTLY BELOW THE
+    /// OUTFIT AREA, above the day-chart band, the Pro Tip, and
+    /// the feedback row, inside the first screenful, so a user
+    /// who has just subscribed sees it and understands what is
+    /// happening. (It previously rendered at the foot of the
+    /// personal section, below the chart — the position Sol
+    /// flagged on Oct 31 and again on Nov 5.) Visible only while
+    /// a subscribed user's bank is genuinely converging.
+    @ViewBuilder private var homeBandSection: some View {
         if let band = ConvergenceBand.content(isSubscribed: personalStore.mode == .subscribed, coverage: personalStore.bankCoverage) {
             ConvergenceBandView(content: band)
-                .padding(.top, 12)
         }
     }
 
@@ -1290,24 +1319,29 @@ struct WeatherOutfitView: View {
                     .staggeredAnimation(index: 1 + index, isVisible: hasAppeared)
             }
 
-            // Tips (v4.1)
-            if !recommendation.tips.isEmpty {
-                Text("Tips")
+        }
+    }
+
+    /// GEN-5 (RW-28, C-3): the Pro Tip block — its own section
+    /// now, rendered below the day-chart band in every home
+    /// layout (it lived at the outfit list's foot before the
+    /// settlement, above the band).
+    @ViewBuilder private var proTipSection: some View {
+        if !recommendation.tips.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Pro Tip")
                     .font(.appItemName)
                     .foregroundColor(AppTheme.inkSecondary)
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .staggeredAnimation(index: 1 + recommendation.allItems.count, isVisible: hasAppeared)
 
-                ForEach(Array(recommendation.tips.enumerated()), id: \.offset) { index, tip in
+                ForEach(Array(recommendation.tips.enumerated()), id: \.offset) { _, tip in
                     Text(tip)
                         .font(.appSecondary)
                         .foregroundColor(AppTheme.inkSecondary)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 4)
-                        .staggeredAnimation(index: 2 + recommendation.allItems.count + index, isVisible: hasAppeared)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

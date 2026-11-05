@@ -40,15 +40,18 @@ struct MakeItMeForkView: View {
                     // W-23: while the photo loads, the area is a
                     // designed placeholder (card fill, photo glyph,
                     // spinner) — never a blank cream slab.
+                    // GEN-5 (RW-28 item 19, ruling C-2): the fork's
+                    // photo is the purpose-designed HARD-CODED
+                    // bundled image (ForkHeroSpec), cropped by the
+                    // asset lane's anchoring rule — never the
+                    // recommendation's pool photo, whose shipped
+                    // crop was half blank sky with the runner
+                    // sheet-cut (A-3). The dashed face box is a
+                    // code overlay in image space, transformed
+                    // with the same crop, so it stays registered
+                    // to the face at every form factor.
                     GeometryReader { geometry in
-                        AsyncImage(url: previewHeroURL.flatMap(URL.init(string:))) { phase in
-                            switch phase {
-                            case .success(let image):
-                                HeroPhoto(image: image, width: geometry.size.width, height: 180)
-                            default:
-                                forkPhotoPlaceholder
-                            }
-                        }
+                        forkHeroBand(width: geometry.size.width, height: 180)
                     }
                     .frame(height: 180)
                     .clipped()
@@ -94,7 +97,7 @@ struct MakeItMeForkView: View {
                     // ONLY on frame 28's Welcome screen — the fork
                     // (frame 32) carries no promise line; its copy
                     // is the choice itself.
-                    Text("Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at.")
+                    Text("Upload one photo of your face, and RunWear makes your outfit photos from it — starting with the one you're looking at.")
                         .font(.system(size: 15))
                         .foregroundColor(AppTheme.inkSecondary)
                     Button(action: onCustomize) {
@@ -137,6 +140,41 @@ struct MakeItMeForkView: View {
             .padding(24)
         }
     }
+
+    /// GEN-5 (C-2): the bundled fork hero with its dashed face
+    /// box. The image is local, so the band never renders blank
+    /// on arrival (A-5); the cream placeholder sits behind it for
+    /// the first-frame paint.
+    private func forkHeroBand(width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            AppTheme.background
+            if let forkImage = Self.bundledForkImage {
+                HeroPhoto(image: Image(uiImage: forkImage), width: width, height: height)
+                let box = ForkHeroSpec.faceBoxRectInFrame(
+                    imageSize: ForkHeroSpec.imageSize,
+                    frameSize: CGSize(width: width, height: height)
+                )
+                RoundedRectangle(cornerRadius: box.height * 0.12)
+                    .strokeBorder(
+                        AppTheme.pinePayload,
+                        style: StrokeStyle(lineWidth: 2.5, dash: [10, 7])
+                    )
+                    .frame(width: box.width, height: box.height)
+                    .offset(x: box.minX, y: box.minY)
+            }
+        }
+        .frame(width: width, height: height)
+    }
+
+    /// The bundled fork asset (hero_fallback folder reference —
+    /// the same channel as every bundled hero). Loaded once.
+    private static let bundledForkImage: UIImage? = {
+        let bundle = Bundle.main
+        let url = bundle.url(forResource: ForkHeroSpec.assetName, withExtension: "webp", subdirectory: "hero_fallback")
+            ?? bundle.url(forResource: ForkHeroSpec.assetName, withExtension: "webp")
+        guard let url, let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }()
 
     /// W-23: the fork photo area while its image is in flight —
     /// the card's own fill, a photo glyph and a spinner, at the
@@ -232,6 +270,12 @@ struct MakeItMeOptInFlow: View {
     private var consentStep: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // GEN-5 (RW-28 item 20): the consent header
+                // carries the Make It Me script (frame 33).
+                Text("Make It Me")
+                    .font(.greatVibes(size: 28))
+                    .foregroundColor(AppTheme.inkPrimary)
+
                 Text("Before you add photos")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
@@ -354,21 +398,21 @@ struct MakeItMeCaptureView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Add 1 to 3 photos of you")
+                Text("Add your photo")
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
 
-                Text("Front-facing works best: head and shoulders or half body, good light, no sunglasses. The outfit needs a body to land on.")
+                Text("One front-facing photo of your face works best: good light, no sunglasses. The generator reads only your face.")
                     .font(.system(size: 15))
                     .foregroundColor(AppTheme.inkSecondary)
 
-                // RW-16.14 guidance (Sol's ruling, Oct 31): a
-                // recommendation, in the flow where photos are
-                // chosen — never a requirement, never validated.
-                Text(MakeItMeCopy.fullBodyGuidance)
-                    .font(.system(size: 15))
-                    .foregroundColor(AppTheme.inkSecondary)
-
+                // GEN-5 (RW-28 item 18): the full-body guidance
+                // line no longer renders in intake — the settled
+                // intake is ONE photo, face only (design-spec
+                // §10: the generator reads only the face; the
+                // full-body slot is out). The copy constant stays
+                // defined for the historical Oct 31 ruling; the
+                // flow does not present it.
                 if isReplace {
                     Text("Replacing your photos remakes today's look right away. Your other looks update as they're made again.")
                         .font(.system(size: 14))
@@ -405,9 +449,17 @@ struct MakeItMeCaptureView: View {
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.inkSecondary)
                             case .accepted:
-                                Text("This one works.")
+                                // GEN-5 (RW-28 item 17): the review
+                                // speaks the SAME four checks as the
+                                // guided capture, with the settled
+                                // passing copy — acceptance means
+                                // all four passed.
+                                Text("✓ That's exactly what we need")
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(AppTheme.inkPrimary)
+                                Text(SelfieCheck.allCases.map(\.passedLabel).joined(separator: " · "))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(AppTheme.inkSecondary)
                             case .rejected(let rejection):
                                 // C3: the specific reason, under the
                                 // photo, in the flow — never
@@ -430,13 +482,13 @@ struct MakeItMeCaptureView: View {
                     .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.cardFill))
                 }
 
-                if photos.count < 3 {
+                if photos.count < Self.maxPhotos {
                     Button {
                         showSourceChoice = true
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle")
-                            Text(photos.isEmpty ? "Add photos" : "Add another photo")
+                            Text("Add your photo")
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppTheme.inkPrimary)
@@ -586,9 +638,14 @@ struct MakeItMeCaptureView: View {
         }
     }
 
+    /// GEN-5 (RW-28 item 18): the settled intake is ONE photo —
+    /// the upload door takes the first picked photo only (the
+    /// server accepts the one-photo set; the epoch is one photo).
+    static let maxPhotos = 1
+
     private func loadPicked(_ items: [PhotosPickerItem]) async {
         for item in items {
-            guard photos.count < 3 else { break }
+            guard photos.count < Self.maxPhotos else { break }
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             await addPhoto(originalData: data)
         }
@@ -607,7 +664,7 @@ struct MakeItMeCaptureView: View {
     /// never a separate re-encode of the original bytes, which is
     /// how a corrected measurement could still upload sideways.
     private func addPhoto(originalData data: Data) async {
-        guard photos.count < 3 else { return }
+        guard photos.count < Self.maxPhotos else { return }
         let picked = PickedPhoto(originalData: data)
         photos.append(picked)
         let result = await PhotoQualityChecker.check(imageData: data)

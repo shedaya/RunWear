@@ -30,6 +30,11 @@ struct DayChartView: View {
     let nowHour: Int?
     var interactive: Bool = false
     var showsAxisLabels: Bool = false
+    /// GEN-5 (RW-28 item 14): name the selected hour ON the
+    /// chart's own axis, at the dot — the glance band turns this
+    /// on so the hour is never carried by a separate row under
+    /// the band (the gen-4 census B-8 defect).
+    var showsSelectedHourOnAxis: Bool = false
     var onSelectHour: ((Int) -> Void)? = nil
 
     var body: some View {
@@ -55,6 +60,9 @@ struct DayChartView: View {
                 nowMarker(width: width, height: height)
                 changeTicks(width: width, height: height)
                 selectedDot(width: width, height: height)
+                if showsSelectedHourOnAxis {
+                    selectedHourAxisLabel(width: width, height: height)
+                }
             }
             .contentShape(Rectangle())
             .modifier(ScrubModifier(
@@ -161,6 +169,23 @@ struct DayChartView: View {
                 .position(
                     x: DayChartGeometry.x(forHour: entry.hour, model: model, width: width),
                     y: DayChartGeometry.y(forFeelsLike: entry.feelsLikeF, model: model, height: height)
+                )
+        }
+    }
+
+    /// The selected hour's name on the axis itself: bold pine,
+    /// centred on the dot's x (clamped into the chart), sitting
+    /// in the axis zone at the chart's foot.
+    @ViewBuilder
+    private func selectedHourAxisLabel(width: CGFloat, height: CGFloat) -> some View {
+        if let entry = model.entry(forHour: placedSelectedHour) {
+            Text(DayChartFormat.hourLabel(entry.hour))
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundColor(AppTheme.pinePayload)
+                .fixedSize()
+                .position(
+                    x: min(max(DayChartGeometry.x(forHour: entry.hour, model: model, width: width), 18), width - 18),
+                    y: height - 7
                 )
         }
     }
@@ -273,22 +298,17 @@ struct DayChartBandView: View {
                 model: model,
                 selectedHour: selectedHour,
                 nowHour: nowHour,
-                interactive: false
+                interactive: false,
+                showsSelectedHourOnAxis: true
             )
             .frame(height: 62)
 
-            HStack {
-                Text("\(unit.formatFromFahrenheit(model.low.feelsLikeF)) low")
-                Spacer()
-                Text("\(unit.formatFromFahrenheit(model.high.feelsLikeF)) high")
-            }
-            .font(.system(size: 12.5))
-            .foregroundColor(AppTheme.inkSecondary)
-
+            // GEN-5 (RW-28 item 14): ONE row under the chart —
+            // the day's low/high at the ends and "Change ›"
+            // beside them. The selected hour itself is named on
+            // the chart's own axis above, not in this row.
             HStack(alignment: .center) {
-                Text(DayChartFormat.hourMinuteLabel(selectedHour))
-                    .font(.system(size: 15.5, weight: .bold))
-                    .foregroundColor(AppTheme.inkPrimary)
+                Text("\(unit.formatFromFahrenheit(model.low.feelsLikeF)) low")
                 Spacer()
                 Button(action: onChange) {
                     HStack(spacing: 3) {
@@ -300,7 +320,11 @@ struct DayChartBandView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Change the hour")
+                Spacer()
+                Text("\(unit.formatFromFahrenheit(model.high.feelsLikeF)) high")
             }
+            .font(.system(size: 12.5))
+            .foregroundColor(AppTheme.inkSecondary)
         }
         .padding(13)
         .background(

@@ -76,8 +76,23 @@ struct MakeItMeSettingsSection: View {
 
     // MARK: Status group (WS-D group 1, under the heading)
 
+    /// GEN-5 (RW-28 item 22): while a subscriber's bank is
+    /// generating, the "Making your looks" band REPLACES the
+    /// status/offer content in Settings (it does not sit below
+    /// the Premium card alongside the status it replaces — the
+    /// gen-4 B-12 defect).
+    private var settingsConvergenceBand: ConvergenceBandContent? {
+        ConvergenceBand.content(
+            isSubscribed: store.mode == .subscribed,
+            coverage: store.bankCoverage
+        )
+    }
+
     private var statusSection: some View {
         Section {
+            if store.mode == .subscribed, let band = settingsConvergenceBand {
+                ConvergenceBandView(content: band)
+            } else {
             switch store.mode {
             case .stock:
                 // Frame 36's plain not-started row — present in
@@ -114,9 +129,12 @@ struct MakeItMeSettingsSection: View {
                     // pair (AppTheme.inkSecondary), not system
                     // .secondary (≈3.3–3.4:1 on light grounds).
                     if store.mode == .subscribed {
-                        // Frame 37: management only — this line is
-                        // a state fact (§9), not a pitch.
-                        Text("Your photo is ready before you open the app.")
+                        // GEN-5 (RW-28 item 26): the verbatim
+                        // subscribed line (frame 37 / §13) — the
+                        // gen-4 build drifted to an em-dash
+                        // lowercase form on the sibling platform
+                        // (B-17); iOS renders the settled form.
+                        Text("Subscribed · Your photo is ready before you open the app.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     } else {
@@ -142,6 +160,7 @@ struct MakeItMeSettingsSection: View {
                         }
                     }
                 }
+            }
             }
         } header: {
             // RW-26 (notes §7.5): "Make It Me" is a script
@@ -193,9 +212,9 @@ struct MakeItMeSettingsSection: View {
                 // generating → renders; subscribed + complete →
                 // the rule returns nil; free users never reach
                 // this branch at all.
-                if let band = ConvergenceBand.content(isSubscribed: store.mode == .subscribed, coverage: store.bankCoverage) {
-                    ConvergenceBandView(content: band)
-                }
+                // GEN-5: no second band here — while generating,
+                // the band renders in place of the status block
+                // above (settingsConvergenceBand).
                 settingsRow(
                     title: MakeItMeSettingsRow.manageSubscription.title,
                     subtitle: nil,
@@ -216,6 +235,8 @@ struct MakeItMeSettingsSection: View {
     // MARK: Destructive group (WS-D group 4 — last, separated)
 
     private var destructiveSection: some View {
+        // GEN-5 (RW-28 item 25): destructive rows quarantined
+        // under their own "Danger zone" heading, last.
         Section {
             Button(role: .destructive) {
                 presentation.alert = .confirmDelete
@@ -224,6 +245,8 @@ struct MakeItMeSettingsSection: View {
                     .font(.system(size: 16, weight: .medium))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+        } header: {
+            Text("Danger zone")
         }
     }
 
@@ -288,6 +311,32 @@ private struct MakeItMePremiumOfferCard: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.inkPrimary)
             }
+            // GEN-5 (RW-28, C-5 + C-6): the monthly price joins
+            // the Settings card as a MODEST tappable element — a
+            // bordered row in the paywall row's family, clearly
+            // subordinate to the annual headline and its filled
+            // button; tapping it opens the same paywall, where
+            // monthly is selectable.
+            if let monthlyLabel = MakeItMePriceLabels.settingsMonthlyLabel(monthlyPriceString: billing.monthlyPriceString) {
+                Button(action: onGetPremium) {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .stroke(AppTheme.inkSecondary, lineWidth: 1.5)
+                            .frame(width: 16, height: 16)
+                        Text(monthlyLabel)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardFill))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.cardStroke, lineWidth: 1))
+                    .contentShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Monthly plan, \(monthlyLabel)")
+            }
             Button(action: onGetPremium) {
                 Text("Get Premium")
                     .font(.system(size: 16, weight: .semibold))
@@ -314,9 +363,21 @@ struct MakeItMePhotosView: View {
             AppTheme.background.ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Your photos")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(AppTheme.inkPrimary)
+                    // GEN-5 (RW-28 item 21): the settled Your
+                    // Photos surface (frames 38–39) — the title
+                    // zone carries the Make It Me script, the one
+                    // current photo is labelled as such, the epoch
+                    // rule has its own heading, and the two doors
+                    // are distinct (the gen-4 build collapsed them
+                    // into one generic "Replace photos" button).
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Make It Me")
+                            .font(.greatVibes(size: 26))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("Your photos")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(AppTheme.inkPrimary)
+                    }
 
                     switch loader.state {
                     case .loaded(let imageURLs):
@@ -354,15 +415,42 @@ struct MakeItMePhotosView: View {
                             .foregroundColor(AppTheme.inkSecondary)
                     }
 
-                    // Frame 38: the epoch rule, in plain words —
-                    // a retake re-makes what's AHEAD and never
-                    // rewrites the collection behind it.
-                    Text("This is the photo your looks are made from. If you retake it, the looks ahead are re-made from the new photo — the days already in your collection stay as they are.")
-                        .font(.system(size: 14))
-                        .foregroundColor(AppTheme.inkSecondary)
+                    // The one current photo, labelled (frame 38).
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Your current photo")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("Every look is made from this one.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
 
+                    // Frame 38: the epoch rule under its own
+                    // heading — a retake re-makes what's AHEAD and
+                    // never rewrites the collection behind it.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("A new photo starts a new set")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("Retake your selfie and new looks are made from the new photo. Looks already saved in Wear I've Run stay exactly as they are.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+
+                    // The two distinct doors (frame 38): the
+                    // guided capture and the upload door. Both run
+                    // the replace flow, whose source choice opens
+                    // on exactly these two doors.
                     Button(action: onReplace) {
-                        Text("Replace photos")
+                        Text("Retake Selfie")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
+                    }
+                    Button(action: onReplace) {
+                        Text("Choose a Different Photo")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
@@ -506,6 +594,15 @@ struct MakeItMeSubscriptionSheet: View {
                                 .font(.system(size: 19, weight: .bold))
                                 .foregroundColor(AppTheme.inkPrimary)
                         }
+                        // GEN-5 (RW-28 item 29): the per-run line
+                        // DIRECTLY under the annual price (the
+                        // gen-4 card omitted it; the 4¢ idea lived
+                        // only in the fine print below).
+                        if let perRun = MakeItMePriceLabels.perRunLine(annual: store.billing.annualPriceAmount) {
+                            Text(perRun)
+                                .font(.system(size: 13))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -543,10 +640,8 @@ struct MakeItMeSubscriptionSheet: View {
                     // monthly; the CTA then purchases monthly.
                     if store.billing.monthlyPriceString != nil {
                         HStack {
-                            Text("Monthly")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(AppTheme.inkPrimary)
-                            Spacer()
+                            // GEN-5 (item 29): the row IS the settled
+                            // label — "Monthly — $0.99/month".
                             Text(store.billing.monthlyRowLabel)
                                 .font(.system(size: 15))
                                 .foregroundColor(AppTheme.inkSecondary)
@@ -556,7 +651,10 @@ struct MakeItMeSubscriptionSheet: View {
                         .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .stroke(selectedPlan == .monthly ? AppTheme.primaryColor : Color.clear,
+                                // GEN-5 (C-6): visibly tappable even
+                                // unselected — a modest bordered row,
+                                // never a co-equal filled button.
+                                .stroke(selectedPlan == .monthly ? AppTheme.primaryColor : AppTheme.cardStroke,
                                         lineWidth: 1.5)
                         )
                         .contentShape(RoundedRectangle(cornerRadius: 14))
@@ -566,7 +664,7 @@ struct MakeItMeSubscriptionSheet: View {
                     }
 
                     if store.billing.isSubscribed {
-                        Text("You're subscribed — your photo is ready before you open the app.")
+                        Text("Subscribed · Your photo is ready before you open the app.")
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     } else {

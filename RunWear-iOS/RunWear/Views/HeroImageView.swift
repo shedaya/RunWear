@@ -236,7 +236,11 @@ struct HeroImageView: View {
         case .hidden:
             EmptyView()
         case .making:
+            // GEN-5 (pill restatement): EVERY status leads with
+            // the Make It Me script — the generating state was the
+            // one state that dropped it (census A-13/B-14).
             HStack(spacing: 6) {
+                pillScriptMark
                 ProgressView()
                     .controlSize(.mini)
                     .tint(.white)
@@ -246,7 +250,55 @@ struct HeroImageView: View {
                     .lineLimit(1)
             }
             .glassPill()
-            .accessibilityLabel(HeroPill.makingLabel)
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel)")
+        case .makingWithUpsell:
+            // GEN-5 (C-4 AMENDED): the FREE generating pill — the
+            // clean generating content plus ONE small green
+            // upsell line; the upsell half taps to the same
+            // Premium offer as "Get unlimited".
+            HStack(spacing: 6) {
+                pillScriptMark
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.white)
+                Text(HeroPill.makingLabel)
+                    .font(.appFootnote.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Button(action: onPillGetUnlimited) {
+                    Text(HeroPill.getInstantlyLabel)
+                        .font(.appFootnote.weight(.bold))
+                        .foregroundColor(AppTheme.pineAccentDark)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
+            }
+            .glassPill()
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel). \(HeroPill.getInstantlyLabel)")
+        case .exhausted(let used, let allowance):
+            // GEN-5 (OUT OF FREE LOOKS): the upsell IS the pill's
+            // main message — script lead, the used-up count stated
+            // honestly, "Get unlimited" bold as the headline act;
+            // the whole pill taps through to the Premium offer.
+            Button(action: onPillGetUnlimited) {
+                HStack(spacing: 6) {
+                    pillScriptMark
+                    Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text("·")
+                        .font(.appFootnote)
+                        .foregroundColor(.white.opacity(0.7))
+                    Text(HeroPill.getUnlimitedLabel)
+                        .font(.appFootnote.weight(.bold))
+                        .foregroundColor(AppTheme.pineAccentDark)
+                        .lineLimit(1)
+                }
+                .glassPill()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.exhaustedCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
         case .scaffold:
             HStack(spacing: 6) {
                 pillScriptMark

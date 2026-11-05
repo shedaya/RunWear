@@ -82,21 +82,28 @@ enum OnboardingCopy {
     /// ready to go.").
     struct WelcomePoint: Equatable {
         let name: String
+        /// GEN-5 (RW-28 item 27): the headline's plain phrase —
+        /// the headline reads "Name — phrase" (name in pine bold),
+        /// and the body line below it does NOT repeat the name.
         let phrase: String
+        let body: String
     }
 
     static let welcomePoints: [WelcomePoint] = [
         WelcomePoint(
             name: "RunWear",
-            phrase: "One recommendation for the run you're about to take — feels-like, wind, and rain included."
+            phrase: "The right outfit for the weather",
+            body: "One recommendation for the run you're about to take — feels-like, wind, and rain included."
         ),
         WelcomePoint(
             name: "Make It Me",
-            phrase: "Picture yourself at the start line with the perfect outfit ready to go."
+            phrase: "See yourself in every outfit",
+            body: "Picture yourself at the start line with the perfect outfit ready to go."
         ),
         WelcomePoint(
             name: "Wear I've Run",
-            phrase: "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+            phrase: "Remember every run",
+            body: "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
         ),
     ]
 
@@ -106,7 +113,11 @@ enum OnboardingCopy {
     /// app is free forever and Premium is the optional paid part,
     /// so "free to start" misstates the model. This wording is
     /// flagged for Sol's walkthrough verdict — do not vary it.
-    static let welcomeFooter = "Free forever · Premium is optional"
+    /// GEN-5 (RW-28 item 27): restored to the settled frame-28
+    /// footer (design-spec §1). The W-21 "Free forever" line was
+    /// flagged as a deviation by the gen-4 census (A-1) on the
+    /// shipped build; the fix wave restores the settled form.
+    static let welcomeFooter = "Free to start · Set up in under a minute"
 
     /// GEN-3 (Sol, Nov 4 — RULED): the combined preferences
     /// screen's headline and lede, verbatim.

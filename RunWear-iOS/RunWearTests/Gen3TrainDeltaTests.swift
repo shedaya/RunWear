@@ -419,7 +419,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
                        "annual is the hero and the default selection")
         // The monthly row's price comes from the fetched product —
         // the existing label seam, never a hardcoded figure.
-        XCTAssertEqual(MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"), "$0.99 / month")
+        XCTAssertEqual(MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"), "Monthly — $0.99/month")
         XCTAssertEqual(MakeItMePriceLabels.monthlyRowLabel(priceString: nil), "Monthly",
                        "unresolved product → the price-free plan name, never a wrong price")
     }
