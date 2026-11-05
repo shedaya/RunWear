@@ -106,7 +106,7 @@ class OutfitTileService : SuspendingTileService() {
         val layout = when (tileState) {
             is TileState.Loading -> createLoadingLayout()
             is TileState.Error -> createErrorLayout(tileState.message)
-            is TileState.Success -> createOutfitLayout(tileState.weather, tileState.outfit, tileState.locationName, tileState.temperatureUnit)
+            is TileState.Success -> createOutfitLayout(tileState.weather, tileState.outfit, tileState.locationName, tileState.temperatureUnit, tileState.comfortPreference)
             is TileState.NoPermission -> createNoPermissionLayout()
         }
 
@@ -156,7 +156,7 @@ class OutfitTileService : SuspendingTileService() {
                     location.latitude,
                     location.longitude
                 ).getOrThrow()
-                Log.w(TAG, "loadTileData: got weather ${weather.effectiveTemperature}°")
+                Log.w(TAG, "loadTileData: got weather ${weather.feelsLike}°")
 
                 val locationName = weatherRepository.reverseGeocode(
                     location.latitude,
@@ -166,7 +166,7 @@ class OutfitTileService : SuspendingTileService() {
                 val outfit = getOutfitRecommendation.execute(weather, prefs.comfortPreference)
                 Log.w(TAG, "loadTileData: got outfit, topBase=${outfit.topBase}")
 
-                TileState.Success(weather, outfit, locationName, prefs.temperatureUnit)
+                TileState.Success(weather, outfit, locationName, prefs.temperatureUnit, prefs.comfortPreference)
             }
 
             result ?: TileState.Error("Timed out loading weather")
@@ -185,10 +185,15 @@ class OutfitTileService : SuspendingTileService() {
         outfit: OutfitRecommendation,
         locationName: String,
         /** WS-2: render-time projection of the canonical store. */
-        temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit
+        temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit,
+        comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+            com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
     ): LayoutElementBuilders.LayoutElement {
-        val feelsText = temperatureUnit.formatTemperature(weather.feelsLike)
-        val actualText = temperatureUnit.formatTemperature(weather.effectiveTemperature)
+        // DA-13: headline = comfort-adjusted feels-like (WearTempFrame);
+        // the subordinate line's actual is the ACTUAL temperature —
+        // gen-5 printed the feels-like value there a second time.
+        val feelsText = com.runwear.wear.presentation.WearTempFrame.headlineText(weather, comfortPreference, temperatureUnit)
+        val actualText = temperatureUnit.formatTemperature(weather.temperature)
 
         val clickable = ModifiersBuilders.Clickable.Builder()
             .setId("open_app")
@@ -541,7 +546,9 @@ class OutfitTileService : SuspendingTileService() {
             val outfit: OutfitRecommendation,
             val locationName: String,
             val temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
-                com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
+                com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT,
+            val comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+                com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
         ) : TileState()
     }
 }

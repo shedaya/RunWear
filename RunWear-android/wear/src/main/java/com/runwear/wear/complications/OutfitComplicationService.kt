@@ -116,7 +116,7 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
                     location.latitude,
                     location.longitude
                 ).getOrNull()
-                Log.w(TAG, "loadWeatherData: weather=${weather?.effectiveTemperature}")
+                Log.w(TAG, "loadWeatherData: weather=${weather?.feelsLike}")
                 if (weather != null) Result.success(weather)
                 else Result.failure(Exception("no_weather"))
             }
@@ -151,11 +151,15 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
     }
 
     private suspend fun createShortTextComplication(weather: WeatherConditions): ShortTextComplicationData {
-        val tempText = "${weather.effectiveTemperature.toInt()}°"
+        // DA-13: the headline is the comfort-adjusted feels-like;
+        // the actual is the subordinate figure (content description).
+        val prefs = preferencesRepository.preferencesFlow.first()
+        val tempText = "${com.runwear.wear.presentation.WearTempFrame.headlineF(weather, prefs.comfortPreference).toInt()}°"
+        val actualText = prefs.temperatureUnit.formatTemperature(weather.temperature)
 
         return ShortTextComplicationData.Builder(
             text = PlainComplicationText.Builder(tempText).build(),
-            contentDescription = PlainComplicationText.Builder("Temperature: $tempText").build()
+            contentDescription = PlainComplicationText.Builder("Feels like $tempText, actual $actualText").build()
         )
             .setMonochromaticImage(complicationIcon())
             .setTapAction(createTapAction())
@@ -166,8 +170,8 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
         val prefs = preferencesRepository.preferencesFlow.first()
         val outfit = getOutfitRecommendation.execute(weather, prefs.comfortPreference)
 
-        // WS-2: canonical store, projected through the preference.
-        val tempText = prefs.temperatureUnit.formatTemperature(weather.effectiveTemperature)
+        // DA-13: the title is the comfort-adjusted feels-like headline.
+        val tempText = com.runwear.wear.presentation.WearTempFrame.headlineText(weather, prefs.comfortPreference, prefs.temperatureUnit)
 
         val outfitItems = listOfNotNull(
             outfit.topBase.displayName.split(" ").take(2).joinToString(" "),
@@ -190,13 +194,14 @@ class OutfitComplicationService : SuspendingComplicationDataSourceService() {
         // it through the user's preference, read like the long-text
         // complication does.
         val prefs = preferencesRepository.preferencesFlow.first()
-        val tempF = weather.effectiveTemperature
+        // DA-13: the ranged value + text are the feels-like headline.
+        val tempF = com.runwear.wear.presentation.WearTempFrame.headlineF(weather, prefs.comfortPreference)
 
         val minTemp = 10f
         val maxTemp = 100f
         val clampedTemp = tempF.toFloat().coerceIn(minTemp, maxTemp)
 
-        val tempText = prefs.temperatureUnit.formatTemperature(weather.effectiveTemperature)
+        val tempText = prefs.temperatureUnit.formatTemperature(tempF)
 
         return RangedValueComplicationData.Builder(
             value = clampedTemp,
