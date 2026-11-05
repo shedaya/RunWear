@@ -221,18 +221,28 @@ fun GuidedSelfieCapture(
             .setCaptureMode(androidx.camera.core.ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .build()
     }
+    // GEN-6 WAVE A (RW-49 follow-through): detector creation must
+    // never crash the composition. ML Kit is initialized by its
+    // manifest provider on device, but if that context is missing
+    // (test runtimes, a blocked provider), getClient throws
+    // IllegalStateException — the capture now degrades to its
+    // no-live-analysis state (preview + library door intact)
+    // instead of taking the whole intake down with it. On device
+    // the client is created exactly as before.
     val faceDetector = remember {
-        com.google.mlkit.vision.face.FaceDetection.getClient(
-            com.google.mlkit.vision.face.FaceDetectorOptions.Builder()
-                .setPerformanceMode(
-                    com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_FAST
-                )
-                .setMinFaceSize(0.12f)
-                .build()
-        )
+        runCatching {
+            com.google.mlkit.vision.face.FaceDetection.getClient(
+                com.google.mlkit.vision.face.FaceDetectorOptions.Builder()
+                    .setPerformanceMode(
+                        com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_FAST
+                    )
+                    .setMinFaceSize(0.12f)
+                    .build()
+            )
+        }.getOrNull()
     }
     androidx.compose.runtime.DisposableEffect(Unit) {
-        onDispose { faceDetector.close() }
+        onDispose { faceDetector?.close() }
     }
     val lastAnalyzedMillis = remember { java.util.concurrent.atomic.AtomicLong(0L) }
 
@@ -298,7 +308,15 @@ fun GuidedSelfieCapture(
                     val input = com.google.mlkit.vision.common.InputImage.fromMediaImage(
                         mediaImage, proxy.imageInfo.rotationDegrees
                     )
-                    faceDetector.process(input)
+                    val detector = faceDetector
+                    if (detector == null) {
+                        // No live analysis available (see the
+                        // creation seam above): close the frame and
+                        // leave the measurements unset.
+                        proxy.close()
+                        return@setAnalyzer
+                    }
+                    detector.process(input)
                         .addOnSuccessListener { faces ->
                             val largest = faces.maxOfOrNull {
                                 it.boundingBox.width().toFloat()

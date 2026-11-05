@@ -109,7 +109,9 @@ class FreeLooksMeterSequenceTest {
         listOf("a", "b", "c", "d").forEach { d.request(it) }
         assertStep(d, 0, 4, "four in flight")
         d.completeStale("a")
-        assertStep(d, 1, 3, "first stale delivery (raw making still 4)")
+        // used 1 + raw making 4 = exactly the allowance: all four
+        // may still show as making (the sum binds, not each input).
+        assertStep(d, 1, 4, "first stale delivery (raw making still 4)")
         d.completeStale("b")
         // The recording's exact state: used 2, raw making 4.
         assertEquals(4, d.rawMaking())

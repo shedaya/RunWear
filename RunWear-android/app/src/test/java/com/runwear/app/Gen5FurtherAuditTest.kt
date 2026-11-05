@@ -113,7 +113,12 @@ class Gen5FurtherAuditTest {
         val screens = source("com/runwear/app/makeitme/MakeItMeScreens.kt")
         assertTrue(screens.contains("Restore purchases"))
         assertTrue(screens.contains("viewModel.restorePurchases"))
-        assertTrue(
+        // GEN-6 (DA-11): the subscribed state renders the SETTLED
+        // string constant, gated on real bank coverage — the gen-5
+        // hard-coded literal this pin used to require is the defect
+        // and must NOT come back.
+        assertTrue(screens.contains("MakeItMeStrings.S5_STATE_C_SUB"))
+        assertFalse(
             screens.contains(
                 "You're subscribed — your photo is ready before you open the app."
             )

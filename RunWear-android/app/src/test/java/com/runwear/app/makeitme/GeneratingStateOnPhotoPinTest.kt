@@ -94,8 +94,15 @@ class GeneratingStateOnPhotoPinTest {
         assertTrue(
             moment.contains("com.runwear.app.ui.components.HeroPill(")
         )
+        // GEN-6 (DA-12): the making pill is resolved through the
+        // ONE HeroPillPolicy (the MAKING copy now lives behind the
+        // policy, not hand-built in this surface) — the pin follows
+        // the seam, and the hand-built content must not return.
         assertTrue(
-            moment.contains("MakeItMeStrings.HERO_PILL_MAKING")
+            moment.contains("HeroPillPolicy.resolve")
+        )
+        assertFalse(
+            moment.contains("HeroPillContent(")
         )
     }
 
