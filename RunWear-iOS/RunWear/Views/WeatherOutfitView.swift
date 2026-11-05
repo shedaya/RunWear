@@ -784,11 +784,13 @@ struct WeatherOutfitView: View {
         return "\(displayHour):00 \(suffix)"
     }
 
+    /// GEN-4 RULING (Sol, Nov 4, 2026): "now" is the viewed
+    /// location's live local time and date — the tracking lives
+    /// on the view model in the location's clock (the headline's
+    /// "↻ Now" return, the sheet moment's "Now", and the pill
+    /// row's Now segment all read this one state).
     private var isViewingNow: Bool {
-        let calendar = Calendar.current
-        let now = Date()
-        return calendar.isDateInToday(viewModel.selectedDate)
-            && viewModel.selectedHour == calendar.component(.hour, from: now)
+        viewModel.isViewingLocationNow
     }
 
     /// The hero's date/time pills, restyled flat on the sheet:

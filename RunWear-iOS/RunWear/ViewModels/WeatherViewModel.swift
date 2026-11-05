@@ -472,10 +472,53 @@ class WeatherViewModel: ObservableObject {
     }
 
     /// Reset to current date and time — re-enters the NOW state.
-    func resetToNow() {
-        let now = Date()
-        let currentHour = Calendar.current.component(.hour, from: now)
-        applySelectedTime(date: now, hour: currentHour, nowState: true)
+    ///
+    /// GEN-4 RULING (Sol, Nov 4, 2026): "now" is the VIEWED
+    /// LOCATION's live local time and date, on every surface —
+    /// not the device's clock. Android's MainViewModel.resetToNow
+    /// does the same via its locationNow (LocalDateTime in the
+    /// viewed location's zone). The pre-fix iOS reset read
+    /// Calendar.current, so viewing a place in another timezone
+    /// reset to the device's date and hour while the rest of the
+    /// app (snapshot matching, the day chart) frames the
+    /// selection as the location's wall time.
+    ///
+    /// The selection's framing is the app's existing one: the
+    /// selected date's DEVICE-calendar components are the wall
+    /// date the hourly matching reads textually. The reset
+    /// therefore lands the date whose device-calendar components
+    /// are the location's current year/month/day (see
+    /// locationNowDate) and the location's current hour.
+    func resetToNow(at instant: Date = Date()) {
+        applySelectedTime(
+            date: locationNowDate(at: instant),
+            hour: locationNowHour(at: instant),
+            nowState: true
+        )
+    }
+
+    /// The viewed location's current wall date, framed for the
+    /// selection: a Date whose device-calendar year/month/day
+    /// equal the location's current year/month/day at `instant`.
+    /// With no forecast timezone yet (no weather loaded),
+    /// locationCalendar IS the device calendar and this is the
+    /// instant's own day — the pre-ruling behaviour.
+    func locationNowDate(at instant: Date = Date()) -> Date {
+        let components = locationCalendar.dateComponents(
+            [.year, .month, .day], from: instant
+        )
+        return Calendar.current.date(from: components) ?? instant
+    }
+
+    /// Whether the current selection IS the viewed location's
+    /// now: the location's today, at the location's current
+    /// hour. This is the NOW-state tracking the reset feeds —
+    /// the headline's "↻ Now" return and the pill row's Now
+    /// segment show exactly when this is false, and the sheet
+    /// moment reads "Now" exactly when it is true — so it is
+    /// framed in the location's clock, never the device's.
+    var isViewingLocationNow: Bool {
+        selectedDayIsLocationToday && selectedHour == locationNowHour()
     }
 
     // MARK: - GEN-4 day chart
