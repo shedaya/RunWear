@@ -173,6 +173,15 @@ class BillingManager @Inject constructor(
         data object Success : PurchaseOutcome
         data object Cancelled : PurchaseOutcome
         data class Failed(val message: String) : PurchaseOutcome
+
+        /**
+         * GEN-6 WAVE A (DA-10): the entitlement was ALREADY active
+         * when purchase was tapped — the flow was never launched.
+         * The caller routes the user to the subscribed state
+         * instead of dead-ending in the store's "You're already
+         * subscribed…" error (the owner's recording, 2:51–2:53).
+         */
+        data object AlreadySubscribed : PurchaseOutcome
     }
 
     /**
@@ -203,6 +212,16 @@ class BillingManager @Inject constructor(
 
     suspend fun purchase(activity: Activity, packageToPurchase: Package): PurchaseOutcome {
         if (!configured) return PurchaseOutcome.Failed("Billing is unavailable.")
+        // GEN-6 WAVE A (DA-10): recognise the entitlement BEFORE
+        // launching the purchase flow. A fresh customer-info read
+        // (not just the cached flow — the recording's user had a
+        // live subscription the app had not yet surfaced) decides;
+        // already-entitled users never reach the store sheet that
+        // errors out on them.
+        val fresh = runCatching { refreshCustomerInfo() }.getOrNull()
+        val alreadyActive = makeItMeActive.value ||
+            fresh?.entitlements?.get(ENTITLEMENT_ID)?.isActive == true
+        if (alreadyActive) return PurchaseOutcome.AlreadySubscribed
         return suspendCancellableCoroutine { cont ->
             Purchases.sharedInstance.purchaseWith(
                 com.revenuecat.purchases.PurchaseParams.Builder(activity, packageToPurchase).build(),

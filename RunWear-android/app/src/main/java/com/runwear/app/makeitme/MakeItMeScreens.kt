@@ -1559,6 +1559,11 @@ fun MakeItMePaywallSheet(
             purchasing = false
             when (outcome) {
                 BillingManager.PurchaseOutcome.Success -> onPurchased()
+                // GEN-6 WAVE A (DA-10): the entitlement already
+                // existed — the flow was never launched; the sheet
+                // closes into the subscribed state the sync just
+                // landed (Settings / a reopened sheet render it).
+                BillingManager.PurchaseOutcome.AlreadySubscribed -> onPurchased()
                 BillingManager.PurchaseOutcome.Cancelled -> Unit
                 is BillingManager.PurchaseOutcome.Failed -> purchaseError = outcome.message
             }
@@ -1634,13 +1639,41 @@ fun MakeItMePaywallSheet(
             val subscribed = mimState.mode == MakeItMeMode.SUBSCRIBED
             var annualSelected by remember { mutableStateOf(true) }
             if (subscribed) {
-                Text(
-                    text = "You're subscribed — your photo is ready before you open the app.",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 21.sp,
-                    color = RunWearColors.TextPrimary
-                )
+                // GEN-6 WAVE A (DA-11): the settled string, and the
+                // readiness claim is GATED on the real bank state —
+                // the gen-5 hard-coded literal promised "your photo
+                // is ready before you open the app" whether or not
+                // the bank had actually converged. Only a coverage
+                // read proving the bank complete may carry it;
+                // otherwise the honest subscribed + still-making
+                // lines stand.
+                val bankReady = mimState.bankCoverage?.let {
+                    it.total > 0 && it.ready >= it.total
+                } ?: false
+                if (bankReady) {
+                    Text(
+                        text = MakeItMeStrings.S5_STATE_C_SUB,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 21.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                } else {
+                    Text(
+                        text = MakeItMeStrings.S28_SUBSCRIBED_STATE,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 21.sp,
+                        color = RunWearColors.TextPrimary
+                    )
+                    Text(
+                        text = MakeItMeStrings.BAND_MAKING_LINE,
+                        fontSize = 13.sp,
+                        lineHeight = 19.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
             } else {
             // The ONE highlighted card: "Premium" / "All of Make It
             // Me." Its price slot is the ONLY price on the card and it
@@ -1776,6 +1809,10 @@ fun MakeItMePaywallSheet(
                         restoring = false
                         when (outcome) {
                             BillingManager.PurchaseOutcome.Success -> onPurchased()
+                            // Restore never yields this outcome
+                            // (it reports Success directly), but the
+                            // subscribed landing is the same.
+                            BillingManager.PurchaseOutcome.AlreadySubscribed -> onPurchased()
                             BillingManager.PurchaseOutcome.Cancelled -> Unit
                             is BillingManager.PurchaseOutcome.Failed ->
                                 purchaseError = outcome.message

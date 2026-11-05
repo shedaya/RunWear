@@ -204,7 +204,13 @@ class MakeItMeViewModel @Inject constructor(
         viewModelScope.launch {
             val outcome = billing.purchase(activity, packageToPurchase)
             purchaseInFlight.value = false
-            if (outcome == BillingManager.PurchaseOutcome.Success) {
+            if (outcome == BillingManager.PurchaseOutcome.Success ||
+                outcome == BillingManager.PurchaseOutcome.AlreadySubscribed
+            ) {
+                // GEN-6 (DA-10): an already-held entitlement syncs
+                // the same way a fresh purchase does — the state
+                // lands SUBSCRIBED and every surface (Settings,
+                // paywall) renders the subscribed/management state.
                 onSubscriptionActivated()
             }
             onResult(outcome)

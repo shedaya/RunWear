@@ -342,7 +342,13 @@ object MakeItMeStrings {
 
     // GEN-5 (RW-28 item 29): the Android fine print names the
     // store this build is actually sold through — Google Play.
-    const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your Google Play subscriptions."
+    // GEN-6 WAVE A (DA-11): the withdrawn "about 10 seconds"
+    // figure is REMOVED — it was false against a measured 72 s
+    // job (see the note at S5/G2 above) and against the backend's
+    // minutes-long norm. The replacement stays in the settled
+    // truthful family (the meter line's "your first ones take
+    // about a minute to make") and promises nothing more precise.
+    const val U2C_FINE_PRINT = "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about a minute to make the first time — after that, it's ready instantly. Cancel any time in your Google Play subscriptions."
 
     // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4 — word
     // for word; do not paraphrase): the home-sheet band a Premium

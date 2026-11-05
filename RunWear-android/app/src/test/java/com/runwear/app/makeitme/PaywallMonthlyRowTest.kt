@@ -101,11 +101,14 @@ class PaywallMonthlyRowTest {
     fun `the fine print names the store this build is sold through`() {
         // GEN-5 (item 29): Android's fine print names Google Play
         // only — the gen-4 text named both stores on both platforms.
+        // GEN-6 (DA-11): the withdrawn "about 10 seconds" figure is
+        // gone — the truthful "about a minute" family stands.
         assertEquals(
-            "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about 10 seconds to make the first time — after that, it's ready instantly. Cancel any time in your Google Play subscriptions.",
+            "Your outfits for your local weather are made when you subscribe. A brand-new outfit or a new place takes about a minute to make the first time — after that, it's ready instantly. Cancel any time in your Google Play subscriptions.",
             MakeItMeStrings.U2C_FINE_PRINT
         )
         assertFalse(MakeItMeStrings.U2C_FINE_PRINT.contains("App Store"))
+        assertFalse(MakeItMeStrings.U2C_FINE_PRINT.contains("10 seconds"))
     }
 
     @Test
