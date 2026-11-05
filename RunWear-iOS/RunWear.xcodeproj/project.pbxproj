@@ -54,6 +54,8 @@
 		A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		A10002000000000000000011 /* StaggeredAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000011 /* StaggeredAnimation.swift */; };
 		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		R67002000000000000000001 /* HomeHeroNumeralRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67001000000000000000001 /* HomeHeroNumeralRow.swift */; };
+		R67002000000000000000002 /* HomeHeroNumeralRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67001000000000000000001 /* HomeHeroNumeralRow.swift */; };
 		D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
 		D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
 		C10002000000000000000040 /* RW25NextGenHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000031 /* RW25NextGenHomeTests.swift */; };
@@ -167,6 +169,7 @@
 		G51002000000000000000001 /* Gen5FidelityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G51001000000000000000001 /* Gen5FidelityTests.swift */; };
 		G61002000000000000000001 /* Gen6WaveCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61001000000000000000001 /* Gen6WaveCTests.swift */; };
 		G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61003000000000000000001 /* Gen6RW66RenderTests.swift */; };
+		R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67003000000000000000001 /* Gen6RW67RenderTests.swift */; };
 		G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */; };
 		K10002000000000000000003 /* HomeCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000002 /* HomeCompositionTests.swift */; };
 		L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
@@ -213,6 +216,8 @@
 		Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z30001000000000000000001 /* Gen3ISmallTests.swift */; };
 		Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = Z40001000000000000000001 /* Gen3ShareRenderTests.swift */; };
 		AA1000000000000000003001 /* RunWearWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001001 /* RunWearWidget.swift */; };
+		AA1000000000000000003010 /* RunWearWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001010 /* RunWearWidgetViews.swift */; };
+		AA1000000000000000003011 /* RunWearWidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001010 /* RunWearWidgetViews.swift */; };
 		AA1000000000000000003002 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000008233456780000004 /* AppTheme.swift */; };
 		AA1000000000000000003003 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
 		AA1000000000000000003004 /* WidgetLastGood.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001006 /* WidgetLastGood.swift */; };
@@ -338,6 +343,7 @@
 		A10001000000000000000010 /* GlassMorphismModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassMorphismModifiers.swift; sourceTree = "<group>"; };
 		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
 		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
+		R67001000000000000000001 /* HomeHeroNumeralRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeroNumeralRow.swift; sourceTree = "<group>"; };
 		D10001000000000000000001 /* WearIveRunMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunMiniBar.swift; sourceTree = "<group>"; };
 		C10001000000000000000031 /* RW25NextGenHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW25NextGenHomeTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000032 /* GreatVibesFontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GreatVibesFontTests.swift; sourceTree = "<group>"; };
@@ -401,6 +407,7 @@
 		G51001000000000000000001 /* Gen5FidelityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen5FidelityTests.swift; sourceTree = "<group>"; };
 		G61001000000000000000001 /* Gen6WaveCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WaveCTests.swift; sourceTree = "<group>"; };
 		G61003000000000000000001 /* Gen6RW66RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW66RenderTests.swift; sourceTree = "<group>"; };
+		R67003000000000000000001 /* Gen6RW67RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW67RenderTests.swift; sourceTree = "<group>"; };
 		G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4BundledReplenishmentTests.swift; sourceTree = "<group>"; };
 		K10001000000000000000002 /* HomeCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCompositionTests.swift; sourceTree = "<group>"; };
 		L10001000000000000000001 /* WearIveRunElementMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachine.swift; sourceTree = "<group>"; };
@@ -437,6 +444,7 @@
 		C10001000000000000000095 /* Gen3TrainDeltaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen3TrainDeltaTests.swift; sourceTree = "<group>"; };
 		AA1000000000000000001005 /* RunWearWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RunWearWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA1000000000000000001001 /* RunWearWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWearWidget.swift; sourceTree = "<group>"; };
+		AA1000000000000000001010 /* RunWearWidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunWearWidgetViews.swift; sourceTree = "<group>"; };
 		AA1000000000000000001002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA1000000000000000001003 /* RunWearWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWearWidget.entitlements; sourceTree = "<group>"; };
 		AA1000000000000000001004 /* RunWear.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWear.entitlements; sourceTree = "<group>"; };
@@ -528,6 +536,7 @@
 				A10004000000000000000002 /* DuoArrangement.swift */,
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
+				R67001000000000000000001 /* HomeHeroNumeralRow.swift */,
 				D10001000000000000000001 /* WearIveRunMiniBar.swift */,
 				G10001000000000000000002 /* GuidedSelfieCaptureView.swift */,
 				G10001000000000000000003 /* WearIveRunCollectionView.swift */,
@@ -696,6 +705,7 @@
 				G51001000000000000000001 /* Gen5FidelityTests.swift */,
 				G61001000000000000000001 /* Gen6WaveCTests.swift */,
 				G61003000000000000000001 /* Gen6RW66RenderTests.swift */,
+				R67003000000000000000001 /* Gen6RW67RenderTests.swift */,
 				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
 				W50001000000000000000002 /* SettingsInventoryTests.swift */,
@@ -722,6 +732,7 @@
 			isa = PBXGroup;
 			children = (
 				AA1000000000000000001001 /* RunWearWidget.swift */,
+				AA1000000000000000001010 /* RunWearWidgetViews.swift */,
 				AA1000000000000000001002 /* Info.plist */,
 				AA1000000000000000001003 /* RunWearWidget.entitlements */,
 			);
@@ -949,6 +960,7 @@
 				A10002000000000000000010 /* GlassMorphismModifiers.swift in Sources */,
 				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
 				A10002000000000000000012 /* HeroImageView.swift in Sources */,
+				R67002000000000000000001 /* HomeHeroNumeralRow.swift in Sources */,
 				D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */,
 				A10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				A10002000000000000000013 /* PreferenceControls.swift in Sources */,
@@ -1027,6 +1039,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */,
+				AA1000000000000000003011 /* RunWearWidgetViews.swift in Sources */,
 				AA1000000000000000003005 /* WidgetLastGood.swift in Sources */,
 				C10002000000000000000001 /* OutfitRulesSweepTest.swift in Sources */,
 				C10002000000000000000002 /* OutfitRecommendationService.swift in Sources */,
@@ -1055,6 +1068,7 @@
 				C10002000000000000000022 /* DataParityFixTests.swift in Sources */,
 				C10002000000000000000023 /* WatchGlyphRenderingTests.swift in Sources */,
 				C10002000000000000000024 /* HomePresentationTests.swift in Sources */,
+				R67002000000000000000002 /* HomeHeroNumeralRow.swift in Sources */,
 				C10002000000000000000026 /* WatchOutfitView.swift in Sources */,
 				C10002000000000000000027 /* WatchViewModel.swift in Sources */,
 				C10002000000000000000028 /* WatchSettingsView.swift in Sources */,
@@ -1086,6 +1100,7 @@
 				G51002000000000000000001 /* Gen5FidelityTests.swift in Sources */,
 				G61002000000000000000001 /* Gen6WaveCTests.swift in Sources */,
 				G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */,
+				R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */,
 				G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */,
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
 				W50002000000000000000002 /* SettingsInventory.swift in Sources */,
@@ -1125,6 +1140,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA1000000000000000003001 /* RunWearWidget.swift in Sources */,
+				AA1000000000000000003010 /* RunWearWidgetViews.swift in Sources */,
 				AA1000000000000000003002 /* AppTheme.swift in Sources */,
 				AA1000000000000000003003 /* WidgetLastGood.swift in Sources */,
 			);

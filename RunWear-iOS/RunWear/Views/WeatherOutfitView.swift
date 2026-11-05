@@ -7,7 +7,6 @@ struct WeatherOutfitView: View {
     // RW-25 sheet numeral: ~80pt, Dynamic-Type-scaled relative to
     // .largeTitle (the RW-6.3 pattern the hero numeral used), capped
     // by the text's dynamicTypeSize limit at the call site.
-    @ScaledMetric(relativeTo: .largeTitle) private var sheetNumeralSize: CGFloat = 80
     /// RW-26 "Wear I've Run": the collection model — the current
     /// session's entry drives the mini bar dock (GEN-3 session
     /// rule); the store behind it is the collection itself.
@@ -655,32 +654,14 @@ struct WeatherOutfitView: View {
             // row that used to render under the date/time pills
             // is retired from home; the weather detail sheet
             // itself is unchanged).
-            HStack(alignment: .top, spacing: 14) {
-                HStack(alignment: .center, spacing: 14) {
-                    Text(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))
-                        .font(.system(size: sheetNumeralSize, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundColor(AppTheme.inkPrimary)
-                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(AppTheme.temperatureColor(for: viewModel.currentTempBracket))
-                            .frame(width: 8, height: 8)
-                        Text(viewModel.currentTempBracket.rawValue)
-                            .font(.appEyebrow)
-                            .foregroundColor(AppTheme.inkPrimary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(AppTheme.cardOnSheet))
-                }
-
-                Spacer(minLength: 0)
-
-                heroWeatherFigures
-                    .padding(.top, 8)
-            }
+            HomeHeroNumeralRow(
+                formattedTemperature: viewModel.temperatureUnit.format(viewModel.currentFeelsLike),
+                bracket: viewModel.currentTempBracket,
+                windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
+                rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
+                humidityPercent: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
+                uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0
+            )
 
             // (c) RW-26 (notes §7.1): the line carries the actual
             // temperature ONLY.
@@ -769,48 +750,6 @@ struct WeatherOutfitView: View {
     /// (mph / % / % / "N of 11"), even row spacing. The figures
     /// describe the selected moment, from the same snapshot the
     /// retired pills row read.
-    private var heroWeatherFigures: some View {
-        let snapshot = viewModel.selectedWeatherSnapshot
-        let wind = snapshot?.windSpeed ?? weather.currentWeather.windspeed
-        let rain = snapshot?.precipitationProbability ?? 0
-        let humidity = snapshot?.humidity ?? 50
-        let uv = snapshot?.uvIndex ?? 0
-        return Grid(horizontalSpacing: 12, verticalSpacing: 3) {
-            GridRow {
-                heroFigureLabel("WIND")
-                heroFigureValue("\(Int(wind.rounded())) mph")
-            }
-            GridRow {
-                heroFigureLabel("RAIN")
-                heroFigureValue("\(rain)%")
-            }
-            GridRow {
-                heroFigureLabel("HUMIDITY")
-                heroFigureValue("\(humidity)%")
-            }
-            GridRow {
-                heroFigureLabel("UV")
-                heroFigureValue("\(Int(uv.rounded())) of 11")
-            }
-        }
-    }
-
-    private func heroFigureLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .bold))
-            .tracking(0.7)
-            .foregroundColor(AppTheme.inkMuted)
-            .gridColumnAlignment(.leading)
-    }
-
-    private func heroFigureValue(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13.5, weight: .semibold))
-            .monospacedDigit()
-            .foregroundColor(AppTheme.inkPrimary)
-            .gridColumnAlignment(.trailing)
-    }
-
     /// The Choose-a-Time sheet's default draft hour: the
     /// currently selected hour — except in the NOW state on the
     /// location's today, where the draft starts on the

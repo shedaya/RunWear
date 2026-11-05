@@ -48,7 +48,12 @@ class WatchViewModel: NSObject, ObservableObject {
     private let geocoder = CLGeocoder()
 
     private var currentLocation: CLLocation?
-    private var currentWeather: WeatherData?
+    /// Internal (not private) so the RW-67 render fixtures can
+    /// seat a measured weather value and render the production
+    /// glance page — the WeatherViewModel precedent
+    /// (updateSelectedWeatherSnapshot is internal for the same
+    /// reason). Production writes it only in fetchWeather.
+    var currentWeather: WeatherData?
     /// GEN-5 (RW-29 FA-56): the measured RAW feels-like (°F) from
     /// the last fetch. The glance does NOT render this value
     /// directly — GEN-6 (DA-14) it renders the comfort-adjusted
