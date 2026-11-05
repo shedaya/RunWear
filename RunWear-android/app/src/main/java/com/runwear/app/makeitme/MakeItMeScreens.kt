@@ -1942,9 +1942,10 @@ fun MakeItMeDeleteDialog(
 // First-look moment (frame 34) — onboarding's end, on the fork's
 // success path. The onboarding look counts as look 1 of 5. The ONE
 // soft Premium ask lives here: the primary button returns to the
-// outfit ("See My Outfit"); "See Premium" is the quiet second door.
-// Shown once, never a modal again. The band carries the §9 pair
-// verbatim; NO price appears anywhere in onboarding.
+// outfit ("See My Outfit"); "Upgrade to Premium" is the quiet
+// second door (Sol's Nov 4 wording for this surface). Shown once,
+// never a modal again. The band carries the §9 pair verbatim; NO
+// price appears anywhere in onboarding.
 // ============================================================================
 
 @Composable

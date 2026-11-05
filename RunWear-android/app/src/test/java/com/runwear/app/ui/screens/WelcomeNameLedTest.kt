@@ -28,7 +28,12 @@ class WelcomeNameLedTest {
         )
 
         assertEquals("Make It Me", points[1].name)
-        assertEquals("Put yourself in the photos.", points[1].phrase)
+        // Sol's final point-2 phrase (Nov 4 welcome update,
+        // superseding "Put yourself in the photos.").
+        assertEquals(
+            "Picture yourself at the start line with the perfect outfit ready to go.",
+            points[1].phrase
+        )
 
         assertEquals("Wear I've Run", points[2].name)
         assertEquals(

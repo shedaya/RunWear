@@ -135,12 +135,16 @@ class OnboardingSequenceTest {
 
     @Test
     fun `A1 - the free-looks promise sentence stays defined, superseded on the welcome by round 2`() {
-        // GEN-3 ROUND 2 (Sol, Nov 4): point 2's final copy is
-        // "Put yourself in the photos." — the free-looks sentence
-        // no longer rides the welcome point. The canonical sentence
-        // itself stays defined verbatim.
+        // GEN-3 ROUND 2 + WELCOME UPDATE (Sol, Nov 4): point 2's
+        // final copy is "Picture yourself at the start line with
+        // the perfect outfit ready to go." — the free-looks
+        // sentence no longer rides the welcome point. The
+        // canonical sentence itself stays defined verbatim.
         assertEquals("Your first 5 looks are free.", OnboardingCopy.FREE_LOOKS_PROMISE)
-        assertEquals("Put yourself in the photos.", OnboardingCopy.PROMISE_2_PHRASE)
+        assertEquals(
+            "Picture yourself at the start line with the perfect outfit ready to go.",
+            OnboardingCopy.PROMISE_2_PHRASE
+        )
     }
 
     @Test

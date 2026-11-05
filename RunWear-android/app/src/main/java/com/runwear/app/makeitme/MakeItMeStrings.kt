@@ -315,7 +315,11 @@ object MakeItMeStrings {
     const val FIRST_LOOK_BAND_READINESS = "Ready the moment you open the app — made ahead, never while you wait."
     const val FIRST_LOOK_BAND_NO_CAP = "Every outfit, every day — no number to run out of."
     const val FIRST_LOOK_PRIMARY = "See My Outfit"
-    const val FIRST_LOOK_SECOND_DOOR = "See Premium"
+    // GEN-3 FIRST-LOOK RULING (Sol, Nov 4): the finished surface's
+    // CTA reads "Upgrade to Premium" (was "See Premium"). Scope is
+    // THIS surface only — other surfaces' premium wording is
+    // untouched (Settings' "Get Premium" is approved as mocked).
+    const val FIRST_LOOK_SECOND_DOOR = "Upgrade to Premium"
     // WS-10 (frame 34 verbatim): the band's header, the moment's
     // headline, and the honest count line — the onboarding look is
     // look 1 of 5 (design §8 Q5 ruling), stated in the frame's own

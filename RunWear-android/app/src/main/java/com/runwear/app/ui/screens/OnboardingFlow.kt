@@ -18,10 +18,10 @@ import androidx.compose.animation.core.CubicBezierEasing
  * A1: the "Your first 5 looks are free" promise lived ONLY on frame
  * 28's own screen (the promise step below), never on the setup
  * form. GEN-3 ROUND 2 (Sol, Nov 4): Sol's final point-2 copy
- * ("Put yourself in the photos.") supersedes its welcome
- * placement — the sentence remains defined as FREE_LOOKS_PROMISE
- * (the canonical free-looks wording) but is no longer rendered on
- * the welcome screen.
+ * ("Picture yourself at the start line with the perfect outfit ready to go.") supersedes
+ * its welcome placement — the sentence remains defined as
+ * FREE_LOOKS_PROMISE (the canonical free-looks wording) but is no
+ * longer rendered on the welcome screen.
  *
  * A2: the welcome headline is Sol's pick, character for character:
  * "Run, weather or not." (Part 2 decision block, Nov 3 2026). It
@@ -47,7 +47,9 @@ object OnboardingCopy {
     const val PROMISE_1_PHRASE =
         "One recommendation for the run you're about to take — feels-like, wind, and rain included."
     const val PROMISE_2_NAME = "Make It Me"
-    const val PROMISE_2_PHRASE = "Put yourself in the photos."
+    // GEN-3 WELCOME UPDATE (Sol, Nov 4): point 2's final phrase,
+    // word for word (supersedes "Put yourself in the photos.").
+    const val PROMISE_2_PHRASE = "Picture yourself at the start line with the perfect outfit ready to go."
     const val PROMISE_3_NAME = "Wear I've Run"
     const val PROMISE_3_PHRASE =
         "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
