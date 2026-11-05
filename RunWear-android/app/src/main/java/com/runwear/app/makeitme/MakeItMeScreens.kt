@@ -1775,6 +1775,30 @@ fun MakeItMeSettingsSection(
                     }
                 }
 
+                // GEN-3 WS-D ADDITION (Sol, Nov 4): while a PREMIUM
+                // user's bank is still generating, the subscribed
+                // state says so — with the SAME shared element the
+                // home band renders (ConvergenceBand, resolved by
+                // the same ConvergenceBandPolicy from the same
+                // state; not a re-implementation — whatever count
+                // treatment is ruled later applies to both places
+                // at once; until then, the bar without a numeric
+                // count per the current hold). The policy itself
+                // gates it to subscribed + not-in-trial +
+                // mid-convergence, so free users and completed
+                // banks never see it here either. It sits in the
+                // offer card's subscribed-state area, directly
+                // beneath the card.
+                val settingsBand = ConvergenceBandPolicy.content(
+                    mode = state.mode,
+                    coverage = state.bankCoverage,
+                    inTrial = state.inTrial
+                )
+                if (settingsBand != null) {
+                    Spacer(Modifier.height(14.dp))
+                    ConvergenceBand(content = settingsBand)
+                }
+
                 // ── Destructive group (WS-D group 5): last and
                 // visually separated from the offer, so no mis-tap
                 // travels between them. Delete my data follows as
