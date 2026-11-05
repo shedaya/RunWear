@@ -183,21 +183,19 @@ class BillingManager @Inject constructor(
      */
     suspend fun restorePurchases(): PurchaseOutcome {
         if (!configured) return PurchaseOutcome.Failed("Billing is unavailable.")
-        return suspendCancellableCoroutine { cont ->
-            Purchases.sharedInstance.restorePurchasesWith(
-                onError = { error -> cont.resume(PurchaseOutcome.Failed(error.message)) },
-                onSuccess = { info ->
-                    applyCustomerInfo(info)
-                    cont.resume(
-                        if (info.entitlements[ENTITLEMENT_ID]?.isActive == true) {
-                            PurchaseOutcome.Success
-                        } else {
-                            PurchaseOutcome.Failed(
-                                "No active subscription found for this account."
-                            )
-                        }
-                    )
-                }
+        // SDK 9.x: the coroutine form is Purchases.awaitRestore()
+        // (there is no restorePurchasesWith in this version).
+        val info = runCatching {
+            Purchases.sharedInstance.awaitRestore()
+        }.getOrElse { error ->
+            return PurchaseOutcome.Failed(error.message ?: "Restore failed.")
+        }
+        applyCustomerInfo(info)
+        return if (info.entitlements[ENTITLEMENT_ID]?.isActive == true) {
+            PurchaseOutcome.Success
+        } else {
+            PurchaseOutcome.Failed(
+                "No active subscription found for this account."
             )
         }
     }

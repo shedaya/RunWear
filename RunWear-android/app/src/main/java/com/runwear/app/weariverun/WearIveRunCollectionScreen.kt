@@ -112,10 +112,14 @@ fun WearIveRunCollectionScreen(
             WearIveRunCollectionLogic.matches(it, filter)
         }
     }
-    val listChapters = remember(entries, filter, todayEntry) {
+    val listChapters = remember(entries, filter, pinnedTodayEntry) {
+        // GEN-5 (FA-35): the exclusion follows the PIN — an entry
+        // is kept out of the chapter list only while it is
+        // actually pinned above it; when the filter unpins it,
+        // the entry belongs to its chapter again.
         val rest = if (pinnedTodayEntry != null) {
             entries.filterNot {
-                WearIveRunCollectionLogic.sameIdentity(it, todayEntry)
+                WearIveRunCollectionLogic.sameIdentity(it, pinnedTodayEntry)
             }
         } else {
             entries

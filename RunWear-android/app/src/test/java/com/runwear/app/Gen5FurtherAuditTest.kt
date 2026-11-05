@@ -122,7 +122,7 @@ class Gen5FurtherAuditTest {
         assertFalse(screens.contains("onClick = { buy(monthly) }"))
         assertFalse(screens.contains("onClick = { buy(annual) }"))
         val billing = source("com/runwear/app/makeitme/BillingManager.kt")
-        assertTrue(billing.contains("restorePurchasesWith"))
+        assertTrue(billing.contains("awaitRestore()"))
     }
 
     // ── FA-15: authored error bodies, bounded forecast reads ─────
