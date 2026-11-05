@@ -265,6 +265,16 @@ class WeatherViewModel: ObservableObject {
     /// ("This doesn't look like me", RW-14 acceptance (19)).
     @Published private(set) var currentPersonalHeroId: String?
 
+    /// GEN-6 Wave A (RW-34): whether the personal photo currently
+    /// ON SCREEN is a SCAFFOLD serve — the user's own banked photo
+    /// for nearest conditions standing in while this cell's exact
+    /// look is still making (the PersonalServePolicy distinction,
+    /// recorded at paint time in applyPersonalHero). The hero pill
+    /// reads it: a scaffold serve is silent and never receives an
+    /// exact-serve label. False whenever the exact photo (or no
+    /// personal photo) is on screen.
+    @Published private(set) var currentPersonalServeIsScaffold = false
+
     /// The in-flight wait for a personalized hero to land for the
     /// current cell; cancelled whenever the cell changes.
     private var personalAwaitTask: Task<Void, Never>?
@@ -982,6 +992,7 @@ class WeatherViewModel: ObservableObject {
             heroImageRowId = nil
             heroServedCombinationId = nil
             currentPersonalHeroId = nil
+            currentPersonalServeIsScaffold = false
         }
         heroOwnerPlaceKey = placeDisplayName
 
@@ -1232,6 +1243,7 @@ class WeatherViewModel: ObservableObject {
               let recommendation else {
             currentPersonalCombination = nil
             currentPersonalHeroId = nil
+            currentPersonalServeIsScaffold = false
             personalAwaitTask?.cancel()
             personalAwaitTask = nil
             return false
@@ -1247,6 +1259,7 @@ class WeatherViewModel: ObservableObject {
         // The pool photo painted by the caller is what's on screen
         // until a personal hero actually applies below.
         currentPersonalHeroId = nil
+        currentPersonalServeIsScaffold = false
         personalAwaitTask?.cancel()
         if let personalURL = await store.resolveHero(for: combo) {
             heroImageUrl = personalURL
@@ -1261,6 +1274,10 @@ class WeatherViewModel: ObservableObject {
             // resolving contract — the concrete store is not part
             // of every target this view model compiles into).
             let lookState = store.lookState(for: combo)
+            // GEN-6 Wave A (RW-34): record the scaffold fact at
+            // paint time — the pill's silent-scaffold gate reads
+            // exactly this distinction.
+            currentPersonalServeIsScaffold = lookState == .making
             recordHeroServe(
                 HeroServeRecord(
                     source: lookState == .making ? .scaffold : .personal,
@@ -1283,6 +1300,9 @@ class WeatherViewModel: ObservableObject {
                 self.heroImageRowId = nil
                 self.heroServedCombinationId = combo.combinationId
                 self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
+                // The landed look is the exact photo by
+                // definition — no longer a scaffold serve.
+                self.currentPersonalServeIsScaffold = false
                 // WS-7: the swap-in is a new paint — a personal
                 // serve (the landed look is ready by definition).
                 self.recordHeroServe(

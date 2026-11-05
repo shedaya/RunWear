@@ -696,11 +696,11 @@ final class LookStatusTests: XCTestCase {
 
     func testProgressCopyIsTheAmendedDeck() {
         XCTAssertEqual(MakeItMeCopy.progressTitle, "Making this outfit yours…")
-        // GEN-5 (RW-29 FA-5): the standard-photo claim clause
-        // is removed, matching Android's gen-3 WS-B audit line.
+        // GEN-6 Wave A (RW-47): the settled §11 honesty line is
+        // restored verbatim, superseding the gen-5 substitution.
         XCTAssertEqual(
             MakeItMeCopy.progressSubline,
-            "This usually takes a few minutes. Your recommendation is ready either way.")
+            "This usually takes a few minutes — the standard photo stays up until yours is done.")
         // The retired G2 figure must never come back: it promised
         // a number the system misses by an order of magnitude.
         XCTAssertFalse(MakeItMeCopy.progressSubline.contains("10 seconds"))

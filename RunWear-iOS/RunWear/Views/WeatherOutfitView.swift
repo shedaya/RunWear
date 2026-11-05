@@ -1245,7 +1245,10 @@ struct WeatherOutfitView: View {
             personalPhotoDisplayed: viewModel.currentPersonalHeroId != nil,
             isSubscribed: personalStore.mode == .subscribed,
             freeGenerationsUsed: personalStore.freeGenerationsUsed,
-            freeAllowance: PersonalHeroStore.freeAllowance
+            freeAllowance: PersonalHeroStore.freeAllowance,
+            // GEN-6 Wave A (RW-34): a scaffold serve is silent —
+            // the pill policy, not this view, decides the state.
+            isScaffoldServe: viewModel.currentPersonalServeIsScaffold
         )
     }
 
@@ -1267,11 +1270,11 @@ struct WeatherOutfitView: View {
         if let cell = viewModel.currentPersonalCombination {
             switch personalStore.lookStates[cell.combinationId] ?? .none {
             case .making:
-                // GEN-3 (WS-A(2)): the making state — and the
-                // scaffold treatment while a banked photo is on
-                // screen — now live ON the photo as the ONE hero
-                // pill (HeroPill: "Making this you…" / script mark
-                // + "Your photo"). The pre-GEN-3 lines
+                // GEN-3 (WS-A(2)): the making state now lives ON
+                // the photo as the ONE hero pill (HeroPill:
+                // "Making this you…"); a scaffold serve under it
+                // is silent (GEN-6 Wave A, RW-34 — the "Your
+                // photo" label is removed). The pre-GEN-3 lines
                 // here (the G1/G2 progress block and the scaffold
                 // badge text) sat in the scroll content under the
                 // hero — census X-8's wrong-place defect — and are

@@ -278,11 +278,11 @@ final class Gen3HeroServingTests: XCTestCase {
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: true,
                              isSubscribed: true, freeGenerationsUsed: 1, freeAllowance: 5)
         )
-        // The scaffold rendering case and its GEN-3 label remain
-        // in the pill's vocabulary (the serve underneath is still
-        // the scaffold); resolve simply never selects it over an
-        // in-flight generation again.
-        XCTAssertEqual("Your photo", HeroPill.scaffoldLabel)
+        // GEN-6 Wave A (RW-34) SUPERSEDES the GEN-3 label pin:
+        // the scaffold serve is SILENT — the "Your photo" label
+        // is removed (Sol ruled it is not an approved pill) and
+        // a scaffold serve with no generation in flight resolves
+        // to no pill at all (pinned in Gen6WaveATests).
         XCTAssertEqual("Make It Me", HeroPill.scriptMarkText)
         XCTAssertEqual("Making this you…", HeroPill.makingLabel)
     }
@@ -367,7 +367,10 @@ final class Gen3HeroServingTests: XCTestCase {
                       "the pill's Get unlimited must open the Premium paywall from home")
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
         XCTAssertTrue(hero.contains("HeroPill.makingLabel"))
-        XCTAssertTrue(hero.contains("HeroPill.scaffoldLabel"))
+        // GEN-6 Wave A (RW-34): NO scaffold label anywhere in
+        // the hero — the serve is silent.
+        XCTAssertFalse(hero.contains("HeroPill.scaffoldLabel"))
+        XCTAssertFalse(hero.contains("\"Your photo\""))
         XCTAssertTrue(hero.contains("HeroPill.getUnlimitedLabel"))
         XCTAssertTrue(hero.contains("HeroPill.premiumLabel"))
         // GEN-3 DESIGN DELTA 2: the script mark renders in the

@@ -896,12 +896,16 @@ enum FreeLooksMeter {
 //      cell and none is on screen yet: "Making this you…" over
 //      the fallback photo (which stays up — WS-A(1)).
 //  (b) scaffold — the user's own banked photo for close-by
-//      weather is on screen while the exact look makes: the
-//      Make It Me script mark + "Your photo" — NOTHING MORE
-//      (GEN-3 DESIGN DELTA 2, Sol's Nov 4 mockup review: the
-//      "made for close-by weather" line is OUT, found confusing).
-//      This folds the PersonalServePolicy scaffold treatment
-//      into the pill.
+//      weather is on screen while the exact look makes.
+//      GEN-6 Wave A (RW-34, Sol's ruling Nov 5, 2026): the
+//      scaffold serve is SILENT — no claim label at all. The
+//      GEN-3 "Your photo" scaffold label is REMOVED: the owner
+//      ruled it is not one of the approved pills, superseding
+//      design-spec §3.6's older scaffold text. While the exact
+//      look is making, the generating pill (a) carries the
+//      surface; a scaffold serve with no generation in flight
+//      renders NO pill, and it never receives the exact-serve
+//      labels (free count / Premium / exhausted).
 //  (c) freeLook — the exact personal photo IS displayed, free
 //      tier: the script mark + the look count from the ONE
 //      shared counter (FreeLooksMeter's source), in the mock's
@@ -912,11 +916,12 @@ enum FreeLooksMeter {
 //  (d) premium — the exact personal photo is displayed and the
 //      user is subscribed: the script mark + "Premium" + a lock
 //      glyph (the mock's device — NOT the crown I-HERO shipped).
-// States (b)(c)(d) carry the Make It Me script mark; state (a)
-// is unchanged (approved as excellent).
-// A failed look renders NO pill: the standard photo serves
-// quietly and the failure line + retry live in the personal
-// section, as before. Not opted in renders no pill.
+// Every rendered state carries the Make It Me script mark
+// (Sol's pill clarification, Nov 5, 2026: the script leads
+// EVERY status). A failed look renders NO pill: the standard
+// photo serves quietly and the failure line + retry live in
+// the personal section, as before. Not opted in renders no
+// pill. A scaffold serve renders no pill (silent, above).
 enum HeroPillState: Equatable {
     case hidden
     /// Generating, subscribed (or otherwise not sellable): the
@@ -929,7 +934,6 @@ enum HeroPillState: Equatable {
     /// banked ahead, so next time the look is already there).
     /// Gated to the free generating state ONLY.
     case makingWithUpsell
-    case scaffold
     case freeLook(used: Int, allowance: Int)
     /// GEN-5 (RW-28, Sol Nov 5, 2026): OUT OF FREE LOOKS — the
     /// free tier's exhausted status: script lead, the used-up
@@ -941,8 +945,11 @@ enum HeroPillState: Equatable {
 
 enum HeroPill {
     static let makingLabel = "Making this you…"
-    /// GEN-3 DESIGN DELTA 2: "Your photo" — nothing more.
-    static let scaffoldLabel = "Your photo"
+    // GEN-6 Wave A (RW-34): there is NO scaffold label. The
+    // GEN-3 scaffold label constant is removed outright —
+    // the owner ruled Nov 5, 2026 that it is not an approved
+    // pill; a scaffold serve is silent (see the state table
+    // above and `resolve`'s scaffold gate).
     static let premiumLabel = "Premium"
     static let getUnlimitedLabel = "Get unlimited"
     /// GEN-5 (C-4 AMENDED): the free generating pill's green
@@ -972,7 +979,8 @@ enum HeroPill {
         personalPhotoDisplayed: Bool,
         isSubscribed: Bool,
         freeGenerationsUsed: Int,
-        freeAllowance: Int
+        freeAllowance: Int,
+        isScaffoldServe: Bool = false
     ) -> HeroPillState {
         guard optedIn else { return .hidden }
         // GEN-5 (RW-29 FA-1, parity settlement): a generation in
@@ -984,9 +992,20 @@ enum HeroPill {
         // personal photo showed during a generation). The C-4
         // amendment's gating applies here too: a free user's
         // generating pill carries the green instantly line, a
-        // subscriber's stays clean.
+        // subscriber's stays clean. This also discharges the
+        // table's never-rule: a generation window ALWAYS has a
+        // pill — the generating one.
         if lookState == .making {
             return isSubscribed ? .making : .makingWithUpsell
+        }
+        // GEN-6 Wave A (RW-34): a scaffold serve — the user's
+        // own banked photo standing in for the exact look — is
+        // SILENT. It carries no claim label, and it never
+        // receives an exact-serve state (free count, Premium,
+        // exhausted): those labels belong to the exact photo
+        // only.
+        if isScaffoldServe {
+            return .hidden
         }
         if personalPhotoDisplayed {
             if isSubscribed { return .premium }
@@ -1575,11 +1594,15 @@ enum MakeItMeCopy {
     /// original "About 10 seconds" figure was false against a
     /// measured 72-second job and a 2–4 minute backend norm; the
     /// amended line promises no number the system misses.
-    // GEN-5 (RW-29 FA-5): the standard-photo claim clause is
-    // removed — Android's gen-3 WS-B copy audit removed the same
-    // claim after it proved false in the Overland Park frames;
-    // both platforms now state the identical honesty line.
-    static let progressSubline = "This usually takes a few minutes. Your recommendation is ready either way."
+    // GEN-6 Wave A (RW-47, conformance sweep CS-01): the
+    // settled first-look honesty line (design-spec §11) is
+    // RESTORED verbatim. The gen-5 line ("This usually takes a
+    // few minutes. Your recommendation is ready either way.")
+    // was a builder substitution no owner ruling sanctioned;
+    // §11's line — whose standard-photo clause the first-look
+    // screen now honours (the standard photo sits plainly up
+    // while the look is made, FA-5) — governs again.
+    static let progressSubline = "This usually takes a few minutes — the standard photo stays up until yours is done."
     /// Spec §7 G5 (added Nov 1, 2026 — RW-16.16): the durable
     /// failed-look line at the hero, shown with the G6 action
     /// whenever the server reports the current cell's look as

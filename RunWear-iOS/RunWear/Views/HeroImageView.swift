@@ -299,17 +299,10 @@ struct HeroImageView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.exhaustedCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
-        case .scaffold:
-            HStack(spacing: 6) {
-                pillScriptMark
-                Text(HeroPill.scaffoldLabel)
-                    .font(.appFootnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .glassPill()
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.scaffoldLabel)")
+        // GEN-6 Wave A (RW-34): NO scaffold case exists — a
+        // scaffold serve is silent (HeroPill.resolve returns
+        // .hidden for it); the removed "Your photo" label was
+        // ruled not an approved pill (Sol, Nov 5, 2026).
         case .freeLook(let used, let allowance):
             Button(action: onPillGetUnlimited) {
                 HStack(spacing: 6) {
@@ -321,9 +314,13 @@ struct HeroImageView: View {
                     Text("·")
                         .font(.appFootnote)
                         .foregroundColor(.white.opacity(0.7))
+                    // GEN-6 Wave A (approved pill table): on the
+                    // free exact-serve pill, "Get unlimited" is
+                    // the GREEN element (the pine accent the
+                    // generating and exhausted pills already use).
                     Text(HeroPill.getUnlimitedLabel)
                         .font(.appFootnote.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(AppTheme.pineAccentDark)
                         .lineLimit(1)
                 }
                 .glassPill()

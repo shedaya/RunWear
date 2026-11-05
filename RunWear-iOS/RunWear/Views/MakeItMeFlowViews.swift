@@ -309,6 +309,12 @@ struct MakeItMeOptInFlow: View {
                     Text("Your photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.")
                     Text("Pictures made from your photos are kept only for you, so your outfits are ready when you open the app.")
                     Text("You can delete your photos and every picture made from them at any time: Settings → Make It Me → Delete my photos. Deleting is permanent and takes effect right away.")
+                    // GEN-6 Wave A (RW-48, design-spec §10.2): the
+                    // consent body's closing sentence — the
+                    // explicit no-other-use assurance the settled
+                    // body ends on — restored as the body's last
+                    // line.
+                    Text("Nothing else is done with them.")
                 }
                 .font(.system(size: 16))
                 .foregroundColor(AppTheme.inkPrimary)
