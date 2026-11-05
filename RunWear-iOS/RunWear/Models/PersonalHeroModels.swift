@@ -1441,16 +1441,10 @@ struct PhotoCheckReport: Equatable {
 
 // MARK: - Intake copy (RW-16.14)
 //
-// The full-body guidance Sol ruled on Oct 31, 2026 (RW-16.13's
-// structural lever): the generator preserves what the reference
-// photos show, and Sol's own upper-body portraits produced heroes
-// with no legs for the tights outfits to land on. Guidance only —
-// it recommends; it never validates, and no photo is rejected for
-// lacking a full body (RW-16.10 strictness is a separate, still
-// open question). The lead line and the solo-frame note are Sol's
-// copy direction verbatim in substance: race photos with other
-// runners in frame fail the existing multiple-people check (C3b),
-// so the guidance must not steer anyone into that rejection.
+// GEN-6 (DA-23): the dead `fullBodyGuidance` constant is DELETED
+// — full-body guidance for an intake settled as face-only
+// (design-spec §10), with zero call sites since gen-5 removed it
+// from the intake rendering.
 enum MakeItMeCopy {
     /// Frame 34 (WS-9 fix): the first-look band's header, verbatim
     /// from the frozen design package — Android ships the identical
@@ -1480,7 +1474,6 @@ enum MakeItMeCopy {
         return line
     }
 
-    static let fullBodyGuidance = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
     /// RW-16.15 (spec C2j, both platforms verbatim): the save
     /// confirmation the flow shows after a successful commit,
     /// before it dismisses — the explicit "it saved" the field

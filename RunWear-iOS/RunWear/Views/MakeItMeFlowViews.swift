@@ -468,9 +468,8 @@ struct MakeItMeCaptureView: View {
                 // line no longer renders in intake — the settled
                 // intake is ONE photo, face only (design-spec
                 // §10: the generator reads only the face; the
-                // full-body slot is out). The copy constant stays
-                // defined for the historical Oct 31 ruling; the
-                // flow does not present it.
+                // full-body slot is out). GEN-6 (DA-23): the dead
+                // copy constant itself is now deleted.
                 if isReplace {
                     Text("Replacing your photos remakes today's look right away. Your other looks update as they're made again.")
                         .font(.system(size: 14))

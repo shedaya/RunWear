@@ -165,75 +165,6 @@ struct WatchOutfitView: View {
     }
 }
 
-// MARK: - Watch Weather Card (Legacy)
-
-struct WatchWeatherCard: View {
-    let weather: CurrentWeather
-    let locationName: String
-    let onToggleUnit: () -> Void
-
-    var temperatureColor: Color {
-        let temp = weather.temperatureFahrenheit
-        switch temp {
-        case 80...: return Color(hex: "FF5722")
-        case 65..<80: return Color(hex: "FF9800")
-        case 50..<65: return Color(hex: "4CAF50")
-        case 35..<50: return Color(hex: "2196F3")
-        case 20..<35: return Color(hex: "3F51B5")
-        default: return Color(hex: "9C27B0")
-        }
-    }
-
-    var body: some View {
-        VStack(spacing: 4) {
-            // Location
-            HStack(spacing: 2) {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 8))
-                Text(locationName)
-                    .font(.system(size: 10))
-            }
-            .foregroundColor(.secondary)
-
-            // Weather Icon + Temp
-            HStack(spacing: 8) {
-                Image(systemName: weather.condition.icon)
-                    .font(.title2)
-                    .foregroundColor(AppTheme.primaryColor)
-
-                Button(action: onToggleUnit) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("\(Int(weather.temperatureFahrenheit))°")
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundColor(temperatureColor)
-                        Text("Feels like")
-                            .font(.system(size: 8))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Condition + Wind
-            HStack(spacing: 8) {
-                Text(weather.condition.rawValue)
-                    .font(.caption2)
-
-                HStack(spacing: 2) {
-                    Image(systemName: "wind")
-                        .font(.system(size: 8))
-                    Text("\(Int(weather.windspeed))")
-                        .font(.system(size: 10))
-                }
-            }
-            .foregroundColor(.secondary)
-        }
-        .padding(8)
-        .background(Color.black.opacity(0.3))
-        .cornerRadius(12)
-    }
-}
-
 // MARK: - Watch Clothing Row
 
 /// The clothing row's glyph tile: the item's SF Symbol rendered as
@@ -288,14 +219,10 @@ struct WatchClothingRow: View {
 
             Spacer()
 
-            // Shop icon - links to Amazon with watchos subtag
-            if let url = item.affiliateURL(for: gender, subtag: "watchos") {
-                Link(destination: url) {
-                    Image(systemName: "cart.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(AppTheme.primaryColor)
-                }
-            }
+            // GEN-6 (DA-24): no shop link on the watch — there is
+            // no designed watch shop surface, and the phone shop
+            // sheet is the settled shop surface. The row's `gender`
+            // input remains for the row's other consumers.
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

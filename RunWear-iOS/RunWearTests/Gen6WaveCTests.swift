@@ -190,4 +190,26 @@ final class Gen6WaveCTests: XCTestCase {
         // Fork lines themselves unchanged.
         XCTAssertTrue(fork.contains("Your recommendations, with you in the photo."))
     }
+
+    // MARK: - DA-23: dead code stays deleted
+
+    func testDA23DeadCodeAbsent_sourcePins() throws {
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertFalse(vm.contains("var shareText"), "shareText is deleted")
+        XCTAssertFalse(vm.contains("🏃 RunWear Recommendation"), "the emoji-led share copy is deleted")
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertFalse(models.contains("fullBodyGuidance"), "fullBodyGuidance is deleted")
+        let watch = try sourceFile("../RunWearWatch/WatchOutfitView.swift")
+        XCTAssertFalse(watch.contains("WatchWeatherCard"), "the dead WatchWeatherCard is deleted")
+        XCTAssertFalse(watch.contains("FF5722"), "its hardcoded off-system colours go with it")
+    }
+
+    // MARK: - DA-24(ii): no shop links on the watch
+
+    func testDA24WatchRowsCarryNoShopLink_sourcePin() throws {
+        let watch = try sourceFile("../RunWearWatch/WatchOutfitView.swift")
+        XCTAssertFalse(watch.contains("affiliateURL"), "no affiliate link construction on the watch")
+        XCTAssertFalse(watch.contains("cart.fill"), "no cart glyph on the watch")
+        XCTAssertFalse(watch.contains("Link(destination:"), "no outbound link on the watch outfit rows")
+    }
 }

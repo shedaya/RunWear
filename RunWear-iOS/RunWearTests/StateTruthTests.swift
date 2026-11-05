@@ -121,21 +121,18 @@ final class StateTruthTests: XCTestCase {
     // the hero numeral (`temperatureUnit.format(currentFeelsLike)`),
     // the "Actual NN°" line (HomeHeaderCopy.actualLine over
     // `format(currentTemperature)`), the bracket badge's range
-    // (TemperatureBracket.rangeText(for:)), the share headline
-    // (shareText), and the mini bar's formatted feels-like
+    // (TemperatureBracket.rangeText(for:)) and the mini bar's
+    // formatted feels-like
     // (`formatFromFahrenheit(entry.feelsLikeF)`).
 
     private struct RenderedFigures {
         var numeral: String
         var actualLine: String
         var badgeRange: String
-        var share: String?
         var miniBar: String
 
         /// The sheet figures proper — the one-unit contract binds
-        /// these in full. The share payload is checked by its
-        /// headline line only (see assertOneConsistentUnit): its
-        /// tip line is engine copy, not a rendered figure.
+        /// these in full.
         var all: [String] {
             [numeral, actualLine, badgeRange, miniBar]
         }
@@ -159,7 +156,6 @@ final class StateTruthTests: XCTestCase {
                 formattedTemperature: vm.temperatureUnit.format(vm.currentTemperature)
             ),
             badgeRange: vm.recommendation!.temperatureBracket.rangeText(for: vm.temperatureUnit),
-            share: vm.shareText,
             miniBar: vm.temperatureUnit.formatFromFahrenheit(entry.feelsLikeF)
         )
     }
@@ -192,12 +188,6 @@ final class StateTruthTests: XCTestCase {
                     file: file, line: line
                 )
             }
-        }
-        // The share payload's headline line speaks the same unit.
-        if let share = figures.share,
-           let headline = share.components(separatedBy: "\n").first(where: { $0.contains("Feels like") }) {
-            XCTAssertTrue(headline.contains(unit.symbol), "share headline '\(headline)' not in \(unit.symbol)", file: file, line: line)
-            XCTAssertFalse(headline.contains(other.symbol), "share headline '\(headline)' carries \(other.symbol)", file: file, line: line)
         }
         XCTAssertEqual(figures.numeral, expectedNumeral, file: file, line: line)
         XCTAssertEqual(figures.actualLine, expectedActualLine, file: file, line: line)
@@ -573,7 +563,6 @@ final class StateTruthTests: XCTestCase {
         XCTAssertEqual(renderedFigures(flipFirst).numeral, renderedFigures(landFirst).numeral)
         XCTAssertEqual(renderedFigures(flipFirst).actualLine, renderedFigures(landFirst).actualLine)
         XCTAssertEqual(renderedFigures(flipFirst).badgeRange, renderedFigures(landFirst).badgeRange)
-        XCTAssertEqual(renderedFigures(flipFirst).share, renderedFigures(landFirst).share)
     }
 
     // MARK: - Source pins (view layer is not compiled into this target)

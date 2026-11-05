@@ -260,33 +260,19 @@ final class WS10CopyTests: XCTestCase {
 
     // MARK: - A4 residue · the emoji census (R-1's test)
 
-    func testEmojiCensus_onlyTheConsumerlessShareTextRemains() throws {
+    func testEmojiCensus_noEmojiRemainsInAppCode() throws {
         let lines = try appCodeLines()
         var hits: [(file: String, line: Int, text: String)] = []
         for entry in lines where entry.text.unicodeScalars.contains(where: isEmojiScalar) {
             hits.append(entry)
         }
-        // The complete census of app-target CODE: exactly four
-        // lines, all inside WeatherViewModel.shareText. That
-        // computation has had no UI consumer since WS-6 removed
-        // the home ShareLink (T-4); it is kept — and its emoji
-        // with it — because ShareTextCompositionTests pins its
-        // composition (see the gate report's census table). Every
-        // other occurrence the audit found is gone.
-        XCTAssertEqual(hits.count, 4,
+        // GEN-6 (DA-23): the complete census of app-target CODE is
+        // ZERO lines. The four lines the old census tolerated all
+        // lived inside the consumerless WeatherViewModel.shareText,
+        // which DA-23 deletes (emoji-led, violating RW-31 §5.3);
+        // with it goes the last emoji in app code.
+        XCTAssertEqual(hits.count, 0,
                        "emoji census drifted — found: \(hits.map { "\($0.file):\($0.line)" })")
-        XCTAssertTrue(hits.allSatisfy { $0.file == "WeatherViewModel.swift" },
-                      "no emoji may live outside the shareText computation: \(hits)")
-        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
-        let shareStart = try XCTUnwrap(vm.range(of: "var shareText: String?"))
-        for hit in hits {
-            XCTAssertTrue(hit.text.contains("RunWear Recommendation")
-                          || hit.text.contains("placeDisplayName")
-                          || hit.text.contains("Feels like")
-                          || hit.text.contains("Tip:"),
-                          "census hit outside shareText's known lines: \(hit)")
-        }
-        XCTAssertTrue(vm[shareStart.lowerBound...].contains("🏃 RunWear Recommendation"))
     }
 
     func testDisplayIconAndItsDeadToggleChainAreRemoved() throws {
@@ -312,17 +298,18 @@ final class WS10CopyTests: XCTestCase {
                        "the three plain-text labels the picker renders, in order")
     }
 
-    func testShareTextStatusRecorded_consumerlessButKept() throws {
-        // WS-6's flag, recorded as a pin: shareText remains DEFINED
-        // (its composition tests still run against it) and no app
-        // view consumes it in code — the home toolbar's ShareLink
-        // was its last consumer (T-4).
+    func testShareTextIsDeleted_gen6DA23() throws {
+        // GEN-6 (DA-23) supersedes WS-6's "consumerless but kept"
+        // record: the emoji-led shareText computation had zero
+        // call sites and is deleted outright — no definition, no
+        // code reference anywhere in the app target.
         let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
-        XCTAssertTrue(vm.contains("var shareText: String?"))
+        XCTAssertFalse(vm.contains("var shareText"), "shareText must not be redefined")
+        XCTAssertFalse(vm.contains("rawFeelsLikeFahrenheit"), "its sole-use helper goes with it")
         let lines = try appCodeLines()
-        let consumers = lines.filter { $0.file != "WeatherViewModel.swift" && $0.text.contains("shareText") }
-        XCTAssertTrue(consumers.isEmpty,
-                      "shareText must stay consumerless in code (comments aside): \(consumers)")
+        let references = lines.filter { $0.text.contains("shareText") }
+        XCTAssertTrue(references.isEmpty,
+                      "no app code may reference the deleted shareText: \(references)")
     }
 
     // MARK: - WS-9 fix · frame 34 completeness, fork body, fit-step line

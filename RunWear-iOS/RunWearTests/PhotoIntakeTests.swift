@@ -2,16 +2,14 @@ import XCTest
 import UIKit
 
 /// RW-16.14 — the reference-photo intake grows a second source
-/// (the camera, beside the library) and a guidance line (one
-/// full-body photo in plain athletic wear). These tests pin the
-/// three contracts the lane is built on:
+/// (the camera, beside the library). (The full-body guidance line
+/// this lane once carried was removed from the intake in gen-5
+/// and its dead constant deleted in GEN-6 / DA-23.) These tests
+/// pin the contracts the lane is built on:
 ///
 ///   * the source-routing matrix is total and honest — the camera
 ///     when it can be used, the library otherwise, WITH the reason
 ///     shown; no state routes to a dead end;
-///   * the guidance copy carries Sol's ruled elements verbatim —
-///     the positive lead, the full-body ask, and the solo-frame
-///     note that keeps users out of the multiple-people rejection;
 ///   * a captured photo enters the IDENTICAL quality check a
 ///     library photo does — the same PhotoQualityChecker seam —
 ///     and an unmeasurable or faceless frame fails closed, never
@@ -58,20 +56,24 @@ final class PhotoIntakeTests: XCTestCase {
         XCTAssertEqual(PhotoIntakeRouting.route(requested: .camera, cameraAccess: .restricted), expected)
     }
 
-    // MARK: - Guidance copy (Sol's ruling, Oct 31 2026)
+    // MARK: - Guidance copy
 
-    func testFullBodyGuidanceCarriesTheRuledElements() {
-        let guidance = MakeItMeCopy.fullBodyGuidance
-        XCTAssertTrue(guidance.hasPrefix("Photos of you running work best."),
-                      "the guidance leads with Sol's positive line")
-        XCTAssertTrue(guidance.contains("one full-body photo in plain athletic wear"),
-                      "the structural ask: one full-body photo in plain athletic wear")
-        XCTAssertTrue(guidance.contains("just you in the frame"),
-                      "the solo-frame note that keeps race photos out of the C3b rejection")
-        XCTAssertTrue(guidance.contains("tights and jackets"),
-                      "the reason names the full-length outfits it rescues")
-        XCTAssertTrue(guidance.contains("Photos with other people in them can't be used."),
-                      "the multiple-people limit is stated before it can reject anyone")
+    func testFullBodyGuidanceIsDeleted_gen6DA23() throws {
+        // GEN-6 (DA-23): the fullBodyGuidance constant (Sol's Oct 31
+        // 2026 ruling, RW-16.14) is DELETED as dead code — gen-5
+        // removed it from the intake rendering when the intake
+        // settled as one face photo (§10); it had zero call sites.
+        // The multiple-people limit it carried is still stated
+        // where it bites: the intake step's own line and the
+        // rejection wording (PersonalHeroTests pins both).
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let modelsURL = dir.deletingLastPathComponent()
+            .appendingPathComponent("RunWear/Models/PersonalHeroModels.swift")
+        guard let models = try? String(contentsOf: modelsURL, encoding: .utf8) else {
+            throw XCTSkip("app source tree unreachable from this host")
+        }
+        XCTAssertFalse(models.contains("fullBodyGuidance"),
+                       "the dead guidance constant must not return")
     }
 
     // MARK: - Captured photos run the identical quality check

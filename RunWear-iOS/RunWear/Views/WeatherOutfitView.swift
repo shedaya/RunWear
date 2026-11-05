@@ -390,9 +390,9 @@ struct WeatherOutfitView: View {
     // the T-4 ruling (Sol, Nov 3, 2026 — register D-15's iOS half):
     // the design has no home share on either platform, and sharing
     // lives in the collection, whose Poster / Kit Card share is
-    // the designed artifact path (WearIveRunCollectionView). The
-    // view model's shareText composition remains as a tested
-    // view-model computation with no home consumer.
+    // the designed artifact path (WearIveRunCollectionView).
+    // GEN-6 (DA-23): the view model's consumerless shareText
+    // computation is deleted with this comment's predecessor.
 
     // MARK: - Layouts (design record §5.2, frame f5)
 
