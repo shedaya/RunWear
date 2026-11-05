@@ -285,10 +285,13 @@ final class Gen6PickerWatchRenderTests: XCTestCase {
             ForEach(watchRecommendation.allItems) { item in
                 WatchClothingRow(item: item, gender: watchVM.genderPreference)
             }
-            Spacer(minLength: 0)
         }
         .padding(8)
         .background(Color.black)
+        // The production outfit page is a ScrollView; the static
+        // render shows its first screenful, top-anchored (the
+        // full item list is asserted above, item for item).
+        .frame(width: 198, height: 242, alignment: .topLeading)
         try render(surface, size: CGSize(width: 198, height: 242),
                    name: "picker-watch-watch-1-same-selection.png")
     }

@@ -99,7 +99,19 @@ struct RunWearWidgetProvider: TimelineProvider {
 // MARK: - Entry view (per-family compositions)
 
 struct RunWearWidgetEntryView: View {
-    @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetFamily) private var environmentFamily
+    /// Harness seam (GEN-6 Wave C evidence closures): outside
+    /// WidgetKit the family environment cannot be injected —
+    /// `\.widgetFamily` is read-only and WidgetPreviewContext is
+    /// honoured only by Xcode previews (verified in CI run
+    /// 42122702490, where every family rendered as the default
+    /// .systemMedium). Nil — the default, and the only value the
+    /// widget extension itself ever produces — leaves the
+    /// environment in charge, so production behaviour is
+    /// unchanged; the render-proof tests pass an explicit family
+    /// to render each size's own composition.
+    var familyOverride: WidgetFamily? = nil
+    private var family: WidgetFamily { familyOverride ?? environmentFamily }
     let entry: RunWearWidgetEntry
 
     var body: some View {

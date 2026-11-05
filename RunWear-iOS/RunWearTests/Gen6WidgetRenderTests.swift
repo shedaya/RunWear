@@ -99,6 +99,21 @@ final class Gen6WidgetRenderTests: XCTestCase {
         return distinct.count > 2
     }
 
+    /// The entry view on its production ground. WidgetKit
+    /// paints `containerBackground(AppTheme.background)` behind
+    /// the entry view on device; ImageRenderer does not apply
+    /// container backgrounds, so the harness supplies the same
+    /// token as the ground — the container's role, replicated,
+    /// with the view itself rendered exactly as shipped. The
+    /// family is injected through the view's harness seam (see
+    /// RunWearWidgetEntryView.familyOverride).
+    private func widgetView(_ entry: RunWearWidgetEntry, _ family: WidgetFamily) -> some View {
+        ZStack {
+            AppTheme.background
+            RunWearWidgetEntryView(entry: entry, familyOverride: family)
+        }
+    }
+
     // MARK: - Fresh populated renders, one per family
 
     @MainActor
@@ -109,18 +124,16 @@ final class Gen6WidgetRenderTests: XCTestCase {
             WidgetFreshness.eyebrow(record(), now: entry.date).hasPrefix("FOR NOW · "),
             "a fresh record's eyebrow states its save clock time")
         XCTAssertFalse(WidgetFreshness.isStale(record(), now: entry.date))
-        let view = RunWearWidgetEntryView(entry: entry)
-            .previewContext(WidgetPreviewContext(family: .systemSmall))
-        try render(view, size: CGSize(width: 170, height: 170), name: "widget-small.png")
+        try render(widgetView(entry, .systemSmall),
+                   size: CGSize(width: 170, height: 170), name: "widget-small.png")
     }
 
     @MainActor
     func testWidgetRenderMediumFresh() throws {
         let entry = RunWearWidgetEntry(
             date: savedAt.addingTimeInterval(25 * 60), record: record(), errorCategory: nil)
-        let view = RunWearWidgetEntryView(entry: entry)
-            .previewContext(WidgetPreviewContext(family: .systemMedium))
-        try render(view, size: CGSize(width: 364, height: 170), name: "widget-medium.png")
+        try render(widgetView(entry, .systemMedium),
+                   size: CGSize(width: 364, height: 170), name: "widget-medium.png")
     }
 
     @MainActor
@@ -130,9 +143,8 @@ final class Gen6WidgetRenderTests: XCTestCase {
         XCTAssertTrue(
             WidgetFreshness.updatedLabel(record(), now: entry.date).hasPrefix("Updated "),
             "the Large brand strip renders its Updated label in clock form while recent")
-        let view = RunWearWidgetEntryView(entry: entry)
-            .previewContext(WidgetPreviewContext(family: .systemLarge))
-        try render(view, size: CGSize(width: 364, height: 382), name: "widget-large.png")
+        try render(widgetView(entry, .systemLarge),
+                   size: CGSize(width: 364, height: 382), name: "widget-large.png")
     }
 
     // MARK: - Stale state (same record, aged past the threshold)
@@ -145,9 +157,8 @@ final class Gen6WidgetRenderTests: XCTestCase {
         XCTAssertEqual(WidgetFreshness.eyebrow(record(), now: staleDate), "FOR NOW · 2H AGO",
                        "the stale eyebrow speaks in age form, never a bare clock time")
         let entry = RunWearWidgetEntry(date: staleDate, record: record(), errorCategory: nil)
-        let view = RunWearWidgetEntryView(entry: entry)
-            .previewContext(WidgetPreviewContext(family: .systemSmall))
-        try render(view, size: CGSize(width: 170, height: 170), name: "widget-small-stale.png")
+        try render(widgetView(entry, .systemSmall),
+                   size: CGSize(width: 170, height: 170), name: "widget-small-stale.png")
     }
 
     // MARK: - Authored error card (no record at all)
@@ -157,8 +168,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
         XCTAssertEqual(WidgetErrorCategory.weather.headline, "Couldn't load weather")
         XCTAssertEqual(WidgetErrorCategory.weather.reason, "Couldn't reach the weather service")
         let entry = RunWearWidgetEntry(date: savedAt, record: nil, errorCategory: .weather)
-        let view = RunWearWidgetEntryView(entry: entry)
-            .previewContext(WidgetPreviewContext(family: .systemMedium))
-        try render(view, size: CGSize(width: 364, height: 170), name: "widget-medium-error.png")
+        try render(widgetView(entry, .systemMedium),
+                   size: CGSize(width: 364, height: 170), name: "widget-medium-error.png")
     }
 }
