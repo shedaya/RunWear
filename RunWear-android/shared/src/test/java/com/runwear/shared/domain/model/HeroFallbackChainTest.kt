@@ -17,17 +17,19 @@ import org.junit.Test
  *  - chain order: EXACT (pool, then bundled) > SCAFFOLD (pool) >
  *    FLOOR (bundled);
  *  - the metric: bracket distance dominates garment detail, bottom
- *    coverage leads the garment components, hands coverage makes a
- *    mittens prescription scaffold to gloves;
+ *    coverage leads the garment components, hands coverage orders
+ *    the scaffold metric (the gate's own handwear substitution —
+ *    gloves exact for a mittens prescription, Sol's ruling
+ *    2026-11-04 — is pinned separately below);
  *  - one case per census defect family;
  *  - gender is never crossed at any tier;
  *  - floor completeness: every one of the census's 50 gendered gate
  *    signatures resolves non-null with the pool empty;
  *  - the scaffold label (isScaffold / serveSource) is present iff
  *    the tier is not EXACT;
- *  - convergence: the same prescription resolves SCAFFOLD before a
- *    replenishment row lands and EXACT after, with no code change —
- *    resolution is a function of the live candidate set.
+ *  - convergence: resolution is a function of the live candidate
+ *    set — a true-mittens row outranks the substituted gloves serve
+ *    for the same prescription with no code change.
  */
 class HeroFallbackChainTest {
 
@@ -191,10 +193,14 @@ class HeroFallbackChainTest {
     }
 
     @Test
-    fun `defect family 1 - mittens scaffolds to the nearest gloves photo`() {
-        // The pool holds zero mittens rows; the nearest covered photo
-        // for a sub-15F prescription is the same gender/bracket photo
-        // in gloves — never bare hands while a gloves photo exists.
+    fun `defect family 1 - mittens prescription serves the gloves photo EXACT under the handwear substitution`() {
+        // HANDWEAR SUBSTITUTION (Sol's ruling, 2026-11-04 ~22:23 CST,
+        // extended to stock): gloves satisfy a mittens prescription,
+        // so the same-gender/bracket gloves photo is an EXACT serve
+        // for a sub-15F mittens prescription — this case previously
+        // pinned SCAFFOLD and is re-pinned EXACT under the ruling.
+        // Bare hands still do not pass the gate (hands prescribed,
+        // none worn), so the gloves photo is the resolution.
         val mittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.WINDBREAKER, ClothingItem.THERMAL_BEANIE,
@@ -212,8 +218,9 @@ class HeroFallbackChainTest {
             mittens, bracket = TempBracket.FREEZING,
             pool = listOf(bareHands, gloves)
         )
-        assertEquals(HeroChainTier.SCAFFOLD, res?.tier)
+        assertEquals(HeroChainTier.EXACT, res?.tier)
         assertEquals("gloves-photo", res?.url)
+        assertFalse(res!!.isScaffold)
     }
 
     @Test
@@ -315,7 +322,7 @@ class HeroFallbackChainTest {
     }
 
     @Test
-    fun `convergence - a replenishment row turns the same prescription exact with no code change`() {
+    fun `convergence - a true mittens row outranks the substituted gloves serve with no code change`() {
         val mittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.WINDBREAKER, ClothingItem.THERMAL_BEANIE,
@@ -325,12 +332,16 @@ class HeroFallbackChainTest {
             "gloves-photo", bracket = TempBracket.FREEZING,
             outer = true, head = "beanie", hands = "gloves"
         )
+        // Under the handwear substitution (Sol's ruling, 2026-11-04)
+        // the gloves photo serves EXACT for the mittens prescription
+        // — the pre-ruling SCAFFOLD state of this case is superseded.
         val before = resolve(mittens, bracket = TempBracket.FREEZING, pool = listOf(gloves))
-        assertEquals(HeroChainTier.SCAFFOLD, before?.tier)
-        // The replenishment wave lands a mittens row in the pool; the
-        // SAME resolution, given the new live candidate set, serves
-        // it exact — the scaffold was a function of the set, not a
-        // hard-coded per-signature table.
+        assertEquals(HeroChainTier.EXACT, before?.tier)
+        assertEquals("gloves-photo", before?.url)
+        // When a true mittens row lands in the pool, the SAME
+        // resolution prefers it (hands distance 0 beats the
+        // substituted gloves' 1) — resolution is a function of the
+        // live candidate set, not a per-signature table.
         val mittensRow = candidate(
             "mittens-photo", bracket = TempBracket.FREEZING,
             outer = true, head = "beanie", hands = "mittens"
@@ -377,8 +388,10 @@ class HeroFallbackChainTest {
         assertEquals(GenderPreference.FEMALE, candidates[0].gender)
         assertEquals(TempBracket.FREEZING, candidates[0].bracket)
         assertEquals(HeroWeatherCondition.CLEAR, candidates[0].weather)
-        // The mittens prescription scaffolds to the approved gloves
-        // row; the rejected mittens row cannot serve even as exact.
+        // The mittens prescription serves the approved gloves row
+        // EXACT under the handwear substitution (Sol's ruling,
+        // 2026-11-04 — re-pinned from SCAFFOLD); the rejected
+        // mittens row cannot serve at any tier.
         val mittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.WINDBREAKER, ClothingItem.THERMAL_BEANIE,
@@ -388,7 +401,7 @@ class HeroFallbackChainTest {
             GenderPreference.FEMALE, TempBracket.FREEZING,
             HeroWeatherCondition.CLEAR, mittens, candidates, emptyList()
         )
-        assertEquals(HeroChainTier.SCAFFOLD, res?.tier)
+        assertEquals(HeroChainTier.EXACT, res?.tier)
         assertEquals("https://pool/gloves.webp", res?.url)
         assertEquals("gloves-row", res?.candidate?.rowId)
     }
@@ -396,7 +409,15 @@ class HeroFallbackChainTest {
     // ── Selector-level floor (bundled chain end to end) ────────────
 
     @Test
-    fun `mittens prescription floors to the same-gender gloves bundled asset, labelled scaffold`() {
+    fun `mittens prescription exact-serves the same-gender gloves bundled asset under the handwear substitution`() {
+        // HANDWEAR SUBSTITUTION (Sol's ruling, 2026-11-04 ~22:23
+        // CST): the bundled freezing_clear_* assets wear beanie +
+        // gloves, and gloves now satisfy the (…, beanie, mittens)
+        // signature at the exact gate — so the bundled chain serves
+        // freezing_clear_female EXACT (BUNDLED_FALLBACK, not
+        // scaffold). This case previously pinned FLOOR/scaffold and
+        // is re-pinned under the ruling. (The balaclava mittens
+        // signatures still floor: no balaclava bundled asset exists.)
         val mittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.INSULATED_JACKET, ClothingItem.THERMAL_BEANIE,
@@ -410,9 +431,9 @@ class HeroFallbackChainTest {
             "file:///android_asset/hero_fallback/freezing_clear_female.webp",
             result.imageUrl
         )
-        assertTrue(result.isScaffold)
-        assertEquals(HeroServeSource.SCAFFOLD, result.serveSource)
-        assertEquals("FLOOR", result.chainTier)
+        assertFalse(result.isScaffold)
+        assertEquals(HeroServeSource.BUNDLED_FALLBACK, result.serveSource)
+        assertEquals("EXACT", result.chainTier)
     }
 
     @Test

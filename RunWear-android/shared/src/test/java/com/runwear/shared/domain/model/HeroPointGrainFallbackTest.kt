@@ -386,27 +386,44 @@ class HeroPointGrainFallbackTest {
     }
 
     @Test
-    fun `defect family - mittens prescriptions have no servable bundled photo`() {
-        // Census evidence: the verified pool's adjudicated hands
-        // vocabulary is {gloves, none} — zero rows carry mittens, so
-        // every sub-15°F MITTENS prescription is unservable by
-        // construction. The gate must say so (null), never serve a
-        // gloves photo against a mittens prescription.
+    fun `handwear substitution - beanie mittens serves the bundled gloves photo, balaclava mittens still has none`() {
+        // The pool holds zero true-mittens rows and no mittens asset
+        // was fabricated (RWPOOL-T01..T06). Under the HANDWEAR
+        // SUBSTITUTION (Sol's ruling, 2026-11-04 ~22:23 CST, extended
+        // to stock), a gloves photo passes the gate for a mittens
+        // prescription — so the beanie+mittens signature, whose
+        // bundled matrix assets wear beanie+gloves, now SERVES via
+        // the gated walk. This case previously asserted null for
+        // every gender and is re-pinned under the ruling.
         val mittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.WINDBREAKER, ClothingItem.THERMAL_BEANIE,
             ClothingItem.MITTENS
         )
-        for (gender in GenderPreference.entries) {
-            assertNull(
-                HeroImageSelector.gatedFallbackUrl(
-                    TempBracket.FREEZING, HeroWeatherCondition.CLEAR,
-                    gender, mittens
-                )
+        assertEquals(
+            "file:///android_asset/hero_fallback/freezing_clear_female.webp",
+            HeroImageSelector.gatedFallbackUrl(
+                TempBracket.FREEZING, HeroWeatherCondition.CLEAR,
+                GenderPreference.FEMALE, mittens
             )
-        }
-        // Sub-5°F: balaclava + mittens — the pool's balaclava rows
-        // all wear gloves, so this is unservable for the same reason.
+        )
+        assertEquals(
+            "file:///android_asset/hero_fallback/freezing_clear_male.webp",
+            HeroImageSelector.gatedFallbackUrl(
+                TempBracket.FREEZING, HeroWeatherCondition.CLEAR,
+                GenderPreference.MALE, mittens
+            )
+        )
+        assertEquals(
+            "file:///android_asset/hero_fallback/freezing_clear_female.webp",
+            HeroImageSelector.gatedFallbackUrl(
+                TempBracket.FREEZING, HeroWeatherCondition.CLEAR,
+                GenderPreference.UNISEX, mittens
+            )
+        )
+        // Sub-5°F: balaclava + mittens — STILL unservable by the
+        // gated walk: no bundled asset wears a balaclava at all, and
+        // the substitution covers only the hands slot, never head.
         val balaclavaMittens = outfit(
             ClothingItem.LONG_SLEEVE_THERMAL, ClothingItem.THERMAL_TIGHTS,
             ClothingItem.INSULATED_JACKET, ClothingItem.BALACLAVA,

@@ -113,6 +113,14 @@ object HeroPoolPolicy {
  * unenforced, and accessories (sunglasses/gaiter) are not head/hands
  * slots.
  *
+ * HANDWEAR SUBSTITUTION AMENDMENT (Sol's ruling, 2026-11-04 ~22:23
+ * CST, extended to stock): the hands slot — and only the hands slot —
+ * carries one substitution: gloves satisfy a mittens prescription
+ * (handwear form on its own is not a failure). One direction only; a
+ * mittens photo never satisfies a gloves prescription. This applies
+ * everywhere this gate is consulted: the pool cascade's exact tier
+ * and the bundled exact tier alike.
+ *
  * Rows with no adjudicated classes at all fail closed: every approved
  * row carries adjudicated (photo) classes after the RW-20 backfill,
  * and rows whose classes came from their stored prompt are judged by
@@ -185,7 +193,12 @@ object HeroPointGrainPolicy {
         }
         if (!headOk) return false
 
-        // Hands (RW-23): same rule as head.
+        // Hands (RW-23): same rule as head — with the HANDWEAR
+        // SUBSTITUTION amendment (Sol's ruling, 2026-11-04 ~22:23
+        // CST, extended to stock): a candidate wearing GLOVES passes
+        // when the prescription's hands class is MITTENS — handwear
+        // form on its own is not a failure. ONE direction only: a
+        // mittens candidate does NOT satisfy a gloves prescription.
         val handsOk = if (prescribedHands == null) {
             handsClass == null
         } else {
@@ -195,7 +208,8 @@ object HeroPointGrainPolicy {
                 ClothingItem.MITTENS -> "mittens"
                 else -> null
             }
-            expectedHands != null && handsClass == expectedHands
+            expectedHands != null && (handsClass == expectedHands ||
+                (prescribedHands == ClothingItem.MITTENS && handsClass == "gloves"))
         }
         if (!handsOk) return false
 

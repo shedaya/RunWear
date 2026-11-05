@@ -233,7 +233,12 @@ class HeroPointGrainPolicyTest {
     }
 
     @Test
-    fun `mittens prescription accepts mittens and rejects gloves`() {
+    fun `mittens prescription accepts mittens and gloves - handwear substitution, Sol ruling 2026-11-04`() {
+        // HANDWEAR SUBSTITUTION (Sol's ruling, 2026-11-04 ~22:23 CST,
+        // extended to stock): gloves satisfy a mittens prescription —
+        // handwear form on its own is not a failure. This test
+        // previously asserted the opposite (gloves rejected); the
+        // ruling supersedes it.
         val mittens = OutfitSelection(
             topBase = ClothingItem.LONG_SLEEVE_THERMAL,
             bottom = ClothingItem.THERMAL_TIGHTS,
@@ -241,7 +246,30 @@ class HeroPointGrainPolicyTest {
             hands = ClothingItem.MITTENS
         )
         assertTrue(matches(mittens, bottom = "tights", head = "beanie", hands = "mittens"))
-        assertFalse(matches(mittens, bottom = "tights", head = "beanie", hands = "gloves"))
+        assertTrue(matches(mittens, bottom = "tights", head = "beanie", hands = "gloves"))
+        // The substitution is ONE direction only: a mittens candidate
+        // does NOT satisfy a gloves prescription (the gloves-side pin
+        // also lives in the bridge test: hands="mittens" against a
+        // LIGHT_GLOVES prescription is false).
+        val gloves = OutfitSelection(
+            topBase = ClothingItem.LONG_SLEEVE_THERMAL,
+            bottom = ClothingItem.THERMAL_TIGHTS,
+            head = ClothingItem.THERMAL_BEANIE,
+            hands = ClothingItem.THERMAL_GLOVES
+        )
+        assertTrue(matches(gloves, bottom = "tights", head = "beanie", hands = "gloves"))
+        assertFalse(matches(gloves, bottom = "tights", head = "beanie", hands = "mittens"))
+        // And the bridge facade reaches the same substituted verdict.
+        assertTrue(
+            HeroPointGrainPolicy.matchesByKey(
+                personCount = 1, topBaseClass = "long", outerClass = "true",
+                bottomClass = "tights", prescribedTopBaseKey = "LONG_SLEEVE_THERMAL",
+                prescribedTopOuterKey = "INSULATED_JACKET",
+                prescribedBottomKey = "THERMAL_TIGHTS",
+                headClass = "beanie", handsClass = "gloves",
+                prescribedHeadKey = "THERMAL_BEANIE", prescribedHandsKey = "MITTENS"
+            )
+        )
     }
 
     @Test
