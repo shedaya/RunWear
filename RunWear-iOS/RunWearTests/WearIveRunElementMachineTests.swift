@@ -372,7 +372,9 @@ final class WearIveRunElementMachineTests: XCTestCase {
                 existing: base, incoming: entry(feels: 55)),
             .silentUpdate
         )
-        // A kit change IS the update the narration speaks.
+        // A kit change classifies distinctly (the record can say
+        // so) — GEN-5 treats it as a silent landing downstream
+        // (C-7: garments are never narration subjects).
         XCTAssertEqual(
             WearIveRunLandingClassifier.classify(
                 existing: base, incoming: entry(items: ["Long Sleeve", "Tights"])),
@@ -381,10 +383,11 @@ final class WearIveRunElementMachineTests: XCTestCase {
     }
 
     /// The collection model's cue counter follows the classifier:
-    /// creation bumps it, identical and hero/weather-only settles
-    /// do not, a kit change does — and a silent settle does NOT
-    /// flip the narration to "Update to" (WS-4 content carried
-    /// as-is: the payload is the entry's first kit item).
+    /// creation bumps it; identical, hero/weather-only, and
+    /// (GEN-5) kit-only settles do not — and a silent settle does
+    /// NOT flip the narration to "Update to" (GEN-5 C-7: the
+    /// payload is the place or moment that changed, never the
+    /// entry's first kit item as WS-4 carried it).
     @MainActor
     func testCollectionModelCueSemantics() {
         let defaults = UserDefaults(suiteName: "ws3-tests-\(UUID().uuidString)")!
@@ -404,17 +407,23 @@ final class WearIveRunElementMachineTests: XCTestCase {
         XCTAssertEqual(model.cueCount, 1)
         XCTAssertFalse(model.todaysEntryWasUpdated)
         XCTAssertEqual(model.entries.first?.heroImageReference, "hero-2")
-        // Kit change: cue + the "Update to" narration state.
+        // Kit change: GEN-5 (RW-28, C-7) SUPERSEDES the WS-4
+        // kit cue — the narration names place and time only,
+        // never a garment, so a kit-only settle is SILENT: the
+        // new kit is recorded, but no cue fires and the
+        // narration it found is preserved untouched.
         model.recordSettled(entry(items: ["Long Sleeve", "Tights"], hero: "hero-2"))
-        XCTAssertEqual(model.cueCount, 2)
-        XCTAssertTrue(model.todaysEntryWasUpdated)
+        XCTAssertEqual(model.cueCount, 1)
+        XCTAssertFalse(model.todaysEntryWasUpdated)
+        XCTAssertEqual(model.entries.first?.itemNames, ["Long Sleeve", "Tights"],
+                       "the kit change itself is still recorded")
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: model.entries.first, moment: "Now",
                 wasUpdatedThisSession: model.todaysEntryWasUpdated
             ),
-            .updated(payload: "Long Sleeve"),
-            "WS-4 narration content, carried as-is"
+            .added(place: "New York", moment: "Now"),
+            "GEN-5 C-7: a kit-only settle leaves the creation narration standing"
         )
         // Trash deletes the entry the machine absented.
         model.removeToday(placeName: "New York", today: base.dayStart)
@@ -883,15 +892,17 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         model.recordSettled(miami)
         XCTAssertEqual(model.entries.count, 1)
         // The scrapbook keeps the session's LAST settled version
-        // — carrying its update narration kind on itself (Y-5:
-        // the two in-session place moves were narrated updates).
-        XCTAssertEqual(model.sessionEntry(), miami.settingWasUpdatedInSession(true))
+        // — carrying its update narration kind AND its C-7
+        // payload on itself (Y-5: the two in-session place moves
+        // were narrated updates; GEN-5: the payload is the place
+        // that changed, "Miami, FL").
+        XCTAssertEqual(model.sessionEntry(), miami.settingNarration(wasUpdated: true, payload: "Miami, FL"))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
         XCTAssertEqual(model.sessionEntry()?.feelsLikeF, 90)
         // And it is what a fresh read of the store holds.
         XCTAssertEqual(
             WearIveRunStore(defaults: defaults).entries,
-            [miami.settingWasUpdatedInSession(true)])
+            [miami.settingNarration(wasUpdated: true, payload: "Miami, FL")])
     }
 
     @MainActor
@@ -912,15 +923,18 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             "Added Overland Park, KS, Now")
 
         // Place + kit change: narration-from-diff — "Update to"
-        // the new entry's payload, never a second "Added".
+        // the place that changed, never a second "Added".
+        // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment payload
+        // this pin carried ("Update to Tee"): the payload is the
+        // new PLACE, always.
         model.recordSettled(entry(
             session: "s1", place: "New York, NY", feels: 72,
             items: ["Tee", "Shorts"], day: d))
         XCTAssertEqual(model.cueCount, 2)
-        XCTAssertEqual(state(of: model), .updated(payload: "Tee"))
+        XCTAssertEqual(state(of: model), .updated(payload: "New York, NY"))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
-            "Update to Tee")
+            "Update to New York, NY")
 
         // Place-only change (same kit): still an update — the
         // bar must never announce a place home has moved past,
@@ -929,7 +943,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "Miami, FL", feels: 90,
             items: ["Tee", "Shorts"], day: d))
         XCTAssertEqual(model.cueCount, 3)
-        XCTAssertEqual(state(of: model), .updated(payload: "Tee"))
+        XCTAssertEqual(state(of: model), .updated(payload: "Miami, FL"))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
     }
 
@@ -1159,16 +1173,19 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         XCTAssertEqual(settled.heroImageReference, "hero-miami")
         XCTAssertTrue(settled.wasUpdatedInSession)
         // The narration computed from THIS value names THIS
-        // value's payload: "Update to Tank Top" over the Miami
+        // value's payload: "Update to Miami, FL" over the Miami
         // entry — the build-21 shape (an update naming one
-        // place's item over another place's entry) cannot be
-        // produced, because both halves read the same value.
+        // settle's payload over another settle's entry) cannot
+        // be produced, because both halves read the same value.
+        // GEN-5 (RW-28, C-7) SUPERSEDES the garment payload this
+        // pin carried ("Update to Tank Top"): the payload is the
+        // place that changed.
         let narration = WearIveRunMiniBarModel.state(
             todaysEntry: settled, moment: "Now",
             wasUpdatedThisSession: settled.wasUpdatedInSession)
-        XCTAssertEqual(narration, .updated(payload: settled.itemNames[0]))
+        XCTAssertEqual(narration, .updated(payload: "Miami, FL"))
         XCTAssertEqual(
-            WearIveRunNarration.line(for: narration), "Update to Tank Top")
+            WearIveRunNarration.line(for: narration), "Update to Miami, FL")
         XCTAssertEqual(
             WearIveRunNarration.expandedLine(for: settled, formattedFeelsLike: "90°"),
             "Miami, FL · Today — 90° feels like · 2 items")
@@ -1193,7 +1210,10 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // it is stored on the entry.
         let recreated = WearIveRunCollectionModel(store: store, sessionID: "s1")
         XCTAssertEqual(recreated.sessionEntry()?.wasUpdatedInSession, true)
-        XCTAssertEqual(state(of: recreated), .updated(payload: "Tank Top"))
+        // GEN-5 (RW-28, C-7): the surviving payload is the place
+        // that changed — supersedes the garment payload ("Tank
+        // Top") this pin carried under WS-4.
+        XCTAssertEqual(state(of: recreated), .updated(payload: "Miami, FL"))
 
         // A weather-only settle updates the numbers and keeps
         // the narration kind it found.
@@ -1202,7 +1222,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             items: ["Tank Top"], day: d))
         XCTAssertEqual(recreated.sessionEntry()?.feelsLikeF, 92)
         XCTAssertEqual(recreated.sessionEntry()?.wasUpdatedInSession, true)
-        XCTAssertEqual(state(of: recreated), .updated(payload: "Tank Top"))
+        XCTAssertEqual(state(of: recreated), .updated(payload: "Miami, FL"))
     }
 
     // MARK: Served-hero identity (census Y-10)

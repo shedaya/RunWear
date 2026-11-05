@@ -453,10 +453,16 @@ struct MakeItMeCaptureView: View {
                                 // speaks the SAME four checks as the
                                 // guided capture, with the settled
                                 // passing copy — acceptance means
-                                // all four passed.
-                                Text("✓ That's exactly what we need")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(AppTheme.inkPrimary)
+                                // all four passed. The check is a
+                                // drawn glyph (SF Symbol), not an
+                                // emoji-class character (WS-10).
+                                HStack(spacing: 5) {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 13, weight: .bold))
+                                    Text("That's exactly what we need")
+                                }
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppTheme.inkPrimary)
                                 Text(SelfieCheck.allCases.map(\.passedLabel).joined(separator: " · "))
                                     .font(.system(size: 12))
                                     .foregroundColor(AppTheme.inkSecondary)

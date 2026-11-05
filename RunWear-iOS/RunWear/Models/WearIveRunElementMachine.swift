@@ -233,26 +233,31 @@ struct WearIveRunElementMachine: Equatable {
 // MARK: - Landing classification (the collection model's half)
 //
 // The element's cue may only be fed by a landing that is the
-// user's business: the session's first generation, a settle that
-// changed the entry's KIT (the payload the narration speaks),
-// or — GEN-3 session rule — a settle that moved the session's
-// entry to a new PLACE. A settle that changed only weather
-// numbers or the hero image is an asynchronous landing wearing
-// the entry's clothes — the store still records it (the saved
-// entry is the session's last settled version), but it
-// classifies `.silentUpdate` and the element never hears about
-// it (D-07's abolished drivers, at the source).
+// user's business: the session's first generation, a settle
+// that moved the session's entry to a new PLACE (GEN-3 session
+// rule), or — GEN-5 (RW-28, C-7) — a settle that changed its
+// MOMENT. A settle that changed only the kit, weather numbers,
+// or the hero image is an asynchronous landing wearing the
+// entry's clothes — the store still records it (the saved
+// entry is the session's last settled version), but the
+// element never hears about it (D-07's abolished drivers, at
+// the source). GEN-5 supersedes the WS-4 kit cue: the
+// narration names place and time only, never a garment, so a
+// kit-only change has nothing to narrate and does not cue.
 
 enum WearIveRunLandingClassification: Equatable {
     /// No entry with this identity existed: creation.
     case created
-    /// The entry existed and its kit (names or keys) changed.
+    /// The entry existed and its kit (names or keys) changed —
+    /// classified distinctly so the record can say so, but
+    /// GEN-5 treats it as a silent landing (C-7: garments are
+    /// never narration subjects).
     case kitUpdated
     /// GEN-5 (RW-28, C-7): the entry existed and its settled
     /// MOMENT changed (a confirmed hour change re-solves the
     /// entry) with place and kit otherwise as they were — a
     /// user-caused settle that narrates "Update to [reading]"
-    /// and cues, like a kit change.
+    /// and cues.
     case momentUpdated
     /// The entry existed and MOVED to a different place (GEN-3
     /// session rule): within a session the one entry updates in

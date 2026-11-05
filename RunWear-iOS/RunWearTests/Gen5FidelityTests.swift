@@ -77,9 +77,11 @@ final class Gen5FidelityTests: XCTestCase {
     }
 
     func testNarrationPayload_NeverAGarment() {
-        // Kit changes with place and moment unchanged: the payload
-        // is the settled moment, not the first kit item (the
-        // gen-4 defect on both platforms).
+        // Kit changes with place and moment unchanged: even the
+        // payload RULE never names a garment — and at the model
+        // level a kit-only settle is silent and preserves the
+        // narration it found (pinned in
+        // WearIveRunElementMachineTests.testCollectionModelCueSemantics).
         let before = entry(place: "Miami, Florida", day: nov5, feels: 78,
                            items: ["Tank Top"], moment: "9 p.m.")
         let after = entry(place: "Miami, Florida", day: nov5, feels: 78,
@@ -128,14 +130,23 @@ final class Gen5FidelityTests: XCTestCase {
         let kcOlder = entry(place: "Kansas City, Missouri", day: nov2, feels: 41)
         let miamiRecent = entry(place: "Miami, Florida", day: nov5, feels: 78,
                                 hero: "", session: "session-miami-a")
-        let miamiOlder = entry(place: "Miami, Florida", day: nov4, feels: 80,
+        // Sol's shape is 2 STAYS: the two Miami days are NOT
+        // consecutive (Nov 2 + Nov 5), so the collation splits
+        // them — a consecutive pair would read as one stay.
+        let miamiOlder = entry(place: "Miami, Florida", day: nov2, feels: 80,
                                hero: "not a url", session: "session-miami-b")
         let all = [todaySession, kcOlder, miamiRecent, miamiOlder]
 
-        // The pin lifts out; both collated chapters remain.
-        let chapters = WearIveRunCollection.chapters(
-            from: all.filter { $0.id != todaySession.id }, filter: .all)
+        // Both collated chapters compute from the full set.
+        let chapters = WearIveRunCollection.chapters(from: all, filter: .all)
         XCTAssertEqual(Set(chapters.map(\.placeName)), ["Kansas City, MO", "Miami, FL"])
+        // And with the today pin lifted out (the collection's
+        // own presentation), both chapters still remain.
+        XCTAssertEqual(
+            Set(WearIveRunCollection.chapters(
+                from: all.filter { $0.id != todaySession.id }, filter: .all
+            ).map(\.placeName)),
+            ["Kansas City, MO", "Miami, FL"])
 
         for chapter in chapters {
             // Cover, range, summary — the surfaces a chapter row

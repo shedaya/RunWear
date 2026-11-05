@@ -473,7 +473,12 @@ final class Gen4DayChartTests: XCTestCase {
         XCTAssertTrue(view.contains("DayChartBandView("), "the glance band below the outfit")
         XCTAssertTrue(view.contains("applyTimePickerCommit"), "Confirm lands through the one apply path")
         XCTAssertFalse(view.contains("WeatherPillsRow("), "the pills row is retired from home")
-        // The pill row keeps its segments and its own Now segment.
-        XCTAssertTrue(view.contains("sheetDateTimePills"))
+        // GEN-5 (RW-28 item 12): the sheet's duplicate date/time
+        // pill row is RETIRED — it restated the hero's focal time
+        // in a second wording for the same instant (census A-6).
+        // The date stays reachable through the hero's date seam;
+        // one moment system only.
+        XCTAssertFalse(view.contains("sheetDateTimePills"),
+                       "the duplicate sheet pill row is retired (GEN-5 item 12)")
     }
 }

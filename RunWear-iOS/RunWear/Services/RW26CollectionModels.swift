@@ -250,10 +250,9 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
 /// the original Nov 2 concept: name whatever changed. Place beats
 /// moment (a move is the bigger change); a moment change names the
 /// new simple reading (a clock reading like "9 p.m." is in-spec
-/// per Sol's Nov 5 nuance ruling); a kit-only change (the outfit
-/// re-solved because the moment's weather moved within the same
-/// reading) names the moment it settled at. Garments are never
-/// named.
+/// per Sol's Nov 5 nuance ruling). Called only for place/moment
+/// updates — a kit-only settle never reaches here (it is silent
+/// and preserves the payload it found). Garments are never named.
 enum WearIveRunNarrationRules {
     static func updatePayload(
         existing: WearIveRunEntry,

@@ -85,14 +85,28 @@ struct GuidedSelfieCaptureView: View {
 
                 // ONE coaching line — the first failing check's.
                 // GEN-5 (RW-28 item 17): the passing moment
-                // speaks the settled line (frame 16).
-                Text(model.evaluation.coachingLine ?? "✓ That's exactly what we need")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-                    .padding(.top, 12)
-                    .shadow(color: .black.opacity(0.6), radius: 4)
+                // speaks the settled line (frame 16) — the check
+                // is a drawn glyph (SF Symbol), the words are the
+                // settled copy; the pair renders as the design's
+                // "✓ That's exactly what we need" without putting
+                // an emoji-class character in copy (WS-10 census).
+                Group {
+                    if let line = model.evaluation.coachingLine {
+                        Text(line)
+                    } else {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 15, weight: .bold))
+                            Text("That's exactly what we need")
+                        }
+                    }
+                }
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+                .padding(.top, 12)
+                .shadow(color: .black.opacity(0.6), radius: 4)
 
                 Spacer()
 

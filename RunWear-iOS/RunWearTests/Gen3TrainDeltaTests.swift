@@ -65,7 +65,9 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // complete picker (search field, current location,
         // results) from the first moment.
         let pickerSheet = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
-        XCTAssertTrue(pickerSheet.contains("TextField(\"Search for a city\""),
+        // GEN-5 (RW-28 item 31): the field's prompt is the
+        // settled "Search a place".
+        XCTAssertTrue(pickerSheet.contains("TextField(\"Search a place\""),
                       "the picker carries its search field")
         XCTAssertTrue(pickerSheet.contains("\"Current location\""),
                       "the picker carries its current-location row")
@@ -87,23 +89,32 @@ final class Gen3TrainDeltaTests: XCTestCase {
     func testWelcomePointsAreNameLedWithSolFinalWording() {
         let points = OnboardingCopy.welcomePoints
         XCTAssertEqual(points.count, 3)
-        // Point 1: name + its existing plain phrase, unchanged.
+        // GEN-5 (RW-28 item 27, census A-1) restructures the
+        // point: the name leads with the settled SHORT headline
+        // phrase ("Name — phrase", pine bold), and Sol's Nov 4
+        // final wording survives verbatim as the separate BODY
+        // line. The headline phrases are pinned in
+        // Gen5FidelityTests; the bodies are pinned here.
+        // Point 1: name + its existing body sentence, unchanged.
         XCTAssertEqual(points[0].name, "RunWear")
-        XCTAssertEqual(points[0].phrase,
+        XCTAssertEqual(points[0].body,
                        "One recommendation for the run you're about to take — feels-like, wind, and rain included.")
         // Point 2: Sol's FINAL wording (last ruling, Nov 4).
         XCTAssertEqual(points[1].name, "Make It Me")
-        XCTAssertEqual(points[1].phrase,
+        XCTAssertEqual(points[1].body,
                        "Picture yourself at the start line with the perfect outfit ready to go.")
-        // Point 3: the round-2 phrase (the name-led form of the
+        // Point 3: the round-2 body (the name-led form of the
         // WS-E line — the name no longer repeats inside it).
         XCTAssertEqual(points[2].name, "Wear I've Run")
-        XCTAssertEqual(points[2].phrase,
+        XCTAssertEqual(points[2].body,
                        "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.")
-        // No phrase repeats its feature name.
+        // Neither the headline phrase nor the body repeats its
+        // feature name.
         for point in points {
             XCTAssertFalse(point.phrase.contains(point.name),
                            "the phrase must not repeat its feature name: \(point.name)")
+            XCTAssertFalse(point.body.contains(point.name),
+                           "the body must not repeat its feature name: \(point.name)")
         }
     }
 
@@ -147,10 +158,15 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // The home landing state after leaving frame 34
         // mid-generation: the shared store still reports the
         // requested cell as making, no personal photo is on
-        // screen yet, and the hero pill resolves to .making —
-        // the generating pill over the fallback photo.
+        // screen yet, and the hero pill resolves to the
+        // generating pill over the fallback photo. GEN-5
+        // (C-4 AMENDED, Nov 5): for this FREE user the
+        // generating state is .makingWithUpsell — script +
+        // spinner + "Making this you…" + the one small green
+        // "Get it instantly next time" line; a subscriber's
+        // generating pill stays the clean .making.
         XCTAssertEqual(
-            .making,
+            .makingWithUpsell,
             HeroPill.resolve(optedIn: true, lookState: .making, personalPhotoDisplayed: false,
                              isSubscribed: false, freeGenerationsUsed: 0, freeAllowance: 5),
             "leaving mid-generation must land on home with the generating pill active")
@@ -296,21 +312,28 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let sectionStart = try XCTUnwrap(views.range(of: "struct MakeItMeSettingsSection")?.lowerBound)
         let sectionEnd = try XCTUnwrap(views.range(of: "struct MakeItMePhotosView")?.lowerBound)
         let section = String(views[sectionStart..<sectionEnd])
-        XCTAssertTrue(section.contains("ConvergenceBand.content(isSubscribed: store.mode == .subscribed, coverage: store.bankCoverage)"),
+        XCTAssertTrue(section.contains("ConvergenceBand.content("),
                       "the Settings seat is driven by the shared content rule over the store's banking state")
         XCTAssertTrue(section.contains("ConvergenceBandView(content: band)"),
                       "Settings renders the SHARED ConvergenceBandView — not a re-implementation")
-        // The seat sits inside the subscribed branch of the
-        // OFFER group specifically (anchored at offerSection:
-        // after its subscribed branch opens, before the offer
-        // card's else) — free users never reach it.
+        // GEN-5 (RW-28 item 22 + addendum 5.2b) RELOCATES the
+        // seat: while generating, the band REPLACES the status
+        // block inside statusSection — it no longer sits in the
+        // offer group below a status card that simultaneously
+        // claims readiness (the gen-4 B-11/B-12 defect: band
+        // nested under "You're subscribed." at ~half coverage).
+        let statusStart = try XCTUnwrap(section.range(of: "private var statusSection")?.lowerBound)
+        let statusSlice = String(section[statusStart...])
+        let gate = try XCTUnwrap(statusSlice.range(of: "if store.mode == .subscribed, let band = settingsConvergenceBand")?.lowerBound)
+        let seat = try XCTUnwrap(statusSlice.range(of: "ConvergenceBandView(content: band)")?.lowerBound)
+        let readiness = try XCTUnwrap(statusSlice.range(of: "Subscribed · Your photo is ready before you open the app.")?.lowerBound)
+        XCTAssertTrue(gate < seat && seat < readiness,
+                      "the band renders in place of the status block; the readiness line lives in the else branch and cannot co-render while generating")
+        // And the offer group no longer carries a second seat.
         let offerStart = try XCTUnwrap(section.range(of: "private var offerSection")?.lowerBound)
         let offerSlice = String(section[offerStart...])
-        let branch = try XCTUnwrap(offerSlice.range(of: "if store.mode == .subscribed")?.lowerBound)
-        let seat = try XCTUnwrap(offerSlice.range(of: "ConvergenceBand.content(isSubscribed: store.mode")?.lowerBound)
-        let offerCard = try XCTUnwrap(offerSlice.range(of: "MakeItMePremiumOfferCard")?.lowerBound)
-        XCTAssertTrue(branch < seat && seat < offerCard,
-                      "the band seat is inside the offer group's subscribed branch, before the free-state offer card")
+        XCTAssertFalse(offerSlice.contains("ConvergenceBand"),
+                       "the duplicate offer-group band seat is gone (GEN-5 item 22)")
     }
 
     func testConvergenceBandRendersWithThePillSpinner_sourcePin() throws {

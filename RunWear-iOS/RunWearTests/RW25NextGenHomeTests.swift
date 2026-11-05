@@ -109,17 +109,18 @@ final class RW25NextGenHomeTests: XCTestCase {
             ),
             .added(place: "New York", moment: "Now")
         )
-        // WS-4: the update payload is the entry's REAL payload —
-        // its first kit item — derived by the model from the
-        // entry. (This pin previously asserted a caller-supplied
-        // "5 items · 41°F" summary; that string was the iOS half
-        // of D-08 and the pin is superseded.)
+        // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment payload:
+        // an entry carrying no stored update payload narrates
+        // its PLACE — never its first kit item. (This pin
+        // previously asserted the first kit item "Tee"; before
+        // that, a caller-supplied "5 items · 41°F" summary —
+        // both superseded in turn.)
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: entry, moment: "Now",
                 wasUpdatedThisSession: true
             ),
-            .updated(payload: "Tee")
+            .updated(payload: "New York")
         )
     }
 

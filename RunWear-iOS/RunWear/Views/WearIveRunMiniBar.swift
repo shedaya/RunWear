@@ -152,13 +152,16 @@ final class WearIveRunCollectionModel: ObservableObject {
         return false
     }
     /// Bumped ONLY on a cue-worthy landing (WS-3): the session's
-    /// creation, a settle that changed the entry's KIT, or a
-    /// settle that moved it to a new PLACE (GEN-3). A settle that
-    /// changed only weather numbers or the hero image is an
-    /// asynchronous landing — it is recorded below, but it never
-    /// bumps this counter, so it can never move the element
-    /// (D-07's abolished drivers, enforced at the source via
-    /// `WearIveRunLandingClassifier`).
+    /// creation, a settle that moved it to a new PLACE (GEN-3),
+    /// or a settle that changed its MOMENT (GEN-5, RW-28 C-7 —
+    /// the narration names place and time only). A settle that
+    /// changed only the kit, weather numbers, or the hero image
+    /// is an asynchronous landing — it is recorded below, but it
+    /// never bumps this counter, so it can never move the
+    /// element (D-07's abolished drivers, enforced at the source
+    /// via `WearIveRunLandingClassifier`). GEN-5 supersedes the
+    /// WS-4 kit cue: a kit-only re-solve narrates nothing, so it
+    /// cues nothing.
     @Published private(set) var cueCount = 0
 
     /// The identity of the app session this model records for —
@@ -203,11 +206,15 @@ final class WearIveRunCollectionModel: ObservableObject {
     /// in-session settle replaces, never accumulates); what the
     /// classification decides is only whether the element hears
     /// about it:
-    /// - created / kit-changed / place-moved → the cue counter
-    ///   bumps (a place move after the first add narrates
-    ///   "Update to…", never a fresh "Added …" — census X-4);
-    /// - weather-only or hero-only change → silent (an async
-    ///   landing is not a driver);
+    /// - created / place-moved / moment-changed → the cue
+    ///   counter bumps (a place move after the first add
+    ///   narrates "Update to…", never a fresh "Added …" —
+    ///   census X-4; a moment change narrates the new reading —
+    ///   GEN-5 items 8/9);
+    /// - kit-only, weather-only, or hero-only change → silent
+    ///   (an async landing is not a driver; GEN-5 C-7: garments
+    ///   are never narration subjects, so a kit-only re-solve
+    ///   has nothing to say);
     /// - identical → nothing at all.
     func recordSettled(_ entry: WearIveRunEntry) {
         let existing = entries.first { $0.id == entry.id }
@@ -224,20 +231,21 @@ final class WearIveRunCollectionModel: ObservableObject {
         // rewrite the narration).
         // GEN-5 (RW-28, C-7): the payload is computed from the
         // DIFF and stamped with the kind — place name on a move,
-        // the new moment reading on a time change, the settled
-        // moment on a kit-only re-solve. Never a garment.
+        // the new moment reading on a time change. Never a
+        // garment: a kit-only settle preserves the narration it
+        // found, exactly like a weather-only settle.
         let narrationUpdated: Bool
         let narrationPayload: String?
         switch classification {
         case .created:
             narrationUpdated = false
             narrationPayload = nil
-        case .kitUpdated, .placeUpdated, .momentUpdated:
+        case .placeUpdated, .momentUpdated:
             narrationUpdated = true
             narrationPayload = existing.map {
                 WearIveRunNarrationRules.updatePayload(existing: $0, incoming: entry)
             }
-        case .silentUpdate, .identical:
+        case .kitUpdated, .silentUpdate, .identical:
             narrationUpdated = existing?.wasUpdatedInSession ?? false
             narrationPayload = existing?.updatePayload
         }
@@ -247,9 +255,9 @@ final class WearIveRunCollectionModel: ObservableObject {
         case .created:
             narratedEntryID = entry.id
             cueCount += 1
-        case .kitUpdated, .placeUpdated, .momentUpdated:
+        case .placeUpdated, .momentUpdated:
             cueCount += 1
-        case .silentUpdate, .identical:
+        case .kitUpdated, .silentUpdate, .identical:
             break
         }
     }

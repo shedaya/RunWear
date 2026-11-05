@@ -188,9 +188,13 @@ final class Gen4LocationNowTests: XCTestCase {
 
     func testNowSurfacesShareTheLocationFramedReset_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        // Headline "↻ Now" + pill Now segment: the same reset.
-        XCTAssertEqual(view.components(separatedBy: "viewModel.resetToNow()").count - 1, 3,
-                       "headline Now, pill Now, and the hero's onNowTapped all call the one reset")
+        // Headline "↻ Now" + the hero's onNowTapped: the same
+        // reset. GEN-5 (RW-28 item 12) retired the sheet's
+        // duplicate pill row, whose Now segment was the third
+        // call site — the surviving surfaces still share the
+        // ONE reset.
+        XCTAssertEqual(view.components(separatedBy: "viewModel.resetToNow()").count - 1, 2,
+                       "headline Now and the hero's onNowTapped call the one reset")
         // The view's NOW tracking is the view model's
         // location-framed state, not a device-calendar check.
         XCTAssertTrue(view.contains("viewModel.isViewingLocationNow"))

@@ -44,8 +44,16 @@ final class Gen2I3OnboardingTests: XCTestCase {
         let end = try XCTUnwrap(flow.range(of: "// MARK: - The opt-in flow container"))
         let fork = String(flow[start.lowerBound..<end.lowerBound])
 
-        XCTAssertTrue(fork.contains("HeroPhoto(image: image, width: geometry.size.width, height: 180)"),
-                      "the fork card must render through the top-anchored HeroPhoto (W-17)")
+        // GEN-5 (RW-28 item 19, ruling C-2) SUPERSEDES the W-17
+        // HeroPhoto seat: the fork's photo is now the bundled
+        // purpose-designed image, rendered through the fork band
+        // with the asset lane's anchoring rule (ForkHeroSpec) and
+        // the code-drawn dashed face box — a stronger form of the
+        // same never-crop-the-head contract.
+        XCTAssertTrue(fork.contains("forkHeroBand(width: geometry.size.width, height: 180)"),
+                      "the fork card renders the bundled fork image through its spec-anchored band (C-2)")
+        XCTAssertTrue(fork.contains("ForkHeroSpec"),
+                      "the band's crop comes from the asset lane's spec of record")
         XCTAssertFalse(fork.contains("image.resizable().aspectRatio(contentMode: .fill)"),
                        "the bare center-anchored fill that cropped the head is gone from the fork card")
         // The crop contract the fork now inherits: the visible
@@ -181,14 +189,19 @@ final class Gen2I3OnboardingTests: XCTestCase {
     // MARK: - W-21 · welcome footer, verbatim
 
     func testWelcomeFooterIsTheDecidedLineVerbatim() {
-        XCTAssertEqual(OnboardingCopy.welcomeFooter, "Free forever · Premium is optional")
+        // GEN-5 (RW-28 item 27, census A-1) RESTORES the settled
+        // footer: the W-21 line ("Free forever · Premium is
+        // optional") was itself the deviation the Nov 5
+        // walkthrough flagged — the settled line is the one the
+        // design carried all along.
+        XCTAssertEqual(OnboardingCopy.welcomeFooter, "Free to start · Set up in under a minute")
     }
 
     func testWelcomeScreenRendersTheFooterConstant_sourcePin() throws {
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
         XCTAssertTrue(onboarding.contains("Text(OnboardingCopy.welcomeFooter)"))
-        XCTAssertFalse(onboarding.contains("\"Free to start · Set up in under a minute\""),
-                       "the struck line survives nowhere in the onboarding view")
+        XCTAssertFalse(onboarding.contains("\"Free forever · Premium is optional\""),
+                       "the W-21 deviation line survives nowhere in the onboarding view (GEN-5, census A-1)")
     }
 
     // MARK: - W-22 · fit choices shown directly on the step

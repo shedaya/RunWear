@@ -302,11 +302,14 @@ final class StateTruthTests: XCTestCase {
         let object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         // The key set carries the GEN-3 session schema (the
         // owning session's identity + the entry-carried narration
-        // kind) alongside the canonical-frame fields — and still
-        // NO unit field, which is this pin's actual subject.
+        // kind) and the GEN-5 narration schema (the settled
+        // moment reading + the last-saved stamp; the optional
+        // update payload encodes only when present) alongside
+        // the canonical-frame fields — and still NO unit field,
+        // which is this pin's actual subject.
         XCTAssertEqual(
             Set(object.keys),
-            ["dayStart", "placeName", "feelsLikeF", "actualF", "condition", "itemNames", "itemKeys", "heroImageReference", "sessionID", "wasUpdatedInSession"]
+            ["dayStart", "placeName", "feelsLikeF", "actualF", "condition", "itemNames", "itemKeys", "heroImageReference", "sessionID", "wasUpdatedInSession", "momentReading", "lastSavedAt"]
         )
         let json = String(decoding: data, as: UTF8.self).lowercased()
         XCTAssertFalse(json.contains("fahrenheit") || json.contains("celsius") || json.contains("unit"))
