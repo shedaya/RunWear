@@ -64,6 +64,18 @@ class PersonalHeroRepository @Inject constructor(
     private val _state = MutableStateFlow(PersonalState())
     val state: StateFlow<PersonalState> = _state.asStateFlow()
 
+    /**
+     * GEN-5 (RW-28 Addendum 8, second follow-up): the selfie
+     * epoch — bumped whenever the registered reference-photo set
+     * CHANGES (a replacement set, not the first upload and not a
+     * deletion). A new epoch retires the bank server-side, so the
+     * owed fill set must be re-named against the fresh bank; the
+     * main view model collects this and re-sends.
+     */
+    private val _selfieEpoch = MutableStateFlow(0)
+    val selfieEpoch: StateFlow<Int> = _selfieEpoch.asStateFlow()
+    private var lastReferencePaths: List<String>? = null
+
     /** Load persisted local state, then refresh the server mirror. */
     suspend fun initialize() {
         val forkDecided = preferencesRepository.getString(KEY_FORK_DECIDED) == "1"
@@ -99,6 +111,15 @@ class PersonalHeroRepository @Inject constructor(
     suspend fun refreshFromServer() {
         val profile = service.fetchProfile() ?: return
         val refs = service.fetchReferencePaths()
+        // GEN-5 (selfie epoch): a changed, non-empty reference set
+        // is a new epoch — the bank refills against the new face.
+        val previousRefs = lastReferencePaths
+        if (previousRefs != null && previousRefs.isNotEmpty() &&
+            refs.isNotEmpty() && previousRefs != refs
+        ) {
+            _selfieEpoch.value += 1
+        }
+        lastReferencePaths = refs
         // GEN-3 (convergence band): the coverage read rides the same
         // refresh; a failed read leaves the previous value in place.
         val coverage = if (profile.personalizationOn) {

@@ -358,8 +358,11 @@ class PersonalHeroService @Inject constructor(
      * GEN-5 (RW-28 Addendum 8, Defect 1 — convergence diagnosis,
      * Nov 5, 2026): ask the deployed start-personal-fill (v13,
      * RW-16.30 convergence model) to enqueue the forecast-imminent
-     * cells THIS caller names in [priorityCells] — combination ids
-     * derived from the user's own 7-day forecast, in forecast order.
+     * cells THIS caller names in [priorityCells] — the owed fill
+     * set: the user's 7-day forecast cells first (imminent first),
+     * then the 20-cell canonical core matrix (the scaffold
+     * substrate), each id derived by the serve path's own
+     * derivation (Addendum 8, second follow-up).
      * The deployed function enqueues ONLY named cells (intersected
      * server-side with the canonical launch set); the gen-4 client
      * called it with an empty body, so no fill was ever requested
@@ -464,9 +467,10 @@ class PersonalHeroService @Inject constructor(
     /**
      * GEN-3 (convergence band): the caller's REAL bank coverage.
      * GEN-5 (RW-28 Addendum 8, Defect 2 — convergence diagnosis,
-     * Nov 5, 2026): [total] is the BANK'S TARGET SET — the forecast
-     * cells the fill is working toward (the same set the client
-     * names in priority_cells), never the engaged set. The gen-4
+     * Nov 5, 2026): [total] is the BANK'S TARGET SET — the fill
+     * set actually owed (the 20-cell core matrix plus the current
+     * forecast horizon — the same composed set the client names
+     * in priority_cells), never the engaged set. The gen-4
      * denominator (banked ∪ ever-enqueued cells) manufactured
      * ~90% at 8-of-48 true coverage and would have read 100% with
      * 40 target cells still missing. [ready] counts only banked

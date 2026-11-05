@@ -390,6 +390,13 @@ class MainViewModel @Inject constructor(
     private var lastForecastFillCells: List<String> = emptyList()
     private var lastSentFillCells: List<String> = emptyList()
 
+    // The last derivation's inputs, kept so the owed set can be
+    // re-derived when its keys change without a new forecast
+    // (gender change, selfie-epoch change).
+    private var lastResponse: com.runwear.shared.data.model.OpenMeteoResponse? = null
+    private var lastForecastList: List<com.runwear.shared.domain.model.HourlyForecast>? = null
+    private var lastDerivationNow: java.time.LocalDateTime? = null
+
     /**
      * GEN-2 A2 (W-6): a place the user has switched to whose weather
      * has not landed yet. selectLocation / selectManualLocation record
@@ -546,6 +553,20 @@ class MainViewModel @Inject constructor(
                     sendForecastFillIfNeeded()
                 }
                 wasEntitled = personal.entitled
+            }
+        }
+
+        // GEN-5 (Addendum 8, second follow-up): a selfie-epoch
+        // change re-names the SAME owed set against the fresh
+        // bank — the sent-set memory resets so the fill re-fires.
+        viewModelScope.launch {
+            var seenEpoch = personalHeroRepository.selfieEpoch.value
+            personalHeroRepository.selfieEpoch.collect { epoch ->
+                if (epoch != seenEpoch) {
+                    seenEpoch = epoch
+                    lastSentFillCells = emptyList()
+                    rederiveFill()
+                }
             }
         }
 
@@ -1354,10 +1375,37 @@ class MainViewModel @Inject constructor(
                 entryJava.toLocalDate(), daypart, combinationId
             )
         }
-        val cells = com.runwear.app.makeitme.ForecastFillCells.select(frames)
+        val forecastCells = com.runwear.app.makeitme.ForecastFillCells.select(frames)
+        // GEN-5 (Addendum 8, second follow-up): the owed set is
+        // the forecast cells PLUS the 20-cell canonical core
+        // matrix (the scaffold substrate) — forecast first, so
+        // imminent conditions land first and the substrate fills
+        // behind them. The matrix is derived through the same
+        // engine + combination path (CoreMatrixCells), for the
+        // current gender.
+        val coreCells = com.runwear.app.makeitme.CoreMatrixCells.ids(
+            getOutfitRecommendation, _uiState.value.genderPreference
+        )
+        val cells = com.runwear.app.makeitme.ForecastFillCells.compose(coreCells, forecastCells)
+        lastResponse = response
+        lastForecastList = forecast
+        lastDerivationNow = now
         lastForecastFillCells = cells
         personalHeroRepository.noteFillTarget(cells)
         sendForecastFillIfNeeded()
+    }
+
+    /**
+     * Re-run the fill derivation from the last forecast inputs —
+     * for the changes that re-key every combination id without a
+     * new forecast (a gender change) and for selfie-epoch changes
+     * (the same owed set, re-named against a fresh bank).
+     */
+    private fun rederiveFill() {
+        val response = lastResponse ?: return
+        val forecast = lastForecastList ?: return
+        val now = lastDerivationNow ?: return
+        onForecastDerived(response, forecast, now)
     }
 
     /** Send the fill when entitled and the named set has changed. */
@@ -2042,6 +2090,10 @@ class MainViewModel @Inject constructor(
             val weather = _uiState.value.weather ?: return@launch
             val outfit = _uiState.value.outfit ?: return@launch
             resolveHeroImage(weather, outfit)
+            // GEN-5 (Addendum 8, second follow-up): every
+            // combination id is gender-prefixed, so the owed fill
+            // set re-derives (and re-sends, if entitled) too.
+            rederiveFill()
         }
     }
 
