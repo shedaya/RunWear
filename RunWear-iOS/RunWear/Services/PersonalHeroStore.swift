@@ -142,7 +142,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             // GEN-3 (convergence band): the coverage read rides
             // the same refresh; a failed read leaves the previous
             // value in place.
-            if let coverage = await api.fetchBankCoverage() {
+            if let coverage = await readCoverage() {
                 bankCoverage = coverage
                 stallTracker.observe(coverage, now: Date())
             }
@@ -204,7 +204,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                 for _ in 0..<40 {
                     try? await Task.sleep(nanoseconds: 30_000_000_000)
                     if Task.isCancelled || !self.bandConditionHolds { break }
-                    if let coverage = await self.api.fetchBankCoverage() {
+                    if let coverage = await self.readCoverage() {
                         self.bankCoverage = coverage
                         self.stallTracker.observe(coverage, now: Date())
                     }
@@ -526,6 +526,50 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     // MARK: - Subscription fill (server-gated)
 
+    /// GEN-5 (Addendum 8 follow-up, Defects 1 + 2): the priority
+    /// cells this client names to the fill — the current 7-day
+    /// forecast's distinct personal cells, in forecast order,
+    /// supplied by WeatherViewModel on every forecast load. The
+    /// set is ALSO the convergence band's target set (Defect 2):
+    /// coverage is banked ∩ named over named. Persisted so the
+    /// denominator survives a relaunch before the next forecast
+    /// load lands.
+    private static let namedFillCellsKey = "rw.gen5.namedFillCells"
+    private(set) var forecastPriorityCells: [String] = (UserDefaults.standard.stringArray(forKey: PersonalHeroStore.namedFillCellsKey) ?? [])
+    /// The set the last successful fill call named — a forecast
+    /// refresh re-sends the fill only when the set changed (the
+    /// function is designed to make re-calling harmless).
+    private var lastSentFillCells: [String] = []
+
+    /// PersonalHeroResolving: receive the forecast's priority
+    /// cells. While subscribed, a CHANGED set re-kicks the fill
+    /// immediately (forecast refresh is a designed fill trigger);
+    /// the subscription-grant kick reads whatever set is current.
+    func updateForecastPriorityCells(_ cells: [String]) {
+        guard cells != forecastPriorityCells else {
+            // Same set: still the denominator of record.
+            return
+        }
+        forecastPriorityCells = cells
+        UserDefaults.standard.set(cells, forKey: Self.namedFillCellsKey)
+        if mode == .subscribed, !cells.isEmpty {
+            kickFillWithRetry()
+        }
+        // The denominator may have moved under a standing bank —
+        // re-read coverage against the new target.
+        Task { await refreshProfile() }
+    }
+
+    /// Coverage against the named target set (Defect 2): banked
+    /// cells from the server, target from this client's own fill
+    /// contract. Nil when either read is unavailable or no target
+    /// has been named — the band then stays hidden rather than
+    /// showing a fraction against the wrong whole.
+    private func readCoverage() async -> BankCoverage? {
+        guard let banked = await api.fetchBankedCells() else { return nil }
+        return deriveBankCoverage(heroCells: banked, targetCells: Set(forecastPriorityCells))
+    }
+
     /// On entitlement, ask the server to pre-generate the matrix.
     /// The server's entitled flag is set by the billing webhook and
     /// may lag the on-device entitlement by seconds-to-minutes; a
@@ -536,7 +580,12 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             guard let self else { return }
             for attempt in 0..<6 {
                 do {
-                    _ = try await self.api.startPersonalFill()
+                    // Defect 1: name the forecast cells — an
+                    // unnamed call enqueues nothing at all under
+                    // the deployed convergence contract.
+                    let cells = self.forecastPriorityCells
+                    _ = try await self.api.startPersonalFill(priorityCells: cells)
+                    self.lastSentFillCells = cells
                     // GEN-5 (RW-29 EX-15): the fill starting is
                     // the moment the band appears — re-read
                     // coverage for it directly, not as a

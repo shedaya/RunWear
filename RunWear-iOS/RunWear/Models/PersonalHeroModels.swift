@@ -123,6 +123,12 @@ protocol PersonalHeroResolving: AnyObject {
     /// personal serve for its serve-source record (scaffold while
     /// the exact look is still making, personal when it is ready).
     func lookState(for combination: PersonalCombination) -> PersonalLookState
+    /// GEN-5 (Addendum 8 follow-up, Defect 1): hand the resolver
+    /// the priority cells derived from the current 7-day
+    /// forecast, so a subscription fill can name them. Called on
+    /// every forecast load; the resolver re-sends the fill when
+    /// the named set changes under a live subscription.
+    func updateForecastPriorityCells(_ cells: [String])
 }
 
 extension PersonalHeroResolving {
@@ -131,6 +137,7 @@ extension PersonalHeroResolving {
     func personalHeroId(for combination: PersonalCombination) -> String? { nil }
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool { false }
     func lookState(for combination: PersonalCombination) -> PersonalLookState { .none }
+    func updateForecastPriorityCells(_ cells: [String]) {}
 }
 
 // MARK: - Backend DTOs
@@ -1013,11 +1020,63 @@ struct BankCoverage: Equatable {
 }
 
 /// Coverage from the two owner-read cell sets — ready is the
-/// banked set itself; total is every cell the server has engaged
-/// (banked ∪ ever-enqueued). Pure, so the band's counts are
+/// GEN-5 (Addendum 8 follow-up, Defect 2 — the convergence
+/// diagnosis of Nov 5, 2026): coverage is measured against the
+/// bank's TARGET SET — the forecast cells the client named to
+/// start-personal-fill — never against the set the server has
+/// happened to engage. The gen-4 formula (ready = banked, total =
+/// banked ∪ ever-enqueued) divided 8 banked cells by 9 engaged
+/// cells and displayed ~89% at 17% true coverage of the 48-cell
+/// bank; it could also reach 100% while target cells were still
+/// missing. Here ready counts only banked cells INSIDE the
+/// target, total IS the target, so the fraction can reach 1 only
+/// when every named cell is banked. Nil when no target has been
+/// named yet — without a named set there is no honest fraction
+/// and the band stays hidden. Pure, so the band's counts are
 /// unit-pinned without a network.
-func deriveBankCoverage(heroCells: Set<String>, jobCells: Set<String>) -> BankCoverage {
-    BankCoverage(ready: heroCells.count, total: heroCells.union(jobCells).count)
+func deriveBankCoverage(heroCells: Set<String>, targetCells: Set<String>) -> BankCoverage? {
+    guard !targetCells.isEmpty else { return nil }
+    return BankCoverage(
+        ready: heroCells.intersection(targetCells).count,
+        total: targetCells.count
+    )
+}
+
+/// GEN-5 (Addendum 8 follow-up, Defect 1): the priority cells a
+/// start-personal-fill call names — the distinct personal cells
+/// of the user's 7-day forecast, in forecast order. The deployed
+/// fill (start-personal-fill v13, the RW-16.30 convergence
+/// model) enqueues ONLY the cells the caller names; gen-4 named
+/// none, so no fill ever ran ahead and banks held only the cells
+/// the user personally opened. One input per forecast hour,
+/// keyed through the SAME PersonalCombination.make the displayed
+/// cell uses (comfort-adjusted feels-like frame), so a named
+/// cell is exactly the cell its hour will ask for.
+struct ForecastCellInput: Equatable {
+    let weatherCode: Int
+    let feelsLikeFahrenheit: Double
+    let hour: Int
+    let outfit: OutfitRecommendation
+}
+
+enum ForecastPriorityCells {
+    static func ids(genderPreference: GenderPreference, hours: [ForecastCellInput]) -> [String] {
+        var seen = Set<String>()
+        var ids: [String] = []
+        for input in hours {
+            let combination = PersonalCombination.make(
+                genderPreference: genderPreference,
+                weatherCode: input.weatherCode,
+                feelsLikeFahrenheit: input.feelsLikeFahrenheit,
+                hour: input.hour,
+                outfit: input.outfit
+            )
+            if seen.insert(combination.combinationId).inserted {
+                ids.append(combination.combinationId)
+            }
+        }
+        return ids
+    }
 }
 
 struct ConvergenceBandContent: Equatable {

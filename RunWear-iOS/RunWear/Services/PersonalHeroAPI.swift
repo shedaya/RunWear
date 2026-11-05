@@ -119,8 +119,14 @@ actor PersonalHeroAPI {
     /// entitled flag (set by the billing webhook, service-role only):
     /// a 403 not_entitled here means the webhook has not landed yet,
     /// and the caller retries — the client never writes entitled.
-    func startPersonalFill() async throws -> PersonalFillResponse {
-        let data = try await functionPost("start-personal-fill", body: [:])
+    func startPersonalFill(priorityCells: [String]) async throws -> PersonalFillResponse {
+        // GEN-5 (Addendum 8 follow-up, Defect 1): the deployed
+        // fill enqueues ONLY the cells named here — the client's
+        // 7-day forecast cells, in forecast order. Gen-4 posted an
+        // empty body, so the fill enqueued zero cells and banks
+        // grew only through cells the user personally opened (the
+        // Nov 5, 2026 convergence diagnosis).
+        let data = try await functionPost("start-personal-fill", body: ["priority_cells": priorityCells])
         return try JSONDecoder().decode(PersonalFillResponse.self, from: data)
     }
 
@@ -163,19 +169,20 @@ actor PersonalHeroAPI {
     /// personal_generation_jobs, by combination_id). Nil when
     /// there is no session or either read fails — the band never
     /// shows invented counts.
-    func fetchBankCoverage() async -> BankCoverage? {
+    /// GEN-5 (Addendum 8 follow-up, Defect 2): the BANKED cell
+    /// set only. Coverage is derived against the client's named
+    /// target set (deriveBankCoverage) — the gen-4 read also
+    /// fetched the jobs table so the denominator could be the
+    /// engaged union, the formula that displayed ~89% at 17%
+    /// true coverage.
+    func fetchBankedCells() async -> Set<String>? {
         guard let session = try? await requireSession() else { return nil }
-        func cells(table: String) async -> Set<String>? {
-            let path = "/rest/v1/\(table)?select=combination_id&user_id=eq.\(session.userId)"
-            guard let data = try? await authedGet(path: path, session: session) else { return nil }
-            struct Row: Decodable { let combinationId: String
-                enum CodingKeys: String, CodingKey { case combinationId = "combination_id" } }
-            guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
-            return Set(rows.map { $0.combinationId })
-        }
-        guard let heroCells = await cells(table: "personal_heroes"),
-              let jobCells = await cells(table: "personal_generation_jobs") else { return nil }
-        return deriveBankCoverage(heroCells: heroCells, jobCells: jobCells)
+        let path = "/rest/v1/personal_heroes?select=combination_id&user_id=eq.\(session.userId)"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable { let combinationId: String
+            enum CodingKeys: String, CodingKey { case combinationId = "combination_id" } }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        return Set(rows.map { $0.combinationId })
     }
 
     func fetchReferencePaths() async throws -> [String] {

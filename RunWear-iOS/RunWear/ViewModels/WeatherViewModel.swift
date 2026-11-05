@@ -489,6 +489,48 @@ class WeatherViewModel: ObservableObject {
         // the NOW state itself), and a failed load never reaches
         // here, so the record only ever moves forward.
         persistWidgetLastGoodIfNow()
+
+        // GEN-5 (Addendum 8 follow-up, Defect 1): keep the
+        // personal store's named fill set current with the
+        // loaded forecast, so a subscription fill names real
+        // cells. Fingerprinted — the derivation re-runs only
+        // when the forecast (or the keying inputs) changes.
+        publishForecastPriorityCells()
+    }
+
+    /// The fingerprint of the last published priority-cell set:
+    /// forecast identity + the keying inputs (fit preference,
+    /// comfort) that shape the cell ids.
+    private var priorityCellsFingerprint: String?
+
+    private func publishForecastPriorityCells() {
+        guard let hourly = weatherData?.hourly, !hourly.time.isEmpty else { return }
+        let fingerprint = "\(hourly.time.first ?? "")|\(hourly.time.count)|\(genderPreference.rawValue)|\(comfortLevel.rawValue)"
+        guard fingerprint != priorityCellsFingerprint else { return }
+        priorityCellsFingerprint = fingerprint
+        var inputs: [ForecastCellInput] = []
+        inputs.reserveCapacity(hourly.time.count)
+        for index in hourly.time.indices {
+            guard let snap = HourlyWeatherSnapshot.from(hourly: hourly, at: index) else { continue }
+            let outfit = outfitService.getRecommendation(
+                for: comfortLevel.adjustTemperature(snap.feelsLikeFahrenheit),
+                rawTemperature: snap.feelsLikeFahrenheit,
+                isRaining: snap.rain > 0,
+                windSpeed: snap.windSpeed,
+                humidity: snap.humidity,
+                uvIndex: snap.uvIndex,
+                precipitation: snap.precipitation,
+                hour: snap.hour
+            )
+            inputs.append(ForecastCellInput(
+                weatherCode: snap.weatherCode,
+                feelsLikeFahrenheit: comfortLevel.adjustTemperature(snap.feelsLikeFahrenheit),
+                hour: snap.hour,
+                outfit: outfit
+            ))
+        }
+        let cells = ForecastPriorityCells.ids(genderPreference: genderPreference, hours: inputs)
+        personalStore?.updateForecastPriorityCells(cells)
     }
 
     // MARK: - Widget last-good (GEN-5, Addendum 7)

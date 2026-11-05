@@ -614,6 +614,119 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertEqual(content?.line, ConvergenceBand.line)
     }
 
+    // MARK: Addendum 8 follow-up — the convergence diagnosis
+
+    /// Defect 2, Sol's exact numbers: 8 banked cells against the
+    /// 48-cell bank reads 8/48 — never the engaged-union 8/9 the
+    /// gen-4 formula produced for his screenshot.
+    func testCoverage_SolShapedBankReadsEightOfFortyEight() {
+        let target = Set((0..<48).map { "cell-\($0)" })
+        let banked = Set((0..<8).map { "cell-\($0)" })
+        let coverage = deriveBankCoverage(heroCells: banked, targetCells: target)
+        XCTAssertEqual(coverage?.ready, 8)
+        XCTAssertEqual(coverage?.total, 48)
+        let content = ConvergenceBand.content(isSubscribed: true, coverage: coverage)
+        XCTAssertEqual(content?.fraction, 8.0 / 48.0)
+    }
+
+    /// Defect 1: the priority cells are the forecast's distinct
+    /// personal cells in forecast order, keyed exactly as the
+    /// displayed cell is keyed — including cells the user has
+    /// never opened (the fill's whole point).
+    func testForecastPriorityCells_DistinctInForecastOrder() {
+        // Real engine outfits, as the view model's derivation
+        // assembles them per forecast hour.
+        let mild = OutfitRecommendationService.shared.getRecommendation(
+            for: 62, rawTemperature: 62, isRaining: false, windSpeed: 5,
+            humidity: 50, uvIndex: 3, precipitation: 0, hour: 6)
+        let warm = OutfitRecommendationService.shared.getRecommendation(
+            for: 78, rawTemperature: 78, isRaining: false, windSpeed: 5,
+            humidity: 50, uvIndex: 5, precipitation: 0, hour: 12)
+        let hours = [
+            ForecastCellInput(weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild),
+            ForecastCellInput(weatherCode: 0, feelsLikeFahrenheit: 78, hour: 12, outfit: warm),
+            // The same cell recurring later in the 7-day forecast
+            // (cell ids carry no date) must not be named twice.
+            ForecastCellInput(weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild),
+        ]
+        let ids = ForecastPriorityCells.ids(genderPreference: .male, hours: hours)
+        XCTAssertEqual(ids.count, 2, "recurring forecast cells are named once")
+        XCTAssertEqual(ids[0], PersonalCombination.make(
+            genderPreference: .male, weatherCode: 0, feelsLikeFahrenheit: 62, hour: 6, outfit: mild
+        ).combinationId, "forecast order: the first hour's cell leads")
+        XCTAssertEqual(ids[1], PersonalCombination.make(
+            genderPreference: .male, weatherCode: 0, feelsLikeFahrenheit: 78, hour: 12, outfit: warm
+        ).combinationId)
+    }
+
+    /// Defect 1's contract, end to end at the client level: the
+    /// fill call NAMES the stored forecast cells (source pins on
+    /// the API body and the store's kick), and the grant path and
+    /// the forecast-refresh path both reach the kick.
+    func testFillContract_NamesTheForecastCells() throws {
+        let api = try sourceFile("../RunWear/Services/PersonalHeroAPI.swift")
+        XCTAssertTrue(api.contains("\"priority_cells\": priorityCells"),
+                      "start-personal-fill is called with the named priority cells")
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("api.startPersonalFill(priorityCells: cells)"),
+                      "the fill kick sends the stored forecast cells")
+        XCTAssertTrue(store.contains("func updateForecastPriorityCells"),
+                      "the store receives forecast cells through the resolving contract")
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("publishForecastPriorityCells()"),
+                      "every forecast load publishes its cells")
+        XCTAssertTrue(vm.contains("ForecastPriorityCells.ids(genderPreference: genderPreference"),
+                      "the derivation runs over the loaded 7-day forecast")
+    }
+
+    /// Item 3, the exact state: an entitled user opens a cell he
+    /// does not own while his own same-prescription hero is
+    /// banked. The deployed serve answers found=true with the
+    /// scaffold photo and look_state "making" (and queues the
+    /// priority-15 convergence job server-side). The client half
+    /// of that contract: the lookup decodes, the cache resolves
+    /// it to SHOW (never a stock fall-through), the folded look
+    /// state classifies the paint as the scaffold presentation,
+    /// and the serve path reaches the lookup unconditionally —
+    /// the personal layer runs on every hero load, and inside
+    /// the store the lookup precedes any generation-request gate.
+    func testItem3_ScaffoldServeBranch_ExactState() throws {
+        let json = """
+        {"found": true, "combination_id": "MALE_CLEAR_COOL_DAWN_ab12cd34",
+         "hero_id": "hero-9", "variant": 1,
+         "image_url": "https://example.invalid/scaffold.jpg",
+         "version": 3, "replenishment_queued": 0,
+         "look_state": "making", "look_reason": null}
+        """
+        let lookup = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(json.utf8))
+        XCTAssertEqual(lookup.lookState, "making")
+        var cache = PersonalCellCache()
+        let resolution = cache.resolve(lookup: lookup, now: Date())
+        guard case .show(let url) = resolution else {
+            return XCTFail("a scaffold payload must resolve to SHOW, got \(resolution)")
+        }
+        XCTAssertEqual(url, "https://example.invalid/scaffold.jpg")
+        let lookState = PersonalLookState.from(lookup: lookup)
+        XCTAssertEqual(lookState, .making)
+        XCTAssertEqual(
+            PersonalServePolicy.presentation(hasPersonalPhoto: true, lookState: lookState),
+            .scaffold(badge: PersonalServePolicy.scaffoldBadge),
+            "an own photo under a making look state IS the scaffold presentation")
+        // The serve path cannot be short-circuited by the pool:
+        // the personal layer runs after the pool cascade on every
+        // load, and the store's lookup precedes its request gate.
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        let poolIndex = try XCTUnwrap(vm.range(of: "heroImageService.getHeroImage(")?.lowerBound)
+        let personalIndex = try XCTUnwrap(vm.range(of: "await applyPersonalHero(frame: frame)")?.lowerBound)
+        XCTAssertLessThan(poolIndex, personalIndex,
+                          "the personal layer runs on every hero load, after the pool paints")
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        let lookupIndex = try XCTUnwrap(store.range(of: "api.getPersonalHero(combinationId: cell)")?.lowerBound)
+        let requestIndex = try XCTUnwrap(store.range(of: "await requestGenerationIfNeeded(")?.lowerBound)
+        XCTAssertLessThan(lookupIndex, requestIndex,
+                          "the serve lookup happens before any generation-request decision")
+    }
+
     func testBandStalledLine_ReplacesTheInProgressLineOnly() {
         let coverage = BankCoverage(ready: 43, total: 48)
         let stalled = ConvergenceBand.content(isSubscribed: true, coverage: coverage, stalled: true)

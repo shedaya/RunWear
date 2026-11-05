@@ -267,13 +267,24 @@ final class Gen3TrainDeltaTests: XCTestCase {
     }
 
     func testConvergenceCoverageDerivation() {
-        // ready = banked set; total = banked ∪ ever-enqueued.
-        let cov = deriveBankCoverage(heroCells: ["a", "b"], jobCells: ["b", "c", "d"])
-        XCTAssertEqual(cov.ready, 2)
-        XCTAssertEqual(cov.total, 4)
-        // Before any fill: the union is just the banked set.
-        let preFill = deriveBankCoverage(heroCells: ["a"], jobCells: [])
-        XCTAssertEqual(preFill.ready, preFill.total)
+        // GEN-5 (Addendum 8 follow-up, Defect 2) SUPERSEDES the
+        // gen-3 formula pinned here before: coverage is measured
+        // against the bank's TARGET SET (the forecast cells the
+        // client named to the fill), never the engaged union —
+        // the union formula displayed 8/9 ≈ 89% at 8/48 ≈ 17%
+        // true coverage on Nov 5, 2026.
+        let cov = deriveBankCoverage(heroCells: ["a", "b"], targetCells: ["a", "b", "c", "d"])
+        XCTAssertEqual(cov?.ready, 2)
+        XCTAssertEqual(cov?.total, 4)
+        // Banked cells OUTSIDE the target never inflate ready.
+        let outside = deriveBankCoverage(heroCells: ["a", "x", "y"], targetCells: ["a", "b"])
+        XCTAssertEqual(outside?.ready, 1)
+        XCTAssertEqual(outside?.total, 2)
+        // No named target: no honest fraction exists.
+        XCTAssertNil(deriveBankCoverage(heroCells: ["a"], targetCells: []))
+        // The bar cannot reach 100% while target cells are missing.
+        let partial = deriveBankCoverage(heroCells: ["a", "b", "c"], targetCells: ["a", "b", "c", "d"])
+        XCTAssertLessThan(partial?.ready ?? 99, partial?.total ?? 0)
     }
 
     func testConvergenceBandVisibilityRule() {
