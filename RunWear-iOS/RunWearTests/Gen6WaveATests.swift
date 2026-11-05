@@ -178,8 +178,8 @@ final class Gen6WaveATests: XCTestCase {
         let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
         XCTAssertTrue(hero.contains("HeroPill.getInstantlyLabel"),
                       "the C-4 green line renders from the policy's label")
-        XCTAssertTrue(hero.contains("HeroPill.scriptMarkImageName"),
-                      "every pill leads with the Make It Me script mark asset")
+        XCTAssertTrue(hero.contains("pillScriptMark"),
+                      "every pill state leads with the Make It Me script mark")
     }
 
     // MARK: - Item 3 · Cold start (DA-07 class): serve order + place persistence
@@ -297,8 +297,13 @@ final class Gen6WaveATests: XCTestCase {
                                      "\(step): used \(used) + making \(making) must never exceed \(allowance)", file: file, line: line)
             // The composed Settings block itself.
             let line1 = FreeLooksMeter.settingsLine(used: used, allowance: allowance)
-            XCTAssertTrue(line1.contains("\(used) of \(allowance)"),
-                          "\(step): meter line reads the delivered truth: \(line1)", file: file, line: line)
+            if used >= allowance {
+                XCTAssertEqual(line1, "All \(allowance) free looks used",
+                               "\(step): the exhausted meter line", file: file, line: line)
+            } else {
+                XCTAssertTrue(line1.contains("\(used) of \(allowance)"),
+                              "\(step): meter line reads the delivered truth: \(line1)", file: file, line: line)
+            }
             if making > 0 {
                 XCTAssertEqual(FreeLooksMeter.settingsPendingLine(inFlight: making),
                                making == 1 ? "Making your look…" : "Making \(making) looks…",
