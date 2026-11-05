@@ -285,13 +285,21 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     }
 
     /// Wait for a pending generation to land (polls the serving
-    /// endpoint; generation takes ~2–4 min server-side). Returns the
-    /// URL when the hero lands, nil when the poll resolves FAILED or
-    /// the budget runs out. Every poll folds the server's look state
-    /// (RW-16.16): a terminal failure ends the poll with the failed
-    /// state standing on the hero — the pool photo stays up, the
-    /// failed line stays up, and nothing about the state is erased
-    /// when the poll gives up (the pre-RW-16.16 G4 behavior).
+    /// endpoint). GEN-6 Wave A (DA-02): the poll horizon is
+    /// HeroPollPolicy's — poll with backoff until the cell reaches
+    /// a terminal state (READY / FAILED), up to the policy's
+    /// generous cap (20 min), NOT gen-5's 18 × 15 s ≈ 4.5 min,
+    /// which stopped with MAKING stranded on screen. Returns the
+    /// URL when the hero lands, nil when the poll resolves FAILED
+    /// or the cap runs out. Every poll folds the server's look
+    /// state (RW-16.16): a terminal failure ends the poll with the
+    /// failed state standing on the hero — the pool photo stays
+    /// up, the failed line stays up. On CAP EXPIRY with the cell
+    /// still MAKING, the cell resolves out of MAKING
+    /// (HeroPollPolicy.stateAfterCapExpiry): the pool photo keeps
+    /// serving with no stranded generating pill, and a later
+    /// display re-looks-up the cell — never a silently stranded
+    /// MAKING.
     func awaitHero(for combination: PersonalCombination) async -> String? {
         let cell = combination.combinationId
         if let existing = pollingTasks[cell] {
@@ -300,8 +308,8 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         let task = Task<String?, Never> { [weak self] in
             guard let self else { return nil }
             var landed: String?
-            for _ in 0..<18 {
-                try? await Task.sleep(nanoseconds: 15_000_000_000)
+            for delay in HeroPollPolicy.delays {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 if Task.isCancelled { break }
                 guard let lookup = try? await self.api.getPersonalHero(combinationId: cell) else { continue }
                 self.noteLookState(lookup)
@@ -311,7 +319,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                 }
                 // A terminal failure resolves the poll: the failed
                 // state folded above is the durable surface now.
-                if self.lookStates[cell]?.isFailed == true { break }
+                if let state = self.lookStates[cell], HeroPollPolicy.isTerminal(state) { break }
+            }
+            if landed == nil, !Task.isCancelled,
+               let state = self.lookStates[cell], state == .making {
+                // Cap expiry (the loop ran its full schedule
+                // without a terminal word): leave the honest,
+                // usable state the policy names.
+                self.lookStates[cell] = HeroPollPolicy.stateAfterCapExpiry(state)
             }
             self.userInitiatedPending.remove(cell)
             self.pollingTasks[cell] = nil

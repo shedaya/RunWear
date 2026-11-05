@@ -246,6 +246,94 @@ enum PersonalLookState: Equatable {
     }
 }
 
+/// GEN-6 Wave A (DA-02, RW-38): the client poll horizon for a
+/// MAKING cell. Gen-5 polled 18 × 15 s ≈ 4.5 min and then stopped
+/// with MAKING left on screen — anything the server delivered
+/// later was experienced as "it never arrives", because the poll
+/// was the only thing watching the cell. The horizon now matches
+/// the guaranteed first-cell delivery window the server lane
+/// builds in the same wave: poll until the cell reaches a
+/// TERMINAL state (READY — a verified hero resolves — or FAILED),
+/// with backoff, up to a generous cap. On cap expiry the poll
+/// resolves the cell OUT of MAKING (see
+/// `stateAfterCapExpiry`): the pool photo keeps serving with no
+/// stranded generating pill, and a later display re-looks-up the
+/// cell and picks up whatever the server has since delivered —
+/// the state is honest and usable, never a silently stranded
+/// MAKING.
+///
+/// INTERACTION with the 30-minute bank stall line
+/// (ConvergenceBand.stallThreshold, PersonalHeroModels.swift's
+/// ConvergenceBand): the two clocks govern DIFFERENT scopes and
+/// neither replaces the other. The stall line watches the whole
+/// Premium BANK's ready count (coverage advancing or not, over
+/// 30 min) and only changes the convergence band's copy. This
+/// poll watches ONE cell's look state. The poll cap (20 min)
+/// expires BEFORE the stall threshold, so a single first photo
+/// still MAKING at its cap resolves to the quiet pool serve
+/// while the bank — if it is also not advancing — goes on to
+/// declare itself stalled in the band at 30 min. The stall line
+/// itself is a named parity exception awaiting the owner's
+/// ruling and is NOT changed by this wave.
+enum HeroPollPolicy {
+    /// The generous cap: 20 minutes of total poll time
+    /// (≥ the 15-minute floor the wave brief sets).
+    static let maxDurationSeconds: TimeInterval = 20 * 60
+
+    /// The delay before poll `attempt` (0-based). Backoff:
+    /// 15 s while the job is young (the measured generation is
+    /// 17–40 s, so the first polls stay tight), then 30 s, then
+    /// 60 s for the long tail the queue can impose.
+    static func delay(forAttempt attempt: Int) -> TimeInterval {
+        switch attempt {
+        case ..<8: return 15
+        case ..<16: return 30
+        default: return 60
+        }
+    }
+
+    /// Every delay in the schedule, in order, until the
+    /// cumulative time reaches the cap.
+    static var delays: [TimeInterval] {
+        var out: [TimeInterval] = []
+        var elapsed: TimeInterval = 0
+        var attempt = 0
+        while elapsed < maxDurationSeconds {
+            let d = delay(forAttempt: attempt)
+            out.append(d)
+            elapsed += d
+            attempt += 1
+        }
+        return out
+    }
+
+    /// The schedule's total poll window.
+    static var totalDurationSeconds: TimeInterval {
+        delays.reduce(0, +)
+    }
+
+    /// A look state is terminal for polling when the server has
+    /// spoken finally: READY (including a resolved hero — the
+    /// store breaks on resolution before consulting this) or
+    /// FAILED. MAKING and NONE keep polling.
+    static func isTerminal(_ state: PersonalLookState) -> Bool {
+        switch state {
+        case .ready, .failed: return true
+        case .making, .none: return false
+        }
+    }
+
+    /// The state a cell is left in when the cap expires without a
+    /// terminal word: a MAKING cell resolves to NONE — the pool
+    /// photo serves quietly, no pill claims a generation nobody
+    /// is watching any more, and the next display's lookup folds
+    /// the server's then-current word (which may by then be
+    /// READY). Any other state is already honest and stands.
+    static func stateAfterCapExpiry(_ state: PersonalLookState) -> PersonalLookState {
+        state == .making ? .none : state
+    }
+}
+
 /// request-personal-generation success response (backend §2.2).
 struct PersonalGenerationResponse: Decodable {
     let status: String // "already_available" | "already_queued" | "queued"
