@@ -353,7 +353,11 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let offerRest = section[offerStart...].dropFirst("private var offerSection".count)
         let offerEnd = offerRest.range(of: "\n    private var ")?.lowerBound ?? offerRest.endIndex
         let offerSlice = String(offerRest[..<offerEnd])
-        XCTAssertFalse(offerSlice.contains("ConvergenceBand"),
+        // GEN-5: the assertion targets the band's RENDER call —
+        // the offer section's comments legitimately explain
+        // where the band went, and tripped the bare-token form
+        // of this assert in CI run 42061903439.
+        XCTAssertFalse(offerSlice.contains("ConvergenceBandView(content:"),
                        "the duplicate offer-group band seat is gone (GEN-5 item 22)")
     }
 
