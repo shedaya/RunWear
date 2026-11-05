@@ -299,12 +299,14 @@ object MakeItMeStrings {
 
     // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4 — word
     // for word; do not paraphrase): the home-sheet band a Premium
-    // user sees while the bank converges. HOLD (Sol, Nov 4): NO
-    // numeric count is shown — the earlier "N of your M looks are
-    // ready" line is withdrawn (its total had no basis in the
-    // generation model); the progress bar's fraction still comes
-    // from the real banking state, only the number is withheld.
-    // Neither 24 nor 48 is hard-coded anywhere.
+    // user sees while the bank converges. COUNT RULED (Sol,
+    // Nov 4 — FINAL): NO numeric count is shown — the earlier
+    // "N of your M looks are ready" line is withdrawn for good
+    // (its total had no basis in the generation model); the
+    // progress bar's fraction still comes from the real banking
+    // state, only the number is withheld. Neither 24 nor 48 is
+    // hard-coded anywhere. (The FREE tier's own "X of 5" counters
+    // are a different surface and are KEPT, per Sol.)
     const val BAND_MAKING_HEADING = "Making your looks"
     const val BAND_MAKING_LINE = "We're generating your outfits across all running conditions, so it will be ready when you need it."
 

@@ -33,9 +33,11 @@ import com.runwear.app.ui.theme.RunWearColors
  *   Line:    "We're generating your outfits across all running
  *             conditions, so it will be ready when you need it."
  *   Plus the animated spinner and a progress bar — WITHOUT any
- *   numeric count (HOLD, Sol Nov 4: the count wording is
- *   withdrawn; the bar's fraction still comes from the real
- *   banking state, only the number is withheld).
+ *   numeric count (COUNT RULED, Sol Nov 4 — FINAL: the count
+ *   wording is withdrawn for good; the bar's fraction still
+ *   comes from the real banking state, only the number is
+ *   withheld. Settled sentence + spinner + unlabelled bar
+ *   only, in both placements — home and Settings).
  *
  * PREMIUM CONTEXT ONLY: banking is Premium-only behaviour — free
  * users get 5 on-demand looks and in-trial users likewise have no
@@ -119,7 +121,7 @@ fun ConvergenceBand(
         )
         Spacer(Modifier.height(12.dp))
         // The progress bar — fraction from the real banking state,
-        // NO numeric count (HOLD, Sol Nov 4).
+        // NO numeric count (COUNT RULED final, Sol Nov 4).
         LinearProgressIndicator(
             progress = { content.fraction },
             modifier = Modifier.fillMaxWidth(),

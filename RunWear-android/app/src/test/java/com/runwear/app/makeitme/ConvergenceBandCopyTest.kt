@@ -7,13 +7,15 @@ import org.junit.Test
 
 /**
  * GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4) + the
- * Nov 4 HOLD on the numeric count: the heading and line are
- * pinned WORD FOR WORD; NO numeric count is shown anywhere (the
- * earlier "N of your M looks are ready" wording is withdrawn —
- * neither 24 nor 48 is hard-coded); the progress bar's fraction
- * still derives from the real banking state; and the band is
- * PREMIUM CONTEXT ONLY — never for free users, never in-trial
- * (banking is Premium-only behaviour).
+ * COUNT RULING (Sol, Nov 4 — FINAL, closing the earlier hold): the
+ * heading and line are pinned WORD FOR WORD; NO numeric count is
+ * shown anywhere in either placement (the earlier "N of your M
+ * looks are ready" wording is withdrawn for good — neither 24 nor
+ * 48 is hard-coded); the progress bar's fraction still derives
+ * from the real banking state; and the band is PREMIUM CONTEXT
+ * ONLY — never for free users, never in-trial (banking is
+ * Premium-only behaviour). The FREE tier's separate "X of 5"
+ * counters are explicitly KEPT (last test).
  */
 class ConvergenceBandCopyTest {
 
@@ -84,6 +86,20 @@ class ConvergenceBandCopyTest {
                 PersonalHeroService.BankCoverage(ready = 0, total = 0),
                 inTrial = false
             )
+        )
+    }
+
+    @Test
+    fun `the FREE tier's own X of 5 counters are explicitly KEPT unchanged`() {
+        // COUNT RULING scope (Sol, Nov 4): the no-count treatment is
+        // the Premium band ONLY. The free counters Sol confirmed
+        // himself stay exactly as they were — the hero pill's
+        // "N of 5 looks" and the Settings meter family.
+        assertEquals("2 of 5 looks", MakeItMeStrings.heroPillLookCount(2))
+        assertEquals("0 of 5 looks", MakeItMeStrings.heroPillLookCount(0))
+        assertEquals(
+            "Your first 5 looks are free.",
+            com.runwear.app.ui.screens.OnboardingCopy.FREE_LOOKS_PROMISE
         )
     }
 }

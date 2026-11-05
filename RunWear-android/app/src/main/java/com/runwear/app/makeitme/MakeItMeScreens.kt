@@ -1783,7 +1783,7 @@ fun MakeItMeSettingsSection(
                 // state; not a re-implementation — whatever count
                 // treatment is ruled later applies to both places
                 // at once; until then, the bar without a numeric
-                // count per the current hold). The policy itself
+                // count per the final count ruling). The policy itself
                 // gates it to subscribed + not-in-trial +
                 // mid-convergence, so free users and completed
                 // banks never see it here either. It sits in the

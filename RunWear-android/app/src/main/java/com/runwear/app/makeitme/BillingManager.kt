@@ -61,7 +61,7 @@ class BillingManager @Inject constructor(
 
     private val _makeItMeInTrial = MutableStateFlow(false)
     /**
-     * GEN-3 (convergence band HOLD, Sol Nov 4): true while the
+     * GEN-3 (convergence band, Sol Nov 4): true while the
      * entitlement's current period is a free TRIAL (RevenueCat
      * periodType). Banking is Premium-only behaviour — a trial
      * user gets on-demand looks, no bank — so surfaces that
