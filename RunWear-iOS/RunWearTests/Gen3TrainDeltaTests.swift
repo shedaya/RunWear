@@ -43,4 +43,30 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertTrue(home.contains(".shadow(color: .black.opacity(0.35), radius: 6, y: 2)"),
                       "the wordmark shadow token is unchanged by delta 1")
     }
+
+    // MARK: - Y-16 · one tap on location opens the complete picker
+
+    func testLocationEntryIsOneTapToTheCompletePicker_sourcePin() throws {
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertFalse(home.contains(".toolbarTitleMenu"),
+                       "Y-16: no intermediate title menu in the home location path")
+        XCTAssertTrue(home.contains("ToolbarItem(placement: .principal)"),
+                      "the location is a principal toolbar button")
+        // The button's action is the picker presentation itself,
+        // and the picker rests at the full-height detent only, so
+        // the first tap lands on the complete UI.
+        let pickerSheet = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
+        XCTAssertTrue(pickerSheet.contains("TextField(\"Search for a city\""),
+                      "the picker carries its search field")
+        XCTAssertTrue(pickerSheet.contains("\"Current location\""),
+                      "the picker carries its current-location row")
+        // The home presentation of the picker: search the home
+        // file's sheet block for its detent line.
+        let sheetIdx = try XCTUnwrap(home.range(of: ".sheet(isPresented: $showLocationPicker)"))
+        let sheetBlock = home[sheetIdx.lowerBound...].prefix(1600)
+        XCTAssertTrue(sheetBlock.contains(".presentationDetents([.large])"),
+                      "Y-16: the picker opens complete — full-height detent only")
+        XCTAssertFalse(sheetBlock.contains(".medium"),
+                       "Y-16: no medium rest the user must expand")
+    }
 }

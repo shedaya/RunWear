@@ -150,14 +150,32 @@ struct WeatherOutfitView: View {
             // solid bar, as it does under Android's app bar.
             .toolbarBackground(AppTheme.background, for: .navigationBar)
             .toolbarBackgroundVisibility(.visible, for: .navigationBar)
-            .toolbarTitleMenu {
-                Button {
-                    showLocationPicker = true
-                } label: {
-                    Label("Set Location", systemImage: "location")
-                }
-            }
+            // GEN-3 Y-16 (FIRM): ONE tap on the location opens the
+            // COMPLETE change-location UI immediately. The pre-fix
+            // entry was a toolbarTitleMenu — tapping the title
+            // opened a one-item menu ("Set Location") and only the
+            // second tap reached the picker. The title is now a
+            // principal toolbar BUTTON bound straight to the
+            // picker; there is no intermediate menu anywhere in
+            // the home location path.
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Button {
+                        showLocationPicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(viewModel.placeDisplayName)
+                                .font(.headline)
+                                .foregroundColor(AppTheme.inkPrimary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Location: \(viewModel.placeDisplayName). Change location")
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Button {
                         showSettings = true
@@ -248,7 +266,12 @@ struct WeatherOutfitView: View {
                         viewModel.setManualLocation(coordinate: coordinate, name: name)
                     }
                 )
-                .presentationDetents([.medium, .large])
+                // Y-16: the COMPLETE picker (search field, current
+                // location, results) at first presentation — the
+                // full-height detent only, no medium rest the user
+                // must expand (the WS-5 discipline for sheets whose
+                // content scrolls).
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
         }

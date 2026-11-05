@@ -204,9 +204,14 @@ final class HomeCompositionTests: XCTestCase {
         // The bar is opaque and its background is visible: no
         // sheet or header content renders under the status bar
         // (the D-03 iOS verdict), and the location entry lives in
-        // the title menu of that always-visible bar.
+        // that always-visible bar. GEN-3 Y-16 supersedes the
+        // title-menu seat: the location is a principal toolbar
+        // BUTTON bound straight to the picker — one tap, no
+        // intermediate menu.
         XCTAssertTrue(view.contains(".toolbarBackgroundVisibility(.visible, for: .navigationBar)"))
-        XCTAssertTrue(view.contains(".toolbarTitleMenu"))
+        XCTAssertFalse(view.contains(".toolbarTitleMenu"),
+                       "Y-16: the title menu's extra tap is removed")
+        XCTAssertTrue(view.contains("ToolbarItem(placement: .principal)"))
         XCTAssertTrue(view.contains("showLocationPicker = true"))
     }
 
