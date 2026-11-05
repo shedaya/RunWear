@@ -196,7 +196,7 @@ fun FeedbackScreen(
                 colors = feedbackFieldColors()
             )
             Text(
-                text = "Email if you want a reply. Otherwise this goes in anonymously.",
+                text = "Only used to reply to your feedback",
                 fontSize = 12.sp,
                 color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 6.dp)

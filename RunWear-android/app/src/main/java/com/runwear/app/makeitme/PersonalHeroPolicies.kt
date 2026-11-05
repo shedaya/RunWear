@@ -199,9 +199,13 @@ object PersonalHeroCachePolicy {
  */
 enum class PersonalHeroFlagReason(val code: String, val label: String) {
     DOESNT_LOOK_LIKE_ME("doesnt_look_like_me", "This doesn't look like me"),
-    LOOKS_BROKEN("looks_broken", "Looks broken"),
-    INAPPROPRIATE("inappropriate", "Inappropriate"),
-    OUTFIT_MISMATCH("outfit_mismatch", "Doesn't match the outfit")
+    // GEN-6 WAVE C (RW-62): the settled follow-on reasons
+    // (design-spec §17, frame 45) — "Wrong outfit for the weather",
+    // then "Something else". The gen-5 backend vocabulary
+    // ("Looks broken" / "Inappropriate" / "Doesn't match the
+    // outfit") is retired from this sheet.
+    WRONG_OUTFIT("wrong_outfit", "Wrong outfit for the weather"),
+    SOMETHING_ELSE("something_else", "Something else")
 }
 
 /**

@@ -500,6 +500,40 @@ class PersonalHeroService @Inject constructor(
         return deriveBankCoverage(heroCells, jobCells, targetCells)
     }
 
+    /**
+     * GEN-6 WAVE C (RW-61): the looks library's bank read — the
+     * same two owner-read tables as [fetchBankCoverage], but
+     * carrying each job's STATUS so a gate-failed cell (a FAILED
+     * job with no banked hero) is visible as itself. Returns
+     * (heroCells, jobStatuses); null when either read fails.
+     */
+    suspend fun fetchBankCells(): Pair<Set<String>, Map<String, String>>? {
+        val session = session() ?: return null
+        suspend fun read(table: String, select: String): List<kotlinx.serialization.json.JsonObject>? =
+            runCatching {
+                val response = http.get("$BASE_URL/rest/v1/$table?select=$select") {
+                    header("apikey", ANON_KEY)
+                    header("Authorization", "Bearer ${session.accessToken}")
+                }
+                if (!response.status.isSuccess()) return@runCatching null
+                json.parseToJsonElement(response.bodyAsText()).jsonArray
+                    .map { it.jsonObject }
+            }.onFailure { Log.w(TAG, "bank cells read failed ($table)", it) }.getOrNull()
+        val heroes = read("personal_heroes", "combination_id") ?: return null
+        val jobs = read("personal_generation_jobs", "combination_id,status") ?: return null
+        val heroCells = heroes.mapNotNull {
+            it["combination_id"]?.jsonPrimitive?.contentOrNull
+        }.toSet()
+        val jobStatuses = jobs.mapNotNull { row ->
+            val id = row["combination_id"]?.jsonPrimitive?.contentOrNull
+                ?: return@mapNotNull null
+            val status = row["status"]?.jsonPrimitive?.contentOrNull
+                ?: return@mapNotNull null
+            id to status
+        }.toMap()
+        return heroCells to jobStatuses
+    }
+
     /** The caller's registered reference-photo storage paths, in order. */
     suspend fun fetchReferencePaths(): List<String> {
         val session = session() ?: return emptyList()

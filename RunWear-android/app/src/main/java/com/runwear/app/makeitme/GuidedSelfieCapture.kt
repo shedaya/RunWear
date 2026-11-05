@@ -184,7 +184,15 @@ object GuidedSelfieChecks {
 @Composable
 fun GuidedSelfieCapture(
     onAccepted: (Uri) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /**
+     * GEN-6 WAVE C (DA-18): the "Choose from library instead" door —
+     * it must OPEN the photo library/picker, not merely dismiss.
+     * The host wires this to its photo picker and closes the capture
+     * dialog; the default keeps the old dismiss-only behaviour for
+     * hosts that have no picker.
+     */
+    onChooseFromLibrary: () -> Unit = onDismiss
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -550,7 +558,7 @@ fun GuidedSelfieCapture(
                     }
                 }
             }
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onChooseFromLibrary) {
                 Text("Choose from library instead", color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.7f))
             }
         }

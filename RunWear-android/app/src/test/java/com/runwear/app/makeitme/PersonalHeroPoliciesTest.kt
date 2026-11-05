@@ -166,13 +166,13 @@ class PersonalHeroPoliciesTest {
         // first label is the spec §4 control verbatim. Both must
         // match iOS's PersonalHeroFlagReason exactly.
         assertEquals(
-            listOf("doesnt_look_like_me", "looks_broken", "inappropriate", "outfit_mismatch"),
+            listOf("doesnt_look_like_me", "wrong_outfit", "something_else"),
             PersonalHeroFlagReason.entries.map { it.code }
         )
         assertEquals(
             listOf(
-                "This doesn't look like me", "Looks broken",
-                "Inappropriate", "Doesn't match the outfit"
+                "This doesn't look like me", "Wrong outfit for the weather",
+                "Something else"
             ),
             PersonalHeroFlagReason.entries.map { it.label }
         )

@@ -32,7 +32,7 @@ object MakeItMeStrings {
     // and the gen-4 wording stands.
     const val F4_OPTION_A_BODY = "Upload 1 to 3 photos of yourself, and RunWear makes your outfit photos from them — starting with the one you're looking at."
     const val F5_OPTION_A_BUTTON = "Use my photos"
-    const val F6_OPTION_B_TITLE = "Use the standard photos"
+    const val F6_OPTION_B_TITLE = "Standard photos"
     const val F7_OPTION_B_BODY = "Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make It Me any time in Settings."
     const val F8_OPTION_B_BUTTON = "Use standard photos"
     const val F9_FOOTER = "Either way, your recommendations don't change — only the photo does."
@@ -52,7 +52,9 @@ object MakeItMeStrings {
     // amended by dated note): the full-body guidance (guidance only,
     // never a validation rule) and the camera/library source choice.
     // C2D is verbatim-identical to the iOS deck (MakeItMeCopy).
-    const val C2D_FULL_BODY_GUIDANCE = "Photos of you running work best. Include one full-body photo in plain athletic wear, head to shoes, with just you in the frame — full-length outfits like tights and jackets come out right when your whole body is in the photo. Photos with other people in them can't be used."
+    // GEN-6 WAVE C (DA-23): C2D_FULL_BODY_GUIDANCE is DELETED — the
+    // full-body guidance contradicted the settled face-only intake
+    // (design-spec §10) and had zero call sites in the shipped module.
     const val C2E_SOURCE_DIALOG_TITLE = "Add a photo"
     const val C2F_TAKE_PHOTO = "Take photo"
     const val C2G_CHOOSE_FROM_LIBRARY = "Choose from library"
@@ -270,7 +272,7 @@ object MakeItMeStrings {
         annualFormatted: String,
         annualAmountMicros: Long,
         monthlyAmountMicros: Long?
-    ): String = "Annual — $annualFormatted/yr"
+    ): String = "$annualFormatted/yr"
 
     /** Runs per year behind the per-run framing: 4.5 runs/week × 52. */
     const val RUNS_PER_YEAR_BASIS = 4.5 * 52.0
@@ -284,9 +286,18 @@ object MakeItMeStrings {
     fun perRunCents(annualAmountMicros: Long): Int =
         Math.round((annualAmountMicros / 10_000.0) / RUNS_PER_YEAR_BASIS).toInt()
 
-    /** The WS-F per-run line, with its basis stated in the line. */
+    /**
+     * GEN-6 WAVE C (RW-58): the per-run line under the annual price,
+     * verbatim per design-spec §14 — "only about 4¢ per run" — with
+     * its basis carried separately as the fine-print line
+     * [perRunBasis] ("$9.99 a year, at 4–5 runs a week.").
+     */
     fun perRunLine(annualFormatted: String, annualAmountMicros: Long): String =
-        "At four to five runs a week, $annualFormatted/year works out to only about ${perRunCents(annualAmountMicros)}¢ per run."
+        "only about ${perRunCents(annualAmountMicros)}¢ per run"
+
+    /** GEN-6 WAVE C (RW-58): the per-run basis, design-spec §14 verbatim form. */
+    fun perRunBasis(annualFormatted: String): String =
+        "$annualFormatted a year, at 4–5 runs a week."
 
     /**
      * The paywall fine print. GEN-5 (RW-28 item 29): the per-run

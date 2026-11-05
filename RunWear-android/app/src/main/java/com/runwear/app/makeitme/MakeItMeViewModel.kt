@@ -169,6 +169,25 @@ class MakeItMeViewModel @Inject constructor(
     }
 
     /** Signed display URLs for the registered reference photos (Settings "Your photos"). */
+    /**
+     * GEN-6 WAVE C (RW-61): load the "Your looks" library cells
+     * from the bank read (heroes + job statuses). Null onResult
+     * when the read fails — the surface shows its empty state
+     * rather than invented cells.
+     */
+    fun loadLooksLibrary(
+        onResult: (List<LooksLibraryPolicy.LookCell>?) -> Unit
+    ) {
+        viewModelScope.launch {
+            val bank = service.fetchBankCells()
+            onResult(
+                bank?.let { (heroes, jobs) ->
+                    LooksLibraryPolicy.build(heroes, jobs)
+                }
+            )
+        }
+    }
+
     fun loadReferenceUrls(onResult: (List<String>) -> Unit) {
         viewModelScope.launch {
             val paths = service.fetchReferencePaths()
