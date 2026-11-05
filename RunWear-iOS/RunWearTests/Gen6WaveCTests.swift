@@ -474,3 +474,321 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertTrue(date.contains("Button(\"Confirm\")"), "Confirm stands in the sheet")
     }
 }
+
+// MARK: - GEN-6 Wave C scope addition — DA-09 / RW-42 narration discipline (iOS)
+//
+// The device evidence is Android (Sol's gen-5 recording: six
+// announcements in one session, including a SECOND "Added
+// Miami, FL, Now" fired on relaunch for an entry added earlier
+// in the same session, and a bar announcing "Update to Miami,
+// FL, Now" over a stale card matching neither adjacent
+// recommendation). The owner directed the same discipline on
+// iOS under the wave's parity rules.
+//
+// The iOS mechanism, diagnosed in this lane: Wear I've Run
+// entries are keyed by SESSION, and a relaunch mints a new
+// session identity — so home's automatic re-settle after
+// relaunch (onAppear / landing triggers, no user action) found
+// no entry under the new identity, classified the settle
+// .created, bumped the cue counter, and the bar fired "Added"
+// again for a day+place entry the store already held. These
+// tests script that sequence at the model level: an
+// "announcement" is a cue-counter bump, and the announced line
+// is the narration derived from the presented entry at that
+// moment — the same derivation the dock renders.
+final class Gen6WaveCDA09Tests: XCTestCase {
+
+    private let day = Date(timeIntervalSince1970: 1_762_560_000)
+
+    private func entry(
+        session: String,
+        place: String,
+        feels: Double,
+        items: [String],
+        moment: MomentReading = .now,
+        hero: String = "hero-1"
+    ) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: day,
+            placeName: place,
+            feelsLikeF: feels,
+            actualF: feels + 2,
+            condition: "Clear",
+            itemNames: items,
+            itemKeys: items.map { $0.lowercased() },
+            heroImageReference: hero,
+            sessionID: session,
+            momentReading: moment
+        )
+    }
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    /// The production derivation (WeatherOutfitView's dock):
+    /// state, kind, and moment all read off the ONE presented
+    /// entry — the Y-5 shape the atomicity test below relies on.
+    @MainActor
+    private func state(of model: WearIveRunCollectionModel) -> WearIveRunState {
+        let presented = model.sessionEntry()
+        return WearIveRunMiniBarModel.state(
+            todaysEntry: presented,
+            moment: presented?.momentReading ?? .now,
+            wasUpdatedThisSession: presented?.wasUpdatedInSession ?? false
+        )
+    }
+
+    @MainActor
+    private func announcedLine(of model: WearIveRunCollectionModel) -> String? {
+        WearIveRunNarration.line(for: state(of: model))
+    }
+
+    /// Record one settle and, if it ANNOUNCED (the cue counter
+    /// moved — the only path by which the element cues), append
+    /// the line the bar announced to the sequence.
+    @MainActor
+    private func settle(
+        _ model: WearIveRunCollectionModel,
+        _ entry: WearIveRunEntry,
+        announcements: inout [String]
+    ) {
+        let cuesBefore = model.cueCount
+        model.recordSettled(entry)
+        if model.cueCount > cuesBefore, let line = announcedLine(of: model) {
+            announcements.append(line)
+        }
+    }
+
+    // MARK: The recorded scenario, scripted end to end
+
+    @MainActor
+    func testDA09RecordedSequence_RelaunchRestoreFiresNoDuplicateAdded() {
+        let defaults = UserDefaults(suiteName: "gen6-da09-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        var announcements: [String] = []
+
+        // Session 1, live flow: add place A, move to place B,
+        // then a moment update — three real changes, three
+        // announcements (the recording's conforming forms).
+        let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        settle(first, entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve", "Windbreaker"]), announcements: &announcements)
+        settle(first, entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top", "Shorts"]), announcements: &announcements)
+        settle(first, entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top", "Shorts"],
+            moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
+        XCTAssertEqual(announcements, [
+            "Added Overland Park, KS, Now",
+            "Update to Miami, FL",
+            "Update to 7 p.m."
+        ])
+
+        // RELAUNCH: a new process over the same persisted
+        // store — a new session identity, a fresh model.
+        // Rehydration alone fires nothing.
+        let relaunched = WearIveRunCollectionModel(store: store, sessionID: "s2")
+        XCTAssertEqual(relaunched.cueCount, 0, "rehydration must not announce")
+
+        // Home's automatic re-settle of the SAME persisted
+        // state (onAppear / landing triggers — no user action)
+        // is a RESTORE, not a creation: no cue, no second
+        // "Added Miami", and the day keeps ONE Miami entry —
+        // now the new session's, carrying the narration kind
+        // and payload it already had.
+        settle(relaunched, entry(
+            session: "s2", place: "Miami, FL", feels: 90,
+            items: ["Tank Top", "Shorts"],
+            moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
+        XCTAssertEqual(relaunched.cueCount, 0, "a restore must not cue")
+        XCTAssertEqual(announcements.count, 3, "no duplicate Added on relaunch")
+        XCTAssertEqual(relaunched.entries.count, 1, "the day keeps one entry — the restored session's")
+        XCTAssertEqual(relaunched.sessionEntry()?.sessionID, "s2")
+        XCTAssertEqual(relaunched.sessionEntry()?.wasUpdatedInSession, true,
+                       "the restored entry keeps the narration kind it already carried")
+        XCTAssertEqual(state(of: relaunched), .updated(payload: .moment(.clock(hour12: 7, isPM: true))))
+
+        // A weather-only re-settle after the restore is silent,
+        // as it is in-session.
+        settle(relaunched, entry(
+            session: "s2", place: "Miami, FL", feels: 92,
+            items: ["Tank Top", "Shorts"],
+            moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
+        XCTAssertEqual(announcements.count, 3)
+
+        // A REAL change after the restore still announces —
+        // once, and as an Update (the session already has an
+        // entry), never as a fresh Added.
+        settle(relaunched, entry(
+            session: "s2", place: "New York, NY", feels: 72,
+            items: ["Tee", "Shorts"]), announcements: &announcements)
+        XCTAssertEqual(announcements, [
+            "Added Overland Park, KS, Now",
+            "Update to Miami, FL",
+            "Update to 7 p.m.",
+            "Update to New York, NY"
+        ])
+        XCTAssertEqual(relaunched.entries.count, 1)
+    }
+
+    @MainActor
+    func testDA09RestoreOfACreationEntry_KeepsItsAddedFormSilently() {
+        let defaults = UserDefaults(suiteName: "gen6-da09-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        var announcements: [String] = []
+
+        let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        settle(first, entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"]), announcements: &announcements)
+        XCTAssertEqual(announcements, ["Added Miami, FL, Now"])
+
+        // Relaunch + automatic re-settle of the identical
+        // state: silent restore; the bar's resting state is the
+        // Added form the entry already carried (presented via
+        // entryAlreadyPresent, at MINI — not re-announced).
+        let relaunched = WearIveRunCollectionModel(store: store, sessionID: "s2")
+        settle(relaunched, entry(
+            session: "s2", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"]), announcements: &announcements)
+        XCTAssertEqual(relaunched.cueCount, 0)
+        XCTAssertEqual(announcements, ["Added Miami, FL, Now"])
+        XCTAssertEqual(relaunched.entries.count, 1)
+        XCTAssertEqual(state(of: relaunched), .added(place: "Miami, FL", moment: .now))
+    }
+
+    @MainActor
+    func testDA09RestoreIsScopedToTheSameDayAndPlace() {
+        // A relaunched session whose first settle is at a place
+        // with NO entry for today is a genuine creation — it
+        // announces Added, once, and the prior session's entry
+        // at the other place stands as history. Restore silence
+        // is not a blanket first-settle silence.
+        let defaults = UserDefaults(suiteName: "gen6-da09-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        var announcements: [String] = []
+
+        let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
+        settle(first, entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"]), announcements: &announcements)
+
+        let relaunched = WearIveRunCollectionModel(store: store, sessionID: "s2")
+        settle(relaunched, entry(
+            session: "s2", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve"]), announcements: &announcements)
+        XCTAssertEqual(relaunched.cueCount, 1)
+        XCTAssertEqual(announcements, [
+            "Added Miami, FL, Now",
+            "Added Overland Park, KS, Now"
+        ])
+        XCTAssertEqual(store.entries.count, 2, "the prior session's Miami entry is untouched history")
+    }
+
+    @MainActor
+    func testDA09LegacyEntryRestoresSilentlyOnFirstSessionSettle() {
+        // The legacy (pre-session) form of the same shape —
+        // FA-36's supersede, now also silent: build 25's legacy
+        // entry for today + this place is restored, not
+        // re-announced as a fresh Added.
+        let defaults = UserDefaults(suiteName: "gen6-da09-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        store.record(entry(session: "", place: "Miami, FL", feels: 90, items: ["Tank Top"]))
+
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s-new")
+        var announcements: [String] = []
+        settle(model, entry(
+            session: "s-new", place: "Miami, FL", feels: 90,
+            items: ["Tank Top"]), announcements: &announcements)
+        XCTAssertEqual(model.cueCount, 0)
+        XCTAssertTrue(announcements.isEmpty)
+        XCTAssertEqual(model.entries.count, 1, "the day keeps ONE Miami entry — the session's")
+        XCTAssertEqual(model.sessionEntry()?.sessionID, "s-new")
+    }
+
+    // MARK: Atomicity — the announced selection IS the rendered card
+
+    @MainActor
+    func testDA09BarAndCardAreTheSameSolvedSelectionAfterAnUpdate() {
+        let defaults = UserDefaults(suiteName: "gen6-da09-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s1")
+
+        model.recordSettled(entry(
+            session: "s1", place: "Overland Park, KS", feels: 48,
+            items: ["Light Long Sleeve", "Windbreaker"], hero: "hero-overland"))
+        // The update lands as ONE solved settle (the recording
+        // seam now refuses partial, in-flight assemblies — see
+        // the source pins below).
+        let miami = entry(
+            session: "s1", place: "Miami, FL", feels: 90,
+            items: ["Tank Top", "Shorts"], hero: "hero-miami")
+        model.recordSettled(miami)
+        XCTAssertEqual(model.cueCount, 2, "the update announced exactly once")
+
+        // Read the persisted value back ONCE: the bar's state
+        // and the card's line both derive from this single
+        // value, so neither can carry a facet of the outgoing
+        // settle (the DA-09 stale card: an 85° / 3-item outfit
+        // under a Miami announcement).
+        guard let settled = model.sessionEntry() else {
+            XCTFail("the session's entry must be presented after its update settle")
+            return
+        }
+        XCTAssertEqual(
+            WearIveRunStore(defaults: defaults).entries, [settled],
+            "one persisted value — no second read for a stale facet to come from")
+        XCTAssertEqual(settled.placeDisplayName, miami.placeDisplayName)
+        XCTAssertEqual(settled.feelsLikeF, miami.feelsLikeF)
+        XCTAssertEqual(settled.itemNames, miami.itemNames)
+        XCTAssertEqual(settled.heroImageReference, miami.heroImageReference)
+
+        // The bar announces THIS selection…
+        let barState = state(of: model)
+        XCTAssertEqual(barState, .updated(payload: .place("Miami, FL")))
+        XCTAssertEqual(WearIveRunNarration.line(for: barState), "Update to Miami, FL")
+
+        // …and the expanded card renders THIS selection — same
+        // place, same feels-like, same items, from the same
+        // entry value the bar derived from.
+        let cardLine = WearIveRunNarration.expandedLine(
+            for: settled,
+            formattedFeelsLike: "\(Int(settled.feelsLikeF))°")
+        XCTAssertEqual(cardLine, "Miami, FL · Today — 90° feels like · Tank Top · Shorts")
+    }
+
+    // MARK: The recording seam — no settle from a partial selection
+
+    func testDA09RecordingSeamRefusesInFlightSettles_sourcePins() throws {
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(home.contains("guard !viewModel.isLoading else { return }"),
+                      "DA-09: no entry is recorded from an in-flight fetch — the place can be named before its weather lands")
+        XCTAssertTrue(home.contains(".onChange(of: viewModel.isLoading)"),
+                      "DA-09: the fetch-completion re-offer records the one solved selection")
+        // The manual switch marks its fetch in flight in the
+        // same instant it names the place — no unmarked window.
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        let start = try XCTUnwrap(vm.range(of: "func setManualLocation"))
+        let rest = vm[start.upperBound..<vm.endIndex]
+        let end = rest.range(of: "\n    func ")?.lowerBound ?? vm.endIndex
+        let body = String(vm[start.lowerBound..<end])
+        let loading = try XCTUnwrap(body.range(of: "isLoading = true"))
+        let fetch = try XCTUnwrap(body.range(of: "await fetchWeather"))
+        XCTAssertTrue(loading.lowerBound < fetch.lowerBound,
+                      "DA-09: isLoading is set synchronously, before the fetch task")
+        // The restore rule itself stands in the collection model.
+        let miniBar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(miniBar.contains("RESTORE, not creation"),
+                      "DA-09: the model's restore branch is the firing-discipline seam")
+    }
+}
