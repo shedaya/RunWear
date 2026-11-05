@@ -62,7 +62,7 @@ class PersonalPollPolicyTest {
         assertFalse(PersonalPollPolicy.shouldPollAgain(PersonalLookStatus.Ready, 0))
         assertFalse(
             PersonalPollPolicy.shouldPollAgain(
-                PersonalLookStatus.Failed("boom"), 0
+                PersonalLookStatus.Failed(PersonalLookStatus.Reason.ERROR), 0
             )
         )
         assertFalse(PersonalPollPolicy.shouldPollAgain(PersonalLookStatus.None, 0))
