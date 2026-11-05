@@ -100,6 +100,9 @@
 		C10002000000000000000007 /* HeroImageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000003 /* HeroImageModels.swift */; };
 		C10002000000000000000008 /* EngineBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000002 /* EngineBoundaryTests.swift */; };
 		C10002000000000000000009 /* WeatherViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014233456780000010 /* WeatherViewModel.swift */; };
+		C10002000000000000000103 /* DayChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G40001000000000000000002 /* DayChartView.swift */; };
+		C10002000000000000000102 /* DatePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000016 /* DatePickerSheet.swift */; };
+		C10002000000000000000101 /* TimePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000020 /* TimePickerSheet.swift */; };
 		C10002000000000000000010 /* WeatherService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000E233456780000007 /* WeatherService.swift */; };
 		C10002000000000000000011 /* HeroImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000007 /* HeroImageService.swift */; };
 		C10002000000000000000012 /* SupabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000008 /* SupabaseClient.swift */; };
@@ -1036,6 +1039,9 @@
 				C10002000000000000000007 /* HeroImageModels.swift in Sources */,
 				C10002000000000000000008 /* EngineBoundaryTests.swift in Sources */,
 				C10002000000000000000009 /* WeatherViewModel.swift in Sources */,
+				C10002000000000000000103 /* DayChartView.swift in Sources */,
+				C10002000000000000000102 /* DatePickerSheet.swift in Sources */,
+				C10002000000000000000101 /* TimePickerSheet.swift in Sources */,
 				C10002000000000000000010 /* WeatherService.swift in Sources */,
 				C10002000000000000000011 /* HeroImageService.swift in Sources */,
 				C10002000000000000000012 /* SupabaseClient.swift in Sources */,

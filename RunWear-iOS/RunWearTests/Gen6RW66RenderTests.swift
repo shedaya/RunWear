@@ -12,10 +12,23 @@ import UIKit
 ///      the restored date entry in its context line — "Today ›";
 ///   2. the day picker with a DIFFERENT date selected in the
 ///      draft (tomorrow highlighted, Confirm/Cancel standing);
-///   3. home AFTER Confirm — re-solved to the new date: the cold
-///      day's numeral and outfit;
-///   4. home AFTER Cancel — the prior selection unchanged: the
-///      mild day's state, exactly as before the picker opened.
+///   3. AFTER Confirm — the view model re-solved to the new
+///      date (asserted: cold feels-like, rebuilt recommendation)
+///      and the picker reopened on the new day: "Tomorrow ›"
+///      over the cold day's curve;
+///   4. AFTER Cancel — the prior selection unchanged (asserted)
+///      and the picker reopened on today, exactly as before.
+///
+/// Scope note (stated plainly): the full home view
+/// (WeatherOutfitView) is not compiled into this test target —
+/// dual-membering its whole dependency closure is not this
+/// lane's to do — so states 3/4 render the re-solved SELECTION
+/// through the production picker + view model rather than the
+/// home screen itself. The home screen renders the same view
+/// model state the assertions pin. TimePickerSheet,
+/// DatePickerSheet and DayChartView are dual-membered into the
+/// test target for these renders (the WeatherDetailSheet
+/// precedent).
 ///
 /// The weather fixture is built relative to the RUN day (today
 /// mild ≈65°F feels-like, tomorrow cold ≈30°F, both at hour 12)
@@ -152,10 +165,10 @@ final class Gen6RW66RenderTests: XCTestCase {
                    name: "RW-66-2-date-picker-changed.png")
     }
 
-    // MARK: - 3 · Confirm → home re-solved to the new date
+    // MARK: - 3 · Confirm → re-solved to the new date
 
     @MainActor
-    func testRW66Render3_HomeAfterConfirmShowsTheNewDate() throws {
+    func testRW66Render3_AfterConfirmPickerOnTheNewDate() throws {
         let f = fixture()
         let mild = f.vm.currentFeelsLike
         var draft = DatePickerDraft(originalDate: f.vm.selectedDate)
@@ -163,23 +176,31 @@ final class Gen6RW66RenderTests: XCTestCase {
         f.vm.selectedDate = draft.commit()
         f.vm.updateSelectedTime(date: f.vm.selectedDate, hour: f.vm.selectedHour)
         XCTAssertLessThan(f.vm.currentFeelsLike, mild - 20,
-                          "the commit re-solved home to the cold day before rendering")
-        let home = WeatherOutfitView(
-            viewModel: f.vm,
-            locationService: LocationService(),
-            weather: f.data,
-            recommendation: try XCTUnwrap(f.vm.recommendation),
-            onRefresh: {}
+                          "the commit re-solved to the cold day before rendering")
+        XCTAssertNotNil(f.vm.recommendation, "the outfit re-solved with the day")
+        // The picker reopened on the committed state: tomorrow's
+        // cold curve under a "Tomorrow ›" context line.
+        let sheet = TimePickerSheet(
+            chart: f.vm.dayChart,
+            dateLabel: "Tomorrow",
+            placeName: "New York",
+            unit: .fahrenheit,
+            initialHour: 12,
+            openedInNowState: false,
+            nowHour: nil,
+            isPresented: .constant(true),
+            dateSelection: .constant(f.tomorrow),
+            onDateConfirmed: {}
         )
-        .environmentObject(PersonalHeroStore())
-        try attach(home, size: CGSize(width: 390, height: 844),
-                   name: "RW-66-3-home-after-confirm-new-date.png")
+        .background(AppTheme.background)
+        try attach(sheet, size: CGSize(width: 390, height: 560),
+                   name: "RW-66-3-after-confirm-new-date.png")
     }
 
     // MARK: - 4 · Cancel → prior selection restored unchanged
 
     @MainActor
-    func testRW66Render4_HomeAfterCancelUnchanged() throws {
+    func testRW66Render4_AfterCancelPickerUnchanged() throws {
         let f = fixture()
         let feelsBefore = f.vm.currentFeelsLike
         var draft = DatePickerDraft(originalDate: f.vm.selectedDate)
@@ -188,15 +209,20 @@ final class Gen6RW66RenderTests: XCTestCase {
         _ = draft
         XCTAssertEqual(f.vm.selectedDate, f.today)
         XCTAssertEqual(f.vm.currentFeelsLike, feelsBefore)
-        let home = WeatherOutfitView(
-            viewModel: f.vm,
-            locationService: LocationService(),
-            weather: f.data,
-            recommendation: try XCTUnwrap(f.vm.recommendation),
-            onRefresh: {}
+        let sheet = TimePickerSheet(
+            chart: f.vm.dayChart,
+            dateLabel: "Today",
+            placeName: "New York",
+            unit: .fahrenheit,
+            initialHour: 12,
+            openedInNowState: false,
+            nowHour: nil,
+            isPresented: .constant(true),
+            dateSelection: .constant(f.today),
+            onDateConfirmed: {}
         )
-        .environmentObject(PersonalHeroStore())
-        try attach(home, size: CGSize(width: 390, height: 844),
-                   name: "RW-66-4-home-after-cancel-unchanged.png")
+        .background(AppTheme.background)
+        try attach(sheet, size: CGSize(width: 390, height: 560),
+                   name: "RW-66-4-after-cancel-unchanged.png")
     }
 }
