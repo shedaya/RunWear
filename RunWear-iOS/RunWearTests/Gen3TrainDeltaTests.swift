@@ -200,6 +200,91 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertTrue(home.contains("ConvergenceBandView(content: band)"))
     }
 
+    // MARK: - Round 2 · Wear I've Run FULL MODEL verification
+
+    private var wirUTCCalendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }
+
+    private func wirDay(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        let comps = DateComponents(year: year, month: month, day: day)
+        return wirUTCCalendar.startOfDay(for: wirUTCCalendar.date(from: comps)!)
+    }
+
+    private func wirEntry(session: String, place: String, day: Date, hero: String) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: day, placeName: place, feelsLikeF: 50, actualF: 52,
+            condition: "Clear", itemNames: ["Tee"], itemKeys: ["tee"],
+            heroImageReference: hero, sessionID: session)
+    }
+
+    /// The binding shape (Sol's example, scaled): the collection's
+    /// TOP LEVEL collates BY LOCATION ACROSS ALL HISTORY — many
+    /// sessions accumulate under one location across days; inside
+    /// a location, one entry per session, each updated in place
+    /// during its own session; past sessions preserved; the pinned
+    /// TODAY entry and the current session's chapter entry are
+    /// THE SAME entry, never duplicates.
+    @MainActor
+    func testCollectionCollatesByLocationAcrossAllHistory() {
+        let defaults = UserDefaults(suiteName: "gen3-train-wir-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+
+        // Five New York sessions on five different days, two
+        // Miami, one Overland Park — each its own model (session)
+        // over the one store, as successive app launches would be.
+        let nyDays = [wirDay(2026, 10, 28), wirDay(2026, 10, 30), wirDay(2026, 11, 1),
+                      wirDay(2026, 11, 3), wirDay(2026, 11, 4)]
+        for (i, day) in nyDays.enumerated() {
+            let model = WearIveRunCollectionModel(store: store, sessionID: "ny-\(i)")
+            model.recordSettled(wirEntry(session: "ny-\(i)", place: "New York, NY", day: day, hero: "hero-ny-\(i)"))
+            if i == nyDays.count - 1 {
+                // The current session settles AGAIN (a weather
+                // change in-session): it updates in place — the
+                // location must NOT gain a sixth entry.
+                model.recordSettled(wirEntry(session: "ny-\(i)", place: "New York, NY", day: day, hero: "hero-ny-\(i)-v2"))
+            }
+        }
+        for (i, day) in [wirDay(2026, 10, 29), wirDay(2026, 11, 2)].enumerated() {
+            let model = WearIveRunCollectionModel(store: store, sessionID: "mia-\(i)")
+            model.recordSettled(wirEntry(session: "mia-\(i)", place: "Miami, FL", day: day, hero: "hero-mia-\(i)"))
+        }
+        let opModel = WearIveRunCollectionModel(store: store, sessionID: "op-0")
+        opModel.recordSettled(wirEntry(session: "op-0", place: "Overland Park, KS", day: wirDay(2026, 11, 3), hero: "hero-op"))
+
+        XCTAssertEqual(store.entries.count, 8, "5 NY + 2 Miami + 1 OP sessions, the in-session update included")
+
+        let chapters = WearIveRunCollection.chapters(from: store.entries, filter: .all, calendar: wirUTCCalendar)
+        XCTAssertEqual(chapters.count, 3, "the top level is locations, not sessions")
+        let ny = chapters.first { $0.placeName == "New York, NY" }
+        XCTAssertEqual(ny?.entries.count, 5, "all five NY sessions accumulate under the one location")
+        XCTAssertEqual(ny?.dayCount, 5, "five distinct NY days")
+        XCTAssertEqual(ny?.entries.first?.heroImageReference, "hero-ny-4-v2",
+                       "the current session's entry is its LAST settled version, newest first")
+        XCTAssertEqual(ny?.entries.last?.heroImageReference, "hero-ny-0",
+                       "the oldest NY session is preserved at the chapter's foot")
+        XCTAssertEqual(chapters.first { $0.placeName == "Miami, FL" }?.entries.count, 2)
+        XCTAssertEqual(chapters.first { $0.placeName == "Overland Park, KS" }?.entries.count, 1)
+        // Nothing flattens sessions to the top level and nothing
+        // caps a location at one entry.
+        XCTAssertEqual(chapters.flatMap(\.entries).count, 8)
+
+        // The pinned TODAY entry IS the current session's chapter
+        // entry: same identity, and lifting it for the pin leaves
+        // the chapter standing on its remaining four sessions —
+        // presented exactly once in the collection, as the pin.
+        let current = WearIveRunCollectionModel(store: store, sessionID: "ny-4")
+        let pinned = current.sessionEntry()
+        XCTAssertEqual(pinned?.id, ny?.cover.id, "pin and chapter cover are the same entry")
+        let unpinned = store.entries.filter { $0.id != pinned?.id }
+        let chaptersAfter = WearIveRunCollection.chapters(from: unpinned, filter: .all, calendar: wirUTCCalendar)
+        XCTAssertFalse(chaptersAfter.flatMap(\.entries).contains { $0.id == pinned?.id },
+                       "the pinned entry never duplicates into a chapter")
+        XCTAssertEqual(chaptersAfter.first { $0.placeName == "New York, NY" }?.entries.count, 4)
+    }
+
     // MARK: - First-look rulings · finished CTA wording
 
     func testFinishedCTAReadsUpgradeToPremium_sourcePin() throws {
