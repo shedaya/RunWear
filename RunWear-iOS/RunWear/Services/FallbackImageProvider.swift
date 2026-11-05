@@ -456,7 +456,13 @@ struct FallbackImageProvider {
     /// The 6 mittens signatures (RWPOOL-T01…T06) have NO entry
     /// here and never will from this wave: no truthful mittens
     /// photo exists (see the replenishment INTEGRATION-NOTE) —
-    /// they serve scaffold/floor through the chain.
+    /// nothing is fabricated for them. Under Sol's handwear
+    /// substitution ruling (2026-11-04 ~22:23 CST) a mittens
+    /// prescription can still exact-serve a GLOVES candidate
+    /// (pool row or bundled asset) whose other slots all match,
+    /// through the shared gate; the mittens forms no gloves
+    /// candidate matches (the balaclava forms, in the bundled
+    /// set) serve scaffold/floor through the chain.
     static let pointGrainGarmentsByAsset: [String: BundledGarments] = [
         "pg_female_long_o0_shorts_cap_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: "cap", hands: nil),
         "pg_female_long_o0_shorts_none_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: nil, hands: nil),

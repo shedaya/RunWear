@@ -258,25 +258,47 @@ final class Gen4HeroFallbackTests: XCTestCase {
         XCTAssertEqual(8, HeroFallbackChain.garmentScore(requested: mittens, candidate: bare))
     }
 
-    // MARK: - Defect family 1: mittens → nearest same-gender gloves scaffold
+    // MARK: - Defect family 1: mittens → same-gender gloves (exact under the ruling; balaclava form scaffolds)
 
-    func testMittensPrescriptionScaffoldsToSameGenderGloves() {
+    func testMittensPrescription_beanieFormExactServesSameGenderGloves_balaclavaFormScaffolds() {
         for gender in [HeroGender.FEMALE, .MALE] {
             let suffix = gender == .FEMALE ? "female" : "male"
             // Sub-15°F: thermal + shell + thermal tights + beanie + MITTENS.
+            //
+            // GEN-4 HANDWEAR AMENDMENT (Sol's ruling, 2026-11-04
+            // ~22:23 CST): a gloves-for-mittens substitution is
+            // acceptable where mittens are prescribed — handwear
+            // form alone is not a failure. The original pin asserted
+            // SCAFFOLD for this serve; under the ruling the gloves
+            // candidate whose other slots all match passes the
+            // shared gate, so the chain resolves it EXACT (the
+            // first gate-passing bundled candidate in the chain's
+            // deterministic order — a gloves photo of the same
+            // gender). Re-pinned as EXACT citing the ruling; no
+            // other assertion weakened.
             let mittens = outfit(top: "LONG_SLEEVE_THERMAL", outer: "INSULATED_JACKET", bottom: "THERMAL_TIGHTS", head: "THERMAL_BEANIE", hands: "MITTENS")
             let res = resolve(mittens, bracket: .FREEZING, gender: gender, reachable: true)
-            XCTAssertEqual(res?.tier, .scaffold)
+            XCTAssertEqual(res?.tier, .exact)
             XCTAssertEqual(res?.candidate.gender, gender)
+            XCTAssertEqual(res?.candidate.source, .bundled)
             XCTAssertEqual(res?.candidate.signature.hands, "gloves",
-                           "the mittens family's nearest truth is a gloved photo of the same gender")
-            XCTAssertEqual(res?.bundledAssetName, "freezing_clear_\(suffix)")
-            // Balaclava + mittens (sub-5°F): same nearest family.
+                           "under the substitution ruling a gloved photo of the same gender exact-serves a mittens prescription")
+            XCTAssertEqual(res?.bundledAssetName, "cold_clear_\(suffix)")
+            // Balaclava + mittens (sub-5°F): NO bundled candidate
+            // wears a balaclava, so no gloves candidate matches the
+            // head slot and the amendment cannot exact-serve this
+            // form from the bundle — it still scaffolds to the
+            // nearest same-gender gloves photo, as before. (The
+            // replenishment top-up's balaclava+gloves rows are live
+            // pool stock: when one is in the live candidate set it
+            // exact-serves this form through the pool tier under
+            // the same ruling.)
             let balaclava = outfit(top: "LONG_SLEEVE_THERMAL", outer: "INSULATED_JACKET", bottom: "THERMAL_TIGHTS", head: "BALACLAVA", hands: "MITTENS")
             let res2 = resolve(balaclava, bracket: .FREEZING, gender: gender, reachable: true)
             XCTAssertEqual(res2?.tier, .scaffold)
             XCTAssertEqual(res2?.candidate.signature.hands, "gloves")
             XCTAssertEqual(res2?.candidate.gender, gender)
+            XCTAssertEqual(res2?.bundledAssetName, "freezing_clear_\(suffix)")
         }
     }
 

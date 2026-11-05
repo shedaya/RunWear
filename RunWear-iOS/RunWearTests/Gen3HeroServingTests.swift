@@ -200,17 +200,30 @@ final class Gen3HeroServingTests: XCTestCase {
         }
     }
 
-    func testMittensPrescriptionHasNoBundledServe() {
-        // Below 15°F the engine prescribes MITTENS; the policy's
-        // hands class for mittens is "mittens" and NO bundled asset
-        // records it (every winter asset wears gloves). The gate
-        // must say so — never silently serve gloves as mittens.
-        // (Pool-wide this is the census's headline unservable
-        // class: no approved pool row records "mittens" either.)
+    func testMittensPrescriptionServesGlovesAssetUnderSubstitutionRuling() {
+        // Below 15°F the engine prescribes MITTENS and NO bundled
+        // asset records "mittens" (every winter asset wears
+        // gloves) — the original GEN-3 pin asserted NO bundled
+        // serve for this prescription.
+        //
+        // GEN-4 HANDWEAR AMENDMENT (Sol's ruling, 2026-11-04
+        // ~22:23 CST): a gloves-for-mittens substitution is
+        // acceptable where mittens are prescribed; handwear form
+        // alone is not a failure. The shared gate now passes a
+        // gloves candidate on the hands slot under a MITTENS
+        // prescription (one direction only), so the gated walk
+        // serves the cell's own gloves asset — freezing_clear —
+        // truthfully under the ruling, for both genders.
         let prescription = outfit(adjustedF: 10)
         XCTAssertEqual(prescription.hands?.key, "MITTENS")
         for gender in [HeroGender.FEMALE, .MALE] {
-            XCTAssertNil(provider.gatedAssetName(temp: .FREEZING, weather: .CLEAR, gender: gender, outfit: prescription))
+            XCTAssertEqual(
+                assetName(.FREEZING, .CLEAR, gender),
+                provider.gatedAssetName(temp: .FREEZING, weather: .CLEAR, gender: gender, outfit: prescription),
+                "under the substitution ruling the mittens prescription serves the gloves asset"
+            )
+            XCTAssertTrue(FallbackImageProvider.bundledAssetMatches(
+                assetName: assetName(.FREEZING, .CLEAR, gender), outfit: prescription))
         }
     }
 

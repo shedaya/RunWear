@@ -23,8 +23,11 @@ import Foundation
 ///
 /// The 6 mittens signatures (RWPOOL-T01…T06) are deliberately
 /// absent: no truthful mittens photo exists, and nothing here
-/// fabricates one — they keep serving scaffold/floor via the
-/// chain (pinned in Gen4HeroFallbackTests).
+/// fabricates one. Under Sol's handwear substitution ruling
+/// (2026-11-04 ~22:23 CST) mittens prescriptions exact-serve
+/// matching GLOVES candidates through the shared gate where the
+/// other slots align, and scaffold/floor via the chain where
+/// they do not (pinned in Gen4HeroFallbackTests).
 final class Gen4BundledReplenishmentTests: XCTestCase {
 
     private let provider = FallbackImageProvider.shared

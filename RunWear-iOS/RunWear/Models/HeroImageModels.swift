@@ -177,6 +177,14 @@ enum HeroPoolPolicy {
 /// prescribed the row must record none; the Juneau field failure
 /// (four bare-handed photos served under a LIGHT_GLOVES prescription)
 /// is what the waiver let through.
+/// HANDWEAR SUBSTITUTION (Sol, 2026-11-04 ~22:23 CST): the shared
+/// policy's one exception — a "gloves" candidate passes the hands
+/// slot under a MITTENS prescription (handwear form alone is not a
+/// failure); the reverse (mittens under a gloves prescription) does
+/// NOT pass. The amendment lives in the shared policy, so every iOS
+/// consultation of this gate — the pool cascade's exact tier, the
+/// bundled exact tier via bundledAssetMatches, and the fallback
+/// chain's exact test — inherits it from this one seam.
 enum HeroPointGrainPolicy {
     static func matches(image: GeneratedImage, outfit: OutfitRecommendation) -> Bool {
         RunWearEngine.HeroPointGrainPolicy.shared.matchesByKey(

@@ -152,6 +152,63 @@ final class HeroPointGrainTests: XCTestCase {
         XCTAssertTrue(HeroPointGrainPolicy.matches(image: glovedRow, outfit: outfit))
     }
 
+    // MARK: - Handwear substitution (Sol, 2026-11-04 ~22:23 CST)
+
+    private func directOutfit(top: String, outer: String?, bottom: String, head: String?, hands: String?) -> OutfitRecommendation {
+        func item(_ key: String) -> ClothingItem {
+            ClothingItem(key: key, name: key, description: "", icon: "", amazonSearchTerm: "")
+        }
+        return OutfitRecommendation(
+            temperatureBracket: .cool,
+            topBase: item(top),
+            topMid: nil,
+            topOuter: outer.map(item),
+            bottom: item(bottom),
+            head: head.map(item),
+            hands: hands.map(item),
+            accessories: [],
+            tips: []
+        )
+    }
+
+    func testGlovesForMittensSubstitution_oneDirectionOnly() {
+        // Sol's ruling (2026-11-04 ~22:23 CST): a gloves-for-mittens
+        // substitution is acceptable where mittens are prescribed;
+        // handwear form alone is not a failure. ONE direction only.
+        let mittensOutfit = directOutfit(
+            top: "LONG_SLEEVE_THERMAL", outer: "INSULATED_JACKET",
+            bottom: "THERMAL_TIGHTS", head: "THERMAL_BEANIE", hands: "MITTENS"
+        )
+        // A gloves candidate passes the hands slot under MITTENS.
+        XCTAssertTrue(HeroPointGrainPolicy.matches(
+            image: image(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+            outfit: mittensOutfit))
+        // A true mittens candidate still passes, exactly as before.
+        XCTAssertTrue(HeroPointGrainPolicy.matches(
+            image: image(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "mittens"),
+            outfit: mittensOutfit))
+        // All other slots unchanged: bare hands still fail, and a
+        // gloves candidate with the wrong head still fails.
+        XCTAssertFalse(HeroPointGrainPolicy.matches(
+            image: image(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: nil),
+            outfit: mittensOutfit))
+        XCTAssertFalse(HeroPointGrainPolicy.matches(
+            image: image(topBase: "long", outer: true, bottom: "tights", head: "cap", hands: "gloves"),
+            outfit: mittensOutfit))
+        // The reverse does NOT hold: a mittens candidate does not
+        // satisfy a gloves prescription.
+        let glovesOutfit = directOutfit(
+            top: "LONG_SLEEVE_THERMAL", outer: "INSULATED_JACKET",
+            bottom: "THERMAL_TIGHTS", head: "THERMAL_BEANIE", hands: "THERMAL_GLOVES"
+        )
+        XCTAssertFalse(HeroPointGrainPolicy.matches(
+            image: image(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "mittens"),
+            outfit: glovesOutfit))
+        XCTAssertTrue(HeroPointGrainPolicy.matches(
+            image: image(topBase: "long", outer: true, bottom: "tights", head: "beanie", hands: "gloves"),
+            outfit: glovesOutfit))
+    }
+
     // MARK: - The warm side of the breakpoint (47F COOL)
 
     func testAt47FShortsMayMatchAndTightsMustNot() {
