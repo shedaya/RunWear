@@ -134,6 +134,138 @@ class HeroPointGrainFallbackTest {
                     ClothingItem.SHORT_SLEEVE, ClothingItem.SHORTS,
                     null, ClothingItem.BASEBALL_CAP
                 )
+            ),
+            // GEN-4 REPLENISHMENT (RWPOOL-T07..T26, 2026-11-04 night):
+            // the 20 signatures the gen-3 census recorded as
+            // unservable, bundled from the replenishment's newly
+            // approved pool rows.
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o0_shorts_cap_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS,
+                    null, ClothingItem.BASEBALL_CAP
+                )
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o0_shorts_none_none",
+                outfit(ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS)
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o1_shorts_none_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS,
+                    ClothingItem.WINDBREAKER
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o0_shorts_cap_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS,
+                    null, ClothingItem.BASEBALL_CAP
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o0_shorts_none_none",
+                outfit(ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS)
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o1_shorts_none_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS,
+                    ClothingItem.WINDBREAKER
+                )
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o0_tights_beanie_gloves",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.THERMAL_TIGHTS,
+                    null, ClothingItem.LIGHT_BEANIE, ClothingItem.LIGHT_GLOVES
+                )
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o0_tights_cap_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS,
+                    null, ClothingItem.BASEBALL_CAP
+                )
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o0_tights_none_none",
+                outfit(ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS)
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o1_tights_cap_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS,
+                    ClothingItem.WINDBREAKER, ClothingItem.BASEBALL_CAP
+                )
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_long_o1_tights_none_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS,
+                    ClothingItem.WINDBREAKER
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o0_tights_beanie_gloves",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.THERMAL_TIGHTS,
+                    null, ClothingItem.LIGHT_BEANIE, ClothingItem.LIGHT_GLOVES
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o0_tights_cap_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS,
+                    null, ClothingItem.BASEBALL_CAP
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o0_tights_none_none",
+                outfit(ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS)
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_long_o1_tights_none_none",
+                outfit(
+                    ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS,
+                    ClothingItem.WINDBREAKER
+                )
+            ),
+            Triple(
+                GenderPreference.FEMALE, "pg_female_sleeveless_o0_shorts_visor_none",
+                outfit(
+                    ClothingItem.TANK_TOP, ClothingItem.SHORT_SHORTS,
+                    null, ClothingItem.VISOR
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_short_o0_shorts_visor_none",
+                outfit(
+                    ClothingItem.SHORT_SLEEVE, ClothingItem.SHORTS,
+                    null, ClothingItem.VISOR
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_short_o1_shorts_visor_none",
+                outfit(
+                    ClothingItem.SHORT_SLEEVE, ClothingItem.SHORTS,
+                    ClothingItem.RAIN_JACKET, ClothingItem.VISOR
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_sleeveless_o0_shorts_visor_none",
+                outfit(
+                    ClothingItem.TANK_TOP, ClothingItem.SHORT_SHORTS,
+                    null, ClothingItem.VISOR
+                )
+            ),
+            Triple(
+                GenderPreference.MALE, "pg_male_sleeveless_o1_shorts_visor_none",
+                outfit(
+                    ClothingItem.TANK_TOP, ClothingItem.SHORT_SHORTS,
+                    ClothingItem.RAIN_JACKET, ClothingItem.VISOR
+                )
             )
         )
 
@@ -142,7 +274,7 @@ class HeroPointGrainFallbackTest {
         val garments = HeroImageSelector.pointGrainGarmentsTable()
         val provenance = HeroImageSelector.pointGrainProvenanceTable()
         val nominations = HeroImageSelector.pointGrainFallbackTable()
-        assertEquals(10, garments.size)
+        assertEquals(30, garments.size)
         assertEquals(garments.keys, provenance.keys)
         assertEquals(garments.keys, nominations.values.toSet())
         // Every PG asset carries the PG rung and a pool row id.
@@ -289,22 +421,26 @@ class HeroPointGrainFallbackTest {
     }
 
     @Test
-    fun `defect family - the warm-point long-sleeve bare head and hands serve has no bundled photo`() {
-        // The Overland Park prescription family: long sleeve + shell
-        // + shorts with bare head and bare hands. Zero rows in the
-        // verified pool carry it (every shell+shorts row wears a cap
-        // or visor), so the honest terminus is no photo.
+    fun `replenished family - the warm-point long-sleeve bare head and hands serve resolves via point grain`() {
+        // The Overland Park prescription family WAS a defect family
+        // in gen-3 (long sleeve + shell + shorts, bare head/hands:
+        // zero qualifying pool rows). The GEN-4 replenishment closed
+        // it — RWPOOL-T09 (FEMALE) / T12 (MALE) are bundled from the
+        // replenishment's newly approved rows, so the gated
+        // resolution now serves them EXACTLY instead of null.
         val opFamily = outfit(
             ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.SHORTS,
             ClothingItem.WINDBREAKER, null, null
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o1_shorts_none_none.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COOL, HeroWeatherCondition.CLEAR,
                 GenderPreference.FEMALE, opFamily
             )
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_male_long_o1_shorts_none_none.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COOL, HeroWeatherCondition.CLEAR,
                 GenderPreference.MALE, opFamily
@@ -313,20 +449,24 @@ class HeroPointGrainFallbackTest {
     }
 
     @Test
-    fun `defect family - COLD calm beanie without a shell has no bundled photo`() {
-        // 20–24°F calm: beanie + gloves + tights with NO shell. Every
-        // beanie/gloves/tights row in the pool wears a shell.
+    fun `replenished family - COLD calm beanie without a shell resolves via point grain`() {
+        // 20–24°F calm WAS a defect family in gen-3 (beanie + gloves
+        // + tights with NO shell: every pool row wore a shell). The
+        // GEN-4 replenishment closed it — RWPOOL-T13 (FEMALE) / T18
+        // (MALE) are bundled from newly approved rows.
         val coldCalm = outfit(
             ClothingItem.LONG_SLEEVE_LIGHT, ClothingItem.LIGHT_TIGHTS,
             null, ClothingItem.LIGHT_BEANIE, ClothingItem.LIGHT_GLOVES
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o0_tights_beanie_gloves.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COLD, HeroWeatherCondition.CLEAR,
                 GenderPreference.FEMALE, coldCalm
             )
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_male_long_o0_tights_beanie_gloves.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COLD, HeroWeatherCondition.CLEAR,
                 GenderPreference.MALE, coldCalm
@@ -335,17 +475,21 @@ class HeroPointGrainFallbackTest {
     }
 
     @Test
-    fun `no male visor asset is bundled - the nomination itself is absent`() {
-        // Census evidence: all 40 visor rows in the verified pool are
-        // FEMALE. The male nomination must not exist (the gated
-        // cascade's cross-gender pass is a separate, designed
-        // behavior — this pins that no male visor photo was bundled
-        // or fabricated).
+    fun `male visor assets are bundled after the replenishment - the nomination exists`() {
+        // Gen-3 census evidence was that all visor rows in the pool
+        // were FEMALE, so no male visor nomination existed. The
+        // GEN-4 replenishment generated and approved male visor rows
+        // (RWPOOL-T23..T26) and bundled them — the male nomination
+        // now exists and serves. UNISEX still names no gender, so
+        // the direct nomination stays null by design.
         val visor = outfit(
             ClothingItem.SHORT_SLEEVE, ClothingItem.SHORTS,
             null, ClothingItem.VISOR
         )
-        assertNull(HeroImageSelector.pointGrainFallbackUrl(GenderPreference.MALE, visor))
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_male_short_o0_shorts_visor_none.webp",
+            HeroImageSelector.pointGrainFallbackUrl(GenderPreference.MALE, visor)
+        )
         assertNull(HeroImageSelector.pointGrainFallbackUrl(GenderPreference.UNISEX, visor))
     }
 }

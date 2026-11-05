@@ -592,6 +592,17 @@ object HeroImageSelector {
      * Signatures with NO qualifying pool row are NOT bundled — they
      * are reported as pool-coverage defects in the census, never
      * silently served a contradicting photo (RW-20 invariant).
+     *
+     * GEN-4 REPLENISHMENT (2026-11-04 night): 20 further assets
+     * (RWPOOL-T07…T26) join the tables below, rendered at the RW-20
+     * standard from the replenishment wave's newly approved pool
+     * rows (1,086-row live pool; per-asset source row id +
+     * combination in the provenance table, adjudicated garment
+     * classes in the garments table — an outer-shell row whose base
+     * was unperceived carries topBase null, as in the gen-3 set).
+     * The 6 mittens signatures (RWPOOL-T01…T06) deliberately have NO
+     * asset: no truthful mittens photo exists, and a gloves photo
+     * labelled mittens would be the W-4 defect class.
      */
     private val POINT_GRAIN_GARMENTS: Map<String, FallbackGarments> = mapOf(
         "pg_female_long_o1_shorts_cap_none" to FallbackGarments(null, true, "shorts", "cap", null),
@@ -603,7 +614,27 @@ object HeroImageSelector {
         "pg_male_long_o1_shorts_cap_none" to FallbackGarments(null, true, "shorts", "cap", null),
         "pg_male_long_o1_tights_cap_none" to FallbackGarments(null, true, "tights", "cap", null),
         "pg_male_long_o1_tights_headband_gloves" to FallbackGarments(null, true, "tights", "headband", "gloves"),
-        "pg_male_short_o0_shorts_cap_none" to FallbackGarments("short", false, "shorts", "cap", null)
+        "pg_male_short_o0_shorts_cap_none" to FallbackGarments("short", false, "shorts", "cap", null),
+        "pg_female_long_o0_shorts_cap_none" to FallbackGarments("long", false, "shorts", "cap", null),
+        "pg_female_long_o0_shorts_none_none" to FallbackGarments("long", false, "shorts", null, null),
+        "pg_female_long_o1_shorts_none_none" to FallbackGarments(null, true, "shorts", null, null),
+        "pg_male_long_o0_shorts_cap_none" to FallbackGarments("long", false, "shorts", "cap", null),
+        "pg_male_long_o0_shorts_none_none" to FallbackGarments("long", false, "shorts", null, null),
+        "pg_male_long_o1_shorts_none_none" to FallbackGarments(null, true, "shorts", null, null),
+        "pg_female_long_o0_tights_beanie_gloves" to FallbackGarments("long", false, "tights", "beanie", "gloves"),
+        "pg_female_long_o0_tights_cap_none" to FallbackGarments("long", false, "tights", "cap", null),
+        "pg_female_long_o0_tights_none_none" to FallbackGarments("long", false, "tights", null, null),
+        "pg_female_long_o1_tights_cap_none" to FallbackGarments(null, true, "tights", "cap", null),
+        "pg_female_long_o1_tights_none_none" to FallbackGarments(null, true, "tights", null, null),
+        "pg_male_long_o0_tights_beanie_gloves" to FallbackGarments("long", false, "tights", "beanie", "gloves"),
+        "pg_male_long_o0_tights_cap_none" to FallbackGarments("long", false, "tights", "cap", null),
+        "pg_male_long_o0_tights_none_none" to FallbackGarments("long", false, "tights", null, null),
+        "pg_male_long_o1_tights_none_none" to FallbackGarments(null, true, "tights", null, null),
+        "pg_female_sleeveless_o0_shorts_visor_none" to FallbackGarments("sleeveless", false, "shorts", "visor", null),
+        "pg_male_short_o0_shorts_visor_none" to FallbackGarments("short", false, "shorts", "visor", null),
+        "pg_male_short_o1_shorts_visor_none" to FallbackGarments("short", true, "shorts", "visor", null),
+        "pg_male_sleeveless_o0_shorts_visor_none" to FallbackGarments("sleeveless", false, "shorts", "visor", null),
+        "pg_male_sleeveless_o1_shorts_visor_none" to FallbackGarments("sleeveless", true, "shorts", "visor", null)
     )
 
     /** GEN-3 A-HERO: provenance of the point-grain assets (rung "PG"). */
@@ -617,7 +648,27 @@ object HeroImageSelector {
         "pg_male_long_o1_shorts_cap_none" to FallbackAssetProvenance("MALE_RAINY_HOT_DUSK_v5", "914d7cc8-a421-4880-9835-4fda351b6e56", "PG"),
         "pg_male_long_o1_tights_cap_none" to FallbackAssetProvenance("MALE_RAINY_COOL_DAWN_v3", "b4938d64-7ed0-432e-91e9-58b1884e0879", "PG"),
         "pg_male_long_o1_tights_headband_gloves" to FallbackAssetProvenance("MALE_CLEAR_COOL_DAWN_0812f41c", "4897a1a5-edea-4b50-8d64-73846757dd71", "PG"),
-        "pg_male_short_o0_shorts_cap_none" to FallbackAssetProvenance("MALE_CLEAR_MILD_MIDDAY_v1", "e6ade771-bb21-435f-8185-cff7a1d136c8", "PG")
+        "pg_male_short_o0_shorts_cap_none" to FallbackAssetProvenance("MALE_CLEAR_MILD_MIDDAY_v1", "e6ade771-bb21-435f-8185-cff7a1d136c8", "PG"),
+        "pg_female_long_o0_shorts_cap_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_MIDDAY_01285eec", "72f29634-32a3-4382-9dbe-8705a1e1e9bc", "PG"),
+        "pg_female_long_o0_shorts_none_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_DAWN_726beba2", "92c54e8c-1e58-4d40-acd8-ace41fc00678", "PG"),
+        "pg_female_long_o1_shorts_none_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_DAWN_f48f0719", "801b8ec7-b176-461d-ac58-2f952237a521", "PG"),
+        "pg_male_long_o0_shorts_cap_none" to FallbackAssetProvenance("MALE_CLEAR_COOL_MIDDAY_01285eec", "c9d4e9ca-f4e8-4f23-a4bd-92a1db0ab828", "PG"),
+        "pg_male_long_o0_shorts_none_none" to FallbackAssetProvenance("MALE_CLEAR_COOL_DAWN_726beba2", "8fe47ab5-ee32-4613-a416-4a631dc1d691", "PG"),
+        "pg_male_long_o1_shorts_none_none" to FallbackAssetProvenance("MALE_CLEAR_COOL_DAWN_f48f0719", "b949a5cc-d3a3-4e4d-a787-3aca222bced7", "PG"),
+        "pg_female_long_o0_tights_beanie_gloves" to FallbackAssetProvenance("FEMALE_CLEAR_COLD_DAWN_86a1b05a", "a3ac61b5-8186-44c1-a35b-149517500cc0", "PG"),
+        "pg_female_long_o0_tights_cap_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_MIDDAY_2afe0e3d", "9b7b4c79-b4bf-460b-b89e-191884d8c66b", "PG"),
+        "pg_female_long_o0_tights_none_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_DAWN_e216ba73", "767527d5-c0e9-4ec6-860b-2879aea3aa2e", "PG"),
+        "pg_female_long_o1_tights_cap_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_MIDDAY_32531934", "b605a141-652a-4520-b26e-6e113843bfe4", "PG"),
+        "pg_female_long_o1_tights_none_none" to FallbackAssetProvenance("FEMALE_CLEAR_COOL_DAWN_5d6d246a", "46c26b43-70d8-47bd-9332-b6eccf36b584", "PG"),
+        "pg_male_long_o0_tights_beanie_gloves" to FallbackAssetProvenance("MALE_CLEAR_COLD_DAWN_86a1b05a", "eba55b64-1020-4b0b-9415-422403101247", "PG"),
+        "pg_male_long_o0_tights_cap_none" to FallbackAssetProvenance("MALE_CLEAR_COOL_MIDDAY_2afe0e3d", "c1c08b14-5285-4c8c-b6f8-e824557de115", "PG"),
+        "pg_male_long_o0_tights_none_none" to FallbackAssetProvenance("MALE_CLEAR_COOL_DAWN_e216ba73", "d18cbbc9-fcb3-463e-a046-8b873750cd46", "PG"),
+        "pg_male_long_o1_tights_none_none" to FallbackAssetProvenance("MALE_CLEAR_COOL_DAWN_5d6d246a", "bb301f8a-240d-4aec-9e1b-0cd54d2a5cc0", "PG"),
+        "pg_female_sleeveless_o0_shorts_visor_none" to FallbackAssetProvenance("FEMALE_CLEAR_HOT_MIDDAY_c9b28fa9", "751d99e8-d36c-46ba-b029-f5cc8607077d", "PG"),
+        "pg_male_short_o0_shorts_visor_none" to FallbackAssetProvenance("MALE_CLEAR_WARM_MIDDAY_83b3d617", "c682b3cc-fd5c-415b-8ca2-c69762de383f", "PG"),
+        "pg_male_short_o1_shorts_visor_none" to FallbackAssetProvenance("MALE_RAIN_WARM_MIDDAY_f8d85d23", "f7dd3cc1-4dd0-4767-8cab-ac1599d2abe1", "PG"),
+        "pg_male_sleeveless_o0_shorts_visor_none" to FallbackAssetProvenance("MALE_CLEAR_HOT_MIDDAY_c9b28fa9", "9d4b71bb-28ef-4eb1-83e8-6f2761bdbbbd", "PG"),
+        "pg_male_sleeveless_o1_shorts_visor_none" to FallbackAssetProvenance("MALE_RAIN_HOT_MIDDAY_87d183b5", "3643f7ec-59a2-4904-8aec-d1297e426857", "PG")
     )
 
     /**
@@ -640,7 +691,27 @@ object HeroImageSelector {
         "MALE|long|true|shorts|cap|none" to "pg_male_long_o1_shorts_cap_none",
         "MALE|long|true|tights|cap|none" to "pg_male_long_o1_tights_cap_none",
         "MALE|long|true|tights|headband|gloves" to "pg_male_long_o1_tights_headband_gloves",
-        "MALE|short|false|shorts|cap|none" to "pg_male_short_o0_shorts_cap_none"
+        "MALE|short|false|shorts|cap|none" to "pg_male_short_o0_shorts_cap_none",
+        "FEMALE|long|false|shorts|cap|none" to "pg_female_long_o0_shorts_cap_none",
+        "FEMALE|long|false|shorts|none|none" to "pg_female_long_o0_shorts_none_none",
+        "FEMALE|long|true|shorts|none|none" to "pg_female_long_o1_shorts_none_none",
+        "MALE|long|false|shorts|cap|none" to "pg_male_long_o0_shorts_cap_none",
+        "MALE|long|false|shorts|none|none" to "pg_male_long_o0_shorts_none_none",
+        "MALE|long|true|shorts|none|none" to "pg_male_long_o1_shorts_none_none",
+        "FEMALE|long|false|tights|beanie|gloves" to "pg_female_long_o0_tights_beanie_gloves",
+        "FEMALE|long|false|tights|cap|none" to "pg_female_long_o0_tights_cap_none",
+        "FEMALE|long|false|tights|none|none" to "pg_female_long_o0_tights_none_none",
+        "FEMALE|long|true|tights|cap|none" to "pg_female_long_o1_tights_cap_none",
+        "FEMALE|long|true|tights|none|none" to "pg_female_long_o1_tights_none_none",
+        "MALE|long|false|tights|beanie|gloves" to "pg_male_long_o0_tights_beanie_gloves",
+        "MALE|long|false|tights|cap|none" to "pg_male_long_o0_tights_cap_none",
+        "MALE|long|false|tights|none|none" to "pg_male_long_o0_tights_none_none",
+        "MALE|long|true|tights|none|none" to "pg_male_long_o1_tights_none_none",
+        "FEMALE|sleeveless|false|shorts|visor|none" to "pg_female_sleeveless_o0_shorts_visor_none",
+        "MALE|short|false|shorts|visor|none" to "pg_male_short_o0_shorts_visor_none",
+        "MALE|short|true|shorts|visor|none" to "pg_male_short_o1_shorts_visor_none",
+        "MALE|sleeveless|false|shorts|visor|none" to "pg_male_sleeveless_o0_shorts_visor_none",
+        "MALE|sleeveless|true|shorts|visor|none" to "pg_male_sleeveless_o1_shorts_visor_none"
     )
 
     /**
@@ -830,7 +901,7 @@ object HeroImageSelector {
     /**
      * GEN-4: every bundled asset as a chain candidate — the 44 RW-26
      * matrix assets (bracket/weather read from the file name, gender
-     * from its suffix) plus the 10 point-grain assets (bracket/
+     * from its suffix) plus the 30 point-grain assets (bracket/
      * weather read from the asset's provenance combination, gender
      * from the pg_ file prefix). Garments are the adjudicated census
      * classes; every asset is a one-person photo per its derivation

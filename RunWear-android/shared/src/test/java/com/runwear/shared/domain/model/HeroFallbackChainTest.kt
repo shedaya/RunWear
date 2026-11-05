@@ -416,7 +416,7 @@ class HeroFallbackChainTest {
     }
 
     @Test
-    fun `male visor prescription floors to a male bundled asset, labelled scaffold`() {
+    fun `male visor prescription serves the male visor bundled asset exactly after the replenishment`() {
         val visor = outfit(
             ClothingItem.SHORT_SLEEVE, ClothingItem.SHORTS,
             head = ClothingItem.VISOR
@@ -425,16 +425,19 @@ class HeroFallbackChainTest {
             weatherFixture(), visor,
             GenderPreference.MALE, frameFeelsLikeF = 58.0
         )
-        // The nearest male scaffold is the male cap photo (cap and
-        // visor are the same sun-coverage step) — never the female
-        // visor asset, which the pre-GEN-4 gated walk's cross-gender
-        // pass would have served as if exact.
+        // GEN-4 replenishment (RWPOOL-T23): a truthful male visor
+        // photo now EXISTS in the bundle, so the chain serves it
+        // EXACT — superseding the gen-4 pin above it in history,
+        // where the nearest male scaffold (the male cap photo)
+        // served labelled scaffold because no male visor photo
+        // existed. Gender is still never crossed.
         assertEquals(
-            "file:///android_asset/hero_fallback/pg_male_short_o0_shorts_cap_none.webp",
+            "file:///android_asset/hero_fallback/pg_male_short_o0_shorts_visor_none.webp",
             result.imageUrl
         )
-        assertTrue(result.isScaffold)
-        assertEquals(HeroServeSource.SCAFFOLD, result.serveSource)
+        assertFalse(result.isScaffold)
+        assertEquals(HeroServeSource.BUNDLED_FALLBACK, result.serveSource)
+        assertEquals("EXACT", result.chainTier)
     }
 
     /**
@@ -513,7 +516,7 @@ class HeroFallbackChainTest {
     @Test
     fun `bundled candidate census covers both genders for every bracket family`() {
         val candidates = HeroImageSelector.bundledPhotoCandidates()
-        assertEquals(54, candidates.size)
+        assertEquals(74, candidates.size)  // 54 -> 74: +20 GEN-4 replenishment pg_* assets (RWPOOL-T07..T26)
         for (gender in listOf(GenderPreference.FEMALE, GenderPreference.MALE)) {
             val brackets = candidates.filter { it.gender == gender }.map { it.bracket }.toSet()
             assertEquals(

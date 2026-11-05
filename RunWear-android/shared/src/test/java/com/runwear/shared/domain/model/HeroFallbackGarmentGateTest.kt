@@ -2,7 +2,6 @@ package com.runwear.shared.domain.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -103,23 +102,32 @@ class HeroFallbackGarmentGateTest {
     }
 
     @Test
-    fun `W-4 - no bundled asset serves the 2-item KC prescription`() {
-        // Long sleeve + tights + no outer + bare head/hands exists
-        // nowhere in the bundled library: the honest terminus is no
-        // photo, never the headband-and-gloves photo.
-        assertNull(
+    fun `W-4 - the replenished point-grain asset serves the 2-item KC prescription`() {
+        // GEN-4 REPLENISHMENT (RWPOOL-T15 FEMALE / T20 MALE): the
+        // 2-item KC prescription (long sleeve + tights, no outer,
+        // bare head/hands) WAS unservable in the bundled library —
+        // the gen-2/3 pin here asserted null. The replenishment
+        // bundled exactly this signature from newly approved pool
+        // rows, so the gated resolution now serves it exactly. The
+        // RW-20 invariant is unchanged: the serve passes the same
+        // gate (see the signature tests in
+        // HeroPointGrainFallbackTest); it is not a waiver.
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o0_tights_none_none.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COOL, HeroWeatherCondition.CLEAR,
                 GenderPreference.FEMALE, kcTwoItem
             )
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_male_long_o0_tights_none_none.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COOL, HeroWeatherCondition.CLEAR,
                 GenderPreference.MALE, kcTwoItem
             )
         )
-        assertNull(
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o0_tights_none_none.webp",
             HeroImageSelector.gatedFallbackUrl(
                 TempBracket.COOL, HeroWeatherCondition.CLEAR,
                 GenderPreference.UNISEX, kcTwoItem
@@ -149,6 +157,10 @@ class HeroFallbackGarmentGateTest {
     fun `W-5 - resolution is a function of the prescription, so a change re-resolves`() {
         // Same cell, three prescriptions, three different outcomes:
         // the pre-fix bracket key made all three the same photo.
+        // Post-replenishment all three resolve to a photo (the two
+        // former nulls are the T15 and T08 point-grain serves) —
+        // and they are three DIFFERENT photos, which is the W-5
+        // property: the serve tracks the prescription.
         val cell = TempBracket.COOL to HeroWeatherCondition.CLEAR
         val forTights = HeroImageSelector.gatedFallbackUrl(
             cell.first, cell.second, GenderPreference.FEMALE, kcTwoItem
@@ -159,14 +171,17 @@ class HeroFallbackGarmentGateTest {
         val forShorts = HeroImageSelector.gatedFallbackUrl(
             cell.first, cell.second, GenderPreference.FEMALE, kcShorts
         )
-        assertNull(forTights)
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o0_tights_none_none.webp",
+            forTights
+        )
         assertEquals(
             "file:///android_asset/hero_fallback/cool_clear_female.webp", forColdEnd
         )
-        // Shorts under a long sleeve exists nowhere in the library
-        // either — the change is VISIBLE (the mismatched photo is
-        // gone) instead of the photo silently staying.
-        assertNull(forShorts)
+        assertEquals(
+            "file:///android_asset/hero_fallback/pg_female_long_o0_shorts_none_none.webp",
+            forShorts
+        )
     }
 
     @Test
@@ -244,25 +259,25 @@ class HeroFallbackGarmentGateTest {
     }
 
     @Test
-    fun `getFallbackImage serves the labelled floor scaffold when the gate exhausts`() {
-        // GEN-4 (Sol's ruling, 2026-11-04) supersedes the gen-2/3
-        // terminus pinned here before: the exact GATE still exhausts
-        // for the 2-item KC prescription (gatedFallbackUrl is null —
-        // no bundled asset may CLAIM it), but the hero may no longer
-        // settle on the bare gradient. The chain's FLOOR tier serves
-        // the nearest same-gender bundled asset — the COOL bracket's
-        // own cold-end photo — labelled SCAFFOLD, never exact.
+    fun `getFallbackImage serves the KC prescription exactly after the replenishment, cold-end unchanged`() {
+        // GEN-4 REPLENISHMENT supersedes the gen-4 floor pin for
+        // this prescription: the 2-item KC prescription now has a
+        // bundled EXACT serve (RWPOOL-T15), so getFallbackImage
+        // returns it labelled exact — not the COOL cold-end photo
+        // labelled scaffold. The floor tier itself is still pinned
+        // end-to-end in HeroFallbackChainTest (e.g. the mittens
+        // prescription, which deliberately has no bundled asset).
         val result = HeroImageSelector.getFallbackImage(
             weatherFixture(), kcTwoItem,
             GenderPreference.FEMALE, frameFeelsLikeF = 44.0
         )
         assertEquals(
-            "file:///android_asset/hero_fallback/cool_clear_female.webp",
+            "file:///android_asset/hero_fallback/pg_female_long_o0_tights_none_none.webp",
             result.imageUrl
         )
-        assertEquals(HeroServeSource.SCAFFOLD, result.serveSource)
-        assertTrue(result.isScaffold)
-        assertEquals("FLOOR", result.chainTier)
+        assertEquals(HeroServeSource.BUNDLED_FALLBACK, result.serveSource)
+        assertFalse(result.isScaffold)
+        assertEquals("EXACT", result.chainTier)
 
         val matched = HeroImageSelector.getFallbackImage(
             weatherFixture(), coolColdEnd,
