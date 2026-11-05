@@ -140,6 +140,16 @@ final class MakeItMeBilling: ObservableObject {
     }
 
     private func purchase(package: Package?) async -> PurchaseOutcome {
+        // GEN-6 Wave A (DA-10 class): recognise an EXISTING
+        // entitlement before initiating any purchase. The sheet
+        // gates its purchase button on `isSubscribed` at render
+        // time, but a stale model (entitlement active, refresh
+        // not yet landed) would otherwise send an already-
+        // subscribed user into a store purchase that can only
+        // dead-end in a store error. Re-read the entitlement
+        // first; a live one routes to the subscribed state.
+        await refresh()
+        guard !isSubscribed else { return .subscribed }
         guard configured, let package else {
             await loadOfferings()
             return .unavailable

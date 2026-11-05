@@ -1148,6 +1148,26 @@ enum ForkHeroSpec {
 struct BankCoverage: Equatable {
     let ready: Int
     let total: Int
+
+    /// Every named target cell is banked — the only state in
+    /// which a readiness claim about the bank is true.
+    var isComplete: Bool {
+        total > 0 && ready >= total
+    }
+}
+
+/// GEN-6 Wave A (DA-10-class honesty): the subscribed state's
+/// readiness claim ("Subscribed · Your photo is ready before
+/// you open the app.", design-spec §13) may render ONLY when
+/// the user's bank is actually complete — every named target
+/// cell banked. Before that (fill still converging, or coverage
+/// not yet measured) the claim is hard-coded optimism: the
+/// surfaces fall back to the plain subscribed state and the
+/// convergence band carries the honest progress.
+enum SubscribedReadiness {
+    static func mayClaim(coverage: BankCoverage?) -> Bool {
+        coverage?.isComplete == true
+    }
 }
 
 /// Coverage from the two owner-read cell sets — ready is the

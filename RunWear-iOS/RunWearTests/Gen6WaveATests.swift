@@ -67,6 +67,54 @@ final class Gen6WaveATests: XCTestCase {
                       "W-18 stands: a landing still re-reads the one counter")
     }
 
+    // MARK: - Item 5 · Paywall honesty (DA-11 figure · DA-10 entitlement · readiness gate)
+
+    func testReadinessClaim_GatedOnActualBankCoverage() {
+        XCTAssertFalse(SubscribedReadiness.mayClaim(coverage: nil),
+                       "coverage unmeasured: no readiness claim")
+        XCTAssertFalse(SubscribedReadiness.mayClaim(coverage: BankCoverage(ready: 0, total: 0)),
+                       "an empty bank is not a complete bank")
+        XCTAssertFalse(SubscribedReadiness.mayClaim(coverage: BankCoverage(ready: 47, total: 48)),
+                       "47 of 48 banked is converging, not ready-before-you-open-the-app")
+        XCTAssertTrue(SubscribedReadiness.mayClaim(coverage: BankCoverage(ready: 48, total: 48)),
+                      "the claim renders only when every named cell is banked")
+    }
+
+    func testPaywallHonesty_sourcePins() throws {
+        let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        // (a) The withdrawn figure renders nowhere in the
+        // paywall / Settings surfaces.
+        XCTAssertFalse(settings.contains("About 10 seconds"),
+                       "the withdrawn 'about 10 seconds' figure must not survive in user-facing copy")
+        XCTAssertFalse(settings.contains("10 seconds"),
+                       "no seconds promise of any kind in these surfaces")
+        // (c) The settled string stands, and BOTH seats gate it
+        // on coverage through the one helper.
+        XCTAssertTrue(settings.contains("Subscribed · Your photo is ready before you open the app."),
+                      "the settled §13 string stands verbatim")
+        XCTAssertEqual(settings.components(separatedBy: "SubscribedReadiness.mayClaim(coverage: store.bankCoverage)").count - 1, 2,
+                       "both readiness seats (Settings status, paywall sheet) gate on bank coverage")
+        // (b) The billing layer re-checks the entitlement
+        // BEFORE any store purchase is initiated.
+        let billing = try sourceFile("../RunWear/Services/MakeItMeBilling.swift")
+        let purchaseStart = try XCTUnwrap(billing.range(of: "private func purchase(package:")?.lowerBound)
+        let refreshAt = try XCTUnwrap(billing.range(of: "await refresh()", range: purchaseStart..<billing.endIndex)?.lowerBound)
+        let storeCall = try XCTUnwrap(billing.range(of: "Purchases.shared.purchase(package:", range: purchaseStart..<billing.endIndex)?.lowerBound)
+        let guardAt = try XCTUnwrap(billing.range(of: "guard !isSubscribed else { return .subscribed }", range: purchaseStart..<billing.endIndex)?.lowerBound)
+        XCTAssertTrue(refreshAt < guardAt && guardAt < storeCall,
+                      "purchase(): refresh entitlement → already-subscribed returns .subscribed → only then the store call")
+    }
+
+    func testWithdrawnFigure_NoUserFacingCopyCarriesIt() {
+        // The settled progress copy and the settled paywall
+        // meter line carry no seconds promise.
+        XCTAssertFalse(MakeItMeCopy.progressSubline.contains("second"))
+        XCTAssertFalse(MakeItMeCopy.progressTitle.contains("second"))
+        XCTAssertFalse(FreeLooksMeter.subscriptionLine.contains("second"))
+        XCTAssertTrue(FreeLooksMeter.subscriptionLine.contains("about a minute"),
+                      "the settled §14 meter line stands: first ones take about a minute")
+    }
+
     // MARK: - Item 4 · Counter truth — the counter-sequence test (DA-08)
 
     /// THE COUNTER-SEQUENCE TEST the gen-5 gate lacked: drive

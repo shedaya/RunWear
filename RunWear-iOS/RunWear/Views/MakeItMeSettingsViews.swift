@@ -133,9 +133,24 @@ struct MakeItMeSettingsSection: View {
                         // gen-4 build drifted to an em-dash
                         // lowercase form on the sibling platform
                         // (B-17); iOS renders the settled form.
-                        Text("Subscribed · Your photo is ready before you open the app.")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.inkSecondary)
+                        // GEN-6 Wave A: the READINESS claim inside
+                        // the line renders only when the bank is
+                        // actually complete (SubscribedReadiness)
+                        // — before that (or while coverage is
+                        // unmeasured) the plain subscribed line
+                        // stands; this seat is under the band's
+                        // umbrella whenever a band exists (see the
+                        // band seat above), so the claim can never
+                        // outrun the coverage it asserts.
+                        if SubscribedReadiness.mayClaim(coverage: store.bankCoverage) {
+                            Text("Subscribed · Your photo is ready before you open the app.")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        } else {
+                            Text("Subscribed.")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
                     } else {
                         // W-18: composed through FreeLooksMeter
                         // from the store's ONE counter — the same
@@ -736,9 +751,22 @@ struct MakeItMeSubscriptionSheet: View {
                     }
 
                     if store.billing.isSubscribed {
-                        Text("Subscribed · Your photo is ready before you open the app.")
-                            .font(.system(size: 14))
-                            .foregroundColor(AppTheme.inkSecondary)
+                        // GEN-6 Wave A: the readiness claim is
+                        // gated on actual bank coverage here too
+                        // (SubscribedReadiness) — the sheet reads
+                        // the personal store's coverage; a
+                        // subscribed user whose bank is still
+                        // filling sees the plain subscribed state,
+                        // never a hard-coded readiness promise.
+                        if SubscribedReadiness.mayClaim(coverage: store.bankCoverage) {
+                            Text("Subscribed · Your photo is ready before you open the app.")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        } else {
+                            Text("You're subscribed.")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
                     } else {
                         // The CTA carries NO price (§6, row 7).
                         Button {
