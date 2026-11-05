@@ -48,6 +48,9 @@ struct WeatherOutfitView: View {
     /// GEN-3 (WS-A(2)): the hero pill's free-look state opens the
     /// Premium paywall from the hero.
     @State private var showHeroPillPaywall = false
+    /// GEN-6 (RW-61): the looks library sheet, opened from the
+    /// failed cell's "See all your looks" door.
+    @State private var showLooksLibrary = false
 
     // R-15 rating moment: this view exists only when a recommendation
     // is on screen, so appearing here IS the proven-value signal. The
@@ -361,6 +364,15 @@ struct WeatherOutfitView: View {
             MakeItMeSubscriptionSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showLooksLibrary) {
+            // GEN-6 (RW-61): the looks library, one tap from the
+            // failed cell's home line.
+            NavigationStack {
+                YourLooksLibraryView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         // Neutral THREE-door rating moment (frame 49): feedback
         // first, then the rating door, then not-now. Any door
@@ -1298,6 +1310,16 @@ struct WeatherOutfitView: View {
                     Button(MakeItMeCopy.lookRetry) {
                         personalStore.retryLook(for: cell)
                         viewModel.refreshHero()
+                    }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(AppTheme.inkPrimary)
+                    // GEN-6 (RW-61): the library door, one tap from
+                    // where the failed cell is encountered (frame
+                    // 20's door wording). The failure itself is
+                    // never badged on home — this quiet door is the
+                    // whole home footprint.
+                    Button("See all your looks") {
+                        showLooksLibrary = true
                     }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.inkPrimary)

@@ -286,4 +286,47 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertTrue(textIdx < redactedIdx || loading.contains("private var skeleton"),
                       "the line is not swallowed by the placeholder redaction")
     }
+
+    // MARK: - RW-61: the looks library
+
+    func testRW61LibraryCellsCarrySettledTitlesAndTheFailedLabel() {
+        let cells = LooksLibrary.cells(from: [
+            "MALE_SNOW_FREEZING_NIGHT_hash1": .ready,
+            "FEMALE_CLEAR_MILD_DAWN_hash2": .failed(reason: .qualityRefused),
+            "MALE_RAIN_COOL_MIDDAY_hash3": .making,
+            "MALE_CLOUDY_WARM_DUSK_hash4": .none,
+        ])
+        XCTAssertEqual(cells.count, 3, ".none states are not library cells")
+        let ready = try! XCTUnwrap(cells.first { $0.combinationId.hasPrefix("MALE_SNOW") })
+        XCTAssertEqual(ready.titleLine, "Snow · Freezing")
+        XCTAssertEqual(ready.statusLine, "Night")
+        XCTAssertFalse(ready.isFailed)
+        // THE failed-cell state: the settled label, verbatim.
+        let failed = try! XCTUnwrap(cells.first { $0.combinationId.hasPrefix("FEMALE_CLEAR") })
+        XCTAssertEqual(failed.titleLine, "Clear · Mild")
+        XCTAssertEqual(failed.statusLine, "Dawn · stock photo for now")
+        XCTAssertTrue(failed.isFailed)
+    }
+
+    func testRW61ExplanationIsThePolicyConstantVerbatim() {
+        XCTAssertEqual(PersonalServePolicy.failedExplanation,
+                       "This look couldn't be made, so the standard photo is shown here. Your other looks are unaffected.")
+        XCTAssertEqual(PersonalServePolicy.presentation(hasPersonalPhoto: false, lookState: .failed(reason: .error)),
+                       .failedQuiet(explanation: PersonalServePolicy.failedExplanation))
+    }
+
+    func testRW61LibrarySurfaceAndEntry_sourcePins() throws {
+        let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(settings.contains("struct YourLooksLibraryView"), "the library surface exists")
+        XCTAssertTrue(settings.contains(".navigationTitle(\"Your looks\")"), "under its settled title")
+        XCTAssertTrue(settings.contains("Button(\"Why am I seeing a stock photo?\")"),
+                      "the failed cell carries the explanation door")
+        XCTAssertTrue(settings.contains("Text(PersonalServePolicy.failedExplanation)"),
+                      "the door speaks the policy constant itself, not a rewrite")
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(home.contains("Button(\"See all your looks\")"),
+                      "one tap away from the failed cell's home line")
+        XCTAssertFalse(home.contains("stock photo for now"),
+                       "the failed label is never badged on home — it lives in the library")
+    }
 }

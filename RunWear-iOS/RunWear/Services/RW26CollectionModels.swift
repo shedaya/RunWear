@@ -1290,6 +1290,57 @@ enum PersonalServePolicy {
     }
 }
 
+// MARK: - The looks library (GEN-6 RW-61; frame 21 / §17)
+//
+// The designed "Your looks" library did not exist on iOS: the
+// store's per-cell look states had no surface of their own, and
+// the failed cell's explanation (PersonalServePolicy
+// .failedExplanation) was computed but never rendered anywhere.
+// This model is the library's content: one cell per known look
+// state, titled from the cell's own key ({weather} · {bracket},
+// then the time of day), with the gate-failed cell carrying the
+// settled "stock photo for now" suffix on its time line.
+enum LooksLibrary {
+
+    struct Cell: Equatable, Identifiable {
+        let combinationId: String
+        /// "{Weather} · {Bracket}" — frame 21's title line.
+        let titleLine: String
+        /// The time-of-day line; a gate-failed cell appends the
+        /// settled suffix: "Night · stock photo for now".
+        let statusLine: String
+        let state: PersonalLookState
+
+        var id: String { combinationId }
+        var isFailed: Bool { state.isFailed }
+    }
+
+    /// The settled failure suffix (frame 21 / design-spec §17).
+    static let failedSuffix = "stock photo for now"
+
+    static func cells(from lookStates: [String: PersonalLookState]) -> [Cell] {
+        lookStates
+            .compactMap { (combinationId, state) in
+                guard state != .none else { return nil }
+                // combinationId = {GENDER}_{WEATHER}_{BRACKET}_{TIME}_{hash}
+                let parts = combinationId.split(separator: "_")
+                guard parts.count >= 5,
+                      let weather = HeroWeatherCondition(rawValue: String(parts[1])),
+                      let bracket = HeroTempBracket(rawValue: String(parts[2])),
+                      let time = HeroTimeOfDay(rawValue: String(parts[3]))
+                else { return nil }
+                let timeName = time.rawValue.capitalized
+                return Cell(
+                    combinationId: combinationId,
+                    titleLine: "\(weather.rawValue.capitalized) · \(bracket.rawValue.capitalized)",
+                    statusLine: state.isFailed ? "\(timeName) · \(failedSuffix)" : timeName,
+                    state: state
+                )
+            }
+            .sorted { $0.combinationId < $1.combinationId }
+    }
+}
+
 // MARK: - Feedback routing (RW-18 + RW-1 residual)
 
 /// The feedback channel contract, identical to Android's
