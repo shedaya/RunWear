@@ -285,6 +285,42 @@ final class Gen3TrainDeltaTests: XCTestCase {
         XCTAssertEqual(chaptersAfter.first { $0.placeName == "New York, NY" }?.entries.count, 4)
     }
 
+    // MARK: - Paywall monthly · Sol's resolution (displayed, secondary)
+
+    func testPaywallDefaultsToAnnualAndMonthlyPriceIsParameterized() {
+        XCTAssertEqual(MakeItMePriceLabels.defaultPlan, .annual,
+                       "annual is the hero and the default selection")
+        // The monthly row's price comes from the fetched product —
+        // the existing label seam, never a hardcoded figure.
+        XCTAssertEqual(MakeItMePriceLabels.monthlyRowLabel(priceString: "$0.99"), "$0.99 / month")
+        XCTAssertEqual(MakeItMePriceLabels.monthlyRowLabel(priceString: nil), "Monthly",
+                       "unresolved product → the price-free plan name, never a wrong price")
+    }
+
+    func testMonthlyRowIsOneQuietRowUnderTheAnnualHero_sourcePin() throws {
+        let views = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        let sheetIdx = try XCTUnwrap(views.range(of: "struct MakeItMeSubscriptionSheet"))
+        let sheet = views[sheetIdx.lowerBound...]
+        let annualIdx = try XCTUnwrap(sheet.range(of: "store.billing.annualPriceString"))
+        let finePrintIdx = try XCTUnwrap(sheet.range(of: "store.billing.perRunFinePrint"))
+        let monthlyIdx = try XCTUnwrap(sheet.range(of: "store.billing.monthlyRowLabel"))
+        XCTAssertTrue(annualIdx.lowerBound < finePrintIdx.lowerBound
+                      && finePrintIdx.lowerBound < monthlyIdx.lowerBound,
+                      "order: annual hero card → per-run fine print (unchanged seat) → the one monthly row")
+        XCTAssertTrue(sheet.contains("@State private var selectedPlan: PaywallPlan = MakeItMePriceLabels.defaultPlan"),
+                      "the selection state defaults through the label seam (annual)")
+        XCTAssertTrue(sheet.contains("if store.billing.monthlyPriceString != nil"),
+                      "the monthly row renders only once its fetched price resolves")
+        XCTAssertTrue(sheet.contains("selectedPlan = .monthly"),
+                      "tapping the row selects monthly")
+        XCTAssertTrue(sheet.contains("await store.billing.purchaseMonthly()"),
+                      "the CTA purchases the selected plan")
+        XCTAssertTrue(sheet.contains("await store.billing.purchaseAnnual()"))
+        // Exactly ONE monthly row in the sheet.
+        XCTAssertEqual(sheet.components(separatedBy: "store.billing.monthlyRowLabel").count - 1, 2,
+                       "the label is read twice (row + its accessibility label) — one row, not two")
+    }
+
     // MARK: - First-look rulings · finished CTA wording
 
     func testFinishedCTAReadsUpgradeToPremium_sourcePin() throws {

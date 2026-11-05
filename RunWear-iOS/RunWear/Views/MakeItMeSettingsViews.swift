@@ -431,6 +431,10 @@ struct MakeItMeSubscriptionSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var purchasing = false
     @State private var unavailableLine: String?
+    /// GEN-3 (Sol's Nov 4 resolution): the plan selection —
+    /// annual is the hero and the default; the monthly row below
+    /// it is the one quiet secondary alternative.
+    @State private var selectedPlan: PaywallPlan = MakeItMePriceLabels.defaultPlan
 
     var body: some View {
         ZStack {
@@ -471,8 +475,10 @@ struct MakeItMeSubscriptionSheet: View {
                             .foregroundColor(AppTheme.inkSecondary)
                     }
 
-                    // The ONE highlighted card. Its price slot is
-                    // the Offering's annual price and nothing else.
+                    // The hero card — the annual plan, and the
+                    // default selection. Its price slot is the
+                    // Offering's annual price and nothing else.
+                    // Tapping it re-selects annual.
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Premium")
                             .font(.system(size: 18, weight: .bold))
@@ -491,8 +497,13 @@ struct MakeItMeSubscriptionSheet: View {
                     .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.sheet))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppTheme.primaryColor, lineWidth: 2)
+                            .stroke(selectedPlan == .annual ? AppTheme.primaryColor : AppTheme.cardStroke,
+                                    lineWidth: selectedPlan == .annual ? 2 : 1)
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: 16))
+                    .onTapGesture { selectedPlan = .annual }
+                    .accessibilityAddTraits(selectedPlan == .annual ? [.isSelected] : [])
+                    .accessibilityLabel("Annual plan")
 
                     // GEN-3 (WS-F): the fine print under the card —
                     // the annual price framed per run with its
@@ -505,6 +516,38 @@ struct MakeItMeSubscriptionSheet: View {
                         Text(finePrint)
                             .font(.system(size: 12))
                             .foregroundColor(AppTheme.inkSecondary)
+                    }
+
+                    // GEN-3 (Sol's Nov 4 resolution — the monthly
+                    // plan IS displayed): ONE quiet secondary
+                    // monthly row UNDER the annual hero card. Its
+                    // price is parameterized from the fetched
+                    // monthly product, exactly like the annual's
+                    // (never hardcoded); the row renders only once
+                    // that price has resolved. Tapping it selects
+                    // monthly; the CTA then purchases monthly.
+                    if store.billing.monthlyPriceString != nil {
+                        HStack {
+                            Text("Monthly")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Spacer()
+                            Text(store.billing.monthlyRowLabel)
+                                .font(.system(size: 15))
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(selectedPlan == .monthly ? AppTheme.primaryColor : Color.clear,
+                                        lineWidth: 1.5)
+                        )
+                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                        .onTapGesture { selectedPlan = .monthly }
+                        .accessibilityAddTraits(selectedPlan == .monthly ? [.isSelected] : [])
+                        .accessibilityLabel("Monthly plan, \(store.billing.monthlyRowLabel)")
                     }
 
                     if store.billing.isSubscribed {
@@ -557,7 +600,12 @@ struct MakeItMeSubscriptionSheet: View {
         purchasing = true
         unavailableLine = nil
         Task {
-            let outcome = await store.billing.purchaseAnnual()
+            // The CTA purchases the SELECTED plan — annual by
+            // default (and whenever the hero card is tapped),
+            // monthly only when its quiet row was selected.
+            let outcome = selectedPlan == .annual
+                ? await store.billing.purchaseAnnual()
+                : await store.billing.purchaseMonthly()
             purchasing = false
             switch outcome {
             case .subscribed:

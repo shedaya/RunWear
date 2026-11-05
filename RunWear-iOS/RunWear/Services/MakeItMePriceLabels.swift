@@ -22,7 +22,19 @@ import Foundation
 /// Foundation-only and dual-membered into the RunWearTests target
 /// (the project's established pattern) so MakeItMePriceLabelTests
 /// can pin the math without the RevenueCat module.
+/// The paywall's two plans (GEN-3, Sol's Nov 4 resolution: the
+/// monthly plan IS displayed, as one quiet secondary row under
+/// the annual hero card). Annual is the hero and the DEFAULT
+/// selection; monthly is the secondary alternative.
+enum PaywallPlan: Equatable {
+    case annual
+    case monthly
+}
+
 enum MakeItMePriceLabels {
+    /// The selection the paywall opens with: annual, always.
+    static let defaultPlan: PaywallPlan = .annual
+
     static func monthlyRowLabel(priceString: String?) -> String {
         priceString.map { "\($0) / month" } ?? "Monthly"
     }
