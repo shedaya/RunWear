@@ -125,14 +125,18 @@ class Gen3SettingsTest {
         assertEquals("Make It Me", MakeItMeStrings.F3_OPTION_A_TITLE)
     }
 
-    // ── WS-E — welcome third feature point ─────────────────────
+    // ── WS-E → GEN-3 ROUND 2 — welcome third feature point ─────
+    // The WS-E headline/line ("Remember every run" / "Wear I've Run
+    // turns…") is SUPERSEDED by Sol's name-led composition: the
+    // point leads with "Wear I've Run" and the phrase no longer
+    // repeats the name.
 
     @Test
-    fun `welcome carries the third feature point verbatim`() {
-        assertEquals("Remember every run", OnboardingCopy.PROMISE_3_TITLE)
+    fun `welcome third point is the name-led composition`() {
+        assertEquals("Wear I've Run", OnboardingCopy.PROMISE_3_NAME)
         assertEquals(
-            "Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.",
-            OnboardingCopy.PROMISE_3_BODY
+            "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran.",
+            OnboardingCopy.PROMISE_3_PHRASE
         )
     }
 }

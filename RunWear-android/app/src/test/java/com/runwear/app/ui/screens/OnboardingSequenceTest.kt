@@ -134,12 +134,13 @@ class OnboardingSequenceTest {
     // ── A1 — the promise's placement ────────────────────────────
 
     @Test
-    fun `A1 - the free-looks promise is a frame-28 promise-row string`() {
+    fun `A1 - the free-looks promise sentence stays defined, superseded on the welcome by round 2`() {
+        // GEN-3 ROUND 2 (Sol, Nov 4): point 2's final copy is
+        // "Put yourself in the photos." — the free-looks sentence
+        // no longer rides the welcome point. The canonical sentence
+        // itself stays defined verbatim.
         assertEquals("Your first 5 looks are free.", OnboardingCopy.FREE_LOOKS_PROMISE)
-        assertTrue(
-            "the promise sentence must live inside the second promise row",
-            OnboardingCopy.PROMISE_2_BODY.endsWith(OnboardingCopy.FREE_LOOKS_PROMISE)
-        )
+        assertEquals("Put yourself in the photos.", OnboardingCopy.PROMISE_2_PHRASE)
     }
 
     @Test
@@ -154,9 +155,9 @@ class OnboardingSequenceTest {
             occurrences(screen, OnboardingCopy.FREE_LOOKS_PROMISE)
         )
         val promiseStep = region(screen, "private fun PromiseStep", "private fun PromiseRow")
-        assertTrue(promiseStep.contains("OnboardingCopy.PROMISE_2_BODY"))
+        assertTrue(promiseStep.contains("OnboardingCopy.WELCOME_POINTS"))
         val setupStep = region(screen, "private fun PreferencesStep", "private fun LocationStep")
-        assertFalse(setupStep.contains("PROMISE_2_BODY"))
+        assertFalse(setupStep.contains("WELCOME_POINTS"))
         assertFalse(setupStep.contains("FREE_LOOKS_PROMISE"))
         assertFalse(setupStep.contains("Make It Me"))
         // The retired A1 placement — a header above the setup form —
@@ -236,8 +237,9 @@ class OnboardingSequenceTest {
         val pricePattern = Regex("\\$\\s?\\d")
         val copy = listOf(
             OnboardingCopy.HEADLINE,
-            OnboardingCopy.PROMISE_1_TITLE, OnboardingCopy.PROMISE_1_BODY,
-            OnboardingCopy.PROMISE_2_TITLE, OnboardingCopy.PROMISE_2_BODY,
+            OnboardingCopy.PROMISE_1_NAME, OnboardingCopy.PROMISE_1_PHRASE,
+            OnboardingCopy.PROMISE_2_NAME, OnboardingCopy.PROMISE_2_PHRASE,
+            OnboardingCopy.PROMISE_3_NAME, OnboardingCopy.PROMISE_3_PHRASE,
             OnboardingCopy.PROMISE_CTA, OnboardingCopy.PROMISE_FOOTER,
             OnboardingCopy.SETUP_TITLE, OnboardingCopy.SETUP_SUB,
             OnboardingCopy.TEMP_TITLE, OnboardingCopy.TEMP_SUB,

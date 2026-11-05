@@ -48,8 +48,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.components.HapticSpec
@@ -232,46 +235,43 @@ private fun PromiseStep(onGetStarted: () -> Unit) {
 
         Spacer(Modifier.height(36.dp))
 
-        // One promise per row (frame 28).
-        PromiseRow(
-            title = OnboardingCopy.PROMISE_1_TITLE,
-            body = OnboardingCopy.PROMISE_1_BODY
-        )
-        Spacer(Modifier.height(24.dp))
-        PromiseRow(
-            title = OnboardingCopy.PROMISE_2_TITLE,
-            body = OnboardingCopy.PROMISE_2_BODY
-        )
-        Spacer(Modifier.height(24.dp))
-        // Gen-3 WS-E: the third feature point, in the same
-        // composition as the two above it.
-        PromiseRow(
-            title = OnboardingCopy.PROMISE_3_TITLE,
-            body = OnboardingCopy.PROMISE_3_BODY
-        )
+        // One promise per row (frame 28) — GEN-3 ROUND 2: the
+        // name-led composition (feature name in pine bold, then
+        // the plain phrase in regular weight).
+        OnboardingCopy.WELCOME_POINTS.forEachIndexed { index, point ->
+            if (index > 0) Spacer(Modifier.height(24.dp))
+            PromiseRow(point = point)
+        }
 
         Spacer(Modifier.height(24.dp))
     }
 }
 
-/** One frame-28 promise row: the claim, then what it means. */
+/**
+ * One frame-28 promise row: the name-led headline — the feature
+ * name in PINE BOLD leading, the plain phrase in regular weight
+ * after it (GEN-3 ROUND 2, Sol's chosen composition).
+ */
 @Composable
-private fun PromiseRow(title: String, body: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = RunWearColors.TextPrimary
-        )
-        Text(
-            text = body,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            color = RunWearColors.TextSecondary,
-            modifier = Modifier.padding(top = 3.dp)
-        )
-    }
+private fun PromiseRow(point: OnboardingCopy.WelcomePoint) {
+    Text(
+        text = buildAnnotatedString {
+            withStyle(
+                SpanStyle(
+                    color = RunWearColors.PineAccent,
+                    fontWeight = FontWeight.Bold
+                )
+            ) {
+                append(point.name)
+            }
+            append(" ")
+            append(point.phrase)
+        },
+        fontSize = 17.sp,
+        lineHeight = 23.sp,
+        color = RunWearColors.TextPrimary,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 /**

@@ -15,11 +15,13 @@ import androidx.compose.animation.core.CubicBezierEasing
  * fork, consent gates capture, and the first personal look exists
  * before Premium is ever named as an offer.
  *
- * A1: the "Your first 5 looks are free" promise lives ONLY on frame
- * 28's own screen (the promise step below). It is NOT part of the
- * setup form — the pre-WS-10 build carried it in the header above
- * the setup questions, before Make It Me (or the word "looks") had
- * been introduced.
+ * A1: the "Your first 5 looks are free" promise lived ONLY on frame
+ * 28's own screen (the promise step below), never on the setup
+ * form. GEN-3 ROUND 2 (Sol, Nov 4): Sol's final point-2 copy
+ * ("Put yourself in the photos.") supersedes its welcome
+ * placement — the sentence remains defined as FREE_LOOKS_PROMISE
+ * (the canonical free-looks wording) but is no longer rendered on
+ * the welcome screen.
  *
  * A2: the welcome headline is Sol's pick, character for character:
  * "Run, weather or not." (Part 2 decision block, Nov 3 2026). It
@@ -33,17 +35,32 @@ import androidx.compose.animation.core.CubicBezierEasing
 object OnboardingCopy {
     // ── Frame 28 · Promise (welcome) ─────────────────────────────
     const val HEADLINE = "Run, weather or not."
-    const val PROMISE_1_TITLE = "The right outfit for the weather"
-    const val PROMISE_1_BODY =
+    // GEN-3 ROUND 2 (Sol, Nov 4 — the name-led welcome, CHOSEN by
+    // Sol; supersedes the A-SETTINGS/WS-E title+body composition
+    // and the earlier "no name-led variant" instruction): each
+    // point's headline leads with its feature name in PINE BOLD,
+    // followed by the plain phrase in regular weight. No phrase
+    // repeats its feature name. Point 1's phrase is its existing
+    // plain copy, unchanged; points 2 and 3 carry Sol's final
+    // wording verbatim.
+    const val PROMISE_1_NAME = "RunWear"
+    const val PROMISE_1_PHRASE =
         "One recommendation for the run you're about to take — feels-like, wind, and rain included."
-    const val PROMISE_2_TITLE = "See yourself in every outfit"
-    const val PROMISE_2_BODY =
-        "Make It Me puts you in the photos. Your first 5 looks are free."
-    // Gen-3 WS-E (Nov 4, 2026): the third feature point, under the
-    // existing two — headline and line verbatim from the lane spec.
-    const val PROMISE_3_TITLE = "Remember every run"
-    const val PROMISE_3_BODY =
-        "Wear I've Run turns each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+    const val PROMISE_2_NAME = "Make It Me"
+    const val PROMISE_2_PHRASE = "Put yourself in the photos."
+    const val PROMISE_3_NAME = "Wear I've Run"
+    const val PROMISE_3_PHRASE =
+        "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+
+    /** One name-led welcome point: [name] in pine bold, then [phrase]. */
+    data class WelcomePoint(val name: String, val phrase: String)
+
+    /** The three welcome points, in display order. */
+    val WELCOME_POINTS: List<WelcomePoint> = listOf(
+        WelcomePoint(PROMISE_1_NAME, PROMISE_1_PHRASE),
+        WelcomePoint(PROMISE_2_NAME, PROMISE_2_PHRASE),
+        WelcomePoint(PROMISE_3_NAME, PROMISE_3_PHRASE)
+    )
     const val PROMISE_CTA = "Get Started"
     // W-21 (Sol, Nov 4 walkthrough): the app is free forever —
     // premium features are the upsell — so the footer states the
