@@ -210,7 +210,7 @@ final class Gen6RW67RenderTests: XCTestCase {
                       "the numeral is its own child view, so its @ScaledMetric can be capped by its parent")
         XCTAssertTrue(row.contains("HeroNumeralText(text: formattedTemperature)"),
                       "the row composes the numeral child")
-        XCTAssertTrue(row.contains(".minimumScaleFactor(0.25)"),
+        XCTAssertTrue(row.contains(".minimumScaleFactor(0.2)"),
                       "the numeral shrinks to fit its slot — never wraps, never truncates")
         XCTAssertTrue(row.contains(".lineLimit(1)"),
                       "the numeral is one line by construction")
@@ -288,21 +288,21 @@ final class Gen6RW67RenderTests: XCTestCase {
     @MainActor
     func testRW67WidgetSmall_ThreeDigit_LargestType() throws {
         let fit = try renderWidget(family: .systemSmall, feelsLikeF: 115, type: .accessibility5,
-                                   name: "RW-67-widget-small-115F-largest-before.png")
+                                   name: "RW-67-widget-small-115F-largest-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemSmall), "widget small 115°F largest")
     }
 
     @MainActor
     func testRW67WidgetSmall_Negative_LargestType() throws {
         let fit = try renderWidget(family: .systemSmall, feelsLikeF: -13, type: .accessibility5,
-                                   name: "RW-67-widget-small-neg13F-largest-before.png")
+                                   name: "RW-67-widget-small-neg13F-largest-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemSmall), "widget small -13°F largest")
     }
 
     @MainActor
     func testRW67WidgetSmall_Control72_DefaultType() throws {
         let fit = try renderWidget(family: .systemSmall, feelsLikeF: 72, type: .large,
-                                   name: "RW-67-widget-small-72F-default-before.png")
+                                   name: "RW-67-widget-small-72F-default-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemSmall), "widget small 72°F default (control)")
     }
 
@@ -323,21 +323,21 @@ final class Gen6RW67RenderTests: XCTestCase {
     @MainActor
     func testRW67WidgetLarge_ThreeDigit_LargestType() throws {
         let fit = try renderWidget(family: .systemLarge, feelsLikeF: 115, type: .accessibility5,
-                                   name: "RW-67-widget-large-115F-largest-before.png")
+                                   name: "RW-67-widget-large-115F-largest-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemLarge), "widget large 115°F largest")
     }
 
     @MainActor
     func testRW67WidgetLarge_Negative_LargestType() throws {
         let fit = try renderWidget(family: .systemLarge, feelsLikeF: -13, type: .accessibility5,
-                                   name: "RW-67-widget-large-neg13F-largest-before.png")
+                                   name: "RW-67-widget-large-neg13F-largest-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemLarge), "widget large -13°F largest")
     }
 
     @MainActor
     func testRW67WidgetLarge_Control72_DefaultType() throws {
         let fit = try renderWidget(family: .systemLarge, feelsLikeF: 72, type: .large,
-                                   name: "RW-67-widget-large-72F-default-before.png")
+                                   name: "RW-67-widget-large-72F-default-after.png")
         assertFits(fitting: fit, canvas: widgetCanvas(.systemLarge), "widget large 72°F default (control)")
     }
 

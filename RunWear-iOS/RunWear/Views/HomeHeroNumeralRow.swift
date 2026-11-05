@@ -74,6 +74,15 @@ struct HomeHeroNumeralRow: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(Capsule().fill(AppTheme.cardOnSheet))
+                // RW-67 (render round 2): the chip keeps its
+                // natural width — without priority, the stack's
+                // compression split between the shrinking
+                // numeral and the chip, and the chip's label
+                // wrapped mid-word ("FREE/ZING", "WAR/M") at
+                // accessibility1. The numeral absorbs the
+                // compression alone; it has the scale factor
+                // for exactly that.
+                .layoutPriority(1)
             }
             .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
@@ -142,6 +151,6 @@ private struct HeroNumeralText: View {
             .monospacedDigit()
             .foregroundColor(AppTheme.inkPrimary)
             .lineLimit(1)
-            .minimumScaleFactor(0.25)
+            .minimumScaleFactor(0.2)
     }
 }

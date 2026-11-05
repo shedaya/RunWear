@@ -59,8 +59,24 @@ struct RunWearWidgetEntryView: View {
     // the outfit stack, the supporting line. The outfit is the
     // hero's partner: base layer bold, layers on one line, the
     // bottom, and the secondary garments counted honestly.
+    //
+    // GEN-6 (RW-67): as shipped this stack did not fit its
+    // 158 pt canvas — measured fitting height 177 pt at
+    // DEFAULT type with a provider-shaped record (one layer,
+    // two secondary garments), 439.5 pt at accessibility5: the
+    // bottom lines were cut on device. The composition fix
+    // keeps every element and every garment name: the outfit
+    // runs as TWO lines instead of four — base + layers on
+    // one, bottom + the honest "+N more" count on the other,
+    // per-run styling preserved (base semibold, layers
+    // regular, the count caption-sized and secondary) — the
+    // supporting line shrinks to fit one line rather than
+    // wrapping to two or three, and the stack's type growth
+    // is capped at accessibility1 (as on medium and the home
+    // hero cluster). The temperature is the fixed 32 pt hero,
+    // never scaled, never truncated.
     private func smallContent(_ record: WidgetLastGood) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(WidgetFreshness.eyebrow(record, now: entry.date))
                 .font(.caption2.weight(.bold))
                 .foregroundColor(AppTheme.inkSecondary)
@@ -75,35 +91,49 @@ struct RunWearWidgetEntryView: View {
                     .foregroundColor(AppTheme.pinePayload)
             }
 
-            Text(record.topBaseName)
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(AppTheme.inkPrimary)
-                .lineLimit(1)
-            if !record.layerNames.isEmpty {
-                Text(record.layerNames.joined(separator: " · "))
-                    .font(.subheadline)
-                    .foregroundColor(AppTheme.inkPrimary)
-                    .lineLimit(1)
-            }
-            Text(record.bottomName)
+            smallOutfitLineOne(record)
                 .font(.subheadline)
                 .foregroundColor(AppTheme.inkPrimary)
                 .lineLimit(1)
-            if !record.secondaryNames.isEmpty {
-                Text("+\(record.secondaryNames.count) more")
-                    .font(.caption)
-                    .foregroundColor(AppTheme.inkSecondary)
-                    .lineLimit(1)
-            }
+            smallOutfitLineTwo(record)
+                .font(.subheadline)
+                .foregroundColor(AppTheme.inkPrimary)
+                .lineLimit(1)
 
             Spacer(minLength: 2)
 
             Text(record.supportingLine)
                 .font(.caption2)
                 .foregroundColor(AppTheme.inkSecondary)
-                .lineLimit(2)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+    }
+
+    /// Small outfit line one: the base (semibold run) with the
+    /// layers appended as a regular run — the same joined
+    /// idiom the layers already used among themselves.
+    private func smallOutfitLineOne(_ record: WidgetLastGood) -> Text {
+        var line = Text(record.topBaseName).fontWeight(.semibold)
+        if !record.layerNames.isEmpty {
+            line = line + Text(" · " + record.layerNames.joined(separator: " · "))
+        }
+        return line
+    }
+
+    /// Small outfit line two: the bottom with the secondary
+    /// count as a caption-sized secondary run — counted
+    /// honestly, exactly as the standalone line counted it.
+    private func smallOutfitLineTwo(_ record: WidgetLastGood) -> Text {
+        var line = Text(record.bottomName)
+        if !record.secondaryNames.isEmpty {
+            line = line + Text(" · +\(record.secondaryNames.count) more")
+                .font(.caption)
+                .foregroundColor(AppTheme.inkSecondary)
+        }
+        return line
     }
 
     // MEDIUM — the wide canvas splits: weather on the left
@@ -182,7 +212,7 @@ struct RunWearWidgetEntryView: View {
     // the humidity/UV truth the smaller sizes have no room to
     // carry truthfully.
     private func largeContent(_ record: WidgetLastGood) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline) {
                 Text("RunWear")
                     .font(.greatVibes(size: 26))
@@ -251,6 +281,15 @@ struct RunWearWidgetEntryView: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        // GEN-6 (RW-67): at accessibility Dynamic Type sizes
+        // the large composition measured a 948.5 pt fitting
+        // height in its 382 pt canvas (the .body outfit lines
+        // carry no line limit, so at accessibility sizes each
+        // name wraps and the stack runs away). Type growth is
+        // capped at accessibility1 — the same cap as small,
+        // medium, and the home hero cluster; composition and
+        // the fixed 46 pt temperature are unchanged.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
     // The never-succeeded card (authored categories, Android's
