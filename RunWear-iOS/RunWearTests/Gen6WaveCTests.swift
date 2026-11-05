@@ -244,4 +244,46 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertTrue(section.contains("MakeItMeSettingsRow.manageSubscription.title"),
                       "the management door stands in the subscribed seat")
     }
+
+    // MARK: - RW-59: feedback disclosure is the settled substance
+
+    func testRW59BundleCarriesVersionDeviceAndSettings() throws {
+        let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(modal.contains("\"Device\": \\(UIDevice.current.model)"),
+                      "the bundle carries the device, as disclosed")
+        XCTAssertTrue(modal.contains("\"Settings\": \"Fit: \\(fit) · Units: \\(unit) · Body temperature: \\(comfort)\""),
+                      "the bundle carries the user's settings, as disclosed")
+        XCTAssertTrue(modal.contains("Nothing else — no health data, no location, no photos."),
+                      "the disclosure states the never-sent substance before Send")
+        XCTAssertFalse(modal.contains("no location beyond what you type"),
+                       "the weaker old phrasing must not return")
+    }
+
+    func testRW59CasingPins_sourcePins() throws {
+        let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(modal.contains("Label(\"Send feedback\", systemImage: \"envelope\")"))
+        XCTAssertTrue(modal.contains(".navigationTitle(\"Send feedback\")"))
+        XCTAssertFalse(modal.contains("\"Send Feedback\""))
+        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(home.contains("Button(\"Send feedback\")"))
+        XCTAssertTrue(home.contains("Button(\"Not now\", role: .cancel)"))
+        XCTAssertFalse(home.contains("Button(\"Not Now\""))
+    }
+
+    // MARK: - RW-60: the settled line on the HOME loading surface
+
+    func testRW60HomeLoadingSurfaceCarriesTheSettledLine_sourcePin() throws {
+        let supporting = try sourceFile("../RunWear/Views/SupportingViews.swift")
+        let start = try XCTUnwrap(supporting.range(of: "struct LoadingView"))
+        let end = try XCTUnwrap(supporting.range(of: "struct LocationPermissionView"))
+        let loading = String(supporting[start.lowerBound..<end.lowerBound])
+        XCTAssertTrue(loading.contains("Text(\"Getting your first recommendation…\")"),
+                      "the home skeleton carries the settled line (frame 46)")
+        // The line must render as text: it is composed outside
+        // the redacted skeleton subtree.
+        let textIdx = try XCTUnwrap(loading.range(of: "Getting your first recommendation…")).lowerBound
+        let redactedIdx = try XCTUnwrap(loading.range(of: ".redacted(reason: .placeholder)")).lowerBound
+        XCTAssertTrue(textIdx < redactedIdx || loading.contains("private var skeleton"),
+                      "the line is not swallowed by the placeholder redaction")
+    }
 }

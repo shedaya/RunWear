@@ -367,7 +367,7 @@ struct WeatherOutfitView: View {
         // closes it for the season; the rating door hands off to
         // the system review sheet.
         .alert("Enjoying RunWear?", isPresented: $showRatingPrompt) {
-            Button("Send Feedback") {
+            Button("Send feedback") {
                 ratingTracker.recordPromptShown()
                 showFeedbackSheet = true
             }
@@ -375,7 +375,7 @@ struct WeatherOutfitView: View {
                 ratingTracker.recordPromptShown()
                 requestReview()
             }
-            Button("Not Now", role: .cancel) {
+            Button("Not now", role: .cancel) {
                 ratingTracker.recordPromptShown()
             }
         } message: {
