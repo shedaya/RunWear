@@ -24,7 +24,7 @@ import sys, urllib.parse
 from asc_common import call
 
 APP_BUNDLE = "com.uptimeventures.runwear"
-WIDGET_BUNDLE = "com.uptimeventures.runwear.widget"
+WIDGET_BUNDLE = "com.uptimeventures.runwear.widgets"
 WATCH_BUNDLE = "com.uptimeventures.runwear.watchkitapp"
 APP_GROUP = "group.com.uptimeventures.runwear"
 WIDGET_PROFILE = "RunWear Widget App Store"
@@ -173,20 +173,46 @@ def ensure_profile(name, bundle, cert, recreate=False):
     return d["data"]
 
 def apply():
-    widget = ensure_bundle_id(WIDGET_BUNDLE, "RunWear Widget")
-    bids = bundle_ids()
-    app = bids[APP_BUNDLE]
-    group = ensure_app_group()
-    ensure_capability(app, group)
-    ensure_capability(widget, group)
+    """Phase A — everything the API can do BEFORE the portal
+    step: the widget bundle ID and its first profile. The App
+    Group itself is NOT API-manageable (probe: /v1/appGroups
+    answers 404), so group creation + assignment is a portal
+    step for a human; apply-profiles (phase B) re-issues both
+    profiles once that step is done."""
+    widget = ensure_bundle_id(WIDGET_BUNDLE, "RunWear Widgets")
     cert = distribution_cert()
     ensure_profile(WIDGET_PROFILE, widget, cert)
-    # The app profile predates the group assignment: re-issue it
-    # so the archived app's declared application-groups
-    # entitlement is inside its profile.
-    ensure_profile(APP_PROFILE, app, cert, recreate=True)
+    print("PHASE_A_COMPLETE")
+    print("PORTAL STEPS STILL REQUIRED (developer.apple.com, ~5 min):")
+    print("  1. Identifiers -> + -> App Groups: create "
+          + APP_GROUP + " (description: RunWear)")
+    print("  2. Identifiers -> com.uptimeventures.runwear -> "
+          "App Groups capability ON -> assign " + APP_GROUP)
+    print("  3. Identifiers -> com.uptimeventures.runwear.widgets -> "
+          "App Groups capability ON -> assign " + APP_GROUP)
+    print("  Then re-run with task=provision-profiles to re-issue "
+          "both App Store profiles so they carry the group.")
+
+def apply_profiles():
+    """Phase B — after the portal step: re-issue BOTH App Store
+    profiles so their entitlements include the App Group."""
+    bids = bundle_ids()
+    cert = distribution_cert()
+    ensure_profile(WIDGET_PROFILE, bids[WIDGET_BUNDLE], cert,
+                   recreate=True)
+    ensure_profile(APP_PROFILE, bids[APP_BUNDLE], cert,
+                   recreate=True)
+    caps = list_all(f"/v1/bundleIds/{bids[APP_BUNDLE]['id']}"
+                    "/bundleIdCapabilities")
+    types = [c["attributes"].get("capabilityType") for c in caps]
+    print("app capabilities now:", types)
+    if "APP_GROUPS" not in types:
+        print("WARNING: APP_GROUPS capability not visible on the "
+              "app bundle ID — the portal assignment may not have "
+              "saved; the re-issued profiles may lack the group.")
     print("PROVISIONING_COMPLETE")
 
 if __name__ == "__main__":
     task = sys.argv[1] if len(sys.argv) > 1 else "probe"
-    {"probe": probe, "apply": apply}[task]()
+    {"probe": probe, "apply": apply,
+     "apply-profiles": apply_profiles}[task]()

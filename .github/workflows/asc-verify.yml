@@ -22,6 +22,7 @@ on:
           - packet-apply
           - provision-probe
           - provision-apply
+          - provision-profiles
         default: verify
         required: true
       version:
@@ -72,3 +73,7 @@ jobs:
         if: inputs.task == 'provision-apply'
         working-directory: scripts/asc
         run: python3 asc_provision_widget.py apply
+      - name: Re-issue profiles after the App Group portal step (gen-5)
+        if: inputs.task == 'provision-profiles'
+        working-directory: scripts/asc
+        run: python3 asc_provision_widget.py apply-profiles
