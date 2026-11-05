@@ -198,7 +198,20 @@ data class HeroImageResult(
      */
     val fallbackProvenance: FallbackAssetProvenance? = null,
     /** WS-7: the bundled asset file served, for a bundled serve. */
-    val fallbackAssetFile: String? = null
+    val fallbackAssetFile: String? = null,
+    /**
+     * GEN-4 (Sol's ruling, 2026-11-04): true when this serve is a
+     * SCAFFOLD or FLOOR serve of the hero fallback chain — the photo
+     * is the nearest covered photo, NOT the prescription's exact
+     * photo, and must never be recorded or presented as exact
+     * anywhere (hero, Wear I've Run record, thumbnails, poster all
+     * inherit this flag through the single resolution). Stock
+     * scaffolds carry no home badge (the STOCK_QUIET convention);
+     * this state plus [serveSource] = SCAFFOLD is their label.
+     */
+    val isScaffold: Boolean = false,
+    /** GEN-4: the chain tier that served ("EXACT"/"SCAFFOLD"/"FLOOR"). */
+    val chainTier: String? = null
 )
 
 /**
@@ -783,6 +796,168 @@ object HeroImageSelector {
         FALLBACK_PROVENANCE[fallbackAssetFile(url)]
             ?: POINT_GRAIN_PROVENANCE[fallbackAssetFile(url)]
 
+    // ── GEN-4 hero fallback chain (Sol's ruling, 2026-11-04) ──────
+
+    /** Bracket/weather words used by the matrix asset file names. */
+    private val ASSET_BRACKET_WORDS: Map<String, TempBracket> = mapOf(
+        "freezing" to TempBracket.FREEZING, "cold" to TempBracket.COLD,
+        "cool" to TempBracket.COOL, "mild" to TempBracket.MILD,
+        "warm" to TempBracket.WARM, "hot" to TempBracket.HOT
+    )
+    private val ASSET_WEATHER_WORDS: Map<String, HeroWeatherCondition> = mapOf(
+        "clear" to HeroWeatherCondition.CLEAR, "cloudy" to HeroWeatherCondition.CLOUDY,
+        "rain" to HeroWeatherCondition.RAIN, "snow" to HeroWeatherCondition.SNOW
+    )
+
+    /** Parse bracket/weather out of a combination-id-style token list. */
+    private fun bracketWeatherFromCombination(combinationId: String): Pair<TempBracket?, HeroWeatherCondition?> {
+        val tokens = combinationId.split("_")
+        val bracket = tokens.firstNotNullOfOrNull { token ->
+            TempBracket.entries.firstOrNull { it.name == token }
+        }
+        val weather = tokens.firstNotNullOfOrNull { token ->
+            when (token) {
+                "CLEAR" -> HeroWeatherCondition.CLEAR
+                "CLOUDY" -> HeroWeatherCondition.CLOUDY
+                "RAIN", "RAINY" -> HeroWeatherCondition.RAIN
+                "SNOW", "SNOWY" -> HeroWeatherCondition.SNOW
+                else -> null
+            }
+        }
+        return bracket to weather
+    }
+
+    /**
+     * GEN-4: every bundled asset as a chain candidate — the 44 RW-26
+     * matrix assets (bracket/weather read from the file name, gender
+     * from its suffix) plus the 10 point-grain assets (bracket/
+     * weather read from the asset's provenance combination, gender
+     * from the pg_ file prefix). Garments are the adjudicated census
+     * classes; every asset is a one-person photo per its derivation
+     * record.
+     */
+    fun bundledPhotoCandidates(): List<HeroPhotoCandidate> {
+        val matrix = FALLBACK_GARMENTS.map { (file, garments) ->
+            val parts = file.split("_")
+            HeroPhotoCandidate(
+                url = "file:///android_asset/hero_fallback/$file.webp",
+                source = HeroCandidateSource.BUNDLED,
+                gender = if (file.endsWith("_male")) GenderPreference.MALE else GenderPreference.FEMALE,
+                bracket = ASSET_BRACKET_WORDS[parts.getOrNull(0)],
+                weather = ASSET_WEATHER_WORDS[parts.getOrNull(1)],
+                garments = HeroGarmentSnapshot(
+                    garments.topBase, garments.outer, garments.bottom,
+                    garments.head, garments.hands
+                ),
+                personCount = 1,
+                assetFile = file
+            )
+        }
+        val pointGrain = POINT_GRAIN_GARMENTS.map { (file, garments) ->
+            val (bracket, weather) = bracketWeatherFromCombination(
+                POINT_GRAIN_PROVENANCE[file]?.combinationId ?: ""
+            )
+            HeroPhotoCandidate(
+                url = "file:///android_asset/hero_fallback/$file.webp",
+                source = HeroCandidateSource.BUNDLED,
+                gender = if (file.startsWith("pg_male_")) GenderPreference.MALE else GenderPreference.FEMALE,
+                bracket = bracket,
+                weather = weather,
+                garments = HeroGarmentSnapshot(
+                    garments.topBase, garments.outer, garments.bottom,
+                    garments.head, garments.hands
+                ),
+                personCount = 1,
+                assetFile = file
+            )
+        }
+        return matrix + pointGrain
+    }
+
+    /**
+     * GEN-4: the bundled-only chain resolution (the pool side is
+     * empty by definition here — this is the FLOOR path and the
+     * synchronous fallback's resolver).
+     *
+     * Gendered requests resolve through [HeroFallbackChain] over the
+     * bundled candidates: same-gender exact assets serve as EXACT,
+     * and when the exact gate exhausts, the nearest same-gender
+     * bundled asset serves as the FLOOR, labelled scaffold. Gender
+     * is never crossed — deliberately unlike [gatedFallbackUrl]'s
+     * designed cross-gender exact pass, which the GEN-4 ruling
+     * supersedes for this path (the census counts male visor as
+     * uncovered precisely because no male visor photo exists; serving
+     * the female visor asset as a male hero's "exact" photo was the
+     * RW-26 failure shape). [gatedFallbackUrl] itself is unchanged —
+     * it remains the exact-gate oracle the gate tests pin.
+     *
+     * UNISEX requests name no gender: they keep the legacy gated
+     * walk first (the legacy view's subject per cell), then the
+     * chain floor over both genders.
+     *
+     * Null only when no bundled asset exists for the request's
+     * gender — the bundle covers both genders at every bracket, so
+     * a real request never returns null.
+     */
+    fun bundledChainResult(
+        tempBracket: TempBracket,
+        weatherCondition: HeroWeatherCondition,
+        gender: GenderPreference,
+        outfit: OutfitRecommendation,
+        combinationId: String
+    ): HeroImageResult {
+        if (gender == GenderPreference.UNISEX) {
+            val exactUrl = gatedFallbackUrl(tempBracket, weatherCondition, gender, outfit)
+            if (exactUrl != null) {
+                return HeroImageResult(
+                    imageUrl = exactUrl,
+                    thumbnailUrl = exactUrl,
+                    combinationId = combinationId,
+                    serveSource = HeroServeSource.BUNDLED_FALLBACK,
+                    fallbackProvenance = fallbackProvenance(exactUrl),
+                    fallbackAssetFile = fallbackAssetFile(exactUrl),
+                    chainTier = HeroChainTier.EXACT.name
+                )
+            }
+        }
+        val resolution = HeroFallbackChain.resolve(
+            gender = gender,
+            bracket = tempBracket,
+            weather = weatherCondition,
+            outfit = outfit,
+            poolCandidates = emptyList(),
+            bundledCandidates = bundledPhotoCandidates()
+        ) ?: return HeroImageResult(
+            imageUrl = null,
+            thumbnailUrl = null,
+            combinationId = combinationId,
+            serveSource = HeroServeSource.BUNDLED_FALLBACK
+        )
+        val url = resolution.url
+        return if (resolution.tier == HeroChainTier.EXACT) {
+            HeroImageResult(
+                imageUrl = url,
+                thumbnailUrl = url,
+                combinationId = combinationId,
+                serveSource = HeroServeSource.BUNDLED_FALLBACK,
+                fallbackProvenance = fallbackProvenance(url),
+                fallbackAssetFile = fallbackAssetFile(url),
+                chainTier = HeroChainTier.EXACT.name
+            )
+        } else {
+            HeroImageResult(
+                imageUrl = url,
+                thumbnailUrl = url,
+                combinationId = combinationId,
+                serveSource = HeroServeSource.SCAFFOLD,
+                fallbackProvenance = fallbackProvenance(url),
+                fallbackAssetFile = fallbackAssetFile(url),
+                isScaffold = true,
+                chainTier = resolution.tier.name
+            )
+        }
+    }
+
     /**
      * The gender-paired bundled asset for an exact cell, or null when
      * the cell is a non-cell (HOT x SNOW, WARM x SNOW) or the gender
@@ -826,21 +1001,16 @@ object HeroImageSelector {
 
         val combination = OutfitCombination.fromConditions(weather, outfit, gender, frameFeelsLikeF)
         val weatherCondition = HeroWeatherCondition.fromWeatherCode(weather.weatherCode)
-        // GEN-2 A2 (W-4/W-5): the synchronous fallback serve obeys
-        // the same point-grain gate as the pool — it resolves through
-        // the garment census, not the bare bracket key. When no
-        // bundled asset matches the prescription the result carries
-        // NO image: the caller paints the gradient state rather than
-        // a photo that contradicts the outfit on screen.
-        val url = gatedFallbackUrl(combination.tempBracket, weatherCondition, gender, outfit)
-
-        return HeroImageResult(
-            imageUrl = url,
-            thumbnailUrl = url,
-            combinationId = combination.id,
-            serveSource = HeroServeSource.BUNDLED_FALLBACK,
-            fallbackProvenance = url?.let { fallbackProvenance(it) },
-            fallbackAssetFile = url?.let { fallbackAssetFile(it) }
+        // GEN-2 A2 (W-4/W-5) + GEN-4 (Sol's ruling, 2026-11-04): the
+        // synchronous fallback serve resolves through the fallback
+        // CHAIN — the point-grain gate decides what may serve as the
+        // prescription's exact photo (bundledChainResult's gated
+        // walk); when no bundled asset matches exactly, the nearest
+        // same-gender bundled asset serves as the labelled floor
+        // scaffold instead of the bare gradient. The gradient is no
+        // longer a terminus for any prescription.
+        return bundledChainResult(
+            combination.tempBracket, weatherCondition, gender, outfit, combination.id
         )
     }
 

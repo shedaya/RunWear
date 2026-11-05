@@ -111,17 +111,26 @@ class HeroImageRepository @Inject constructor() {
         try {
             val searchResult = getRandomImage(combination, outfit)
             val result = if (searchResult.image == null) {
-                getFallbackImage(combination, outfit)
+                // GEN-4: the exact cascade found nothing — the chain
+                // continues (scaffold from the live pool, then the
+                // bundled floor) instead of terminating at the
+                // exact-gated bundled walk.
+                getScaffoldOrFallback(combination, outfit)
             } else {
                 poolResult(combination, searchResult, outfit)
             }
             // WS-7 / RW-26(c): every serve records its source at serve
-            // time (pool / bundled-fallback; a rotation-floor pick of
-            // the bundled candidate records as bundled-fallback — the
-            // URL is the ground truth inside emitForResult).
+            // time (pool / bundled-fallback / scaffold; a rotation-floor
+            // pick of the bundled candidate records as bundled-fallback —
+            // the URL is the ground truth inside emitForResult, except
+            // that a SCAFFOLD serve source is never relabelled).
             HeroServeTelemetry.emitForResult(
                 result, combination,
-                trigger = if (searchResult.image == null) "bundled-fallback" else "pool-cascade"
+                trigger = when {
+                    searchResult.image != null -> "pool-cascade"
+                    result.isScaffold -> "hero-fallback-chain"
+                    else -> "bundled-fallback"
+                }
             )
             result
         } catch (e: Exception) {
@@ -345,42 +354,92 @@ class HeroImageRepository @Inject constructor() {
     }
 
     /**
+     * GEN-4: the chain below the exact cascade. The exact pool
+     * cascade ([getRandomImage]) found no photo that may CLAIM this
+     * prescription; the hero still must not settle on the gradient:
+     *
+     *  - SCAFFOLD: one broad same-gender read of the live approved
+     *    pool (the app's existing anon PostgREST path), resolved to
+     *    the nearest covered photo by [com.runwear.shared.domain.model.HeroFallbackChain].
+     *    Computed from the live candidate set at serve time, so a
+     *    replenishment row that makes this prescription exact wins
+     *    through the cascade above with no client change (and an
+     *    exact row this broad read surfaces serves as EXACT here).
+     *  - FLOOR: the pool read is unreachable/empty (or holds no
+     *    same-gender one-person photo) → [getFallbackImage]'s
+     *    bundled chain, whose floor asset always exists.
+     */
+    private suspend fun getScaffoldOrFallback(
+        combination: OutfitCombination,
+        outfit: OutfitRecommendation
+    ): HeroImageResult {
+        val client = supabase ?: return getFallbackImage(combination, outfit)
+        val heroWeather = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
+        val gender = combination.genderPreference.name
+        val rows = try {
+            client.from("generated_images")
+                .select {
+                    filter { like("combination_id", "${gender}_%") }
+                    // The whole same-gender library: the scaffold
+                    // metric must see every covered neighbour, not a
+                    // page of the nearest cell.
+                    limit(1000)
+                }
+                .decodeList<GeneratedImage>()
+        } catch (e: Exception) {
+            android.util.Log.w("HeroImage", "[Hero] Scaffold pool read failed", e)
+            return getFallbackImage(combination, outfit)
+        }
+        val resolution = com.runwear.shared.domain.model.HeroFallbackChain.resolve(
+            gender = combination.genderPreference,
+            bracket = combination.tempBracket,
+            weather = heroWeather,
+            outfit = outfit,
+            poolCandidates = poolPhotoCandidates(rows),
+            bundledCandidates = emptyList()
+        ) ?: return getFallbackImage(combination, outfit)
+        val candidate = resolution.candidate
+        return HeroImageResult(
+            imageUrl = candidate.url,
+            thumbnailUrl = candidate.url,
+            combinationId = combination.id,
+            imageRowId = candidate.rowId,
+            servedCombinationId = candidate.combinationId,
+            candidates = listOf(
+                com.runwear.shared.domain.model.HeroCandidate(
+                    imageUrl = candidate.url,
+                    thumbnailUrl = candidate.url,
+                    imageRowId = candidate.rowId,
+                    servedCombinationId = candidate.combinationId
+                )
+            ),
+            serveSource = resolution.serveSource,
+            isScaffold = resolution.isScaffold,
+            chainTier = resolution.tier.name
+        )
+    }
+
+    /**
      * Get a fallback image when no cached image is available.
      *
-     * GEN-2 A2 (W-4/W-5): the resolution is GATED by the exact
-     * prescription — it walks the bundled matrix through
-     * [com.runwear.shared.domain.model.HeroImageSelector.gatedFallbackUrl],
-     * which serves only an asset whose adjudicated garments match
-     * [outfit]. The pre-fix resolver keyed on bracket × weather ×
-     * gender alone, and the matrix's assets are exact at their
-     * bracket's COLD-END prescription (COOL's wear a headband and
-     * gloves), so any warmer point prescription in the bracket was
-     * silently served a photo wearing garments it did not prescribe
-     * — and a within-bracket prescription change could never change
-     * the photo, its key having no prescription component. When no
-     * bundled asset matches, the result carries NO image (the
-     * gradient state) — never a contradicting photo.
+     * GEN-2 A2 (W-4/W-5) + GEN-4: the resolution runs through the
+     * bundled chain ([com.runwear.shared.domain.model.HeroImageSelector.bundledChainResult]):
+     * the exact point-grain gate decides which bundled asset may
+     * serve as the prescription's own photo; when none matches
+     * exactly, the nearest same-gender bundled asset serves as the
+     * labelled FLOOR scaffold (serve source SCAFFOLD, isScaffold) —
+     * never the bare gradient, and never recorded as the exact
+     * photo. (Pre-GEN-4 this walk terminated at no photo for the
+     * census's 26 uncovered signatures.)
      */
     private fun getFallbackImage(
         combination: OutfitCombination,
         outfit: OutfitRecommendation
     ): HeroImageResult {
         val weatherCondition = HeroWeatherCondition.fromWeatherCode(combination.weatherCode)
-        val url = com.runwear.shared.domain.model.HeroImageSelector.gatedFallbackUrl(
-            combination.tempBracket, weatherCondition, combination.genderPreference, outfit
-        )
-
-        return HeroImageResult(
-            imageUrl = url,
-            thumbnailUrl = url,
-            combinationId = combination.id,
-            serveSource = com.runwear.shared.domain.model.HeroServeSource.BUNDLED_FALLBACK,
-            fallbackProvenance = url?.let {
-                com.runwear.shared.domain.model.HeroImageSelector.fallbackProvenance(it)
-            },
-            fallbackAssetFile = url?.let {
-                com.runwear.shared.domain.model.HeroImageSelector.fallbackAssetFile(it)
-            }
+        return com.runwear.shared.domain.model.HeroImageSelector.bundledChainResult(
+            combination.tempBracket, weatherCondition, combination.genderPreference,
+            outfit, combination.id
         )
     }
 
@@ -820,6 +879,53 @@ internal fun pointGrainImages(
         prescribedHands = outfit.hands
     )
 }
+
+/**
+ * GEN-4: convert live pool rows to hero-chain candidates. Only
+ * servable (review-approved) rows convert — the scaffold tier draws
+ * from the same approved library as the exact tier. Gender, weather
+ * and bracket parse from the row's own combination_id
+ * ({GENDER}_{WEATHER}_{TEMP}_{TIME}_…, with the legacy RAINY/SNOWY
+ * weather tokens read as RAIN/SNOW); a row whose bracket token does
+ * not parse keeps a null bracket, which the metric penalises but
+ * never excludes. Multi-person rows stay in the list and are
+ * excluded by the chain itself (personCount is carried through).
+ */
+internal fun poolPhotoCandidates(
+    rows: List<GeneratedImage>
+): List<com.runwear.shared.domain.model.HeroPhotoCandidate> =
+    servableImages(rows).map { row ->
+        val tokens = row.combinationId.split("_")
+        com.runwear.shared.domain.model.HeroPhotoCandidate(
+            url = row.imageUrl,
+            source = com.runwear.shared.domain.model.HeroCandidateSource.POOL,
+            gender = when (tokens.getOrNull(0)) {
+                "MALE" -> GenderPreference.MALE
+                "FEMALE" -> GenderPreference.FEMALE
+                else -> GenderPreference.UNISEX
+            },
+            bracket = tokens.getOrNull(2)?.let { token ->
+                runCatching { TempBracket.valueOf(token) }.getOrNull()
+            },
+            weather = when (tokens.getOrNull(1)) {
+                "CLEAR" -> HeroWeatherCondition.CLEAR
+                "CLOUDY" -> HeroWeatherCondition.CLOUDY
+                "RAIN", "RAINY" -> HeroWeatherCondition.RAIN
+                "SNOW", "SNOWY" -> HeroWeatherCondition.SNOW
+                else -> null
+            },
+            garments = com.runwear.shared.domain.model.HeroGarmentSnapshot(
+                topBase = row.garmentClasses?.topBase,
+                outer = row.garmentClasses?.outer,
+                bottom = row.garmentClasses?.bottom,
+                head = row.garmentClasses?.head,
+                hands = row.garmentClasses?.hands
+            ),
+            personCount = row.personCount,
+            rowId = row.id,
+            combinationId = row.combinationId
+        )
+    }
 
 /**
  * The adjudicated garment classes of a pool photo (RW-20 backfill,

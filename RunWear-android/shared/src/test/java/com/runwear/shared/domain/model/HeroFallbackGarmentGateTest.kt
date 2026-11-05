@@ -244,13 +244,25 @@ class HeroFallbackGarmentGateTest {
     }
 
     @Test
-    fun `getFallbackImage carries no photo when the gate exhausts`() {
+    fun `getFallbackImage serves the labelled floor scaffold when the gate exhausts`() {
+        // GEN-4 (Sol's ruling, 2026-11-04) supersedes the gen-2/3
+        // terminus pinned here before: the exact GATE still exhausts
+        // for the 2-item KC prescription (gatedFallbackUrl is null —
+        // no bundled asset may CLAIM it), but the hero may no longer
+        // settle on the bare gradient. The chain's FLOOR tier serves
+        // the nearest same-gender bundled asset — the COOL bracket's
+        // own cold-end photo — labelled SCAFFOLD, never exact.
         val result = HeroImageSelector.getFallbackImage(
             weatherFixture(), kcTwoItem,
             GenderPreference.FEMALE, frameFeelsLikeF = 44.0
         )
-        assertNull(result.imageUrl)
-        assertEquals(HeroServeSource.BUNDLED_FALLBACK, result.serveSource)
+        assertEquals(
+            "file:///android_asset/hero_fallback/cool_clear_female.webp",
+            result.imageUrl
+        )
+        assertEquals(HeroServeSource.SCAFFOLD, result.serveSource)
+        assertTrue(result.isScaffold)
+        assertEquals("FLOOR", result.chainTier)
 
         val matched = HeroImageSelector.getFallbackImage(
             weatherFixture(), coolColdEnd,
@@ -260,5 +272,8 @@ class HeroFallbackGarmentGateTest {
             "file:///android_asset/hero_fallback/cool_clear_female.webp",
             matched.imageUrl
         )
+        // The exact serve keeps its exact label.
+        assertEquals(HeroServeSource.BUNDLED_FALLBACK, matched.serveSource)
+        assertFalse(matched.isScaffold)
     }
 }
