@@ -12,7 +12,7 @@ import SwiftUI
 /// section-header treatment (.ssec) — uppercase, tracked, in
 /// the secondary ink token — replacing SwiftUI's default grey
 /// Form header on the titled sections in this file.
-fileprivate func settingsSectionHeader(_ title: String) -> Text {
+fileprivate func settingsSectionHeader(_ title: String) -> some View {
     Text(title)
         .font(.system(size: 13, weight: .semibold))
         .textCase(.uppercase)
