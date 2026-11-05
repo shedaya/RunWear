@@ -1,15 +1,21 @@
 package com.runwear.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -128,6 +134,61 @@ object HeroSheetFormat {
     fun windText(weather: WeatherConditions, unit: TemperatureUnit): String {
         return unit.formatWind(weather.windSpeed)
     }
+
+    /**
+     * GEN-4: the hero's right-justified weather grid — the strict
+     * two-column figure set beside the feels-like numeral. Labels in
+     * one fixed column (WIND / RAIN / HUMIDITY / UV), values flush
+     * right ("7 mph" / "0%" / "52%" / "0 of 11"). Rain is the
+     * precipitation probability, shortened per the mock so the label
+     * column stays narrow and even; UV is the index of 11.
+     */
+    fun weatherGridRows(weather: WeatherConditions, unit: TemperatureUnit): List<Pair<String, String>> =
+        listOf(
+            "WIND" to unit.formatWind(weather.windSpeed),
+            "RAIN" to "${weather.precipitationProbability}%",
+            "HUMIDITY" to "${weather.humidity}%",
+            "UV" to "${weather.uvIndex.toInt()} of 11"
+        )
+
+    /** The headline line's place segment (non-interactive). */
+    fun placeText(locationName: String): String = simplePlaceName(locationName)
+
+    /** The headline line's moment segment text. */
+    fun momentText(
+        selectedDateTime: LocalDateTime,
+        locationNow: LocalDateTime,
+        isNowSelected: Boolean
+    ): String = if (isNowSelected) "Now" else momentLabel(selectedDateTime, locationNow)
+}
+
+/**
+ * GEN-4 headline-line entry (Concept 1) — pure, unit-tested.
+ *
+ * The moment segment of "{Place} · {Moment}" is tappable in BOTH
+ * states (it opens the Choose-a-Time sheet). The compact pine
+ * refresh-arrow + "Now" way-back segment is present ONLY in the
+ * changed-time state, and tapping it performs exactly the existing
+ * resetToNow(). The place segment stays non-interactive.
+ */
+object HeadlineLinePolicy {
+
+    enum class Action { OPEN_TIME_SHEET, RESET_TO_NOW }
+
+    data class State(
+        val momentTappable: Boolean,
+        val showNowReset: Boolean
+    )
+
+    fun state(isNowSelected: Boolean): State = State(
+        momentTappable = true,
+        showNowReset = !isNowSelected
+    )
+
+    fun momentAction(): Action = Action.OPEN_TIME_SHEET
+
+    fun nowAction(state: State): Action? =
+        if (state.showNowReset) Action.RESET_TO_NOW else null
 }
 
 /**
@@ -223,23 +284,90 @@ fun HeroSheetBlock(
             color = RunWearColors.TextSecondary,
             maxLines = 1
         )
-        Text(
-            text = HeroSheetFormat.locationLine(
-                locationName = locationName,
-                selectedDateTime = selectedDateTime,
-                locationNow = locationNow,
-                isNowSelected = isNowSelected
-            ),
-            style = TextStyle(
-                fontFamily = FontFamily.Default,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.5.sp,
-                lineHeight = 20.sp
-            ),
-            color = RunWearColors.TextPrimary,
-            maxLines = 1,
+        // GEN-4 headline-line entry: the MOMENT segment is tappable
+        // (pine, bold, chevron — opens the Choose-a-Time sheet); in
+        // the changed-time state a compact pine refresh + "Now"
+        // segment follows it in the same dot-separated rhythm and
+        // performs exactly resetToNow(). The place segment stays
+        // non-interactive.
+        val headlineState = HeadlineLinePolicy.state(isNowSelected)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(top = 2.dp)
-        )
+        ) {
+            Text(
+                text = HeroSheetFormat.placeText(locationName),
+                style = TextStyle(
+                    fontFamily = FontFamily.Default,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.5.sp,
+                    lineHeight = 20.sp
+                ),
+                color = RunWearColors.TextPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = " · ",
+                style = TextStyle(
+                    fontFamily = FontFamily.Default,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.5.sp,
+                    lineHeight = 20.sp
+                ),
+                color = RunWearColors.TextPrimary
+            )
+            Text(
+                text = HeroSheetFormat.momentText(selectedDateTime, locationNow, isNowSelected) + " ›",
+                style = TextStyle(
+                    fontFamily = FontFamily.Default,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.5.sp,
+                    lineHeight = 20.sp
+                ),
+                color = RunWearColors.PineAccent,
+                maxLines = 1,
+                modifier = Modifier
+                    .clickable { onTimeClick() }
+                    .padding(vertical = 2.dp)
+            )
+            if (headlineState.showNowReset) {
+                Text(
+                    text = " · ",
+                    style = TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.5.sp,
+                        lineHeight = 20.sp
+                    ),
+                    color = RunWearColors.TextPrimary
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { onNowClick() }
+                        .padding(vertical = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Jump to now",
+                        tint = RunWearColors.PineAccent,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = "Now",
+                        style = TextStyle(
+                            fontFamily = FontFamily.Default,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp
+                        ),
+                        color = RunWearColors.PineAccent,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
 
         Spacer(Modifier.height(8.dp))
 
@@ -261,7 +389,16 @@ fun HeroSheetBlock(
         LaunchedEffect(candidateNumeral, holdNumeral) {
             if (!holdNumeral && candidateNumeral != null) heldNumeral = candidateNumeral
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // GEN-4: the weather figures live HERE, right-justified in
+        // the hero beside the numeral — a strict two-column grid
+        // (labels in one fixed column, values flush right), its top
+        // aligned to the numeral's top, rows evenly spaced. Nothing
+        // weather-related sits below the headline on home anymore:
+        // the pills row that used to live under the pill is gone.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
             Text(
                 text = shownNumeral ?: "0°",
                 style = TextStyle(
@@ -275,7 +412,56 @@ fun HeroSheetBlock(
             )
             if (bracket != null) {
                 Spacer(Modifier.size(14.dp))
-                TemperatureBracketChip(bracket = bracket)
+                Box(modifier = Modifier.padding(top = 14.dp)) {
+                    TemperatureBracketChip(bracket = bracket)
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            weather?.let { w ->
+                Column(
+                    modifier = Modifier
+                        .width(150.dp)
+                        .padding(top = 4.dp)
+                        .clickable { onWeatherPillClick("condition") },
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)
+                ) {
+                    HeroSheetFormat.weatherGridRows(w, temperatureUnit).forEach { (label, value) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(19.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Default,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 1.sp
+                                ),
+                                color = RunWearColors.TextSecondary,
+                                modifier = Modifier.width(68.dp),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                            Text(
+                                text = value,
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Default,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.5.sp,
+                                    fontFeatureSettings = "tnum"
+                                ),
+                                color = RunWearColors.TextPrimary,
+                                modifier = Modifier.weight(1f),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -302,15 +488,10 @@ fun HeroSheetBlock(
             onSheet = true
         )
 
-        Spacer(Modifier.height(12.dp))
-
-        // (e) Weather pills, flat on the sheet (behavior unchanged)
-        WeatherPillsRow(
-            weather = weather,
-            onPillClick = onWeatherPillClick,
-            onSheet = true,
-            temperatureUnit = temperatureUnit
-        )
+        // GEN-4: no weather row below the headline — the figures
+        // are in the right-justified grid beside the numeral above.
+        // The weather DETAIL sheet (frames 40/41) is unchanged and
+        // still opens from that grid.
     }
 }
 

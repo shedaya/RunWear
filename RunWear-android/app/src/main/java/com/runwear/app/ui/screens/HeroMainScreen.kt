@@ -233,6 +233,33 @@ fun HeroMainScreen(
         inTrial = makeItMeState.inTrial
     )
 
+    // GEN-4 DAY CHART: the selected day's model, built from the
+    // hourly forecast already in state (the retired HourGrid's own
+    // series) in the RW-23 comfort-adjusted frame. One model serves
+    // the home glance band and the Choose-a-Time sheet.
+    val dayChartModel = remember(
+        uiState.hourlyForecast, uiState.selectedDateTime, uiState.comfortPreference
+    ) {
+        com.runwear.app.ui.components.DayChartBuilder.build(
+            hourly = uiState.hourlyForecast,
+            date = uiState.selectedDateTime.toLocalDate(),
+            comfort = uiState.comfortPreference
+        )
+    }
+    val dayChartBandContent: @Composable () -> Unit = {
+        com.runwear.app.ui.components.DayChartGlanceBand(
+            model = dayChartModel,
+            selectedHour = uiState.selectedDateTime.hour,
+            locationToday = uiState.locationNow.toLocalDate(),
+            nowHour = uiState.locationNow.hour,
+            temperatureUnit = uiState.temperatureUnit,
+            onChangeClick = { showTimePicker = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        )
+    }
+
     // Hero-flag flow: the sheet, plus the URL already flagged in this
     // view (one flag per photo view — the chip goes inert for it).
     var showHeroFlagSheet by remember { mutableStateOf(false) }
@@ -575,6 +602,10 @@ fun HeroMainScreen(
                                         )
                                     }
                                 }
+                                // GEN-4: the day-chart glance band, below the outfit list.
+                                if (!dayChartModel.isEmpty) {
+                                item { dayChartBandContent() }
+                                }
                             }
                         }
                         AdaptiveLayout.MEDIUM -> {
@@ -655,6 +686,10 @@ fun HeroMainScreen(
                                             modifier = Modifier.padding(vertical = 8.dp)
                                         )
                                     }
+                                }
+                                // GEN-4: the day-chart glance band, below the outfit list.
+                                if (!dayChartModel.isEmpty) {
+                                item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
                                 }
                             }
                         }
@@ -754,6 +789,10 @@ fun HeroMainScreen(
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
                                         }
+                                    }
+                                    // GEN-4: the day-chart glance band, below the outfit list.
+                                    if (!dayChartModel.isEmpty) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
                                     }
                                 }
                             }
@@ -863,12 +902,22 @@ fun HeroMainScreen(
         )
     }
 
-    // Time Picker
+    // Time Picker — GEN-4: the chart sheet. Confirm commits the
+    // drafted hour (the same downstream re-solve as a tile pick:
+    // hero, headline, outfit, detail); confirming the untouched NOW
+    // hour keeps the NOW state (TimePickerDraftPolicy's pinned
+    // interpretation) and commits nothing. Cancel simply dismisses —
+    // the draft was sheet-local, so the pre-open selection stands.
     if (showTimePicker) {
         TimePickerSheet(
+            model = dayChartModel,
             selectedHour = uiState.selectedDateTime.hour,
-            onSelectTime = { hour ->
-                onTimeSelected(hour)
+            locationNow = uiState.locationNow,
+            isNowSelected = uiState.isNowSelected,
+            temperatureUnit = uiState.temperatureUnit,
+            locationName = uiState.locationName,
+            onConfirm = { confirm ->
+                if (!confirm.keepNow) onTimeSelected(confirm.hour)
                 showTimePicker = false
             },
             onDismiss = { showTimePicker = false }
