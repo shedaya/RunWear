@@ -110,7 +110,7 @@ final class Gen6WidgetRenderTests: XCTestCase {
     private func widgetView(_ entry: RunWearWidgetEntry, _ family: WidgetFamily) -> some View {
         ZStack {
             AppTheme.background
-            RunWearWidgetEntryView(entry: entry, familyOverride: family)
+            RunWearWidgetEntryView(familyOverride: family, entry: entry)
         }
     }
 
