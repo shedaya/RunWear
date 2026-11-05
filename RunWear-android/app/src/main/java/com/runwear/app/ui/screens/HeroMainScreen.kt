@@ -989,7 +989,8 @@ fun HeroMainScreen(
                 entries = wearIveRunEntries,
                 today = uiState.locationNow.toLocalDate(),
                 onDismiss = { showWearIveRunCollection = false },
-                gender = uiState.genderPreference
+                gender = uiState.genderPreference,
+                temperatureUnit = uiState.temperatureUnit
             )
         }
     }
