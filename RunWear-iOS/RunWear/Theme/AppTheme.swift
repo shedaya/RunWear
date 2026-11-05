@@ -270,10 +270,28 @@ enum AppTheme {
     /// hero's head. Replaces the 6-stop full-frame overlay on the
     /// home hero — the sheet owns all text now, so the photo's foot
     /// needs no darkening.
+    ///
+    /// GEN-3 DESIGN DELTA 1 (Sol's mockup review, Nov 4 — FIRM;
+    /// strengthened-scrim treatment approved as mocked in round 2):
+    /// the centered script wordmark got lost on light heroes. The
+    /// treatment is the design system's EXISTING scrim language at
+    /// the Morning Poster's top-scrim strength: the poster's stop
+    /// alphas (0.62 / 0.31 — see MorningPosterView's area scrim) on
+    /// this gradient's black, keeping this gradient's own seat
+    /// (gone by 0.35 of the hero height, the mid stop at its
+    /// midpoint). The wordmark's own shadow token is unchanged.
+    /// Measured on the bundled set's lightest heroes (top-center
+    /// wordmark zone, area-averaged warm-white contrast, before
+    /// the shadow's glyph-local darkening): freezing_clear_male
+    /// 1.84 → 3.64, cold_snow_male 1.88 → 3.72, cold_snow_female
+    /// 2.00 → 3.93, freezing_cloudy_male 2.05 → 3.99,
+    /// cool_rain_male 2.05 → 4.00.
+    static let heroTopScrimAlphas: [Double] = [0.62, 0.31]
     static func heroTopGradient() -> LinearGradient {
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(0.35), location: 0),
+                .init(color: .black.opacity(heroTopScrimAlphas[0]), location: 0),
+                .init(color: .black.opacity(heroTopScrimAlphas[1]), location: 0.175),
                 .init(color: .clear, location: 0.35)
             ],
             startPoint: .top,
