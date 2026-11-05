@@ -1,4 +1,5 @@
 import SwiftUI
+import LinkPresentation
 import RunWearEngine
 import Vision
 
@@ -374,26 +375,33 @@ struct WearIveRunDayView: View {
     let formatTemperature: (Double) -> String
     let genderPreference: GenderPreference
 
-    @State private var shareKind: ShareCardKind?
-    /// GEN-3 share-render fix: each card renders through its own
-    /// slot (ShareCardRenderStore) — independent pipelines,
-    /// render-once per content key, process-wide image cache.
-    /// The pre-fix view ran ONE serial task (every Kit thumbnail
-    /// download, then the poster, then the Kit Card) into three
-    /// @State values the share sheet branched over, so the sheet
-    /// waited behind the other card's downloads and its content
-    /// was replaced at every phase landing — the ~23 s blank
-    /// spinner and the flickering card Sol recorded on build 21.
+    /// GEN-6 (RW-31 Wave B): sharing opens ONE Share Studio —
+    /// the chapter page's two plain text buttons and the
+    /// per-card blank sheets are retired.
+    @State private var showStudio = false
+    /// The Studio's chosen export format. The render slots'
+    /// keys carry it, so each (card, format) pair renders at
+    /// most once and is cached process-wide.
+    @State private var shareFormat: ShareExportFormat = .feed
+    /// Garments the user removed from the Kit Card in the
+    /// Studio (the input-gating escape for a garment whose
+    /// render cannot load).
+    @State private var excludedKitKeys: Set<String> = []
+    /// GEN-3 share-render fix (kept): each card renders through
+    /// its own slot — independent pipelines, render-once per
+    /// content key, process-wide image cache.
     @StateObject private var posterSlot = ShareCardSlot()
     @StateObject private var kitSlot = ShareCardSlot()
+    /// Verify-gate context the render pipelines publish for the
+    /// Studio: the poster's face-anchor canvas point and the
+    /// Kit Card's missing garment renders.
+    @StateObject private var exportContext = ShareExportContext()
 
-    /// Content keys: a re-recorded entry (new hero, new kit) is a
-    /// new card; the same entry is the same card forever.
-    /// GEN-5 (RW-29 FA-24): the content keys carry a CONTENT
-    /// FINGERPRINT, not just identity — an in-session settle can
-    /// change the entry's place, feels-like, condition or items
-    /// in place (same id), and a key that cannot see the change
-    /// serves the stale card for the rest of the session.
+    /// Content keys: a re-recorded entry (new hero, new kit) is
+    /// a new card; the same entry is the same card forever. The
+    /// keys carry a CONTENT FINGERPRINT (GEN-5 FA-24) and, from
+    /// GEN-6, the export format (RW-31 §9: the render store's
+    /// slots gain the format as part of their key).
     private var shareContentFingerprint: String {
         [entry.placeKey,
          String(entry.dayStart.timeIntervalSince1970),
@@ -402,8 +410,44 @@ struct WearIveRunDayView: View {
          entry.itemNames.joined(separator: ","),
          entry.heroImageReference].joined(separator: "|")
     }
-    private var posterKey: String { "\(entry.id)|poster|\(shareContentFingerprint)" }
-    private var kitKey: String { "\(entry.id)|kit|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)|\(shareContentFingerprint)" }
+    private func posterKey(format: ShareExportFormat) -> String {
+        "\(entry.id)|poster|\(format.rawValue)|\(shareContentFingerprint)"
+    }
+    private func kitKey(format: ShareExportFormat) -> String {
+        "\(entry.id)|kit|\(format.rawValue)|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)|\(excludedKitKeys.sorted().joined(separator: ","))|\(shareContentFingerprint)"
+    }
+
+    /// The day's moment in its caption and poster forms (§5.1).
+    private var moments: (caption: String, poster: String, isPastChapter: Bool) {
+        ShareMomentResolver.forms(
+            momentReading: entry.momentReading,
+            dayStart: entry.dayStart,
+            lastSavedAt: entry.lastSavedAt,
+            now: Date()
+        )
+    }
+
+    /// The caption system's input, filled from the day record.
+    /// Legacy entries without a recorded day range fall back to
+    /// the actual/feels-like pair as the range — never a
+    /// fabricated figure.
+    private var captionInput: ShareCaptionInput {
+        let lowF = entry.dayLowF ?? min(entry.actualF, entry.feelsLikeF)
+        let highF = entry.dayHighF ?? max(entry.actualF, entry.feelsLikeF)
+        return ShareCaptionInput(
+            place: entry.placeDisplayName,
+            captionMoment: moments.caption,
+            isPastChapter: moments.isPastChapter,
+            feels: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.feelsLikeF)),
+            actual: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.actualF)),
+            low: ShareDisplayDegrees.number(fromFormatted: formatTemperature(lowF)),
+            high: ShareDisplayDegrees.number(fromFormatted: formatTemperature(highF)),
+            swingF: highF - lowF,
+            feelsF: entry.feelsLikeF,
+            conditionLower: entry.condition.lowercased(),
+            kitNames: entry.itemNames
+        )
+    }
 
     var body: some View {
         ScrollView {
@@ -435,24 +479,32 @@ struct WearIveRunDayView: View {
                     }
                 }
 
-                // Sharing lives inside, card by card: the user
-                // chooses Poster or Kit Card (frame 11 — no Range).
-                // Tapping also requests the render (the appearance
-                // pre-warm usually beats the tap; the slot dedupes).
-                HStack(spacing: 12) {
-                    Button("Morning Poster") {
-                        requestPoster()
-                        shareKind = .poster
+                // GEN-6 (RW-31 §4.1): ONE full-width row opens
+                // the Share Studio — card choice with live
+                // previews, the size control, the caption
+                // choice, and the one pine Share button.
+                Button {
+                    showStudio = true
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Share this day")
+                                .font(.appItemName)
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Text("Morning Poster or Kit Card, with the day's caption.")
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.appItemName)
+                            .foregroundColor(AppTheme.pinePayload)
                     }
-                    .font(.appButtonLabel)
-                    .foregroundColor(AppTheme.pinePayload)
-                    Button("Kit Card") {
-                        requestKit()
-                        shareKind = .kit
-                    }
-                    .font(.appButtonLabel)
-                    .foregroundColor(AppTheme.pinePayload)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.sheet))
                 }
+                .buttonStyle(.plain)
                 .padding(.top, 8)
             }
             .padding(16)
@@ -460,72 +512,121 @@ struct WearIveRunDayView: View {
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle(WearIveRunDateFormatting.dayLabel(entry.dayStart))
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $shareKind) { kind in
-            // WS-5 (§1.3): named detent — this choice sheet was
-            // the one unnamed presentation on the surface; it
-            // now rests at .large like the other scrolling-free
-            // share door (its content does not scroll; .large
-            // names the detent it already defaulted to).
-            ShareCardSheetView(
-                slot: kind == .poster ? posterSlot : kitSlot,
-                kind: kind,
-                onRetry: { kind == .poster ? requestPoster() : requestKit() }
+        .sheet(isPresented: $showStudio) {
+            ShareStudioView(
+                entry: entry,
+                captionInput: captionInput,
+                posterMoment: moments.poster,
+                formatTemperature: formatTemperature,
+                genderPreference: genderPreference,
+                posterSlot: posterSlot,
+                kitSlot: kitSlot,
+                exportContext: exportContext,
+                format: $shareFormat,
+                excludedKitKeys: excludedKitKeys,
+                onFormatChanged: {
+                    requestPoster()
+                    requestKit()
+                },
+                onRetry: { kind in
+                    if kind == .poster { requestPoster(force: true) } else { requestKit(force: true) }
+                },
+                onRemoveGarment: { key in
+                    excludedKitKeys.insert(key)
+                    requestKit(force: true)
+                }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         // Pre-warm BOTH cards on appearance, as two independent
         // pipelines — neither waits for the other, and each slot
-        // renders at most once per entry (the cache serves any
-        // later visit outright). The pre-fix single serial task
-        // is the 23-second spinner's mechanism; it is gone.
+        // renders at most once per (entry, format) key.
         .task { await MainActor.run { requestPoster() } }
         .task { await MainActor.run { requestKit() } }
     }
 
-    // MARK: Render requests (slot-deduped)
+    // MARK: Render requests (slot-deduped, keyed by format)
 
     @MainActor
-    private func requestPoster() {
-        posterSlot.request(key: posterKey) { await renderPosterImage() }
+    private func requestPoster(force: Bool = false) {
+        let format = shareFormat
+        if force {
+            posterSlot.forceRequest(key: posterKey(format: format)) { await renderPosterImage(format: format) }
+        } else {
+            posterSlot.request(key: posterKey(format: format)) { await renderPosterImage(format: format) }
+        }
     }
 
     @MainActor
-    private func requestKit() {
-        kitSlot.request(key: kitKey) { await renderKitImage() }
+    private func requestKit(force: Bool = false) {
+        let format = shareFormat
+        if force {
+            kitSlot.forceRequest(key: kitKey(format: format)) { await renderKitImage(format: format) }
+        } else {
+            kitSlot.request(key: kitKey(format: format)) { await renderKitImage(format: format) }
+        }
     }
 
     // MARK: Render pipelines
 
     /// Poster pipeline: hero download → poster-size downscale
-    /// (off the main actor) → the one full-size render.
-    /// GEN-5 (RW-29 FA-25): a poster whose hero could not be
-    /// loaded FAILS the slot (the labeled failure surface with
-    /// Try again) — it never lands as a "ready" photo-less dark
-    /// rectangle, which is what the build-25 pipeline produced
-    /// and what Sol's walkthrough received as a black payload.
-    private func renderPosterImage() async -> UIImage? {
-        guard let hero = await loadHeroUIImage() else { return nil }
-        let view = MorningPosterView(entry: entry, hero: hero, formatTemperature: formatTemperature)
-        return await MainActor.run {
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 3
-            return renderer.uiImage
+    /// (off the main actor) → face-anchor resolution (stored →
+    /// Vision → default) → anchor crop for THIS canvas → the
+    /// one export render at exact pixels. A hero that cannot
+    /// load FAILS the slot (GEN-5 FA-25) — never a photo-less
+    /// dark rectangle — and a composition that would clip the
+    /// face cannot be produced (§4.3.3).
+    private func renderPosterImage(format: ShareExportFormat) async -> UIImage? {
+        guard let base = await loadHeroBase() else { return nil }
+        let anchor = base.anchor
+        let hero = base.image
+        let cropped = await Task.detached(priority: .userInitiated) {
+            ShareAnchorCrop.anchoredCropped(hero, anchor: anchor, canvasAspect: format.aspect)
+        }.value
+        // Anchor arithmetic, checked before rasterising: the
+        // face must sit inside the crop window, and its canvas
+        // position is published for the verify gate's sample.
+        guard let cg = hero.cgImage else { return nil }
+        let imageSize = CGSize(width: cg.width, height: cg.height)
+        let rect = ShareAnchorCrop.cropRect(imageSize: imageSize, anchor: anchor, canvasAspect: format.aspect)
+        let faceTop = CGFloat(anchor.topNormalized) * imageSize.height
+        let faceBottom = faceTop + CGFloat(anchor.height) * imageSize.height
+        guard faceTop >= rect.minY - 1, faceBottom <= rect.maxY + 1 else { return nil }
+        let placement = ShareAnchorCrop.placement(cropRect: rect, anchor: anchor, imageSize: imageSize)
+        let centerX = (CGFloat(anchor.centerX) * imageSize.width - rect.minX) / rect.width
+        await MainActor.run {
+            exportContext.posterAnchorCanvasPoint = CGPoint(x: centerX, y: placement.faceCenterYFraction)
+            exportContext.posterPlacementValid = ShareAnchorCrop.placementIsValid(
+                cropRect: rect, anchor: anchor, imageSize: imageSize)
         }
+        let view = MorningPosterView(
+            entry: entry, hero: cropped, format: format,
+            posterMoment: moments.poster, formatTemperature: formatTemperature
+        )
+        return await ShareExportRenderer.render(view, format: format)
     }
 
-    /// Kit pipeline: garment renders fetched CONCURRENTLY (the
-    /// pre-fix loop awaited them one at a time), then the one
-    /// full-size render. ImageRenderer does not wait for
-    /// AsyncImage, so the card renders from the fetched images.
-    private func renderKitImage() async -> UIImage? {
+    /// Kit pipeline: garment renders fetched CONCURRENTLY, then
+    /// the one export render. A garment whose render cannot
+    /// load is recorded on the export context and FAILS the
+    /// slot — the Studio holds the share in its labeled error
+    /// state until retry or removal (RW-31 §7.2).
+    private func renderKitImage(format: ShareExportFormat) async -> UIImage? {
         let thumbnails = await loadKitThumbnails()
-        let view = KitCardView(entry: entry, genderPreference: genderPreference, thumbnails: thumbnails)
-        return await MainActor.run {
-            let renderer = ImageRenderer(content: view)
-            renderer.scale = 3
-            return renderer.uiImage
+        let included = ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
+            .filter { !excludedKitKeys.contains($0.key) }
+        let missing = included.filter { thumbnails[$0.key] == nil }
+        await MainActor.run {
+            exportContext.missingKitGarments = missing.map { MissingKitGarment(name: $0.name, key: $0.key) }
         }
+        guard missing.isEmpty else { return nil }
+        let view = KitCardView(
+            entry: entry, format: format, items: included, thumbnails: thumbnails,
+            posterMoment: moments.poster, formatTemperature: formatTemperature,
+            genderPreference: genderPreference
+        )
+        return await ShareExportRenderer.render(view, format: format)
     }
 
     private func loadKitThumbnails() async -> [String: UIImage] {
@@ -560,31 +661,31 @@ struct WearIveRunDayView: View {
         return URLSession(configuration: configuration)
     }()
 
-    private func loadHeroUIImage() async -> UIImage? {
+    /// Download + downscale the hero and resolve its face
+    /// anchor: the day record's stored anchor when one exists,
+    /// else on-device Vision face detection, else the default
+    /// upper-middle composition point (never the centre).
+    private func loadHeroBase() async -> (image: UIImage, anchor: ShareFaceAnchor)? {
         guard let url = URL(string: entry.heroImageReference),
               let (data, _) = try? await Self.heroFetchSession.data(from: url),
               let image = UIImage(data: data) else { return nil }
-        // Downscale to the poster's rendered size OFF the main
-        // actor, so the render never pays full-resolution decode.
         let downscaled = await Task.detached(priority: .userInitiated) {
             ShareCardImagePrep.downscaledForPoster(image)
         }.value
-        // GEN-5 (RW-28 sharing fix): crop to the poster's 4:5
-        // window FACE-PRESERVING (Vision face rect when one is
-        // found; the top-anchored head band otherwise) — the
-        // gen-4 poster center-cropped the face off entirely.
-        return await Task.detached(priority: .userInitiated) {
-            ShareCardCrop.facePreservingCropped(
-                downscaled,
-                faceRectTopLeftNormalized: Self.detectedFaceRect(in: downscaled)
-            )
+        if let stored = entry.faceAnchor {
+            return (downscaled, stored)
+        }
+        let detected = await Task.detached(priority: .userInitiated) {
+            Self.detectedFaceRect(in: downscaled)
         }.value
+        if let rect = detected {
+            return (downscaled, ShareFaceAnchor.from(faceRectTopLeftNormalized: rect))
+        }
+        return (downscaled, .defaultUpperMiddle)
     }
 
     /// Vision face detection for the poster crop: the largest
-    /// face's rect in top-left-normalised coordinates, or nil —
-    /// the crop then falls back to its top anchor (the head band
-    /// every RunWear hero portrait keeps at the top).
+    /// face's rect in top-left-normalised coordinates, or nil.
     nonisolated private static func detectedFaceRect(in image: UIImage) -> CGRect? {
         guard let cg = image.cgImage else { return nil }
         let request = VNDetectFaceRectanglesRequest()
@@ -597,46 +698,147 @@ struct WearIveRunDayView: View {
     }
 }
 
-// MARK: - Share sheet (per card)
+// MARK: - Share export context (GEN-6, RW-31 §7)
+//
+// What the render pipelines publish for the Studio's verify
+// gate: the poster's face-anchor position on the composed
+// canvas (the raster is sampled exactly there) and the Kit
+// Card's garments whose renders could not load (the share is
+// held until retry or removal).
 
-/// The share door for ONE card, observing ONLY that card's slot:
-/// the other card's pipeline cannot republish this sheet. States:
-/// ready → the rendered CARD ITSELF, drawn on the sheet, with a
-/// Share affordance and a Close; rendering/idle → the LABELED
-/// working state (the hero-pill rule: labeled, state-driven —
-/// never a bare spinner on a blank sheet); failed → the failure
-/// line with a retry. EVERY state carries an explicit Close —
-/// the census path trapped the user in the sheet for ~31 s
-/// with no cancel affordance at all.
-///
-/// GEN-5 (RW-29 FA-63 / FA-65): build 25's ready state was one
-/// "Share" label on a full-height white sheet — the card was
-/// never drawn, there was no exit control, and because the
-/// door was a ShareLink (which reports no completion), this
-/// sheet stayed open behind the system sheet after either
-/// outcome. The door is now a UIActivityViewController whose
-/// completion handler dismisses this sheet on BOTH outcomes,
-/// and its payload is exactly the card image plus the settled
-/// caption "#RunAnyWear" — no subject field exists in this
-/// path, so nothing concatenates onto the caption (FA-65;
-/// Android's caption is the same hashtag alone). The sheet
-/// itself sits on the app's cream ground (cream map: the app's
-/// own share sheet was an Absent row).
-struct ShareCardSheetView: View {
-    @ObservedObject var slot: ShareCardSlot
-    let kind: ShareCardKind
-    var onRetry: () -> Void
+struct MissingKitGarment: Identifiable, Equatable {
+    let name: String
+    let key: String
+    var id: String { key }
+}
+
+final class ShareExportContext: ObservableObject {
+    @Published var posterAnchorCanvasPoint: CGPoint?
+    @Published var posterPlacementValid = false
+    @Published var missingKitGarments: [MissingKitGarment] = []
+}
+
+// MARK: - Share Studio (GEN-6, RW-31 §4.1 — DA-04)
+//
+// ONE sheet in the app's design language, in three movements:
+// the card (Morning Poster and Kit Card as LIVE PREVIEW
+// thumbnails of the actual artifacts, poster pre-selected,
+// with the three-way size control), the words (the four filled
+// captions as selectable cards, Edit opens the chosen one as
+// editable text), and the door (one pine Share button →
+// render-and-verify → the system activity sheet). The
+// blank-white per-card sheet is retired.
+
+struct ShareStudioView: View {
+    let entry: WearIveRunEntry
+    let captionInput: ShareCaptionInput
+    let posterMoment: String
+    let formatTemperature: (Double) -> String
+    let genderPreference: GenderPreference
+    @ObservedObject var posterSlot: ShareCardSlot
+    @ObservedObject var kitSlot: ShareCardSlot
+    @ObservedObject var exportContext: ShareExportContext
+    @Binding var format: ShareExportFormat
+    let excludedKitKeys: Set<String>
+    var onFormatChanged: () -> Void
+    var onRetry: (ShareCardKind) -> Void
+    var onRemoveGarment: (String) -> Void
+
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @State private var selectedKind: ShareCardKind = .poster
+    @State private var selectedTemplate: ShareCaptionTemplate?
+    @State private var editedCaption: String?
+    @State private var editorPresented = false
+    @State private var editorDraft = ""
+    @State private var verifyFailed = false
     @State private var activityPresented = false
 
+    private var orderedCaptions: [(template: ShareCaptionTemplate, text: String)] {
+        ShareCaptionComposer.orderedCaptions(for: captionInput)
+    }
+
+    private var activeTemplate: ShareCaptionTemplate {
+        selectedTemplate ?? orderedCaptions.first?.template ?? .feelsLikeStory
+    }
+
+    private var activeCaption: String {
+        editedCaption ?? ShareCaptionComposer.caption(for: activeTemplate, input: captionInput)
+    }
+
+    private var selectedSlot: ShareCardSlot {
+        selectedKind == .poster ? posterSlot : kitSlot
+    }
+
+    /// The share is held while the chosen card is not ready —
+    /// and, for the Kit Card, while any garment render is
+    /// missing (the labeled error state of §7.2).
+    private var shareHeld: Bool {
+        if selectedSlot.state != .ready { return true }
+        if selectedKind == .kit && !exportContext.missingKitGarments.isEmpty { return true }
+        return false
+    }
+
     var body: some View {
-        ZStack {
-            AppTheme.background.ignoresSafeArea()
-            content
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text("Share this day")
+                        .font(.appSectionTitle)
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Spacer()
+                    Button("Close") { dismiss() }
+                        .font(.appButtonLabel)
+                        .foregroundColor(AppTheme.pinePayload)
+                }
+
+                formatChoice
+                sizeControl
+                selectedPreview
+                if selectedKind == .kit { kitInputState }
+                captionChoice
+
+                if verifyFailed {
+                    Text(ShareCardCopy.verifyFailureLabel)
+                        .font(.appSecondary)
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Button("Try again") {
+                        verifyFailed = false
+                        onRetry(selectedKind)
+                    }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
+                }
+
+                Button {
+                    shareTapped()
+                } label: {
+                    Text("Share")
+                        .font(.appButtonLabel)
+                        .foregroundColor(AppTheme.warmWhite)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(shareHeld ? AppTheme.inkMuted : AppTheme.primaryColor)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(shareHeld)
+            }
+            .padding(20)
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        .onChange(of: format) { _ in
+            verifyFailed = false
+            onFormatChanged()
+        }
+        .sheet(isPresented: $editorPresented) {
+            captionEditor
         }
         .sheet(isPresented: $activityPresented) {
-            if let image = slot.image {
-                ActivityViewController(items: [image, "#RunAnyWear"]) {
+            if let image = selectedSlot.image {
+                ActivityViewController(items: [image, activityItemSource(image: image)]) {
                     activityPresented = false
                     dismiss()
                 }
@@ -645,61 +847,311 @@ struct ShareCardSheetView: View {
         }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch slot.state {
-        case .ready:
-            if let image = slot.image {
-                VStack(spacing: 16) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
-                    Button {
-                        activityPresented = true
-                    } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
-                            .font(.appButtonLabel)
-                            .foregroundColor(AppTheme.pinePayload)
-                    }
-                    Button("Close") { dismiss() }
-                        .font(.appButtonLabel)
-                        .foregroundColor(AppTheme.pinePayload)
-                }
-                .padding(24)
-            } else {
-                progress
-            }
-        case .failed:
-            VStack(spacing: 12) {
-                Text(ShareCardCopy.failureLabel(for: kind))
-                    .font(.appSecondary)
-                    .foregroundColor(AppTheme.inkPrimary)
-                Button("Try again") { onRetry() }
-                    .font(.appButtonLabel)
-                    .foregroundColor(AppTheme.pinePayload)
-                Button("Close") { dismiss() }
-                    .font(.appButtonLabel)
-                    .foregroundColor(AppTheme.pinePayload)
-            }
-            .padding(24)
-        case .idle, .rendering:
-            progress
+    // MARK: First movement — the card
+
+    private var formatChoice: some View {
+        HStack(alignment: .top, spacing: 12) {
+            formatCard(kind: .poster, name: "Morning Poster", slot: posterSlot)
+            formatCard(kind: .kit, name: "Kit Card", slot: kitSlot)
         }
     }
 
-    private var progress: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-            Text(ShareCardCopy.progressLabel(for: kind))
-                .font(.appSecondary)
-                .foregroundColor(AppTheme.inkSecondary)
-            Button("Close") { dismiss() }
+    private func formatCard(kind: ShareCardKind, name: String, slot: ShareCardSlot) -> some View {
+        Button {
+            selectedKind = kind
+            verifyFailed = false
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12).fill(AppTheme.cardOnSheet)
+                    switch slot.state {
+                    case .ready:
+                        if let image = slot.image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    case .failed:
+                        VStack(spacing: 6) {
+                            Text(ShareCardCopy.failureLabel(for: kind))
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkPrimary)
+                                .multilineTextAlignment(.center)
+                            Text("Try again")
+                                .font(.appFootnote.weight(.semibold))
+                                .foregroundColor(AppTheme.pinePayload)
+                        }
+                        .padding(8)
+                    case .idle, .rendering:
+                        VStack(spacing: 6) {
+                            ProgressView()
+                            Text(ShareCardCopy.progressLabel(for: kind))
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(8)
+                    }
+                }
+                .frame(height: 170)
+                HStack {
+                    Text(name)
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Spacer()
+                    if selectedKind == kind {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(AppTheme.pinePayload)
+                    }
+                }
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(AppTheme.sheet)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(selectedKind == kind ? AppTheme.primaryColor : Color.clear, lineWidth: 2)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var sizeControl: some View {
+        Picker("Size", selection: $format) {
+            ForEach(ShareExportFormat.allCases) { option in
+                Text(option.label).tag(option)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    @ViewBuilder
+    private var selectedPreview: some View {
+        if selectedSlot.state == .ready, let image = selectedSlot.image {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxHeight: 420)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+        }
+    }
+
+    /// Kit Card input gating (§7.2): a garment whose render
+    /// cannot load shows its name under an empty tile in the
+    /// card and holds the share here — retry, or remove the
+    /// garment from the card. Per-tile Shop › rows ride under
+    /// the preview: the raster carries the printed affordance,
+    /// and these live rows open the garment's shop URL through
+    /// the app's existing affiliate machinery.
+    @ViewBuilder
+    private var kitInputState: some View {
+        if !exportContext.missingKitGarments.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(exportContext.missingKitGarments) { garment in
+                    HStack {
+                        Text("\(garment.name) couldn't load.")
+                            .font(.appFootnote)
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Spacer()
+                        Button("Remove from card") { onRemoveGarment(garment.key) }
+                            .font(.appFootnote.weight(.semibold))
+                            .foregroundColor(AppTheme.pinePayload)
+                    }
+                }
+                Button("Try again") { onRetry(.kit) }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
+            }
+        }
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
+                .filter { !excludedKitKeys.contains($0.key) }.enumerated()), id: \.offset) { _, item in
+                if let url = shopURL(forKey: item.key, name: item.name) {
+                    HStack {
+                        Text(item.name)
+                            .font(.appFootnote)
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Spacer()
+                        Button("Shop ›") { openURL(url) }
+                            .font(.appFootnote.weight(.semibold))
+                            .foregroundColor(AppTheme.pinePayload)
+                    }
+                }
+            }
+        }
+    }
+
+    /// The garment's affiliate URL via the app's existing
+    /// machinery (ClothingItem.affiliateURL — the same link the
+    /// outfit cards and Shop sheet open). No catalogue render
+    /// for the key → no link → no Shop ›.
+    private func shopURL(forKey key: String, name: String) -> URL? {
+        guard RunWearEngine.ClothingThumbnailService.shared.hasThumbnail(itemName: key) else { return nil }
+        let item = ClothingItem(
+            key: key, name: name, description: "", icon: "", amazonSearchTerm: name)
+        return item.affiliateURL(for: genderPreference, subtag: "ios")
+    }
+
+    // MARK: Second movement — the words
+
+    private var captionChoice: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Caption")
+                    .font(.appItemName)
+                    .foregroundColor(AppTheme.inkPrimary)
+                Spacer()
+                Button("Edit") {
+                    editorDraft = activeCaption
+                    editorPresented = true
+                }
                 .font(.appButtonLabel)
                 .foregroundColor(AppTheme.pinePayload)
+            }
+            ForEach(Array(orderedCaptions.enumerated()), id: \.offset) { _, option in
+                Button {
+                    selectedTemplate = option.template
+                    editedCaption = nil
+                } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(option.template.title.uppercased())
+                            .font(.appEyebrow)
+                            .foregroundColor(AppTheme.pinePayload)
+                        Text(option.template == activeTemplate ? activeCaption : option.text)
+                            .font(.appFootnote)
+                            .foregroundColor(AppTheme.inkPrimary)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(AppTheme.sheet)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(option.template == activeTemplate ? AppTheme.primaryColor : Color.clear, lineWidth: 2)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(24)
+    }
+
+    private var captionEditor: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Edit caption")
+                .font(.appSectionTitle)
+                .foregroundColor(AppTheme.inkPrimary)
+            TextEditor(text: $editorDraft)
+                .font(.appSecondary)
+                .frame(minHeight: 180)
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.sheet))
+            HStack {
+                Button("Cancel") { editorPresented = false }
+                    .font(.appButtonLabel)
+                    .foregroundColor(AppTheme.pinePayload)
+                Spacer()
+                Button("Use this caption") {
+                    editedCaption = editorDraft
+                    editorPresented = false
+                }
+                .font(.appButtonLabel)
+                .foregroundColor(AppTheme.pinePayload)
+            }
+        }
+        .padding(20)
+        .background(AppTheme.background.ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+    }
+
+    // MARK: Third movement — the door (render-and-verify, §7)
+
+    /// Verify the finished raster, THEN open the system sheet.
+    /// Any failure: the sheet never opens and the Studio shows
+    /// the verify failure line with its retry.
+    private func shareTapped() {
+        guard let image = selectedSlot.image else { return }
+        let points: [CGPoint]
+        if selectedKind == .poster {
+            points = [exportContext.posterAnchorCanvasPoint].compactMap { $0 }
+        } else {
+            let count = ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
+                .filter { !excludedKitKeys.contains($0.key) }.count
+            points = ShareKitCardModel.tileSamplePoints(format: format, itemCount: count)
+        }
+        let verdict = ShareRasterVerifier.verify(image: image, format: format, samplePoints: points)
+        guard verdict.passed else {
+            verifyFailed = true
+            return
+        }
+        activityPresented = true
+    }
+
+    /// The payload (§8): the verified image plus an item source
+    /// carrying the chosen caption as the message, the subject
+    /// for Mail, and rich link metadata titled for the day with
+    /// the poster itself as its icon/image provider.
+    private func activityItemSource(image: UIImage) -> ShareActivityItemSource {
+        ShareActivityItemSource(
+            caption: activeCaption,
+            subjectLine: ShareCaptionComposer.subject(for: captionInput),
+            linkTitle: ShareCaptionComposer.linkTitle(for: captionInput),
+            image: image
+        )
+    }
+}
+
+/// The caption/subject/metadata half of the share payload
+/// (RW-31 §8): the image travels as its own activity item; this
+/// source vends the caption text, the Mail subject, and
+/// LPLinkMetadata whose title names the day and whose icon is
+/// the card itself — so Messages and Mail preview the actual
+/// card, not a generic attachment.
+final class ShareActivityItemSource: NSObject, UIActivityItemSource {
+    let caption: String
+    let subjectLine: String
+    let linkTitle: String
+    let image: UIImage
+
+    init(caption: String, subjectLine: String, linkTitle: String, image: UIImage) {
+        self.caption = caption
+        self.subjectLine = subjectLine
+        self.linkTitle = linkTitle
+        self.image = image
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        caption
+    }
+
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        itemForActivityType activityType: UIActivity.ActivityType?
+    ) -> Any? {
+        caption
+    }
+
+    func activityViewController(
+        _ activityViewController: UIActivityViewController,
+        subjectForActivityType activityType: UIActivity.ActivityType?
+    ) -> String {
+        subjectLine
+    }
+
+    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+        let metadata = LPLinkMetadata()
+        metadata.title = linkTitle
+        let provider = NSItemProvider(object: image)
+        metadata.iconProvider = provider
+        metadata.imageProvider = provider
+        return metadata
     }
 }
 
@@ -720,45 +1172,58 @@ private struct ActivityViewController: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-// MARK: - Morning Poster (frame 12)
+// MARK: - Morning Poster (GEN-6, RW-31 §4.2 — DA-06)
+//
+// ONE composition rendered onto the three canvases: the photo
+// (already anchor-cropped for this canvas) fills the frame;
+// the settled top lockup (RunWear script + #RunAnyWear beneath,
+// warm white over the top scrim); the informative block in
+// exactly four tiers — (1) the feels-like numeral with "feels
+// like" small beside it, (2) place · moment, (3) the outfit in
+// words, promoted as the clear second read, (4) the quiet
+// conditions micro-line, which yields first under pressure;
+// and the foot as ONE lockup row (Wear I've Run script +
+// runwear.ai). The why-line never appears here — it lives in
+// the captions. On Stories the lockup sits below the top safe
+// zone and the footer folds into the block as its last line,
+// the whole stack ending above the bottom safe line.
 
-/// The poster artifact: hero + the script "RunWear" lockup with
-/// #RunAnyWear directly under it, a top area scrim that is gone
-/// before the runner's head, UI-sans body copy, and the "Wear I've
-/// Run" script at the foot.
-///
-/// GEN-3 X-11: this view is composed at ONE size (the
-/// MorningPosterMetrics canvas) and rendered once, full-size, by
-/// `renderPoster()`; the share preview is a raster scale-down of
-/// that render — there is no thumbnail-size composition of this
-/// view anywhere on iOS, so the Android thumbnail text collision
-/// has no mechanism here. The lockup band and the body+foot band
-/// are sequential VStack bands across a Spacer; their bounded
-/// heights are pinned in MorningPosterMetrics.
 struct MorningPosterView: View {
     let entry: WearIveRunEntry
     let hero: UIImage?
+    let format: ShareExportFormat
+    let posterMoment: String
     let formatTemperature: (Double) -> String
+
+    private var canvas: CGSize { format.canvasPointSize }
+    private var feelsText: String {
+        ShareDisplayDegrees.text(fromFormatted: formatTemperature(entry.feelsLikeF))
+    }
+    private var tier3: String {
+        SharePosterModel.tier3Line(kitNames: entry.itemNames)
+    }
+    private var tier4: String? {
+        guard SharePosterModel.showsMicroLine(format: format, tier3Text: tier3) else { return nil }
+        let actual = ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.actualF))
+        if let wind = entry.windMph {
+            return SharePosterModel.tier4Line(
+                condition: entry.condition, actualDegrees: actual, windMph: Int(wind.rounded()))
+        }
+        // Legacy record without a wind figure: the micro-line
+        // carries what the record holds — never a fabrication.
+        return "\(entry.condition) · Actual \(actual)°"
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             if let hero {
-                // GEN-5: the hero arrives already face-cropped to
-                // the poster aspect (loadHeroUIImage); HeroPhoto's
-                // top anchor is the second line of defence — a
-                // bare center fill never renders this poster.
-                HeroPhoto(
-                    image: Image(uiImage: hero),
-                    width: MorningPosterMetrics.canvasWidth,
-                    height: MorningPosterMetrics.canvasHeight
-                )
+                HeroPhoto(image: Image(uiImage: hero), width: canvas.width, height: canvas.height)
             } else {
                 AppTheme.darkBackground
             }
 
-            // The area scrim (notes §7.4): gray gradient
-            // rgba(35,35,39,.62) at the top edge, gone by ~150pt —
-            // its own layer behind the lockup only.
+            // The settled top scrim: charcoal gradient, 0.62 at
+            // the top edge, gone before it reaches the runner.
             LinearGradient(
                 stops: [
                     .init(color: Color(red: 35 / 255, green: 35 / 255, blue: 39 / 255).opacity(0.62), location: 0),
@@ -768,47 +1233,61 @@ struct MorningPosterView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: MorningPosterMetrics.scrimHeight)
+            .frame(height: canvas.height * 0.31)
             .frame(maxWidth: .infinity)
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Lockup: script brand + hashtag directly under it.
-                // GEN-3 X-11: every layout value comes from
-                // MorningPosterMetrics (the dual-membered pure
-                // enum), so the band geometry the tests pin is
-                // the geometry that renders.
-                VStack(spacing: MorningPosterMetrics.lockupSpacing) {
+                VStack(spacing: 2) {
                     Text("RunWear")
-                        .font(.greatVibes(size: MorningPosterMetrics.brandFontSize))
+                        .font(.greatVibes(size: 37))
                         .foregroundColor(AppTheme.warmWhite)
                         .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
                     Text("#RunAnyWear")
-                        .font(.system(size: MorningPosterMetrics.hashtagFontSize, weight: .semibold))
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(AppTheme.warmWhite)
                 }
-                .padding(.top, MorningPosterMetrics.lockupTopPadding)
+                .padding(.top, SharePosterModel.lockupTopInset(format: format))
 
                 Spacer()
 
-                // Body in the UI sans (Bebas retired, artifact too).
-                VStack(alignment: .leading, spacing: MorningPosterMetrics.bodySpacing) {
-                    Text("\(formatTemperature(entry.feelsLikeF)) · \(entry.condition)")
-                        .font(.system(size: MorningPosterMetrics.feelsFontSize, weight: .semibold))
+                VStack(alignment: .leading, spacing: 10) {
+                    // Tier 1 — the numeral.
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(feelsText)
+                            .font(.system(size: 64, weight: .heavy))
+                            .foregroundColor(.white)
+                        Text("feels like")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.9))
+                    }
+                    // Tier 2 — place · moment.
+                    Text(SharePosterModel.tier2Line(place: entry.placeDisplayName, posterMoment: posterMoment))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
-                    // GEN-5 (RW-29 FA-21): the second line
-                    // carries the run's human MOMENT (the
-                    // entry's recorded moment reading), never a
-                    // stamped "Nov 5" date form (frame 12).
-                    Text("\(entry.placeDisplayName) · \(entry.momentReading.rendered)")
-                        .font(.system(size: MorningPosterMetrics.placeFontSize))
-                        .foregroundColor(.white.opacity(0.85))
-                    Text(entry.itemNames.prefix(4).joined(separator: " · "))
-                        .font(.system(size: MorningPosterMetrics.itemsFontSize))
-                        .foregroundColor(.white.opacity(0.85))
+                    // Tier 3 — the outfit in words, promoted.
+                    Text(tier3)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                    // Tier 4 — the quiet conditions micro-line.
+                    if let tier4 {
+                        Text(tier4)
+                            .font(.system(size: 11.5, weight: .medium))
+                            .foregroundColor(.white.opacity(0.72))
+                    }
+                    // Stories: the footer folds in as the
+                    // block's last line (§6).
+                    if SharePosterModel.footerFoldsIntoBlock(format: format) {
+                        footerRow
+                            .padding(.top, 4)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(MorningPosterMetrics.bodyPadding)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, SharePosterModel.footerFoldsIntoBlock(format: format)
+                    ? SharePosterModel.blockBottomInset(format: format) : 6)
                 .background(
                     LinearGradient(
                         colors: [.clear, .black.opacity(0.45)],
@@ -816,133 +1295,144 @@ struct MorningPosterView: View {
                     )
                 )
 
-                // Foot: the collection's signature.
-                HStack(spacing: 8) {
-                    Text("Wear I've Run")
-                        .font(.greatVibes(size: MorningPosterMetrics.footFontSize))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Text("runwear.ai")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.8))
+                if !SharePosterModel.footerFoldsIntoBlock(format: format) {
+                    footerRow
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, SharePosterModel.blockBottomInset(format: format))
                 }
-                .padding(.horizontal, MorningPosterMetrics.footHorizontalPadding)
-                .padding(.bottom, MorningPosterMetrics.footBottomPadding)
             }
         }
-        .frame(width: MorningPosterMetrics.canvasWidth, height: MorningPosterMetrics.canvasHeight)
+        .frame(width: canvas.width, height: canvas.height)
         .clipped()
+    }
+
+    /// The foot as ONE lockup row: the Wear I've Run script and
+    /// runwear.ai composed together, centred — never two
+    /// elements in opposite corners.
+    private var footerRow: some View {
+        HStack(spacing: 9) {
+            Text("Wear I've Run")
+                .font(.greatVibes(size: 21))
+                .foregroundColor(.white)
+            Text("·")
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.55))
+            Text("runwear.ai")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 
-// MARK: - Kit Card (frame 13)
+// MARK: - Kit Card (GEN-6, RW-31 §4.5 — DA-17)
+//
+// The outfit in the app's own card language, on its cream
+// ground: header (Wear I've Run script small, place as title,
+// the weather line), then a two-column grid of LARGE squares
+// on the Warm Charcoal ground token in wearing order — the
+// garment name under every square in every format, its
+// one-line note under the name where the format has room, and
+// a per-tile Shop › printed on the card. Foot: #RunAnyWear in
+// pine, runwear.ai beside it, and the Associates disclosure in
+// microcopy. No prices anywhere. Fixed-light by design (frame
+// 13), so its colors are AppTheme's STATIC light constants.
 
-/// The kit artifact: the day's garments as the app's real renders
-/// (the engine's thumbnail map, by item key), on the sheet surface.
-/// WS-8: the artifact is fixed-light by design (frame 13), so its
-/// colors are AppTheme's STATIC light constants (textPrimary /
-/// textSecondary / backgroundColor / cardBackground / primaryColor)
-/// — never the dynamic pair, which would flip the rendered share
-/// image with the app's appearance.
 struct KitCardView: View {
     let entry: WearIveRunEntry
-    let genderPreference: GenderPreference
-    /// Prefetched garment renders by item key (the live view
-    /// passes these; previews may omit them).
+    let format: ShareExportFormat
+    /// The day's garments in wearing order (removed garments
+    /// already filtered by the caller).
+    let items: [(name: String, key: String)]
+    /// Prefetched garment renders by item key.
     var thumbnails: [String: UIImage] = [:]
+    let posterMoment: String
+    let formatTemperature: (Double) -> String
+    let genderPreference: GenderPreference
 
-    private func thumbnailURL(forKey key: String) -> URL? {
-        RunWearEngine.ClothingThumbnailService.shared
-            .getThumbnailUrl(itemName: key, genderName: genderPreference.rawValue.uppercased())
-            .flatMap { URL(string: $0) }
+    private var canvas: CGSize { format.canvasPointSize }
+    private var showsNotes: Bool {
+        ShareKitCardModel.showsNotes(format: format, itemCount: items.count)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Wear I've Run")
-                .font(.greatVibes(size: 26))
-                .foregroundColor(AppTheme.textPrimary)
-            Text("\(entry.placeDisplayName) · \(WearIveRunDateFormatting.dayLabel(entry.dayStart))")
-                .font(.system(size: 13))
-                .foregroundColor(AppTheme.textSecondary)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Wear I've Run")
+                    .font(.greatVibes(size: 24))
+                    .foregroundColor(AppTheme.textPrimary)
+                Text(entry.placeDisplayName)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundColor(AppTheme.textPrimary)
+                Text(ShareKitCardModel.weatherLine(
+                    feelsDegrees: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.feelsLikeF)),
+                    condition: entry.condition,
+                    place: entry.placeDisplayName,
+                    posterMoment: posterMoment))
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.textSecondary)
+            }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(Array(zip(entry.itemNames, entry.itemKeys).enumerated()), id: \.offset) { _, pair in
-                    VStack(spacing: 6) {
-                        // GEN-5 (RW-29 FA-64): the garment
-                        // renders are charcoal garments on pure
-                        // black source photographs (opaque — the
-                        // black is baked into the asset, verified
-                        // against the stored bytes). Build 25
-                        // floated each as a hard-cornered black
-                        // square inside a taller cream cell,
-                        // which reads as a broken image and
-                        // collapses to a black void at share
-                        // scale. The tile is now a designed
-                        // object: a square tile, rounded corners,
-                        // a hairline edge — the dark product tile
-                        // the photography was made as.
-                        Group {
-                            if let thumbnail = thumbnails[pair.1] {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 14) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    VStack(spacing: 0) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(AppTheme.darkCardBackground)
+                            if let thumbnail = thumbnails[item.key] {
                                 Image(uiImage: thumbnail)
                                     .resizable()
                                     .aspectRatio(contentMode: .fit)
-                            } else {
-                                AsyncImage(url: thumbnailURL(forKey: pair.1)) { phase in
-                                    switch phase {
-                                    case .success(let image):
-                                        image.resizable().aspectRatio(contentMode: .fit)
-                                    default:
-                                        Rectangle()
-                                            .fill(AppTheme.backgroundColor)
-                                            .overlay(
-                                                Image(systemName: "tshirt")
-                                                    .foregroundColor(AppTheme.textSecondary)
-                                            )
-                                    }
-                                }
+                                    .padding(8)
                             }
                         }
-                        .frame(width: 90, height: 90)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(AppTheme.textSecondary.opacity(0.35), lineWidth: 1)
-                        )
-                        Text(pair.0)
-                            .font(.system(size: 12, weight: .medium))
+                        .aspectRatio(1, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        Text(item.name)
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(AppTheme.textPrimary)
                             .multilineTextAlignment(.center)
-                        // GEN-5 (RW-29 FA-17): frame 13 carries
-                        // the catalogue's one-line note under
-                        // each garment's name, resolved from
-                        // the engine catalogue by item key.
-                        if let note = EngineBridge.itemNote(forKey: pair.1) {
+                            .padding(.top, 8)
+                        if showsNotes, let note = EngineBridge.itemNote(forKey: item.key) {
                             Text(note)
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                                 .foregroundColor(AppTheme.textSecondary)
                                 .multilineTextAlignment(.center)
+                                .padding(.top, 1)
+                        }
+                        if hasShopLink(forKey: item.key) {
+                            Text("Shop ›")
+                                .font(.system(size: 12.5, weight: .semibold))
+                                .foregroundColor(AppTheme.primaryColor)
+                                .padding(.top, 4)
                         }
                     }
                 }
             }
 
-            Text("#RunAnyWear")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(AppTheme.primaryColor)
+            Spacer(minLength: 0)
 
-            // GEN-5 (RW-29 FA-17): frame 13's single call to
-            // action and the Amazon Associates disclosure —
-            // both verbatim, exactly one CTA on the card.
-            Text("Shop this kit →")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(AppTheme.primaryColor)
-            Text("As an Amazon Associate, RunWear earns from qualifying purchases.")
-                .font(.system(size: 10))
+            HStack(spacing: 8) {
+                Text("#RunAnyWear")
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundColor(AppTheme.primaryColor)
+                Text("runwear.ai")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(AppTheme.textSecondary)
+            }
+            Text(ShareKitCardModel.disclosure)
+                .font(.system(size: 9.5))
                 .foregroundColor(AppTheme.textSecondary)
         }
         .padding(20)
-        .frame(width: 390)
+        .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
         .background(AppTheme.cardBackground)
+    }
+
+    /// A tile carries Shop › only when the garment has a real
+    /// shop link — the catalogue render exists for its key, so
+    /// the affiliate URL the Studio's live rows open exists too.
+    private func hasShopLink(forKey key: String) -> Bool {
+        RunWearEngine.ClothingThumbnailService.shared.hasThumbnail(itemName: key)
     }
 }
