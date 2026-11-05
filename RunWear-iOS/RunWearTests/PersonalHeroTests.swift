@@ -266,8 +266,11 @@ final class PersonalHeroTests: XCTestCase {
         // without a spec change fails loudly.
         XCTAssertEqual(PhotoRejection.faceUnclear.specString, "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow.")
         XCTAssertEqual(PhotoRejection.multiplePeople.specString, "This photo has more than one person in it. Pick one that's just you.")
-        XCTAssertEqual(PhotoRejection.tooDark.specString, "This one is too dark to use. Try a photo in brighter light.")
-        XCTAssertEqual(PhotoRejection.tooClose.specString, "This one is cropped too close. A head-and-shoulders or half-body photo works best.")
+        // GEN-6 (RW-51): too-dark and too-close carry the settled
+        // design-spec §10.4 / frame 18 wordings.
+        XCTAssertEqual(PhotoRejection.tooDark.specString, "Try facing a window or light, looking at the camera.")
+        XCTAssertEqual(PhotoRejection.tooClose.specString, "Hold the phone at arm's length, so your whole face fits with space around it.")
+        XCTAssertEqual(PhotoRejection.faceTooSmall.specString, "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…")
     }
 
     // MARK: - RW-15 (1): request payload contract

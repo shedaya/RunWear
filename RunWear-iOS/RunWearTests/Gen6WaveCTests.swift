@@ -105,4 +105,89 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertTrue(home.contains(".font(.system(size: 15.5, weight: .bold))"),
                       "the headline moment renders in pine bold per the design")
     }
+
+    // MARK: - DA-20 + RW-58: per-run stated once; fine print is basis only
+
+    func testRW58FinePrintIsTheSettledBasisOnly() {
+        XCTAssertEqual(
+            MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$9.99", annual: Decimal(string: "9.99")),
+            "$9.99 a year, at 4–5 runs a week.")
+        let finePrint = try! XCTUnwrap(MakeItMePriceLabels.perRunFinePrint(
+            annualPriceString: "$9.99", annual: Decimal(string: "9.99")))
+        XCTAssertFalse(finePrint.contains("per run"), "DA-20: the fine print must not restate the per-run claim")
+        XCTAssertFalse(finePrint.contains("¢"), "DA-20: no second per-run figure below the card")
+    }
+
+    func testRW58PerRunLineStaysUnderThePriceAndPriceIsPerYear() {
+        XCTAssertEqual(MakeItMePriceLabels.perRunLine(annual: Decimal(string: "9.99")), "only about 4¢ per run")
+        XCTAssertEqual(MakeItMePriceLabels.annualRowLabel(annualPriceString: "$9.99", annual: nil, monthly: nil), "$9.99/yr")
+        XCTAssertEqual(MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: "$9.99"), "$9.99/yr")
+    }
+
+    // MARK: - DA-22: upsell eyebrow is the script title instance
+
+    func testDA22UpsellCardUsesTheScriptNotSansCaps_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertFalse(settings.contains("Text(\"MAKE IT ME\")"),
+                       "no sans caps MAKE IT ME title instance may remain")
+        let upsellStart = try XCTUnwrap(settings.range(of: "struct MakeItMeUpsellCard"))
+        let upsell = String(settings[upsellStart.lowerBound...])
+        XCTAssertTrue(upsell.contains("Text(\"Make It Me\")"), "the upsell card carries the script title")
+        XCTAssertTrue(upsell.contains(".greatVibes(size: 25)"), "the upsell title is set in the script")
+    }
+
+    // MARK: - RW-51: settled upload failure wordings + doors
+
+    func testRW51FailureWordingsAreTheSettledOnes() {
+        XCTAssertEqual(PhotoRejection.faceTooSmall.specString,
+                       "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…")
+        XCTAssertEqual(PhotoRejection.tooClose.specString,
+                       "Hold the phone at arm's length, so your whole face fits with space around it.")
+        XCTAssertEqual(PhotoRejection.tooDark.specString,
+                       "Try facing a window or light, looking at the camera.")
+        XCTAssertEqual(SelfieGuidance.retakeFaceTooSmall, PhotoRejection.faceTooSmall.specString,
+                       "the guidance constant and the rejection string are one wording")
+    }
+
+    func testRW51FailureRowCarriesBothSettledDoors_sourcePin() throws {
+        let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        XCTAssertTrue(flow.contains("Text(\"Take the guided selfie\")"),
+                      "the guided door carries its settled label")
+        XCTAssertFalse(flow.contains("Retake with the guided camera"),
+                       "the old guided-door label must not return")
+        XCTAssertTrue(flow.contains("Text(\"Choose a different photo\")"),
+                      "the failure row gains the labelled library door")
+    }
+
+    // MARK: - RW-52 + DA-24(i): the fork per §10.1 / frame 32
+
+    func testRW52ForkShape_sourcePin() throws {
+        let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
+        let start = try XCTUnwrap(flow.range(of: "struct MakeItMeForkView"))
+        let end = try XCTUnwrap(flow.range(of: "// MARK: - The opt-in flow container"))
+        let fork = String(flow[start.lowerBound..<end.lowerBound])
+        // The script is the fork's TITLE: it appears before the
+        // fork's first line, and only once in the fork.
+        let scriptIdx = try XCTUnwrap(fork.range(of: "Text(\"Make It Me\")")).lowerBound
+        let lineIdx = try XCTUnwrap(fork.range(of: "See yourself in every outfit.")).lowerBound
+        XCTAssertTrue(scriptIdx < lineIdx, "the script title heads the fork")
+        XCTAssertEqual(fork.components(separatedBy: "Text(\"Make It Me\")").count - 1, 1,
+                       "the script sits in the title seat only, not inside a card")
+        // Settled doors.
+        XCTAssertTrue(fork.contains("Text(\"Make it me\")"))
+        XCTAssertTrue(fork.contains("Text(\"Use my photos\")"))
+        XCTAssertTrue(fork.contains("Text(\"Standard photos\")"))
+        XCTAssertTrue(fork.contains("Text(\"Use standard photos\")"))
+        XCTAssertFalse(fork.contains("Use the standard photos"),
+                       "DA-24: the old stock-card heading must not return")
+        // The two unlisted card description lines are gone.
+        XCTAssertFalse(fork.contains("Upload one photo of your face"))
+        XCTAssertFalse(fork.contains("Keep the photo library RunWear matches"))
+        // The settled Continue, after the honesty line.
+        let honestyIdx = try XCTUnwrap(fork.range(of: "Either way, your recommendations don't change")).lowerBound
+        let continueIdx = try XCTUnwrap(fork.range(of: "Text(\"Continue\")")).lowerBound
+        XCTAssertTrue(honestyIdx < continueIdx, "Continue follows the honesty line")
+        // Fork lines themselves unchanged.
+        XCTAssertTrue(fork.contains("Your recommendations, with you in the photo."))
+    }
 }

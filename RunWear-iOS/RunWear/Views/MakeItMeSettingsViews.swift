@@ -689,13 +689,12 @@ struct MakeItMeSubscriptionSheet: View {
                     .accessibilityAddTraits(selectedPlan == .annual ? [.isSelected] : [])
                     .accessibilityLabel("Annual plan")
 
-                    // GEN-3 (WS-F): the fine print under the card —
-                    // the annual price framed per run with its
-                    // basis stated, DERIVED from the displayed
-                    // product's annual price (never a hardcoded
-                    // cents figure). This replaces the retired
-                    // monthly-comparison line; nothing else on the
-                    // paywall changes.
+                    // GEN-3 (WS-F) as settled by GEN-6 (DA-20 +
+                    // RW-58): the fine print under the card carries
+                    // the per-run line's BASIS ONLY, in the settled
+                    // wording, DERIVED from the displayed product's
+                    // annual price — the per-run claim itself is
+                    // stated exactly once, under the price above.
                     if let finePrint = store.billing.perRunFinePrint {
                         Text(finePrint)
                             .font(.system(size: 12))
@@ -813,9 +812,12 @@ struct MakeItMeUpsellCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("MAKE IT ME")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(AppTheme.inkSecondary)
+            // GEN-6 (DA-22): the feature's name as a title is the
+            // Make It Me SCRIPT, like every other title instance
+            // in the app — never a bold sans caps eyebrow.
+            Text("Make It Me")
+                .font(.greatVibes(size: 25))
+                .foregroundColor(AppTheme.inkPrimary)
             Text("This outfit isn't you — yet.")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(AppTheme.inkPrimary)

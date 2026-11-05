@@ -189,18 +189,21 @@ final class MakeItMePriceLabelTests: XCTestCase {
     }
 
     func testPerRunFinePrintStatesItsBasisAtAllThreeArms() {
+        // GEN-6 (DA-20 + RW-58): the fine print is the settled
+        // basis ONLY — "$9.99 a year, at 4–5 runs a week." — at
+        // every arm; the per-run claim lives once, in perRunLine.
         XCTAssertEqual(
-            "At four to five runs a week, $9.99/year is only about 4¢ per run.",
+            "$9.99 a year, at 4–5 runs a week.",
             MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$9.99",
                                                 annual: Decimal(string: "9.99"))
         )
         XCTAssertEqual(
-            "At four to five runs a week, $19.99/year is only about 9¢ per run.",
+            "$19.99 a year, at 4–5 runs a week.",
             MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$19.99",
                                                 annual: Decimal(string: "19.99"))
         )
         XCTAssertEqual(
-            "At four to five runs a week, $29.99/year is only about 13¢ per run.",
+            "$29.99 a year, at 4–5 runs a week.",
             MakeItMePriceLabels.perRunFinePrint(annualPriceString: "$29.99",
                                                 annual: Decimal(string: "29.99"))
         )

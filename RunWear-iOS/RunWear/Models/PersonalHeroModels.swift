@@ -1253,13 +1253,19 @@ enum PhotoRejection: Equatable {
         case .multiplePeople:
             return "This photo has more than one person in it. Pick one that's just you."
         case .tooDark:
-            return "This one is too dark to use. Try a photo in brighter light."
+            // GEN-6 (RW-51): the settled dim/turned wording
+            // (design-spec §10.4, frame 18), verbatim in substance.
+            return "Try facing a window or light, looking at the camera."
         case .tooClose:
-            return "This one is cropped too close. A head-and-shoulders or half-body photo works best."
+            // GEN-6 (RW-51): the settled too-close wording
+            // (design-spec §10.4, frame 18), verbatim.
+            return "Hold the phone at arm's length, so your whole face fits with space around it."
         case .faceTooSmall:
-            // C3E: failure-specific, and the camera is offered
-            // first (the guided capture frames the face for you).
-            return "Your face is too small in this photo to use. Take a selfie with the camera instead — the guide helps you frame it."
+            // GEN-6 (RW-51): the settled face-too-small wording
+            // (design-spec §10.4, frame 18), verbatim — failure-
+            // specific, and the camera is offered first (the
+            // guided capture frames the face for you).
+            return "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…"
         case .rotated:
             // C3G: verbatim with Android's MakeItMeStrings
             // C3G_REJECT_ROTATED (both platforms, one string).

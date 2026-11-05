@@ -1476,8 +1476,10 @@ enum SelfieGuidance {
     // door; no coded counterpart exists in either repo (checked
     // 2026-11-02), so these are authored to the C3 pattern:
     // failure-specific, and the camera is offered first.
-    /// C3E — the uploaded photo's face is too small.
-    static let retakeFaceTooSmall = "Your face is too small in this photo to use. Take a selfie with the camera instead — the guide helps you frame it."
+    /// C3E — the uploaded photo's face is too small. GEN-6
+    /// (RW-51): the settled §10.4 wording, identical to
+    /// PhotoRejection.faceTooSmall.specString.
+    static let retakeFaceTooSmall = "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…"
     /// C3F — the uploaded photo is not frontal.
     static let retakeNotFrontal = "This photo isn't facing the camera. Take a selfie with the camera instead — face it straight on."
 }
