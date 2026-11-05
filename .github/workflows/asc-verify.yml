@@ -20,6 +20,8 @@ on:
           - attach
           - packet-read
           - packet-apply
+          - provision-probe
+          - provision-apply
         default: verify
         required: true
       version:
@@ -62,3 +64,11 @@ jobs:
         if: inputs.task == 'packet-apply'
         working-directory: scripts/asc
         run: python3 asc_packet.py apply "${{ inputs.build }}"
+      - name: Probe widget provisioning state (gen-5, read-only)
+        if: inputs.task == 'provision-probe'
+        working-directory: scripts/asc
+        run: python3 asc_provision_widget.py probe
+      - name: Apply widget provisioning (gen-5, idempotent creates)
+        if: inputs.task == 'provision-apply'
+        working-directory: scripts/asc
+        run: python3 asc_provision_widget.py apply
