@@ -318,18 +318,27 @@ final class WS6PipelinesTests: XCTestCase {
         // GEN-5 (RW-29 FA-63 / FA-65) SUPERSEDES the ShareLink
         // form of this pin: ShareLink reports no completion, so
         // the app sheet could never dismiss after sharing, and
-        // its subject field concatenated onto the caption. The
-        // designed share remains — through a
-        // UIActivityViewController whose payload is the card
-        // image plus the hashtag caption alone.
+        // its subject field concatenated onto the caption.
+        // GEN-6 (RW-31 Wave B) supersedes the payload half of
+        // that pin: the bare hashtag is replaced by the caption
+        // system — the payload is the verified card image plus
+        // a UIActivityItemSource carrying the chosen caption,
+        // the day's subject, and link metadata (design §8). The
+        // FA-65 property survives in its real form: the subject
+        // is a SEPARATE field of the item source, never
+        // concatenated onto the caption text.
         XCTAssertTrue(collection.contains("UIActivityViewController"),
                       "the collection's designed share must remain — via the activity controller")
         XCTAssertTrue(collection.contains("Text(\"#RunAnyWear\")"),
                       "the collection artifacts keep the hashtag lockup")
-        XCTAssertTrue(collection.contains("[image, \"#RunAnyWear\"]"),
-                      "the share payload is the card plus the settled caption, nothing else")
+        XCTAssertTrue(collection.contains("ShareActivityItemSource"),
+                      "the payload's text half is the caption item source")
+        XCTAssertTrue(collection.contains("subjectForActivityType"),
+                      "the subject rides as its own field (FA-65's real form)")
+        XCTAssertFalse(collection.contains("[image, \"#RunAnyWear\"]"),
+                       "the bare-hashtag payload is retired by RW-31")
         XCTAssertFalse(collection.contains("RunWear — Wear I've Run"),
-                       "FA-65: no subject field concatenates onto the received caption")
+                       "FA-65: the generic subject is gone — the subject names the day")
     }
 
     // MARK: - F-1 · IntakeOrientation math (rotated inputs)

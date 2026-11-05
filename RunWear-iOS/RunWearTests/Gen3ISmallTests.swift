@@ -330,13 +330,21 @@ final class Gen3ISmallTests: XCTestCase {
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
         XCTAssertEqual(occurrences(collection, "MorningPosterView("), 1,
                        "the poster view is instantiated exactly once — the full-size render")
-        XCTAssertTrue(collection.contains("ImageRenderer(content: view)"),
-                      "the one instantiation renders through ImageRenderer")
-        XCTAssertTrue(collection.contains("renderer.scale = 3"),
-                      "rendered once at full size, 3x raster")
-        XCTAssertTrue(collection.contains("MorningPosterMetrics.canvasWidth")
-                      && collection.contains("MorningPosterMetrics.canvasHeight"),
-                      "the view consumes the pinned metrics for its canvas")
+        // GEN-6 (RW-31 Wave B, DA-16): the one instantiation
+        // renders through the shared export renderer at the
+        // chosen format's exact export pixels — the gen-3
+        // fixed-canvas ImageRenderer call is superseded, and
+        // its mechanism (one composition, rendered once, the
+        // preview a raster of that render) is preserved.
+        XCTAssertTrue(collection.contains("ShareExportRenderer.render(view, format: format)"),
+                      "the one instantiation renders through the export renderer")
+        let store = try sourceFile("../RunWear/Services/ShareCardRenderStore.swift")
+        XCTAssertTrue(store.contains("ImageRenderer(content: content)"),
+                      "the export renderer is an ImageRenderer render")
+        XCTAssertTrue(store.contains("renderer.scale = format.renderScale"),
+                      "rendered at the format's scale, landing on exact export pixels")
+        XCTAssertTrue(collection.contains("format.canvasPointSize"),
+                      "the view composes on the chosen format's canvas (Feed/Stories/Square)")
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertFalse(home.contains("MorningPosterView"),
                        "no second (thumbnail) composition of the poster exists on the home surface")

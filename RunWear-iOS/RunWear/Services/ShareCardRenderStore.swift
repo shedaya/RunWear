@@ -447,6 +447,18 @@ enum ShareRasterVerifier {
             let regionVariance = values.reduce(0) { $0 + ($1 - regionMean) * ($1 - regionMean) } / Double(values.count)
             return (regionMean, regionVariance.squareRoot())
         }
+        /// A uniform BLACK region — the black-square signature
+        /// of Sol's recording and of a photo that never drew on
+        /// the poster's dark ground.
+        func isUniformBlack(_ stats: (mean: Double, deviation: Double)) -> Bool {
+            stats.deviation < uniformDeviationCeiling && stats.mean < uniformMeanCeiling
+        }
+        /// A uniform black OR blank region — used at the
+        /// specific samples, where real content must sit (the
+        /// face, a garment tile). The grid scan does not use
+        /// this form: the Kit Card's cream ground is a designed
+        /// uniform field, and only the global degenerate check
+        /// (above) judges whole-raster blankness.
         func isUniformDead(_ stats: (mean: Double, deviation: Double)) -> Bool {
             stats.deviation < uniformDeviationCeiling
                 && (stats.mean < uniformMeanCeiling || stats.mean > uniformMeanFloor)
@@ -460,7 +472,7 @@ enum ShareRasterVerifier {
                 let centerX = (column * 2 + 1) * gridWidth / (cellColumns * 2)
                 let centerY = (row * 2 + 1) * gridHeight / (cellRows * 2)
                 let radius = max(1, gridWidth / (cellColumns * 4))
-                if isUniformDead(regionStats(centerX: centerX, centerY: centerY, radius: radius)) {
+                if isUniformBlack(regionStats(centerX: centerX, centerY: centerY, radius: radius)) {
                     return Verdict(passed: false, failure: .uniformRegion("grid \(column),\(row)"),
                                    meanLuminance: mean, standardDeviation: deviation)
                 }

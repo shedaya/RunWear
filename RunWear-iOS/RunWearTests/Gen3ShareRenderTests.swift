@@ -248,8 +248,8 @@ final class Gen3ShareRenderTests: XCTestCase {
                       "both cards pre-warm as independent pipelines on appearance")
         XCTAssertTrue(collection.contains("withTaskGroup"),
                       "kit thumbnails fetch concurrently, not in a sequential await loop")
-        XCTAssertTrue(collection.contains("ShareCardSheetView("),
-                      "the sheet is the per-card slot-observing view")
+        XCTAssertTrue(collection.contains("ShareStudioView("),
+                      "GEN-6 (RW-31 Wave B): the sheet is the unified Share Studio, observing the same per-card slots")
         XCTAssertTrue(collection.contains("ShareCardCopy.progressLabel"),
                       "the sheet's working state is the labeled copy")
         XCTAssertTrue(collection.contains("ShareCardImagePrep.downscaledForPoster"),
