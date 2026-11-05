@@ -139,12 +139,17 @@ class SettingsInventoryRenderTest {
         "Body Temperature",
         MakeItMeStrings.S1_SECTION_HEADER,
         MakeItMeStrings.S2_STATE_A_ROW,
-        MakeItMeStrings.S20_DELETE_DATA_ROW,
         "Send feedback",
         "Help improve the app",
         "About",
         "Version",
-        SettingsInventory.versionLabel(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
+        SettingsInventory.versionLabel(BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+        // GEN-5 (RW-28 item 25): the Danger zone is the LAST
+        // registered section (design-spec S13) — Delete my data
+        // closes the sheet, after About. This checklist's older
+        // position (inside the Make It Me group) predates the
+        // danger-zone quarantine.
+        MakeItMeStrings.S20_DELETE_DATA_ROW
     )
 
     private fun assertInventory(texts: List<String>, label: String) {
