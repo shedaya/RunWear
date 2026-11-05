@@ -75,8 +75,23 @@ struct SettingsModal: View {
             Form {
                 ForEach(inventorySections) { section in
                     inventorySection(section)
+                        // GEN-5 design pass (RW-29 workstream, Sol
+                        // Nov 5): every Settings row sits on the
+                        // system's sheet tone (#FDFBF6 light /
+                        // #211D17 dark) — the screen's ground is
+                        // the approved cream (below), so no surface
+                        // of this screen keeps the system
+                        // white/grey Form styling.
+                        .listRowBackground(AppTheme.sheet)
                 }
             }
+            // GEN-5 design pass: the Form's own grouped
+            // background is hidden and the approved ground shows
+            // through — cream #F5F1E8 light, warm charcoal
+            // #16130F dark (design of record, tokens §0.4).
+            .listRowBackground(AppTheme.sheet)
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -393,6 +408,8 @@ struct SettingsModal: View {
 // offers the old mailto composer as a fallback; it never claims
 // a send that did not land.
 struct FeedbackSheet: View {
+    // GEN-5 design pass: FeedbackSheet's Form is composed with
+    // the same cream/sheet treatment as Settings (see body).
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -496,6 +513,12 @@ struct FeedbackSheet: View {
                     }
                 }
             }
+            // GEN-5 design pass: same cream ground + sheet rows
+            // as Settings — no system-grey Form surface remains
+            // in the settings family.
+            .listRowBackground(AppTheme.sheet)
+            .scrollContentBackground(.hidden)
+            .background(AppTheme.background.ignoresSafeArea())
             .navigationTitle("Send Feedback")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -420,6 +420,27 @@ final class Gen5FidelityTests: XCTestCase {
         XCTAssertTrue(modal.contains("ComfortLevelControl(comfortLevel: $comfortLevel)"))
     }
 
+    // MARK: - Addendum 5.1: the design pass (cream system)
+
+    func testDesignPass_SettingsFormIsOnSystem() throws {
+        let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        // The named instance: Settings' Form hides the system
+        // grouped background, grounds on the approved cream /
+        // warm charcoal, and seats every row on the sheet tone.
+        XCTAssertTrue(modal.contains(".scrollContentBackground(.hidden)"))
+        XCTAssertTrue(modal.contains(".listRowBackground(AppTheme.sheet)"))
+        XCTAssertTrue(modal.contains("AppTheme.background.ignoresSafeArea()"))
+    }
+
+    func testDesignPass_BandReplacesSettingsStatusWhileGenerating() throws {
+        // Addendum 5.2(b), confirmed from Sol's own iOS evidence:
+        // while generating, the band REPLACES the status block —
+        // and the readiness claim cannot render alongside it.
+        let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(settings.contains("if store.mode == .subscribed, let band = settingsConvergenceBand"))
+        XCTAssertTrue(settings.contains("ConvergenceBandView(content: band)"))
+    }
+
     // MARK: - Addendum 1.3: the hero failure line is the decided line
 
     func testFailureCopy_IsSolDecidedVerbatim() {

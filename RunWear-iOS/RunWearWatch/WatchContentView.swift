@@ -24,6 +24,10 @@ struct WatchContentView: View {
                 )
             }
         }
+        // GEN-5 design pass: the watch app's ground is the
+        // system's warm charcoal (#16130F family via the shared
+        // dark token), not the watchOS system black.
+        .background(AppTheme.darkBackground.ignoresSafeArea())
         .onAppear {
             viewModel.onAppear()
         }
