@@ -212,7 +212,7 @@ struct FallbackImageProvider {
     /// WS-7 / D-22: the manifest provenance of a bundled asset base
     /// name, or nil when the name is not a bundled fallback asset.
     static func provenance(forAssetName name: String) -> FallbackAssetProvenance? {
-        provenanceByAsset[name]
+        bundledProvenance(forAssetName: name)
     }
 
     /// The bundled asset file base name for a fallback URL string
@@ -226,14 +226,14 @@ struct FallbackImageProvider {
     /// WS-7 / D-22: the manifest provenance of a bundled asset URL,
     /// or nil when the URL does not name a bundled fallback asset.
     static func provenance(forURLString url: String) -> FallbackAssetProvenance? {
-        provenanceByAsset[assetFile(fromURLString: url)]
+        bundledProvenance(forAssetName: assetFile(fromURLString: url))
     }
 
     /// Whether a URL string names a bundled fallback asset (the
     /// ground truth a serve record keys on — mirror of Android's
     /// bundled-asset URL check in HeroServeTelemetry.emitForResult).
     static func isBundledURL(_ url: String) -> Bool {
-        url.contains("/hero_fallback/") && provenanceByAsset[assetFile(fromURLString: url)] != nil
+        url.contains("/hero_fallback/") && bundledProvenance(forAssetName: assetFile(fromURLString: url)) != nil
     }
 
     // MARK: - Resolution
@@ -436,6 +436,128 @@ struct FallbackImageProvider {
         "hot_rain_male": BundledGarments(topBase: "sleeveless", outer: true, bottom: "shorts", head: "cap", hands: nil)
     ]
 
+// MARK: - GEN-4 replenishment point-grain assets (train, 2026-11-04)
+
+    /// GEN-4 (pool replenishment, integrated on the GEN-4 train):
+    /// the point-grain (`pg_*`) bundled assets for 20 of the 26
+    /// GEN-3 census signatures the 44-asset matrix cannot serve
+    /// (targets RWPOOL-T07…T26). Each is rendered at the RW-20
+    /// standard from the replenishment's own newly approved pool
+    /// row (live in the approved pool; the bundled copy is the
+    /// offline floor for the same signature, per Sol's
+    /// never-gradient ruling) and pixel-verified against its
+    /// source row. Naming is the signature:
+    /// `pg_{gender}_{topBase}_o{0|1}_{bottom}_{head}_{hands}` —
+    /// the garments below are that tuple (head/hands "none" =
+    /// nil). Kept in SEPARATE tables from the 44-asset matrix
+    /// tables, exactly as Android keeps its POINT_GRAIN_* tables
+    /// separate from FALLBACK_GARMENTS / the paired provenance —
+    /// the matrix census/provenance pins cover the 44 only.
+    /// The 6 mittens signatures (RWPOOL-T01…T06) have NO entry
+    /// here and never will from this wave: no truthful mittens
+    /// photo exists (see the replenishment INTEGRATION-NOTE) —
+    /// they serve scaffold/floor through the chain.
+    static let pointGrainGarmentsByAsset: [String: BundledGarments] = [
+        "pg_female_long_o0_shorts_cap_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: "cap", hands: nil),
+        "pg_female_long_o0_shorts_none_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "pg_female_long_o1_shorts_none_none": BundledGarments(topBase: "long", outer: true, bottom: "shorts", head: nil, hands: nil),
+        "pg_male_long_o0_shorts_cap_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: "cap", hands: nil),
+        "pg_male_long_o0_shorts_none_none": BundledGarments(topBase: "long", outer: false, bottom: "shorts", head: nil, hands: nil),
+        "pg_male_long_o1_shorts_none_none": BundledGarments(topBase: "long", outer: true, bottom: "shorts", head: nil, hands: nil),
+        "pg_female_long_o0_tights_beanie_gloves": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "beanie", hands: "gloves"),
+        "pg_female_long_o0_tights_cap_none": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "cap", hands: nil),
+        "pg_female_long_o0_tights_none_none": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: nil, hands: nil),
+        "pg_female_long_o1_tights_cap_none": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: "cap", hands: nil),
+        "pg_female_long_o1_tights_none_none": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: nil, hands: nil),
+        "pg_male_long_o0_tights_beanie_gloves": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "beanie", hands: "gloves"),
+        "pg_male_long_o0_tights_cap_none": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: "cap", hands: nil),
+        "pg_male_long_o0_tights_none_none": BundledGarments(topBase: "long", outer: false, bottom: "tights", head: nil, hands: nil),
+        "pg_male_long_o1_tights_none_none": BundledGarments(topBase: "long", outer: true, bottom: "tights", head: nil, hands: nil),
+        "pg_female_sleeveless_o0_shorts_visor_none": BundledGarments(topBase: "sleeveless", outer: false, bottom: "shorts", head: "visor", hands: nil),
+        "pg_male_short_o0_shorts_visor_none": BundledGarments(topBase: "short", outer: false, bottom: "shorts", head: "visor", hands: nil),
+        "pg_male_short_o1_shorts_visor_none": BundledGarments(topBase: "short", outer: true, bottom: "shorts", head: "visor", hands: nil),
+        "pg_male_sleeveless_o0_shorts_visor_none": BundledGarments(topBase: "sleeveless", outer: false, bottom: "shorts", head: "visor", hands: nil),
+        "pg_male_sleeveless_o1_shorts_visor_none": BundledGarments(topBase: "sleeveless", outer: true, bottom: "shorts", head: "visor", hands: nil),
+    ]
+
+    /// Provenance of the point-grain assets, from the
+    /// replenishment manifest (bundled-pg/manifest.json): the
+    /// source pool combination and row each asset was rendered
+    /// from. Rung "PG" — Android's point-grain rung convention.
+    static let pointGrainProvenanceByAsset: [String: FallbackAssetProvenance] = [
+        "pg_female_long_o0_shorts_cap_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_MIDDAY_01285eec", sourceRowId: "72f29634-32a3-4382-9dbe-8705a1e1e9bc", rung: "PG"),
+        "pg_female_long_o0_shorts_none_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_DAWN_726beba2", sourceRowId: "92c54e8c-1e58-4d40-acd8-ace41fc00678", rung: "PG"),
+        "pg_female_long_o1_shorts_none_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_DAWN_f48f0719", sourceRowId: "801b8ec7-b176-461d-ac58-2f952237a521", rung: "PG"),
+        "pg_male_long_o0_shorts_cap_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COOL_MIDDAY_01285eec", sourceRowId: "c9d4e9ca-f4e8-4f23-a4bd-92a1db0ab828", rung: "PG"),
+        "pg_male_long_o0_shorts_none_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COOL_DAWN_726beba2", sourceRowId: "8fe47ab5-ee32-4613-a416-4a631dc1d691", rung: "PG"),
+        "pg_male_long_o1_shorts_none_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COOL_DAWN_f48f0719", sourceRowId: "b949a5cc-d3a3-4e4d-a787-3aca222bced7", rung: "PG"),
+        "pg_female_long_o0_tights_beanie_gloves": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COLD_DAWN_86a1b05a", sourceRowId: "a3ac61b5-8186-44c1-a35b-149517500cc0", rung: "PG"),
+        "pg_female_long_o0_tights_cap_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_MIDDAY_2afe0e3d", sourceRowId: "9b7b4c79-b4bf-460b-b89e-191884d8c66b", rung: "PG"),
+        "pg_female_long_o0_tights_none_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_DAWN_e216ba73", sourceRowId: "767527d5-c0e9-4ec6-860b-2879aea3aa2e", rung: "PG"),
+        "pg_female_long_o1_tights_cap_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_MIDDAY_32531934", sourceRowId: "b605a141-652a-4520-b26e-6e113843bfe4", rung: "PG"),
+        "pg_female_long_o1_tights_none_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_COOL_DAWN_5d6d246a", sourceRowId: "46c26b43-70d8-47bd-9332-b6eccf36b584", rung: "PG"),
+        "pg_male_long_o0_tights_beanie_gloves": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COLD_DAWN_86a1b05a", sourceRowId: "eba55b64-1020-4b0b-9415-422403101247", rung: "PG"),
+        "pg_male_long_o0_tights_cap_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COOL_MIDDAY_2afe0e3d", sourceRowId: "c1c08b14-5285-4c8c-b6f8-e824557de115", rung: "PG"),
+        "pg_male_long_o0_tights_none_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COOL_DAWN_e216ba73", sourceRowId: "d18cbbc9-fcb3-463e-a046-8b873750cd46", rung: "PG"),
+        "pg_male_long_o1_tights_none_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_COOL_DAWN_5d6d246a", sourceRowId: "bb301f8a-240d-4aec-9e1b-0cd54d2a5cc0", rung: "PG"),
+        "pg_female_sleeveless_o0_shorts_visor_none": FallbackAssetProvenance(combinationId: "FEMALE_CLEAR_HOT_MIDDAY_c9b28fa9", sourceRowId: "751d99e8-d36c-46ba-b029-f5cc8607077d", rung: "PG"),
+        "pg_male_short_o0_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_WARM_MIDDAY_83b3d617", sourceRowId: "c682b3cc-fd5c-415b-8ca2-c69762de383f", rung: "PG"),
+        "pg_male_short_o1_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_RAIN_WARM_MIDDAY_f8d85d23", sourceRowId: "f7dd3cc1-4dd0-4767-8cab-ac1599d2abe1", rung: "PG"),
+        "pg_male_sleeveless_o0_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_CLEAR_HOT_MIDDAY_c9b28fa9", sourceRowId: "9d4b71bb-28ef-4eb1-83e8-6f2761bdbbbd", rung: "PG"),
+        "pg_male_sleeveless_o1_shorts_visor_none": FallbackAssetProvenance(combinationId: "MALE_RAIN_HOT_MIDDAY_87d183b5", sourceRowId: "3643f7ec-59a2-4904-8aec-d1297e426857", rung: "PG"),
+    ]
+
+    /// (gender, gate signature) → point-grain asset, for the
+    /// gated walk's point-grain pass — mirror of Android's
+    /// POINT_GRAIN_FALLBACK. The signature is
+    /// `topBase|outer|bottomFamily|head|hands` in the RW-20
+    /// vocabulary (`none` for an empty slot), exactly the tuple
+    /// HeroPointGrainPolicy judges. The table only NOMINATES:
+    /// every candidate is re-verified through
+    /// bundledAssetMatches before it serves.
+    static let pointGrainAssetsBySignature: [String: String] = [
+        "FEMALE|long|false|shorts|cap|none": "pg_female_long_o0_shorts_cap_none",
+        "FEMALE|long|false|shorts|none|none": "pg_female_long_o0_shorts_none_none",
+        "FEMALE|long|true|shorts|none|none": "pg_female_long_o1_shorts_none_none",
+        "MALE|long|false|shorts|cap|none": "pg_male_long_o0_shorts_cap_none",
+        "MALE|long|false|shorts|none|none": "pg_male_long_o0_shorts_none_none",
+        "MALE|long|true|shorts|none|none": "pg_male_long_o1_shorts_none_none",
+        "FEMALE|long|false|tights|beanie|gloves": "pg_female_long_o0_tights_beanie_gloves",
+        "FEMALE|long|false|tights|cap|none": "pg_female_long_o0_tights_cap_none",
+        "FEMALE|long|false|tights|none|none": "pg_female_long_o0_tights_none_none",
+        "FEMALE|long|true|tights|cap|none": "pg_female_long_o1_tights_cap_none",
+        "FEMALE|long|true|tights|none|none": "pg_female_long_o1_tights_none_none",
+        "MALE|long|false|tights|beanie|gloves": "pg_male_long_o0_tights_beanie_gloves",
+        "MALE|long|false|tights|cap|none": "pg_male_long_o0_tights_cap_none",
+        "MALE|long|false|tights|none|none": "pg_male_long_o0_tights_none_none",
+        "MALE|long|true|tights|none|none": "pg_male_long_o1_tights_none_none",
+        "FEMALE|sleeveless|false|shorts|visor|none": "pg_female_sleeveless_o0_shorts_visor_none",
+        "MALE|short|false|shorts|visor|none": "pg_male_short_o0_shorts_visor_none",
+        "MALE|short|true|shorts|visor|none": "pg_male_short_o1_shorts_visor_none",
+        "MALE|sleeveless|false|shorts|visor|none": "pg_male_sleeveless_o0_shorts_visor_none",
+        "MALE|sleeveless|true|shorts|visor|none": "pg_male_sleeveless_o1_shorts_visor_none",
+    ]
+
+    /// The garment census of ANY bundled asset (matrix or
+    /// point-grain), or nil when the name is not bundled.
+    static func bundledGarments(forAssetName name: String) -> BundledGarments? {
+        garmentsByAsset[name] ?? pointGrainGarmentsByAsset[name]
+    }
+
+    /// The provenance of ANY bundled asset (matrix or
+    /// point-grain), or nil when the name is not bundled.
+    static func bundledProvenance(forAssetName name: String) -> FallbackAssetProvenance? {
+        provenanceByAsset[name] ?? pointGrainProvenanceByAsset[name]
+    }
+
+    /// The gate-signature key of a prescription, in the
+    /// pointGrainAssetsBySignature format (gender prefixed by
+    /// the caller).
+    static func pointGrainSignatureKey(for outfit: OutfitRecommendation) -> String {
+        let sig = HeroGarmentSignature.prescribed(from: outfit)
+        return "\(sig.topBase ?? "none")|\(sig.outer)|\(sig.bottomFamily)|\(sig.head)|\(sig.hands)"
+    }
+
     /// May this bundled asset serve under `outfit`'s exact point
     /// prescription? The SAME shared point-grain gate the pool obeys
     /// (HeroPointGrainPolicy via its key bridge), fed the asset's
@@ -444,10 +566,11 @@ struct FallbackImageProvider {
     /// assets fail closed. Mirror of Android's
     /// HeroImageSelector.fallbackMatchesPrescription.
     static func bundledAssetMatches(assetName: String, outfit: OutfitRecommendation) -> Bool {
-        guard let garments = garmentsByAsset[assetName] else { return false }
+        guard let garments = bundledGarments(forAssetName: assetName) else { return false }
+        let prov = bundledProvenance(forAssetName: assetName)
         let row = GeneratedImage(
-            id: provenanceByAsset[assetName]?.sourceRowId ?? assetName,
-            combinationId: provenanceByAsset[assetName]?.combinationId ?? assetName,
+            id: prov?.sourceRowId ?? assetName,
+            combinationId: prov?.combinationId ?? assetName,
             imageUrl: assetName,
             thumbnailUrl: nil,
             prompt: nil,
@@ -513,6 +636,26 @@ struct FallbackImageProvider {
                 }
             }
         }
+        // GEN-4 (replenishment): the point-grain pass — after the
+        // cell walk, the signature-keyed pg_* assets for
+        // prescriptions the 44-asset matrix cannot serve. Gender
+        // order mirrors Android's pass (requested gender, then
+        // opposite; ungendered tries both), and the nomination is
+        // re-verified through the same gate, so this pass can
+        // only nominate, never force a contradicting serve.
+        let pgGenders: [HeroGender]
+        if let gender {
+            pgGenders = [gender, gender.opposite]
+        } else {
+            pgGenders = [.FEMALE, .MALE]
+        }
+        let signatureKey = Self.pointGrainSignatureKey(for: outfit)
+        for pgGender in pgGenders {
+            if let name = Self.pointGrainAssetsBySignature["\(pgGender.rawValue)|\(signatureKey)"],
+               Self.bundledAssetMatches(assetName: name, outfit: outfit) {
+                return name
+            }
+        }
         return nil
     }
 
@@ -532,7 +675,7 @@ struct FallbackImageProvider {
         return HeroImageResult.fromBundledFallback(
             url: url,
             assetFile: name,
-            provenance: Self.provenanceByAsset[name]
+            provenance: Self.bundledProvenance(forAssetName: name)
         )
     }
 
@@ -985,6 +1128,27 @@ extension FallbackImageProvider {
                 }
             }
         }
+        // GEN-4 (replenishment): the point-grain assets join the
+        // chain's bundled candidate set — gender from the asset
+        // name's gender token, bracket/weather from the asset's
+        // provenance combination (its source pool cell), garments
+        // from its census tuple. An asset whose provenance
+        // combination does not parse cannot be ranked and is
+        // left out (it still serves through the gated walk's
+        // signature nomination above).
+        for (name, garments) in pointGrainGarmentsByAsset {
+            guard let prov = pointGrainProvenanceByAsset[name],
+                  let axes = HeroFallbackChain.combinationAxes(prov.combinationId) else { continue }
+            candidates.append(HeroFallbackCandidate(
+                source: .bundled,
+                gender: axes.gender,
+                bracket: axes.bracket,
+                weather: axes.weather,
+                signature: HeroGarmentSignature.from(bundledGarments: garments),
+                poolImage: nil,
+                bundledAssetName: name
+            ))
+        }
         return candidates.sorted { $0.sortKey < $1.sortKey }
     }
 
@@ -1029,7 +1193,7 @@ extension FallbackImageProvider {
             return HeroImageResult.fromBundledFallback(
                 url: url,
                 assetFile: name,
-                provenance: Self.provenanceByAsset[name],
+                provenance: Self.bundledProvenance(forAssetName: name),
                 tier: resolution.tier
             )
         }

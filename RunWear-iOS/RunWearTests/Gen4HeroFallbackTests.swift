@@ -185,9 +185,14 @@ final class Gen4HeroFallbackTests: XCTestCase {
     }
 
     func testScaffoldWhenPoolReachableAndFloorWhenItIsNot() {
-        // The Kansas City 44°F shape: no exact candidate exists
-        // for long + tights + bare/bare in the bundled set.
-        let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: nil, bottom: "LIGHT_TIGHTS", head: nil, hands: nil)
+        // A still-uncovered shape: (long, shell, shorts, cap,
+        // bare) has no exact candidate in the bundled set (the
+        // replenishment stocked its bare-headed sibling, T09/T12
+        // — not this cap form). GEN-4 TRAIN UPDATE: the original
+        // Kansas City 44°F shape (long + tights + bare/bare) is
+        // RWPOOL-T20 and now exact-serves its pg asset, so it can
+        // no longer pin the scaffold/floor tiers.
+        let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: "WINDBREAKER", bottom: "SHORTS", head: "BASEBALL_CAP", hands: nil)
         let scaffold = resolve(prescription, bracket: .COOL, gender: .MALE, pool: [], reachable: true)
         XCTAssertEqual(scaffold?.tier, .scaffold)
         XCTAssertNotNil(scaffold?.bundledAssetName)
@@ -205,12 +210,14 @@ final class Gen4HeroFallbackTests: XCTestCase {
         // function of the live candidate set, so when an exact
         // row lands in the pool the same prescription upgrades
         // from scaffold to exact with no code change.
-        let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: nil, bottom: "LIGHT_TIGHTS", head: nil, hands: nil)
+        // (long, shell, shorts, cap, bare): still uncovered in
+        // the bundled set (see the scaffold/floor pin above).
+        let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: "WINDBREAKER", bottom: "SHORTS", head: "BASEBALL_CAP", hands: nil)
         let before = resolve(prescription, bracket: .COOL, gender: .FEMALE, pool: [], reachable: true)
         XCTAssertEqual(before?.tier, .scaffold)
         let newRow = poolRow(
             id: "new-exact", combinationId: "FEMALE_CLEAR_COOL_MIDDAY_v42",
-            topBase: "long", outer: false, bottom: "tights", head: nil, hands: nil
+            topBase: "long", outer: true, bottom: "shorts", head: "cap", hands: nil
         )
         let after = resolve(prescription, bracket: .COOL, gender: .FEMALE, pool: [newRow], reachable: true)
         XCTAssertEqual(after?.tier, .exact)
@@ -277,28 +284,34 @@ final class Gen4HeroFallbackTests: XCTestCase {
 
     func testShellOverShortsBareBareScaffoldsSameBracket() {
         // The recorded Overland Park shape: long sleeve +
-        // WINDBREAKER + shorts at COOL, bare head, bare hands —
-        // zero pool rows, zero bundled exact.
+        // WINDBREAKER + shorts at COOL, bare head, bare hands.
+        // GEN-4 TRAIN UPDATE (replenishment): this signature is
+        // RWPOOL-T09/T12 — the replenishment stocked it with an
+        // exact point-grain asset, so it now serves EXACT from
+        // the bundle (same gender, its own pg asset), which is
+        // the replenishment working, not a scaffold.
         for gender in [HeroGender.FEMALE, .MALE] {
             let suffix = gender == .FEMALE ? "female" : "male"
             let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: "WINDBREAKER", bottom: "SHORTS", head: nil, hands: nil)
             let res = resolve(prescription, bracket: .COOL, gender: gender, reachable: true)
-            XCTAssertEqual(res?.tier, .scaffold)
+            XCTAssertEqual(res?.tier, .exact)
             XCTAssertEqual(res?.candidate.gender, gender)
-            XCTAssertEqual(res?.candidate.bracket, .COOL,
-                           "bracket dominates: the scaffold stays in COOL")
-            XCTAssertEqual(res?.bundledAssetName, "cool_clear_\(suffix)")
+            XCTAssertEqual(res?.bundledAssetName, "pg_\(suffix)_long_o1_shorts_none_none")
         }
     }
 
     func testShellOverShortsPrefersANearPoolRowAsScaffold() {
-        // A live pool row wearing shell + shorts + cap (gate
-        // fails on the unprescribed cap) is nearer than every
-        // bundled candidate: it scaffolds, with its OWN identity.
-        let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: "WINDBREAKER", bottom: "SHORTS", head: nil, hands: nil)
+        // A live pool row wearing shell + shorts + cap + gloves
+        // (gate fails on the unprescribed gloves) is nearer than
+        // every bundled candidate: it scaffolds, with its OWN
+        // identity. GEN-4 TRAIN UPDATE: the prescription is the
+        // still-uncovered (long, shell, shorts, cap, bare) — the
+        // bare-headed form the original pin used is RWPOOL-T12
+        // and exact-serves its pg asset now.
+        let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: "WINDBREAKER", bottom: "SHORTS", head: "BASEBALL_CAP", hands: nil)
         let nearRow = poolRow(
             id: "near-1", combinationId: "MALE_CLEAR_COOL_DAWN_v9",
-            topBase: "long", outer: true, bottom: "shorts", head: "cap", hands: nil
+            topBase: "long", outer: true, bottom: "shorts", head: "cap", hands: "gloves"
         )
         let res = resolve(prescription, bracket: .COOL, gender: .MALE, pool: [nearRow], reachable: true)
         XCTAssertEqual(res?.tier, .scaffold)
@@ -320,51 +333,68 @@ final class Gen4HeroFallbackTests: XCTestCase {
 
     func testWarmPointTights_noOuterBeanieGlovesScaffoldsWithinCold() {
         // The COLD 20–24°F calm prescription (long, no-outer,
-        // tights, beanie, gloves): every beanie/gloves/tights
-        // bundled asset wears a shell — garment score 20 — but
-        // bracket dominance keeps the scaffold in COLD.
+        // tights, beanie, gloves). GEN-4 TRAIN UPDATE
+        // (replenishment): this signature is RWPOOL-T13/T18 —
+        // before the refill every beanie/gloves/tights bundled
+        // asset wore a shell and the serve scaffolded in COLD;
+        // the replenishment's pg asset wears exactly this kit
+        // with NO shell, so the serve is now EXACT.
         for gender in [HeroGender.FEMALE, .MALE] {
             let suffix = gender == .FEMALE ? "female" : "male"
             let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: nil, bottom: "THERMAL_TIGHTS", head: "LIGHT_BEANIE", hands: "LIGHT_GLOVES")
             let res = resolve(prescription, bracket: .COLD, gender: gender, reachable: true)
-            XCTAssertEqual(res?.tier, .scaffold)
-            XCTAssertEqual(res?.bundledAssetName, "cold_clear_\(suffix)")
+            XCTAssertEqual(res?.tier, .exact)
+            XCTAssertEqual(res?.bundledAssetName, "pg_\(suffix)_long_o0_tights_beanie_gloves")
         }
     }
 
     func testWarmPointTights_capWithBareHandsScaffolds() {
         // (long, outer, tights, cap, none) — female-only defect
         // in the census (the male counterpart had one pool row).
+        // GEN-4 TRAIN UPDATE (replenishment): RWPOOL-T16 stocked
+        // exactly this signature — it now serves its pg asset
+        // EXACT instead of scaffolding.
         let prescription = outfit(top: "LONG_SLEEVE_LIGHT", outer: "WINDBREAKER", bottom: "LIGHT_TIGHTS", head: "BASEBALL_CAP", hands: nil)
         let res = resolve(prescription, bracket: .COOL, gender: .FEMALE, reachable: true)
-        XCTAssertEqual(res?.tier, .scaffold)
+        XCTAssertEqual(res?.tier, .exact)
         XCTAssertEqual(res?.candidate.gender, .FEMALE)
-        XCTAssertEqual(res?.candidate.bracket, .COOL)
-        XCTAssertNotNil(res?.bundledAssetName)
+        XCTAssertEqual(res?.bundledAssetName, "pg_female_long_o1_tights_cap_none")
     }
 
     // MARK: - Defect family 4: visor gaps
 
     func testMaleVisorScaffoldsToNearestMaleNeverFemaleVisor() {
-        // Every visor row in the pool is FEMALE; there is no
-        // male visor photo. The male visor prescription must
-        // scaffold to the nearest MALE photo — never cross
-        // gender to the female visor stock.
+        // GEN-4 TRAIN UPDATE (replenishment): the visor gaps
+        // were RWPOOL-T22…T26 — the refill stocked male short
+        // visor (T23), male shell visor (T24), female sleeveless
+        // visor (T22), male sleeveless visor (T25) and male
+        // sleeveless shell visor (T26) with exact pg assets, so
+        // those serves are now EXACT, same-gender — the
+        // never-cross property the original pin protected is
+        // now satisfied by an exact photo instead of a scaffold.
         let prescription = outfit(top: "SHORT_SLEEVE", outer: nil, bottom: "SHORTS", head: "VISOR", hands: nil)
         let res = resolve(prescription, bracket: .MILD, gender: .MALE, reachable: true)
-        XCTAssertEqual(res?.tier, .scaffold)
+        XCTAssertEqual(res?.tier, .exact)
         XCTAssertEqual(res?.candidate.gender, .MALE)
-        XCTAssertEqual(res?.bundledAssetName, "mild_clear_male")
+        XCTAssertEqual(res?.bundledAssetName, "pg_male_short_o0_shorts_visor_none")
         // Male sleeveless + shell + visor (HOT RAIN).
         let hotVisor = outfit(top: "TANK_TOP", outer: "RAIN_JACKET", bottom: "SHORT_SHORTS", head: "VISOR", hands: nil)
         let hotRes = resolve(hotVisor, bracket: .HOT, weather: .RAIN, gender: .MALE, reachable: true)
-        XCTAssertEqual(hotRes?.tier, .scaffold)
-        XCTAssertEqual(hotRes?.bundledAssetName, "hot_rain_male")
+        XCTAssertEqual(hotRes?.tier, .exact)
+        XCTAssertEqual(hotRes?.bundledAssetName, "pg_male_sleeveless_o1_shorts_visor_none")
         // Female sleeveless visor, no outer (HOT CLEAR).
         let femaleVisor = outfit(top: "TANK_TOP", outer: nil, bottom: "SHORT_SHORTS", head: "VISOR", hands: nil)
         let femaleRes = resolve(femaleVisor, bracket: .HOT, gender: .FEMALE, reachable: true)
-        XCTAssertEqual(femaleRes?.tier, .scaffold)
-        XCTAssertEqual(femaleRes?.bundledAssetName, "hot_clear_female")
+        XCTAssertEqual(femaleRes?.tier, .exact)
+        XCTAssertEqual(femaleRes?.bundledAssetName, "pg_female_sleeveless_o0_shorts_visor_none")
+        // The never-cross guard stands where no same-gender
+        // exact exists: FEMALE short visor has no pg asset (only
+        // the male T23) — she must scaffold to a FEMALE photo,
+        // never serve the male visor asset as her exact photo.
+        let femaleShortVisor = resolve(prescription, bracket: .MILD, gender: .FEMALE, reachable: true)
+        XCTAssertEqual(femaleShortVisor?.tier, .scaffold)
+        XCTAssertEqual(femaleShortVisor?.candidate.gender, .FEMALE)
+        XCTAssertNotEqual(femaleShortVisor?.bundledAssetName, "pg_male_short_o0_shorts_visor_none")
     }
 
     // MARK: - Gender is never crossed
@@ -401,9 +431,11 @@ final class Gen4HeroFallbackTests: XCTestCase {
     func testBundledFloorCompleteness_all50SignaturesPoolEmpty() {
         XCTAssertEqual(25, censusSignatures.count)
         // The bundled candidate set itself: paired for every
-        // gender × bracket family.
+        // gender × bracket family. GEN-4 TRAIN UPDATE: 64 —
+        // the 44 matrix assets plus the replenishment's 20
+        // point-grain assets.
         let bundled = FallbackImageProvider.bundledCandidates
-        XCTAssertEqual(44, bundled.count)
+        XCTAssertEqual(64, bundled.count)
         for gender in [HeroGender.FEMALE, .MALE] {
             for bracket in HeroTempBracket.allCases {
                 XCTAssertTrue(

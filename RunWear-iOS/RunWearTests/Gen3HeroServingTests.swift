@@ -128,20 +128,40 @@ final class Gen3HeroServingTests: XCTestCase {
         // Census X-3's cell class: COOL, feels-like 44°F, calm —
         // the engine prescribes exactly two items (long sleeve +
         // light tights; head and hands drop out at 40°F). Every
-        // bundled COOL asset wears the cold-end headband + gloves,
-        // so NO bundled asset may serve — serving one was W-4.
-        // (The pool cascade is this prescription's servable layer;
-        // the gated nil is what routes the chain to it.)
+        // bundled COOL MATRIX asset wears the cold-end headband +
+        // gloves, so no matrix asset may serve — serving one was
+        // W-4, and that half of the pin stands.
+        //
+        // GEN-4 TRAIN UPDATE (replenishment, 2026-11-04): this
+        // signature — (long, no-outer, tights, bare, bare) — is
+        // RWPOOL-T15/T20, one of the 20 the replenishment
+        // stocked with an exact point-grain asset rendered from
+        // a gate-passing pool row. The gated walk's point-grain
+        // pass now serves THAT asset: it wears exactly the two
+        // prescribed items, so the serve is truthful, and the
+        // pre-replenishment nil premise is superseded for this
+        // signature (the full per-asset pins live in
+        // Gen4BundledReplenishmentTests).
         let prescription = outfit(adjustedF: 44)
         XCTAssertEqual(prescription.bottom.key, "LIGHT_TIGHTS")
         XCTAssertNil(prescription.topOuter)
         XCTAssertNil(prescription.head)
         XCTAssertNil(prescription.hands)
         for gender in [HeroGender.FEMALE, .MALE] {
-            XCTAssertNil(provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: gender, outfit: prescription))
-            XCTAssertNil(provider.gatedAssetName(temp: .COOL, weather: .CLOUDY, gender: gender, outfit: prescription))
+            let suffix = gender == .FEMALE ? "female" : "male"
+            XCTAssertEqual(
+                "pg_\(suffix)_long_o0_tights_none_none",
+                provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: gender, outfit: prescription)
+            )
+            XCTAssertEqual(
+                "pg_\(suffix)_long_o0_tights_none_none",
+                provider.gatedAssetName(temp: .COOL, weather: .CLOUDY, gender: gender, outfit: prescription)
+            )
         }
-        XCTAssertNil(provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: nil, outfit: prescription))
+        XCTAssertEqual(
+            "pg_female_long_o0_tights_none_none",
+            provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: nil, outfit: prescription)
+        )
         XCTAssertFalse(FallbackImageProvider.bundledAssetMatches(assetName: "cool_clear_female", outfit: prescription))
     }
 
@@ -155,8 +175,16 @@ final class Gen3HeroServingTests: XCTestCase {
         let shorts = outfit(adjustedF: 47)
         XCTAssertEqual("cool_clear_female",
                        provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: .FEMALE, outfit: coldEnd))
-        XCTAssertNil(provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: .FEMALE, outfit: twoItem))
-        XCTAssertNil(provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: .FEMALE, outfit: shorts))
+        // GEN-4 TRAIN UPDATE (replenishment): the two warmer
+        // points are stocked point-grain signatures now — the
+        // 44°F two-item point is RWPOOL-T15 and the 47°F shorts
+        // point is RWPOOL-T08 — so each re-resolves to its own
+        // exact pg asset. Three prescriptions, three DIFFERENT
+        // truthful serves: the W-5 property itself is unchanged.
+        XCTAssertEqual("pg_female_long_o0_tights_none_none",
+                       provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: .FEMALE, outfit: twoItem))
+        XCTAssertEqual("pg_female_long_o0_shorts_none_none",
+                       provider.gatedAssetName(temp: .COOL, weather: .CLEAR, gender: .FEMALE, outfit: shorts))
     }
 
     func testJuneauRainPrescriptionServesTheRainAsset() {
