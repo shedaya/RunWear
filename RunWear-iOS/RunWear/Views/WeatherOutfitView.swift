@@ -25,6 +25,10 @@ struct WeatherOutfitView: View {
     @EnvironmentObject var personalStore: PersonalHeroStore
     @ObservedObject var viewModel: WeatherViewModel
     @ObservedObject var locationService: LocationService
+    /// RW-79: the app's lifecycle phase — Home re-reads the
+    /// current cell's look state when the app comes back to the
+    /// foreground (see the onChange below).
+    @Environment(\.scenePhase) private var scenePhase
     let weather: WeatherData
     let recommendation: OutfitRecommendation
     let onRefresh: () -> Void
@@ -311,6 +315,23 @@ struct WeatherOutfitView: View {
                 showRatingPrompt = true
             }
             recordTodaysEntry()
+            // RW-79: returning to Home re-reads the current
+            // cell's look state — a generation that finished (or
+            // failed) while the user was anywhere else is the
+            // server's word now, not whatever Home last rendered.
+            viewModel.revalidatePersonalLookState()
+        }
+        // RW-79: the foreground re-read. A generation running
+        // when the app was backgrounded keeps being watched by
+        // the store's poll only while its schedule lasts (the
+        // schedule is consumed in real time, suspension
+        // included); when the app comes back, one fresh read
+        // folds the terminal state — or re-arms the poll when
+        // the cell is still MAKING.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                viewModel.revalidatePersonalLookState()
+            }
         }
         // A re-settled recommendation (refresh, hour change back to
         // now, outfit change) updates the session's entry in place
@@ -378,7 +399,15 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showHeroPillPaywall) {
+        .sheet(isPresented: $showHeroPillPaywall, onDismiss: {
+            // RW-79: the paywall stood over Home while a
+            // generation ran — dismissing it re-reads the cell's
+            // look state, so the hero the user comes back to
+            // carries the server's current word (landed hero
+            // swapped in, or the settled failed line), not the
+            // MAKING presentation the paywall covered.
+            viewModel.revalidatePersonalLookState()
+        }) {
             // GEN-3 (WS-A(2)): the hero pill's "Get unlimited" door
             // — the same Premium paywall the upsell card and the
             // first-look band open, at the same named detent.

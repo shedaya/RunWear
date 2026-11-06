@@ -1340,31 +1340,97 @@ class WeatherViewModel: ObservableObject {
             )
             return true
         } else {
-            personalAwaitTask = Task { [weak self] in
-                guard let landedURL = await store.awaitHero(for: combo) else { return }
-                guard let self,
-                      self.currentPersonalCombination?.combinationId == combo.combinationId
-                else { return }
-                self.heroImageUrl = landedURL
+            attachPersonalAwaiter(for: combo, store: store)
+            return false
+        }
+    }
+
+    /// The swap-in awaiter for a cell whose generation is in
+    /// flight: awaits the store's per-cell poll and paints the
+    /// hero the moment it lands, if the screen still shows this
+    /// cell. GEN-6 RW-79 factored this out of applyPersonalHero
+    /// so the lifecycle revalidation below re-attaches the exact
+    /// same awaiter when a re-read finds the cell still MAKING
+    /// (the previous awaiter may have been cancelled by an
+    /// intervening resolution that painted a pool serve and
+    /// attached none).
+    private func attachPersonalAwaiter(for combo: PersonalCombination, store: any PersonalHeroResolving) {
+        personalAwaitTask?.cancel()
+        personalAwaitTask = Task { [weak self] in
+            guard let landedURL = await store.awaitHero(for: combo) else { return }
+            guard let self,
+                  self.currentPersonalCombination?.combinationId == combo.combinationId
+            else { return }
+            self.heroImageUrl = landedURL
+            self.heroImageRowId = nil
+            self.heroServedCombinationId = combo.combinationId
+            self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
+            // The landed look is the exact photo by
+            // definition — no longer a scaffold serve.
+            self.currentPersonalServeIsScaffold = false
+            // WS-7: the swap-in is a new paint — a personal
+            // serve (the landed look is ready by definition).
+            self.recordHeroServe(
+                HeroServeRecord(
+                    source: .personal,
+                    requestedCombinationId: self.heroRequestedCombinationId,
+                    servedCombinationId: combo.combinationId,
+                    gender: self.genderPreference,
+                    trigger: "personal-overlay"
+                )
+            )
+        }
+    }
+
+    /// RW-79: lifecycle revalidation of the CURRENT cell's look
+    /// state — the Home view calls this when the app returns to
+    /// the foreground, when the hero paywall is dismissed, and
+    /// when Home appears. Before this, nothing re-read look state
+    /// on any of those events: a generation that reached its
+    /// terminal state while the user was elsewhere (app
+    /// backgrounded, paywall up) surfaced on Home only if the
+    /// store's poll happened still to be running, and a hero
+    /// that landed with no awaiter attached never swapped in
+    /// (the store's landedHeroVersion bumps with no observer).
+    /// Now: one fresh read through the store — a terminal state
+    /// folds in within the round trip and Home re-renders off
+    /// the folded state (the MAKING pill drops; the settled
+    /// failed line with its "Try again" stands; a landed hero
+    /// swaps in here with its exact/scaffold truth), and a cell
+    /// still MAKING gets its poll re-armed store-side and its
+    /// swap-in awaiter re-attached here.
+    func revalidatePersonalLookState() {
+        guard let store = personalStore, store.isOptedIn,
+              let combo = currentPersonalCombination else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            if let url = await store.revalidateLookState(for: combo) {
+                guard self.currentPersonalCombination?.combinationId == combo.combinationId,
+                      self.heroImageUrl != url else { return }
+                let lookState = store.lookState(for: combo)
+                // The same scaffold truth applyPersonalHero
+                // records at paint time: a URL resolving while
+                // the cell is still MAKING is the user's own
+                // banked photo serving as scaffold, not the
+                // finished look.
+                let isScaffold = lookState == .making
+                self.heroImageUrl = url
                 self.heroImageRowId = nil
                 self.heroServedCombinationId = combo.combinationId
-                self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
-                // The landed look is the exact photo by
-                // definition — no longer a scaffold serve.
-                self.currentPersonalServeIsScaffold = false
-                // WS-7: the swap-in is a new paint — a personal
-                // serve (the landed look is ready by definition).
+                self.currentPersonalHeroId = store.personalHeroId(for: combo)
+                self.currentPersonalServeIsScaffold = isScaffold
                 self.recordHeroServe(
                     HeroServeRecord(
-                        source: .personal,
+                        source: isScaffold ? .scaffold : .personal,
                         requestedCombinationId: self.heroRequestedCombinationId,
                         servedCombinationId: combo.combinationId,
                         gender: self.genderPreference,
-                        trigger: "personal-overlay"
+                        trigger: "personal-revalidate"
                     )
                 )
+            } else if store.lookState(for: combo) == .making {
+                self.attachPersonalAwaiter(for: combo, store: store)
             }
-            return false
         }
     }
 

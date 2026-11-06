@@ -108,6 +108,14 @@ protocol PersonalHeroResolving: AnyObject {
     /// Polls for this cell's hero to land; nil on timeout — the
     /// caller simply keeps the pool photo (no error state).
     func awaitHero(for combination: PersonalCombination) async -> String?
+    /// RW-79: ONE fresh look-state read for a cell, driven by a
+    /// lifecycle event (foreground, paywall dismissal, Home
+    /// appearing) instead of a hero resolution: folds the
+    /// server's current word into the rendered look state and
+    /// re-arms the cell's poll when the cell is still MAKING
+    /// with no poll running. Returns the hero URL when one
+    /// resolves now (the caller swaps it in); nil otherwise.
+    func revalidateLookState(for combination: PersonalCombination) async -> String?
     /// The id of the verified personalized hero currently held for
     /// this cell, if any — what a "This doesn't look like me" flag
     /// would report (RW-14 acceptance (19)).
@@ -135,6 +143,12 @@ protocol PersonalHeroResolving: AnyObject {
 extension PersonalHeroResolving {
     /// Defaults so lightweight conformers (test doubles) carry no
     /// flag surface; PersonalHeroStore provides the real ones.
+    /// RW-79: the default revalidation is the fresh read alone
+    /// (a double has no poll to re-arm); the store overrides it
+    /// with the poll re-arm.
+    func revalidateLookState(for combination: PersonalCombination) async -> String? {
+        await resolveHero(for: combination)
+    }
     func personalHeroId(for combination: PersonalCombination) -> String? { nil }
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool { false }
     func lookState(for combination: PersonalCombination) -> PersonalLookState { .none }
@@ -331,6 +345,25 @@ enum HeroPollPolicy {
     /// READY). Any other state is already honest and stands.
     static func stateAfterCapExpiry(_ state: PersonalLookState) -> PersonalLookState {
         state == .making ? .none : state
+    }
+}
+
+/// RW-79: when a lifecycle revalidation (foreground, paywall
+/// dismissal, Home appearing) must re-arm a cell's poll. The
+/// poll is the only mechanism that keeps folding the server's
+/// word while a generation runs, and it can be gone while the
+/// cell is still MAKING — its schedule consumed during app
+/// suspension (cap expiry resolves the cell out of MAKING and
+/// deletes the poll), or never started for a cell whose
+/// generation another surface requested. The re-arm rule is
+/// deliberately narrow: exactly when the folded state is
+/// MAKING and no poll task is stored for the cell. A terminal
+/// state needs no poll — the revalidation's own fold IS the
+/// resolution the hero renders — and a running poll needs no
+/// second one (awaitHero dedupes by cell regardless).
+enum LookRevalidationPolicy {
+    static func shouldRearmPoll(state: PersonalLookState, pollRunning: Bool) -> Bool {
+        state == .making && !pollRunning
     }
 }
 
