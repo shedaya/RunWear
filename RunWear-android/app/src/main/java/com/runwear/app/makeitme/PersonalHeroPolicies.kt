@@ -204,8 +204,8 @@ enum class PersonalHeroFlagReason(val code: String, val label: String) {
     // then "Something else". The gen-5 backend vocabulary
     // ("Looks broken" / "Inappropriate" / "Doesn't match the
     // outfit") is retired from this sheet.
-    WRONG_OUTFIT("wrong_outfit", "Wrong outfit for the weather"),
-    SOMETHING_ELSE("something_else", "Something else")
+    WRONG_OUTFIT("outfit_mismatch", "Wrong outfit for the weather"),
+    SOMETHING_ELSE("looks_broken", "Something else")
 }
 
 /**
