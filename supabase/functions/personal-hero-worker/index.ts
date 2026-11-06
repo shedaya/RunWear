@@ -94,6 +94,31 @@
 // spent, then the worker self-chains; the 5-minute pg_cron is a
 // backstop, not the metronome. Everything else in this header
 // stands as written.
+//
+// RW-80 amendment (2026-11-06): two changes, both evidence-led.
+// (1) claimed_at: the guarded claim now also stamps a dedicated
+// claimed_at column, set ONLY at claim time. started_at cannot
+// serve as the claim stamp — it is the draw-boundary heartbeat
+// (RW-16.25 discipline, refreshed at every draw so the stale scan
+// can tell a live job from a terminated invocation), so reading
+// started_at - requested_at as "claim latency" systematically
+// overstates it by the whole generation time of the earlier draws
+// (this misreading is what filed RW-80: gate-verdict timestamps
+// prove Sol's 2026-11-06 cold jobs were claimed within ~4 s and
+// their first draws were already gated ~25 s after the request,
+// while started_at showed 63-65 s — the LAST draw's start).
+// The drain-on-enqueue kick itself already exists on every
+// enqueue path (request-personal-generation, start-personal-fill,
+// get-personal-hero) and is unchanged. (2) Rain fidelity: the
+// ENVIRONMENT light prefix is now weather-aware for RAIN cells
+// and SCENE.RAIN names visible rain. Diagnosis from production
+// gate records: gated RAIN draws at DAWN failed the conditions
+// read ('clear', ruling 3) 17 of 19 times while MIDDAY rain draws
+// failed it 0 of 15 — the weather-blind LIGHT text for DAWN/DUSK
+// ("soft golden sunrise light, long shadows") paints direct sun
+// into the scene and overrides the rain clause for both the
+// generator and the gate's read. Non-rain prompts are byte-
+// identical to before this amendment.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -312,7 +337,7 @@ const MOOD_SNOW = 'Quiet and powerful, tracks in fresh snow'
 const SCENE: Record<string, string> = {
   CLEAR: 'Clear sky, suburban neighborhood with sidewalks and trees',
   CLOUDY: 'Overcast gray sky, diffused lighting, suburban neighborhood with sidewalks and trees',
-  RAIN: 'Rain falling, wet glistening pavement, puddles, gray sky',
+  RAIN: 'Rain falling in visible streaks, raindrops splashing in puddles, wet glistening pavement, soaked surroundings, gray overcast sky',
   SNOW: 'Snow falling, snow-covered streets and trees, soft winter light'
 }
 const SCENE_MILD_SNOW = 'Light spring snow shower, snowflakes melting on wet pavement, green lawns at the edges'
@@ -321,6 +346,20 @@ const LIGHT: Record<string, string> = {
   MIDDAY: 'Bright daylight; ',
   DUSK: 'Golden evening light, long shadows; ',
   NIGHT: 'Dark night lit by streetlights; '
+}
+// RW-80 rain fidelity (2026-11-06): the LIGHT prefixes above are
+// weather-blind — at DAWN/DUSK they describe direct golden sun and
+// long shadows, which contradicts a rain scene outright. Production
+// gate records show the cost: gated RAIN draws at DAWN read 'clear'
+// (a ruling-3 hard failure) 17 of 19 times, vs 0 of 15 at MIDDAY.
+// RAIN cells therefore take an overcast light prefix with no sun
+// and no shadows; every other weather keeps the table above, so
+// non-rain prompts are unchanged byte for byte.
+const LIGHT_RAIN: Record<string, string> = {
+  DAWN: 'Gray overcast dawn light, no direct sun, quiet streets; ',
+  MIDDAY: 'Flat gray overcast light, no direct sun; ',
+  DUSK: 'Gray overcast evening light, no direct sun; ',
+  NIGHT: 'Dark rainy night lit by streetlights, reflections on wet pavement; '
 }
 const STYLE_BLOCK =
   'Professional athletic action photography. Full body in motion, natural running stride, ' +
@@ -420,7 +459,10 @@ export function buildPrompt(job: {
   const outfit = 'OUTFIT:\n' + ordered.map(k => `- ${bulletText(k)}`).join('\n')
   const scene = (job.weather === 'SNOW' && job.temp_bracket === 'MILD')
     ? SCENE_MILD_SNOW : (SCENE[job.weather] ?? SCENE.CLEAR)
-  const env = `ENVIRONMENT: ${LIGHT[job.time_of_day] ?? ''}${scene}`
+  const light = job.weather === 'RAIN'
+    ? (LIGHT_RAIN[job.time_of_day] ?? '')
+    : (LIGHT[job.time_of_day] ?? '')
+  const env = `ENVIRONMENT: ${light}${scene}`
   const style = `STYLE: ${STYLE_BLOCK}${TEMP_ADJ[job.temp_bracket] ?? ''} ${WX_ADJ[job.weather] ?? ''} conditions.`
   const moodTxt = job.weather === 'RAIN' ? MOOD_RAIN
     : job.weather === 'SNOW' && job.temp_bracket === 'MILD' ? 'Light and amazed, spring snow falling'
@@ -1541,7 +1583,14 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
   // Guarded claim.
   const { data: claimed, error: claimError } = await supabase
     .from('personal_generation_jobs')
-    .update({ status: 'PROCESSING', started_at: new Date().toISOString() })
+    .update({
+      status: 'PROCESSING', started_at: new Date().toISOString(),
+      // RW-80: the claim stamp proper — written ONLY here, at claim
+      // time (including re-claims after stale recovery, which pass
+      // through this same guarded update). started_at keeps its
+      // heartbeat role and must never be read as the claim time.
+      claimed_at: new Date().toISOString()
+    })
     .eq('id', job.id)
     .eq('status', 'QUEUED')
     .select('id')
