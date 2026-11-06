@@ -294,8 +294,8 @@ final class WS10CopyTests: XCTestCase {
         XCTAssertTrue(controls.contains("Text(option.label)"),
                       "the live fit control renders the shared options' plain text labels")
         XCTAssertEqual(GenderPreference.fitOptions.map { $0.label },
-                       ["Men's", "Women's", "No preference"],
-                       "the three plain-text labels the picker renders, in order")
+                       ["Men's", "Women's"],
+                       "the two plain-text labels the picker renders, in order (RW-81, Nov 6, 2026 — supersedes the three-label pin)")
     }
 
     func testShareTextIsDeleted_gen6DA23() throws {

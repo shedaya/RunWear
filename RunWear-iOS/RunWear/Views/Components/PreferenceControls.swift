@@ -95,15 +95,22 @@ struct TemperatureUnitPicker: View {
 /// W-22 (GEN-2 walkthrough, 2026-11-04): the onboarding Fit
 /// Preference step's selection, rendered INLINE. The step's only
 /// choice used to be the collapsed menu above on an otherwise
-/// empty screen — the three options existed only inside the
-/// opened menu. Per Sol's ruling, a one-question step with three
-/// short options shows them directly: a grouped list of the three
-/// choices with the current selection checkmarked (the native
-/// iOS inline-selection expression), no dropdown to open.
+/// empty screen — the options existed only inside the opened
+/// menu. Per Sol's ruling, a one-question step with short options
+/// shows them directly: a grouped list of the choices with the
+/// current selection checkmarked (the native iOS
+/// inline-selection expression), no dropdown to open.
 /// GEN-3 (Y-13): Settings presents these same rows — the gen-2
 /// census caught Settings still using a collapsed menu row while
 /// onboarding (here) and Android Settings both present the choice
 /// directly; the surfaces are aligned on this one control.
+/// RW-81 (owner ruling, Sol, Nov 6, 2026): the list carries
+/// exactly TWO rows (Men's / Women's — GenderPreference.fitOptions).
+/// Tapping the row that is already selected DESELECTS it, back
+/// to neutral (.unisex): no row checkmarks, and neutral is a
+/// complete state — onboarding's Continue never requires a fit
+/// selection. The toggle transition itself lives in the model
+/// (GenderPreference.fitSelection(afterTapping:)).
 struct FitPreferenceInlinePicker: View {
     @Binding var preference: GenderPreference
 
@@ -111,7 +118,7 @@ struct FitPreferenceInlinePicker: View {
         VStack(spacing: 0) {
             ForEach(Array(GenderPreference.fitOptions.enumerated()), id: \.offset) { index, option in
                 Button {
-                    preference = option.value
+                    preference = preference.fitSelection(afterTapping: option.value)
                 } label: {
                     HStack(spacing: 12) {
                         Text(option.label)

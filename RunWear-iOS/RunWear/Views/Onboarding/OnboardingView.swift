@@ -194,12 +194,18 @@ struct OnboardingView: View {
     /// the two surfaces can never drift apart, and each selection
     /// settles with the control's own selection haptic), with the
     /// shipped wording and options: Fahrenheit / Celsius in full
-    /// words; Men's / Women's / No preference as direct-choice
-    /// rows (W-22/Y-13 — all three, including "No preference");
+    /// words; Men's / Women's as direct-choice rows (W-22/Y-13);
     /// the 5-stop body-temperature slider with its Runs Cold /
     /// Runs Warm end labels. One Continue pushes the location
     /// step. (Supersedes the one-question-per-screen structure
     /// for these three questions only.)
+    /// RW-81 (owner ruling, Sol, Nov 6, 2026): the fit rows are
+    /// TWO, and only two — there is no third choice of any kind.
+    /// The screen's genderPreference state starts at .unisex,
+    /// the neutral value, which renders as neither row selected;
+    /// tapping a selected row again returns to neutral, and
+    /// Continue (advanceToNextStep) never requires a fit
+    /// selection — neutral proceeds exactly like a selection.
     private var preferencesScreen: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {

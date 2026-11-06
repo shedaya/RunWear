@@ -209,11 +209,12 @@ final class SettingsInventoryTests: XCTestCase {
         }
     }
 
-    /// GEN-3 (Y-13): Settings' Fit Preference presents the three
+    /// GEN-3 (Y-13): Settings' Fit Preference presents the fit
     /// choices directly — the shared inline rows onboarding uses
     /// (W-22) — not a collapsed menu row. The menu-style picker is
     /// gone from the controls entirely, so no surface can drift
-    /// back to it.
+    /// back to it. (RW-81, Nov 6, 2026: the rows are the TWO fit
+    /// choices; see the watch pin below.)
     func testGen3SettingsFitPreferencePresentsDirectChoices_sourcePin() throws {
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
         XCTAssertTrue(settings.contains("FitPreferenceInlinePicker(preference: $genderPreference)"),
@@ -223,6 +224,31 @@ final class SettingsInventoryTests: XCTestCase {
                        "Y-13: the collapsed menu picker is removed — the inline rows are the one fit control")
         XCTAssertTrue(controls.contains("struct FitPreferenceInlinePicker: View"),
                       "the shared inline control stands")
+    }
+
+    /// RW-81 (owner ruling, Sol, Nov 6, 2026): the WATCH settings
+    /// surface carries the same fit ruling as the phone — exactly
+    /// two fit buttons (Men's / Women's), no third choice of any
+    /// kind, and both buttons toggle through the model's
+    /// tap-again-to-neutral transition, so a stored .unisex
+    /// renders with neither button selected. The temperature
+    /// buttons stay direct-set: a unit always has a value, so
+    /// there is nothing to deselect to.
+    func testRW81WatchSettingsFitIsTwoToggleButtons_sourcePin() throws {
+        let watch = try sourceFile("../RunWearWatch/WatchSettingsView.swift")
+        XCTAssertTrue(watch.contains("label: \"Men's\""),
+                      "RW-81: the watch fit section carries the Men's button")
+        XCTAssertTrue(watch.contains("label: \"Women's\""),
+                      "RW-81: the watch fit section carries the Women's button")
+        XCTAssertFalse(watch.contains("No preference"),
+                       "RW-81: no third fit choice exists on the watch either")
+        let toggles = watch.components(separatedBy: "fitSelection(afterTapping:").count - 1
+        XCTAssertEqual(toggles, 2,
+                       "RW-81: both watch fit buttons route through the tap-again-to-neutral transition")
+        XCTAssertTrue(watch.contains("action: { viewModel.temperatureUnit = .fahrenheit }"),
+                      "the temperature buttons stay direct-set — a unit always has a value")
+        XCTAssertTrue(watch.contains("action: { viewModel.temperatureUnit = .celsius }"),
+                      "the temperature buttons stay direct-set — a unit always has a value")
     }
 
     /// The offer card must read as an offer (study P1): the name

@@ -177,11 +177,15 @@ struct SettingsModal: View {
             }
 
         case .fitPreference:
-            // GEN-3 (Y-13): Settings presents the three fit
-            // choices DIRECTLY — the same inline rows onboarding
-            // uses (W-22) and Android Settings' direct toggle —
-            // not the collapsed "Men's ⌄" menu row the gen-2 iOS
+            // GEN-3 (Y-13): Settings presents the fit choices
+            // DIRECTLY — the same inline rows onboarding uses
+            // (W-22) and Android Settings' direct toggle — not
+            // the collapsed "Men's ⌄" menu row the gen-2 iOS
             // census caught here. One control, both surfaces.
+            // RW-81 (Nov 6, 2026): those rows are the TWO fit
+            // choices; a stored .unisex (neutral) renders with
+            // neither selected, and tapping a selected row
+            // returns to neutral (the shared control's toggle).
             Section {
                 FitPreferenceInlinePicker(preference: $genderPreference)
             } header: {

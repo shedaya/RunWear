@@ -57,17 +57,36 @@ enum GenderPreference: String, Codable, CaseIterable {
         return "\(searchPrefix)\(baseTerm)"
     }
 
-    /// W-22 (GEN-2): the fit preference's three choices, in the
-    /// order every selection surface presents them — the single
-    /// list the onboarding step's inline picker
+    /// W-22 (GEN-2): the fit preference's choices, in the order
+    /// every selection surface presents them — the single list
+    /// the onboarding step's inline picker
     /// (FitPreferenceInlinePicker) renders directly on screen.
     /// (A model value, not view state, so the test target can pin
     /// the choices without compiling the controls.)
+    /// RW-81 (owner ruling, Sol, Nov 6, 2026 — SUPERSEDES the
+    /// Nov 4 three-option ruling): exactly TWO choices, Men's
+    /// and Women's. There is no third button of any kind: neutral
+    /// is a STATE, not an option — it is the stored .unisex value,
+    /// it renders as nothing selected on every surface, and it is
+    /// reached only by tapping the selected choice again (see
+    /// fitSelection(afterTapping:)).
     static let fitOptions: [FitPreferenceOption] = [
         FitPreferenceOption(value: .male, label: "Men's"),
-        FitPreferenceOption(value: .female, label: "Women's"),
-        FitPreferenceOption(value: .unisex, label: "No preference")
+        FitPreferenceOption(value: .female, label: "Women's")
     ]
+
+    /// RW-81: the fit value that results from TAPPING a choice
+    /// while `self` is the current value. Tapping an unselected
+    /// choice selects it; tapping the choice that is already
+    /// selected DESELECTS it, back to neutral (.unisex). Neutral
+    /// is a complete, proceedable state — a fresh install starts
+    /// there, and no surface requires a fit selection. (A pure
+    /// value transition, in the model on the fitOptions
+    /// precedent, so the test target can pin the behaviour
+    /// without compiling the controls.)
+    func fitSelection(afterTapping tapped: GenderPreference) -> GenderPreference {
+        self == tapped ? .unisex : tapped
+    }
 
     /// WS-6 (D-20): the DETERMINISTIC hero gender the bundled
     /// fallback paints with. Unlike `forHeroImage()` — whose

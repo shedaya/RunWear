@@ -208,11 +208,83 @@ final class Gen2I3OnboardingTests: XCTestCase {
 
     // MARK: - W-22 · fit choices shown directly on the step
 
-    func testInlineFitOptionsAreTheThreeChoicesInOrder() {
+    /// RW-81 RE-PIN (owner ruling, Sol, Nov 6, 2026 — supersedes
+    /// the Nov 4 three-option pin this test used to carry): the
+    /// fit choices are exactly TWO, Men's and Women's, and no
+    /// fitOptions entry carries the neutral value — neutral is a
+    /// state (a stored .unisex), never a button.
+    func testInlineFitOptionsAreTheTwoChoicesInOrder_RW81() {
         XCTAssertEqual(GenderPreference.fitOptions.map { $0.value },
-                       [.male, .female, .unisex])
+                       [.male, .female])
         XCTAssertEqual(GenderPreference.fitOptions.map { $0.label },
-                       ["Men's", "Women's", "No preference"])
+                       ["Men's", "Women's"])
+        XCTAssertFalse(GenderPreference.fitOptions.contains { $0.value == .unisex },
+                       "RW-81: no fit row carries the neutral value — nothing renders as a third choice")
+    }
+
+    /// RW-81: the tap-again toggle's full transition table —
+    /// tapping an unselected choice selects it; tapping the
+    /// selected choice again deselects to neutral (.unisex);
+    /// from neutral, a tap selects.
+    func testFitTapAgainTogglesToNeutral_RW81() {
+        XCTAssertEqual(GenderPreference.male.fitSelection(afterTapping: .male), .unisex,
+                       "tapping the selected Men's returns to neutral")
+        XCTAssertEqual(GenderPreference.female.fitSelection(afterTapping: .female), .unisex,
+                       "tapping the selected Women's returns to neutral")
+        XCTAssertEqual(GenderPreference.male.fitSelection(afterTapping: .female), .female,
+                       "tapping the other choice switches to it")
+        XCTAssertEqual(GenderPreference.female.fitSelection(afterTapping: .male), .male,
+                       "tapping the other choice switches to it")
+        XCTAssertEqual(GenderPreference.unisex.fitSelection(afterTapping: .male), .male,
+                       "from neutral, tapping Men's selects it")
+        XCTAssertEqual(GenderPreference.unisex.fitSelection(afterTapping: .female), .female,
+                       "from neutral, tapping Women's selects it")
+        XCTAssertEqual(
+            GenderPreference.male
+                .fitSelection(afterTapping: .male)
+                .fitSelection(afterTapping: .male),
+            .male,
+            "the toggle round-trips: select, un-tap to neutral, tap to select again")
+    }
+
+    /// RW-81: a stored .unisex (neutral — every pre-RW-81 "No
+    /// preference" selection is stored as this same value)
+    /// matches NO fit row, so every surface renders it as
+    /// nothing selected; stored men/women values are untouched.
+    func testStoredUnisexRendersAsNothingSelected_RW81() {
+        for option in GenderPreference.fitOptions {
+            XCTAssertNotEqual(option.value, GenderPreference.unisex,
+                              "a stored neutral value must match no row's checkmark seat")
+        }
+        XCTAssertEqual(GenderPreference(rawValue: "unisex"), .unisex,
+                       "the stored neutral value is the pre-existing .unisex — the data model does not change")
+        XCTAssertEqual(GenderPreference(rawValue: "male"), .male)
+        XCTAssertEqual(GenderPreference(rawValue: "female"), .female)
+    }
+
+    /// RW-81: neutral is a complete, proceedable state — the
+    /// onboarding screen's fit state starts neutral (.unisex),
+    /// and its Continue is never disabled and never gated on the
+    /// fit value: advanceToNextStep reads only the step stack.
+    func testOnboardingStartsNeutralAndContinueIsUngated_RW81_sourcePin() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("@State private var genderPreference: GenderPreference = .unisex"),
+                      "RW-81: a fresh install starts neutral — neither fit row selected")
+        let start = try XCTUnwrap(onboarding.range(of: "private var preferencesScreen")?.lowerBound)
+        let end = try XCTUnwrap(onboarding.range(of: "private func preferenceGroup")?.lowerBound)
+        let screen = String(onboarding[start..<end])
+        XCTAssertTrue(screen.contains("advanceToNextStep()"),
+                      "the combined screen's Continue advances the flow")
+        XCTAssertFalse(screen.contains(".disabled"),
+                       "RW-81: Continue is never disabled — neutral proceeds exactly like a selection")
+        let advanceStart = try XCTUnwrap(onboarding.range(of: "private func advanceToNextStep()")?.lowerBound)
+        let advanceEnd = try XCTUnwrap(onboarding.range(of: "path.append(next)", range: advanceStart..<onboarding.endIndex)?.upperBound)
+        let advance = String(onboarding[advanceStart..<advanceEnd])
+        XCTAssertFalse(advance.contains("genderPreference"),
+                       "RW-81: advancing reads the step stack only — no fit-selection requirement")
+        let controls = try sourceFile("../RunWear/Views/Components/PreferenceControls.swift")
+        XCTAssertTrue(controls.contains("preference = preference.fitSelection(afterTapping: option.value)"),
+                      "RW-81: the shared control's rows toggle through the model's transition")
     }
 
     func testFitStepUsesTheInlinePicker_sourcePin() throws {

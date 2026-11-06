@@ -188,14 +188,17 @@ final class Gen3TrainDeltaTests: XCTestCase {
     }
 
     /// Option fidelity is binding (shipped iOS wording/options):
-    /// full-word Fahrenheit / Celsius; Men's / Women's / No
-    /// preference — ALL THREE (the design frame dropping "No
-    /// preference" is NOT followed); five slider stops.
+    /// full-word Fahrenheit / Celsius; Men's / Women's — exactly
+    /// TWO since RW-81 (owner ruling, Sol, Nov 6, 2026), which
+    /// SUPERSEDES the Nov 4 three-option ruling this pin used to
+    /// carry: there is no third fit choice of any kind, and
+    /// neutral is the stored .unisex state reached by tapping
+    /// the selected choice again; five slider stops.
     func testCombinedPreferencesOptionFidelity() {
         XCTAssertEqual(TemperatureUnit.allCases.map(\.label), ["Fahrenheit", "Celsius"],
                        "temperature unit options are the full words, in order")
-        XCTAssertEqual(GenderPreference.fitOptions.map(\.label), ["Men's", "Women's", "No preference"],
-                       "fit options are all three shipped choices, in order")
+        XCTAssertEqual(GenderPreference.fitOptions.map(\.label), ["Men's", "Women's"],
+                       "fit options are the two RW-81 choices, in order")
         XCTAssertEqual(ComfortLevel.allCases.count, 5,
                        "body temperature keeps its five stops")
     }

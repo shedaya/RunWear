@@ -7,9 +7,17 @@ import SwiftUI
 /// every label ("M" / "F" / "Body Temp" / "°F" / "°C") and made
 /// every selection in system green/blue on the default black.
 /// The labels are now spelled out exactly as the phone's —
-/// Men's / Women's / No preference, Body temperature,
-/// Fahrenheit / Celsius — and the selections are pine, on the
-/// Warm Charcoal ground the app root paints.
+/// Men's / Women's, Body temperature, Fahrenheit / Celsius —
+/// and the selections are pine, on the Warm Charcoal ground
+/// the app root paints.
+/// RW-81 (owner ruling, Sol, Nov 6, 2026): Fit Preference here
+/// carries the same TWO buttons as the phone — no third choice.
+/// Tapping the selected fit button again returns to neutral
+/// (.unisex, nothing highlighted), through the same model
+/// transition the phone's control uses
+/// (GenderPreference.fitSelection(afterTapping:)). The
+/// temperature buttons are untouched: a unit always has a
+/// value, so they stay direct-set with no toggle.
 struct WatchSettingsView: View {
     @ObservedObject var viewModel: WatchViewModel
 
@@ -42,8 +50,10 @@ struct WatchSettingsView: View {
                     }
                 }
 
-                // Fit Preference — the phone's three choices,
-                // spelled out, one row each.
+                // Fit Preference — the phone's TWO choices,
+                // spelled out, one row each (RW-81: no third
+                // button; tapping the selected one again clears
+                // back to neutral, nothing highlighted).
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Fit Preference")
                         .font(.caption2)
@@ -53,19 +63,19 @@ struct WatchSettingsView: View {
                         WatchSettingsButton(
                             label: "Men's",
                             isSelected: viewModel.genderPreference == .male,
-                            action: { viewModel.genderPreference = .male }
+                            action: {
+                                viewModel.genderPreference = viewModel.genderPreference
+                                    .fitSelection(afterTapping: .male)
+                            }
                         )
 
                         WatchSettingsButton(
                             label: "Women's",
                             isSelected: viewModel.genderPreference == .female,
-                            action: { viewModel.genderPreference = .female }
-                        )
-
-                        WatchSettingsButton(
-                            label: "No preference",
-                            isSelected: viewModel.genderPreference == .unisex,
-                            action: { viewModel.genderPreference = .unisex }
+                            action: {
+                                viewModel.genderPreference = viewModel.genderPreference
+                                    .fitSelection(afterTapping: .female)
+                            }
                         )
                     }
                 }

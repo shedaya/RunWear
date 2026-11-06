@@ -735,6 +735,47 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                                name: "VQ-2.4-ios-datepicker-F-TOMORROW-max-fixed.png")
     }
 
+    // MARK: - RW-81 · Fit control in its three states (Nov 6, 2026)
+    //
+    // Owner ruling RW-81: the fit control carries exactly two
+    // rows (Men's / Women's); neutral is the stored .unisex
+    // state and renders as NOTHING selected. The renders below
+    // are the PRODUCTION shared control — the one view both
+    // onboarding (342 pt content width: the 390 pt phone minus
+    // its 24 pt insets) and Settings present — seated in each of
+    // its three states at default Dynamic Type, through this
+    // harness's ImageRenderer vehicle (not the hosted-capture
+    // lottery). The watch surface carries no render here: its
+    // fit buttons are pinned by source + the model transition
+    // tests (SettingsInventoryTests / Gen2I3OnboardingTests).
+
+    /// Stateful seat for the production fit control — the
+    /// control takes a binding, so the fixture owns the value
+    /// exactly the way onboarding and Settings each own theirs.
+    private struct FitControlFixture: View {
+        @State private var preference: GenderPreference
+
+        init(_ preference: GenderPreference) {
+            _preference = State(initialValue: preference)
+        }
+
+        var body: some View {
+            FitPreferenceInlinePicker(preference: $preference)
+                .environment(\.dynamicTypeSize, .large)
+                .background(AppTheme.background)
+        }
+    }
+
+    @MainActor
+    func testRW81FitControl_ThreeStates() throws {
+        try writeFittingRender(FitControlFixture(.male), width: 342, minimumHeight: 96,
+                               name: "RW81-ios-fit-mens-default.png")
+        try writeFittingRender(FitControlFixture(.female), width: 342, minimumHeight: 96,
+                               name: "RW81-ios-fit-womens-default.png")
+        try writeFittingRender(FitControlFixture(.unisex), width: 342, minimumHeight: 96,
+                               name: "RW81-ios-fit-neutral-default.png")
+    }
+
     // MARK: - §10.4 · Caption system, transcribed from the production composer
 
     func testVQ104CaptionsTranscription() throws {
