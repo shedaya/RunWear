@@ -25,10 +25,13 @@ import com.runwear.app.makeitme.PersonalServeKind
 import com.runwear.app.ui.components.HeroPill
 import com.runwear.app.ui.components.HeroPillContent
 import com.runwear.app.ui.components.HeroPillPolicy
+import com.runwear.app.ui.components.HeroSheetBlock
+import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.RunWearTheme
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ComfortPreference
+import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherCode
 import com.runwear.shared.domain.model.WeatherConditions
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
@@ -47,14 +50,20 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * GEN-6 VQ harness (Android): renders PRODUCTION composables for the
  * visual-QA fixtures the pre-existing render tests do not cover —
- * the phone hero at the numeral width extremes (feels-like 108 and
+ * the hero sheet at the numeral width extremes (feels-like 108 and
  * -4, TEST-PLAN F-HOT-108 / F-COLD-NEG) and with a long place name
  * (F-LONGPLACE), each at font scale 1.0 and 1.3 (the plan's `max`),
- * plus the hero pill states in the DARK theme (VQ-1.10; the existing
- * HeroPillRenderTest renders light only). Font scale is applied
- * through LocalDensity exactly as the system scales sp text (the
- * WearComplianceTest method). PNGs + semantics text dumps land in
- * build/render-out-gen6vq/.
+ * one full-home attempt at the hot fixture, plus the hero pill
+ * states in the DARK theme (VQ-1.10; the existing HeroPillRenderTest
+ * renders light only). The hero sheet is rendered through the
+ * production [HeroSheetBlock] — the same composable the
+ * PickerWatchClosurePhoneTest harness renders — and settling uses
+ * that harness's pump loop (measure/layout/draw inside the loop;
+ * a settle without in-loop draws captures a blank frame for these
+ * surfaces, found in VQ run 232 and fixed here). Font scale is
+ * applied through LocalDensity exactly as the system scales sp
+ * text (the WearComplianceTest method). PNGs + semantics text
+ * dumps land in build/render-out-gen6vq/.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -124,7 +133,11 @@ class Gen6VqRenderTest {
         fontScale: Float,
         dark: Boolean = false,
         content: @Composable () -> Unit
-    ): ComposeView {
+    ) {
+        RunWearColors.setActivePalette(
+            if (dark) com.runwear.app.ui.theme.DarkPalette
+            else com.runwear.app.ui.theme.LightPalette
+        )
         val controller = Robolectric.buildActivity(ComponentActivity::class.java)
         val activity = controller.create().start().resume().visible().get()
         val composeView = ComposeView(activity)
@@ -137,23 +150,20 @@ class Gen6VqRenderTest {
                 ) { content() }
             }
         }
-        val scheduler = Robolectric.getForegroundThreadScheduler()
-        repeat(80) {
-            scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
-            shadowOf(Looper.getMainLooper()).idle()
-        }
-        shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.SECONDS)
-        shadowOf(Looper.getMainLooper()).idle()
-        composeView.dispatchWindowFocusChanged(true)
-        composeView.requestFocus()
-        shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS)
-        shadowOf(Looper.getMainLooper()).idle()
         val w = composeView.resources.displayMetrics.widthPixels
         val h = composeView.resources.displayMetrics.heightPixels
         val wSpec = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
         val hSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
-        composeView.measure(wSpec, hSpec)
-        composeView.layout(0, 0, w, h)
+        val scheduler = Robolectric.getForegroundThreadScheduler()
+        repeat(30) {
+            Robolectric.flushForegroundThreadScheduler()
+            scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
+            shadowOf(Looper.getMainLooper()).idle()
+            composeView.measure(wSpec, hSpec)
+            composeView.layout(0, 0, w, h)
+            composeView.draw(Canvas(Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)))
+        }
+        shadowOf(Looper.getMainLooper()).idle()
         val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         composeView.draw(Canvas(bitmap))
         outDir.mkdirs()
@@ -162,10 +172,49 @@ class Gen6VqRenderTest {
         }
         dumpTexts(composeView, name)
         controller.pause().stop().destroy()
-        return composeView
     }
 
-    private fun hero(name: String, w: WeatherConditions, place: String, fontScale: Float) {
+    private fun sheet(name: String, w: WeatherConditions, place: String, fontScale: Float) {
+        val now = LocalDateTime.of(2026, 10, 30, 7, 35)
+        hostAndShoot(name, fontScale) {
+            HeroSheetBlock(
+                weather = w,
+                locationName = place,
+                selectedDateTime = now,
+                locationNow = now,
+                isNowSelected = true,
+                onDateClick = {},
+                onTimeClick = {},
+                onNowClick = {},
+                onWeatherPillClick = {},
+                overlapsPhoto = false,
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                holdNumeral = false,
+                comfortPreference = ComfortPreference.NEUTRAL
+            )
+        }
+    }
+
+    @Test fun heroHot108Default() =
+        sheet("hero-F-HOT108-default", weather(104.0, 108.0), "Miami, Florida", 1.0f)
+
+    @Test fun heroHot108Max() =
+        sheet("hero-F-HOT108-max", weather(104.0, 108.0), "Miami, Florida", 1.3f)
+
+    @Test fun heroColdNegDefault() =
+        sheet("hero-F-COLDNEG-default", weather(2.0, -4.0), "Aspen, Colorado", 1.0f)
+
+    @Test fun heroColdNegMax() =
+        sheet("hero-F-COLDNEG-max", weather(2.0, -4.0), "Aspen, Colorado", 1.3f)
+
+    @Test fun heroLongPlaceMax() =
+        sheet("hero-F-LONGPLACE-max", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.3f)
+
+    @Test fun heroLongPlaceDefault() =
+        sheet("hero-F-LONGPLACE-default", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.0f)
+
+    @Test fun homeFullHot108Default() {
+        val w = weather(104.0, 108.0)
         val outfit = engine.execute(w, ComfortPreference.NEUTRAL)
         val now = LocalDateTime.of(2026, 10, 30, 7, 35)
         val uiState = MainUiState(
@@ -173,14 +222,14 @@ class Gen6VqRenderTest {
             error = null,
             outfit = outfit,
             weather = w,
-            locationName = place,
+            locationName = "Miami, Florida",
             selectedDateTime = now,
             locationNow = now,
             isNowSelected = true,
             heroImageUrl = null,
             hasCompletedOnboarding = true
         )
-        hostAndShoot(name, fontScale) {
+        hostAndShoot("home-full-F-HOT108-default", 1.0f) {
             HeroMainScreen(
                 uiState = uiState,
                 locationSearchState = LocationSearchState(),
@@ -196,24 +245,6 @@ class Gen6VqRenderTest {
             )
         }
     }
-
-    @Test fun heroHot108Default() =
-        hero("hero-F-HOT108-default", weather(104.0, 108.0), "Miami, Florida", 1.0f)
-
-    @Test fun heroHot108Max() =
-        hero("hero-F-HOT108-max", weather(104.0, 108.0), "Miami, Florida", 1.3f)
-
-    @Test fun heroColdNegDefault() =
-        hero("hero-F-COLDNEG-default", weather(2.0, -4.0), "Aspen, Colorado", 1.0f)
-
-    @Test fun heroColdNegMax() =
-        hero("hero-F-COLDNEG-max", weather(2.0, -4.0), "Aspen, Colorado", 1.3f)
-
-    @Test fun heroLongPlaceMax() =
-        hero("hero-F-LONGPLACE-max", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.3f)
-
-    @Test fun heroLongPlaceDefault() =
-        hero("hero-F-LONGPLACE-default", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.0f)
 
     private fun pill(name: String, content: HeroPillContent, dark: Boolean) {
         hostAndShoot(name, 1.0f, dark = dark) {
