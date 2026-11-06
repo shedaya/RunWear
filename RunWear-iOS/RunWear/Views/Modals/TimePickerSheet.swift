@@ -106,10 +106,10 @@ struct TimePickerSheet: View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
                 ScrollView {
-                    sheetContent
+                    sheetContent(size: dynamicTypeSize)
                 }
             } else {
-                sheetContent
+                sheetContent(size: dynamicTypeSize)
             }
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -132,8 +132,15 @@ struct TimePickerSheet: View {
         }
     }
 
-    private var sheetContent: some View {
-        VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 12 : 16) {
+    // Internal (not private) as the render-harness seam: a
+    // SwiftUI ScrollView photographs as a blank canvas under
+    // ImageRenderer, so the harness grades the AX-size CONTENT
+    // through this entry point (wholeness, Confirm at the
+    // foot), passing the size explicitly, while
+    // SheetDisciplineTests pins the gated ScrollView wrapper
+    // itself. The scroll motion is a device item.
+    func sheetContent(size: DynamicTypeSize) -> some View {
+        VStack(spacing: size.isAccessibilitySize ? 12 : 16) {
             Text("Choose a Time")
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
@@ -156,7 +163,7 @@ struct TimePickerSheet: View {
                 // the chart yields height to the type (the
                 // readout carries the hour's data as text; the
                 // chart remains the scrub surface).
-                .frame(height: dynamicTypeSize.isAccessibilitySize ? 120 : 168)
+                .frame(height: size.isAccessibilitySize ? 120 : 168)
 
                 // GEN-6 (DA-21): a PARTIAL day's truncated curve
                 // names its beyond-forecast region with the same

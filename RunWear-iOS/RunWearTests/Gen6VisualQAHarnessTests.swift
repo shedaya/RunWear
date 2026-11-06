@@ -313,6 +313,29 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
             .background(AppTheme.background)
     }
 
+    // RW-73 DETENT RULING amendment (Nov 6, 2026): at
+    // accessibility sizes the picker sheets' bodies are a
+    // ScrollView (the ruling's gated form), and a SwiftUI
+    // ScrollView photographs as a blank canvas under this
+    // harness's ImageRenderer vehicles (evidence: gate run
+    // 42282659617's VQ-2.4 max renders). The accessibility-size
+    // legs of this harness therefore render the sheet's CONTENT
+    // through the sheetContent seam — content wholeness is what
+    // VQ-2.4 grades; the gated wrapper is pinned by
+    // SheetDisciplineTests, and the scroll motion itself is a
+    // device-walkthrough item on the VQ sign-off sheet.
+    @MainActor
+    private func timeSheetContent(vm: WeatherViewModel, label: String, date: Date,
+                                  type: DynamicTypeSize = .large) -> some View {
+        TimePickerSheet(
+            chart: vm.dayChart, dateLabel: label, placeName: "New York",
+            unit: .fahrenheit, initialHour: 12, openedInNowState: false, nowHour: nil,
+            isPresented: .constant(true), dateSelection: .constant(date), onDateConfirmed: {})
+            .sheetContent(size: type)
+            .environment(\.dynamicTypeSize, type)
+            .background(AppTheme.background)
+    }
+
     @MainActor
     func testVQ51Picker_DateAxisSeries() throws {
         let f = pickerFixture()
@@ -320,20 +343,23 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today),
                         size: CGSize(width: 390, height: 560),
                         name: "VQ-5.1-ios-picker-before-default.png")
-        try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today, type: .accessibility5),
-                        size: CGSize(width: 390, height: 700),
-                        name: "VQ-2.4-ios-timesheet-F-PARTDAY-max.png")
+        try writeFittingRender(timeSheetContent(vm: f.vm, label: "Today", date: f.today, type: .accessibility5),
+                               width: 390, minimumHeight: 700,
+                               name: "VQ-2.4-ios-timesheet-F-PARTDAY-max.png")
         // DATE-CHANGED state: tomorrow selected in the draft,
         // standing behind Confirm/Cancel (the RW-66 state).
         let changed = DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
             .background(AppTheme.background)
         try writeRender(changed, size: CGSize(width: 390, height: 620),
                         name: "VQ-5.1-ios-datechanged-F-TOMORROW-default.png")
+        // AX5 leg: the sheet's content through the seam (see
+        // the timeSheetContent note above).
         let changedMax = DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
+            .sheetContent(size: .accessibility5)
             .environment(\.dynamicTypeSize, .accessibility5)
             .background(AppTheme.background)
-        try writeRender(changedMax, size: CGSize(width: 390, height: 760),
-                        name: "VQ-2.4-ios-datepicker-F-TOMORROW-max.png")
+        try writeFittingRender(changedMax, width: 390, minimumHeight: 760,
+                               name: "VQ-2.4-ios-datepicker-F-TOMORROW-max.png")
         // After Confirm: the view model re-solves to the cold day;
         // the picker reopened on it reads "Tomorrow ›".
         let mild = f.vm.currentFeelsLike
@@ -706,31 +732,46 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         // Time sheet: default renders on the executor's own
         // canvas (390×560, the VQ-5.1 before frame); the
         // accessibility sizes render at fitting height.
+        // RW-73 DETENT RULING amendment (Nov 6, 2026): the
+        // accessibility legs render the sheet's CONTENT through
+        // the sheetContent seam — at those sizes the body is
+        // the ruling's gated ScrollView, which photographs
+        // blank under ImageRenderer (see the timeSheetContent
+        // note). Content wholeness at each size remains the
+        // assertion; the wrapper is pin-proven and the scroll
+        // motion is a device item.
         try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today),
                         size: CGSize(width: 390, height: 560),
                         name: "VQ-2.4-ios-timesheet-F-PARTDAY-default-fixed.png")
-        try writeFittingRender(timeSheet(vm: f.vm, label: "Today", date: f.today, type: .accessibility2),
+        try writeFittingRender(timeSheetContent(vm: f.vm, label: "Today", date: f.today, type: .accessibility2),
                                width: 390, minimumHeight: 700,
                                name: "VQ-2.4-ios-timesheet-F-PARTDAY-mid-fixed.png")
-        try writeFittingRender(timeSheet(vm: f.vm, label: "Today", date: f.today, type: .accessibility5),
+        try writeFittingRender(timeSheetContent(vm: f.vm, label: "Today", date: f.today, type: .accessibility5),
                                width: 390, minimumHeight: 700,
                                name: "VQ-2.4-ios-timesheet-F-PARTDAY-max-fixed.png")
         // Date sheet (tomorrow selected in the draft, the
         // VQ-2.4 fixture state): default on the executor's
         // canvas (390×620, the VQ-5.1 date-changed frame);
-        // accessibility sizes at fitting height.
+        // accessibility sizes at fitting height, content
+        // through the seam per the amendment above.
         func dateSheet(_ type: DynamicTypeSize) -> some View {
             DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
+                .environment(\.dynamicTypeSize, type)
+                .background(AppTheme.background)
+        }
+        func dateSheetContent(_ type: DynamicTypeSize) -> some View {
+            DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
+                .sheetContent(size: type)
                 .environment(\.dynamicTypeSize, type)
                 .background(AppTheme.background)
         }
         try writeRender(dateSheet(.large),
                         size: CGSize(width: 390, height: 620),
                         name: "VQ-2.4-ios-datepicker-F-TOMORROW-default-fixed.png")
-        try writeFittingRender(dateSheet(.accessibility2),
+        try writeFittingRender(dateSheetContent(.accessibility2),
                                width: 390, minimumHeight: 760,
                                name: "VQ-2.4-ios-datepicker-F-TOMORROW-mid-fixed.png")
-        try writeFittingRender(dateSheet(.accessibility5),
+        try writeFittingRender(dateSheetContent(.accessibility5),
                                width: 390, minimumHeight: 760,
                                name: "VQ-2.4-ios-datepicker-F-TOMORROW-max-fixed.png")
     }

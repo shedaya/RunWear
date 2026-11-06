@@ -13,18 +13,22 @@ import SwiftUI
 /// by SheetDisciplineTests in the ruled form).
 ///
 /// This lane proves the ruled behaviour renders:
-///   * At .accessibility5 each sheet renders in a full phone
-///     frame (390×852) — the scroll form, top of content whole,
-///     nothing clipped mid-element at the fold.
-///   * On a fitting-height canvas at the same size each sheet's
-///     FULL content renders end to end with the Confirm action
-///     whole at the foot — i.e. the content the ScrollView
-///     carries is complete and Confirm is in it, reachable by
-///     the one scroll the ruling permits.
-///   * The premise — untruncated content at this size is
-///     taller than one screen — is visible by comparing the
-///     two frames: the phone frame shows only the content's
-///     head; the fitting canvas shows it whole.
+///   * At .accessibility5 each sheet's CONTENT renders whole
+///     on a fitting-height canvas, with the Confirm action
+///     whole at the foot — the content the ScrollView carries
+///     is complete and untruncated at the largest size.
+///   * The wrapper half of the ruling (exactly one ScrollView,
+///     gated on the accessibility size class, detents
+///     unchanged) is pinned by SheetDisciplineTests.
+///
+/// Why the content and not the sheet: a SwiftUI ScrollView
+/// photographs as a blank canvas under ImageRenderer (proven
+/// on gate run 42282659617, whose AX-size sheet renders came
+/// back uniformly blank at every frame), and hosted capture
+/// in this CI is the standing black-frame lottery. The scroll
+/// MOTION itself is therefore a device-walkthrough item on
+/// the Visual QA sign-off sheet (VQ-2.4 post-ruling fixture);
+/// these renders grade the half this vehicle can photograph.
 ///
 /// Fixture mirrors Gen6RW66RenderTests (WeatherViewModel +
 /// run-day-relative WeatherData), and DatePickerSheet /
@@ -142,39 +146,36 @@ final class Gen6DetentRenderTests: XCTestCase {
         return count
     }
 
-    // MARK: - Date sheet at the largest size
+    // MARK: - Date sheet content at the largest size
 
     @MainActor
-    func testDetent_DateSheet_AX5_PhoneFrameAndFittingHeight() throws {
+    func testDetent_DateSheet_AX5_FittingHeight() throws {
         let (_, today) = fixture()
-        let sheet = DatePickerSheet(
+        let content = DatePickerSheet(
             selectedDate: .constant(today),
             isPresented: .constant(true)
         )
+        .sheetContent(size: .accessibility5)
         .background(AppTheme.background)
         .environment(\.dynamicTypeSize, .accessibility5)
-
-        // The scroll form in a real phone frame.
-        try attach(sheet, size: CGSize(width: 390, height: 852),
-                   name: "DETENT-date-AX5-phone-frame.png")
 
         // The full content on a fitting-height canvas: Confirm
         // whole at the foot of the content the ScrollView
         // carries. (Canvas heights here are deliberately taller
-        // than the content; the ScrollView form top-anchors its
-        // content, so the foot lands in the canvas's lower half.)
-        let fitting = try attach(sheet, size: CGSize(width: 390, height: 1900),
+        // than the content; the foot lands in the canvas's lower
+        // half under either anchoring.)
+        let fitting = try attach(content, size: CGSize(width: 390, height: 1900),
                                  name: "DETENT-date-AX5-fitting-height.png")
         XCTAssertGreaterThan(pinePixels(fitting, fromFraction: 0.5), 20,
-                             "the Confirm action (pine label) must render in the sheet's lower half")
+                             "the Confirm action (pine label) must render in the content's lower half")
     }
 
-    // MARK: - Time sheet at the largest size
+    // MARK: - Time sheet content at the largest size
 
     @MainActor
-    func testDetent_TimeSheet_AX5_PhoneFrameAndFittingHeight() throws {
+    func testDetent_TimeSheet_AX5_FittingHeight() throws {
         let (vm, today) = fixture()
-        let sheet = TimePickerSheet(
+        let content = TimePickerSheet(
             chart: vm.dayChart,
             dateLabel: "Today",
             placeName: "New York",
@@ -186,17 +187,15 @@ final class Gen6DetentRenderTests: XCTestCase {
             dateSelection: .constant(today),
             onDateConfirmed: {}
         )
+        .sheetContent(size: .accessibility5)
         .background(AppTheme.background)
         .environment(\.dynamicTypeSize, .accessibility5)
 
-        try attach(sheet, size: CGSize(width: 390, height: 852),
-                   name: "DETENT-time-AX5-phone-frame.png")
-
-        let fitting = try attach(sheet, size: CGSize(width: 390, height: 1200),
+        let fitting = try attach(content, size: CGSize(width: 390, height: 1200),
                                  name: "DETENT-time-AX5-fitting-height.png")
-        // Bottom quarter only: the chart's own pine axis labels
+        // Bottom region only: the chart's own pine axis labels
         // sit mid-sheet; the foot is the Confirm action row.
         XCTAssertGreaterThan(pinePixels(fitting, fromFraction: 0.7), 20,
-                             "the Confirm action (pine label) must render at the sheet's foot")
+                             "the Confirm action (pine label) must render at the content's foot")
     }
 }

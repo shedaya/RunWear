@@ -34,8 +34,14 @@ struct DatePickerSheet: View {
     /// the largest sizes give each tile the full sheet width.)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var gridColumnCount: Int {
-        switch dynamicTypeSize {
+    /// The grid's column count for a given size — taken as a
+    /// parameter (not read from the environment here) so the
+    /// render harness can compose the content at an explicit
+    /// size through the sheetContent seam below; production
+    /// passes its own environment value, so behaviour is
+    /// unchanged.
+    private func gridColumnCount(for size: DynamicTypeSize) -> Int {
+        switch size {
         case .accessibility4, .accessibility5:
             return 1
         case .accessibility1, .accessibility2, .accessibility3:
@@ -84,10 +90,10 @@ struct DatePickerSheet: View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
                 ScrollView {
-                    sheetContent
+                    sheetContent(size: dynamicTypeSize)
                 }
             } else {
-                sheetContent
+                sheetContent(size: dynamicTypeSize)
             }
         }
         .background(AppTheme.background.ignoresSafeArea())
@@ -95,7 +101,14 @@ struct DatePickerSheet: View {
         .sensoryFeedback(.selection, trigger: draft.draftDate)
     }
 
-    private var sheetContent: some View {
+    // Internal (not private) as the render-harness seam: a
+    // SwiftUI ScrollView photographs as a blank canvas under
+    // ImageRenderer, so the harness grades the AX-size CONTENT
+    // through this entry point (wholeness, Confirm at the
+    // foot), passing the size explicitly, while
+    // SheetDisciplineTests pins the gated ScrollView wrapper
+    // itself. The scroll motion is a device item.
+    func sheetContent(size: DynamicTypeSize) -> some View {
         VStack(spacing: 20) {
             // Title — frame 42's own name for the sheet, the
             // sibling of the time picker's "Choose a Time".
@@ -155,7 +168,7 @@ struct DatePickerSheet: View {
     // MARK: - Date Grid
 
     private var dateGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: gridColumnCount), spacing: 12) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: gridColumnCount(for: size)), spacing: 12) {
             ForEach(Array(availableDates.enumerated()), id: \.offset) { index, date in
                 DateButton(
                     date: date,
