@@ -161,6 +161,20 @@ jobs:
             RunWear-android/**/build/outputs/androidTest-results/**
           if-no-files-found: warn
 
+      # GEN-6 VQ harness (Android): collect every PNG the Robolectric
+      # render tests produced so the visual-QA executor can grade
+      # rendered output. Evidence only — test execution is unchanged.
+      - name: Upload render PNGs (GEN-6 VQ evidence)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gen6-vq-renders
+          path: |
+            RunWear-android/app/build/render-out*/
+            RunWear-android/wear/build/wear-screenshots/
+            RunWear-android/wear/build/wear-compliance/
+          if-no-files-found: warn
+
       - name: Upload generated engine fixtures
         if: ${{ inputs.generate_fixtures }}
         uses: actions/upload-artifact@v4
