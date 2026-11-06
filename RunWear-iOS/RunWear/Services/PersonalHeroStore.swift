@@ -270,6 +270,39 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         _ = await lookupAndMaybeGenerate(combination: combination, userInitiated: false)
     }
 
+    /// RW-79: the lifecycle revalidation the view model drives
+    /// when the app returns to the foreground, the hero paywall
+    /// is dismissed, or Home appears. Before this, look state was
+    /// re-read ONLY by hero resolutions and by the per-cell poll
+    /// while it ran — so a job that reached its terminal state
+    /// while no poll was live (its schedule consumed during app
+    /// suspension, cap expiry having resolved the cell out of
+    /// MAKING and deleted the poll) was never folded: Home kept
+    /// whatever it last rendered, indefinitely, until some
+    /// unrelated re-resolution happened. This performs ONE fresh
+    /// resolution read — the same read a display performs, so a
+    /// terminal FAILED folds in within the round trip and Home
+    /// (which renders `lookStates` directly) drops the MAKING
+    /// presentation for the settled failed line, and a landed
+    /// hero's URL returns to the caller for the swap — and, when
+    /// the cell is still MAKING with no poll stored, re-arms the
+    /// poll under LookRevalidationPolicy so the wait is watched
+    /// again. It never requests generation itself: the read
+    /// routes through resolveHero, whose once-per-session guard
+    /// keeps a failed cell un-requested until the user's own
+    /// "Try again" (retryLook) clears the marker.
+    func revalidateLookState(for combination: PersonalCombination) async -> String? {
+        let url = await resolveHero(for: combination)
+        let cell = combination.combinationId
+        if LookRevalidationPolicy.shouldRearmPoll(
+            state: lookState(for: combination),
+            pollRunning: pollingTasks[cell] != nil
+        ) {
+            Task { _ = await self.awaitHero(for: combination) }
+        }
+        return url
+    }
+
     private func lookupAndMaybeGenerate(combination: PersonalCombination, userInitiated: Bool) async -> String? {
         let cell = combination.combinationId
         guard let lookup = try? await api.getPersonalHero(combinationId: cell) else {

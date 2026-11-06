@@ -23,12 +23,15 @@ struct MakeItMeForkView: View {
     let onCustomize: () -> Void
     let onStock: () -> Void
 
-    /// GEN-6 (RW-52): the fork's two doors are CHOICES (frame 32):
-    /// a door selects, and the settled "Continue" below the
-    /// honesty line commits the choice. The Make It Me door is
-    /// the default selection, as the fork's primary door.
-    private enum ForkDoor { case makeItMe, standard }
-    @State private var selectedDoor: ForkDoor = .makeItMe
+    /// RW-78 (Nov 6, 2026): the fork's two doors ACT on tap —
+    /// "Use my photos" goes straight to the opt-in flow and
+    /// "Use standard photos" completes onboarding with the
+    /// standard set, exactly as gen-5 behaved. The GEN-6 RW-52
+    /// select-then-commit form (a door only selected, a separate
+    /// "Continue" below the honesty line committed) is REMOVED:
+    /// Sol's device evidence settled against it — tapping the
+    /// door he wanted appeared to do nothing. There is no
+    /// selection state on this fork.
 
     var body: some View {
         // GEN-5 (RW-29 FA-40 + EX-21): the photo band is a FIXED
@@ -106,12 +109,14 @@ struct MakeItMeForkView: View {
                 // carries ONLY its settled door heading + door
                 // button (frame 32) — the unlisted description
                 // line is removed, and the script moved up to be
-                // the fork's title.
+                // the fork's title. RW-78: the button itself is
+                // the door — tapping it opens the opt-in flow
+                // directly (gen-5's wiring).
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Make it me")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Button { selectedDoor = .makeItMe } label: {
+                    Button(action: onCustomize) {
                         Text("Use my photos")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
@@ -122,18 +127,17 @@ struct MakeItMeForkView: View {
                 }
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
-                .overlay(RoundedRectangle(cornerRadius: 16)
-                    .stroke(selectedDoor == .makeItMe ? AppTheme.primaryColor : Color.clear, lineWidth: 2))
-                .onTapGesture { selectedDoor = .makeItMe }
 
                 // Option B — stock (a complete, respected choice).
                 // GEN-6 (RW-52 + DA-24): the heading is the settled
                 // "Standard photos" (the button already conformed).
+                // RW-78: tapping it completes onboarding with the
+                // standard set directly (gen-5's wiring).
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Standard photos")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Button { selectedDoor = .standard } label: {
+                    Button(action: onStock) {
                         Text("Use standard photos")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
@@ -144,28 +148,11 @@ struct MakeItMeForkView: View {
                 }
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
-                .overlay(RoundedRectangle(cornerRadius: 16)
-                    .stroke(selectedDoor == .standard ? AppTheme.primaryColor : Color.clear, lineWidth: 2))
-                .onTapGesture { selectedDoor = .standard }
 
                 Text("Either way, your recommendations don't change — only the photo does.")
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
-
-                // GEN-6 (RW-52): the settled "Continue" (frame 32)
-                // commits the chosen door — Make It Me goes to
-                // consent, Standard photos keeps the standard set.
-                Button {
-                    if selectedDoor == .makeItMe { onCustomize() } else { onStock() }
-                } label: {
-                    Text("Continue")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
-                }
                     }
                     .padding(.bottom, 24)
                 }
