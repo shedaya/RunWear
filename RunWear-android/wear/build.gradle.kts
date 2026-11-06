@@ -39,8 +39,10 @@ android {
         // bundles use 10000 + the aligned phone versionCode.
         // This build: 10036 ↔ phone 1.2.21 / vc36 (GEN-5 Android release
         // 2026-11-05). The wear versionName tracks the phone versionName.
-        versionCode = 10037
-        versionName = "1.2.22"
+        // GEN-6: 10037 ↔ 1.2.22 / vc37. FOLLOWING BUILD 2026-11-06:
+        // 10038 ↔ 1.2.23 / vc38.
+        versionCode = 10038
+        versionName = "1.2.23"
     }
 
     buildTypes {
