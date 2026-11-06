@@ -19,6 +19,9 @@ on:
           - verify
           - attach
           - status
+          - opt3-probe
+          - opt3-stage1
+          - opt3-submit
         default: verify
         required: true
       version:
@@ -57,3 +60,15 @@ jobs:
         if: inputs.task == 'status'
         working-directory: scripts/asc
         run: python3 asc_status.py
+      - name: Option 3 probe (read-only)
+        if: inputs.task == 'opt3-probe'
+        working-directory: scripts/asc
+        run: python3 asc_opt3_probe.py
+      - name: Option 3 stage 1 (create 1.1, attach live build, prepare)
+        if: inputs.task == 'opt3-stage1'
+        working-directory: scripts/asc
+        run: python3 asc_opt3_stage1.py
+      - name: Option 3 submit (1.1 + both subscriptions for review)
+        if: inputs.task == 'opt3-submit'
+        working-directory: scripts/asc
+        run: python3 asc_opt3_submit.py
