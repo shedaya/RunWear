@@ -1,10 +1,14 @@
 package com.runwear.app.weariverun
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.BroadcastFrameClock
@@ -41,11 +45,21 @@ import kotlin.math.roundToInt
  * size the sheet happened to be (the gen-5 graphics-layer capture
  * is retired from the share path).
  *
- * The render runs on a [ComposeView] that is NOT attached to any
- * window, with manually installed lifecycle / saved-state owners
- * and a render-owned [Recomposer] installed as the parent
- * composition context before content is set (an unattached view
- * has no windowRecomposer to resolve). The recomposer runs on a
+ * The render runs on a [ComposeView] carrying manually installed
+ * lifecycle / saved-state owners and a render-owned [Recomposer]
+ * installed as the parent composition context before content is
+ * set (a view outside the app's own composition has no
+ * windowRecomposer to resolve). For the render's duration the
+ * view is ATTACHED, invisibly (alpha 0), to the host activity's
+ * decor view: Compose UI defers a ComposeView's actual content
+ * until its ViewTreeOwners become available, and owners are
+ * only assigned at window attach (WrappedComposition gates
+ * setContent on setOnViewTreeOwnersAvailable, which an
+ * unattached view never receives) — a never-attached view
+ * composes an EMPTY root and draws a transparent raster, which
+ * the raster verifier then correctly rejects as degenerate.
+ * The view is detached and its composition disposed before the
+ * render returns. The recomposer runs on a
  * render-owned [BroadcastFrameClock] that the settle loop sends
  * frames to explicitly — a manually created recomposer has no
  * ambient frame clock to borrow (runRecomposeAndApplyChanges
@@ -159,10 +173,10 @@ object ShareExportRenderer {
 
         val bitmap = withContext(Dispatchers.Main) {
             val owners = ShareRenderOwners()
-            // One Recomposer owned by this render: an unattached
-            // ComposeView has no window, so there is no
-            // windowRecomposer to resolve (measure() threw
-            // "Cannot locate windowRecomposer" before this).
+            // One Recomposer owned by this render: the export
+            // view is not part of the app's composition, so there
+            // is no windowRecomposer for it to resolve (measure()
+            // threw "Cannot locate windowRecomposer" before this).
             // Install it as the parent composition context BEFORE
             // setContent and drive it for the render's duration;
             // close it and cancel its job once the draw is done
@@ -186,12 +200,14 @@ object ShareExportRenderer {
             val recomposeJob = launch(frameClock) {
                 recomposer.runRecomposeAndApplyChanges()
             }
+            var composeView: ComposeView? = null
             try {
-                val composeView = ComposeView(context)
-                composeView.setParentCompositionContext(recomposer)
-                composeView.setViewTreeLifecycleOwner(owners)
-                composeView.setViewTreeSavedStateRegistryOwner(owners)
-                composeView.setContent {
+                val view = ComposeView(context)
+                composeView = view
+                view.setParentCompositionContext(recomposer)
+                view.setViewTreeLifecycleOwner(owners)
+                view.setViewTreeSavedStateRegistryOwner(owners)
+                view.setContent {
                     CompositionLocalProvider(
                         LocalDensity provides Density(
                             density = format.renderScale.toFloat(),
@@ -224,6 +240,32 @@ object ShareExportRenderer {
                         }
                     }
                 }
+                // Attach the view to the host activity's window
+                // for the render's duration — invisibly (alpha 0;
+                // the manual draw below is into our own bitmap and
+                // is not affected by the view's window alpha, which
+                // only the window's own draw applies). This attach
+                // is what the content was waiting for: Compose UI
+                // gates a ComposeView's real setContent on its
+                // ViewTreeOwners becoming available, and owners are
+                // assigned only in AndroidComposeView's
+                // onAttachedToWindow (found by walking up from the
+                // view — the owners installed on THIS view above
+                // are the ones it finds). Without an attach the
+                // composition stays an empty root and the draw is a
+                // transparent raster (the verifier's
+                // DegenerateRaster(mean=0.0) verdict). When no
+                // Activity hosts the render the view stays
+                // unattached and the verifier — not a crash — is
+                // what reports the empty render, as designed.
+                val decor = context.findActivity()?.window?.decorView as? ViewGroup
+                if (decor != null) {
+                    view.alpha = 0f
+                    decor.addView(
+                        view,
+                        FrameLayout.LayoutParams(pixelSize.width, pixelSize.height)
+                    )
+                }
                 val widthSpec = View.MeasureSpec.makeMeasureSpec(
                     pixelSize.width, View.MeasureSpec.EXACTLY
                 )
@@ -245,26 +287,30 @@ object ShareExportRenderer {
                     nextFrameTimeNanos += 16_666_667L
                     frameClock.sendFrame(nextFrameTimeNanos)
                     delay(50)
-                    composeView.measure(widthSpec, heightSpec)
-                    composeView.layout(0, 0, pixelSize.width, pixelSize.height)
+                    view.measure(widthSpec, heightSpec)
+                    view.layout(0, 0, pixelSize.width, pixelSize.height)
                 }
                 nextFrameTimeNanos += 16_666_667L
                 frameClock.sendFrame(nextFrameTimeNanos)
                 delay(50)
-                composeView.measure(widthSpec, heightSpec)
-                composeView.layout(0, 0, pixelSize.width, pixelSize.height)
+                view.measure(widthSpec, heightSpec)
+                view.layout(0, 0, pixelSize.width, pixelSize.height)
                 val out = Bitmap.createBitmap(
                     pixelSize.width, pixelSize.height, Bitmap.Config.ARGB_8888
                 )
                 // Warm draw, then the real one — the harness pattern:
                 // the first draw can still carry a pending layout pass.
-                composeView.draw(Canvas(out))
+                view.draw(Canvas(out))
                 val finished = Bitmap.createBitmap(
                     pixelSize.width, pixelSize.height, Bitmap.Config.ARGB_8888
                 )
-                composeView.draw(Canvas(finished))
+                view.draw(Canvas(finished))
                 finished
             } finally {
+                composeView?.let { view ->
+                    runCatching { view.disposeComposition() }
+                    (view.parent as? ViewGroup)?.removeView(view)
+                }
                 recomposer.close()
                 recomposeJob.cancel()
             }
@@ -360,6 +406,19 @@ object ShareExportRenderer {
         val remoteUrl = ClothingThumbnailService.getThumbnailUrl(item, gender)
         if (remoteUrl != assetUri) {
             loadBitmapFrom(context, remoteUrl)?.let { return it }
+        }
+        return null
+    }
+
+    /** The Activity hosting this render, unwrapping the
+     * ContextWrapper chain (the Studio's LocalContext is the
+     * activity itself or a wrapper around it). Null when the
+     * render was handed a non-activity context. */
+    private fun Context.findActivity(): Activity? {
+        var ctx: Context? = this
+        while (ctx != null) {
+            if (ctx is Activity) return ctx
+            ctx = (ctx as? ContextWrapper)?.baseContext
         }
         return null
     }
