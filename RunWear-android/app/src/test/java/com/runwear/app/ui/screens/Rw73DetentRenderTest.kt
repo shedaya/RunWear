@@ -10,7 +10,6 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -20,7 +19,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.dp
 import com.runwear.app.ui.components.DayChartHour
 import com.runwear.app.ui.components.DayChartModel
 import com.runwear.app.ui.theme.RunWearColors
@@ -56,17 +54,34 @@ import org.robolectric.annotation.GraphicsMode
  * drive via a LocalDensity override (the Gen6VqRenderTest
  * precedent).
  *
- * The sheets' window-height cap is simulated by a 420dp-tall
- * host box: at font scale 1.3 both contents overflow it.
- * Proofs, per sheet:
- *   * the hoisted ScrollState reports maxValue > 0 (the ruled
- *     consumer is attached and the content overflows);
- *   * Confirm starts BELOW the capped frame's foot;
+ * What the ruling insures against is a window too short for the
+ * untruncated content (a small phone, split-screen): the
+ * ModalBottomSheet caps its content at the window height, and
+ * without a consumer the foot is simply unreachable. The
+ * proofs therefore run in deliberately SHORT windows (the
+ * PROCESS §5 worst case), sized per sheet from the content's
+ * measured height at font scale 1.3 on a full screen (Date
+ * ≈ 330dp, Time ≈ 565dp — both fit a tall window whole, which
+ * the fs13-top captures in the first gate run showed):
+ *   * Date in a 280dp window, Time in a 500dp window: the
+ *     hoisted ScrollState reports a real, positive maxValue
+ *     (the consumer attached and the content overflows);
+ *   * Confirm starts BELOW the window's foot;
  *   * after scrolling to the foot, Confirm's semantics bounds
- *     sit wholly inside the frame — reachable and whole;
- *   * at font scale 1.0 in a full-height host the same state
- *     reports maxValue == 0 (no consumer attached — the
- *     discipline side of the ruling) and Confirm is in frame.
+ *     sit wholly inside the window — reachable and whole.
+ * The discipline side: at font scale 1.0 in a full-height
+ * window the same states are NEVER attached — an unattached
+ * ScrollState keeps its Int.MAX_VALUE sentinel maxValue, the
+ * observable signature of "no consumer" — and Confirm renders
+ * in frame.
+ *
+ * (First-run correction, of record: the assembly lane's first
+ * version of this proof capped the host at 420dp and expected
+ * maxValue == 0 for "no consumer". Both premises were wrong —
+ * an intermediate height cap does not bind under this harness's
+ * manual measure/draw, and ScrollState's unattached sentinel is
+ * Int.MAX_VALUE, not 0. Gate run 42278554001's renders are the
+ * evidence for the corrected design.)
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -163,11 +178,10 @@ class Rw73DetentRenderTest {
     }
 
     @Composable
-    private fun CappedSheet(content: @Composable () -> Unit) {
+    private fun SheetSurface(content: @Composable () -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(CAP_DP.dp)
                 .background(RunWearColors.Surface)
         ) { content() }
     }
@@ -197,17 +211,21 @@ class Rw73DetentRenderTest {
         sheet: String,
         footName: String
     ) {
-        val density = host.composeView.resources.displayMetrics.density
-        val capPx = CAP_DP * density
+        val windowPx = host.composeView.resources.displayMetrics.heightPixels.toFloat()
         assertTrue(
-            "$sheet: at font scale 1.3 the content must overflow the cap (maxValue > 0), was ${scrollState.maxValue}",
+            "$sheet: at font scale 1.3 in a short window the ruled consumer must attach " +
+                "(maxValue must leave the Int.MAX_VALUE sentinel), was ${scrollState.maxValue}",
+            scrollState.maxValue != Int.MAX_VALUE
+        )
+        assertTrue(
+            "$sheet: the content must overflow the short window (maxValue > 0), was ${scrollState.maxValue}",
             scrollState.maxValue > 0
         )
         val before = boundsOf(host, "Confirm")
         assertTrue("$sheet: Confirm must be composed", before != null)
         assertTrue(
-            "$sheet: Confirm must start below the capped frame's foot (bottom ${before!!.bottom} > cap $capPx)",
-            before.bottom > capPx
+            "$sheet: Confirm must start below the window's foot (bottom ${before!!.bottom} > window $windowPx)",
+            before.bottom > windowPx
         )
         runBlocking { scrollState.scrollTo(scrollState.maxValue) }
         pump(host, 10)
@@ -215,18 +233,19 @@ class Rw73DetentRenderTest {
         val after = boundsOf(host, "Confirm")
         assertTrue("$sheet: Confirm must still be composed after the scroll", after != null)
         assertTrue(
-            "$sheet: after scrolling to the foot, Confirm must be whole inside the frame " +
-                "(top ${after!!.top} >= 0, bottom ${after.bottom} <= cap $capPx)",
-            after.top >= 0f && after.bottom <= capPx + 1f
+            "$sheet: after scrolling to the foot, Confirm must be whole inside the window " +
+                "(top ${after!!.top} >= 0, bottom ${after.bottom} <= window $windowPx)",
+            after.top >= 0f && after.bottom <= windowPx + 1f
         )
     }
 
     @Test
+    @Config(qualifiers = "w390dp-h280dp-xhdpi")
     fun `date sheet at the largest font scale - scrolls, Confirm reachable and whole`() {
         val scrollState = ScrollState(0)
         val host = compose {
             Scaled(1.3f) {
-                CappedSheet {
+                SheetSurface {
                     DatePickerSheetContent(
                         selectedDate = today,
                         today = today,
@@ -243,11 +262,12 @@ class Rw73DetentRenderTest {
     }
 
     @Test
+    @Config(qualifiers = "w390dp-h500dp-xhdpi")
     fun `time sheet at the largest font scale - scrolls, Confirm reachable and whole`() {
         val scrollState = ScrollState(0)
         val host = compose {
             Scaled(1.3f) {
-                CappedSheet {
+                SheetSurface {
                     TimePickerSheetContent(
                         model = dayChartModel(),
                         selectedHour = 12,
@@ -272,11 +292,7 @@ class Rw73DetentRenderTest {
         val dateState = ScrollState(0)
         val dateHost = compose {
             Scaled(1.0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(RunWearColors.Surface)
-                ) {
+                SheetSurface {
                     DatePickerSheetContent(
                         selectedDate = today,
                         today = today,
@@ -289,14 +305,15 @@ class Rw73DetentRenderTest {
         }
         capture(dateHost, "DETENT-android-date-fs10-full.png")
         assertTrue(
-            "date at 1.0: no scroll consumer may attach (maxValue must stay 0), was ${dateState.maxValue}",
-            dateState.maxValue == 0
+            "date at 1.0: no scroll consumer may attach (maxValue must keep the " +
+                "Int.MAX_VALUE sentinel), was ${dateState.maxValue}",
+            dateState.maxValue == Int.MAX_VALUE
         )
         val dateConfirm = boundsOf(dateHost, "Confirm")
         val screenH = dateHost.composeView.resources.displayMetrics.heightPixels.toFloat()
         assertTrue("date at 1.0: Confirm composed", dateConfirm != null)
         assertTrue(
-            "date at 1.0: Confirm whole inside the full-height frame (bottom ${dateConfirm!!.bottom} <= $screenH)",
+            "date at 1.0: Confirm whole inside the full-height window (bottom ${dateConfirm!!.bottom} <= $screenH)",
             dateConfirm.bottom <= screenH && dateConfirm.top >= 0f
         )
         dateHost.controller.pause().stop().destroy()
@@ -304,11 +321,7 @@ class Rw73DetentRenderTest {
         val timeState = ScrollState(0)
         val timeHost = compose {
             Scaled(1.0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(RunWearColors.Surface)
-                ) {
+                SheetSurface {
                     TimePickerSheetContent(
                         model = dayChartModel(),
                         selectedHour = 12,
@@ -325,20 +338,16 @@ class Rw73DetentRenderTest {
         }
         capture(timeHost, "DETENT-android-time-fs10-full.png")
         assertTrue(
-            "time at 1.0: no scroll consumer may attach (maxValue must stay 0), was ${timeState.maxValue}",
-            timeState.maxValue == 0
+            "time at 1.0: no scroll consumer may attach (maxValue must keep the " +
+                "Int.MAX_VALUE sentinel), was ${timeState.maxValue}",
+            timeState.maxValue == Int.MAX_VALUE
         )
         val timeConfirm = boundsOf(timeHost, "Confirm")
         assertTrue("time at 1.0: Confirm composed", timeConfirm != null)
         assertTrue(
-            "time at 1.0: Confirm whole inside the full-height frame (bottom ${timeConfirm!!.bottom} <= $screenH)",
+            "time at 1.0: Confirm whole inside the full-height window (bottom ${timeConfirm!!.bottom} <= $screenH)",
             timeConfirm.bottom <= screenH && timeConfirm.top >= 0f
         )
         timeHost.controller.pause().stop().destroy()
-    }
-
-    private companion object {
-        /** Simulated ModalBottomSheet window-height cap. */
-        const val CAP_DP = 420
     }
 }

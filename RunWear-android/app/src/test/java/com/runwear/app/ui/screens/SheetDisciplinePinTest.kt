@@ -131,13 +131,24 @@ class SheetDisciplinePinTest {
     @Test
     fun `settings content has exactly one scroll consumer - its LazyColumn`() {
         val sheets = bottomSheets()
-        assertFalse(
-            "no verticalScroll may remain in BottomSheets (the D-13 nested consumer)",
-            sheets.contains(".verticalScroll(")
+        // RW-73 DETENT RULING amendment (Sol, Nov 6, 2026): the
+        // file now carries exactly ONE .verticalScroll( — the
+        // Date picker content's gated consumer, pinned in
+        // datePickerContent_carriesTheOneRuledScrollConsumer
+        // below. The D-13 rule this test guards is unchanged in
+        // intent: the SETTINGS content nests no scroll consumer
+        // inside its LazyColumn.
+        assertEquals(
+            "BottomSheets carries exactly one verticalScroll (the Date picker's ruled one)",
+            1, occurrences(sheets, ".verticalScroll(")
         )
         val contentStart = sheets.indexOf("fun SettingsSheetContent(")
         assertTrue(contentStart >= 0)
         val content = sheets.substring(contentStart)
+        assertFalse(
+            "no verticalScroll may nest in the Settings content (the D-13 nested consumer)",
+            content.contains(".verticalScroll(")
+        )
         assertTrue(content.contains("LazyColumn("))
         assertTrue(
             "the content composes the registry, in order",
