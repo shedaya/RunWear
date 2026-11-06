@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,9 +27,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.theme.RunWearColors
@@ -261,6 +265,87 @@ object HeroNumeralPolicy {
      */
     fun shown(held: String?, candidate: String?, transitionInFlight: Boolean): String? =
         if (transitionInFlight) held ?: candidate else candidate ?: held
+}
+
+/** RW-75: the §3.3 figures' label style (shared by the grid and its measurer). */
+private val WeatherFigureLabelStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.Bold,
+    fontSize = 10.sp,
+    letterSpacing = 1.sp
+)
+
+/** RW-75: the §3.3 figures' value style (shared by the grid and its measurer). */
+private val WeatherFigureValueStyle = TextStyle(
+    fontFamily = FontFamily.Default,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 13.5.sp,
+    fontFeatureSettings = "tnum"
+)
+
+/**
+ * RW-75 (GEN-6 VQ fix wave, VQ-2.2): the §3.3 weather figures grid —
+ * labels in one column, values flush right — at a RESERVED width.
+ *
+ * The gen-6 candidate composed this grid at a nominal 150.dp inside
+ * the hero row; when the numeral + bracket chip took more of the row
+ * (a three-digit numeral at either type scale, the FREEZING chip at
+ * max type), Compose squeezed the grid to ~92–100.dp and its values
+ * clipped mid-glyph at the sheet edge, with a too-wide value drawing
+ * back over its label. The grid now carries its measured width as a
+ * required width ([labelColumnWidth] + [figuresWidth] are computed
+ * from the actual strings at the actual type scale in
+ * [HeroSheetBlock]), so it can never be squeezed below the width its
+ * glyphs need; the hero row re-flows around it instead (see
+ * [HeroSheetBlock]).
+ */
+@Composable
+private fun WeatherFiguresGrid(
+    rows: List<Pair<String, String>>,
+    labelColumnWidth: androidx.compose.ui.unit.Dp,
+    figuresWidth: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .requiredWidth(figuresWidth)
+                .padding(top = 4.dp),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)
+        ) {
+            rows.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(19.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = label,
+                        style = WeatherFigureLabelStyle,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.requiredWidth(labelColumnWidth),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Text(
+                        text = value,
+                        style = WeatherFigureValueStyle,
+                        color = RunWearColors.TextPrimary,
+                        modifier = Modifier.weight(1f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -528,76 +613,90 @@ fun HeroSheetBlock(
         // aligned to the numeral's top, rows evenly spaced. Nothing
         // weather-related sits below the headline on home anymore:
         // the pills row that used to live under the pill is gone.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
-        ) {
-            Text(
-                text = shownNumeral ?: "0°",
-                style = TextStyle(
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 80.sp,
-                    lineHeight = 80.sp,
-                    fontFeatureSettings = "tnum"
-                ),
-                color = RunWearColors.TextPrimary
-            )
-            if (bracket != null) {
-                Spacer(Modifier.size(14.dp))
-                Box(modifier = Modifier.padding(top = 14.dp)) {
-                    TemperatureBracketChip(bracket = bracket)
-                }
+        //
+        // RW-75 (GEN-6 VQ fix wave, VQ-2.2): the beside composition
+        // is kept ONLY when it genuinely fits. The candidate's fixed
+        // 150.dp grid was squeezed by the numeral + chip whenever
+        // their combined width grew (108° at both type scales, −4°
+        // with the FREEZING chip at max type), clipping values
+        // mid-glyph at the sheet edge and letting a value draw back
+        // over its label (the HUMIDITY overlap). The row now
+        // MEASURES its citizens at the current type scale — numeral,
+        // chip (label + 24.dp padding + 9.dp dot + 7.dp spacer),
+        // and the figures at their glyph widths — and reserves the
+        // figures their full measured width. When the measured sum
+        // exceeds the sheet's content width, the figures re-flow to
+        // a reserved right-anchored slot directly under the numeral
+        // row, values still flush at the sheet's right edge; the
+        // numeral and the chip beside it never move or shrink.
+        val numeralStyle = TextStyle(
+            fontFamily = FontFamily.Default,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 80.sp,
+            lineHeight = 80.sp,
+            fontFeatureSettings = "tnum"
+        )
+        val figureRows = weather?.let {
+            HeroSheetFormat.weatherGridRows(it, temperatureUnit)
+        } ?: emptyList()
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        fun measuredWidth(text: String, style: TextStyle): androidx.compose.ui.unit.Dp =
+            with(density) {
+                textMeasurer.measure(AnnotatedString(text), style).size.width.toDp()
             }
-            Spacer(Modifier.weight(1f))
-            weather?.let { w ->
-                Surface(
-                    onClick = { onWeatherPillClick("condition") },
-                    color = androidx.compose.ui.graphics.Color.Transparent
+        val labelColumnWidth = (figureRows.maxOfOrNull { (label, _) ->
+            measuredWidth(label, WeatherFigureLabelStyle)
+        } ?: 0.dp) + 4.dp
+        val valueColumnWidth = (figureRows.maxOfOrNull { (_, value) ->
+            measuredWidth(value, WeatherFigureValueStyle)
+        } ?: 0.dp) + 4.dp
+        // 8.dp of air between the label column and the value column.
+        val figuresWidth = labelColumnWidth + valueColumnWidth + 8.dp
+        val numeralWidth = measuredWidth(shownNumeral ?: "0°", numeralStyle)
+        val chipWidth = bracket?.let {
+            measuredWidth(it.name, MaterialTheme.typography.labelLarge) + 40.dp
+        } ?: 0.dp
+        val chipGap = if (bracket != null) 14.dp else 0.dp
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val figuresFitBeside = figureRows.isEmpty() ||
+                numeralWidth + chipGap + chipWidth + 8.dp + figuresWidth <= maxWidth
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
                 ) {
-                Column(
-                    modifier = Modifier
-                        .width(150.dp)
-                        .padding(top = 4.dp),
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)
-                ) {
-                    HeroSheetFormat.weatherGridRows(w, temperatureUnit).forEach { (label, value) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(19.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = label,
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Default,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    letterSpacing = 1.sp
-                                ),
-                                color = RunWearColors.TextSecondary,
-                                modifier = Modifier.width(68.dp),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                            Text(
-                                text = value,
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Default,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.5.sp,
-                                    fontFeatureSettings = "tnum"
-                                ),
-                                color = RunWearColors.TextPrimary,
-                                modifier = Modifier.weight(1f),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                    Text(
+                        text = shownNumeral ?: "0°",
+                        style = numeralStyle,
+                        color = RunWearColors.TextPrimary
+                    )
+                    if (bracket != null) {
+                        Spacer(Modifier.size(14.dp))
+                        Box(modifier = Modifier.padding(top = 14.dp)) {
+                            TemperatureBracketChip(bracket = bracket)
                         }
                     }
+                    if (figuresFitBeside && figureRows.isNotEmpty()) {
+                        Spacer(Modifier.weight(1f))
+                        WeatherFiguresGrid(
+                            rows = figureRows,
+                            labelColumnWidth = labelColumnWidth,
+                            figuresWidth = figuresWidth,
+                            onClick = { onWeatherPillClick("condition") }
+                        )
+                    }
                 }
+                if (!figuresFitBeside && figureRows.isNotEmpty()) {
+                    WeatherFiguresGrid(
+                        rows = figureRows,
+                        labelColumnWidth = labelColumnWidth,
+                        figuresWidth = figuresWidth,
+                        onClick = { onWeatherPillClick("condition") },
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .padding(top = 6.dp)
+                    )
                 }
             }
         }

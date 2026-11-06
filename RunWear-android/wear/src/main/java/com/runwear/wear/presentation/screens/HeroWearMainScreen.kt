@@ -112,10 +112,26 @@ private fun HeroWearContent(
 ) {
     val pagerState = rememberPagerState(pageCount = { 3 })
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // RW-76 (GEN-6 VQ fix wave, VQ-6.6): the pager indicator owns a
+    // RESERVED SLOT in the layout — a 20.dp band below the pager —
+    // instead of overlaying the pager's bottom edge. As an overlay
+    // (bottom = 20.dp in the old composition) the dots sat on
+    // whatever content line the hero page happened to place at that
+    // height: the "Actual 60°F" line at font scale 1.3 on both round
+    // faces, the "Thu" day line and the "Swipe for N items →" line
+    // at default scale in the DA-13 states. Inside the layout flow
+    // the pager is clipped to its own bounds above the band, so no
+    // content line of any page, at any scroll position, can ever
+    // reach the dots; the dots still advertise the swipe on every
+    // page, and at the band's centre height the round chord is far
+    // wider than the 28.dp dot row, so the dots themselves stay
+    // inside the display.
+    Column(modifier = Modifier.fillMaxSize()) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             beyondViewportPageCount = 0
         ) { page ->
             when (page) {
@@ -141,17 +157,20 @@ private fun HeroWearContent(
             }
         }
 
-        // Page indicator — Addendum 10 supplement (screenshot
-        // 1224): the dots sat at the very bottom edge of the
-        // circle, over the photo. They now sit 20.dp inside the
-        // safe area.
-        PageIndicator(
-            pageCount = 3,
-            currentPage = pagerState.currentPage,
+        // Page indicator — RW-76: rendered in its reserved layout
+        // band below the pager (see the slot note above), never as
+        // an overlay on page content.
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 20.dp)
-        )
+                .fillMaxWidth()
+                .height(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            PageIndicator(
+                pageCount = 3,
+                currentPage = pagerState.currentPage
+            )
+        }
     }
 }
 
@@ -269,7 +288,15 @@ internal fun HeroWeatherPage(
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(
-                    top = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp <= 200) 6.dp else 24.dp,
+                    // RW-76: the large face's top reserve is 16.dp
+                    // (was 24.dp) — the 8.dp returns to the card so
+                    // its Actual line stays inside the pager's
+                    // shortened first screenful at font scale 1.3
+                    // now that the indicator band sits below the
+                    // pager. At 16.dp from the top the large face's
+                    // chord is still far wider than the centred
+                    // condition line, so chord safety is unchanged.
+                    top = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp <= 200) 6.dp else 16.dp,
                     start = 26.dp, end = 26.dp
                 )
             ) {
@@ -322,7 +349,11 @@ internal fun HeroWeatherPage(
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+                    // RW-76: no vertical padding inside the card —
+                    // the 4.dp returns to the card's Actual line so
+                    // it stays inside the pager's first screenful at
+                    // font scale 1.3 (see the indicator-slot note).
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 0.dp)
                 ) {
                     // Temperature with colored accent border/shadow.
                     // Addendum 10: on the smallest round faces the
@@ -387,7 +418,10 @@ internal fun HeroWeatherPage(
                             .clip(RoundedCornerShape(2.dp))
                             .background(tempColor)
                     )
-                    Spacer(Modifier.height(4.dp))
+                    // RW-76: 2.dp (was 4.dp) — see the card-padding
+                    // note above; the bar-to-Actual gap keeps its
+                    // separation at half the reserve.
+                    Spacer(Modifier.height(2.dp))
                     // Addendum 10 supplement (screenshot 1224): the
                     // "Feels like" label rendered but its VALUE never
                     // appeared inside the circle. Label and value now
@@ -419,9 +453,12 @@ internal fun HeroWeatherPage(
             // narrowed bottom chord at the largest font size.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                // 34.dp bottom reserve: the block ends ABOVE the
-                // pagination dots' zone (dots sit 20.dp off the
-                // bottom edge) instead of underneath them.
+                // 34.dp bottom reserve: at the scroll end the block
+                // stops short of the round display's bottom chord
+                // instead of running under the curved edge. (RW-76:
+                // the pager dots no longer share this zone at all —
+                // they live in their own layout band below the
+                // pager; this reserve is chord safety only now.)
                 modifier = Modifier.padding(bottom = 34.dp, start = 26.dp, end = 26.dp)
             ) {
                 val isToday = weather.dateTime.toJavaLocalDateTime().toLocalDate() == LocalDate.now()
