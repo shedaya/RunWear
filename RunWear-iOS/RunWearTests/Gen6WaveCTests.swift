@@ -184,10 +184,19 @@ final class Gen6WaveCTests: XCTestCase {
         // The two unlisted card description lines are gone.
         XCTAssertFalse(fork.contains("Upload one photo of your face"))
         XCTAssertFalse(fork.contains("Keep the photo library RunWear matches"))
-        // The settled Continue, after the honesty line.
-        let honestyIdx = try XCTUnwrap(fork.range(of: "Either way, your recommendations don't change")).lowerBound
-        let continueIdx = try XCTUnwrap(fork.range(of: "Text(\"Continue\")")).lowerBound
-        XCTAssertTrue(honestyIdx < continueIdx, "Continue follows the honesty line")
+        // RW-78 (Nov 6, 2026) SUPERSEDES the RW-52 commit model
+        // this pin originally asserted (a settled "Continue"
+        // below the honesty line committing a selected door):
+        // Sol's device evidence settled against select-then-
+        // commit — the doors act on tap, gen-5's wiring, and no
+        // Continue exists on the fork. The honesty line stands,
+        // now as the fork's closing line. (The full RW-78 wiring
+        // pins live in Gen6RW78RW79Tests.)
+        XCTAssertTrue(fork.contains("Either way, your recommendations don't change"))
+        XCTAssertFalse(fork.contains("Text(\"Continue\")"),
+                       "RW-78: the select-then-commit Continue must not return")
+        XCTAssertFalse(fork.contains("selectedDoor"),
+                       "RW-78: the fork carries no selection state")
         // Fork lines themselves unchanged.
         XCTAssertTrue(fork.contains("Your recommendations, with you in the photo."))
     }
