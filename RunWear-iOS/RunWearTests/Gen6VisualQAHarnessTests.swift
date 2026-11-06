@@ -1,0 +1,492 @@
+import XCTest
+import SwiftUI
+import UIKit
+import WidgetKit
+
+/// GEN-6 VQ harness (iOS): visual-QA executor renders for the
+/// gen-6 assembled candidate (release/gen6-ios). Every render is
+/// a PRODUCTION view composed as production composes it, rendered
+/// with ImageRenderer in the CI simulator and written as a PNG
+/// into `RunWear-iOS/render-artefacts/` (uploaded by ios-tests.yml
+/// as `runwear-ios-renders`). No re-implemented surfaces.
+///
+/// File names follow TEST-PLAN §0:
+/// VQ-<item>-ios-<fixture>-<typescale>.png
+final class Gen6VisualQAHarnessTests: XCTestCase {
+
+    // MARK: - Harness plumbing
+
+    private func artefactsDirectory() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../render-artefacts", isDirectory: true)
+            .standardizedFileURL
+    }
+
+    @MainActor
+    private func writeRender<Content: View>(_ content: Content, size: CGSize, name: String) throws {
+        let renderer = ImageRenderer(content: content.frame(width: size.width, height: size.height))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.uiImage, "render failed for \(name)")
+        XCTAssertTrue(imageHasContent(image), "\(name) rendered blank")
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try XCTUnwrap(image.pngData(), "PNG encoding failed for \(name)")
+        try data.write(to: dir.appendingPathComponent(name))
+        print("VQ-HARNESS wrote \(name) (\(Int(image.size.width))x\(Int(image.size.height))pt)")
+    }
+
+    private func writeText(_ text: String, name: String) throws {
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try text.write(to: dir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+    }
+
+    private func imageHasContent(_ image: UIImage) -> Bool {
+        guard let cg = image.cgImage else { return false }
+        let w = 8, h = 8
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data: &bytes, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var distinct = Set<Int>()
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            distinct.insert(Int(bytes[i]) << 16 | Int(bytes[i + 1]) << 8 | Int(bytes[i + 2]))
+        }
+        return distinct.count > 2
+    }
+
+    // MARK: - VQ-2.1 · Hero numeral at the plan fixtures (108 / -4)
+
+    @MainActor
+    private func renderHeroNumeral(feelsLikeF: Double, type: DynamicTypeSize, name: String) throws {
+        let row = HomeHeroNumeralRow(
+            formattedTemperature: TemperatureUnit.fahrenheit.formatFromFahrenheit(feelsLikeF),
+            bracket: HeroTempBracket.from(feelsLikeTemperature: feelsLikeF),
+            windMph: 11, rainPercent: 40, humidityPercent: 54, uvIndex: 3
+        )
+        .environment(\.dynamicTypeSize, type)
+        .background(AppTheme.background)
+        // Height the composition needs at the sheet's real width
+        // (358 pt = 390 pt phone minus the sheet's 16 pt insets) —
+        // the RW-67 fitting method, so the canvas never clips by
+        // harness choice; any clipping in the PNG is the build's.
+        let probe = ImageRenderer(content: row)
+        probe.scale = 2
+        probe.proposedSize = ProposedViewSize(width: 358, height: nil)
+        let needed = probe.uiImage?.size.height ?? 120
+        try writeRender(row, size: CGSize(width: 358, height: max(needed, 60)), name: name)
+        print("VQ-HARNESS hero \(name): fitting height at 358pt = \(needed)")
+    }
+
+    @MainActor
+    func testVQ21HeroNumeral_PlanFixtures() throws {
+        try renderHeroNumeral(feelsLikeF: 108, type: .large,
+                              name: "VQ-2.1-ios-F-HOT108-default.png")
+        try renderHeroNumeral(feelsLikeF: 108, type: .accessibility5,
+                              name: "VQ-2.1-ios-F-HOT108-max.png")
+        try renderHeroNumeral(feelsLikeF: -4, type: .large,
+                              name: "VQ-2.1-ios-F-COLDNEG-default.png")
+        try renderHeroNumeral(feelsLikeF: -4, type: .accessibility5,
+                              name: "VQ-2.1-ios-F-COLDNEG-max.png")
+    }
+
+    // MARK: - §1 · Hero pill states (production HeroImageView)
+
+    @MainActor
+    private func renderPill(state: HeroPillState, dark: Bool = false, name: String) throws {
+        let hero = HeroImageView(
+            locationName: "New York, NY",
+            temperature: 72, actualTemperature: 75,
+            weatherCondition: .clear,
+            date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+            tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+            fallbackImageUrl: "", aiImageUrl: nil,
+            pillState: state,
+            heightMode: .fill,
+            showsTopControls: false
+        )
+        .preferredColorScheme(dark ? .dark : .light)
+        try writeRender(hero, size: CGSize(width: 390, height: 520), name: name)
+    }
+
+    @MainActor
+    func testVQ1PillStates_Light() throws {
+        // The policy resolves the scaffold serve to silence —
+        // pinned here so the silent render below is the policy's
+        // own output, not a hand-picked state.
+        XCTAssertEqual(
+            HeroPill.resolve(optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
+                             isSubscribed: false, freeGenerationsUsed: 1, freeAllowance: 5,
+                             isScaffoldServe: true),
+            .hidden, "scaffold serve resolves silent per the operative pill table")
+        try renderPill(state: .makingWithUpsell, name: "VQ-1.1-ios-F-FREE-0-default.png")
+        try renderPill(state: .making, name: "VQ-1.2-ios-F-PREM-GEN-default.png")
+        try renderPill(state: .freeLook(used: 3, allowance: 5), name: "VQ-1.3-ios-F-FREE-3-default.png")
+        try renderPill(state: .exhausted(used: 5, allowance: 5), name: "VQ-1.4-ios-F-FREE-5-default.png")
+        try renderPill(state: .premium, name: "VQ-1.5-ios-F-PREM-BANK-default.png")
+        try renderPill(state: .hidden, name: "VQ-1.6-ios-F-SCAFFOLD-default.png")
+    }
+
+    @MainActor
+    func testVQ110PillStates_Dark() throws {
+        try renderPill(state: .makingWithUpsell, dark: true, name: "VQ-1.10-ios-F-FREE-0-dark.png")
+        try renderPill(state: .freeLook(used: 3, allowance: 5), dark: true, name: "VQ-1.10-ios-F-FREE-3-dark.png")
+        try renderPill(state: .exhausted(used: 5, allowance: 5), dark: true, name: "VQ-1.10-ios-F-FREE-5-dark.png")
+    }
+
+    // MARK: - §2.9 / §11.5 · Widget at plan fixtures + missing states
+
+    private func widgetRecord(feelsLikeF: Double, place: String, savedAt: Date) -> WidgetLastGood {
+        WidgetLastGood(
+            feelsLikeF: feelsLikeF,
+            temperatureF: feelsLikeF - 3,
+            conditionText: feelsLikeF >= 100 ? "Sunny" : "Snow",
+            conditionIcon: feelsLikeF >= 100 ? "sun.max.fill" : "snowflake",
+            windMph: 8, humidityPercent: 40, uvIndex: feelsLikeF >= 100 ? 9 : 1,
+            locationName: place,
+            topBaseName: feelsLikeF >= 100 ? "Singlet" : "Thermal Top",
+            layerNames: feelsLikeF >= 100 ? [] : ["Insulated Jacket"],
+            bottomName: feelsLikeF >= 100 ? "Split Shorts" : "Thermal Tights",
+            secondaryNames: feelsLikeF >= 100 ? ["Sunglasses"] : ["Balaclava", "Heavy Gloves"],
+            laterTodayLine: "By 6 PM: 91° · clear",
+            unitIsCelsius: false,
+            savedAt: savedAt
+        )
+    }
+
+    private func widgetCanvas(_ family: WidgetFamily) -> CGSize {
+        switch family {
+        case .systemMedium: return CGSize(width: 364, height: 170)
+        case .systemLarge: return CGSize(width: 364, height: 382)
+        default: return CGSize(width: 170, height: 170)
+        }
+    }
+
+    @MainActor
+    private func renderWidget(entry: RunWearWidgetEntry, family: WidgetFamily,
+                              type: DynamicTypeSize = .large, name: String) throws {
+        let view = ZStack {
+            AppTheme.background
+            RunWearWidgetEntryView(entry: entry, familyOverride: family)
+                .environment(\.dynamicTypeSize, type)
+        }
+        try writeRender(view, size: widgetCanvas(family), name: name)
+    }
+
+    @MainActor
+    func testVQ29Widget_PlanFixtures_LargestType() throws {
+        let now = Date(timeIntervalSince1970: 1_798_000_000)
+        let hot = RunWearWidgetEntry(date: now.addingTimeInterval(600),
+                                     record: widgetRecord(feelsLikeF: 108, place: "Phoenix, AZ", savedAt: now),
+                                     errorCategory: nil)
+        let cold = RunWearWidgetEntry(date: now.addingTimeInterval(600),
+                                      record: widgetRecord(feelsLikeF: -4, place: "Duluth, MN", savedAt: now),
+                                      errorCategory: nil)
+        try renderWidget(entry: hot, family: .systemSmall, type: .accessibility5, name: "VQ-2.9-ios-small-F-HOT108-max.png")
+        try renderWidget(entry: hot, family: .systemMedium, type: .accessibility5, name: "VQ-2.9-ios-medium-F-HOT108-max.png")
+        try renderWidget(entry: hot, family: .systemLarge, type: .accessibility5, name: "VQ-2.9-ios-large-F-HOT108-max.png")
+        try renderWidget(entry: cold, family: .systemSmall, type: .accessibility5, name: "VQ-2.9-ios-small-F-COLDNEG-max.png")
+        try renderWidget(entry: cold, family: .systemMedium, type: .accessibility5, name: "VQ-2.9-ios-medium-F-COLDNEG-max.png")
+        try renderWidget(entry: cold, family: .systemLarge, type: .accessibility5, name: "VQ-2.9-ios-large-F-COLDNEG-max.png")
+    }
+
+    @MainActor
+    func testVQ115Widget_RemainingStates() throws {
+        let savedAt = Date(timeIntervalSince1970: 1_798_000_000)
+        let record = WidgetLastGood(
+            feelsLikeF: 36, temperatureF: 39, conditionText: "Clear",
+            conditionIcon: "sun.max.fill", windMph: 9, humidityPercent: 48, uvIndex: 2,
+            locationName: "New York, NY", topBaseName: "Long Sleeve Shirt",
+            layerNames: ["Light Jacket"], bottomName: "Tights",
+            secondaryNames: ["Running Cap", "Light Gloves"],
+            laterTodayLine: "By 6 PM: drop the Light Jacket · rain 20%",
+            unitIsCelsius: false, savedAt: savedAt)
+        let staleDate = savedAt.addingTimeInterval(2 * 3600 + 5 * 60)
+        try renderWidget(entry: RunWearWidgetEntry(date: staleDate, record: record, errorCategory: nil),
+                         family: .systemMedium, name: "VQ-11.5-ios-medium-stale-default.png")
+        try renderWidget(entry: RunWearWidgetEntry(date: staleDate, record: record, errorCategory: nil),
+                         family: .systemLarge, name: "VQ-11.5-ios-large-stale-default.png")
+        try renderWidget(entry: RunWearWidgetEntry(date: savedAt, record: nil, errorCategory: .weather),
+                         family: .systemSmall, name: "VQ-11.5-ios-small-error-default.png")
+        try renderWidget(entry: RunWearWidgetEntry(date: savedAt, record: nil, errorCategory: .weather),
+                         family: .systemLarge, name: "VQ-11.5-ios-large-error-default.png")
+    }
+
+    // MARK: - §2.8 / §11.3 · watchOS glance at plan fixtures
+
+    @MainActor
+    private func renderWatch(feelsLikeF: Double, type: DynamicTypeSize, name: String) throws {
+        let celsius = (feelsLikeF - 32) * 5 / 9
+        let weather = WeatherData(
+            latitude: 40.7128, longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: celsius, windspeed: 6, weathercode: 0, isDay: 1),
+            hourly: nil, timezone: nil, currentDetail: nil)
+        let vm = WatchViewModel()
+        vm.locationName = "New York, NY"
+        vm.temperatureUnit = .fahrenheit
+        vm.comfortLevel = .neutral
+        vm.currentWeather = weather
+        XCTAssertEqual(vm.displayTemperature, "\(Int(feelsLikeF.rounded()))°",
+                       "glance renders the fixture value")
+        let page = WatchGlancePage(viewModel: vm, weather: weather)
+            .environment(\.dynamicTypeSize, type)
+            .background(Color.black)
+        try writeRender(page, size: CGSize(width: 198, height: 242), name: name)
+        print("VQ-HARNESS watch \(name): displayTemperature = \(vm.displayTemperature)")
+    }
+
+    @MainActor
+    func testVQ28WatchGlance_PlanFixtures() throws {
+        try renderWatch(feelsLikeF: 108, type: .accessibility5, name: "VQ-2.8-ios-watch-F-HOT108-max.png")
+        try renderWatch(feelsLikeF: -4, type: .accessibility5, name: "VQ-2.8-ios-watch-F-COLDNEG-max.png")
+        try renderWatch(feelsLikeF: 108, type: .large, name: "VQ-11.3-ios-watch-F-HOT108-default.png")
+        try renderWatch(feelsLikeF: -4, type: .large, name: "VQ-11.3-ios-watch-F-COLDNEG-default.png")
+    }
+
+    // MARK: - §5.1–5.3 / §2.4 · Picker date axis, to files (RW-66 states)
+
+    private struct PickerFixture {
+        let vm: WeatherViewModel
+        let today: Date
+        let tomorrow: Date
+    }
+
+    @MainActor
+    private func pickerFixture() -> PickerFixture {
+        ManualLocationStore.clear()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        func stamp(_ date: Date, _ hour: Int) -> String {
+            let c = calendar.dateComponents([.year, .month, .day], from: date)
+            return String(format: "%04d-%02d-%02dT%02d:00", c.year!, c.month!, c.day!, hour)
+        }
+        var times: [String] = []
+        var temps: [Double] = []
+        var apparent: [Double] = []
+        for (date, value) in [(today, 18.3), (tomorrow, -1.1)] {
+            for hour in 0..<24 {
+                times.append(stamp(date, hour))
+                temps.append(value)
+                apparent.append(value)
+            }
+        }
+        let hourly = HourlyWeather(
+            time: times, temperature2m: temps, apparentTemperature: apparent,
+            relativeHumidity2m: [Int](repeating: 55, count: 48),
+            precipitationProbability: [Int](repeating: 0, count: 48),
+            precipitation: [Double](repeating: 0, count: 48),
+            rain: [Double](repeating: 0, count: 48),
+            uvIndex: [Double](repeating: 3, count: 48),
+            windSpeed10m: [Double](repeating: 6, count: 48),
+            windDirection10m: [Int](repeating: 90, count: 48),
+            windGusts10m: [Double](repeating: 9, count: 48),
+            weatherCode: [Int](repeating: 0, count: 48))
+        let data = WeatherData(
+            latitude: 40.7128, longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: 18.3, windspeed: 6, weathercode: 0, isDay: 1),
+            hourly: hourly, timezone: TimeZone.current.identifier, currentDetail: nil)
+        let vm = WeatherViewModel()
+        vm.locationName = "New York, NY"
+        vm.temperatureUnit = .fahrenheit
+        vm.comfortLevel = .neutral
+        vm.weatherData = data
+        vm.selectedDate = today
+        vm.selectedHour = 12
+        vm.updateSelectedWeatherSnapshot()
+        vm.makeRecommendation()
+        return PickerFixture(vm: vm, today: today, tomorrow: tomorrow)
+    }
+
+    @MainActor
+    private func timeSheet(vm: WeatherViewModel, label: String, date: Date,
+                           type: DynamicTypeSize = .large) -> some View {
+        TimePickerSheet(
+            chart: vm.dayChart, dateLabel: label, placeName: "New York",
+            unit: .fahrenheit, initialHour: 12, openedInNowState: false, nowHour: nil,
+            isPresented: .constant(true), dateSelection: .constant(date), onDateConfirmed: {})
+            .environment(\.dynamicTypeSize, type)
+            .background(AppTheme.background)
+    }
+
+    @MainActor
+    func testVQ51Picker_DateAxisSeries() throws {
+        let f = pickerFixture()
+        // Before: the time sheet carries the date entry ("Today ›").
+        try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today),
+                        size: CGSize(width: 390, height: 560),
+                        name: "VQ-5.1-ios-picker-before-default.png")
+        try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today, type: .accessibility5),
+                        size: CGSize(width: 390, height: 700),
+                        name: "VQ-2.4-ios-timesheet-F-PARTDAY-max.png")
+        // DATE-CHANGED state: tomorrow selected in the draft,
+        // standing behind Confirm/Cancel (the RW-66 state).
+        let changed = DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
+            .background(AppTheme.background)
+        try writeRender(changed, size: CGSize(width: 390, height: 620),
+                        name: "VQ-5.1-ios-datechanged-F-TOMORROW-default.png")
+        let changedMax = DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .background(AppTheme.background)
+        try writeRender(changedMax, size: CGSize(width: 390, height: 760),
+                        name: "VQ-2.4-ios-datepicker-F-TOMORROW-max.png")
+        // After Confirm: the view model re-solves to the cold day;
+        // the picker reopened on it reads "Tomorrow ›".
+        let mild = f.vm.currentFeelsLike
+        var draft = DatePickerDraft(originalDate: f.vm.selectedDate)
+        draft.select(f.tomorrow)
+        f.vm.selectedDate = draft.commit()
+        f.vm.updateSelectedTime(date: f.vm.selectedDate, hour: f.vm.selectedHour)
+        XCTAssertLessThan(f.vm.currentFeelsLike, mild - 20, "confirm re-solved to the cold day")
+        XCTAssertNotNil(f.vm.recommendation)
+        print("VQ-HARNESS picker after-confirm: feelsLike \(mild) -> \(f.vm.currentFeelsLike)")
+        try writeRender(timeSheet(vm: f.vm, label: "Tomorrow", date: f.tomorrow),
+                        size: CGSize(width: 390, height: 560),
+                        name: "VQ-5.1-ios-picker-afterconfirm-default.png")
+    }
+
+    @MainActor
+    func testVQ53Picker_CancelRestores() throws {
+        let f = pickerFixture()
+        let beforeFeels = f.vm.currentFeelsLike
+        var draft = DatePickerDraft(originalDate: f.vm.selectedDate)
+        draft.select(f.tomorrow)
+        // Cancel: the draft is discarded; the committed selection
+        // is never touched (the RW-66 cancel construction).
+        XCTAssertEqual(f.vm.selectedDate, f.today, "cancel leaves the committed date untouched")
+        XCTAssertEqual(f.vm.currentFeelsLike, beforeFeels, "cancel leaves the solve untouched")
+        try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today),
+                        size: CGSize(width: 390, height: 560),
+                        name: "VQ-5.3-ios-picker-aftercancel-default.png")
+    }
+
+    // MARK: - §6.3 · Day-chart band at collision-prone hours
+
+    @MainActor
+    func testVQ63DayChartBand() throws {
+        ManualLocationStore.clear()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        func stamp(_ date: Date, _ hour: Int) -> String {
+            let c = calendar.dateComponents([.year, .month, .day], from: date)
+            return String(format: "%04d-%02d-%02dT%02d:00", c.year!, c.month!, c.day!, hour)
+        }
+        var times: [String] = []
+        var temps: [Double] = []
+        var apparent: [Double] = []
+        for hour in 0..<24 {  // ramp day: cold dawn -> warm afternoon
+            let v = -2.0 + Double(hour) * 0.9
+            times.append(stamp(today, hour)); temps.append(v); apparent.append(v)
+        }
+        for hour in 0..<24 {
+            times.append(stamp(tomorrow, hour)); temps.append(10); apparent.append(10)
+        }
+        let hourly = HourlyWeather(
+            time: times, temperature2m: temps, apparentTemperature: apparent,
+            relativeHumidity2m: [Int](repeating: 55, count: 48),
+            precipitationProbability: [Int](repeating: 0, count: 48),
+            precipitation: [Double](repeating: 0, count: 48),
+            rain: [Double](repeating: 0, count: 48),
+            uvIndex: [Double](repeating: 3, count: 48),
+            windSpeed10m: [Double](repeating: 6, count: 48),
+            windDirection10m: [Int](repeating: 90, count: 48),
+            windGusts10m: [Double](repeating: 9, count: 48),
+            weatherCode: [Int](repeating: 0, count: 48))
+        let data = WeatherData(
+            latitude: 40.7128, longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: 8, windspeed: 6, weathercode: 0, isDay: 1),
+            hourly: hourly, timezone: TimeZone.current.identifier, currentDetail: nil)
+        let vm = WeatherViewModel()
+        vm.locationName = "New York, NY"
+        vm.temperatureUnit = .fahrenheit
+        vm.comfortLevel = .neutral
+        vm.weatherData = data
+        vm.selectedDate = today
+        vm.selectedHour = 12
+        vm.updateSelectedWeatherSnapshot()
+        vm.makeRecommendation()
+        let chart = try XCTUnwrap(vm.dayChart, "ramp fixture produces a day chart")
+        let bandEnd = DayChartBandView(model: chart, selectedHour: 23, nowHour: 12, unit: .fahrenheit)
+            .background(AppTheme.background)
+        try writeRender(bandEnd, size: CGSize(width: 390, height: 150),
+                        name: "VQ-6.3-ios-band-lasthour-default.png")
+        let bandMid = DayChartBandView(model: chart, selectedHour: 15, nowHour: 12, unit: .fahrenheit)
+            .background(AppTheme.background)
+        try writeRender(bandMid, size: CGSize(width: 390, height: 150),
+                        name: "VQ-6.3-ios-band-changetick-default.png")
+    }
+
+    // MARK: - §1.7 / §2.10 · Mini-bar narration states
+
+    private func collectionEntry(place: String) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: Date(timeIntervalSince1970: 1_798_000_000),
+            placeName: place, feelsLikeF: 57, actualF: 61, condition: "Clear sky",
+            itemNames: ["Short-sleeve shirt", "Running shorts"],
+            itemKeys: ["SHORT_SLEEVE", "SHORTS"],
+            heroImageReference: "", windMph: 6, dayLowF: 55, dayHighF: 63,
+            faceAnchor: nil)
+    }
+
+    @MainActor
+    func testVQ17MiniBarNarration() throws {
+        let miami = WearIveRunMiniBarView(
+            state: .added(place: "Miami, FL", moment: .now),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeRender(miami, size: CGSize(width: 390, height: 110),
+                        name: "VQ-1.7-ios-minibar-added-default.png")
+        let longPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Truth or Consequences, New Mexico")),
+            entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .background(AppTheme.background)
+        try writeRender(longPlace, size: CGSize(width: 390, height: 150),
+                        name: "VQ-2.10-ios-minibar-F-LONGPLACE-max.png")
+    }
+
+    // MARK: - §7.4 · Unified weather detail sheet
+
+    @MainActor
+    func testVQ74WeatherDetailSheet() throws {
+        let all: [WeatherDetailType] = [
+            .feelsLike(value: "72°"), .actual(value: "75°"), .condition(.clear),
+            .wind(speed: 11, direction: "NW", gusts: 18),
+            .humidity(percentage: 54), .precipitation(percentage: 40), .uvIndex(value: 3),
+        ]
+        let sheet = WeatherDetailSheet(
+            detailType: .feelsLike(value: "72°"), allDetails: all,
+            contextLines: ["New York, NY", "Today", "Feels like 72°"],
+            isPresented: .constant(true))
+            .background(AppTheme.background)
+        try writeRender(sheet, size: CGSize(width: 390, height: 700),
+                        name: "VQ-7.4-ios-weatherdetail-default.png")
+    }
+
+    // MARK: - §10.4 · Caption system, transcribed from the production composer
+
+    func testVQ104CaptionsTranscription() throws {
+        let input = ShareCaptionInput(
+            place: "Kansas City, MO", captionMoment: "this morning", isPastChapter: false,
+            feels: 57, actual: 61, low: 55, high: 63, swingF: 8, feelsF: 57,
+            conditionLower: "clear sky",
+            kitNames: ["Short-sleeve shirt", "Running shorts", "Sunglasses"])
+        var out = "VQ-10.4 caption transcription — production ShareCaptionComposer, Kansas City fixture\n"
+        out += "Picker order: \(ShareCaptionComposer.pickerOrder(for: input).map(\.rawValue).joined(separator: ", "))\n"
+        for template in ShareCaptionTemplate.allCases {
+            out += "\n--- \(template.rawValue) ---\n"
+            out += ShareCaptionComposer.caption(for: template, input: input) + "\n"
+        }
+        try writeText(out, name: "VQ-10.4-ios-captions.txt")
+        print(out)
+    }
+}

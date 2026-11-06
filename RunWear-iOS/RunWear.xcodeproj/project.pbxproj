@@ -176,6 +176,9 @@
 		R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67003000000000000000001 /* Gen6RW67RenderTests.swift */; };
 		D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000000000000000000001 /* Gen6WidgetRenderTests.swift */; };
 		D60000000000000000000012 /* Gen6PickerWatchRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */; };
+		VQ2000000000000000000001 /* Gen6VisualQAHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */; };
+		VQ2000000000000000000002 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		VQ2000000000000000000003 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */; };
 		K10002000000000000000003 /* HomeCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000002 /* HomeCompositionTests.swift */; };
 		L10002000000000000000001 /* WearIveRunElementMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = L10001000000000000000001 /* WearIveRunElementMachine.swift */; };
@@ -419,6 +422,7 @@
 		R67003000000000000000001 /* Gen6RW67RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW67RenderTests.swift; sourceTree = "<group>"; };
 		D60000000000000000000001 /* Gen6WidgetRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WidgetRenderTests.swift; sourceTree = "<group>"; };
 		D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6PickerWatchRenderTests.swift; sourceTree = "<group>"; };
+		VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6VisualQAHarnessTests.swift; sourceTree = "<group>"; };
 		G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen4BundledReplenishmentTests.swift; sourceTree = "<group>"; };
 		K10001000000000000000002 /* HomeCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeCompositionTests.swift; sourceTree = "<group>"; };
 		L10001000000000000000001 /* WearIveRunElementMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunElementMachine.swift; sourceTree = "<group>"; };
@@ -721,6 +725,7 @@
 				R67003000000000000000001 /* Gen6RW67RenderTests.swift */,
 				D60000000000000000000001 /* Gen6WidgetRenderTests.swift */,
 				D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */,
+				VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */,
 				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
 				W50001000000000000000002 /* SettingsInventoryTests.swift */,
@@ -1120,6 +1125,9 @@
 				G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */,
 				R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */,
 				D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */,
+				VQ2000000000000000000001 /* Gen6VisualQAHarnessTests.swift in Sources */,
+				VQ2000000000000000000002 /* HeroImageView.swift in Sources */,
+				VQ2000000000000000000003 /* GlassMorphismModifiers.swift in Sources */,
 				D60000000000000000000012 /* Gen6PickerWatchRenderTests.swift in Sources */,
 				G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */,
 				L10002000000000000000002 /* WearIveRunElementMachine.swift in Sources */,
