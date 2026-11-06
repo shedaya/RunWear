@@ -29,7 +29,18 @@ class WaveCGateTest {
         return f.readText()
     }
 
-    // ── RW-52: fork doors + Continue ─────────────────────────────
+    // ── RW-52 → RW-78: fork doors navigate directly ─────────────
+    // The RW-52 select-then-commit pin that stood here ("fork
+    // carries the settled Continue door": doors select into
+    // forkChoice; a separate Continue proceeds) is SUPERSEDED by
+    // RW-78's owner device evidence (Nov 6, 2026): on gen-6 the
+    // tapped "Use my photos" button only marked its card selected
+    // while Continue sat below the fold — the primary call to
+    // action read as a button and behaved as a radio selection.
+    // Re-pinned, not deleted: the doors now navigate directly (the
+    // gen-5 form), and no selection state or Continue may return
+    // to the fork screen. The tap-level behaviour is pinned by
+    // Rw78ForkNavigationTest.
 
     @Test
     fun `fork door B title is the settled Standard photos`() {
@@ -40,11 +51,22 @@ class WaveCGateTest {
     }
 
     @Test
-    fun `fork carries the settled Continue door`() {
+    fun `fork doors navigate directly - no selection state, no Continue`() {
         val source = mainSource("com/runwear/app/makeitme/MakeItMeScreens.kt")
-        assertTrue(source.contains("Text(\"Continue\""))
-        // Doors select; Continue proceeds.
-        assertTrue(source.contains("forkChoice"))
+        val fork = source.substringAfter("fun MakeItMeForkScreen")
+            .substringBefore("private fun ForkOptionCard")
+        // Each door's button carries its navigation handler itself.
+        assertTrue(fork.contains("onClick = onUseMyPhotos"))
+        assertTrue(fork.contains("onClick = onUseStandardPhotos"))
+        // The superseded select-then-commit machinery is gone (the
+        // word Continue survives only inside the RW-78 comment
+        // recording the supersession — the control does not).
+        assertFalse(fork.contains("forkChoice"))
+        assertFalse(fork.contains("Text(\"Continue\""))
+        // …and the supersession is recorded where the next reader
+        // of the RW-52 reading will find it.
+        assertTrue(fork.contains("RW-78"))
+        assertTrue(fork.contains("SUPERSEDES"))
     }
 
     // ── RW-54: outfit header ─────────────────────────────────────

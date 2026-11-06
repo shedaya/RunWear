@@ -332,12 +332,18 @@ Text(
 
             Spacer(Modifier.height(18.dp))
 
-            // GEN-6 WAVE C (RW-52): the fork's doors are a CHOICE,
-            // then the settled "Continue" proceeds with it
-            // (design-spec §10.1, frame 32) — tapping a door selects
-            // it; Continue carries the choice. Neither door proceeds
-            // on its own any more.
-            var forkChoice by remember { mutableStateOf<String?>(null) }
+            // RW-78 (owner device evidence, Nov 6, 2026) — SUPERSEDES
+            // the GEN-6 WAVE C (RW-52) select-then-commit reading
+            // above this fork's doors. On the gen-6 candidate the
+            // RW-52 rewire made each door only SELECT its card (a 2dp
+            // border) while the committing "Continue" sat below the
+            // fold: the owner tapped the full-width green "Use my
+            // photos" button and nothing happened. A button styled
+            // and labelled as the action must itself advance. Both
+            // doors therefore navigate DIRECTLY again — the gen-5
+            // form: "Use my photos" enters the photo path at the tap,
+            // "Use standard photos" settles the stock choice at the
+            // tap. No selection state, no Continue.
 
             // Option A — customize
             ForkOptionCard(
@@ -345,8 +351,7 @@ Text(
                 body = MakeItMeStrings.F4_OPTION_A_BODY,
                 buttonText = MakeItMeStrings.F5_OPTION_A_BUTTON,
                 primary = true,
-                selected = forkChoice == "photos",
-                onClick = { forkChoice = "photos" }
+                onClick = onUseMyPhotos
             )
 
             Spacer(Modifier.height(14.dp))
@@ -357,8 +362,7 @@ Text(
                 body = MakeItMeStrings.F7_OPTION_B_BODY,
                 buttonText = MakeItMeStrings.F8_OPTION_B_BUTTON,
                 primary = false,
-                selected = forkChoice == "standard",
-                onClick = { forkChoice = "standard" }
+                onClick = onUseStandardPhotos
             )
 
             Spacer(Modifier.height(16.dp))
@@ -367,21 +371,6 @@ Text(
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary
             )
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = {
-                    when (forkChoice) {
-                        "photos" -> onUseMyPhotos()
-                        "standard" -> onUseStandardPhotos()
-                    }
-                },
-                enabled = forkChoice != null,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
-            ) {
-                Text("Continue", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -393,17 +382,19 @@ private fun ForkOptionCard(
     body: String,
     buttonText: String,
     primary: Boolean,
-    onClick: () -> Unit,
-    selected: Boolean = false
+    onClick: () -> Unit
 ) {
+    // RW-78: no selection state — the card's button IS the action
+    // (see the fork's doors comment). The border is the resting
+    // card outline only.
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
             .background(RunWearColors.BgCard)
             .border(
-                if (selected) 2.dp else 1.dp,
-                if (selected) RunWearColors.Primary else RunWearColors.TextSecondary.copy(alpha = 0.3f),
+                1.dp,
+                RunWearColors.TextSecondary.copy(alpha = 0.3f),
                 RoundedCornerShape(24.dp)
             )
             .padding(horizontal = 20.dp, vertical = 18.dp)
