@@ -213,6 +213,56 @@ class Gen6VqRenderTest {
     @Test fun heroLongPlaceDefault() =
         sheet("hero-F-LONGPLACE-default", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.0f)
 
+    private fun sheetChanged(name: String, w: WeatherConditions, place: String, fontScale: Float, dark: Boolean = false) {
+        // Changed state: selection is tomorrow 19:00, location-now is today 07:35.
+        val selection = LocalDateTime.of(2026, 10, 31, 19, 0)
+        val now = LocalDateTime.of(2026, 10, 30, 7, 35)
+        hostAndShoot(name, fontScale, dark = dark) {
+            HeroSheetBlock(
+                weather = w,
+                locationName = place,
+                selectedDateTime = selection,
+                locationNow = now,
+                isNowSelected = false,
+                onDateClick = {},
+                onTimeClick = {},
+                onNowClick = {},
+                onWeatherPillClick = {},
+                overlapsPhoto = false,
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                holdNumeral = false,
+                comfortPreference = ComfortPreference.NEUTRAL
+            )
+        }
+    }
+
+    @Test fun heroLongPlaceChangedMax() =
+        sheetChanged("hero-F-LONGPLACE-changed-max", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.3f)
+
+    @Test fun heroLongPlaceChangedDefault() =
+        sheetChanged("hero-F-LONGPLACE-changed-default", weather(60.0, 58.0), "Truth or Consequences, New Mexico", 1.0f)
+
+    @Test fun heroHot108DarkDefault() {
+        val now = LocalDateTime.of(2026, 10, 30, 7, 35)
+        hostAndShoot("hero-F-HOT108-dark-default", 1.0f, dark = true) {
+            HeroSheetBlock(
+                weather = weather(104.0, 108.0),
+                locationName = "Miami, Florida",
+                selectedDateTime = now,
+                locationNow = now,
+                isNowSelected = true,
+                onDateClick = {},
+                onTimeClick = {},
+                onNowClick = {},
+                onWeatherPillClick = {},
+                overlapsPhoto = false,
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                holdNumeral = false,
+                comfortPreference = ComfortPreference.NEUTRAL
+            )
+        }
+    }
+
     @Test fun homeFullHot108Default() {
         val w = weather(104.0, 108.0)
         val outfit = engine.execute(w, ComfortPreference.NEUTRAL)
