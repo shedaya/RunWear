@@ -65,9 +65,13 @@ import org.robolectric.annotation.GraphicsMode
  *   * Date in a 280dp window, Time in a 500dp window: the
  *     hoisted ScrollState reports a real, positive maxValue
  *     (the consumer attached and the content overflows);
- *   * Confirm starts BELOW the window's foot;
+ *   * Confirm is not wholly visible before the scroll
+ *     (semantics bounds are clipped to the viewport — an
+ *     empty rect or a fold sliver; see the second correction
+ *     of record in assertConfirmReachableAfterScroll);
  *   * after scrolling to the foot, Confirm's semantics bounds
- *     sit wholly inside the window — reachable and whole.
+ *     sit wholly inside the window at full height — reachable
+ *     and whole.
  * The discipline side: at font scale 1.0 in a full-height
  * window the same states are NEVER attached — an unattached
  * ScrollState keeps its Int.MAX_VALUE sentinel maxValue, the
@@ -126,7 +130,13 @@ class Rw73DetentRenderTest {
             shadowOf(Looper.getMainLooper()).idle()
             view.measure(wSpec, hSpec)
             view.layout(0, 0, w, h)
-            view.draw(Canvas(Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)))
+            // Recycle each frame: full-screen bitmaps per pump
+            // iteration churn the test JVM's heap (gate
+            // 42288802716 OOM'd the widget render tests later
+            // in the same fork).
+            val frame = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            view.draw(Canvas(frame))
+            frame.recycle()
         }
     }
 
@@ -138,6 +148,7 @@ class Rw73DetentRenderTest {
         view.draw(Canvas(bitmap))
         outDir.mkdirs()
         File(outDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
     }
 
     private fun unmergedRoot(view: View): SemanticsNode {
@@ -222,9 +233,18 @@ class Rw73DetentRenderTest {
         )
         val before = boundsOf(host, "Confirm")
         assertTrue("$sheet: Confirm must be composed", before != null)
+        // Semantics bounds are CLIPPED to the scroll viewport:
+        // a Confirm below the fold reports an empty rect, or a
+        // sliver ending exactly at the window's foot (second
+        // correction of record — gate 42288802716's date failure
+        // read bottom == window exactly, its time failure an
+        // empty 0.0). The provable pre-scroll statement is
+        // therefore "not wholly inside": a whole Confirm is
+        // ~48dp (96px at xhdpi) tall, far above any fold sliver.
+        val wholePx = 80f
         assertTrue(
-            "$sheet: Confirm must start below the window's foot (bottom ${before!!.bottom} > window $windowPx)",
-            before.bottom > windowPx
+            "$sheet: Confirm must NOT be wholly visible before the scroll (bounds $before)",
+            !(before!!.top >= 0f && before.bottom <= windowPx && before.height >= wholePx)
         )
         // Drive the scroll synchronously: dispatchRawDelta is
         // the ScrollState's non-suspending dispatch and clamps
@@ -244,8 +264,9 @@ class Rw73DetentRenderTest {
         assertTrue("$sheet: Confirm must still be composed after the scroll", after != null)
         assertTrue(
             "$sheet: after scrolling to the foot, Confirm must be whole inside the window " +
-                "(top ${after!!.top} >= 0, bottom ${after.bottom} <= window $windowPx)",
-            after.top >= 0f && after.bottom <= windowPx + 1f
+                "(top ${after!!.top} >= 0, bottom ${after.bottom} <= window $windowPx, " +
+                "height ${after.height} >= $wholePx)",
+            after.top >= 0f && after.bottom <= windowPx + 1f && after.height >= wholePx
         )
     }
 
