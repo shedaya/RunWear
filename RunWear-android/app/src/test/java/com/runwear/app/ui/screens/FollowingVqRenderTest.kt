@@ -194,7 +194,7 @@ class FollowingVqRenderTest {
         }
         assertTrue(
             "Home failed line must render verbatim, got: $texts",
-            texts.contains("Your look couldn't be made from these photos — tap to try again")
+            texts.contains(MakeItMeStrings.G5_LOOK_FAILED)
         )
     }
 
