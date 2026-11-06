@@ -173,6 +173,7 @@ jobs:
             RunWear-android/app/build/render-out*/
             RunWear-android/wear/build/wear-screenshots/
             RunWear-android/wear/build/wear-compliance/
+            RunWear-android/wear/build/render-out*/
           if-no-files-found: warn
 
       - name: Upload generated engine fixtures
