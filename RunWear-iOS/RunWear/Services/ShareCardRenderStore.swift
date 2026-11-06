@@ -1,4 +1,5 @@
 import Combine
+import SwiftUI
 import UIKit
 
 // MARK: - Share-card rendering (GEN-3 — the share render fix)
@@ -80,6 +81,11 @@ enum ShareCardCopy {
         case .kit: return "Your Kit Card couldn't be made."
         }
     }
+
+    /// GEN-6 (RW-31 §7): the verify gate's failure line — the
+    /// rendered raster failed inspection, so the system sheet
+    /// never opens and the Studio offers the retry instead.
+    static let verifyFailureLabel = "This card didn't render cleanly — try again"
 }
 
 enum ShareCardState: Equatable {
@@ -100,6 +106,10 @@ final class ShareCardImageCache {
     func image(for key: String) -> UIImage? { images[key] }
 
     func store(_ image: UIImage, for key: String) { images[key] = image }
+
+    /// GEN-6 (RW-31 §7): eviction for the verify gate's retry —
+    /// a raster that failed inspection is never served again.
+    func evict(_ key: String) { images[key] = nil }
 
     /// Test hygiene: the cache is process-wide.
     func removeAll() { images.removeAll() }
@@ -171,6 +181,19 @@ final class ShareCardSlot: ObservableObject {
                 self.state = .failed
             }
         }
+    }
+
+    /// GEN-6 (RW-31 §7): force a fresh render for `key`,
+    /// evicting the cached raster first. The verify gate's retry
+    /// path — a raster that failed inspection must not be
+    /// re-served from the cache or the slot's ready state.
+    func forceRequest(key: String, render: @escaping () async -> UIImage?) {
+        ShareCardImageCache.shared.evict(key)
+        if self.key == key, state == .ready {
+            image = nil
+            state = .idle
+        }
+        request(key: key, render: render)
     }
 
     /// Await the in-flight render, if any (tests; the UI reads
@@ -258,12 +281,12 @@ enum ShareCardCrop {
 // MARK: - Hero preparation for the poster
 
 enum ShareCardImagePrep {
-    /// The poster's longest rendered side: 520 pt at the
-    /// renderer's 3x scale. A hero larger than this is downscaled
-    /// BEFORE the render, off the main actor — rasterizing the
-    /// full-resolution download inside ImageRenderer was part of
-    /// the main-thread cost of the old path.
-    static let posterMaxDimension: CGFloat = 1560
+    /// The poster's longest rendered side. GEN-6 (RW-31 §6):
+    /// the tallest export canvas is Stories at 1920 px, so the
+    /// cap rises from the gen-3 1560 to 2048 — a hero is still
+    /// downscaled BEFORE the render, off the main actor (the
+    /// gen-3 main-thread lesson), but never below export size.
+    static let posterMaxDimension: CGFloat = 2048
 
     static func downscaledForPoster(_ image: UIImage) -> UIImage {
         let size = image.size
@@ -276,5 +299,195 @@ enum ShareCardImagePrep {
         return UIGraphicsImageRenderer(size: target, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
+    }
+}
+
+// MARK: - Anchor-based hero crop (GEN-6, RW-31 §4.3 — share path)
+//
+// The export path's crop: the window is computed from the face
+// anchor by ShareAnchorCrop (ShareStudioModels) for the CHOSEN
+// canvas's aspect — Feed, Stories, and Square each recompute
+// it. This is the share/export path only; the day-view hero's
+// own crop is a separate surface (Wave C's item) and is not
+// touched here.
+
+extension ShareAnchorCrop {
+    /// Crop a UIImage to the anchor-computed window for
+    /// `canvasAspect`. Returns the input when cropping is
+    /// impossible (the poster then renders through HeroPhoto's
+    /// top anchor — never a centre crop).
+    static func anchoredCropped(
+        _ image: UIImage,
+        anchor: ShareFaceAnchor,
+        canvasAspect: CGFloat
+    ) -> UIImage {
+        guard let cg = image.cgImage else { return image }
+        let imageSize = CGSize(width: cg.width, height: cg.height)
+        let rect = cropRect(imageSize: imageSize, anchor: anchor, canvasAspect: canvasAspect)
+        guard rect.width > 0, rect.height > 0,
+              let cropped = cg.cropping(to: rect.integral) else { return image }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
+    }
+}
+
+// MARK: - Export rendering (GEN-6, RW-31 §6/§7.1 — DA-16)
+//
+// The export is RENDERED at exact export pixels from the same
+// composition the Studio previews — never a capture of an
+// on-screen preview at whatever size the sheet happened to be.
+
+enum ShareExportRenderer {
+    /// Render `content` (composed at the format's canvas point
+    /// size) at the format's render scale, landing exactly on
+    /// the export pixel size.
+    @MainActor
+    static func render<Content: View>(_ content: Content, format: ShareExportFormat) -> UIImage? {
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = format.renderScale
+        return renderer.uiImage
+    }
+}
+
+// MARK: - Raster verification (GEN-6, RW-31 §7.3 — DA-16)
+//
+// The finished raster is inspected BEFORE the system sheet
+// opens: it must exist and decode, carry real image data at
+// exactly the export size, sit inside sane brightness/variance
+// bounds, and contain no uniform black or blank region —
+// checked in a grid over the canvas and specifically at the
+// caller's sample points (the face anchor's canvas position,
+// each Kit Card garment tile). A uniform region is the exact
+// signature of the black squares in Sol's gen-5 recording and
+// of a photo that never drew. Any failure means the activity
+// sheet NEVER opens.
+
+enum ShareRasterVerifier {
+    enum Failure: Equatable {
+        case missingImage
+        case wrongSize(expectedWidth: Int, expectedHeight: Int, actualWidth: Int, actualHeight: Int)
+        case degenerateRaster(mean: Double, standardDeviation: Double)
+        case uniformRegion(String)
+    }
+
+    struct Verdict: Equatable {
+        let passed: Bool
+        let failure: Failure?
+        let meanLuminance: Double
+        let standardDeviation: Double
+    }
+
+    /// Sane-bounds constants (0–255 luminance frame).
+    static let minimumGlobalDeviation: Double = 3
+    static let uniformMeanCeiling: Double = 10
+    static let uniformMeanFloor: Double = 245
+    static let uniformDeviationCeiling: Double = 2
+
+    static func verify(
+        image: UIImage?,
+        format: ShareExportFormat,
+        samplePoints: [CGPoint] = []
+    ) -> Verdict {
+        guard let image, let cg = image.cgImage else {
+            return Verdict(passed: false, failure: .missingImage, meanLuminance: 0, standardDeviation: 0)
+        }
+        let expected = format.exportPixelSize
+        guard cg.width == Int(expected.width), cg.height == Int(expected.height) else {
+            return Verdict(
+                passed: false,
+                failure: .wrongSize(
+                    expectedWidth: Int(expected.width), expectedHeight: Int(expected.height),
+                    actualWidth: cg.width, actualHeight: cg.height),
+                meanLuminance: 0, standardDeviation: 0)
+        }
+        // Decode check: the raster must round-trip through an
+        // encoded form — a CGImage that cannot encode is not a
+        // finished image.
+        guard image.pngData() != nil else {
+            return Verdict(passed: false, failure: .missingImage, meanLuminance: 0, standardDeviation: 0)
+        }
+
+        // Sample the raster down to a working grid and read its
+        // luminance statistics.
+        let gridWidth = 48
+        let gridHeight = max(1, Int((Double(gridWidth) * Double(cg.height) / Double(cg.width)).rounded()))
+        var pixels = [UInt8](repeating: 0, count: gridWidth * gridHeight * 4)
+        let context = CGContext(
+            data: &pixels, width: gridWidth, height: gridHeight,
+            bitsPerComponent: 8, bytesPerRow: gridWidth * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        guard let context else {
+            return Verdict(passed: false, failure: .missingImage, meanLuminance: 0, standardDeviation: 0)
+        }
+        context.draw(cg, in: CGRect(x: 0, y: 0, width: gridWidth, height: gridHeight))
+        var luminance = [Double](repeating: 0, count: gridWidth * gridHeight)
+        for index in 0..<(gridWidth * gridHeight) {
+            let offset = index * 4
+            luminance[index] = 0.299 * Double(pixels[offset])
+                + 0.587 * Double(pixels[offset + 1])
+                + 0.114 * Double(pixels[offset + 2])
+        }
+        let mean = luminance.reduce(0, +) / Double(luminance.count)
+        let variance = luminance.reduce(0) { $0 + ($1 - mean) * ($1 - mean) } / Double(luminance.count)
+        let deviation = variance.squareRoot()
+        guard deviation >= minimumGlobalDeviation, mean > 3, mean < 252 else {
+            return Verdict(passed: false, failure: .degenerateRaster(mean: mean, standardDeviation: deviation),
+                           meanLuminance: mean, standardDeviation: deviation)
+        }
+
+        func regionStats(centerX: Int, centerY: Int, radius: Int) -> (mean: Double, deviation: Double) {
+            var values: [Double] = []
+            for y in max(0, centerY - radius)...min(gridHeight - 1, centerY + radius) {
+                for x in max(0, centerX - radius)...min(gridWidth - 1, centerX + radius) {
+                    values.append(luminance[y * gridWidth + x])
+                }
+            }
+            guard !values.isEmpty else { return (mean, deviation) }
+            let regionMean = values.reduce(0, +) / Double(values.count)
+            let regionVariance = values.reduce(0) { $0 + ($1 - regionMean) * ($1 - regionMean) } / Double(values.count)
+            return (regionMean, regionVariance.squareRoot())
+        }
+        /// A uniform BLACK region — the black-square signature
+        /// of Sol's recording and of a photo that never drew on
+        /// the poster's dark ground.
+        func isUniformBlack(_ stats: (mean: Double, deviation: Double)) -> Bool {
+            stats.deviation < uniformDeviationCeiling && stats.mean < uniformMeanCeiling
+        }
+        /// A uniform black OR blank region — used at the
+        /// specific samples, where real content must sit (the
+        /// face, a garment tile). The grid scan does not use
+        /// this form: the Kit Card's cream ground is a designed
+        /// uniform field, and only the global degenerate check
+        /// (above) judges whole-raster blankness.
+        func isUniformDead(_ stats: (mean: Double, deviation: Double)) -> Bool {
+            stats.deviation < uniformDeviationCeiling
+                && (stats.mean < uniformMeanCeiling || stats.mean > uniformMeanFloor)
+        }
+
+        // Grid scan: 6 columns × proportional rows of cells.
+        let cellColumns = 6
+        let cellRows = max(1, gridHeight * cellColumns / gridWidth)
+        for row in 0..<cellRows {
+            for column in 0..<cellColumns {
+                let centerX = (column * 2 + 1) * gridWidth / (cellColumns * 2)
+                let centerY = (row * 2 + 1) * gridHeight / (cellRows * 2)
+                let radius = max(1, gridWidth / (cellColumns * 4))
+                if isUniformBlack(regionStats(centerX: centerX, centerY: centerY, radius: radius)) {
+                    return Verdict(passed: false, failure: .uniformRegion("grid \(column),\(row)"),
+                                   meanLuminance: mean, standardDeviation: deviation)
+                }
+            }
+        }
+        // Specific samples: the face anchor and each garment
+        // tile must hold real image data.
+        for point in samplePoints {
+            let centerX = min(gridWidth - 1, max(0, Int(point.x * CGFloat(gridWidth))))
+            let centerY = min(gridHeight - 1, max(0, Int(point.y * CGFloat(gridHeight))))
+            if isUniformDead(regionStats(centerX: centerX, centerY: centerY, radius: 2)) {
+                return Verdict(passed: false, failure: .uniformRegion("sample \(point)"),
+                               meanLuminance: mean, standardDeviation: deviation)
+            }
+        }
+        return Verdict(passed: true, failure: nil, meanLuminance: mean, standardDeviation: deviation)
     }
 }

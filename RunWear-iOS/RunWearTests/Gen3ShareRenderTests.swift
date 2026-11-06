@@ -213,12 +213,15 @@ final class Gen3ShareRenderTests: XCTestCase {
     func testDownscaleCapsThePosterDimension_andKeepsAspect() {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
-        let big = UIGraphicsImageRenderer(size: CGSize(width: 1000, height: 1700), format: format).image { _ in }
+        // The fixture exceeds the current cap (2048 since gen-6
+        // Wave B — the Stories export is 1920 px tall), so the
+        // downscale must engage and preserve aspect.
+        let big = UIGraphicsImageRenderer(size: CGSize(width: 1400, height: 2400), format: format).image { _ in }
         let out = ShareCardImagePrep.downscaledForPoster(big)
         XCTAssertEqual(max(out.size.width, out.size.height),
                        ShareCardImagePrep.posterMaxDimension, accuracy: 2,
                        "the hero handed to ImageRenderer never exceeds the poster's rendered size")
-        XCTAssertEqual(out.size.width / out.size.height, 1000.0 / 1700.0, accuracy: 0.01,
+        XCTAssertEqual(out.size.width / out.size.height, 1400.0 / 2400.0, accuracy: 0.01,
                        "aspect is preserved")
 
         let small = UIGraphicsImageRenderer(size: CGSize(width: 400, height: 300), format: format).image { _ in }
@@ -248,8 +251,8 @@ final class Gen3ShareRenderTests: XCTestCase {
                       "both cards pre-warm as independent pipelines on appearance")
         XCTAssertTrue(collection.contains("withTaskGroup"),
                       "kit thumbnails fetch concurrently, not in a sequential await loop")
-        XCTAssertTrue(collection.contains("ShareCardSheetView("),
-                      "the sheet is the per-card slot-observing view")
+        XCTAssertTrue(collection.contains("ShareStudioView("),
+                      "GEN-6 (RW-31 Wave B): the sheet is the unified Share Studio, observing the same per-card slots")
         XCTAssertTrue(collection.contains("ShareCardCopy.progressLabel"),
                       "the sheet's working state is the labeled copy")
         XCTAssertTrue(collection.contains("ShareCardImagePrep.downscaledForPoster"),

@@ -943,6 +943,28 @@ struct WeatherOutfitView: View {
     /// another day never writes; the entry carries the current
     /// session's identity, which is what makes the replacement
     /// land on the same entry across place changes.
+    /// GEN-6 (RW-31 Wave B): the selected day's actual-
+    /// temperature range in Fahrenheit, from the hourly
+    /// forecast's own rows for that day — the Swing caption's
+    /// {low}/{high}. Nil when the forecast carries no rows for
+    /// the day (the caption then falls back to the
+    /// actual/feels-like pair, never a fabricated range).
+    private var selectedDayActualRangeF: (low: Double, high: Double)? {
+        guard let hourly = viewModel.weatherData?.hourly,
+              let temperatures = hourly.temperature2m else { return nil }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = Calendar.current.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        let day = formatter.string(from: viewModel.selectedDate)
+        let values = zip(hourly.time, temperatures)
+            .filter { $0.0.hasPrefix(day) }
+            .map { $0.1 * 9 / 5 + 32 }
+        guard let low = values.min(), let high = values.max() else { return nil }
+        return (low, high)
+    }
+
     private func recordTodaysEntry() {
         // GEN-5 (RW-29 FA-2, design-spec §8.2): the settled entry
         // is the NOW entry — browsing or confirming another hour
@@ -1001,7 +1023,15 @@ struct WeatherOutfitView: View {
             heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference() ?? "",
             sessionID: collectionModel.sessionID,
             momentReading: entryMomentReading,
-            lastSavedAt: Date()
+            lastSavedAt: Date(),
+            // GEN-6 (RW-31 Wave B): the share layer's day
+            // record — the moment's wind (the poster's Tier 4
+            // micro-line) and the day's actual-temperature
+            // range (the Swing caption), from the same snapshot
+            // and hourly forecast this settle already holds.
+            windMph: snapshot?.windSpeed,
+            dayLowF: selectedDayActualRangeF?.low,
+            dayHighF: selectedDayActualRangeF?.high
         )
         collectionModel.recordSettled(entry)
     }
