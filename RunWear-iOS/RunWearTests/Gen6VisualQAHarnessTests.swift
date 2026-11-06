@@ -472,6 +472,139 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                         name: "VQ-7.4-ios-weatherdetail-default.png")
     }
 
+    // MARK: - Hosted-window snapshots (glass pill + self-measuring bar)
+    //
+    // The offscreen ImageRenderer drops the hero pill entirely:
+    // the pill's iOS 26 glass chrome (glassPill) does not
+    // composite without a window, and every pill state rendered
+    // byte-identical empty gradients (run 42147399785). The mini
+    // bar likewise measures its own heights through appear/layout
+    // cycles a static snapshot never runs, and rendered blank.
+    // Both surfaces are therefore re-rendered hosted in a real
+    // window with layout + a run-loop settle, then captured via
+    // drawHierarchy — the device compositing path.
+
+    @MainActor
+    private func writeHostedRender<Content: View>(_ content: Content, size: CGSize, name: String) throws {
+        let host = UIHostingController(rootView: content.frame(width: size.width, height: size.height))
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = CGRect(origin: .zero, size: size)
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        let deadline = Date().addingTimeInterval(0.8)
+        while Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 2
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        }
+        XCTAssertTrue(imageHasContent(image), "\(name) rendered blank (hosted)")
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try XCTUnwrap(image.pngData(), "PNG encoding failed for \(name)")
+        try data.write(to: dir.appendingPathComponent(name))
+        print("VQ-HARNESS wrote \(name) (hosted)")
+        window.isHidden = true
+    }
+
+    @MainActor
+    func testVQ1PillStates_Hosted() throws {
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .makingWithUpsell, heightMode: .fill, showsTopControls: false),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.1-ios-F-FREE-0-default.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .making, heightMode: .fill, showsTopControls: false),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.2-ios-F-PREM-GEN-default.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .freeLook(used: 3, allowance: 5), heightMode: .fill, showsTopControls: false),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.3-ios-F-FREE-3-default.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .exhausted(used: 5, allowance: 5), heightMode: .fill, showsTopControls: false),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.4-ios-F-FREE-5-default.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .premium, heightMode: .fill, showsTopControls: false),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.5-ios-F-PREM-BANK-default.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .makingWithUpsell, heightMode: .fill, showsTopControls: false)
+                .preferredColorScheme(.dark),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-0-dark.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .freeLook(used: 3, allowance: 5), heightMode: .fill, showsTopControls: false)
+                .preferredColorScheme(.dark),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-3-dark.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .exhausted(used: 5, allowance: 5), heightMode: .fill, showsTopControls: false)
+                .preferredColorScheme(.dark),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-5-dark.png")
+    }
+
+    @MainActor
+    func testVQ17MiniBarNarration_Hosted() throws {
+        let miami = WearIveRunMiniBarView(
+            state: .added(place: "Miami, FL", moment: .now),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(miami, size: CGSize(width: 390, height: 110),
+                              name: "VQ-1.7-ios-minibar-added-default.png")
+        let longPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Truth or Consequences, New Mexico")),
+            entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .background(AppTheme.background)
+        try writeHostedRender(longPlace, size: CGSize(width: 390, height: 150),
+                              name: "VQ-2.10-ios-minibar-F-LONGPLACE-max.png")
+    }
+
     // MARK: - §10.4 · Caption system, transcribed from the production composer
 
     func testVQ104CaptionsTranscription() throws {
