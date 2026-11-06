@@ -103,6 +103,7 @@ import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.GenderPreference
 import java.time.LocalDate
 import kotlinx.coroutines.launch
+import kotlinx.datetime.toJavaLocalDate
 
 /**
  * Hero-image design MainScreen - PWA v2.9 aligned.
@@ -372,6 +373,16 @@ fun HeroMainScreen(
                 selectedMoment = uiState.selectedDateTime
             )
         ) {
+            // GEN-6 Wave B (RW-31): the day's canonical range for
+            // the share record — the min/max of the hourly
+            // forecast rows FOR the location's current date
+            // (forecast dateTimes are kotlinx, in the location
+            // frame; locationNow is java.time, same frame). Null
+            // when the forecast carries no rows for that date —
+            // never fabricated.
+            val todaysForecast = uiState.hourlyForecast.filter {
+                it.dateTime.date.toJavaLocalDate() == uiState.locationNow.toLocalDate()
+            }
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
                     // GEN-3 (WS-C): stamped with THIS process
@@ -411,7 +422,19 @@ fun HeroMainScreen(
                     isSnowing = weather.isSnowing,
                     isRaining = weather.isRaining,
                     items = outfit.allItems.map { it.displayName },
-                    heroRef = uiState.effectiveHeroUrl
+                    heroRef = uiState.effectiveHeroUrl,
+                    // GEN-6 Wave B (RW-31): the share record's
+                    // canonical fields — the day's actual + wind
+                    // from the same weather frame, the day range
+                    // from the forecast rows above, and the kit's
+                    // garment keys in wearing order. faceAnchor
+                    // stays null: no generation metadata source
+                    // exists yet (the same honest gap as iOS).
+                    actualF = weather.temperatureInFahrenheit,
+                    windMph = weather.windSpeed,
+                    dayLowF = todaysForecast.minOfOrNull { it.temperatureInFahrenheit },
+                    dayHighF = todaysForecast.maxOfOrNull { it.temperatureInFahrenheit },
+                    itemKeys = outfit.allItems.map { it.key }
                 )
             )
         }
@@ -994,7 +1017,8 @@ fun HeroMainScreen(
                 entries = wearIveRunEntries,
                 today = uiState.locationNow.toLocalDate(),
                 onDismiss = { showWearIveRunCollection = false },
-                gender = uiState.genderPreference
+                gender = uiState.genderPreference,
+                temperatureUnit = uiState.temperatureUnit
             )
         }
     }

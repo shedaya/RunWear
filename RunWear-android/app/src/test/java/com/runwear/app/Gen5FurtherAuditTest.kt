@@ -173,10 +173,17 @@ class Gen5FurtherAuditTest {
 
     @Test
     fun `FA-26 - the share tap is guarded and the render has a timeout`() {
-        val screen = source("com/runwear/app/weariverun/WearIveRunCollectionScreen.kt")
-        assertTrue(screen.contains("renderTimedOut"))
-        assertTrue(screen.contains("shareFailed"))
-        assertTrue(screen.contains("Couldn't share this card — try again."))
+        // GEN-6 Wave B reconciliation: the share flow moved from
+        // the collection screen into the Share Studio
+        // (ShareStudioComponents.kt) — the FA-26 guarantees move
+        // with it: a bounded render (20 s timeout onto the honest
+        // failure surface) and a guarded share tap whose failure
+        // surfaces instead of escaping.
+        val studio = source("com/runwear/app/weariverun/ShareStudioComponents.kt")
+        assertTrue(studio.contains("withTimeoutOrNull(20_000)"))
+        assertTrue(studio.contains("RenderTimedOut"))
+        assertTrue(studio.contains("shareFailed"))
+        assertTrue(studio.contains("Couldn't share this card — try again."))
     }
 
     @Test

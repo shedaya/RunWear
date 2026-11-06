@@ -15,9 +15,12 @@ import org.junit.Test
  * WS-6 (D-15/D-16/D-17): the share payload's pins.
  *
  *  - The ONLY payload shape is an image stream (PNG) with the
- *    #RunAnyWear caption pre-filled — for BOTH collection share
- *    choices. A text-only payload is unrepresentable in
- *    [SharePayload]'s spec and absent from the sources.
+ *    caller's composed caption carried verbatim — for BOTH
+ *    collection share choices. A text-only payload is
+ *    unrepresentable in [SharePayload]'s spec and absent from
+ *    the sources. (GEN-6 Wave B: the caption is a parameter
+ *    composed by [ShareCaptionComposer]; the gen-5 bare-hashtag
+ *    constant is retired.)
  *  - The home text share is gone: no `shareOutfit`, no `text/plain`
  *    ACTION_SEND anywhere in the home or collection sources, and
  *    the photo-zone chrome carries no Share button (D-15).
@@ -58,6 +61,10 @@ class ShareArtifactsTest {
         "app/src/main/java/com/runwear/app/weariverun/ShareArtifacts.kt"
     ).readText()
 
+    private fun shareStudioComponents() = sourceFile(
+        "app/src/main/java/com/runwear/app/weariverun/ShareStudioComponents.kt"
+    ).readText()
+
     private fun heroMainScreen() = sourceFile(
         "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt"
     ).readText()
@@ -69,11 +76,27 @@ class ShareArtifactsTest {
     // ---- The payload shape ----
 
     @Test
-    fun `both share choices produce an image payload with the hashtag caption`() {
+    fun `both share choices produce an image payload carrying the composed caption verbatim`() {
+        // GEN-6 Wave B (RW-31): the caption is a payload parameter
+        // now — composed by ShareCaptionComposer from the day
+        // record, carried verbatim for BOTH collection share
+        // choices. The bare-hashtag constant is retired.
+        val caption = ShareCaptionComposer.caption(
+            ShareCaptionTemplate.FEELS_LIKE_STORY,
+            ShareCaptionInput(
+                place = "Kansas City, MO",
+                captionMoment = "this morning",
+                isPastChapter = false,
+                feels = 57, actual = 61, low = 55, high = 63,
+                swingF = 8.0, feelsF = 57.0,
+                conditionLower = "clear sky",
+                kitNames = listOf("Short-sleeve shirt", "Running shorts", "Sunglasses")
+            )
+        )
         for (kind in ShareArtifactKind.entries) {
-            val spec = SharePayload.spec(kind)
+            val spec = SharePayload.spec(kind, caption)
             assertEquals("image/png", spec.mimeType)
-            assertEquals("#RunAnyWear", spec.caption)
+            assertEquals(caption, spec.caption)
             assertTrue(spec.carriesImageStream)
             assertFalse("no text-only payload exists", spec.carriesTextOnlyPayload)
             assertTrue(kind.chooserTitle.contains("Share"))
@@ -88,19 +111,40 @@ class ShareArtifactsTest {
 
     @Test
     fun `the collection share sends the rasterized artifact, never text`() {
+        // GEN-6 Wave B (stage 2): the payload is the OFFSCREEN
+        // EXPORT RENDER, verified before the share fires. The
+        // collection screen opens the Share Studio; the Studio
+        // renders via ShareExportRenderer, gates on
+        // ShareRasterVerifier, and hands the verified bitmap to
+        // ShareArtifacts.share. The gen-5 preview capture
+        // (ShareCaptureHandle / captureBitmap) is deleted — the
+        // share path must not contain it anywhere.
         val screen = collectionScreen()
         assertFalse(screen.contains("fireShare"))
         assertFalse(screen.contains("text/plain"))
-        assertTrue(screen.contains("ShareArtifacts.share"))
-        assertTrue(screen.contains("captureBitmap()"))
+        assertTrue(
+            "the collection's share doors open the Share Studio",
+            screen.contains("ShareStudioSheet")
+        )
+        assertFalse(
+            "the old chooser sheet is deleted",
+            screen.contains("ShareChoiceSheet")
+        )
+        val studio = shareStudioComponents()
+        assertTrue(studio.contains("ShareExportRenderer"))
+        assertTrue(studio.contains("ShareRasterVerifier"))
+        assertTrue(studio.contains("ShareArtifacts.share"))
+        assertFalse(studio.contains("captureBitmap"))
         val artifacts = shareArtifacts()
         assertTrue(artifacts.contains("Intent.EXTRA_STREAM"))
         assertTrue(artifacts.contains("Bitmap.CompressFormat.PNG"))
         assertTrue(artifacts.contains("FileProvider.getUriForFile"))
-        // The capture readback itself (GraphicsLayer.toImageBitmap —
-        // the device path; its Robolectric snapshot fallback is the
-        // library's own limitation, see ShareArtifactRenderTest).
-        assertTrue(artifacts.contains("toImageBitmap()"))
+        assertFalse(
+            "the capture handle is retired from the payload path",
+            artifacts.contains("ShareCaptureHandle")
+        )
+        assertFalse(artifacts.contains("captureBitmap"))
+        assertFalse(artifacts.contains("toImageBitmap()"))
     }
 
     @Test
@@ -117,9 +161,14 @@ class ShareArtifactsTest {
 
     @Test
     fun `the share choice is an M3 sheet on the one full anchor`() {
+        // GEN-6 Wave B: the ONE share surface is the Studio's M3
+        // modal sheet (in ShareStudioComponents.kt); the
+        // collection screen itself hosts no second sheet.
+        val studio = shareStudioComponents()
+        assertTrue(studio.contains("ModalBottomSheet"))
+        assertTrue(studio.contains("skipPartiallyExpanded = true"))
         val screen = collectionScreen()
-        assertTrue(screen.contains("ModalBottomSheet"))
-        assertTrue(screen.contains("skipPartiallyExpanded = true"))
+        assertFalse(screen.contains("ModalBottomSheet"))
         assertFalse(screen.contains("ShareChoiceDialog"))
     }
 

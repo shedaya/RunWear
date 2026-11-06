@@ -5,6 +5,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.net.Uri
 import android.os.Looper
 import android.view.View
@@ -18,11 +20,13 @@ import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.unit.dp
 import com.runwear.app.ui.theme.RunWearTheme
-import com.runwear.shared.domain.model.GenderPreference
+import com.runwear.shared.domain.model.TemperatureUnit
 import java.io.File
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,32 +39,33 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * WS-6 (D-15/D-16): rendered evidence for the share artifacts —
- * the production Morning Poster and Kit Card composables, composed
- * inside the production [ShareCaptureHandle.recordModifier] (so the
- * recording wiring itself is exercised), rasterized the harness way
- * (ComposeView drawn to a bitmap, as WS-1/WS-3 do), and read for:
+ * WS-6 (D-15/D-16) → GEN-6 Wave B (RW-31): rendered evidence for
+ * the share artifacts — the production Morning Poster and Kit
+ * Card composables (the same compositions [ShareExportRenderer]
+ * renders offscreen at export pixels; the exact-pixel export
+ * evidence itself lives in Gen6WaveBRenderTests), composed here
+ * in the harness activity and read for:
  *
  *  - the designed lockup, by semantics: the Poster carries the
- *    script "RunWear" with "#RunAnyWear" and the "Wear I've Run"
- *    foot; the Kit Card carries every item name and "#RunAnyWear";
+ *    script "RunWear" with "#RunAnyWear", its four tiers, and the
+ *    "Wear I've Run · runwear.ai" foot; the Kit Card carries
+ *    every item name under its tile, "#RunAnyWear", the per-tile
+ *    Shop ›, and the Associates disclosure;
  *  - the designed shape, by pixels: the Poster occupies exactly
- *    450 dp of height at 360 wide (the settled 4:5; content above the line, theme ground below)
+ *    450 dp of height at 360 wide (the Feed canvas, 360×450 pt)
  *    and neither artifact is a blank frame;
  *  - the payload end: a raster round-trips through
  *    [ShareArtifacts.writePng] to a decodable PNG of the same
  *    dimensions behind a FileProvider content URI, and the intent
- *    built for it is an image send with the hashtag caption.
+ *    built for it is an image send with the composed caption.
  *
- * Why the bitmap comes from the view draw and not from
- * [ShareCaptureHandle.captureBitmap]: Compose's GraphicsLayer
- * snapshot impl is chosen in the library's own static init —
- * LayerSnapshotV21 under Robolectric (whose software-canvas
- * readback of a RenderNode layer throws), LayerSnapshotV28 on a
- * real device at SDK 28+. The readback is therefore device-only
- * by the library's design; the on-device share-out inspection
- * (what arrives in a receiving app) is WS-9's gate item, stated
- * in the gate report. PNGs land in build/render-out-ws6/.
+ * GEN-6 reconciliation note: the gen-5 harness composed the cards
+ * inside ShareCaptureHandle.recordModifier (the preview-capture
+ * wiring). That path is RETIRED — the export is an offscreen
+ * render, never a capture — so this harness composes the cards
+ * directly, and the Kit Card's gen-5 "Shop this kit →" pin is
+ * dropped: the design (owner amendments, Nov 5 2026) carries
+ * per-tile Shop › links and no card-level shop CTA.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -75,16 +80,29 @@ class ShareArtifactRenderTest {
         isSnowing = false,
         isRaining = false,
         items = listOf("Light Long Sleeve", "Light Tights", "Reflective Gear"),
-        heroRef = null
+        heroRef = null,
+        itemKeys = listOf("LONG_SLEEVE_LIGHT", "LIGHT_TIGHTS", "REFLECTIVE_GEAR")
     )
+
+    private val input = ShareCaptionInput.forEntry(
+        entry, TemperatureUnit.FAHRENHEIT,
+        today = entry.date, now = LocalDateTime.of(2026, 11, 2, 9, 0)
+    )
+    private val posterMoment = ShareMomentResolver.forms(
+        reading = ShareMomentResolver.readingFor(entry),
+        dayStart = entry.date,
+        lastSavedAt = LocalDateTime.of(2026, 11, 2, 7, 0),
+        now = LocalDateTime.of(2026, 11, 2, 9, 0),
+        today = entry.date
+    ).poster
 
     private val outDir: File =
         File(System.getProperty("ws6ShotsDir") ?: "build/render-out-ws6")
 
     private class Rendered(val bitmap: Bitmap, val root: SemanticsNode, val density: Float)
 
-    /** Compose [content] inside the production capture layer; draw the view. */
-    private fun render(name: String, content: @Composable (ShareCaptureHandle) -> Unit): Rendered {
+    /** Compose [content] in the harness activity; draw the view. */
+    private fun render(name: String, content: @Composable () -> Unit): Rendered {
         com.runwear.app.ui.theme.RunWearColors.setActivePalette(
             com.runwear.app.ui.theme.LightPalette
         )
@@ -94,9 +112,8 @@ class ShareArtifactRenderTest {
         activity.setContentView(composeView)
         composeView.setContent {
             RunWearTheme(darkTheme = false) {
-                val capture = rememberShareCapture()
                 Box(modifier = Modifier.width(360.dp)) {
-                    content(capture)
+                    content()
                 }
             }
         }
@@ -165,18 +182,35 @@ class ShareArtifactRenderTest {
         return colors
     }
 
+    /** A two-tone garment render stand-in (real variance, no network). */
+    private fun garmentBitmap(seed: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(120, 120, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.rgb(40 + seed * 20, 45, 50))
+        canvas.drawRect(
+            20f, 20f, 100f, 100f,
+            Paint().apply { color = Color.rgb(180, 170 + seed * 10, 150) }
+        )
+        return bitmap
+    }
+
     @Test
     fun `morning poster renders the designed lockup at the designed shape`() {
-        val rendered = render("poster") { capture ->
-            Box(modifier = capture.recordModifier()) {
-                MorningPoster(entry = entry)
-            }
+        val rendered = render("poster") {
+            MorningPoster(
+                entry = entry,
+                input = input,
+                posterMoment = posterMoment,
+                format = ShareExportFormat.FEED,
+                heroBitmap = null,
+                faceAnchor = ShareFaceAnchor.DEFAULT_UPPER_MIDDLE
+            )
         }
         val bitmap = rendered.bitmap
         val density = rendered.density
         val posterW = (360 * density).toInt()
-        // GEN-5 (FA-21): the settled poster aspect is 4:5 —
-        // at 360dp wide the poster is 450dp tall.
+        // The Feed canvas is 360×450 pt — at 360dp wide the poster
+        // is 450dp tall.
         val posterH = (450 * density).toInt()
         // The designed lockup, read as a user would: script wordmark,
         // hashtag directly in the same artifact, the foot wordmark.
@@ -185,11 +219,13 @@ class ShareArtifactRenderTest {
         assertTrue(texts.any { it == "#RunAnyWear" })
         assertTrue(texts.any { it.contains("Wear I've Run") })
         assertTrue(texts.any { it.contains("41°") })
-        // GEN-5 (RW-29 FA-21): the poster names its moment and
-        // carries the runwear.ai footer line.
+        // The four tiers: place · moment as Tier 2, and the
+        // runwear.ai footer line.
         assertTrue(
-            "poster carries a human moment line",
-            texts.any { it == posterMomentLine(entry) }
+            "poster carries its Tier 2 place · moment line",
+            texts.any {
+                it == SharePosterModel.tier2Line(entry.place, posterMoment)
+            }
         )
         assertTrue(texts.any { it == "runwear.ai" })
         // Non-blank, real variance (scrim gradient, lockup, body).
@@ -197,41 +233,54 @@ class ShareArtifactRenderTest {
             "poster must not be a blank frame",
             distinctColors(bitmap, 0 until posterW, 0 until posterH).size > 8
         )
-        // The designed shape: content ends at the 4:5 height — the center
+        // The designed shape: content ends at the canvas height — the center
         // column just above the line is poster (dark foot gradient),
         // just below it is the theme ground the sheet sits on.
         val above = bitmap.getPixel(posterW / 2, posterH - 4)
         val below = bitmap.getPixel(posterW / 2, posterH + 12)
-        assertTrue("poster content must end at its designed 4:5 height (450dp at 360 wide)", above != below)
+        assertTrue("poster content must end at its designed Feed height (450dp at 360 wide)", above != below)
     }
 
     @Test
-    fun `kit card renders its items, their renders, and the hashtag`() {
-        val rendered = render("kit-card") { capture ->
-            Box(modifier = capture.recordModifier()) {
-                KitCard(entry = entry, gender = GenderPreference.MALE)
-            }
+    fun `poster and kit card expose stable share text`() {
+        val garments: Map<String, Bitmap?> = mapOf(
+            "LONG_SLEEVE_LIGHT" to garmentBitmap(1),
+            "LIGHT_TIGHTS" to garmentBitmap(2),
+            "REFLECTIVE_GEAR" to garmentBitmap(3)
+        )
+        val rendered = render("kit-card") {
+            KitCard(
+                entry = entry,
+                input = input,
+                posterMoment = posterMoment,
+                format = ShareExportFormat.FEED,
+                items = ShareExportRenderer.buildKitTiles(entry, garments, emptySet())
+            )
         }
         val texts = texts(rendered.root)
         for (item in entry.items) {
-            assertTrue("kit card must name $item", texts.any { it == item })
+            assertTrue("kit card must name $item under its tile", texts.any { it == item })
         }
         assertTrue(texts.any { it == "#RunAnyWear" })
         assertTrue(texts.any { it.contains("New York, NY") })
-        // GEN-5 (RW-29 FA-17): the settled Kit Card anatomy —
-        // the Wear I've Run script header, a per-item note, the
-        // single shop CTA, and the Amazon disclosure microcopy.
+        // The settled Kit Card anatomy — the Wear I've Run script
+        // header, a per-item note, the per-tile Shop ›, and the
+        // Amazon Associates disclosure in the footer microcopy.
         assertTrue(
             "kit card carries the Wear I've Run script header",
             texts.any { it.contains("Wear I've Run") }
         )
         assertTrue(
-            "kit card carries the single shop call to action",
+            "kit card carries per-tile Shop links",
+            texts.any { it == "Shop ›" }
+        )
+        assertFalse(
+            "the card-level shop CTA is retired — links are per tile only",
             texts.any { it == "Shop this kit →" }
         )
         assertTrue(
             "kit card carries the Amazon Associates disclosure",
-            texts.any { it.contains("Amazon Associate") }
+            texts.any { it == ShareKitCardModel.DISCLOSURE }
         )
         val notedItems = entry.items.count { name ->
             clothingItemForDisplayName(name)?.description?.isNotBlank() == true &&
@@ -249,10 +298,15 @@ class ShareArtifactRenderTest {
 
     @Test
     fun `a rasterized artifact writes a decodable PNG behind a content URI`() {
-        val rendered = render("poster-png") { capture ->
-            Box(modifier = capture.recordModifier()) {
-                MorningPoster(entry = entry)
-            }
+        val rendered = render("poster-png") {
+            MorningPoster(
+                entry = entry,
+                input = input,
+                posterMoment = posterMoment,
+                format = ShareExportFormat.FEED,
+                heroBitmap = null,
+                faceAnchor = ShareFaceAnchor.DEFAULT_UPPER_MIDDLE
+            )
         }
         val density = rendered.density
         val artifact = Bitmap.createBitmap(
@@ -270,13 +324,29 @@ class ShareArtifactRenderTest {
     }
 
     @Test
-    fun `the share intent is an image send with the hashtag caption`() {
+    fun `the share intent is an image send carrying the composed caption verbatim`() {
+        // GEN-6 Wave B (RW-31): the caption is a payload parameter
+        // now — composed by ShareCaptionComposer from the day
+        // record and carried verbatim as EXTRA_TEXT. The gen-5
+        // bare-hashtag constant is retired.
+        val caption = ShareCaptionComposer.caption(
+            ShareCaptionTemplate.SHORT_CALL,
+            ShareCaptionInput(
+                place = "Kansas City, MO",
+                captionMoment = "this morning",
+                isPastChapter = false,
+                feels = 57, actual = 61, low = 55, high = 63,
+                swingF = 8.0, feelsF = 57.0,
+                conditionLower = "clear sky",
+                kitNames = listOf("Short-sleeve shirt", "Running shorts", "Sunglasses")
+            )
+        )
         val stream = Uri.parse("content://com.runwear.app.fileprovider/share-artifacts/x.png")
-        val intent = ShareArtifacts.buildIntent(stream, ShareArtifactKind.KIT_CARD)
+        val intent = ShareArtifacts.buildIntent(stream, ShareArtifactKind.KIT_CARD, caption)
         assertEquals(Intent.ACTION_SEND, intent.action)
         assertEquals("image/png", intent.type)
         assertEquals(stream, intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java))
-        assertEquals("#RunAnyWear", intent.getStringExtra(Intent.EXTRA_TEXT))
+        assertEquals(caption, intent.getStringExtra(Intent.EXTRA_TEXT))
         assertTrue(intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
     }
 }
