@@ -393,6 +393,22 @@ class MainViewModel @Inject constructor(
     /** The in-flight hero-image resolution (see [resolveHeroImage]). */
     private var heroResolveJob: Job? = null
 
+    /**
+     * RW-79: the personal-look poll's OWN job, launched in
+     * [viewModelScope] — deliberately NOT [heroResolveJob]. The poll
+     * used to run inside the hero resolution's coroutine, so any
+     * superseding resolution (a weather refresh, a place switch, a
+     * personal-layer change) cancelled it mid-wait and Home stranded
+     * on the MAKING pill against a server state that had already
+     * resolved. The poll now survives hero re-resolution; lifecycle
+     * events re-check and re-arm it via [recheckPersonalLookState].
+     * See [ensurePersonalPoll].
+     */
+    private var personalPollJob: Job? = null
+
+    /** The cell [personalPollJob] is currently watching, if any. */
+    private var personalPollCell: String? = null
+
     // GEN-5 (RW-28 Addendum 8, Defect 1): the most recent forecast
     // fill derivation, and the last set actually sent — the fill
     // call re-fires only when the named set changes.
@@ -787,6 +803,13 @@ class MainViewModel @Inject constructor(
      * user explicitly switches back to GPS).
      */
     fun onForegrounded(force: Boolean = false) {
+        // RW-79: foregrounding re-reads the personal look state and
+        // re-arms its poll — FIRST, before every early return below
+        // (the manual-location return, the GPS debounce): a look
+        // that resolved while the app was away must land on Home
+        // within seconds of the user coming back, whichever location
+        // mode they use.
+        recheckPersonalLookState()
         // NOW re-anchor (all location sources): if the hour rolled over while
         // the app was backgrounded, NOW must show the location's new hour.
         if (_uiState.value.isNowSelected) {
@@ -1347,7 +1370,7 @@ class MainViewModel @Inject constructor(
                     )
                 }
                 if (status == com.runwear.app.makeitme.PersonalLookStatus.Making) {
-                    pollForPersonalHero(cell)
+                    ensurePersonalPoll(cell)
                 }
                 return@launch
             }
@@ -1598,7 +1621,7 @@ class MainViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
                 }
-                pollForPersonalHero(cell)
+                ensurePersonalPoll(cell)
                 return
             }
             is com.runwear.app.makeitme.PersonalLookStatus.Failed -> {
@@ -1623,7 +1646,7 @@ class MainViewModel @Inject constructor(
                 outcome is PersonalHeroService.RequestOutcome.AlreadyQueued ||
                 outcome is PersonalHeroService.RequestOutcome.AlreadyAvailable
             if (accepted) {
-                pollForPersonalHero(cell)
+                ensurePersonalPoll(cell)
             } else {
                 // The request itself was refused (the allowance may
                 // have been exhausted server-side between the state
@@ -1654,11 +1677,142 @@ class MainViewModel @Inject constructor(
     }
 
     /**
+     * RW-79: start (or keep) the personal-look poll for [cell] in
+     * its OWN [viewModelScope] job — never inside [heroResolveJob].
+     * A poll already watching this cell is left running (ensuring is
+     * a no-op); a poll watching a different cell is replaced. Hero
+     * re-resolution cannot cancel this job, so the stranded-MAKING
+     * failure mode — a superseding resolution killing the only
+     * look-state reader mid-wait — is closed by construction.
+     */
+    private fun ensurePersonalPoll(cell: String) {
+        if (personalPollJob?.isActive == true && personalPollCell == cell) return
+        personalPollJob?.cancel()
+        personalPollCell = cell
+        personalPollJob = viewModelScope.launch { pollForPersonalHero(cell) }
+    }
+
+    /**
+     * RW-79: apply ONE look-state read for [cell] — the single apply
+     * path shared by the poll and the lifecycle re-check, so the two
+     * can never disagree about what a read means. A personal hit
+     * that is not already the hero swaps in (a person change; the
+     * view cuts) and the delivery is recorded. Returns the poll
+     * outcome when the read RESOLVES the look (delivered / failed),
+     * or null while it is still MAKING.
+     */
+    private suspend fun applyPersonalLookRead(
+        cell: String,
+        look: PersonalHeroRepository.CellLook
+    ): PersonalPollOutcome? {
+        val hit = look.hit
+        if (hit != null && _uiState.value.heroImageUrl != hit.imageUrl) {
+            recordHeroServe(
+                // WS-9 fix: built by the shared production seam
+                // (see the overlay site in resolveHeroImage).
+                HeroServeTelemetry.personalServeRecord(
+                    isScaffold = hit.serveKind ==
+                        com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
+                    requestedCombinationId = cell,
+                    gender = _uiState.value.genderPreference,
+                    trigger = "personal-poll-delivery"
+                )
+            )
+            // RW-16.27: the pool candidate list survives this swap
+            // (it is the refresh rotation; emptying it killed the
+            // refresh control in the personal state), and the
+            // hero's identity is recorded for the personal flag.
+            _uiState.update {
+                it.copy(
+                    heroImageUrl = hit.imageUrl,
+                    heroImageRowId = null,
+                    heroIsPersonal = true,
+                    heroServeKind = hit.serveKind,
+                    heroIsScaffold = hit.serveKind ==
+                        com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
+                    personalHeroId = hit.heroId,
+                    personalHeroImageUrl = hit.imageUrl,
+                    showMakeItMeUpsell = false
+                )
+            }
+            // A verified delivery moves the free counter server-side.
+            personalHeroRepository.refreshFromServer()
+        }
+        return when (look.status) {
+            com.runwear.app.makeitme.PersonalLookStatus.Making -> {
+                _uiState.update {
+                    it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
+                }
+                null
+            }
+            is com.runwear.app.makeitme.PersonalLookStatus.Failed -> {
+                _uiState.update { it.copy(personalLookStatus = look.status) }
+                PersonalPollOutcome.Failed
+            }
+            else -> {
+                // READY (the delivery above, or a hero that was
+                // already serving) or NONE (state cleared): the
+                // look is resolved; settle the status and stop.
+                _uiState.update {
+                    it.copy(
+                        personalLookStatus =
+                            if (hit != null) com.runwear.app.makeitme.PersonalLookStatus.Ready
+                            else look.status
+                    )
+                }
+                PersonalPollOutcome.Delivered
+            }
+        }
+    }
+
+    /**
+     * RW-79: re-read the in-view cell's look state NOW, and if it is
+     * still MAKING make sure the poll is running. Called on app
+     * foreground (from [onForegrounded], ahead of its early
+     * returns), on paywall dismissal, and when the first-look sheet
+     * is left for Home — the events after which a stranded MAKING
+     * pill would otherwise just sit there. Whether a re-read is owed
+     * is [PersonalLookRecheckPolicy]'s call. A terminal state
+     * resolves Home within seconds: success swaps the hero with the
+     * correct pill; failure drops the MAKING pill and the settled
+     * failed line takes its place, with its working Try again.
+     */
+    fun recheckPersonalLookState() {
+        if (!PersonalLookRecheckPolicy.isRecheckOwed(
+                personalLayerEngages =
+                    com.runwear.app.makeitme.MakeItMeAvailability.personalLayerEngages(
+                        personalHeroRepository.state.value.personalizationOn
+                    ),
+                hasCellInView = personalCellInView != null,
+                status = _uiState.value.personalLookStatus
+            )
+        ) return
+        val cell = personalCellInView ?: return
+        viewModelScope.launch {
+            val look = runCatching { personalHeroRepository.cellLookFor(cell) }.getOrNull()
+            if (personalCellInView != cell) return@launch
+            if (look == null) {
+                // The read itself failed: conclude nothing, but the
+                // watch must be running — (re)arm it.
+                ensurePersonalPoll(cell)
+                return@launch
+            }
+            // Still MAKING → the watch must be running too (it may
+            // have reached its horizon while the app was away).
+            if (applyPersonalLookRead(cell, look) == null) ensurePersonalPoll(cell)
+        }
+    }
+
+    /**
      * Poll get-personal-hero while the cell's look is MAKING, until
      * the state resolves (a delivery swaps the hero in; a terminal
-     * failure lands the failed line) or the wait expires (~4.5 min).
-     * On expiry the last server-reported status STAYS on screen —
-     * it is durable state, not a spinner to dismiss (RW-16.16).
+     * failure lands the failed line) or the 20-minute horizon
+     * expires (PersonalPollPolicy). On expiry the last
+     * server-reported status STAYS on screen — it is durable state,
+     * not a spinner to dismiss (RW-16.16) — and the lifecycle
+     * re-check ([recheckPersonalLookState]) re-arms the watch.
+     * RW-79: this loop runs ONLY inside [personalPollJob] (see
+     * [ensurePersonalPoll]), never inside [heroResolveJob].
      */
     private suspend fun pollForPersonalHero(cell: String): PersonalPollOutcome {
         var attempts = 0
@@ -1677,10 +1831,12 @@ class MainViewModel @Inject constructor(
                     // truth re-read, then leave the honest state:
                     // the MAKING pill stays (it IS the server truth)
                     // over the fallback photo — the screen remains
-                    // usable, and foreground / refresh / cell revisit
-                    // re-enters this poll through the overlay path.
-                    // Never the gen-5 silent strand, never a faked
-                    // failure or a cleared-into-silence status.
+                    // usable, and RW-79's lifecycle re-check
+                    // (foreground / paywall dismissal / returning to
+                    // Home) re-reads the state and re-arms this poll;
+                    // a cell revisit re-enters through the overlay
+                    // path. Never the gen-5 silent strand, never a
+                    // faked failure or a cleared-into-silence status.
                     runCatching { personalHeroRepository.refreshFromServer() }
                     PersonalPollOutcome.StillMakingHorizonExpired
                 }
@@ -1690,63 +1846,10 @@ class MainViewModel @Inject constructor(
             if (personalCellInView != cell) return PersonalPollOutcome.CellChanged
             val look = runCatching { personalHeroRepository.cellLookFor(cell) }.getOrNull()
                 ?: continue
-            val hit = look.hit
-            if (hit != null && _uiState.value.heroImageUrl != hit.imageUrl) {
-                recordHeroServe(
-                    // WS-9 fix: built by the shared production seam
-                    // (see the overlay site in resolveHeroImage).
-                    HeroServeTelemetry.personalServeRecord(
-                        isScaffold = hit.serveKind ==
-                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
-                        requestedCombinationId = cell,
-                        gender = _uiState.value.genderPreference,
-                        trigger = "personal-poll-delivery"
-                    )
-                )
-                // RW-16.27: the pool candidate list survives this swap
-                // (it is the refresh rotation; emptying it killed the
-                // refresh control in the personal state), and the
-                // hero's identity is recorded for the personal flag.
-                _uiState.update {
-                    it.copy(
-                        heroImageUrl = hit.imageUrl,
-                        heroImageRowId = null,
-                        heroIsPersonal = true,
-                        heroServeKind = hit.serveKind,
-                        heroIsScaffold = hit.serveKind ==
-                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
-                        personalHeroId = hit.heroId,
-                        personalHeroImageUrl = hit.imageUrl,
-                        showMakeItMeUpsell = false
-                    )
-                }
-                // A verified delivery moves the free counter server-side.
-                personalHeroRepository.refreshFromServer()
-            }
-            when (look.status) {
-                com.runwear.app.makeitme.PersonalLookStatus.Making -> {
-                    _uiState.update {
-                        it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
-                    }
-                }
-                is com.runwear.app.makeitme.PersonalLookStatus.Failed -> {
-                    _uiState.update { it.copy(personalLookStatus = look.status) }
-                    return PersonalPollOutcome.Failed
-                }
-                else -> {
-                    // READY (the delivery above, or a hero that was
-                    // already serving) or NONE (state cleared): the
-                    // look is resolved; settle the status and stop.
-                    _uiState.update {
-                        it.copy(
-                            personalLookStatus =
-                                if (hit != null) com.runwear.app.makeitme.PersonalLookStatus.Ready
-                                else look.status
-                        )
-                    }
-                    return PersonalPollOutcome.Delivered
-                }
-            }
+            // RW-79: one shared apply path for the poll and the
+            // lifecycle re-check (see applyPersonalLookRead).
+            val outcome = applyPersonalLookRead(cell, look)
+            if (outcome != null) return outcome
         }
     }
 
@@ -1780,7 +1883,7 @@ class MainViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.Making)
                     }
-                    pollForPersonalHero(cell)
+                    ensurePersonalPoll(cell)
                 }
                 is PersonalHeroService.RequestOutcome.AlreadyAvailable -> {
                     val look = runCatching {

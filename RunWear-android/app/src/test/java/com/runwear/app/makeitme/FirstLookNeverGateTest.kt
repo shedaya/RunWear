@@ -90,8 +90,16 @@ class FirstLookNeverGateTest {
         val host = mainActivity()
         val momentHost = host.substringAfter("if (showFirstLookMoment)")
             .substringBefore("if (showFirstLookPaywall)")
-        // Dismissal is visibility only.
-        assertTrue(momentHost.contains("onSeeOutfit = { showFirstLookMoment = false }"))
+        // Dismissal cancels NOTHING — the clause this test exists
+        // for stands verbatim. RW-79 re-pins the dismissal's exact
+        // FORM: leaving the sheet now also re-reads the look state
+        // (the sheet is a one-shot presentation; a look that
+        // resolved behind it must land on Home within seconds
+        // instead of stranding the MAKING pill). A re-read is not
+        // a cancellation — the in-flight look is untouched.
+        assertTrue(momentHost.contains("onSeeOutfit = {"))
+        assertTrue(momentHost.contains("showFirstLookMoment = false"))
+        assertTrue(momentHost.contains("viewModel.recheckPersonalLookState()"))
         assertFalse(momentHost.contains("cancel", ignoreCase = true))
         // The moment resolves from the SAME server-mirrored status
         // home renders: uiState.personalLookStatus.

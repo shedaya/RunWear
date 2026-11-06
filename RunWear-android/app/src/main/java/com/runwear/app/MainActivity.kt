@@ -247,6 +247,11 @@ class MainActivity : ComponentActivity() {
                                         viewModel::dismissMakeItMeUpsell,
                                     onRetryPersonalLook =
                                         viewModel::retryPersonalLook,
+                                    // RW-79: dismissing the Home paywall
+                                    // back to Home re-reads the personal
+                                    // look state.
+                                    onPersonalLookRecheck =
+                                        viewModel::recheckPersonalLookState,
                                     // WS-1 (D-03): the Scaffold inset
                                     // reaches the main screen too —
                                     // HeroMainScreen consumes it ONCE
@@ -390,7 +395,15 @@ class MainActivity : ComponentActivity() {
                                     "feels like · ${weather.weatherCode.description}" +
                                     if (items > 0) " · $items items" else ""
                             },
-                            onSeeOutfit = { showFirstLookMoment = false },
+                            // RW-79: leaving the first-look sheet for
+                            // Home re-reads the look state — the sheet
+                            // is a one-shot presentation, and a look
+                            // that resolved behind it must land on
+                            // Home within seconds.
+                            onSeeOutfit = {
+                                showFirstLookMoment = false
+                                viewModel.recheckPersonalLookState()
+                            },
                             onSeePremium = {
                                 showFirstLookMoment = false
                                 showFirstLookPaywall = true
@@ -408,8 +421,17 @@ class MainActivity : ComponentActivity() {
                     if (showFirstLookPaywall) {
                         com.runwear.app.makeitme.MakeItMePaywallSheet(
                             viewModel = makeItMeViewModel,
-                            onDismiss = { showFirstLookPaywall = false },
-                            onPurchased = { showFirstLookPaywall = false }
+                            // RW-79: leaving this paywall — by
+                            // dismissal or by purchase — returns to
+                            // Home, which re-reads the look state.
+                            onDismiss = {
+                                showFirstLookPaywall = false
+                                viewModel.recheckPersonalLookState()
+                            },
+                            onPurchased = {
+                                showFirstLookPaywall = false
+                                viewModel.recheckPersonalLookState()
+                            }
                         )
                     }
 

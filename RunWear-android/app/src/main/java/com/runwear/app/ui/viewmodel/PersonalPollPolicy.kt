@@ -74,6 +74,35 @@ object PersonalPollPolicy {
     }
 }
 
+/**
+ * RW-79: when a lifecycle event owes the in-view cell an immediate
+ * look-state re-read.
+ *
+ * The gen-6 defect: the poll was the ONLY periodic reader of the
+ * look state, and it ran inside the cancellable hero-resolution
+ * job — a superseding resolution killed it, and no event
+ * (foregrounding, paywall dismissal, leaving the first-look sheet)
+ * ever re-read the state or re-armed the poll. A job that failed
+ * terminally at +82 s left Home claiming MAKING for minutes.
+ *
+ * A re-read is owed exactly while Home claims the look is still
+ * MAKING for a cell in view with the personal layer engaged: that
+ * claim is the one a dead or horizon-expired poll strands.
+ * Terminal or absent states are already the truth on screen —
+ * re-reading them would only churn. When the re-read lands, a
+ * terminal state resolves Home within seconds; a still-Making
+ * result (re)arms the poll.
+ */
+object PersonalLookRecheckPolicy {
+
+    fun isRecheckOwed(
+        personalLayerEngages: Boolean,
+        hasCellInView: Boolean,
+        status: PersonalLookStatus
+    ): Boolean =
+        personalLayerEngages && hasCellInView && status == PersonalLookStatus.Making
+}
+
 /** What a MAKING poll concluded — never a silent strand. */
 enum class PersonalPollOutcome {
     /** The cell reached READY inside the horizon. */

@@ -172,6 +172,12 @@ fun HeroMainScreen(
     onDismissMakeItMeUpsell: () -> Unit = {},
     onRetryPersonalLook: () -> Unit = {},
     /**
+     * RW-79: the Home paywall was dismissed back to Home — re-read
+     * the personal look state (and re-arm its poll) so a look that
+     * resolved behind the paywall lands within seconds.
+     */
+    onPersonalLookRecheck: () -> Unit = {},
+    /**
      * WS-1 (D-03): the Scaffold's content padding from MainActivity.
      * Consumed ONCE, here, by the screen's ONE scroll container: its
      * bottom padding lands in the container's contentPadding (so the
@@ -1215,7 +1221,13 @@ fun HeroMainScreen(
     ) {
         com.runwear.app.makeitme.MakeItMePaywallSheet(
             viewModel = makeItMeViewModel,
-            onDismiss = { showMakeItMePaywall = false },
+            onDismiss = {
+                showMakeItMePaywall = false
+                // RW-79: returning to Home from the paywall re-reads
+                // the look state (the purchase path below already
+                // re-resolves the hero wholesale).
+                onPersonalLookRecheck()
+            },
             onPurchased = {
                 showMakeItMePaywall = false
                 onPersonalLayerChanged()
