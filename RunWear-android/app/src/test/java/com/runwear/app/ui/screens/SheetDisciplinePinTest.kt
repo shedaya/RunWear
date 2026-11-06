@@ -304,4 +304,62 @@ class SheetDisciplinePinTest {
             occurrences(mim, "BackHandler") + occurrences(feedback, "BackHandler") >= 2
         )
     }
+
+    // -- RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to
+    // Tank's suggestion; BACKLOG RW-73) --------------------------
+    // The picker sheets' contents were the no-scroll-consumers
+    // exception to the rule above (their roots carried none).
+    // The ruling amends the exception at the LARGEST font scale
+    // only: there the untruncated content outgrows the
+    // ModalBottomSheet window-height cap, so each picker content
+    // carries exactly one vertical scroll consumer, gated on the
+    // shared PickerSheetScrollPolicy; at default and moderate
+    // scales the fixed, scroll-free form stands. The hosts'
+    // skipPartiallyExpanded discipline (pinned above) is
+    // unchanged.
+
+    @Test
+    fun pickerScrollPolicy_permitsScrollOnlyAtTheLargestScale() {
+        assertFalse(PickerSheetScrollPolicy.scrollable(0.85f))
+        assertFalse(PickerSheetScrollPolicy.scrollable(1.0f))
+        assertFalse(PickerSheetScrollPolicy.scrollable(1.15f))
+        assertFalse(PickerSheetScrollPolicy.scrollable(1.29f))
+        assertTrue(PickerSheetScrollPolicy.scrollable(1.3f))
+        assertTrue(PickerSheetScrollPolicy.scrollable(1.5f))
+        assertEquals(1.3f, PickerSheetScrollPolicy.SCROLL_FONT_SCALE, 0.0f)
+    }
+
+    @Test
+    fun datePickerContent_carriesTheOneRuledScrollConsumer() {
+        val src = source("app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt")
+        assertEquals(
+            "the Date content carries exactly one vertical scroll consumer",
+            1, occurrences(src, "Modifier.verticalScroll(scrollState)")
+        )
+        assertTrue(
+            "the Date scroll must be applied through the ruling's gate",
+            src.contains(".then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)")
+        )
+        assertTrue(
+            "the Date gate must read the shared policy",
+            src.contains("PickerSheetScrollPolicy.scrollable(LocalDensity.current.fontScale)")
+        )
+    }
+
+    @Test
+    fun timePickerContent_carriesTheOneRuledScrollConsumer() {
+        val src = source("app/src/main/java/com/runwear/app/ui/screens/DayChartTimePicker.kt")
+        assertEquals(
+            "the Time content carries exactly one vertical scroll consumer",
+            1, occurrences(src, "Modifier.verticalScroll(scrollState)")
+        )
+        assertTrue(
+            "the Time scroll must be applied through the ruling's gate",
+            src.contains(".then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)")
+        )
+        assertTrue(
+            "the Time gate must read the shared policy",
+            src.contains("PickerSheetScrollPolicy.scrollable(LocalDensity.current.fontScale)")
+        )
+    }
 }

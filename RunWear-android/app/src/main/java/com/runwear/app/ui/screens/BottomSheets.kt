@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -164,6 +167,28 @@ fun DatePickerSheet(
 }
 
 /**
+ * RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to Tank's
+ * suggestion; BACKLOG RW-73): the picker sheets' content is a
+ * fixed stack with no vertical scroll consumer at default and
+ * moderate font scales — the settled sheet discipline. At the
+ * LARGEST font scale the untruncated content outgrows the
+ * ModalBottomSheet window-height cap, so — and only there —
+ * the content carries the sheet's one vertical scroll
+ * consumer, keeping Confirm reachable and whole. Both picker
+ * contents (Date here, Time in DayChartTimePicker.kt) gate on
+ * this one policy; the hosts' skipPartiallyExpanded discipline
+ * is unchanged.
+ */
+internal object PickerSheetScrollPolicy {
+    /** The largest font scale in the studio's test matrix (and
+     *  the top of the standard system ladder); scroll is
+     *  permitted at or above it, never below. */
+    const val SCROLL_FONT_SCALE: Float = 1.3f
+
+    fun scrollable(fontScale: Float): Boolean = fontScale >= SCROLL_FONT_SCALE
+}
+
+/**
  * The Choose-a-Day sheet's content, extracted from the
  * ModalBottomSheet host (a ModalBottomSheet cannot be driven to
  * Expanded under Robolectric — the same extraction the location
@@ -175,7 +200,10 @@ internal fun DatePickerSheetContent(
     selectedDate: LocalDate,
     today: LocalDate,
     onSelectDate: (LocalDate) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    // Hoisted so render proofs can drive the ruled scroll
+    // deterministically; the production host uses the default.
+    scrollState: ScrollState = rememberScrollState()
 ) {
     val haptic = LocalHapticFeedback.current
     // RW-53: the draft — sheet-local until Confirm.
@@ -183,10 +211,15 @@ internal fun DatePickerSheetContent(
         mutableStateOf(DatePickerDraftPolicy.open(selectedDate))
     }
     val days = (0 until ForecastHorizonPolicy.BROWSE_DAYS).map { today.plusDays(it.toLong()) }
+    // RW-73 detent ruling: the one vertical scroll consumer,
+    // present only at the largest font scale (see
+    // PickerSheetScrollPolicy).
+    val scrollable = PickerSheetScrollPolicy.scrollable(LocalDensity.current.fontScale)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

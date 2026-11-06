@@ -1,6 +1,9 @@
 package com.runwear.app.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -40,6 +43,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -201,6 +205,50 @@ fun TimePickerSheet(
     onDayClick: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = RunWearColors.Surface,
+        dragHandle = { DayChartDragHandle() }
+    ) {
+        TimePickerSheetContent(
+            model = model,
+            selectedHour = selectedHour,
+            locationNow = locationNow,
+            isNowSelected = isNowSelected,
+            temperatureUnit = temperatureUnit,
+            locationName = locationName,
+            onConfirm = onConfirm,
+            onDismiss = onDismiss,
+            onDayClick = onDayClick
+        )
+    }
+}
+
+/**
+ * The Choose-a-Time sheet's content, extracted from the
+ * ModalBottomSheet host (a ModalBottomSheet cannot be driven
+ * to Expanded under Robolectric — the same extraction the
+ * Choose-a-Day content uses in BottomSheets.kt) so the RW-73
+ * detent-ruling render proofs can drive the production
+ * content directly.
+ */
+@Composable
+internal fun TimePickerSheetContent(
+    model: DayChartModel,
+    selectedHour: Int,
+    locationNow: LocalDateTime,
+    isNowSelected: Boolean,
+    temperatureUnit: TemperatureUnit,
+    locationName: String,
+    onConfirm: (TimePickerDraftPolicy.Confirm) -> Unit,
+    onDismiss: () -> Unit,
+    onDayClick: () -> Unit = {},
+    // Hoisted so render proofs can drive the ruled scroll
+    // deterministically; the production host uses the default.
+    scrollState: ScrollState = rememberScrollState()
+) {
     val haptic = LocalHapticFeedback.current
     val isToday = model.date == locationNow.toLocalDate()
     var session by remember(model.date, selectedHour, isNowSelected) {
@@ -233,15 +281,15 @@ fun TimePickerSheet(
     val high = model.high
     val showNowLine = isToday && low != null
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = RunWearColors.Surface,
-        dragHandle = { DayChartDragHandle() }
-    ) {
+    // RW-73 detent ruling: the one vertical scroll consumer,
+    // present only at the largest font scale (see
+    // PickerSheetScrollPolicy in BottomSheets.kt).
+    val scrollable = PickerSheetScrollPolicy.scrollable(LocalDensity.current.fontScale)
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
                 .padding(horizontal = 24.dp)
                 .padding(bottom = 24.dp)
         ) {
@@ -581,7 +629,6 @@ fun TimePickerSheet(
             }
             Spacer(Modifier.height(8.dp))
         }
-    }
 }
 
 /** The sheet's drag handle (BottomSheets' own handle is file-private). */
