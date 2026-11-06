@@ -160,7 +160,7 @@ class OnboardingSequenceTest {
         )
         val promiseStep = region(screen, "private fun PromiseStep", "private fun PromiseRow")
         assertTrue(promiseStep.contains("OnboardingCopy.WELCOME_POINTS"))
-        val setupStep = region(screen, "private fun PreferencesStep", "private fun LocationStep")
+        val setupStep = region(screen, "internal fun PreferencesStep", "private fun LocationStep")
         assertFalse(setupStep.contains("WELCOME_POINTS"))
         assertFalse(setupStep.contains("FREE_LOOKS_PROMISE"))
         assertFalse(setupStep.contains("Make It Me"))

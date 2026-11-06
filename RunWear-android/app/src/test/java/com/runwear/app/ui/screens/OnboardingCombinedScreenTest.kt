@@ -13,7 +13,8 @@ import org.junit.Test
  * (temperature unit, fit preference, body temperature) form ONE
  * COMBINED SCREEN with binding composition, wording, and options:
  * headline "Make it yours", the lede verbatim, temperature in full
- * words, ALL THREE fit options, and the 5-stop body-temperature
+ * words, the fit options per RW-81 (exactly two, neutral as the
+ * unselected state), and the 5-stop body-temperature
  * slider with named ends. The substantive steps (location, fork,
  * consent, photos) stay one step per screen — the sequence model
  * keeps exactly one PREFERENCES step (count unchanged by the
@@ -45,7 +46,7 @@ class OnboardingCombinedScreenTest {
 
     private fun preferencesStep(): String {
         val s = screen()
-        val start = s.indexOf("private fun PreferencesStep")
+        val start = s.indexOf("internal fun PreferencesStep")
         val end = s.indexOf("private fun LocationStep")
         assertTrue(start in 0 until end)
         return s.substring(start, end)
@@ -71,17 +72,65 @@ class OnboardingCombinedScreenTest {
     }
 
     @Test
-    fun `fit carries all three options including No preference`() {
+    fun `fit carries exactly two options and neutral is the unselected state`() {
+        // RW-81 re-pin (Sol's ruling, Nov 6, 2026; supersedes the
+        // Nov 4 three-option pin): exactly two labelled options,
+        // and NO third "No preference" / neither label anywhere.
         assertEquals("Men's", OnboardingCopy.FIT_OPTION_MENS)
         assertEquals("Women's", OnboardingCopy.FIT_OPTION_WOMENS)
-        assertEquals("No preference", OnboardingCopy.FIT_OPTION_NO_PREFERENCE)
         val step = preferencesStep()
         assertTrue(step.contains("OnboardingCopy.FIT_OPTION_MENS"))
         assertTrue(step.contains("OnboardingCopy.FIT_OPTION_WOMENS"))
-        assertTrue(step.contains("OnboardingCopy.FIT_OPTION_NO_PREFERENCE"))
-        // No preference selects UNISEX directly — no deselect toggle.
-        assertTrue(step.contains("GenderPreference.UNISEX -> 2"))
-        assertFalse(step.contains("Neither selected"))
+        assertFalse(step.contains("FIT_OPTION_NO_PREFERENCE"))
+        assertFalse(step.contains("No preference"))
+        assertFalse(step.contains("Neither"))
+        // A stored UNISEX (neutral) renders as NOTHING selected:
+        // the segmented control's selectedIndex is -1, and a fresh
+        // install starts there.
+        assertTrue(step.contains("GenderPreference.UNISEX -> -1"))
+        // The tap rule is the shared RW-81 toggle: tapping the
+        // selected option deselects it back to UNISEX; tapping an
+        // unselected option selects it.
+        assertTrue(step.contains("fitPreferenceAfterTap"))
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.UNISEX,
+            fitPreferenceAfterTap(
+                com.runwear.shared.domain.model.GenderPreference.MALE,
+                com.runwear.shared.domain.model.GenderPreference.MALE
+            )
+        )
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.UNISEX,
+            fitPreferenceAfterTap(
+                com.runwear.shared.domain.model.GenderPreference.FEMALE,
+                com.runwear.shared.domain.model.GenderPreference.FEMALE
+            )
+        )
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.MALE,
+            fitPreferenceAfterTap(
+                com.runwear.shared.domain.model.GenderPreference.UNISEX,
+                com.runwear.shared.domain.model.GenderPreference.MALE
+            )
+        )
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.FEMALE,
+            fitPreferenceAfterTap(
+                com.runwear.shared.domain.model.GenderPreference.MALE,
+                com.runwear.shared.domain.model.GenderPreference.FEMALE
+            )
+        )
+    }
+
+    @Test
+    fun `onboarding proceeds with no fit selection`() {
+        // RW-81: neutral is a complete, proceedable state — the
+        // step's Continue is wired straight to onContinue, with no
+        // enabled-gate anywhere in the step (a fresh install starts
+        // neutral and can proceed without touching the fit control).
+        val step = preferencesStep()
+        assertTrue(step.contains("onClick = onContinue"))
+        assertFalse(step.contains("enabled"))
     }
 
     @Test

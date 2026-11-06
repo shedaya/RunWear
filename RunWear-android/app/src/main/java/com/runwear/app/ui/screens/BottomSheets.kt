@@ -525,9 +525,9 @@ fun SettingsSheetContent(
                             color = RunWearColors.TextPrimary
                         )
                         Text(
-                            // GEN-5 (RW-28 item 24): "No preference"
-                            // is an explicit third choice now, not a
-                            // tap-again deselect gesture.
+                            // RW-81 (Nov 6, 2026): exactly two fit
+                            // options; neutral is the unselected
+                            // state, not a third labelled choice.
                             text = "Whose fit should your recommendations shop for?",
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
@@ -1008,19 +1008,34 @@ private fun ComfortSelector(
 }
 
 /**
- * GEN-5 (RW-28 item 24 + Addendum 8 item 3): the Settings fit
- * options — ALL THREE, full-word labels, in the onboarding order.
- * "No preference" is a real selectable value (UNISEX), not a
- * tap-again-to-deselect gesture, so a stored No preference shows
- * SELECTED here and survives the round trip (the gen-4 Settings
- * control offered Male/Female only and silently unexpressed it —
- * the N-8 root cause, device-proven on the gen-4 build).
+ * RW-81 (Sol's ruling, Nov 6, 2026; supersedes RW-28 item 24 and
+ * the Nov 4 three-option ruling): the Settings fit options —
+ * exactly TWO, full-word labels, in the onboarding order. Neutral
+ * (UNISEX) is NOT a labelled option: it is the state where neither
+ * button is selected, reached by tapping the selected button
+ * again, and it is also the fresh-install state. A stored UNISEX
+ * therefore shows NOTHING selected here — the value IS expressed,
+ * as the unselected state itself (the gen-4 N-8 failure was a
+ * control with no neutral state at all, not this).
  */
 internal val FitPreferenceOptions: List<Pair<String, GenderPreference>> = listOf(
     "Men's" to GenderPreference.MALE,
-    "Women's" to GenderPreference.FEMALE,
-    "No preference" to GenderPreference.UNISEX
+    "Women's" to GenderPreference.FEMALE
 )
+
+/**
+ * RW-81: the tap rule shared by every fit-preference seat
+ * (onboarding's segmented control and Settings' toggle): tapping
+ * an unselected option selects it; tapping the currently selected
+ * option deselects it, returning the preference to neutral
+ * (UNISEX). The stored data model is unchanged — UNISEX remains
+ * the neutral value and the repository default.
+ */
+internal fun fitPreferenceAfterTap(
+    current: GenderPreference,
+    tapped: GenderPreference
+): GenderPreference =
+    if (current == tapped) GenderPreference.UNISEX else tapped
 
 @Composable
 private fun GenderToggleSettings(
@@ -1046,10 +1061,11 @@ private fun GenderToggleSettings(
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isSelected) RunWearColors.Primary else Color.Transparent)
                     .clickable {
-                        if (!isSelected) {
-                            haptic.performHapticFeedback(HapticSpec.SELECTION)
-                        }
-                        onSelect(pref)
+                        // RW-81: every tap changes the value
+                        // (select, switch, or deselect-to-neutral),
+                        // so the selection tick fires on every tap.
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        onSelect(fitPreferenceAfterTap(selected, pref))
                     }
                     .padding(vertical = 12.dp, horizontal = 2.dp),
                 contentAlignment = Alignment.Center

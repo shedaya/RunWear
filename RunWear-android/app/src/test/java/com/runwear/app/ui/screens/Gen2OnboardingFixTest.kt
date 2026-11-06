@@ -24,13 +24,14 @@ import org.junit.Test
  * exists anywhere in Android's onboarding screen. These pins record
  * that so it cannot silently regress into a collapsed control.
  *
- * OPTION SET SUPERSEDED by Sol's onboarding ruling (Nov 4): the fit
- * control now carries ALL THREE options explicitly — "Men's" /
- * "Women's" / "No preference" (the design frame's dropped third
- * option is not followed; the old toggle-to-deselect is gone on
- * this screen). The direct-visibility principle above is unchanged
- * and strengthened. Full composition pins live in
- * OnboardingCombinedScreenTest.
+ * OPTION SET HISTORY: the Nov 4 ruling carried three explicit
+ * options ("Men's" / "Women's" / "No preference"); RW-81 (Sol's
+ * ruling, Nov 6, 2026) supersedes it — the fit control carries
+ * exactly TWO options, and neutral is the unselected state reached
+ * by tapping the selected option again (the toggle-to-deselect
+ * returns, as the owner's original design). The
+ * direct-visibility principle above is unchanged. Full
+ * composition pins live in OnboardingCombinedScreenTest.
  */
 class Gen2OnboardingFixTest {
 
@@ -106,11 +107,14 @@ class Gen2OnboardingFixTest {
         assertTrue(fitBlock.contains("TokenSegmentedControl"))
         assertTrue(fitBlock.contains("OnboardingCopy.FIT_OPTION_MENS"))
         assertTrue(fitBlock.contains("OnboardingCopy.FIT_OPTION_WOMENS"))
-        assertTrue(fitBlock.contains("OnboardingCopy.FIT_OPTION_NO_PREFERENCE"))
+        // RW-81 re-pin: no third labelled option, and the shared
+        // tap-again-to-neutral toggle drives the control.
+        assertFalse(fitBlock.contains("FIT_OPTION_NO_PREFERENCE"))
+        assertTrue(fitBlock.contains("fitPreferenceAfterTap"))
         // The step is the GROUPED step: Temperature and Body
         // temperature sections share it (the iOS one-question-per-
         // screen structure that motivated W-22 is not Android's).
-        val stepStart = screen.indexOf("private fun PreferencesStep")
+        val stepStart = screen.indexOf("internal fun PreferencesStep")
         val stepEnd = screen.indexOf("private fun LocationStep")
         assertTrue(stepStart in 0 until stepEnd)
         val step = screen.substring(stepStart, stepEnd)

@@ -10,6 +10,7 @@ import java.io.File
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import com.runwear.app.ui.screens.FitPreferenceOptions
+import com.runwear.app.ui.screens.fitPreferenceAfterTap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -295,21 +296,46 @@ class Gen5FurtherAuditTest {
     }
 
     @Test
-    fun `A8 item 3 - settings fit preference carries all three options`() {
+    fun `A8 item 3 - settings fit preference carries exactly two options (RW-81)`() {
+        // RW-81 re-pin (Sol's ruling, Nov 6, 2026; supersedes the
+        // three-option pin): exactly two labelled options, and
+        // UNISEX is NOT among them — neutral is the unselected
+        // state, reached by tapping the selected option again.
         assertEquals(
-            listOf("Men's", "Women's", "No preference"),
+            listOf("Men's", "Women's"),
             FitPreferenceOptions.map { it.first }
         )
         assertEquals(
             listOf(
                 com.runwear.shared.domain.model.GenderPreference.MALE,
-                com.runwear.shared.domain.model.GenderPreference.FEMALE,
-                com.runwear.shared.domain.model.GenderPreference.UNISEX
+                com.runwear.shared.domain.model.GenderPreference.FEMALE
             ),
             FitPreferenceOptions.map { it.second }
         )
+        assertFalse(
+            FitPreferenceOptions.any {
+                it.second == com.runwear.shared.domain.model.GenderPreference.UNISEX
+            }
+        )
+        // The tap rule: selected again → neutral; unselected → it.
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.UNISEX,
+            fitPreferenceAfterTap(
+                com.runwear.shared.domain.model.GenderPreference.MALE,
+                com.runwear.shared.domain.model.GenderPreference.MALE
+            )
+        )
+        assertEquals(
+            com.runwear.shared.domain.model.GenderPreference.FEMALE,
+            fitPreferenceAfterTap(
+                com.runwear.shared.domain.model.GenderPreference.UNISEX,
+                com.runwear.shared.domain.model.GenderPreference.FEMALE
+            )
+        )
         // The stored value round-trips: UNISEX is ordinal 2, the
-        // repository's default when nothing is stored.
+        // repository's default when nothing is stored — the data
+        // model is unchanged by RW-81, so a stored UNISEX still
+        // loads, and now displays as nothing selected.
         assertEquals(
             com.runwear.shared.domain.model.GenderPreference.UNISEX,
             com.runwear.shared.domain.model.GenderPreference.entries[2]

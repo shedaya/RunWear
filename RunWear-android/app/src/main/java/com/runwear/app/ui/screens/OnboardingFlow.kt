@@ -89,15 +89,16 @@ object OnboardingCopy {
     const val FIT_SUB = "Whose fit should the outfits follow?"
     const val BODY_TITLE = "Body temperature"
     const val BODY_SUB = "Do you get cold easily, or overheat quickly?"
-    // Combined-screen option fidelity (Sol's onboarding ruling,
-    // Nov 4): temperature in FULL WORDS, all three fit options
-    // (the design frame's dropped "No preference" is NOT followed),
-    // and the body-temperature slider's end labels.
+    // Combined-screen option fidelity: temperature in FULL WORDS,
+    // and the body-temperature slider's end labels. Fit carries
+    // exactly TWO options (RW-81, Sol's ruling, Nov 6, 2026,
+    // superseding Nov 4): neutral is not a labelled option — it is
+    // the state where neither button is selected (tap the selected
+    // button again to return to it), so there is no third string.
     const val TEMP_OPTION_FAHRENHEIT = "Fahrenheit"
     const val TEMP_OPTION_CELSIUS = "Celsius"
     const val FIT_OPTION_MENS = "Men's"
     const val FIT_OPTION_WOMENS = "Women's"
-    const val FIT_OPTION_NO_PREFERENCE = "No preference"
     const val BODY_SLIDER_MIN_LABEL = "Runs Cold"
     const val BODY_SLIDER_MAX_LABEL = "Runs Warm"
     const val SETUP_CTA = "Continue"

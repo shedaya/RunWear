@@ -282,9 +282,17 @@ private fun PromiseRow(point: OnboardingCopy.WelcomePoint) {
  * coded decisions as segmented controls on theme tokens. NO
  * free-looks promise, no Make It Me vocabulary — the feature has
  * not been introduced yet (A1).
+ *
+ * internal rather than private so the RW-81 render harness can
+ * compose this production step directly: the step machine's
+ * AnimatedContent transition does not complete under Robolectric
+ * in CI, so the harness cannot reach this step by driving the
+ * full screen there (CI runs 42235360057 / 42241604548 /
+ * 42245713753 — the screen stayed on the promise step after the
+ * advance was invoked). Visibility only; no behaviour change.
  */
 @Composable
-private fun PreferencesStep(
+internal fun PreferencesStep(
     temperatureUnit: TemperatureUnit,
     genderPreference: GenderPreference,
     comfortPreference: ComfortPreference,
@@ -351,28 +359,31 @@ private fun PreferencesStep(
             title = OnboardingCopy.FIT_TITLE,
             sublabel = OnboardingCopy.FIT_SUB
         ) {
-            // Sol's onboarding ruling (Nov 4): ALL THREE options are
-            // explicit — "No preference" is a real choice (the design
-            // frame's two-option version is not followed), replacing
-            // the old toggle-to-deselect behaviour on this screen.
+            // RW-81 (Sol's ruling, Nov 6, 2026; supersedes the
+            // Nov 4 three-option ruling): exactly TWO options.
+            // Neutral is not a third option — it is the state where
+            // neither button is selected (selectedIndex -1, the
+            // fresh-install UNISEX state), reached by tapping the
+            // selected button again (fitPreferenceAfterTap). The
+            // pinned Continue below never requires a fit selection.
             TokenSegmentedControl(
                 options = listOf(
                     OnboardingCopy.FIT_OPTION_MENS,
-                    OnboardingCopy.FIT_OPTION_WOMENS,
-                    OnboardingCopy.FIT_OPTION_NO_PREFERENCE
+                    OnboardingCopy.FIT_OPTION_WOMENS
                 ),
                 selectedIndex = when (genderPreference) {
                     GenderPreference.MALE -> 0
                     GenderPreference.FEMALE -> 1
-                    GenderPreference.UNISEX -> 2
+                    GenderPreference.UNISEX -> -1
                 },
                 onSelect = { index ->
+                    val tapped = if (index == 0) {
+                        GenderPreference.MALE
+                    } else {
+                        GenderPreference.FEMALE
+                    }
                     onGenderPreferenceChange(
-                        when (index) {
-                            0 -> GenderPreference.MALE
-                            1 -> GenderPreference.FEMALE
-                            else -> GenderPreference.UNISEX
-                        }
+                        fitPreferenceAfterTap(genderPreference, tapped)
                     )
                 }
             )
