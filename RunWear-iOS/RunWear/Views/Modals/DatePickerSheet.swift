@@ -119,7 +119,7 @@ struct DatePickerSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             // Date grid (draft selection)
-            dateGrid
+            dateGrid(size: size)
 
             // GEN-6 (RW-66): the settled Confirm gate, in the
             // time picker's own button treatment — nothing
@@ -167,7 +167,7 @@ struct DatePickerSheet: View {
 
     // MARK: - Date Grid
 
-    private var dateGrid: some View {
+    private func dateGrid(size: DynamicTypeSize) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: gridColumnCount(for: size)), spacing: 12) {
             ForEach(Array(availableDates.enumerated()), id: \.offset) { index, date in
                 DateButton(
