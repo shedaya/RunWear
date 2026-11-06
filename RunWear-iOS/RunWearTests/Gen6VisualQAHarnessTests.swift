@@ -683,6 +683,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         return image
     }
 
+    @MainActor
     func testVQFix_PillStates_Hosted() throws {
         func pill(_ state: HeroPillState, _ name: String) throws {
             // Hosted capture in the parallel test clones is a
