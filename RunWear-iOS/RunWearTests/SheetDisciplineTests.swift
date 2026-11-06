@@ -148,9 +148,15 @@ final class SheetDisciplineTests: XCTestCase {
         // the accessibility-size gate; at default and moderate
         // sizes the fixed, scroll-free form stands. The detents
         // stay [.medium, .large] (pinned above).
+        // (Counting note, Nov 6, 2026: the count below is of
+        // the CODE form "ScrollView {" — the sheetContent seam
+        // comment added the bare word "ScrollView" twice per
+        // file, and a word count cannot tell a comment from a
+        // consumer. The gated-position assertion beneath is
+        // unchanged and is the load-bearing half.)
         for file in ["DatePickerSheet.swift", "TimePickerSheet.swift"] {
             let sheet = try sourceFile("../RunWear/Views/Modals/\(file)")
-            XCTAssertEqual(occurrences(sheet, "ScrollView"), 1,
+            XCTAssertEqual(occurrences(sheet, "ScrollView {"), 1,
                            "\(file) carries exactly one ScrollView (the accessibility-size form)")
             XCTAssertTrue(sheet.contains("if dynamicTypeSize.isAccessibilitySize {\n                ScrollView {"),
                           "\(file)'s ScrollView must sit directly inside the accessibility-size gate")

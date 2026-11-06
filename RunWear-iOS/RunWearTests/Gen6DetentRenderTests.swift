@@ -163,8 +163,11 @@ final class Gen6DetentRenderTests: XCTestCase {
         // whole at the foot of the content the ScrollView
         // carries. (Canvas heights here are deliberately taller
         // than the content; the foot lands in the canvas's lower
-        // half under either anchoring.)
-        let fitting = try attach(content, size: CGSize(width: 390, height: 1900),
+        // half under either anchoring. The Date canvas is 2800:
+        // at AX5 the one-column grid makes the content the
+        // taller of the two sheets, and gate 42291942279's
+        // 1900pt canvas clipped the foot.)
+        let fitting = try attach(content, size: CGSize(width: 390, height: 2800),
                                  name: "DETENT-date-AX5-fitting-height.png")
         XCTAssertGreaterThan(pinePixels(fitting, fromFraction: 0.5), 20,
                              "the Confirm action (pine label) must render in the content's lower half")
