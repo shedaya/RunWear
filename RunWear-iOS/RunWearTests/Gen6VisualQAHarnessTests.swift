@@ -605,6 +605,25 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                               name: "VQ-2.10-ios-minibar-F-LONGPLACE-max.png")
     }
 
+    @MainActor
+    func testVQ74WeatherDetailSheet_Hosted() throws {
+        // The sheet's split-view composition does not rasterise
+        // under the offscreen ImageRenderer (run 42147399785: a
+        // placeholder bar on a cream field) — re-render hosted.
+        let all: [WeatherDetailType] = [
+            .feelsLike(value: "72°"), .actual(value: "75°"), .condition(.clear),
+            .wind(speed: 11, direction: "NW", gusts: 18),
+            .humidity(percentage: 54), .precipitation(percentage: 40), .uvIndex(value: 3),
+        ]
+        let sheet = WeatherDetailSheet(
+            detailType: .feelsLike(value: "72°"), allDetails: all,
+            contextLines: ["New York, NY", "Today", "Feels like 72°"],
+            isPresented: .constant(true))
+            .background(AppTheme.background)
+        try writeHostedRender(sheet, size: CGSize(width: 390, height: 700),
+                              name: "VQ-7.4-ios-weatherdetail-default.png")
+    }
+
     // MARK: - §10.4 · Caption system, transcribed from the production composer
 
     func testVQ104CaptionsTranscription() throws {
