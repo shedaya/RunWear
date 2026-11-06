@@ -1,6 +1,5 @@
 import XCTest
 import SwiftUI
-@testable import RunWear
 
 /// FOLLOWING-BUILD ASSEMBLY (Nov 6, 2026) — RW-73 DETENT RULING
 /// render proof, iOS half.
