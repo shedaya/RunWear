@@ -92,7 +92,47 @@ struct TimePickerSheet: View {
         ))
     }
 
+    // RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to Tank's
+    // suggestion; BACKLOG RW-73): with the RW-73 composition fixes
+    // the untruncated content at the largest accessibility text
+    // sizes is taller than a phone screen. At those sizes — and
+    // only those — this sheet's content may scroll internally, so
+    // Confirm stays reachable and whole; at default and moderate
+    // sizes the settled no-scroll sheet discipline stands and the
+    // content is the fixed stack it always was. The detents are
+    // unchanged ([.medium, .large] at both hosts, and at the
+    // nested day sheet below).
     var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                ScrollView {
+                    sheetContent
+                }
+            } else {
+                sheetContent
+            }
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        // One selection tick per hour crossed: the trigger is the
+        // SNAPPED draft hour, so it fires exactly once per hour
+        // the handle crosses, never per drag event.
+        .sensoryFeedback(.selection, trigger: draft.draftHour)
+        // GEN-6 (RW-66): the sibling day sheet, presented over
+        // this one from the context line's date door.
+        .sheet(isPresented: $showDateSheet) {
+            if let dateSelection {
+                DatePickerSheet(
+                    selectedDate: dateSelection,
+                    isPresented: $showDateSheet,
+                    onConfirm: onDateConfirmed
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+    }
+
+    private var sheetContent: some View {
         VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 12 : 16) {
             Text("Choose a Time")
                 .font(.appSheetTitle)
@@ -161,24 +201,6 @@ struct TimePickerSheet: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.background.ignoresSafeArea())
-        // One selection tick per hour crossed: the trigger is the
-        // SNAPPED draft hour, so it fires exactly once per hour
-        // the handle crosses, never per drag event.
-        .sensoryFeedback(.selection, trigger: draft.draftHour)
-        // GEN-6 (RW-66): the sibling day sheet, presented over
-        // this one from the context line's date door.
-        .sheet(isPresented: $showDateSheet) {
-            if let dateSelection {
-                DatePickerSheet(
-                    selectedDate: dateSelection,
-                    isPresented: $showDateSheet,
-                    onConfirm: onDateConfirmed
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
-        }
     }
 
     /// The context line — "{Date} · {Place} · Feels-like by

@@ -12,7 +12,14 @@ import XCTest
 ///     named in the spec itself: Location ([.medium, .large],
 ///     §1.3's Location paragraph), and the Date/Time pickers
 ///     ([.medium, .large]) whose grids are FIXED content with no
-///     scroll consumer at all (pinned below).
+///     scroll consumer at default and moderate sizes.
+///     AMENDMENT (RW-73 detent ruling, Sol, Nov 6, 2026 —
+///     delegated to Tank's suggestion): at the largest
+///     accessibility text sizes, where the pickers' untruncated
+///     content is taller than a phone screen, each picker
+///     carries exactly ONE ScrollView gated on the
+///     accessibility size class, so Confirm stays reachable;
+///     the detents do not change. Pinned below in the ruled form.
 ///   * One scroll consumer per sheet: the sheet's own container
 ///     (Form, List, or a single ScrollView) owns scrolling.
 ///   * Settings opens at full height (§1.3's Settings paragraph:
@@ -129,14 +136,24 @@ final class SheetDisciplineTests: XCTestCase {
                        "no second consumer nests inside the Location List")
     }
 
-    func testMediumDetentPickersHaveNoScrollConsumer_sourcePin() throws {
+    func testMediumDetentPickersScrollOnlyAtAccessibilitySizes_sourcePin() throws {
         // The Date/Time pickers are the only non-Location sheets
-        // resting at .medium; that is sound precisely because
-        // their content is a fixed grid that never scrolls.
+        // resting at .medium. Pre-ruling form (through Nov 5,
+        // 2026): fixed grids with no scroll consumer at all.
+        // RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to
+        // Tank's suggestion): at the largest accessibility text
+        // sizes the untruncated content is taller than a phone
+        // screen, so each sheet may scroll internally THERE AND
+        // ONLY THERE — exactly one ScrollView, directly inside
+        // the accessibility-size gate; at default and moderate
+        // sizes the fixed, scroll-free form stands. The detents
+        // stay [.medium, .large] (pinned above).
         for file in ["DatePickerSheet.swift", "TimePickerSheet.swift"] {
             let sheet = try sourceFile("../RunWear/Views/Modals/\(file)")
-            XCTAssertEqual(occurrences(sheet, "ScrollView"), 0,
-                           "\(file) must stay scroll-free while it rests at .medium")
+            XCTAssertEqual(occurrences(sheet, "ScrollView"), 1,
+                           "\(file) carries exactly one ScrollView (the accessibility-size form)")
+            XCTAssertTrue(sheet.contains("if dynamicTypeSize.isAccessibilitySize {\n                ScrollView {"),
+                          "\(file)'s ScrollView must sit directly inside the accessibility-size gate")
         }
     }
 

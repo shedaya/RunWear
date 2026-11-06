@@ -70,7 +70,32 @@ struct DatePickerSheet: View {
 
     // Presented as a real .sheet (design record §5.2): the system
     // owns the backdrop, drag handle, and dismissal.
+    //
+    // RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to Tank's
+    // suggestion; BACKLOG RW-73): with the RW-73 composition fixes
+    // the untruncated content at the largest accessibility text
+    // sizes is taller than a phone screen. At those sizes — and
+    // only those — this sheet's content may scroll internally, so
+    // Confirm stays reachable and whole; at default and moderate
+    // sizes the settled no-scroll sheet discipline stands and the
+    // content is the fixed stack it always was. The detents are
+    // unchanged ([.medium, .large] at both hosts).
     var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                ScrollView {
+                    sheetContent
+                }
+            } else {
+                sheetContent
+            }
+        }
+        .background(AppTheme.background.ignoresSafeArea())
+        // RW-6.10: one selection tick per change — nothing more.
+        .sensoryFeedback(.selection, trigger: draft.draftDate)
+    }
+
+    private var sheetContent: some View {
         VStack(spacing: 20) {
             // Title — frame 42's own name for the sheet, the
             // sibling of the time picker's "Choose a Time".
@@ -124,9 +149,6 @@ struct DatePickerSheet: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity)
-        .background(AppTheme.background.ignoresSafeArea())
-        // RW-6.10: one selection tick per change — nothing more.
-        .sensoryFeedback(.selection, trigger: draft.draftDate)
     }
 
 
