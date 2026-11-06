@@ -148,9 +148,8 @@ final class Gen6DetentRenderTests: XCTestCase {
     func testDetent_DateSheet_AX5_PhoneFrameAndFittingHeight() throws {
         let (_, today) = fixture()
         let sheet = DatePickerSheet(
-            selectedDate: today,
-            isPresented: .constant(true),
-            onConfirm: { _ in }
+            selectedDate: .constant(today),
+            isPresented: .constant(true)
         )
         .background(AppTheme.background)
         .environment(\.dynamicTypeSize, .accessibility5)
