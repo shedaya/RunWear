@@ -149,34 +149,73 @@ if cur_wn != WHATS_NEW:
 print("1.1 whatsNew set:", repr(WHATS_NEW))
 
 # --- App Review detail ---------------------------------------------------------
+# NOTE (probe finding, 2026-11-06): the approved 1.0 review notes state
+# that build 17 contains no purchase surface and that the subscriptions
+# are "switched off in this version". Those notes describe the 1.0
+# submission (products deliberately unattached) and must NOT be copied
+# to a version whose entire purpose is submitting the subscriptions.
+# 1.1 gets fresh notes confined to verifiable facts: same binary as
+# 1.0; the change is store-side (the two products, submitted with this
+# version); the products' settled terms; the unchanged core flow.
+NOTES_11 = (
+    "Thank you for the review. Version 1.1 carries the same build as "
+    "the approved 1.0. The change in this submission is on the store "
+    "side: the two Make It Me subscriptions are submitted for approval "
+    "together with this version.\n\n"
+    "THE APP (unchanged from 1.0): RunWear tells a runner what to wear "
+    "for a run from the local weather forecast - top, layers, bottoms, "
+    "and extras such as gloves or a visor - adjusted to the runner's "
+    "temperature sensitivity and fit preference. There is no account, "
+    "sign-in, or registration anywhere in the app. Launch asks for "
+    "optional location permission (coarse location); without it, the "
+    "user can search for any place by name. Outfit items link out to "
+    "retailer searches in Safari (Amazon Associates; purchases "
+    "complete on the retailer's site).\n\n"
+    "MAKE IT ME AND THE TWO SUBSCRIPTIONS IN THIS SUBMISSION: Make It "
+    "Me lets a user upload photos of themselves and receive generated "
+    "looks - images of themselves wearing the recommended outfits. "
+    "The first 5 looks are free. The two auto-renewable subscriptions "
+    "attached to this version unlock unlimited Make It Me looks:\n"
+    "- Make It Me Annual (rw_makeitme_annual), $9.99 per year.\n"
+    "- Make It Me Monthly (rw_makeitme_monthly), $0.99 per month.\n"
+    "Subscriptions are StoreKit auto-renewable subscriptions, managed "
+    "for the developer by RevenueCat. Uploaded photos are sent to the "
+    "developer's backend (Supabase) and to Replicate (image model) "
+    "solely to generate the user's looks. No account is created; the "
+    "user is identified by an anonymous app-generated ID, and users "
+    "can delete their photos and their data in Settings.\n\n"
+    "EXTERNAL SERVICES: Open-Meteo (weather forecast data), "
+    "OpenStreetMap Nominatim (place search), Amazon Associates "
+    "(affiliate links), RevenueCat (subscription management), "
+    "Supabase (developer backend), Replicate (image generation).\n\n"
+    "REGIONAL CONSISTENCY: the app functions consistently across "
+    "regions; temperatures display in F or C per the user's setting.\n\n"
+    "REGULATED INDUSTRY / THIRD-PARTY MATERIAL: not applicable. "
+    "RunWear does not operate in a regulated industry."
+)
 s, d = raw("GET", f"/v1/appStoreVersions/{v11['id']}/appStoreReviewDetail")
 if s == 200 and d.get("data"):
     da = d["data"]["attributes"]
-    print("1.1 review detail EXISTS (carried): contact",
+    print("1.1 review detail EXISTS: contact",
           da.get("contactFirstName"), da.get("contactLastName"),
           da.get("contactEmail"), "| demoAccountRequired:",
           da.get("demoAccountRequired"))
     print("1.1 review notes:", repr((da.get("notes") or "")[:400]))
 else:
-    print("1.1 review detail absent (GET ->", s, "); copying from 1.0")
+    print("1.1 review detail absent (GET ->", s,
+          "); creating with fresh truthful notes")
     s, d = raw("GET", f"/v1/appStoreVersions/{v10['id']}/appStoreReviewDetail")
     d10 = (d.get("data") or {}).get("attributes", {})
-    notes10 = d10.get("notes") or ""
-    print("1.0 review notes:", repr(notes10[:600]))
-    low = notes10.lower()
-    if "no in-app purchases" in low or "no subscription" in low:
-        print("NEEDS_TRUTHFUL_NOTES: 1.0 notes deny IAP/subscriptions; "
-              "refusing to copy false notes to 1.1")
-        sys.exit(5)
+    print("1.0 review notes (NOT copied - they deny subscriptions):",
+          repr((d10.get("notes") or "")[:200]))
     s2, d2 = raw("GET", f"/v1/appStoreReviewDetails/{d['data']['id']}"
                         f"/appStoreReviewAttachments?limit=50")
     n_att = len(d2.get("data", [])) if s2 == 200 else -1
     print("1.0 review attachments count:", n_att,
           "(attachments are files and are NOT copied by this script)")
-    attrs = {}
+    attrs = {"notes": NOTES_11, "demoAccountRequired": False}
     for k in ("contactFirstName", "contactLastName", "contactPhone",
-              "contactEmail", "demoAccountName", "demoAccountPassword",
-              "demoAccountRequired", "notes"):
+              "contactEmail"):
         if d10.get(k) is not None:
             attrs[k] = d10[k]
     body = {"data": {"type": "appStoreReviewDetails",
