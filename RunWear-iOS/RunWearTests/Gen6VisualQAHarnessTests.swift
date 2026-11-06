@@ -624,6 +624,108 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                               name: "VQ-7.4-ios-weatherdetail-default.png")
     }
 
+    // MARK: - GEN-6 VQ FIX WAVE · RW-71/72/73/74 after-renders
+    //
+    // The fix lane's proof renders for the four iOS FAILs of the
+    // gen-6 VQ run (VQ-1.1, VQ-1.4, VQ-2.4, VQ-2.9). Same
+    // fixtures, same production views, same vehicles as the
+    // executor's renders above; file names carry the `-fixed`
+    // suffix. The picker sheets at accessibility sizes render
+    // at the composition's FITTING height (the VQ-2.1 hero
+    // numeral method in this same file: the canvas never clips
+    // by harness choice) — at those sizes the sheets' fixed,
+    // scroll-free content (SheetDisciplineTests pins no scroll
+    // consumer in either picker) is legitimately taller than
+    // the executor's 700/760 pt frames, and width — the device
+    // width, 390 pt — is the invariant that grades.
+
+    /// Render at the height the composition needs at `width`
+    /// (probed with an unspecified-height proposal), never
+    /// below `minimumHeight`.
+    @MainActor
+    private func writeFittingRender<Content: View>(
+        _ content: Content, width: CGFloat, minimumHeight: CGFloat, name: String
+    ) throws {
+        let probe = ImageRenderer(content: content)
+        probe.scale = 2
+        probe.proposedSize = ProposedViewSize(width: width, height: nil)
+        let needed = probe.uiImage?.size.height ?? minimumHeight
+        let height = max(ceil(needed), minimumHeight)
+        try writeRender(content, size: CGSize(width: width, height: height), name: name)
+        print("VQ-HARNESS fitting render \(name): height \(height) (probed \(needed))")
+    }
+
+    @MainActor
+    func testVQFix_PillStates_Hosted() throws {
+        func pill(_ state: HeroPillState, _ name: String) throws {
+            try writeHostedRender(
+                HeroImageView(
+                    locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                    weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                    tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                    fallbackImageUrl: "", aiImageUrl: nil,
+                    pillState: state, heightMode: .fill, showsTopControls: false),
+                size: CGSize(width: 390, height: 520), name: name)
+        }
+        try pill(.makingWithUpsell, "VQ-1.1-ios-F-FREE-0-default-fixed.png")
+        try pill(.making, "VQ-1.2-ios-F-PREM-GEN-default-fixed.png")
+        try pill(.freeLook(used: 3, allowance: 5), "VQ-1.3-ios-F-FREE-3-default-fixed.png")
+        try pill(.exhausted(used: 5, allowance: 5), "VQ-1.4-ios-F-FREE-5-default-fixed.png")
+        try pill(.premium, "VQ-1.5-ios-F-PREM-BANK-default-fixed.png")
+    }
+
+    @MainActor
+    func testVQFix_Widget_PlanFixtures_LargestType() throws {
+        let now = Date(timeIntervalSince1970: 1_798_000_000)
+        let hot = RunWearWidgetEntry(date: now.addingTimeInterval(600),
+                                     record: widgetRecord(feelsLikeF: 108, place: "Phoenix, AZ", savedAt: now),
+                                     errorCategory: nil)
+        let cold = RunWearWidgetEntry(date: now.addingTimeInterval(600),
+                                      record: widgetRecord(feelsLikeF: -4, place: "Duluth, MN", savedAt: now),
+                                      errorCategory: nil)
+        try renderWidget(entry: hot, family: .systemSmall, type: .accessibility5, name: "VQ-2.9-ios-small-F-HOT108-max-fixed.png")
+        try renderWidget(entry: hot, family: .systemMedium, type: .accessibility5, name: "VQ-2.9-ios-medium-F-HOT108-max-fixed.png")
+        try renderWidget(entry: hot, family: .systemLarge, type: .accessibility5, name: "VQ-2.9-ios-large-F-HOT108-max-fixed.png")
+        try renderWidget(entry: cold, family: .systemSmall, type: .accessibility5, name: "VQ-2.9-ios-small-F-COLDNEG-max-fixed.png")
+        try renderWidget(entry: cold, family: .systemMedium, type: .accessibility5, name: "VQ-2.9-ios-medium-F-COLDNEG-max-fixed.png")
+        try renderWidget(entry: cold, family: .systemLarge, type: .accessibility5, name: "VQ-2.9-ios-large-F-COLDNEG-max-fixed.png")
+    }
+
+    @MainActor
+    func testVQFix_PickerSheets_TypeScales() throws {
+        let f = pickerFixture()
+        // Time sheet: default renders on the executor's own
+        // canvas (390×560, the VQ-5.1 before frame); the
+        // accessibility sizes render at fitting height.
+        try writeRender(timeSheet(vm: f.vm, label: "Today", date: f.today),
+                        size: CGSize(width: 390, height: 560),
+                        name: "VQ-2.4-ios-timesheet-F-PARTDAY-default-fixed.png")
+        try writeFittingRender(timeSheet(vm: f.vm, label: "Today", date: f.today, type: .accessibility2),
+                               width: 390, minimumHeight: 700,
+                               name: "VQ-2.4-ios-timesheet-F-PARTDAY-mid-fixed.png")
+        try writeFittingRender(timeSheet(vm: f.vm, label: "Today", date: f.today, type: .accessibility5),
+                               width: 390, minimumHeight: 700,
+                               name: "VQ-2.4-ios-timesheet-F-PARTDAY-max-fixed.png")
+        // Date sheet (tomorrow selected in the draft, the
+        // VQ-2.4 fixture state): default on the executor's
+        // canvas (390×620, the VQ-5.1 date-changed frame);
+        // accessibility sizes at fitting height.
+        func dateSheet(_ type: DynamicTypeSize) -> some View {
+            DatePickerSheet(selectedDate: .constant(f.tomorrow), isPresented: .constant(true))
+                .environment(\.dynamicTypeSize, type)
+                .background(AppTheme.background)
+        }
+        try writeRender(dateSheet(.large),
+                        size: CGSize(width: 390, height: 620),
+                        name: "VQ-2.4-ios-datepicker-F-TOMORROW-default-fixed.png")
+        try writeFittingRender(dateSheet(.accessibility2),
+                               width: 390, minimumHeight: 760,
+                               name: "VQ-2.4-ios-datepicker-F-TOMORROW-mid-fixed.png")
+        try writeFittingRender(dateSheet(.accessibility5),
+                               width: 390, minimumHeight: 760,
+                               name: "VQ-2.4-ios-datepicker-F-TOMORROW-max-fixed.png")
+    }
+
     // MARK: - §10.4 · Caption system, transcribed from the production composer
 
     func testVQ104CaptionsTranscription() throws {

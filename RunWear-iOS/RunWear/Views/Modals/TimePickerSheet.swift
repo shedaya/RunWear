@@ -49,6 +49,16 @@ struct TimePickerSheet: View {
     @State private var draft: TimePickerDraft
     @State private var showDateSheet = false
 
+    /// GEN-6 VQ FIX (RW-73): the sheet's composition adapts to
+    /// the Dynamic Type size in force — at accessibility sizes
+    /// the chart yields some height and the action row stacks,
+    /// so every settled string stays whole and Confirm stays
+    /// fully visible and tappable at EVERY size (the gen-6 VQ
+    /// render at the largest size ellipsised the title, the
+    /// context line, the outfit line, the instruction, and
+    /// Confirm itself).
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     init(
         chart: DayChartModel?,
         dateLabel: String,
@@ -83,10 +93,12 @@ struct TimePickerSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 12 : 16) {
             Text("Choose a Time")
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             contextLine
 
@@ -100,7 +112,11 @@ struct TimePickerSheet: View {
                     showsAxisLabels: true,
                     onSelectHour: { draft.move(to: $0) }
                 )
-                .frame(height: 168)
+                // GEN-6 VQ FIX (RW-73): at accessibility sizes
+                // the chart yields height to the type (the
+                // readout carries the hour's data as text; the
+                // chart remains the scrub surface).
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? 120 : 168)
 
                 // GEN-6 (DA-21): a PARTIAL day's truncated curve
                 // names its beyond-forecast region with the same
@@ -111,6 +127,8 @@ struct TimePickerSheet: View {
                     Text(beyondCaption)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // GEN-5 (RW-29 FA-57): the settled instruction
@@ -121,19 +139,10 @@ struct TimePickerSheet: View {
                 Text("Every hour can be chosen — the handle snaps hour to hour.")
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                HStack {
-                    Button("Cancel") { dismiss() }
-                        .font(.appSecondary.weight(.semibold))
-                        .foregroundColor(AppTheme.inkSecondary)
-                    Spacer()
-                    Button("Confirm") {
-                        onConfirm(draft.commit())
-                        dismiss()
-                    }
-                    .font(.appSecondary.weight(.bold))
-                    .foregroundColor(AppTheme.pinePayload)
-                }
+                actionRow
             } else {
                 // Horizon honesty: a day the forecast does not
                 // reach has no hours to offer — named, never
@@ -181,28 +190,105 @@ struct TimePickerSheet: View {
     @ViewBuilder
     private var contextLine: some View {
         if dateSelection != nil {
-            HStack(spacing: 0) {
-                Button { showDateSheet = true } label: {
-                    HStack(spacing: 3) {
-                        Text(dateLabel)
-                        Text("›")
-                    }
-                    .font(.appSecondary.weight(.bold))
-                    .foregroundColor(AppTheme.pinePayload)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Choose a day: \(dateLabel)")
-
-                Text(" · \(placeName) · Feels-like by hour")
-                    .font(.appSecondary)
-                    .foregroundColor(AppTheme.inkSecondary)
+            // GEN-6 VQ FIX (RW-73): the one-line form is kept
+            // wherever it fits whole; where the type size makes
+            // it exceed the sheet's width, the line re-flows —
+            // the date door takes its own line and the remainder
+            // wraps beneath it by whole words, every character
+            // of the settled line preserved (the gen-6 VQ render
+            // ellipsised the one-line form to "Today › · New…"
+            // at the largest size, and the old `.lineLimit(1)`
+            // guaranteed that failure at any size where the line
+            // outgrew the sheet).
+            ViewThatFits(in: .horizontal) {
+                contextLineRow
+                contextLineStacked
             }
-            .lineLimit(1)
         } else {
             Text("\(dateLabel) · \(placeName) · Feels-like by hour")
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The settled one-line context: the date door (pine, bold,
+    /// chevron) followed by the place / feels-like tail.
+    private var contextLineRow: some View {
+        HStack(spacing: 0) {
+            dateDoor
+            Text(" · \(placeName) · Feels-like by hour")
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
+        }
+    }
+
+    /// The re-flowed context for large type: the date door on
+    /// its own line, the tail (leading separator kept, exactly
+    /// as the one-line form reads across its wrap point)
+    /// wrapping by whole words beneath it.
+    private var contextLineStacked: some View {
+        VStack(spacing: 2) {
+            dateDoor
+            Text("· \(placeName) · Feels-like by hour")
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The context line's date segment — the day picker's door
+    /// (GEN-6 RW-66): pine, bold, chevron, the headline moment's
+    /// own treatment (Concept 1), because it is the same kind
+    /// of entry.
+    private var dateDoor: some View {
+        Button { showDateSheet = true } label: {
+            HStack(spacing: 3) {
+                Text(dateLabel)
+                Text("›")
+            }
+            .font(.appSecondary.weight(.bold))
+            .foregroundColor(AppTheme.pinePayload)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Choose a day: \(dateLabel)")
+    }
+
+    /// The Cancel / Confirm row. GEN-6 VQ FIX (RW-73): kept in
+    /// its settled one-row form wherever both actions fit
+    /// whole; where the type size outgrows the sheet's width
+    /// the row stacks — Confirm first, each action full-width
+    /// with a 44 pt target — so Confirm is never the ellipsised
+    /// "Confir…" the gen-6 VQ render showed at the largest size.
+    private var actionRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                Button("Cancel") { dismiss() }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(AppTheme.inkSecondary)
+                Spacer()
+                Button("Confirm") {
+                    onConfirm(draft.commit())
+                    dismiss()
+                }
+                .font(.appSecondary.weight(.bold))
+                .foregroundColor(AppTheme.pinePayload)
+            }
+            VStack(spacing: 10) {
+                Button("Confirm") {
+                    onConfirm(draft.commit())
+                    dismiss()
+                }
+                .font(.appSecondary.weight(.bold))
+                .foregroundColor(AppTheme.pinePayload)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                Button("Cancel") { dismiss() }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
         }
     }
 
@@ -214,14 +300,26 @@ struct TimePickerSheet: View {
     /// VoiceOver hears exactly what the eye sees.
     private func readoutRow(chart: DayChartModel) -> some View {
         let entry = chart.entry(forHour: draft.draftHour)
-        return HStack(spacing: 10) {
-            // GEN-5 (RW-29 FA-39): steppers disable at the
-            // selectable range's ends.
-            stepper(systemImage: "minus", label: "Previous hour", isEnabled: draft.canStep(by: -1)) {
-                draft.step(by: -1)
-            }
+        // GEN-6 VQ FIX (RW-73): the outfit preview line moves
+        // OUT of the stepper row's centre column to the sheet's
+        // full width beneath the row, wrapping by whole words
+        // with no line cap. In the centre column (~234 pt
+        // between the two 44 pt steppers) the line ellipsised
+        // at every larger type size — and at the largest it
+        // collapsed to "Short Slee…" — because two lines in
+        // that column cannot hold the day's kit once the type
+        // grows. The readout keeps its settled form and seat
+        // between the steppers ("12 PM · 65°F", hour +
+        // feels-like only); the steppers keep their full round
+        // 44 pt targets.
+        return VStack(spacing: 6) {
+            HStack(spacing: 10) {
+                // GEN-5 (RW-29 FA-39): steppers disable at the
+                // selectable range's ends.
+                stepper(systemImage: "minus", label: "Previous hour", isEnabled: draft.canStep(by: -1)) {
+                    draft.step(by: -1)
+                }
 
-            VStack(spacing: 3) {
                 Text(entry.map {
                     DayChartFormat.readout(
                         hour: $0.hour,
@@ -231,19 +329,19 @@ struct TimePickerSheet: View {
                 .font(.system(size: 15.5, weight: .bold))
                 .foregroundColor(AppTheme.inkPrimary)
                 .monospacedDigit()
+                .frame(maxWidth: .infinity)
 
-                if let entry, !entry.outfitItemNames.isEmpty {
-                    Text(entry.outfitItemNames.joined(separator: " · "))
-                        .font(.appFootnote)
-                        .foregroundColor(AppTheme.inkSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
+                stepper(systemImage: "plus", label: "Next hour", isEnabled: draft.canStep(by: 1)) {
+                    draft.step(by: 1)
                 }
             }
-            .frame(maxWidth: .infinity)
 
-            stepper(systemImage: "plus", label: "Next hour", isEnabled: draft.canStep(by: 1)) {
-                draft.step(by: 1)
+            if let entry, !entry.outfitItemNames.isEmpty {
+                Text(entry.outfitItemNames.joined(separator: " · "))
+                    .font(.appFootnote)
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

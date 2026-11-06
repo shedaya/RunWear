@@ -75,8 +75,25 @@ struct RunWearWidgetEntryView: View {
     // is capped at accessibility1 (as on medium and the home
     // hero cluster). The temperature is the fixed 32 pt hero,
     // never scaled, never truncated.
+    //
+    // GEN-6 VQ FIX (RW-74): the gen-6 VQ render at the largest
+    // Dynamic Type showed the RW-67 composition still clips on
+    // this narrowest canvas: the freshness eyebrow lost its
+    // meridiem ("FOR NOW · 4:26…") and both outfit lines
+    // ellipsised garment names ("Thermal Tight…", "Split
+    // Shorts · +…") — at the accessibility1 cap the eyebrow
+    // and a name like "Thermal Tights" are each wider than
+    // the canvas on their own, so no one-line composition can
+    // hold them. The per-size composition adapts the way the
+    // Large size's tighter cap already does in this file: the
+    // Small stack's type growth is capped at xLarge (the
+    // Large size's own cap), and the two outfit lines may
+    // wrap by whole words onto a second line instead of
+    // truncating mid-name. Every element, string, and style
+    // is unchanged; the eyebrow fits on its one line at the
+    // tighter cap, and no garment name is ever clipped.
     private func smallContent(_ record: WidgetLastGood) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(WidgetFreshness.eyebrow(record, now: entry.date))
                 .font(.caption2.weight(.bold))
                 .foregroundColor(AppTheme.inkSecondary)
@@ -94,13 +111,13 @@ struct RunWearWidgetEntryView: View {
             smallOutfitLineOne(record)
                 .font(.subheadline)
                 .foregroundColor(AppTheme.inkPrimary)
-                .lineLimit(1)
+                .lineLimit(2)
             smallOutfitLineTwo(record)
                 .font(.subheadline)
                 .foregroundColor(AppTheme.inkPrimary)
-                .lineLimit(1)
+                .lineLimit(2)
 
-            Spacer(minLength: 2)
+            Spacer(minLength: 0)
 
             Text(record.supportingLine)
                 .font(.caption2)
@@ -109,7 +126,7 @@ struct RunWearWidgetEntryView: View {
                 .minimumScaleFactor(0.5)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 
     /// Small outfit line one: the base (semibold run) with the
@@ -203,7 +220,19 @@ struct RunWearWidgetEntryView: View {
         // capped at accessibility1, the same cap the home hero
         // cluster carries. The temperature itself is a fixed
         // 38 pt and is never scaled or truncated.
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        //
+        // GEN-6 VQ FIX (RW-74): the gen-6 VQ render at the
+        // largest Dynamic Type showed one survivor of that
+        // composition: the freshness eyebrow in the left column
+        // (~175 pt of the 364 pt canvas) still ellipsised its
+        // meridiem ("FOR NOW · 4:26…") at the accessibility1
+        // cap, while every garment name in the right column
+        // already fit. The Medium cap therefore sits one step
+        // tighter, at xxxLarge — the same per-size cap device
+        // the Large composition uses (xLarge) — which brings
+        // the eyebrow whole inside its column with every other
+        // line unchanged.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // LARGE — the brand strip with the rendered "Updated …"

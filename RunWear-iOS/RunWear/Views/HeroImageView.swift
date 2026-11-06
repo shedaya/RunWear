@@ -256,15 +256,28 @@ struct HeroImageView: View {
             // clean generating content plus ONE small green
             // upsell line; the upsell half taps to the same
             // Premium offer as "Get unlimited".
-            HStack(spacing: 6) {
-                pillScriptMark
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(.white)
-                Text(HeroPill.makingLabel)
-                    .font(.appFootnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+            // GEN-6 VQ FIX (RW-71): the settled content does not
+            // fit the pill's one-row width in the hero composition
+            // (the hero grants the pill its width minus the flag
+            // chip's 60 pt clearance, and script + spinner +
+            // "Making this you…" + "Get it instantly next time"
+            // exceeds it — the gen-6 VQ render ellipsised BOTH
+            // texts). The pill now STACKS: the generating row
+            // keeps its settled one-row form, and the green
+            // upsell line takes its own line beneath it. Every
+            // settled string renders whole; nothing is resized,
+            // reworded, or clipped.
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    pillScriptMark
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(.white)
+                    Text(HeroPill.makingLabel)
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                }
                 Button(action: onPillGetUnlimited) {
                     Text(HeroPill.getInstantlyLabel)
                         .font(.appFootnote.weight(.bold))
@@ -281,15 +294,24 @@ struct HeroImageView: View {
             // honestly, "Get unlimited" bold as the headline act;
             // the whole pill taps through to the Premium offer.
             Button(action: onPillGetUnlimited) {
-                HStack(spacing: 6) {
-                    pillScriptMark
-                    Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
-                        .font(.appFootnote.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    Text("·")
-                        .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.7))
+                // GEN-6 VQ FIX (RW-72): the one-row form squeezed
+                // the honest count out at the hero composition's
+                // pill width (the gen-6 VQ render ellipsised it to
+                // "5 of 5 looks u…"). The pill STACKS: script +
+                // the whole count on the first line, "Get
+                // unlimited" — still the pill's main message in
+                // the green accent — on its own line beneath. The
+                // one-row "·" separator has no seat in the stacked
+                // form and is dropped; every settled string
+                // renders whole.
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        pillScriptMark
+                        Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
+                            .font(.appFootnote.weight(.semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                    }
                     Text(HeroPill.getUnlimitedLabel)
                         .font(.appFootnote.weight(.bold))
                         .foregroundColor(AppTheme.pineAccentDark)

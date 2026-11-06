@@ -19,6 +19,28 @@ struct DatePickerSheet: View {
     /// re-solved instantly with no way back.)
     @State private var draft: DatePickerDraft
 
+    /// GEN-6 VQ FIX (RW-73): the grid's column count adapts to
+    /// the Dynamic Type size in force, so a whole weekday word
+    /// always fits its tile — at the largest sizes the settled
+    /// four-column grid squeezed "Tomorrow" into a mid-word
+    /// wrap ("To-mor-row" over three lines) and pushed "Nov"
+    /// past its tile's edge (the gen-6 VQ render). Three
+    /// columns at the first accessibility sizes, two at the
+    /// largest; four wherever the words fit, which includes
+    /// every non-accessibility size.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var gridColumnCount: Int {
+        switch dynamicTypeSize {
+        case .accessibility3, .accessibility4, .accessibility5:
+            return 2
+        case .accessibility1, .accessibility2:
+            return 3
+        default:
+            return 4
+        }
+    }
+
     init(selectedDate: Binding<Date>, isPresented: Binding<Bool>, onConfirm: (() -> Void)? = nil) {
         self._selectedDate = selectedDate
         self._isPresented = isPresented
@@ -51,6 +73,8 @@ struct DatePickerSheet: View {
             Text("Choose a Day")
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             // Date grid (draft selection)
             dateGrid
@@ -58,18 +82,38 @@ struct DatePickerSheet: View {
             // GEN-6 (RW-66): the settled Confirm gate, in the
             // time picker's own button treatment — nothing
             // re-solves until Confirm; Cancel restores exactly.
-            HStack {
-                Button("Cancel") { dismiss() }
-                    .font(.appSecondary.weight(.semibold))
-                    .foregroundColor(AppTheme.inkSecondary)
-                Spacer()
-                Button("Confirm") {
-                    selectedDate = draft.commit()
-                    onConfirm?()
-                    dismiss()
+            // GEN-6 VQ FIX (RW-73): the row stacks at the type
+            // sizes where the two actions no longer fit whole
+            // side by side (Confirm first, full-width 44 pt
+            // targets), exactly as the time picker's row does.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    Button("Cancel") { dismiss() }
+                        .font(.appSecondary.weight(.semibold))
+                        .foregroundColor(AppTheme.inkSecondary)
+                    Spacer()
+                    Button("Confirm") {
+                        selectedDate = draft.commit()
+                        onConfirm?()
+                        dismiss()
+                    }
+                    .font(.appSecondary.weight(.bold))
+                    .foregroundColor(AppTheme.pinePayload)
                 }
-                .font(.appSecondary.weight(.bold))
-                .foregroundColor(AppTheme.pinePayload)
+                VStack(spacing: 10) {
+                    Button("Confirm") {
+                        selectedDate = draft.commit()
+                        onConfirm?()
+                        dismiss()
+                    }
+                    .font(.appSecondary.weight(.bold))
+                    .foregroundColor(AppTheme.pinePayload)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    Button("Cancel") { dismiss() }
+                        .font(.appSecondary.weight(.semibold))
+                        .foregroundColor(AppTheme.inkSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
             }
 
             Spacer().frame(height: 16)
@@ -85,7 +129,7 @@ struct DatePickerSheet: View {
     // MARK: - Date Grid
 
     private var dateGrid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 12) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: gridColumnCount), spacing: 12) {
             ForEach(Array(availableDates.enumerated()), id: \.offset) { index, date in
                 DateButton(
                     date: date,
