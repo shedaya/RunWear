@@ -178,6 +178,7 @@
 		D60000000000000000000012 /* Gen6PickerWatchRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */; };
 		VQ2000000000000000000001 /* Gen6VisualQAHarnessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */; };
 		VQ2000000000000000000002 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
+		RW8100000000000000000001 /* PreferenceControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000013 /* PreferenceControls.swift */; };
 		VQ2000000000000000000003 /* GlassMorphismModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000010 /* GlassMorphismModifiers.swift */; };
 		G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */; };
 		K10002000000000000000003 /* HomeCompositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = K10001000000000000000002 /* HomeCompositionTests.swift */; };
@@ -1127,6 +1128,7 @@
 				D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */,
 				VQ2000000000000000000001 /* Gen6VisualQAHarnessTests.swift in Sources */,
 				VQ2000000000000000000002 /* HeroImageView.swift in Sources */,
+				RW8100000000000000000001 /* PreferenceControls.swift in Sources */,
 				VQ2000000000000000000003 /* GlassMorphismModifiers.swift in Sources */,
 				D60000000000000000000012 /* Gen6PickerWatchRenderTests.swift in Sources */,
 				G42002000000000000000001 /* Gen4BundledReplenishmentTests.swift in Sources */,
