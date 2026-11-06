@@ -24,18 +24,22 @@ struct DatePickerSheet: View {
     /// always fits its tile — at the largest sizes the settled
     /// four-column grid squeezed "Tomorrow" into a mid-word
     /// wrap ("To-mor-row" over three lines) and pushed "Nov"
-    /// past its tile's edge (the gen-6 VQ render). Three
-    /// columns at the first accessibility sizes, two at the
-    /// largest; four wherever the words fit, which includes
-    /// every non-accessibility size.
+    /// past its tile's edge (the gen-6 VQ render). Two columns
+    /// at accessibility1–3 and one full-width column at
+    /// accessibility4–5; four wherever the words fit, which
+    /// includes every non-accessibility size. (Measured from
+    /// this branch's own renders: "Tomorrow" in the settled
+    /// eyebrow face demands ~113 pt at accessibility2 and more
+    /// than the ~167 pt two-across tile at accessibility5, so
+    /// the largest sizes give each tile the full sheet width.)
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var gridColumnCount: Int {
         switch dynamicTypeSize {
-        case .accessibility3, .accessibility4, .accessibility5:
+        case .accessibility4, .accessibility5:
+            return 1
+        case .accessibility1, .accessibility2, .accessibility3:
             return 2
-        case .accessibility1, .accessibility2:
-            return 3
         default:
             return 4
         }

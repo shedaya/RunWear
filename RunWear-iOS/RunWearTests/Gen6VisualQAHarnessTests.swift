@@ -656,16 +656,60 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     }
 
     @MainActor
+    /// Same hosted-capture mechanics as writeHostedRender, but
+    /// returns the image instead of asserting, so the caller can
+    /// retry a black frame (a window that has not composited yet
+    /// in a parallel test clone) and assert once on the result.
+    private func captureHosted<Content: View>(_ content: Content, size: CGSize, settle: TimeInterval) -> UIImage {
+        let host = UIHostingController(rootView: content.frame(width: size.width, height: size.height))
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.frame = CGRect(origin: .zero, size: size)
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        let deadline = Date().addingTimeInterval(settle)
+        while Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 2
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            host.view.drawHierarchy(in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
+        }
+        window.isHidden = true
+        return image
+    }
+
     func testVQFix_PillStates_Hosted() throws {
         func pill(_ state: HeroPillState, _ name: String) throws {
-            try writeHostedRender(
-                HeroImageView(
-                    locationName: "New York, NY", temperature: 72, actualTemperature: 75,
-                    weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
-                    tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
-                    fallbackImageUrl: "", aiImageUrl: nil,
-                    pillState: state, heightMode: .fill, showsTopControls: false),
-                size: CGSize(width: 390, height: 520), name: name)
+            // Hosted capture in the parallel test clones is a
+            // lottery: a window that has not composited yet
+            // snapshots as a pure-black frame (the gen-6 harness
+            // runs hit the same failure). Retry with a fresh
+            // window until the capture holds real content, then
+            // write and assert once — a state that truly renders
+            // blank still fails.
+            let hero = HeroImageView(
+                locationName: "New York, NY", temperature: 72, actualTemperature: 75,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: state, heightMode: .fill, showsTopControls: false)
+            var image = captureHosted(hero, size: CGSize(width: 390, height: 520), settle: 0.8)
+            var attempts = 1
+            while !imageHasContent(image) && attempts < 4 {
+                image = captureHosted(hero, size: CGSize(width: 390, height: 520), settle: 1.2)
+                attempts += 1
+            }
+            XCTAssertTrue(imageHasContent(image), "\(name) rendered blank (hosted) after \(attempts) attempts")
+            let dir = artefactsDirectory()
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let data = try XCTUnwrap(image.pngData(), "PNG encoding failed for \(name)")
+            try data.write(to: dir.appendingPathComponent(name))
+            print("VQ-HARNESS wrote \(name) (hosted, attempt \(attempts))")
         }
         try pill(.makingWithUpsell, "VQ-1.1-ios-F-FREE-0-default-fixed.png")
         try pill(.making, "VQ-1.2-ios-F-PREM-GEN-default-fixed.png")
