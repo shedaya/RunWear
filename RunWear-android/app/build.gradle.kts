@@ -52,8 +52,8 @@ android {
         // 1.2.5/vc10019 — one shared versionCode space), so the phone
         // line takes vc20 for its half of the 1.2.5 train.
         // GEN-5 Android release 2026-11-05 (RW-28): 1.2.21 / vc36.
-        versionCode = 36
-        versionName = "1.2.21"
+        versionCode = 37
+        versionName = "1.2.22"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
