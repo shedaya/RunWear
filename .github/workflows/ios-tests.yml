@@ -186,3 +186,14 @@ jobs:
             ${{ runner.temp }}/xcodebuild-test.log
             ${{ runner.temp }}/RunWearTests.xcresult
           if-no-files-found: ignore
+
+      # GEN-6 Wave C evidence closures: the render-proof tests
+      # write PNG artefacts into the checkout; upload them so the
+      # evidence lane can open the actual renders.
+      - name: Upload rendered evidence PNGs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runwear-ios-renders
+          path: RunWear-iOS/render-artefacts
+          if-no-files-found: ignore
