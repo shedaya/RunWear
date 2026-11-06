@@ -29,7 +29,6 @@ import java.io.File
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -227,7 +226,18 @@ class Rw73DetentRenderTest {
             "$sheet: Confirm must start below the window's foot (bottom ${before!!.bottom} > window $windowPx)",
             before.bottom > windowPx
         )
-        runBlocking { scrollState.scrollTo(scrollState.maxValue) }
+        // Drive the scroll synchronously: dispatchRawDelta is
+        // the ScrollState's non-suspending dispatch and clamps
+        // at the foot. (The first version used runBlocking +
+        // scrollTo, which deadlocks under Robolectric — the
+        // scroll suspends waiting for the main looper the test
+        // thread is blocking; gate run 42281259057 hung there
+        // until the job was cancelled at 45 minutes.)
+        val consumed = scrollState.dispatchRawDelta(1_000_000f)
+        assertTrue(
+            "$sheet: the scroll dispatch must consume a positive delta, was $consumed",
+            consumed > 0f
+        )
         pump(host, 10)
         capture(host, footName)
         val after = boundsOf(host, "Confirm")
