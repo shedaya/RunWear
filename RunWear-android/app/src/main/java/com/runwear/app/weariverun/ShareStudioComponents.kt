@@ -521,18 +521,26 @@ fun KitCard(
 
         Spacer(Modifier.height(10.dp))
 
-        // The grid of squares, in wearing order.
+        // The grid of squares, in wearing order: two FIXED
+        // columns (the model's columnWidth — the same geometry
+        // ShareKitCardModel.tileSamplePoints samples, and the
+        // iOS view's two flexible grid columns). Each tile is
+        // centred WITHIN its column; a lone last-row tile
+        // stays in the first column. (Centring each row's pack
+        // across the canvas instead — the earlier arrangement —
+        // moved every tile off the model's centres, a lone
+        // last-row tile by half the canvas, and the verifier's
+        // tile sample landed on bare cream sheet.)
+        val columnWidth = ShareKitCardModel.columnWidth(canvas.width)
         Column(verticalArrangement = Arrangement.spacedBy(ShareKitCardModel.KIT_ROW_SPACING.dp)) {
             capped.chunked(2).forEach { rowItems ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(
-                        12.dp, Alignment.CenterHorizontally
-                    )
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     rowItems.forEach { tile ->
                         Column(
-                            modifier = Modifier.width(layout.tileSide.dp),
+                            modifier = Modifier.width(columnWidth.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(

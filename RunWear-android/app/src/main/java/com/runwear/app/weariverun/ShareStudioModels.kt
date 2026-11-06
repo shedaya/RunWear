@@ -644,6 +644,17 @@ object ShareKitCardModel {
         )
     }
 
+    /** One grid column's width: the canvas minus the card's
+     * horizontal padding (20 each side) and the inter-column
+     * spacing (12), halved. The grid is two FIXED columns —
+     * each tile is centred within its column, and a lone
+     * last-row tile stays in the first column (the iOS view's
+     * two flexible LazyVGrid columns render exactly this).
+     * Shared by the Kit Card view and [tileSamplePoints] so
+     * the two cannot drift apart. */
+    fun columnWidth(canvasWidth: Double): Double =
+        (canvasWidth - 40 - 12) / 2
+
     /** Canvas-fraction centres of the grid's tiles, for the
      * raster verifier's per-tile samples — the same geometry
      * the Kit Card renders. */
@@ -654,7 +665,7 @@ object ShareKitCardModel {
         if (itemCount <= 0) return emptyList()
         val canvas = format.canvasPointSize
         val layout = gridLayout(format, itemCount)
-        val columnWidth = (canvas.width - 40 - 12) / 2
+        val columnWidth = columnWidth(canvas.width)
         val top = KIT_VERTICAL_PADDING / 2 + KIT_HEADER_HEIGHT
         return (0 until itemCount).map { index ->
             val column = index % 2
