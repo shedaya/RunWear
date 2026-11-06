@@ -637,6 +637,102 @@ final class FollowingVQExecutorTests: XCTestCase {
         print("VQEXEC fork destination hosted: \(okDest)")
     }
 
+    // MARK: - Late-run hosted retries (ZZ: alphabetical last)
+    //
+    // Run 42300203909 evidence: every hosted capture in this
+    // class came back pure black early in the run, while the
+    // candidate harness's hosted pill test later in the same run
+    // produced real light-state frames. Hosted compositing warms
+    // up over the run; these legs re-attempt the blacked surfaces
+    // late, with a warm-up capture first and longer settles.
+
+    @MainActor
+    private func warmUpHosted() {
+        let v = ZStack {
+            AppTheme.background
+            Text("warmup").foregroundColor(AppTheme.inkPrimary)
+        }
+        writeHostedRender(v, size: CGSize(width: 200, height: 200),
+                          name: "VQEXEC-warmup.png", attempts: 2)
+    }
+
+    @MainActor
+    func testExecZZDarkPillsRetry() {
+        warmUpHosted()
+        writeHostedRender(pillHero(.makingWithUpsell, dark: true), size: CGSize(width: 390, height: 520),
+                          name: "VQ-1.10-ios-F-FREE-0-dark-exec.png", attempts: 6)
+        writeHostedRender(pillHero(.freeLook(used: 3, allowance: 5), dark: true), size: CGSize(width: 390, height: 520),
+                          name: "VQ-1.10-ios-F-FREE-3-dark-exec.png", attempts: 6)
+        writeHostedRender(pillHero(.exhausted(used: 5, allowance: 5), dark: true), size: CGSize(width: 390, height: 520),
+                          name: "VQ-1.10-ios-F-FREE-5-dark-exec.png", attempts: 6)
+    }
+
+    @MainActor
+    func testExecZZForkRetry() {
+        warmUpHosted()
+        let model = ForkHostModel()
+        let fixture = ForkHostFixture(model: model)
+        let size = CGSize(width: 390, height: 760)
+        writeHostedRender(fixture, size: size,
+                          name: "RW78-ios-fork-default-exec.png", attempts: 6)
+        model.showOptIn = true
+        writeHostedRender(fixture, size: size,
+                          name: "RW78-ios-fork-aftertap-consent-exec.png", attempts: 6)
+    }
+
+    @MainActor
+    func testExecZZMiniBarRetry() {
+        warmUpHosted()
+        let miami = WearIveRunMiniBarView(
+            state: .added(place: "Miami, FL", moment: .now),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        writeHostedRender(miami, size: CGSize(width: 390, height: 110),
+                          name: "VQ-1.7-ios-minibar-added-default-exec.png", attempts: 6)
+        let longPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Truth or Consequences, New Mexico")),
+            entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .environment(\.dynamicTypeSize, .accessibility5)
+            .background(AppTheme.background)
+        writeHostedRender(longPlace, size: CGSize(width: 390, height: 150),
+                          name: "VQ-2.10-ios-minibar-F-LONGPLACE-max-exec.png", attempts: 6)
+    }
+
+    @MainActor
+    func testExecZZWatchSettingsRetry() {
+        warmUpHosted()
+        for (pref, label) in [(GenderPreference.male, "mens"), (.female, "womens"), (.unisex, "neutral")] {
+            let vm = WatchViewModel()
+            vm.genderPreference = pref
+            vm.temperatureUnit = .fahrenheit
+            let view = WatchSettingsView(viewModel: vm)
+                .background(Color.black)
+            writeHostedRender(view, size: CGSize(width: 198, height: 242),
+                              name: "RW81-ios-watchsettings-\(label)-exec.png", attempts: 5)
+        }
+    }
+
+    @MainActor
+    func testExecZZWeatherDetailRetry() {
+        warmUpHosted()
+        let all: [WeatherDetailType] = [
+            .feelsLike(value: "72°"), .actual(value: "75°"), .condition(.clear),
+            .wind(speed: 11, direction: "NW", gusts: 18),
+            .humidity(percentage: 54), .precipitation(percentage: 40), .uvIndex(value: 3),
+        ]
+        let sheet = WeatherDetailSheet(
+            detailType: .feelsLike(value: "72°"), allDetails: all,
+            contextLines: ["New York, NY", "Today", "Feels like 72°"],
+            isPresented: .constant(true))
+            .background(AppTheme.background)
+        writeHostedRender(sheet, size: CGSize(width: 390, height: 700),
+                          name: "VQ-7.4-ios-weatherdetail-default-exec.png", attempts: 6)
+    }
+
     // MARK: - VQ-10.4 captions
 
     func testExecCaptions() throws {
