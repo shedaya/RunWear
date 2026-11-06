@@ -121,21 +121,18 @@ final class StateTruthTests: XCTestCase {
     // the hero numeral (`temperatureUnit.format(currentFeelsLike)`),
     // the "Actual NN°" line (HomeHeaderCopy.actualLine over
     // `format(currentTemperature)`), the bracket badge's range
-    // (TemperatureBracket.rangeText(for:)), the share headline
-    // (shareText), and the mini bar's formatted feels-like
+    // (TemperatureBracket.rangeText(for:)) and the mini bar's
+    // formatted feels-like
     // (`formatFromFahrenheit(entry.feelsLikeF)`).
 
     private struct RenderedFigures {
         var numeral: String
         var actualLine: String
         var badgeRange: String
-        var share: String?
         var miniBar: String
 
         /// The sheet figures proper — the one-unit contract binds
-        /// these in full. The share payload is checked by its
-        /// headline line only (see assertOneConsistentUnit): its
-        /// tip line is engine copy, not a rendered figure.
+        /// these in full.
         var all: [String] {
             [numeral, actualLine, badgeRange, miniBar]
         }
@@ -159,7 +156,6 @@ final class StateTruthTests: XCTestCase {
                 formattedTemperature: vm.temperatureUnit.format(vm.currentTemperature)
             ),
             badgeRange: vm.recommendation!.temperatureBracket.rangeText(for: vm.temperatureUnit),
-            share: vm.shareText,
             miniBar: vm.temperatureUnit.formatFromFahrenheit(entry.feelsLikeF)
         )
     }
@@ -192,12 +188,6 @@ final class StateTruthTests: XCTestCase {
                     file: file, line: line
                 )
             }
-        }
-        // The share payload's headline line speaks the same unit.
-        if let share = figures.share,
-           let headline = share.components(separatedBy: "\n").first(where: { $0.contains("Feels like") }) {
-            XCTAssertTrue(headline.contains(unit.symbol), "share headline '\(headline)' not in \(unit.symbol)", file: file, line: line)
-            XCTAssertFalse(headline.contains(other.symbol), "share headline '\(headline)' carries \(other.symbol)", file: file, line: line)
         }
         XCTAssertEqual(figures.numeral, expectedNumeral, file: file, line: line)
         XCTAssertEqual(figures.actualLine, expectedActualLine, file: file, line: line)
@@ -573,7 +563,6 @@ final class StateTruthTests: XCTestCase {
         XCTAssertEqual(renderedFigures(flipFirst).numeral, renderedFigures(landFirst).numeral)
         XCTAssertEqual(renderedFigures(flipFirst).actualLine, renderedFigures(landFirst).actualLine)
         XCTAssertEqual(renderedFigures(flipFirst).badgeRange, renderedFigures(landFirst).badgeRange)
-        XCTAssertEqual(renderedFigures(flipFirst).share, renderedFigures(landFirst).share)
     }
 
     // MARK: - Source pins (view layer is not compiled into this target)
@@ -598,13 +587,23 @@ final class StateTruthTests: XCTestCase {
     func testHeroNumeralIsDisplayOnly_sourcePin() throws {
         let outfitView = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         let heroView = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        // GEN-6 (RW-67): the numeral moved — re-pinned against
+        // its new home, as this pin's own instruction directs.
+        // The sheet header now composes HomeHeroNumeralRow with
+        // the same value expression; the numeral Text lives in
+        // that file's HeroNumeralText.
+        let numeralRow = try sourceFile("../RunWear/Views/HomeHeroNumeralRow.swift")
+        XCTAssertTrue(outfitView.contains("HomeHeroNumeralRow("),
+                      "the sheet header composes the extracted numeral row")
+        XCTAssertTrue(outfitView.contains("viewModel.temperatureUnit.format(viewModel.currentFeelsLike)"),
+                      "the row is fed the same feels-like value expression")
 
         // The sheet numeral and its modifier chain: a plain Text —
         // no gesture, no animation, no content transition.
-        let lines = outfitView.components(separatedBy: "\n")
+        let lines = numeralRow.components(separatedBy: "\n")
         let numeralIndex = try XCTUnwrap(
-            lines.firstIndex(where: { $0.contains("Text(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))") }),
-            "the sheet numeral was not found — if it moved, re-pin WS-2 against its new home"
+            lines.firstIndex(where: { $0.contains("Text(text)") && $0.count < 20 }),
+            "the sheet numeral was not found in its new home — if it moved again, re-pin WS-2 against its new home"
         )
         let chain = lines[numeralIndex...min(numeralIndex + 5, lines.count - 1)].joined(separator: "\n")
         for forbidden in ["onTapGesture", "onLongPressGesture", "gesture", "contentTransition", ".animation", "withAnimation", "Button"] {
@@ -614,7 +613,7 @@ final class StateTruthTests: XCTestCase {
         // No numeric content transition exists on either home view:
         // a Text(String) with no contentTransition swaps discretely
         // and can never display an intermediate (false) value.
-        for source in [outfitView, heroView] {
+        for source in [outfitView, heroView, numeralRow] {
             XCTAssertFalse(source.contains("contentTransition"))
             XCTAssertFalse(source.contains("numericText"))
         }

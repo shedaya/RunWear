@@ -7,7 +7,6 @@ struct WeatherOutfitView: View {
     // RW-25 sheet numeral: ~80pt, Dynamic-Type-scaled relative to
     // .largeTitle (the RW-6.3 pattern the hero numeral used), capped
     // by the text's dynamicTypeSize limit at the call site.
-    @ScaledMetric(relativeTo: .largeTitle) private var sheetNumeralSize: CGFloat = 80
     /// RW-26 "Wear I've Run": the collection model — the current
     /// session's entry drives the mini bar dock (GEN-3 session
     /// rule); the store behind it is the collection itself.
@@ -48,6 +47,9 @@ struct WeatherOutfitView: View {
     /// GEN-3 (WS-A(2)): the hero pill's free-look state opens the
     /// Premium paywall from the hero.
     @State private var showHeroPillPaywall = false
+    /// GEN-6 (RW-61): the looks library sheet, opened from the
+    /// failed cell's "See all your looks" door.
+    @State private var showLooksLibrary = false
 
     // R-15 rating moment: this view exists only when a recommendation
     // is on screen, so appearing here IS the proven-value signal. The
@@ -234,7 +236,16 @@ struct WeatherOutfitView: View {
                     openedInNowState: viewModel.isNowSelection,
                     nowHour: viewModel.dayChartNowHour,
                     isPresented: $showTimePicker,
-                    onConfirm: { viewModel.applyTimePickerCommit($0) }
+                    onConfirm: { viewModel.applyTimePickerCommit($0) },
+                    // GEN-6 (RW-66): the day picker's door inside
+                    // the sheet (its context line's date segment).
+                    // Confirm writes the view model's selectedDate
+                    // — the .onChange on the date-sheet modifier
+                    // above re-solves home exactly once, keeping
+                    // the selected hour — and dismisses this sheet
+                    // too, landing home on the new day.
+                    dateSelection: $viewModel.selectedDate,
+                    onDateConfirmed: { showTimePicker = false }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -336,6 +347,19 @@ struct WeatherOutfitView: View {
         .onChange(of: viewModel.selectedWeatherSnapshot?.feelsLikeFahrenheit) { _, _ in
             recordTodaysEntry()
         }
+        // GEN-6 (RW-42 / DA-09): the fetch-completion re-offer.
+        // While a fetch is in flight the recording gate refuses
+        // every trigger (a place can be named before its weather
+        // lands — see recordTodaysEntry); when the fetch lands,
+        // THIS trigger records the one solved selection — place,
+        // weather, kit, and hero from the same fetch — so a
+        // narrated update and the card it announces are a single
+        // settle, never a stale intermediate.
+        .onChange(of: viewModel.isLoading) { _, isLoading in
+            if !isLoading {
+                recordTodaysEntry()
+            }
+        }
         .sheet(isPresented: $showCollection) {
             NavigationStack {
                 WearIveRunCollectionView(
@@ -362,12 +386,21 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showLooksLibrary) {
+            // GEN-6 (RW-61): the looks library, one tap from the
+            // failed cell's home line.
+            NavigationStack {
+                YourLooksLibraryView()
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
         // Neutral THREE-door rating moment (frame 49): feedback
         // first, then the rating door, then not-now. Any door
         // closes it for the season; the rating door hands off to
         // the system review sheet.
         .alert("Enjoying RunWear?", isPresented: $showRatingPrompt) {
-            Button("Send Feedback") {
+            Button("Send feedback") {
                 ratingTracker.recordPromptShown()
                 showFeedbackSheet = true
             }
@@ -375,7 +408,7 @@ struct WeatherOutfitView: View {
                 ratingTracker.recordPromptShown()
                 requestReview()
             }
-            Button("Not Now", role: .cancel) {
+            Button("Not now", role: .cancel) {
                 ratingTracker.recordPromptShown()
             }
         } message: {
@@ -390,9 +423,9 @@ struct WeatherOutfitView: View {
     // the T-4 ruling (Sol, Nov 3, 2026 — register D-15's iOS half):
     // the design has no home share on either platform, and sharing
     // lives in the collection, whose Poster / Kit Card share is
-    // the designed artifact path (WearIveRunCollectionView). The
-    // view model's shareText composition remains as a tested
-    // view-model computation with no home consumer.
+    // the designed artifact path (WearIveRunCollectionView).
+    // GEN-6 (DA-23): the view model's consumerless shareText
+    // computation is deleted with this comment's predecessor.
 
     // MARK: - Layouts (design record §5.2, frame f5)
 
@@ -621,32 +654,14 @@ struct WeatherOutfitView: View {
             // row that used to render under the date/time pills
             // is retired from home; the weather detail sheet
             // itself is unchanged).
-            HStack(alignment: .top, spacing: 14) {
-                HStack(alignment: .center, spacing: 14) {
-                    Text(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))
-                        .font(.system(size: sheetNumeralSize, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundColor(AppTheme.inkPrimary)
-                        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(AppTheme.temperatureColor(for: viewModel.currentTempBracket))
-                            .frame(width: 8, height: 8)
-                        Text(viewModel.currentTempBracket.rawValue)
-                            .font(.appEyebrow)
-                            .foregroundColor(AppTheme.inkPrimary)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(AppTheme.cardOnSheet))
-                }
-
-                Spacer(minLength: 0)
-
-                heroWeatherFigures
-                    .padding(.top, 8)
-            }
+            HomeHeroNumeralRow(
+                formattedTemperature: viewModel.temperatureUnit.format(viewModel.currentFeelsLike),
+                bracket: viewModel.currentTempBracket,
+                windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
+                rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
+                humidityPercent: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
+                uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0
+            )
 
             // (c) RW-26 (notes §7.1): the line carries the actual
             // temperature ONLY.
@@ -697,6 +712,10 @@ struct WeatherOutfitView: View {
                     Text(sheetMoment)
                     Text("›")
                 }
+                // GEN-6 (RW-54, iOS half): the design specifies
+                // the moment in pine BOLD — the line's inherited
+                // semibold rendered it a weight light.
+                .font(.system(size: 15.5, weight: .bold))
                 .foregroundColor(AppTheme.pinePayload)
             }
             .buttonStyle(.plain)
@@ -731,48 +750,6 @@ struct WeatherOutfitView: View {
     /// (mph / % / % / "N of 11"), even row spacing. The figures
     /// describe the selected moment, from the same snapshot the
     /// retired pills row read.
-    private var heroWeatherFigures: some View {
-        let snapshot = viewModel.selectedWeatherSnapshot
-        let wind = snapshot?.windSpeed ?? weather.currentWeather.windspeed
-        let rain = snapshot?.precipitationProbability ?? 0
-        let humidity = snapshot?.humidity ?? 50
-        let uv = snapshot?.uvIndex ?? 0
-        return Grid(horizontalSpacing: 12, verticalSpacing: 3) {
-            GridRow {
-                heroFigureLabel("WIND")
-                heroFigureValue("\(Int(wind.rounded())) mph")
-            }
-            GridRow {
-                heroFigureLabel("RAIN")
-                heroFigureValue("\(rain)%")
-            }
-            GridRow {
-                heroFigureLabel("HUMIDITY")
-                heroFigureValue("\(humidity)%")
-            }
-            GridRow {
-                heroFigureLabel("UV")
-                heroFigureValue("\(Int(uv.rounded())) of 11")
-            }
-        }
-    }
-
-    private func heroFigureLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 10, weight: .bold))
-            .tracking(0.7)
-            .foregroundColor(AppTheme.inkMuted)
-            .gridColumnAlignment(.leading)
-    }
-
-    private func heroFigureValue(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 13.5, weight: .semibold))
-            .monospacedDigit()
-            .foregroundColor(AppTheme.inkPrimary)
-            .gridColumnAlignment(.trailing)
-    }
-
     /// The Choose-a-Time sheet's default draft hour: the
     /// currently selected hour — except in the NOW state on the
     /// location's today, where the draft starts on the
@@ -872,6 +849,8 @@ struct WeatherOutfitView: View {
         showSettings || showDatePicker || showTimePicker || showShop
             || showLocationPicker || selectedWeatherDetail != nil
             || showCollection || showFeedbackSheet
+            // GEN-6 (RW-61): the looks library is a home sheet too.
+            || showLooksLibrary
     }
 
     /// The mini bar dock: the session's entry drives the bar —
@@ -978,6 +957,20 @@ struct WeatherOutfitView: View {
         // session model's other side, not an accident.
         guard viewModel.isViewingLocationNow else { return }
         guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
+        // GEN-6 (RW-42 / DA-09): never record while a fetch is
+        // in flight. A manual place switch names the new place
+        // synchronously (setManualLocation) and fetches its
+        // weather asynchronously — so the place trigger used to
+        // file the OUTGOING place's feels-like, kit, and hero
+        // under the INCOMING place's name, classify it a place
+        // update, and ANNOUNCE it ("Update to Miami, FL, Now")
+        // while the expanded card still showed that stale
+        // outfit — matching neither adjacent recommendation,
+        // exactly the recording's bar/card split. The
+        // isLoading re-offer below records the settle once the
+        // fetch has landed, from the one solved selection, so
+        // the announced state and the card are the same entry.
+        guard !viewModel.isLoading else { return }
         // W-15: never record under a placeholder. Until the
         // reverse geocode (or a manual selection) derives a
         // SimplePlace, `placeDisplayName` is a non-place label
@@ -1079,11 +1072,16 @@ struct WeatherOutfitView: View {
         }
     }
 
-    /// The five metric details the detail sheet tabs between —
-    /// the same values the pills below present.
+    /// The settled metric details the detail sheet tabs between
+    /// (GEN-6 RW-63; frames 40/41, §3.3): feels-like and actual
+    /// first — carrying the home state's numbers unchanged, in
+    /// the home state's own formatting — then condition, wind,
+    /// humidity, UV, and precipitation where carried.
     private var allWeatherDetails: [WeatherDetailType] {
         let snapshot = viewModel.selectedWeatherSnapshot
         return [
+            .feelsLike(value: viewModel.temperatureUnit.format(viewModel.currentFeelsLike)),
+            .actual(value: viewModel.temperatureUnit.format(viewModel.currentTemperature)),
             .condition(viewModel.currentCondition),
             .wind(
                 speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
@@ -1091,8 +1089,8 @@ struct WeatherOutfitView: View {
                 gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
             ),
             .humidity(percentage: snapshot?.humidity ?? 50),
-            .precipitation(percentage: snapshot?.precipitationProbability ?? 0),
-            .uvIndex(value: snapshot?.uvIndex ?? 0)
+            .uvIndex(value: snapshot?.uvIndex ?? 0),
+            .precipitation(percentage: snapshot?.precipitationProbability ?? 0)
         ]
     }
 
@@ -1330,6 +1328,16 @@ struct WeatherOutfitView: View {
                     }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.inkPrimary)
+                    // GEN-6 (RW-61): the library door, one tap from
+                    // where the failed cell is encountered (frame
+                    // 20's door wording). The failure itself is
+                    // never badged on home — this quiet door is the
+                    // whole home footprint.
+                    Button("See all your looks") {
+                        showLooksLibrary = true
+                    }
+                    .font(.appSecondary.weight(.semibold))
+                    .foregroundColor(AppTheme.inkPrimary)
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 16)
@@ -1552,7 +1560,9 @@ struct DarkClothingItemCard: View {
                 Text(item.description)
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
-                    .lineLimit(2)
+                    // GEN-6 (RW-54, iOS half): the design settles
+                    // a ONE-line outfit-row note.
+                    .lineLimit(1)
             }
 
             Spacer()

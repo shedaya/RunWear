@@ -23,6 +23,13 @@ struct MakeItMeForkView: View {
     let onCustomize: () -> Void
     let onStock: () -> Void
 
+    /// GEN-6 (RW-52): the fork's two doors are CHOICES (frame 32):
+    /// a door selects, and the settled "Continue" below the
+    /// honesty line commits the choice. The Make It Me door is
+    /// the default selection, as the fork's primary door.
+    private enum ForkDoor { case makeItMe, standard }
+    @State private var selectedDoor: ForkDoor = .makeItMe
+
     var body: some View {
         // GEN-5 (RW-29 FA-40 + EX-21): the photo band is a FIXED
         // header, not the first element of the scrolling column —
@@ -70,6 +77,13 @@ struct MakeItMeForkView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+                // GEN-6 (RW-52): the Make It Me script is the
+                // fork's TITLE (design-spec §10.1, frame 32) — it
+                // heads the fork, not the inside of a card.
+                Text("Make It Me")
+                    .font(.greatVibes(size: 34))
+                    .foregroundColor(AppTheme.inkPrimary)
+
                 Text("See yourself in every outfit.")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
@@ -88,21 +102,16 @@ struct MakeItMeForkView: View {
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
 
-                // Option A — customize
+                // Option A — customize. GEN-6 (RW-52): the card
+                // carries ONLY its settled door heading + door
+                // button (frame 32) — the unlisted description
+                // line is removed, and the script moved up to be
+                // the fork's title.
                 VStack(alignment: .leading, spacing: 10) {
-                    // RW-26 (notes §7.5): the fork introduces the
-                    // feature under its script wordmark.
-                    Text("Make It Me")
-                        .font(.greatVibes(size: 25))
+                    Text("Make it me")
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    // WS-10 (A1): the free-looks promise lives
-                    // ONLY on frame 28's Welcome screen — the fork
-                    // (frame 32) carries no promise line; its copy
-                    // is the choice itself.
-                    Text("Upload one photo of your face, and RunWear makes your outfit photos from it — starting with the one you're looking at.")
-                        .font(.system(size: 15))
-                        .foregroundColor(AppTheme.inkSecondary)
-                    Button(action: onCustomize) {
+                    Button { selectedDoor = .makeItMe } label: {
                         Text("Use my photos")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
@@ -113,16 +122,18 @@ struct MakeItMeForkView: View {
                 }
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
+                .overlay(RoundedRectangle(cornerRadius: 16)
+                    .stroke(selectedDoor == .makeItMe ? AppTheme.primaryColor : Color.clear, lineWidth: 2))
+                .onTapGesture { selectedDoor = .makeItMe }
 
-                // Option B — stock (a complete, respected choice)
+                // Option B — stock (a complete, respected choice).
+                // GEN-6 (RW-52 + DA-24): the heading is the settled
+                // "Standard photos" (the button already conformed).
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Use the standard photos")
+                    Text("Standard photos")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text("Keep the photo library RunWear matches to your outfit and your weather. You can switch to Make It Me any time in Settings.")
-                        .font(.system(size: 15))
-                        .foregroundColor(AppTheme.inkSecondary)
-                    Button(action: onStock) {
+                    Button { selectedDoor = .standard } label: {
                         Text("Use standard photos")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
@@ -133,11 +144,28 @@ struct MakeItMeForkView: View {
                 }
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
+                .overlay(RoundedRectangle(cornerRadius: 16)
+                    .stroke(selectedDoor == .standard ? AppTheme.primaryColor : Color.clear, lineWidth: 2))
+                .onTapGesture { selectedDoor = .standard }
 
                 Text("Either way, your recommendations don't change — only the photo does.")
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
+
+                // GEN-6 (RW-52): the settled "Continue" (frame 32)
+                // commits the chosen door — Make It Me goes to
+                // consent, Standard photos keeps the standard set.
+                Button {
+                    if selectedDoor == .makeItMe { onCustomize() } else { onStock() }
+                } label: {
+                    Text("Continue")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
+                }
                     }
                     .padding(.bottom, 24)
                 }
@@ -446,9 +474,8 @@ struct MakeItMeCaptureView: View {
                 // line no longer renders in intake — the settled
                 // intake is ONE photo, face only (design-spec
                 // §10: the generator reads only the face; the
-                // full-body slot is out). The copy constant stays
-                // defined for the historical Oct 31 ruling; the
-                // flow does not present it.
+                // full-body slot is out). GEN-6 (DA-23): the dead
+                // copy constant itself is now deleted.
                 if isReplace {
                     Text("Replacing your photos remakes today's look right away. Your other looks update as they're made again.")
                         .font(.system(size: 14))
@@ -523,13 +550,30 @@ struct MakeItMeCaptureView: View {
                                 if let report = photo.report {
                                     checkReportList(report)
                                 }
+                                // GEN-6 (RW-51): the failure row's
+                                // two settled doors (design-spec
+                                // §10.4, frame 18) — the guided
+                                // camera FIRST, under its settled
+                                // label, and a labelled library door.
                                 Button {
                                     photos.removeAll { $0.id == photo.id }
                                     showCamera = true
                                 } label: {
                                     HStack(spacing: 6) {
                                         Image(systemName: "camera.fill")
-                                        Text("Retake with the guided camera")
+                                        Text("Take the guided selfie")
+                                    }
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(AppTheme.pinePayload)
+                                }
+                                .padding(.top, 2)
+                                Button {
+                                    photos.removeAll { $0.id == photo.id }
+                                    showPicker = true
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "photo.on.rectangle")
+                                        Text("Choose a different photo")
                                     }
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(AppTheme.pinePayload)

@@ -56,10 +56,15 @@ struct ShopModal: View {
                 // FTC disclosure + explicit Close (Android's shop
                 // sheet carries both; the iOS sheet had neither).
                 VStack(spacing: 12) {
+                    // GEN-6 (RW-64): the settled disclosure
+                    // substance (frame 44 / §5), all three elements:
+                    // the links open Amazon; RunWear may earn a
+                    // commission; it never changes the outfit
+                    // recommended.
                     Text("Affiliate Disclosure: ")
                         .font(.caption.weight(.bold))
                         .foregroundColor(AppTheme.inkSecondary)
-                    + Text("As an Amazon Associate, RunWear earns from qualifying purchases. When you click these links, we may earn a small commission at no extra cost to you.")
+                    + Text("These links open Amazon. As an Amazon Associate, RunWear may earn a commission from qualifying purchases, at no extra cost to you. It never changes the outfit we recommend.")
                         .font(.caption)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -310,9 +315,12 @@ private struct ShopItemRow: View {
 
                 Spacer()
 
-                // Shop arrow
-                Image(systemName: "cart.fill")
-                    .font(.body)
+                // GEN-6 (RW-64): the settled per-row door —
+                // "Shop ›" as labelled text, replacing the bare
+                // cart glyph (the row itself still opens Amazon,
+                // or selects for the inspector at regular width).
+                Text("Shop ›")
+                    .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.primaryColor)
             }
             .padding(12)

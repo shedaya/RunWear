@@ -5,6 +5,23 @@ import SwiftUI
 /// outfit rows) in the theme surfaces, never a spinner over blank.
 struct LoadingView: View {
     var body: some View {
+        ZStack {
+            skeleton
+            // GEN-6 (RW-60): the settled line (frame 46) rides the
+            // HOME loading surface — it existed only in onboarding.
+            // It sits OUTSIDE the redacted skeleton so it reads as
+            // text, not as another placeholder bar.
+            VStack {
+                Spacer()
+                Text("Getting your first recommendation…")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .padding(.bottom, 40)
+            }
+        }
+    }
+
+    private var skeleton: some View {
         VStack(spacing: 0) {
             // Photo zone.
             RoundedRectangle(cornerRadius: 0)

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Settings (RW-6.7)
 //
@@ -245,36 +246,13 @@ struct SettingsModal: View {
                 currentCombination: currentCombination
             )
 
-        case .deleteMyData:
-            // WS-5 (D-14): Delete my data is its OWN section
-            // (RW-16.30 decision 5a: the account-level erasure,
-            // offered in every mode and every flag state — a
-            // stock-mode user still has an account). It used to
-            // be a row inside the Make It Me section, so it
-            // vanished whenever that section emitted nothing;
-            // now Settings hosts it directly, and its
-            // confirmation rides the same single alert slot.
-            // GEN-5 (RW-28 item 25): the account delete is
-            // quarantined under its own "Danger zone" heading.
-            Section {
-                Button(role: .destructive) {
-                    makeItMePresentation.alert = .confirmDeleteData
-                } label: {
-                    Text("Delete my data")
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } header: {
-                settingsSectionHeader("Danger zone")
-            }
-
         case .support:
             // R-15: the always-available feedback + rating doors.
             Section {
                 Button {
                     showFeedback = true
                 } label: {
-                    Label("Send Feedback", systemImage: "envelope")
+                    Label("Send feedback", systemImage: "envelope")
                 }
 
                 Link(destination: Self.reviewURL) {
@@ -290,6 +268,40 @@ struct SettingsModal: View {
             } header: {
                 settingsSectionHeader("About")
             }
+        case .dangerZone:
+            // GEN-6 (RW-56): ONE quarantined "Danger zone"
+            // section, seated LAST in the inventory, carrying
+            // BOTH destructive rows. Gen-5 left them split: the
+            // photos delete closed the Make It Me composition
+            // under one "Danger zone" heading and the data delete
+            // sat here under a second, identical heading, both
+            // before Support/About. The data delete keeps its
+            // WS-5 terms (offered in every mode and flag state —
+            // a stock-mode user still has an account); the photos
+            // delete shows when the user has photos in play
+            // (free/subscribed modes), and both confirmations ride
+            // the same single alert slot.
+            Section {
+                if personalStore.mode != .stock {
+                    Button(role: .destructive) {
+                        makeItMePresentation.alert = .confirmDelete
+                    } label: {
+                        Text("Delete my photos")
+                            .font(.system(size: 16, weight: .medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                Button(role: .destructive) {
+                    makeItMePresentation.alert = .confirmDeleteData
+                } label: {
+                    Text("Delete my data")
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } header: {
+                settingsSectionHeader("Danger zone")
+            }
+
         }
     }
 
@@ -465,9 +477,22 @@ struct FeedbackSheet: View {
     }
 
     /// The derived bundle that rides with the report — exactly
-    /// what the disclosure section lists.
+    /// what the disclosure section lists. GEN-6 (RW-59): the
+    /// settled disclosure substance (design-spec §13, frame 48)
+    /// is app version, device, and your settings — never health
+    /// data, never your location. The bundle discloses exactly
+    /// what submit() sends: these three entries, nothing else.
     private var bundle: [String: String] {
-        ["App version": appVersion]
+        let defaults = UserDefaults.standard
+        let fit = defaults.string(forKey: "genderPreference") ?? "not set"
+        let unit = defaults.string(forKey: "temperatureUnit") ?? "not set"
+        let comfort = (defaults.object(forKey: "comfortLevel") as? Int)
+            .flatMap(ComfortLevel.init(rawValue:))?.label ?? "not set"
+        return [
+            "App version": appVersion,
+            "Device": "\(UIDevice.current.model), \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
+            "Settings": "Fit: \(fit) · Units: \(unit) · Body temperature: \(comfort)",
+        ]
     }
 
     private var fallbackURL: URL? {
@@ -528,7 +553,7 @@ struct FeedbackSheet: View {
                             .font(.appFootnote)
                             .foregroundColor(AppTheme.inkSecondary)
                     }
-                    Text("Plus your message, exactly as written, under the category you picked. Nothing else — no location beyond what you type, no photos.")
+                    Text("Plus your message, exactly as written, under the category you picked. Nothing else — no health data, no location, no photos.")
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                 } header: {
@@ -562,7 +587,7 @@ struct FeedbackSheet: View {
             .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
             .background(AppTheme.background.ignoresSafeArea())
-            .navigationTitle("Send Feedback")
+            .navigationTitle("Send feedback")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

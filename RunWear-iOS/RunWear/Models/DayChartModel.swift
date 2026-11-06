@@ -158,6 +158,28 @@ enum DayChartNowMarker {
     }
 }
 
+// MARK: - Beyond-forecast naming (GEN-6, DA-21)
+
+/// Design-spec §6 / frame 42: territory past the forecast is
+/// NAMED as beyond the forecast, never left as silent empty
+/// space. The date cells already carry the name ("Beyond
+/// forecast", DatePickerSheet); a PARTIAL day in the time picker
+/// — a day whose forecast covers only part of the 24-hour scale —
+/// carries the same name for its truncated region. A full day
+/// (forecast covering hours 0…23) has no beyond-forecast region
+/// and names nothing.
+enum DayChartBeyondForecast {
+    static let label = "Beyond forecast"
+
+    /// The caption for a chart, or nil when the day is fully
+    /// covered by the forecast.
+    static func caption(for model: DayChartModel) -> String? {
+        let coversFullDay = model.firstHour <= DayChartGeometry.dayFirstHour
+            && model.lastHour >= DayChartGeometry.dayLastHour
+        return coversFullDay ? nil : label
+    }
+}
+
 // MARK: - Chart geometry (pure, so the mapping is pinnable)
 
 /// The chart's coordinate mapping, shared by the glance band and
@@ -333,6 +355,39 @@ struct TimePickerDraft: Equatable {
         }
         return .explicitPick(hour: draftHour)
     }
+}
+
+// MARK: - Date-picker draft (GEN-6 RW-66)
+
+/// The day picker's draft, the date-side mirror of
+/// TimePickerDraft's semantics (design-spec §6 mechanics applied
+/// to the frame-42 sibling sheet): opening snapshots the
+/// selection; tapping days moves the DRAFT only — the confirmed
+/// selection is written exactly once, by Confirm, through the
+/// host's existing re-solve path. Cancel (or swipe-dismiss)
+/// discards the draft, so the prior selection is restored
+/// exactly because it was never written.
+struct DatePickerDraft: Equatable {
+    /// The selection as it was when the sheet opened.
+    let originalDate: Date
+    private(set) var draftDate: Date
+
+    init(originalDate: Date) {
+        self.originalDate = originalDate
+        self.draftDate = originalDate
+    }
+
+    mutating func select(_ date: Date) {
+        draftDate = date
+    }
+
+    /// True when the drafted day differs from the confirmed day.
+    var isChanged: Bool {
+        !Calendar.current.isDate(draftDate, inSameDayAs: originalDate)
+    }
+
+    /// The date Confirm writes to the selection.
+    func commit() -> Date { draftDate }
 }
 
 // MARK: - Headline-line state

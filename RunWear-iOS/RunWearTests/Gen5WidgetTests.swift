@@ -148,7 +148,13 @@ final class Gen5WidgetTests: XCTestCase {
     }
 
     private func widgetSource() throws -> String {
+        // GEN-6 (RW-67): the entry view moved to
+        // RunWearWidgetViews.swift (dual-membered for render
+        // tests; the definition file's @main cannot be). The
+        // pins below read the widget's full source of record —
+        // both files, as one text.
         try sourceFile("../RunWearWidget/RunWearWidget.swift")
+            + sourceFile("../RunWearWidget/RunWearWidgetViews.swift")
     }
 
     func testWidgetOffersExactlyTheCommissionedFamilies() throws {

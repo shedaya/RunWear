@@ -5,12 +5,14 @@ import Foundation
 // GEN-3 (WS-F): the annual row's old "about 16% less than paying
 // monthly" comparison is REMOVED — Sol's ruling replaces the
 // monthly comparison with a per-run framing of the annual price.
-// The fine print DERIVES its cents figure from the displayed
-// product's annual price (parameterized: $9.99 control / $19.99 /
-// $29.99 experiment arms), with its basis stated in the line
-// itself — at four to five runs a week (234 runs a year at the
-// 4.5 midpoint), $9.99/year is only about 4¢ per run. No cents
-// figure is ever hardcoded, so the line stays honest at every arm.
+// The per-run line under the price DERIVES its cents figure from
+// the displayed product's annual price (parameterized: $9.99
+// control / $19.99 / $29.99 experiment arms) — at four to five
+// runs a week (234 runs a year at the 4.5 midpoint), $9.99/year
+// is only about 4¢ per run. No cents figure is ever hardcoded, so
+// the line stays honest at every arm. GEN-6 (DA-20/RW-58): the
+// fine print below the card carries the basis only, in the
+// settled wording — it does not restate the per-run figure.
 
 /// Pure label composition for the paywall rows — the iOS half of the
 /// cross-platform rule (Android: MakeItMeStrings.monthlyRowLabel /
@@ -86,12 +88,16 @@ enum MakeItMePriceLabels {
         return Int(cents.rounded())
     }
 
-    /// The paywall fine print (WS-F): the annual price framed per
-    /// run, basis stated in the line. Composed only from the
+    /// The paywall fine print (GEN-6, DA-20 + RW-58): the settled
+    /// BASIS ONLY — "$9.99 a year, at 4–5 runs a week." The
+    /// per-run claim itself is stated exactly once on the paywall,
+    /// in the per-run line directly under the annual price
+    /// (`perRunLine`); the gen-5 fine print restated that claim in
+    /// different words below the card. Composed only from the
     /// fetched product's price string + amount; nil when either is
     /// unresolved, so no price framing renders without a price.
     static func perRunFinePrint(annualPriceString: String?, annual: Decimal?) -> String? {
-        guard let annualPriceString, let cents = perRunCents(annual: annual) else { return nil }
-        return "At four to five runs a week, \(annualPriceString)/year is only about \(cents)¢ per run."
+        guard let annualPriceString, annual != nil else { return nil }
+        return "\(annualPriceString) a year, at 4–5 runs a week."
     }
 }

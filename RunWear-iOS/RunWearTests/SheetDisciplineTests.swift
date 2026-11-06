@@ -45,16 +45,17 @@ final class SheetDisciplineTests: XCTestCase {
 
     func testHomeSheetsRestAtNamedDetents_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        // 9 sheets: Settings, Date, Time, Shop, WeatherDetail,
-        // Location, Collection, Feedback, and (GEN-3 WS-A(2)) the
-        // hero pill's Premium paywall — the pill's "Get unlimited"
-        // door, resting at .large like every other scrolling
-        // paywall presentation.
-        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 6,
-                       "Settings, Shop, WeatherDetail, Collection, Feedback and the pill paywall rest at .large only")
+        // 10 sheets: Settings, Date, Time, Shop, WeatherDetail,
+        // Location, Collection, Feedback, (GEN-3 WS-A(2)) the
+        // hero pill's Premium paywall, and (GEN-6 RW-61) the
+        // looks library — the failed cell's "See all your looks"
+        // door, resting at .large like the other scrolling
+        // surfaces.
+        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 7,
+                       "Settings, Shop, WeatherDetail, Collection, Feedback, the pill paywall and the looks library rest at .large only")
         XCTAssertEqual(occurrences(view, ".presentationDetents([.medium, .large])"), 3,
                        "only Date, Time and Location keep a medium detent")
-        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 9,
+        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 10,
                        "every home sheet names its detents and shows the drag indicator")
     }
 
@@ -141,10 +142,13 @@ final class SheetDisciplineTests: XCTestCase {
 
     func testMakeItMeSheetContentsEachCarryOneScrollView_sourcePin() throws {
         // Photos and Subscription are two of the single slot's
-        // contents; each carries exactly one ScrollView.
+        // contents; each carries exactly one ScrollView. GEN-6
+        // (RW-61): the looks library at the file's end carries
+        // the third — it is hosted from home in its own sheet,
+        // not through the Settings slot.
         let mim = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
-        XCTAssertEqual(occurrences(mim, "ScrollView {"), 2,
-                       "Your Photos and the Subscription sheet each own exactly one ScrollView")
+        XCTAssertEqual(occurrences(mim, "ScrollView {"), 3,
+                       "Your Photos, the Subscription sheet and the looks library each own exactly one ScrollView")
     }
 
     // MARK: - The WS-3 dim seam stays intact

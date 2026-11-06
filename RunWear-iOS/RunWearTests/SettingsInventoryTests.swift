@@ -21,9 +21,9 @@ final class SettingsInventoryTests: XCTestCase {
                 .bodyTemperature,
                 .helpImprove,
                 .makeItMe,
-                .deleteMyData,
                 .support,
                 .about,
+                .dangerZone,
             ]
         )
     }
@@ -40,16 +40,19 @@ final class SettingsInventoryTests: XCTestCase {
         }
     }
 
-    func testAppearanceIsFirstAndAboutIsLast() {
+    func testAppearanceIsFirstAndDangerZoneIsLast() {
+        // GEN-6 (RW-56): the ONE danger zone is seated LAST —
+        // after About — not split before Support/About.
         XCTAssertEqual(SettingsInventory.sections.first, .appearance)
-        XCTAssertEqual(SettingsInventory.sections.last, .about)
+        XCTAssertEqual(SettingsInventory.sections.last, .dangerZone)
     }
 
-    func testDeleteMyDataIsItsOwnSectionAfterMakeItMeAndBeforeSupport() {
+    func testDangerZoneIsASectionDistinctFromMakeItMe() {
         let sections = SettingsInventory.sections
-        let delete = sections.firstIndex(of: .deleteMyData)!
-        XCTAssertGreaterThan(delete, sections.firstIndex(of: .makeItMe)!)
-        XCTAssertLessThan(delete, sections.firstIndex(of: .support)!)
+        XCTAssertEqual(sections.filter { $0 == .dangerZone }.count, 1,
+                       "exactly one danger zone in the inventory")
+        XCTAssertGreaterThan(sections.firstIndex(of: .dangerZone)!,
+                             sections.firstIndex(of: .about)!)
     }
 
     // MARK: - The Make It Me section's rows (frames 35–37)
@@ -82,11 +85,11 @@ final class SettingsInventoryTests: XCTestCase {
         )
         XCTAssertEqual(
             MakeItMeSettingsPresentation.rows(makeItMeEnabled: true, mode: .free),
-            [.yourPhotos, .premium, .deletePhotos]
+            [.yourPhotos, .premium]
         )
         XCTAssertEqual(
             MakeItMeSettingsPresentation.rows(makeItMeEnabled: true, mode: .subscribed),
-            [.yourPhotos, .manageSubscription, .deletePhotos]
+            [.yourPhotos, .manageSubscription]
         )
     }
 
@@ -122,7 +125,7 @@ final class SettingsInventoryTests: XCTestCase {
         let cases = [
             "case .appearance:", "case .temperatureUnit:", "case .fitPreference:",
             "case .bodyTemperature:", "case .helpImprove:", "case .makeItMe:",
-            "case .deleteMyData:", "case .support:", "case .about:",
+            "case .support:", "case .about:", "case .dangerZone:",
         ]
         var lastIndex = -1
         for marker in cases {
@@ -144,17 +147,28 @@ final class SettingsInventoryTests: XCTestCase {
                       "inside the section, the flag gates only the not-started row's door")
     }
 
-    func testDeleteMyDataLivesInSettingsNotInTheMakeItMeSection_sourcePin() throws {
+    func testDangerZoneLivesInSettingsNotInTheMakeItMeSection_sourcePin() throws {
+        // GEN-6 (RW-56): BOTH destructive rows live in Settings'
+        // one danger zone; the Make It Me composition hosts
+        // neither and has no destructive group of its own.
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
         XCTAssertTrue(settings.contains("Text(\"Delete my data\")"),
                       "Delete my data must be Settings' own section row")
+        XCTAssertTrue(settings.contains("Text(\"Delete my photos\")"),
+                      "Delete my photos joins the same danger zone")
         XCTAssertTrue(settings.contains("makeItMePresentation.alert = .confirmDeleteData"),
                       "its confirmation rides the surface's single alert slot")
+        XCTAssertTrue(settings.contains("makeItMePresentation.alert = .confirmDelete"),
+                      "the photos delete rides the same alert slot")
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertFalse(section.contains("Text(\"Delete my data\")"),
                        "the Make It Me section must not host Delete my data (the D-14 coupling)")
         XCTAssertFalse(section.contains("confirmDeleteData"),
                        "the Make It Me section must not own the data-delete alert")
+        XCTAssertFalse(section.contains("destructiveSection"),
+                       "the Make It Me composition has no destructive group (RW-56)")
+        XCTAssertFalse(section.contains("Text(\"Danger zone\")"),
+                       "exactly one Danger zone heading exists — Settings' (RW-56)")
     }
 
     func testAboutCarriesTheRealStoreVersion_sourcePin() throws {
@@ -166,7 +180,7 @@ final class SettingsInventoryTests: XCTestCase {
 
     func testSectionViewRendersItsRowsUnderTheModelTitles_sourcePin() throws {
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
-        for row in ["notStarted", "yourPhotos", "premium", "manageSubscription", "deletePhotos"] {
+        for row in ["notStarted", "yourPhotos", "premium", "manageSubscription"] {
             XCTAssertTrue(section.contains("MakeItMeSettingsRow.\(row).title"),
                           "the section must render the \(row) row under the model's title")
         }
@@ -175,15 +189,15 @@ final class SettingsInventoryTests: XCTestCase {
     // MARK: - GEN-3 (WS-D) · the redesigned Make It Me groups
 
     /// The redesign's binding order: heading/status group → Your
-    /// photos group → Premium offer group → destructive group
-    /// last. The composition's body must list the groups in that
-    /// order (study §Redesign; gen-2's flat stack is the defect).
+    /// photos group → Premium offer group. (GEN-6 / RW-56: the
+    /// destructive group that closed this composition moved to
+    /// Settings' one danger zone, seated last overall.)
     func testGen3MakeItMeGroupsRenderInSpecOrder_sourcePin() throws {
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         let bodyStart = try XCTUnwrap(section.range(of: "var body: some View"))
         let bodyEnd = try XCTUnwrap(section.range(of: "private var statusSection"))
         let body = String(section[bodyStart.lowerBound..<bodyEnd.lowerBound])
-        let groups = ["statusSection", "photosSection", "offerSection", "destructiveSection"]
+        let groups = ["statusSection", "photosSection", "offerSection"]
         var lastIndex = -1
         for group in groups {
             let index = body.range(of: group)?.lowerBound.utf16Offset(in: body)
@@ -226,8 +240,8 @@ final class SettingsInventoryTests: XCTestCase {
                       "the card's price is the fetched product's price — parameterized, never hardcoded")
         XCTAssertTrue(section.contains("Made ahead, without limit — every outfit is ready when you open the app."),
                       "the settled two-benefit copy stands on the card")
-        XCTAssertTrue(section.contains("Text(\"You're subscribed.\")"),
-                      "a subscriber sees the subscribed state instead of the offer")
+        XCTAssertFalse(section.contains("Text(\"You're subscribed.\")"),
+                       "GEN-6 (RW-57): the unlisted Premium / You're subscribed. block is removed — the subscribed seat carries management only")
         XCTAssertFalse(section.contains("less than paying monthly"),
                        "WS-F: the monthly comparison renders nowhere in Settings or the paywall")
         XCTAssertTrue(section.contains("store.billing.perRunFinePrint"),

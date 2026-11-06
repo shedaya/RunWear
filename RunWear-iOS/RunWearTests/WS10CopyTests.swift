@@ -260,33 +260,19 @@ final class WS10CopyTests: XCTestCase {
 
     // MARK: - A4 residue · the emoji census (R-1's test)
 
-    func testEmojiCensus_onlyTheConsumerlessShareTextRemains() throws {
+    func testEmojiCensus_noEmojiRemainsInAppCode() throws {
         let lines = try appCodeLines()
         var hits: [(file: String, line: Int, text: String)] = []
         for entry in lines where entry.text.unicodeScalars.contains(where: isEmojiScalar) {
             hits.append(entry)
         }
-        // The complete census of app-target CODE: exactly four
-        // lines, all inside WeatherViewModel.shareText. That
-        // computation has had no UI consumer since WS-6 removed
-        // the home ShareLink (T-4); it is kept — and its emoji
-        // with it — because ShareTextCompositionTests pins its
-        // composition (see the gate report's census table). Every
-        // other occurrence the audit found is gone.
-        XCTAssertEqual(hits.count, 4,
+        // GEN-6 (DA-23): the complete census of app-target CODE is
+        // ZERO lines. The four lines the old census tolerated all
+        // lived inside the consumerless WeatherViewModel.shareText,
+        // which DA-23 deletes (emoji-led, violating RW-31 §5.3);
+        // with it goes the last emoji in app code.
+        XCTAssertEqual(hits.count, 0,
                        "emoji census drifted — found: \(hits.map { "\($0.file):\($0.line)" })")
-        XCTAssertTrue(hits.allSatisfy { $0.file == "WeatherViewModel.swift" },
-                      "no emoji may live outside the shareText computation: \(hits)")
-        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
-        let shareStart = try XCTUnwrap(vm.range(of: "var shareText: String?"))
-        for hit in hits {
-            XCTAssertTrue(hit.text.contains("RunWear Recommendation")
-                          || hit.text.contains("placeDisplayName")
-                          || hit.text.contains("Feels like")
-                          || hit.text.contains("Tip:"),
-                          "census hit outside shareText's known lines: \(hit)")
-        }
-        XCTAssertTrue(vm[shareStart.lowerBound...].contains("🏃 RunWear Recommendation"))
     }
 
     func testDisplayIconAndItsDeadToggleChainAreRemoved() throws {
@@ -312,17 +298,18 @@ final class WS10CopyTests: XCTestCase {
                        "the three plain-text labels the picker renders, in order")
     }
 
-    func testShareTextStatusRecorded_consumerlessButKept() throws {
-        // WS-6's flag, recorded as a pin: shareText remains DEFINED
-        // (its composition tests still run against it) and no app
-        // view consumes it in code — the home toolbar's ShareLink
-        // was its last consumer (T-4).
+    func testShareTextIsDeleted_gen6DA23() throws {
+        // GEN-6 (DA-23) supersedes WS-6's "consumerless but kept"
+        // record: the emoji-led shareText computation had zero
+        // call sites and is deleted outright — no definition, no
+        // code reference anywhere in the app target.
         let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
-        XCTAssertTrue(vm.contains("var shareText: String?"))
+        XCTAssertFalse(vm.contains("var shareText"), "shareText must not be redefined")
+        XCTAssertFalse(vm.contains("rawFeelsLikeFahrenheit"), "its sole-use helper goes with it")
         let lines = try appCodeLines()
-        let consumers = lines.filter { $0.file != "WeatherViewModel.swift" && $0.text.contains("shareText") }
-        XCTAssertTrue(consumers.isEmpty,
-                      "shareText must stay consumerless in code (comments aside): \(consumers)")
+        let references = lines.filter { $0.text.contains("shareText") }
+        XCTAssertTrue(references.isEmpty,
+                      "no app code may reference the deleted shareText: \(references)")
     }
 
     // MARK: - WS-9 fix · frame 34 completeness, fork body, fit-step line
@@ -745,6 +732,14 @@ final class Gen3SettingsTruthTests: XCTestCase {
     /// app target — not in a rendered string, a plist, or a
     /// comment that documents a surface. The wordmark is
     /// "Make It Me" wherever it appears.
+    ///
+    /// GEN-6 (RW-52) supersession, one designed exception: the
+    /// fork's Option-A door label is the settled verb phrase
+    /// "Make it me" (design-spec §10.1: doors "Make it me / Use
+    /// my photos") — an action label in the "Use my photos"
+    /// voice, NOT the wordmark. The census therefore allows
+    /// exactly that one rendered door and bans the casing
+    /// everywhere else, comments included.
     func testNoAppSurfaceSaysMakeItMeWithALowercaseIt() throws {
         let testsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         let appDir = testsDir.deletingLastPathComponent().appendingPathComponent("RunWear")
@@ -755,7 +750,13 @@ final class Gen3SettingsTruthTests: XCTestCase {
         for case let url as URL in enumerator
         where ["swift", "plist"].contains(url.pathExtension) {
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            if text.contains("Make it me") { offenders.append(url.lastPathComponent) }
+            for line in text.components(separatedBy: "\n") where line.contains("Make it me") {
+                let isTheSettledDoor = url.lastPathComponent == "MakeItMeFlowViews.swift"
+                    && line.contains("Text(\"Make it me\")")
+                if !isTheSettledDoor {
+                    offenders.append("\(url.lastPathComponent): \(line.trimmingCharacters(in: .whitespaces))")
+                }
+            }
         }
         XCTAssertEqual(offenders, [], "X-16: lowercase-it casing survives in \(offenders)")
     }
@@ -769,8 +770,12 @@ final class Gen3SettingsTruthTests: XCTestCase {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
         XCTAssertTrue(flow.contains("Settings → Make It Me → Delete my photos"),
                       "Y-12: the consent copy names the section with the wordmark casing")
-        XCTAssertTrue(flow.contains("You can switch to Make It Me any time in Settings."),
-                      "the fork's body copy carries the same casing")
+        // GEN-6 (RW-52): the fork sentence this pin's second half
+        // covered ("You can switch to Make It Me any time in
+        // Settings.") lived inside the Option-B card description
+        // line the register orders REMOVED as unlisted copy —
+        // the assertion is retired with the line, not satisfied
+        // by keeping settled-out copy alive.
     }
 
     // MARK: - WS-E → GEN-3 ROUND 2 · the welcome's name-led points

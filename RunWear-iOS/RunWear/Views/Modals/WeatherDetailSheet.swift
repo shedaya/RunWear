@@ -1,7 +1,13 @@
 import SwiftUI
 
-/// Types of weather details that can be shown
+/// Types of weather details that can be shown. GEN-6 (RW-63):
+/// the settled sheet (frames 40/41; design-spec §3.3) carries
+/// SEVEN metrics — feels-like and actual join condition, wind,
+/// humidity and UV, with precipitation where carried — all
+/// carrying the home state's numbers unchanged.
 enum WeatherDetailType {
+    case feelsLike(value: String)
+    case actual(value: String)
     case condition(WeatherCondition)
     case wind(speed: Double, direction: String, gusts: Double)
     case humidity(percentage: Int)
@@ -10,6 +16,8 @@ enum WeatherDetailType {
 
     var title: String {
         switch self {
+        case .feelsLike: return "Feels Like"
+        case .actual: return "Actual"
         case .condition: return "Weather Condition"
         case .wind: return "Wind"
         case .humidity: return "Humidity"
@@ -20,6 +28,8 @@ enum WeatherDetailType {
 
     var icon: String {
         switch self {
+        case .feelsLike: return "thermometer.sun.fill"
+        case .actual: return "thermometer.medium"
         case .condition(let condition): return condition.icon
         case .wind: return "wind"
         case .humidity: return "drop.fill"
@@ -29,12 +39,16 @@ enum WeatherDetailType {
     }
 }
 
-/// The five weather metrics the detail view tabs between.
+/// The settled metric set the detail view tabs between, in the
+/// settled order (feels-like, actual, condition, wind, humidity,
+/// UV, then precipitation where carried).
 enum WeatherMetricKind: String, CaseIterable, Hashable {
-    case condition, wind, humidity, precipitation, uvIndex
+    case feelsLike, actual, condition, wind, humidity, uvIndex, precipitation
 
     var shortTitle: String {
         switch self {
+        case .feelsLike: return "Feels like"
+        case .actual: return "Actual"
         case .condition: return "Condition"
         case .wind: return "Wind"
         case .humidity: return "Humidity"
@@ -47,6 +61,8 @@ enum WeatherMetricKind: String, CaseIterable, Hashable {
 extension WeatherDetailType {
     var kind: WeatherMetricKind {
         switch self {
+        case .feelsLike: return .feelsLike
+        case .actual: return .actual
         case .condition: return .condition
         case .wind: return .wind
         case .humidity: return .humidity
@@ -58,6 +74,8 @@ extension WeatherDetailType {
     /// One-line value for list rows ("Clear", "12 mph", "50%"...).
     var summaryValue: String {
         switch self {
+        case .feelsLike(let value): return value
+        case .actual(let value): return value
         case .condition(let condition): return condition.rawValue
         case .wind(let speed, _, _): return "\(Int(round(speed))) mph"
         case .humidity(let percentage): return "\(percentage)%"
@@ -151,6 +169,23 @@ struct WeatherDetailSheet: View {
 
             ScrollView {
                 VStack(spacing: 20) {
+                    // GEN-6 (RW-63): the context lines render in
+                    // the phone (compact) layout too — they lived
+                    // only in the regular-width split sidebar, so
+                    // the phone sheet carried numbers with no
+                    // context line at all.
+                    if !contextLines.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(contextLines, id: \.self) { line in
+                                Text(line)
+                                    .font(.appSecondary)
+                                    .monospacedDigit()
+                                    .foregroundColor(AppTheme.inkSecondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     // Icon and title
                     headerSection
 
@@ -288,6 +323,10 @@ struct WeatherDetailSheet: View {
     @ViewBuilder
     private var detailContent: some View {
         switch detailType {
+        case .feelsLike(let value):
+            temperatureContent(value: value, caption: "Feels like")
+        case .actual(let value):
+            temperatureContent(value: value, caption: "Actual temperature")
         case .condition(let condition):
             conditionContent(condition)
         case .wind(let speed, let direction, let gusts):
@@ -298,6 +337,19 @@ struct WeatherDetailSheet: View {
             precipitationContent(percentage)
         case .uvIndex(let value):
             uvIndexContent(value)
+        }
+    }
+
+    private func temperatureContent(value: String, caption: String) -> some View {
+        VStack(spacing: 8) {
+            Text(value)
+                .font(.system(size: bigValueSize, weight: .semibold))
+                .monospacedDigit()
+                .foregroundColor(AppTheme.inkPrimary)
+
+            Text(caption)
+                .font(.appSecondary)
+                .foregroundColor(AppTheme.inkSecondary)
         }
     }
 
@@ -431,6 +483,10 @@ struct WeatherDetailSheet: View {
     /// grounds — see AppTheme's accent note).
     private var iconColor: Color {
         switch detailType {
+        case .feelsLike:
+            return AppTheme.weatherAccentColor(.orange, isDark: isDark)
+        case .actual:
+            return AppTheme.weatherAccentColor(.gray, isDark: isDark)
         case .condition(let condition):
             switch condition {
             case .clear: return AppTheme.weatherAccentColor(.yellow, isDark: isDark)
@@ -503,18 +559,16 @@ struct WeatherDetailSheet: View {
 
     private var runningTip: String {
         switch detailType {
-        case .condition(let condition):
-            switch condition {
-            case .clear: return "Great day for a run! Don't forget sunscreen if it's sunny."
-            case .partlyCloudy: return "Enjoy the cloud cover - it can help keep you cool."
-            case .cloudy: return "Overcast days can be great for longer runs."
-            case .foggy: return "Wear bright, reflective clothing for visibility."
-            case .drizzle: return "Light rain can be refreshing. A cap helps keep rain off your face."
-            case .rain: return "Wear moisture-wicking fabrics and protect your phone."
-            case .snow: return "Choose shoes with good traction and shorten your stride."
-            case .thunderstorm: return "Safety first - consider an indoor workout."
-            case .unknown: return "Check conditions before heading out."
+        case .feelsLike, .actual:
+            // The temperature metrics carry the condition's tip —
+            // the sheet has one tip line, and the outfit is priced
+            // off the feels-like the home state shows.
+            if case .condition(let condition)? = allDetails.first(where: { $0.kind == .condition }) {
+                return Self.conditionTip(condition)
             }
+            return "Check conditions before heading out."
+        case .condition(let condition):
+            return Self.conditionTip(condition)
         case .wind(let speed, _, _):
             if speed > 20 {
                 return "Start your run heading into the wind so you have it at your back when tired."
@@ -543,6 +597,24 @@ struct WeatherDetailSheet: View {
             } else {
                 return "Low UV exposure - enjoy your run!"
             }
+        }
+    }
+}
+
+extension WeatherDetailSheet {
+    /// The condition's running tip — shared by the condition
+    /// metric and (GEN-6 / RW-63) the two temperature metrics.
+    static func conditionTip(_ condition: WeatherCondition) -> String {
+        switch condition {
+        case .clear: return "Great day for a run! Don't forget sunscreen if it's sunny."
+        case .partlyCloudy: return "Enjoy the cloud cover - it can help keep you cool."
+        case .cloudy: return "Overcast days can be great for longer runs."
+        case .foggy: return "Wear bright, reflective clothing for visibility."
+        case .drizzle: return "Light rain can be refreshing. A cap helps keep rain off your face."
+        case .rain: return "Wear moisture-wicking fabrics and protect your phone."
+        case .snow: return "Choose shoes with good traction and shorten your stride."
+        case .thunderstorm: return "Safety first - consider an indoor workout."
+        case .unknown: return "Check conditions before heading out."
         }
     }
 }
