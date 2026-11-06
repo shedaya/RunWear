@@ -332,13 +332,21 @@ Text(
 
             Spacer(Modifier.height(18.dp))
 
+            // GEN-6 WAVE C (RW-52): the fork's doors are a CHOICE,
+            // then the settled "Continue" proceeds with it
+            // (design-spec §10.1, frame 32) — tapping a door selects
+            // it; Continue carries the choice. Neither door proceeds
+            // on its own any more.
+            var forkChoice by remember { mutableStateOf<String?>(null) }
+
             // Option A — customize
             ForkOptionCard(
                 title = MakeItMeStrings.F3_OPTION_A_TITLE,
                 body = MakeItMeStrings.F4_OPTION_A_BODY,
                 buttonText = MakeItMeStrings.F5_OPTION_A_BUTTON,
                 primary = true,
-                onClick = onUseMyPhotos
+                selected = forkChoice == "photos",
+                onClick = { forkChoice = "photos" }
             )
 
             Spacer(Modifier.height(14.dp))
@@ -349,7 +357,8 @@ Text(
                 body = MakeItMeStrings.F7_OPTION_B_BODY,
                 buttonText = MakeItMeStrings.F8_OPTION_B_BUTTON,
                 primary = false,
-                onClick = onUseStandardPhotos
+                selected = forkChoice == "standard",
+                onClick = { forkChoice = "standard" }
             )
 
             Spacer(Modifier.height(16.dp))
@@ -358,6 +367,21 @@ Text(
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary
             )
+            Spacer(Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    when (forkChoice) {
+                        "photos" -> onUseMyPhotos()
+                        "standard" -> onUseStandardPhotos()
+                    }
+                },
+                enabled = forkChoice != null,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+            ) {
+                Text("Continue", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -369,14 +393,19 @@ private fun ForkOptionCard(
     body: String,
     buttonText: String,
     primary: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    selected: Boolean = false
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
             .background(RunWearColors.BgCard)
-            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+            .border(
+                if (selected) 2.dp else 1.dp,
+                if (selected) RunWearColors.Primary else RunWearColors.TextSecondary.copy(alpha = 0.3f),
+                RoundedCornerShape(24.dp)
+            )
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
         Text(
@@ -821,7 +850,15 @@ internal fun MakeItMeUploadFlow(
                                 showGuidedCapture = false
                                 if (photos.none { it.uri == uri }) photos.add(PickedPhoto(uri))
                             },
-                            onDismiss = { showGuidedCapture = false }
+                            onDismiss = { showGuidedCapture = false },
+                            // DA-18: the library door opens the
+                            // picker's library — close the capture
+                            // and launch the same picker the
+                            // upload door uses.
+                            onChooseFromLibrary = {
+                                showGuidedCapture = false
+                                launchPicker()
+                            }
                         )
                     }
                 }
@@ -1472,12 +1509,15 @@ fun MakeItMeUpsellCard(
             .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
             .padding(horizontal = 20.dp, vertical = 18.dp)
     ) {
+        // GEN-6 WAVE C (RW-65): the upsell card's title instance
+        // of the feature name is the Make It Me SCRIPT — every
+        // title instance in the app is script (DA-22 class); the
+        // sans caps eyebrow (U1A_EYEBROW) is retired here.
         Text(
-            text = MakeItMeStrings.U1A_EYEBROW,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.2.sp,
-            color = RunWearColors.PineAccent
+            text = MakeItMeStrings.U2A_SHEET_TITLE,
+            fontFamily = GreatVibesFontFamily,
+            fontSize = 26.sp,
+            color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(6.dp))
         Text(
@@ -1741,6 +1781,15 @@ fun MakeItMePaywallSheet(
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 4.dp)
                         )
+                        // RW-58: the basis, in the settled fine-print
+                        // wording (design-spec §14).
+                        Text(
+                            text = MakeItMeStrings.perRunBasis(it.formatted),
+                            fontSize = 11.5.sp,
+                            lineHeight = 16.sp,
+                            color = RunWearColors.TextSecondary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
                     }
                 }
             }
@@ -1969,7 +2018,9 @@ fun MakeItMeSettingsSection(
     onPhotosClick: () -> Unit,
     onSubscribeClick: () -> Unit,
     onManageSubscriptionClick: () -> Unit,
-    onDeleted: () -> Unit
+    onDeleted: () -> Unit,
+    /** GEN-6 WAVE C (RW-61): the "Your looks" library door. */
+    onLooksClick: () -> Unit = {}
 ) {
     // GEN-5: the delete-photos dialog state moved to
     // DangerZoneSettingsSection with the row itself.
@@ -1982,6 +2033,21 @@ fun MakeItMeSettingsSection(
     // not from this re-read.
     LaunchedEffect(Unit) {
         if (MakeItMeAvailability.ENABLED) viewModel?.refresh()
+    }
+
+    // GEN-6 WAVE C (RW-57): the user's selfie thumbnail for the
+    // "Your photos" row (settled, design-spec §13) — the first
+    // registered reference photo, loaded through the same signed-URL
+    // seam the Your Photos screen uses.
+    var referenceThumbnailUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.mode) {
+        if ((state.mode == MakeItMeMode.FREE || state.mode == MakeItMeMode.SUBSCRIBED) &&
+            viewModel != null
+        ) {
+            viewModel.loadReferenceUrls { urls ->
+                referenceThumbnailUrl = urls.firstOrNull()
+            }
+        }
     }
 
     // The offer card's price, from the fetched store offering —
@@ -2092,11 +2158,23 @@ fun MakeItMeSettingsSection(
                 }
                 Spacer(Modifier.height(14.dp))
 
-                // ── Your photos group (WS-D group 3).
+                // ── Your photos group (WS-D group 3). RW-57: the
+                // row carries the user's selfie thumbnail.
                 MakeItMeSettingsRow(
                     title = MakeItMeStrings.S6_PHOTOS_ROW,
                     sub = MakeItMeStrings.S6_PHOTOS_SUB,
-                    onClick = onPhotosClick
+                    onClick = onPhotosClick,
+                    thumbnailUrl = referenceThumbnailUrl
+                )
+                Spacer(Modifier.height(14.dp))
+
+                // ── GEN-6 WAVE C (RW-61): the "Your looks"
+                // library door — the surface where a gate-failed
+                // cell's explanation lives (frame 21 / §17).
+                MakeItMeSettingsRow(
+                    title = LooksLibraryStrings.TITLE,
+                    sub = "Every look RunWear has made for you",
+                    onClick = onLooksClick
                 )
                 Spacer(Modifier.height(14.dp))
 
@@ -2351,7 +2429,9 @@ private fun MakeItMeSettingsRow(
     title: String,
     sub: String?,
     destructive: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    /** RW-57: the user's selfie thumbnail (Your photos row only). */
+    thumbnailUrl: String? = null
 ) {
     Row(
         modifier = Modifier
@@ -2361,6 +2441,17 @@ private fun MakeItMeSettingsRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (thumbnailUrl != null) {
+            coil.compose.AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+            )
+            Spacer(Modifier.width(10.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,

@@ -47,7 +47,8 @@ class WeatherRepositoryCanonicalTest {
             temperatureUnit: String,
             windSpeedUnit: String,
             timezone: String,
-            forecastDays: Int
+            forecastDays: Int,
+            daily: String
         ): OpenMeteoResponse {
             temperatureUnitArg = temperatureUnit
             windSpeedUnitArg = windSpeedUnit

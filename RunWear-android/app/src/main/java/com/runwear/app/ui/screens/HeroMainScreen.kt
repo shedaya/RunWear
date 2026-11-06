@@ -141,6 +141,8 @@ fun HeroMainScreen(
     analyticsOptIn: Boolean = false,
     onAnalyticsOptInChange: (Boolean) -> Unit = {},
     onOpenFeedback: (com.runwear.app.feedback.FeedbackCategory?) -> Unit = {},
+    /** GEN-6 WAVE C (RW-56): the Settings "Rate RunWear" row's door. */
+    onRateRunWear: () -> Unit = {},
     onFlagHero: (com.runwear.shared.domain.model.HeroFlagReason) -> Unit = {},
     /**
      * RW-16.27: flag the PERSONAL hero on screen ("This doesn't look
@@ -214,6 +216,8 @@ fun HeroMainScreen(
         mutableStateOf(com.runwear.app.makeitme.MakeItMeEntryDoor.STANDARD)
     }
     var showMakeItMePhotos by remember { mutableStateOf(false) }
+    // GEN-6 WAVE C (RW-61): the "Your looks" library's host state.
+    var showMakeItMeLibrary by remember { mutableStateOf(false) }
     var showMakeItMePaywall by remember { mutableStateOf(false) }
 
     // GEN-3 A-HERO (WS-A(2)): THE hero pill — one content value,
@@ -243,12 +247,14 @@ fun HeroMainScreen(
     // series) in the RW-23 comfort-adjusted frame. One model serves
     // the home glance band and the Choose-a-Time sheet.
     val dayChartModel = remember(
-        uiState.hourlyForecast, uiState.selectedDateTime, uiState.comfortPreference
+        uiState.hourlyForecast, uiState.selectedDateTime, uiState.comfortPreference,
+        uiState.sunTimes
     ) {
         com.runwear.app.ui.components.DayChartBuilder.build(
             hourly = uiState.hourlyForecast,
             date = uiState.selectedDateTime.toLocalDate(),
-            comfort = uiState.comfortPreference
+            comfort = uiState.comfortPreference,
+            sunTimes = uiState.sunTimes
         )
     }
     val dayChartBandContent: @Composable () -> Unit = {
@@ -299,19 +305,29 @@ fun HeroMainScreen(
     // the stored collection restoring — it primes the holder at
     // rest (no cue, no announcement for entries an earlier process
     // settled). Later emissions are live landings.
-    var wearPrimed by remember { mutableStateOf(false) }
-    LaunchedEffect(wearIveRunEntries) {
-        if (!wearPrimed) {
-            wearPrimed = true
-            wearIveRunHolder.primeRestore(
-                wearIveRunEntries,
-                uiState.locationNow.toLocalDate()
-            )
-        } else {
-            wearIveRunHolder.onEntriesChanged(
-                wearIveRunEntries,
-                uiState.locationNow.toLocalDate()
-            )
+    //
+    // GEN-6 (DA-09 / RW-42): the holder is driven from the store
+    // flow's OWN emissions, collected here — never from the
+    // collectAsState state above. That state's initial value
+    // (emptyList) reached the gen-5 prime FIRST, so the prime was
+    // spent on an empty list and the store's real first emission —
+    // the restored collection — fell into onEntriesChanged as a
+    // "first presentation", re-firing the creation cue and the
+    // "Added …" announcement for an entry an earlier process had
+    // settled (the duplicate "Added Miami, FL, Now" on relaunch in
+    // Sol's gen-5 recording). A flow collect's first emission IS
+    // the store's first value: it primes; later ones are live.
+    val wearCurrentUiState = androidx.compose.runtime.rememberUpdatedState(uiState)
+    LaunchedEffect(Unit) {
+        var primed = false
+        wearIveRunStore.entriesFlow.collect { entries ->
+            val today = wearCurrentUiState.value.locationNow.toLocalDate()
+            if (!primed) {
+                primed = true
+                wearIveRunHolder.primeRestore(entries, today)
+            } else {
+                wearIveRunHolder.onEntriesChanged(entries, today)
+            }
         }
     }
 
@@ -343,7 +359,19 @@ fun HeroMainScreen(
         // uiState only carries CONFIRMED moments (the picker's
         // draft never reaches this state), so recording here can
         // never be moved by mere browsing of the picker.
-        if (outfit != null && weather != null) {
+        // GEN-6 (DA-09 / RW-42): record only the selection's OWN
+        // solve — inside the window between a confirmed selection
+        // and its fetch committing, the weather/outfit in state
+        // still belong to the previous moment, and recording them
+        // under the new moment's label is how the bar came to
+        // announce an update its card did not carry.
+        if (outfit != null && weather != null &&
+            com.runwear.app.weariverun.WearIveRunRecordPolicy.shouldRecord(
+                isNowSelected = uiState.isNowSelected,
+                weatherMoment = weather.dateTime,
+                selectedMoment = uiState.selectedDateTime
+            )
+        ) {
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
                     // GEN-3 (WS-C): stamped with THIS process
@@ -516,7 +544,7 @@ fun HeroMainScreen(
     val wearAnySheetUp = showDatePicker || showTimePicker || showSettings ||
         showLocationPicker || showShopAll || weatherDetailType != null ||
         showHeroFlagSheet || showPersonalFlagSheet || showWearIveRunCollection ||
-        showMakeItMeFlow || showMakeItMePhotos || showMakeItMePaywall
+        showMakeItMeFlow || showMakeItMePhotos || showMakeItMeLibrary || showMakeItMePaywall
 
     // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned),
     // fluid at every width per the PWA's fully-responsive standard:
@@ -979,6 +1007,10 @@ fun HeroMainScreen(
             onSelectDate = {
                 onDateSelected(it)
                 showDatePicker = false
+                // RW-53: a confirmed date change re-solves home —
+                // the time sheet (if it hosted the day door) closes
+                // with it; its draft dies with the old day.
+                showTimePicker = false
             },
             onDismiss = { showDatePicker = false }
         )
@@ -1002,7 +1034,9 @@ fun HeroMainScreen(
                 if (!confirm.keepNow) onTimeSelected(confirm.hour)
                 showTimePicker = false
             },
-            onDismiss = { showTimePicker = false }
+            onDismiss = { showTimePicker = false },
+            // RW-53: the time sheet's day door opens Choose-a-Day.
+            onDayClick = { showDatePicker = true }
         )
     }
 
@@ -1023,6 +1057,10 @@ fun HeroMainScreen(
                 showSettings = false
                 onOpenFeedback(null)
             },
+            onRateRunWear = {
+                showSettings = false
+                onRateRunWear()
+            },
             makeItMeViewModel = makeItMeViewModel,
             makeItMeState = makeItMeState,
             onMakeItMeOptInClick = {
@@ -1033,6 +1071,10 @@ fun HeroMainScreen(
             onMakeItMePhotosClick = {
                 showSettings = false
                 showMakeItMePhotos = true
+            },
+            onMakeItMeLooksClick = {
+                showSettings = false
+                showMakeItMeLibrary = true
             },
             onMakeItMeSubscribeClick = {
                 showSettings = false
@@ -1080,6 +1122,24 @@ fun HeroMainScreen(
             },
             entryDoor = makeItMeFlowEntryDoor
         )
+    }
+
+    // RW-61: the looks library — a full-screen Dialog of its own,
+    // hosted exactly like Your Photos.
+    if (showMakeItMeLibrary && makeItMeViewModel != null &&
+        com.runwear.app.makeitme.MakeItMeAvailability.ENABLED
+    ) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showMakeItMeLibrary = false },
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false
+            )
+        ) {
+            com.runwear.app.makeitme.LooksLibraryScreen(
+                viewModel = makeItMeViewModel,
+                onDismiss = { showMakeItMeLibrary = false }
+            )
+        }
     }
 
     if (showMakeItMePhotos && makeItMeViewModel != null &&
@@ -1208,7 +1268,19 @@ fun HeroMainScreen(
                 type = type,
                 weather = weather,
                 onDismiss = { weatherDetailType = null },
-                temperatureUnit = uiState.temperatureUnit
+                temperatureUnit = uiState.temperatureUnit,
+                // RW-63: the unified sheet's context line + tip
+                // carry the home state's own values.
+                locationName = uiState.locationName,
+                momentLabel = if (uiState.isNowSelected) {
+                    "Now"
+                } else {
+                    com.runwear.app.ui.components.DayChartFormat.hourLabel(
+                        uiState.selectedDateTime.hour
+                    )
+                },
+                runningTip = uiState.outfit?.tips?.firstOrNull(),
+                comfortPreference = uiState.comfortPreference
             )
         }
     }
@@ -1563,7 +1635,7 @@ private fun OutfitSectionHeader(
                 // "X Items for Your Run" — RW-25: Bebas retired from
                 // the home surface; M3 headlineSmall (semibold sans).
                 Text(
-                    text = "$itemCount Items for Your Run",
+                    text = com.runwear.app.ui.components.OutfitHeaderCopy.header(itemCount),
                     style = MaterialTheme.typography.headlineSmall,
                     color = RunWearColors.TextPrimary
                 )

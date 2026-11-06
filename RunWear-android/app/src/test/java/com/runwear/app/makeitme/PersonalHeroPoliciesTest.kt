@@ -166,15 +166,48 @@ class PersonalHeroPoliciesTest {
         // first label is the spec §4 control verbatim. Both must
         // match iOS's PersonalHeroFlagReason exactly.
         assertEquals(
-            listOf("doesnt_look_like_me", "looks_broken", "inappropriate", "outfit_mismatch"),
+            listOf("doesnt_look_like_me", "outfit_mismatch", "looks_broken"),
             PersonalHeroFlagReason.entries.map { it.code }
         )
         assertEquals(
             listOf(
-                "This doesn't look like me", "Looks broken",
-                "Inappropriate", "Doesn't match the outfit"
+                "This doesn't look like me", "Wrong outfit for the weather",
+                "Something else"
             ),
             PersonalHeroFlagReason.entries.map { it.label }
+        )
+    }
+
+    @Test
+    fun `personal flag sheet codes equal the server contract in sheet order`() {
+        // RW-62 correction: the labels are frame 45's settled design
+        // and do not change, but the codes are the server contract
+        // and must not change with them. The backend flag_hero
+        // action (supabase/functions/request-personal-generation,
+        // FLAG_REASONS) and the personal_hero_flags migration pin
+        // {doesnt_look_like_me, looks_broken, inappropriate,
+        // outfit_mismatch} and return 400 "Unknown flag reason"
+        // otherwise. Mirroring iOS's documented mapping: the lead
+        // files as doesnt_look_like_me, "Wrong outfit for the
+        // weather" files as outfit_mismatch, and the residual
+        // "Something else" files under the generic defect code
+        // looks_broken. Sheet order is [lead, outfit, residual].
+        assertEquals(
+            listOf("doesnt_look_like_me", "outfit_mismatch", "looks_broken"),
+            PersonalHeroFlagReason.entries.map { it.code }
+        )
+        assertEquals(
+            listOf("doesnt_look_like_me", "outfit_mismatch", "looks_broken"),
+            listOf(PersonalFlagSheetContent.headingReason.code) +
+                PersonalFlagSheetContent.rowReasons.map { it.code }
+        )
+        assertEquals(
+            "outfit_mismatch",
+            PersonalHeroFlagReason.WRONG_OUTFIT.code
+        )
+        assertEquals(
+            "looks_broken",
+            PersonalHeroFlagReason.SOMETHING_ELSE.code
         )
     }
 

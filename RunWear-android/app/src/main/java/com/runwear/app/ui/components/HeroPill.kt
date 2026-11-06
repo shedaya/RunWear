@@ -1,11 +1,13 @@
 package com.runwear.app.ui.components
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
@@ -18,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.makeitme.MakeItMeMode
@@ -159,6 +162,13 @@ object HeroPillPolicy {
  * optional spinner, the optional Make It Me script mark (Great
  * Vibes, states (b)(c)(d) per the Nov 4 design delta), the optional
  * trailing action, and the PREMIUM lock glyph.
+ *
+ * GEN-6 DA-15(b): the pill is width-capped to the space its host
+ * actually offers (BoxWithConstraints + widthIn) and script-led
+ * states get extra leading padding — in Sol's recording the
+ * capsule's shape clip cut the script's opening swash at the
+ * pill's left edge ("› Make It Me"). The main text ellipsizes on
+ * one line rather than pushing the capsule past its host.
  */
 @Composable
 fun HeroPill(
@@ -166,84 +176,93 @@ fun HeroPill(
     onAction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Surface(
-        modifier = if (content.wholePillAction) {
-            modifier.clickable { onAction() }
-        } else {
-            modifier
-        },
-        shape = RoundedCornerShape(100.dp),
-        color = Color.Black.copy(alpha = 0.45f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(modifier = modifier) {
+        Surface(
+            modifier = (if (content.wholePillAction) {
+                Modifier.clickable { onAction() }
+            } else {
+                Modifier
+            }).widthIn(max = maxWidth),
+            shape = RoundedCornerShape(100.dp),
+            color = Color.Black.copy(alpha = 0.45f)
         ) {
-            if (content.showSpinner) {
-                CircularProgressIndicator(
+            Row(
+                modifier = Modifier.padding(
+                    start = if (content.showScriptMark) 15.dp else 10.dp,
+                    end = 10.dp,
+                    top = 6.dp,
+                    bottom = 6.dp
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (content.showSpinner) {
+                    CircularProgressIndicator(
+                        color = com.runwear.app.ui.theme.PhotoInk,
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 1.5.dp
+                    )
+                    Spacer(Modifier.width(6.dp))
+                }
+                if (content.showScriptMark) {
+                    Text(
+                        text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
+                        fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
+                        fontSize = 15.sp,
+                        color = com.runwear.app.ui.theme.PhotoInk
+                    )
+                    Spacer(Modifier.width(7.dp))
+                }
+                Text(
+                    text = content.text,
+                    fontSize = 12.sp,
                     color = com.runwear.app.ui.theme.PhotoInk,
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.width(6.dp))
-            }
-            if (content.showScriptMark) {
-                Text(
-                    text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
-                    fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-                    fontSize = 15.sp,
-                    color = com.runwear.app.ui.theme.PhotoInk
-                )
-                Spacer(Modifier.width(7.dp))
-            }
-            Text(
-                text = content.text,
-                fontSize = 12.sp,
-                color = com.runwear.app.ui.theme.PhotoInk
-            )
-            if (content.showLock) {
-                Spacer(Modifier.width(5.dp))
-                Icon(
-                    imageVector = Icons.Filled.Lock,
-                    contentDescription = null,
-                    tint = com.runwear.app.ui.theme.PhotoInk,
-                    modifier = Modifier.size(11.dp)
-                )
-            }
-            if (content.upsellText != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = content.upsellText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = com.runwear.app.ui.theme.PineAccentOnDark,
-                    modifier = Modifier.clickable { onAction() }
-                )
-            }
-            if (content.actionText != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = content.actionText,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    // GEN-6 (RW-34; RW-68): the "Get unlimited"
-                    // action takes the approved green accent on
-                    // BOTH free kinds that carry it — EXHAUSTED
-                    // (where it is the main message) and EXACT_FREE
-                    // (the owner's approved table: the look count
-                    // "with a green 'Get unlimited' button", Nov 5,
-                    // 2026; the iOS half of this wave fixed its
-                    // identical white rendering to the same accent).
-                    // actionText exists only on those two kinds.
-                    color = if (content.kind == HeroPillKind.EXHAUSTED ||
-                        content.kind == HeroPillKind.EXACT_FREE
-                    ) {
-                        com.runwear.app.ui.theme.PineAccentOnDark
-                    } else {
-                        com.runwear.app.ui.theme.PhotoInk
-                    },
-                    modifier = Modifier.clickable { onAction() }
-                )
+                if (content.showLock) {
+                    Spacer(Modifier.width(5.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = com.runwear.app.ui.theme.PhotoInk,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
+                if (content.upsellText != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = content.upsellText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = com.runwear.app.ui.theme.PineAccentOnDark,
+                        modifier = Modifier.clickable { onAction() }
+                    )
+                }
+                if (content.actionText != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = content.actionText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        // GEN-6 (RW-34; RW-68): the "Get unlimited"
+                        // action takes the approved green accent on
+                        // BOTH free kinds that carry it — EXHAUSTED
+                        // (where it is the main message) and EXACT_FREE
+                        // (the owner's approved table: the look count
+                        // "with a green 'Get unlimited' button", Nov 5,
+                        // 2026; the iOS half of this wave fixed its
+                        // identical white rendering to the same accent).
+                        // actionText exists only on those two kinds.
+                        color = if (content.kind == HeroPillKind.EXHAUSTED ||
+                            content.kind == HeroPillKind.EXACT_FREE
+                        ) {
+                            com.runwear.app.ui.theme.PineAccentOnDark
+                        } else {
+                            com.runwear.app.ui.theme.PhotoInk
+                        },
+                        modifier = Modifier.clickable { onAction() }
+                    )
+                }
             }
         }
     }

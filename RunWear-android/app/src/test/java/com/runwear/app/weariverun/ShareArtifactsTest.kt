@@ -166,9 +166,8 @@ class ShareArtifactsTest {
         assertFalse(PersonalFlagSheetContent.rowReasons.contains(PersonalFlagSheetContent.headingReason))
         assertEquals(
             listOf(
-                PersonalHeroFlagReason.LOOKS_BROKEN,
-                PersonalHeroFlagReason.INAPPROPRIATE,
-                PersonalHeroFlagReason.OUTFIT_MISMATCH
+                PersonalHeroFlagReason.WRONG_OUTFIT,
+                PersonalHeroFlagReason.SOMETHING_ELSE
             ),
             PersonalFlagSheetContent.rowReasons
         )

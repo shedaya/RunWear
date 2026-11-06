@@ -220,6 +220,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     analyticsOptIn = analyticsOptIn,
                                     onAnalyticsOptInChange = viewModel::setAnalyticsOptIn,
+                                    onRateRunWear = { launchInAppReview() },
                                     onOpenFeedback = { category ->
                                         feedbackPreselect = category
                                         feedbackEntryPoint =

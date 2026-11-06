@@ -51,8 +51,9 @@ class MakeItMePriceLabelTest {
             "$9.99" to micros(9.99), "$19.99" to micros(19.99), "$29.99" to micros(29.99)
         )) {
             val label = MakeItMeStrings.annualRowLabel(formatted, annual, micros(0.99))
-            // GEN-5 (items 26/29): "Annual — $X/yr" form of record.
-            assertEquals("Annual — $formatted/yr", label)
+            // GEN-6 WAVE C (RW-58): the card's price is "$X/yr" —
+            // the settled design-spec §14 form, no "Annual — " prefix.
+            assertEquals("$formatted/yr", label)
             assertFalse(label.contains("less than paying monthly"))
         }
     }
@@ -63,17 +64,24 @@ class MakeItMePriceLabelTest {
         assertEquals(4, MakeItMeStrings.perRunCents(micros(9.99)))
         assertEquals(9, MakeItMeStrings.perRunCents(micros(19.99)))
         assertEquals(13, MakeItMeStrings.perRunCents(micros(29.99)))
+        // GEN-6 WAVE C (RW-58): the line under the price is
+        // "only about N¢ per run" (design-spec §14); its basis is
+        // the separate settled fine-print wording.
         assertEquals(
-            "At four to five runs a week, $9.99/year works out to only about 4¢ per run.",
+            "only about 4¢ per run",
             MakeItMeStrings.perRunLine("$9.99", micros(9.99))
         )
         assertEquals(
-            "At four to five runs a week, $19.99/year works out to only about 9¢ per run.",
+            "only about 9¢ per run",
             MakeItMeStrings.perRunLine("$19.99", micros(19.99))
         )
         assertEquals(
-            "At four to five runs a week, $29.99/year works out to only about 13¢ per run.",
+            "only about 13¢ per run",
             MakeItMeStrings.perRunLine("$29.99", micros(29.99))
+        )
+        assertEquals(
+            "$9.99 a year, at 4–5 runs a week.",
+            MakeItMeStrings.perRunBasis("$9.99")
         )
     }
 

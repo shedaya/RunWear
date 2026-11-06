@@ -262,6 +262,29 @@ class WeatherRepository @Inject constructor(
             parseWeatherForDateTime(it, dateTime)
         }
 
+    /**
+     * GEN-6 WAVE C (RW-53(ii)): parse the payload's daily block into
+     * per-day sunrise/sunset minutes (location-local). Missing or
+     * malformed entries are skipped — callers fall back to the
+     * fixed night ranges when a day has no entry.
+     */
+    fun parseDailySunTimes(response: OpenMeteoResponse): List<com.runwear.shared.domain.model.DaySunTimes> {
+        val daily = response.daily ?: return emptyList()
+        return daily.time.mapIndexedNotNull { index, dateText ->
+            val sunrise = daily.sunrise.getOrNull(index) ?: return@mapIndexedNotNull null
+            val sunset = daily.sunset.getOrNull(index) ?: return@mapIndexedNotNull null
+            runCatching {
+                com.runwear.shared.domain.model.DaySunTimes(
+                    date = kotlinx.datetime.LocalDate.parse(dateText),
+                    sunriseMinutes = kotlinx.datetime.LocalDateTime.parse(sunrise)
+                        .let { it.hour * 60 + it.minute },
+                    sunsetMinutes = kotlinx.datetime.LocalDateTime.parse(sunset)
+                        .let { it.hour * 60 + it.minute }
+                )
+            }.getOrNull()
+        }
+    }
+
     /** Parse the hourly forecast list from a shared response. */
     fun parseHourlyForecast(
         response: OpenMeteoResponse

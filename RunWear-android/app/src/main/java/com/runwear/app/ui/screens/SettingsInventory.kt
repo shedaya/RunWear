@@ -29,6 +29,7 @@ enum class SettingsSectionId {
     MAKE_IT_ME,
     DELETE_MY_DATA,
     SEND_FEEDBACK,
+    RATE_RUNWEAR,
     HELP_IMPROVE,
     ABOUT
 }
@@ -50,6 +51,7 @@ object SettingsInventory {
         SettingsSectionId.BODY_TEMPERATURE,
         SettingsSectionId.MAKE_IT_ME,
         SettingsSectionId.SEND_FEEDBACK,
+        SettingsSectionId.RATE_RUNWEAR,
         SettingsSectionId.HELP_IMPROVE,
         SettingsSectionId.ABOUT,
         SettingsSectionId.DELETE_MY_DATA

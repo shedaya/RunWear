@@ -1,8 +1,5 @@
 package com.runwear.wear.presentation.screens
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -128,7 +125,8 @@ private fun HeroWearContent(
                     locationName = uiState.locationName,
                     outfitItemCount = uiState.outfit!!.allItems.size,
                     onToggleUnit = onToggleUnit,
-                    temperatureUnit = uiState.temperatureUnit
+                    temperatureUnit = uiState.temperatureUnit,
+                    comfortPreference = uiState.comfortPreference
                 )
                 1 -> OutfitPage(
                     outfit = uiState.outfit!!,
@@ -170,27 +168,22 @@ internal fun HeroWeatherPage(
     onToggleUnit: () -> Unit,
     /** WS-2: render-time projection of the canonical store. */
     temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
-        com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
+        com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT,
+    /** GEN-6 WAVE C (DA-13): the comfort frame for the headline. */
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
 ) {
     val tempColor = WeatherColors.forTemperature(weather.feelsLikeInFahrenheit)
     val tintColor = WeatherColors.forTemperatureTint(weather.feelsLikeInFahrenheit)
 
-    // Animated temperature (WS-2: the animated target is the
-    // projected display value; the stored value is canonical °F)
-    val actualTemp = temperatureUnit.convert(weather.effectiveTemperature).roundToInt()
-    val startTemp = maxOf(-10, actualTemp - 8)
-    var targetTemp by remember { mutableIntStateOf(startTemp) }
-    val animatedTemp by animateIntAsState(
-        targetValue = targetTemp,
-        animationSpec = tween(600, easing = FastOutSlowInEasing),
-        label = "temp"
-    )
-
-    LaunchedEffect(actualTemp) {
-        targetTemp = startTemp
-        kotlinx.coroutines.delay(100)
-        targetTemp = actualTemp
-    }
+    // GEN-6 WAVE C (DA-13): the hero numeral is a READOUT of the
+    // comfort-adjusted feels-like (WearTempFrame) — it appears at
+    // its final value. The gen-5 build animated the raw figure
+    // through a 600 ms tween counting through intermediate values;
+    // a numeral is a readout, never a counter, so the tween is gone.
+    val headlineTemp = temperatureUnit.convert(
+        com.runwear.wear.presentation.WearTempFrame.headlineF(weather, comfortPreference)
+    ).roundToInt()
 
     Box(
         modifier = Modifier
@@ -350,6 +343,14 @@ internal fun HeroWeatherPage(
                         fontScale > 1.15f -> 40.sp
                         else -> 48.sp
                     }
+                    // DA-13: the numeral's label — it is the
+                    // feels-like, named on the card.
+                    Text(
+                        text = "Feels like",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
                     Box(contentAlignment = Alignment.Center) {
                         // Shadow layer for depth. The explicit
                         // lineHeight keeps the heavy glyphs' ink
@@ -357,7 +358,7 @@ internal fun HeroWeatherPage(
                         // font scales (they were sliced at the
                         // default line height).
                         Text(
-                            text = "${animatedTemp}°$unitSymbol",
+                            text = "${headlineTemp}°$unitSymbol",
                             fontSize = tempFontSize,
                             lineHeight = (tempFontSize.value * 1.02f).sp,
                             fontWeight = FontWeight.Black,
@@ -368,7 +369,7 @@ internal fun HeroWeatherPage(
                         )
                         // Main white text
                         Text(
-                            text = "${animatedTemp}°$unitSymbol",
+                            text = "${headlineTemp}°$unitSymbol",
                             fontSize = tempFontSize,
                             lineHeight = (tempFontSize.value * 1.02f).sp,
                             fontWeight = FontWeight.Black,
@@ -393,8 +394,10 @@ internal fun HeroWeatherPage(
                     // travel together as one line INSIDE the
                     // safe-area-capped card, so both are always
                     // inside the display.
+                    // DA-13: the numeral above IS the feels-like;
+                    // the subordinate line carries the ACTUAL.
                     Text(
-                        text = "Feels like ${temperatureUnit.formatTemperature(weather.feelsLike)}",
+                        text = com.runwear.wear.presentation.WearTempFrame.actualLine(weather, temperatureUnit),
                         style = MaterialTheme.typography.labelSmall,
                         color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
                         textAlign = TextAlign.Center,

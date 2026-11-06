@@ -68,6 +68,13 @@ data class MainUiState(
     val outfit: OutfitRecommendation? = null,
     val weather: WeatherConditions? = null,
     val hourlyForecast: List<HourlyForecast> = emptyList(),
+    /**
+     * GEN-6 WAVE C (RW-53(ii)): per-day sunrise/sunset from the
+     * forecast payload's daily block — the day chart's night
+     * shading follows these. Empty when a payload carried no
+     * daily block (the chart falls back to its fixed ranges).
+     */
+    val sunTimes: List<com.runwear.shared.domain.model.DaySunTimes> = emptyList(),
     val locationName: String = "Getting location...",
     /**
      * WS-4 (RC-4): the current place as a simple-place value, derived
@@ -272,7 +279,8 @@ internal fun MainUiState.withFetchedConditions(
     locationNowAnchor: LocalDateTime,
     nowSelected: Boolean,
     heroFallbackUrl: String? = null,
-    heroFallbackIsScaffold: Boolean = false
+    heroFallbackIsScaffold: Boolean = false,
+    sunTimes: List<com.runwear.shared.domain.model.DaySunTimes>? = null
 ): MainUiState {
     val weatherNow = weather.dateTime.toJavaLocalDateTime()
     val switchingPlace = pendingPlace != null
@@ -281,6 +289,7 @@ internal fun MainUiState.withFetchedConditions(
         weather = weather,
         outfit = outfit,
         hourlyForecast = forecast,
+        sunTimes = sunTimes ?: this.sunTimes,
         locationName = pendingPlace?.display ?: locationName,
         simplePlace = pendingPlace ?: simplePlace,
         locationNow = if (nowSelected) weatherNow else locationNowAnchor,
@@ -1074,6 +1083,11 @@ class MainViewModel @Inject constructor(
                     val forecast = runCatching {
                         weatherRepository.parseHourlyForecast(response)
                     }.getOrDefault(emptyList())
+                    // RW-53(ii): sunrise/sunset ride the same
+                    // response into the same commit.
+                    val sunTimes = runCatching {
+                        weatherRepository.parseDailySunTimes(response)
+                    }.getOrDefault(emptyList())
 
                     // Feedback + analytics bookkeeping (all inert unless the
                     // user opted in): outfit diff under identical conditions,
@@ -1105,7 +1119,8 @@ class MainViewModel @Inject constructor(
                             locationNowAnchor = now,
                             nowSelected = nowSelected,
                             heroFallbackUrl = fetchFallback.imageUrl,
-                            heroFallbackIsScaffold = fetchFallback.isScaffold
+                            heroFallbackIsScaffold = fetchFallback.isScaffold,
+                            sunTimes = sunTimes
                         )
                     }
                     if (placeToCommit != null) pendingPlace = null

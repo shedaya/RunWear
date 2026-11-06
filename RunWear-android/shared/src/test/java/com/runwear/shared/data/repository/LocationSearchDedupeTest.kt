@@ -56,7 +56,7 @@ class LocationSearchDedupeTest {
     private class UnusedOpenMeteoApi : OpenMeteoApi {
         override suspend fun getWeather(
             latitude: Double, longitude: Double, current: String, hourly: String,
-            temperatureUnit: String, windSpeedUnit: String, timezone: String, forecastDays: Int
+            temperatureUnit: String, windSpeedUnit: String, timezone: String, forecastDays: Int, daily: String
         ): OpenMeteoResponse = throw UnsupportedOperationException("not used")
 
         override suspend fun getTimeZone(
