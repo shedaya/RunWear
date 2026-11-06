@@ -212,7 +212,7 @@ struct RunWearWidgetEntryView: View {
     // the humidity/UV truth the smaller sizes have no room to
     // carry truthfully.
     private func largeContent(_ record: WidgetLastGood) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline) {
                 Text("RunWear")
                     .font(.greatVibes(size: 26))
@@ -247,7 +247,7 @@ struct RunWearWidgetEntryView: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(record.topBaseName)
                     .font(.body.weight(.semibold))
                     .foregroundColor(AppTheme.inkPrimary)
@@ -285,11 +285,14 @@ struct RunWearWidgetEntryView: View {
         // the large composition measured a 948.5 pt fitting
         // height in its 382 pt canvas (the .body outfit lines
         // carry no line limit, so at accessibility sizes each
-        // name wraps and the stack runs away). Type growth is
-        // capped at accessibility1 — the same cap as small,
-        // medium, and the home hero cluster; composition and
-        // the fixed 46 pt temperature are unchanged.
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        // name wraps and the stack runs away). An accessibility1
+        // cap brought that to 457 pt — still over: the large
+        // composition carries the most semantic text of the
+        // three sizes, so its cap sits one step tighter, at
+        // xLarge, with the stack spacings tightened to match.
+        // Composition and the fixed 46 pt temperature are
+        // unchanged.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 
     // The never-succeeded card (authored categories, Android's
