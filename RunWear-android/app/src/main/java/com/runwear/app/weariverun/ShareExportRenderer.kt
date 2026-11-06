@@ -7,6 +7,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.BroadcastFrameClock
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Recomposer
 import androidx.compose.ui.Modifier
@@ -44,7 +45,14 @@ import kotlin.math.roundToInt
  * window, with manually installed lifecycle / saved-state owners
  * and a render-owned [Recomposer] installed as the parent
  * composition context before content is set (an unattached view
- * has no windowRecomposer to resolve), composed at the format's
+ * has no windowRecomposer to resolve). The recomposer runs on a
+ * render-owned [BroadcastFrameClock] that the settle loop sends
+ * frames to explicitly — a manually created recomposer has no
+ * ambient frame clock to borrow (runRecomposeAndApplyChanges
+ * throws without a MonotonicFrameClock in its coroutine
+ * context), and a static offscreen render should drive its own
+ * frames deterministically rather than wait on vsync. Composed
+ * at the format's
  * canvas point size under a density of
  * exactly the format's render scale (3×), then measured and laid
  * out at the exact export pixels and drawn into a bitmap of
@@ -159,8 +167,23 @@ object ShareExportRenderer {
             // setContent and drive it for the render's duration;
             // close it and cancel its job once the draw is done
             // so nothing leaks past the render.
-            val recomposer = Recomposer(Dispatchers.Main)
-            val recomposeJob = launch {
+            //
+            // The recomposer also needs a MonotonicFrameClock:
+            // runRecomposeAndApplyChanges reads it from its own
+            // coroutine context and throws IllegalStateException
+            // ("A MonotonicFrameClock is not available in this
+            // CoroutineContext") when it is absent — which it is
+            // whenever Dispatchers.Main does not happen to resolve
+            // to Compose's AndroidUiDispatcher (the Robolectric
+            // harness's main dispatcher carries no clock; relying
+            // on the ambient dispatcher was the first fix round's
+            // defect). So the render owns a BroadcastFrameClock,
+            // hands the SAME instance to the Recomposer (its
+            // effect context) and to the runner coroutine, and
+            // the settle loop below sends frames to it explicitly.
+            val frameClock = BroadcastFrameClock()
+            val recomposer = Recomposer(Dispatchers.Main + frameClock)
+            val recomposeJob = launch(frameClock) {
                 recomposer.runRecomposeAndApplyChanges()
             }
             try {
@@ -208,14 +231,26 @@ object ShareExportRenderer {
                     pixelSize.height, View.MeasureSpec.EXACTLY
                 )
                 // Let the composition apply and settle over several
-                // frame opportunities (the render's own recomposer
-                // drives it), measuring and laying out at the exact
-                // export size each pass.
-                repeat(8) {
+                // frame opportunities, measuring and laying out at
+                // the exact export size each pass. Each pass first
+                // SENDS a frame on the render's own clock — that
+                // send is what wakes the recomposer to compose and
+                // apply (a frame sent before it has registered an
+                // awaiter is dropped, which the repeated passes
+                // absorb) — then delays so the frame's work, posted
+                // back to the main dispatcher, actually lands
+                // before the measure/layout that follows it.
+                var nextFrameTimeNanos = System.nanoTime()
+                repeat(10) {
+                    nextFrameTimeNanos += 16_666_667L
+                    frameClock.sendFrame(nextFrameTimeNanos)
+                    delay(50)
                     composeView.measure(widthSpec, heightSpec)
                     composeView.layout(0, 0, pixelSize.width, pixelSize.height)
-                    delay(50)
                 }
+                nextFrameTimeNanos += 16_666_667L
+                frameClock.sendFrame(nextFrameTimeNanos)
+                delay(50)
                 composeView.measure(widthSpec, heightSpec)
                 composeView.layout(0, 0, pixelSize.width, pixelSize.height)
                 val out = Bitmap.createBitmap(
