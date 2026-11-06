@@ -240,7 +240,14 @@ final class SettingsInventoryTests: XCTestCase {
                       "the card's price is the fetched product's price — parameterized, never hardcoded")
         XCTAssertTrue(section.contains("Made ahead, without limit — every outfit is ready when you open the app."),
                       "the settled two-benefit copy stands on the card")
-        XCTAssertFalse(section.contains("Text(\"You're subscribed.\")"),
+        // GEN-6 ASSEMBLY reconciliation: the absence assertion is
+        // scoped to the SETTINGS section — the paywall sheet later in
+        // this file legitimately carries a plain "You're subscribed."
+        // fallback in its subscribed branch (Wave A, DA-11 gating).
+        let sectionStart = try XCTUnwrap(section.range(of: "struct MakeItMeSettingsSection"))
+        let sectionEnd = try XCTUnwrap(section.range(of: "private struct MakeItMePremiumOfferCard"))
+        let settingsSection = String(section[sectionStart.lowerBound..<sectionEnd.lowerBound])
+        XCTAssertFalse(settingsSection.contains("Text(\"You're subscribed.\")"),
                        "GEN-6 (RW-57): the unlisted Premium / You're subscribed. block is removed — the subscribed seat carries management only")
         XCTAssertFalse(section.contains("less than paying monthly"),
                        "WS-F: the monthly comparison renders nowhere in Settings or the paywall")

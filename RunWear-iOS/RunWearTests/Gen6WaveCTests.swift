@@ -239,7 +239,18 @@ final class Gen6WaveCTests: XCTestCase {
     }
 
     func testRW57SubscribedSeatCarriesManagementOnly_sourcePin() throws {
-        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        let file = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        // GEN-6 ASSEMBLY reconciliation: this pin guards the SETTINGS
+        // seat (MakeItMeSettingsSection). The paywall sheet
+        // (MakeItMeSubscriptionSheet, later in the same file)
+        // legitimately carries a plain "You're subscribed." fallback
+        // in its subscribed branch — Wave A's DA-11 coverage gating —
+        // so the absence assertion is scoped to the settings section,
+        // the seat RW-57 governs. The block returning to THIS seat
+        // fails the pin exactly as before.
+        let sectionStart = try XCTUnwrap(file.range(of: "struct MakeItMeSettingsSection"))
+        let sectionEnd = try XCTUnwrap(file.range(of: "private struct MakeItMePremiumOfferCard"))
+        let section = String(file[sectionStart.lowerBound..<sectionEnd.lowerBound])
         XCTAssertFalse(section.contains("Text(\"You're subscribed.\")"),
                        "the unlisted subscribed block is removed")
         XCTAssertTrue(section.contains("MakeItMeSettingsRow.manageSubscription.title"),
