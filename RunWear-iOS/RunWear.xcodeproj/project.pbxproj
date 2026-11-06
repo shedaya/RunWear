@@ -174,6 +174,9 @@
 		G61006000000000000000001 /* Gen6WaveCTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61005000000000000000001 /* Gen6WaveCTests.swift */; };
 		RW7900000000000000000002 /* Gen6RW78RW79Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RW7900000000000000000001 /* Gen6RW78RW79Tests.swift */; };
 		RW7300000000000000000002 /* Gen6DetentRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = RW7300000000000000000001 /* Gen6DetentRenderTests.swift */; };
+		FVQ200000000000000000001 /* FollowingVQExecutorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FVQ100000000000000000001 /* FollowingVQExecutorTests.swift */; };
+		FVQ200000000000000000002 /* MakeItMeFlowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10001000000000000000107 /* MakeItMeFlowViews.swift */; };
+		FVQ200000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = G10001000000000000000002 /* GuidedSelfieCaptureView.swift */; };
 		G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = G61003000000000000000001 /* Gen6RW66RenderTests.swift */; };
 		R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67003000000000000000001 /* Gen6RW67RenderTests.swift */; };
 		D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60000000000000000000001 /* Gen6WidgetRenderTests.swift */; };
@@ -423,6 +426,7 @@
 		G61005000000000000000001 /* Gen6WaveCTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WaveCTests.swift; sourceTree = "<group>"; };
 		RW7900000000000000000001 /* Gen6RW78RW79Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW78RW79Tests.swift; sourceTree = "<group>"; };
 		RW7300000000000000000001 /* Gen6DetentRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6DetentRenderTests.swift; sourceTree = "<group>"; };
+		FVQ100000000000000000001 /* FollowingVQExecutorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowingVQExecutorTests.swift; sourceTree = "<group>"; };
 		G61003000000000000000001 /* Gen6RW66RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW66RenderTests.swift; sourceTree = "<group>"; };
 		R67003000000000000000001 /* Gen6RW67RenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6RW67RenderTests.swift; sourceTree = "<group>"; };
 		D60000000000000000000001 /* Gen6WidgetRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen6WidgetRenderTests.swift; sourceTree = "<group>"; };
@@ -728,6 +732,7 @@
 				G61005000000000000000001 /* Gen6WaveCTests.swift */,
 				RW7900000000000000000001 /* Gen6RW78RW79Tests.swift */,
 				RW7300000000000000000001 /* Gen6DetentRenderTests.swift */,
+				FVQ100000000000000000001 /* FollowingVQExecutorTests.swift */,
 				G61003000000000000000001 /* Gen6RW66RenderTests.swift */,
 				R67003000000000000000001 /* Gen6RW67RenderTests.swift */,
 				D60000000000000000000001 /* Gen6WidgetRenderTests.swift */,
@@ -1131,6 +1136,9 @@
 				G61006000000000000000001 /* Gen6WaveCTests.swift in Sources */,
 				RW7900000000000000000002 /* Gen6RW78RW79Tests.swift in Sources */,
 				RW7300000000000000000002 /* Gen6DetentRenderTests.swift in Sources */,
+				FVQ200000000000000000001 /* FollowingVQExecutorTests.swift in Sources */,
+				FVQ200000000000000000002 /* MakeItMeFlowViews.swift in Sources */,
+				FVQ200000000000000000003 /* GuidedSelfieCaptureView.swift in Sources */,
 				G61004000000000000000001 /* Gen6RW66RenderTests.swift in Sources */,
 				R67004000000000000000001 /* Gen6RW67RenderTests.swift in Sources */,
 				D60000000000000000000011 /* Gen6WidgetRenderTests.swift in Sources */,
