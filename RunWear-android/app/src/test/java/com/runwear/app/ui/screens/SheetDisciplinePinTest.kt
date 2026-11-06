@@ -331,7 +331,9 @@ class SheetDisciplinePinTest {
 
     @Test
     fun datePickerContent_carriesTheOneRuledScrollConsumer() {
-        val src = source("app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt")
+        val src = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt"
+        ).readText()
         assertEquals(
             "the Date content carries exactly one vertical scroll consumer",
             1, occurrences(src, "Modifier.verticalScroll(scrollState)")
@@ -348,7 +350,9 @@ class SheetDisciplinePinTest {
 
     @Test
     fun timePickerContent_carriesTheOneRuledScrollConsumer() {
-        val src = source("app/src/main/java/com/runwear/app/ui/screens/DayChartTimePicker.kt")
+        val src = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/DayChartTimePicker.kt"
+        ).readText()
         assertEquals(
             "the Time content carries exactly one vertical scroll consumer",
             1, occurrences(src, "Modifier.verticalScroll(scrollState)")
