@@ -242,9 +242,10 @@ final class SettingsInventoryTests: XCTestCase {
                       "RW-81: the watch fit section carries the Women's button")
         XCTAssertFalse(watch.contains("No preference"),
                        "RW-81: no third fit choice exists on the watch either")
-        let toggles = watch.components(separatedBy: "fitSelection(afterTapping:").count - 1
-        XCTAssertEqual(toggles, 2,
-                       "RW-81: both watch fit buttons route through the tap-again-to-neutral transition")
+        XCTAssertTrue(watch.contains(".fitSelection(afterTapping: .male)"),
+                      "RW-81: the watch Men's button routes through the tap-again-to-neutral transition")
+        XCTAssertTrue(watch.contains(".fitSelection(afterTapping: .female)"),
+                      "RW-81: the watch Women's button routes through the tap-again-to-neutral transition")
         XCTAssertTrue(watch.contains("action: { viewModel.temperatureUnit = .fahrenheit }"),
                       "the temperature buttons stay direct-set — a unit always has a value")
         XCTAssertTrue(watch.contains("action: { viewModel.temperatureUnit = .celsius }"),
