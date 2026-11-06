@@ -93,6 +93,17 @@ android {
         unitTests {
             // Robolectric render tests load the real manifest/resources.
             isIncludeAndroidResources = true
+            all {
+                // The app render suite outgrew one shared fork:
+                // gate runs 42288802716 and 42292741750 died with
+                // heap exhaustion inside :app:testDebugUnitTest
+                // (widget renders first, then the whole executor),
+                // losing the module's results entirely. Fork per
+                // test class — the wear module's established
+                // precedent for its render harness — so each class
+                // gets a fresh sandbox and heap.
+                it.forkEvery = 1
+            }
         }
     }
 }
