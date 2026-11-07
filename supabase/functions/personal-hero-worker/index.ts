@@ -166,6 +166,44 @@
 // viewed cell's pending subscriber_fill job with priority 15,
 // the convergence class in claimBand below). The band system
 // itself is unchanged.
+//
+// RW-107 amendment (2026-11-06): a counted cell can no longer be
+// left without a hero. Field case (Sol, 2026-11-06): Juneau job
+// 9bba9eb8 delivered normally — hero row written, free counter
+// claimed, job completed 'delivered' with its result_hero_id
+// set. Sol, shown the stock fallback by the RW-106 client render
+// defect, flagged the photo ("doesn't look like me"); flag_hero
+// deleted the hero row, and the result_hero_id foreign key's
+// ON DELETE SET NULL retroactively nulled the job's hero link —
+// leaving a COMPLETED/'delivered' job with result_hero_id NULL,
+// no hero row, and a counter that said the look was spent. Only
+// the regeneration flag_hero itself queued rescued the cell;
+// had the hero been lost by any route that does not queue its
+// own regeneration (admin deletion, a regeneration cycle dying
+// terminally after a flag, storage/row drift), the cell would
+// have stayed counted-but-empty forever — a second live case
+// (a Nov 1 cell, four gate-failed regenerations, pending ever
+// since) sat in exactly that state for five days. Two changes:
+// (1) CONDITIONAL COMPLETION — deliver()'s 'delivered' stage
+// transition is now a checked write, guarded on the job still
+// being PROCESSING and re-verifying the hero row exists at the
+// moment of the transition; if the row has vanished mid-delivery
+// (e.g. a racing flag), deliver() throws and the job fails
+// visibly instead of persisting a 'delivered' with no hero
+// behind it. (2) RECONCILIATION SWEEP — every drain runs
+// reconcileOrphanedCells() alongside the stale scan: a
+// personal_cells row that is counted (free_counted, or
+// ever_delivered for an entitled claim) with NO hero row and NO
+// live job is detected server-side and repaired by queueing a
+// 'regeneration' job (no allowance charge — regeneration kind
+// never claims) at the profile's current epoch, stamping the
+// cell regen-pending. The sweep is the mechanism because drains
+// run on the pg_cron backstop independent of any user action —
+// the repair must not wait for the user to view the cell or
+// complain. Loop safety: a cell whose regen-pending stamp is
+// fresher than RECONCILE_RETRY_AFTER_MS (24 h) is skipped, so a
+// cell whose repair cycle terminally fails is retried at most
+// daily instead of on every drain.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -233,6 +271,16 @@ const STALE_FAILURE_REASON = 'stale_processing_timeout'
 // screen/gate call while it waits on a prediction.
 const DRAW_POLL_TIMEOUT_MS = 180_000
 const POLL_HEARTBEAT_MS = 30_000
+
+// RW-107 reconciliation bounds (see the RW-107 header amendment):
+// candidates scanned per drain, oldest-stuck first; the repair
+// priority is the regeneration class request-personal-generation
+// uses for the same job kind; and the retry floor — a cell whose
+// regen-pending stamp is younger than this is left alone, so a
+// persistently failing repair retries at most once a day.
+const RECONCILE_SCAN_LIMIT = 25
+const RECONCILE_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
+const REPAIR_PRIORITY = 20
 
 // ---------------------------------------------------------------------
 // Draw budget by cell difficulty (commission §3): stop at first
@@ -1647,11 +1695,42 @@ async function deliver(
       .eq('combination_id', job.combination_id)
   }
 
-  await markJob(job.id, {
-    status: 'COMPLETED', gate_result: gateDetail,
-    result_hero_id: hero.id, stage: 'delivered',
-    completed_at: new Date().toISOString()
-  })
+  // RW-107 conditional completion: the 'delivered' stage
+  // transition is persisted ONLY against the hero row this
+  // delivery just wrote. The row's existence is re-verified at
+  // the moment of the transition and the write itself is a
+  // checked update guarded on the job still being PROCESSING —
+  // if the hero row has vanished mid-delivery (a racing
+  // flag_hero delete is the known route) or the completion write
+  // does not land, deliver() throws and the job fails visibly,
+  // so a 'delivered' stage can never be recorded without a hero
+  // row behind it. (markJob's log-and-continue contract is
+  // unchanged for heartbeat/progress writes; this one write is
+  // the delivery of record and must not be silent.)
+  const { data: heroRow } = await supabase
+    .from('personal_heroes')
+    .select('id')
+    .eq('id', hero.id)
+    .maybeSingle()
+  if (!heroRow) {
+    throw new Error(`Delivery integrity: hero row ${hero.id} missing at completion; refusing to record 'delivered'`)
+  }
+  const { data: completedRows, error: completionError } = await supabase
+    .from('personal_generation_jobs')
+    .update({
+      status: 'COMPLETED', gate_result: gateDetail,
+      result_hero_id: hero.id, stage: 'delivered',
+      completed_at: new Date().toISOString()
+    })
+    .eq('id', job.id)
+    .eq('status', 'PROCESSING')
+    .select('id')
+  if (completionError) {
+    throw new Error(`Delivery completion write failed: ${completionError.message}`)
+  }
+  if (!completedRows || completedRows.length === 0) {
+    throw new Error('Delivery completion write failed: job no longer PROCESSING')
+  }
   return 'delivered'
 }
 
@@ -1973,6 +2052,127 @@ async function reclaimStaleJobs(): Promise<Array<Record<string, unknown>>> {
   return outcomes
 }
 
+// RW-107 reconciliation sweep — see the RW-107 header amendment
+// for the full reasoning. A personal_cells row that is counted
+// (free_counted, or ever_delivered for an entitled claim) with
+// no hero row and no live job is a look the user has spent (or
+// been granted) that serves nothing. However the hero was lost
+// — a flag whose regeneration later died terminally, an admin
+// deletion, row drift — the repair is the same: queue a
+// 'regeneration' job for the cell (the kind that never charges
+// the free allowance and preserves the cell's counted state on
+// delivery) at the profile's current epoch, and stamp the cell
+// regen-pending. Runs on every drain, so the repair happens
+// whether or not the user ever views the cell again.
+async function reconcileOrphanedCells(): Promise<Array<Record<string, unknown>>> {
+  const { data: cells, error } = await supabase
+    .from('personal_cells')
+    .select('user_id, combination_id, free_counted, ever_delivered, regen_status, regen_pending_since')
+    .or('free_counted.eq.true,ever_delivered.eq.true')
+    .order('updated_at', { ascending: true })
+    .limit(RECONCILE_SCAN_LIMIT)
+  if (error) {
+    console.error('[personal-hero-worker] reconcile scan failed:', error)
+    return []
+  }
+  const outcomes: Array<Record<string, unknown>> = []
+  for (const cell of (cells ?? []) as Array<Record<string, unknown>>) {
+    const userId = cell.user_id as string
+    const combinationId = cell.combination_id as string
+    try {
+      const { data: heroes } = await supabase
+        .from('personal_heroes')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('combination_id', combinationId)
+        .limit(1)
+      if (heroes && heroes.length > 0) continue
+
+      const { data: active } = await supabase
+        .from('personal_generation_jobs')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('combination_id', combinationId)
+        .in('status', ['QUEUED', 'PROCESSING'])
+        .limit(1)
+      if (active && active.length > 0) continue
+
+      // Loop safety: a cell already stamped regen-pending within
+      // the retry window has a repair cycle outstanding or
+      // recently dead; leave it until the stamp ages out.
+      const pendingSince = typeof cell.regen_pending_since === 'string'
+        ? new Date(cell.regen_pending_since as string).getTime() : null
+      if (cell.regen_status === 'pending' && pendingSince !== null &&
+          Date.now() - pendingSince < RECONCILE_RETRY_AFTER_MS) {
+        continue
+      }
+
+      // The repair job's shape comes from the cell's most recent
+      // job (every counted cell was counted by a delivery running
+      // under a job, so one exists; a cell without one cannot be
+      // reconstructed faithfully and is reported, not guessed).
+      const { data: priorJobs } = await supabase
+        .from('personal_generation_jobs')
+        .select('outfit_items')
+        .eq('user_id', userId)
+        .eq('combination_id', combinationId)
+        .order('requested_at', { ascending: false })
+        .limit(1)
+      if (!priorJobs || priorJobs.length === 0) {
+        outcomes.push({ user_id: userId, combination_id: combinationId, status: 'SKIPPED', error: 'no_source_job' })
+        console.error(`[personal-hero-worker] reconcile: counted cell ${combinationId} for ${userId} has no source job; cannot reconstruct`)
+        continue
+      }
+      const { data: profile } = await supabase
+        .from('personal_profiles')
+        .select('photo_epoch')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (!profile) {
+        outcomes.push({ user_id: userId, combination_id: combinationId, status: 'SKIPPED', error: 'no_profile' })
+        continue
+      }
+
+      const parts = combinationId.split('_')
+      const { data: repairJob, error: insertError } = await supabase
+        .from('personal_generation_jobs')
+        .insert({
+          user_id: userId,
+          combination_id: combinationId,
+          gender: parts[0], weather: parts[1],
+          temp_bracket: parts[2], time_of_day: parts[3],
+          outfit_signature: parts[4],
+          outfit_items: priorJobs[0].outfit_items,
+          kind: 'regeneration',
+          priority: REPAIR_PRIORITY,
+          epoch: (profile.photo_epoch as number | undefined) ?? 0,
+          status: 'QUEUED'
+        })
+        .select('id')
+        .single()
+      if (insertError) throw insertError
+
+      await supabase
+        .from('personal_cells')
+        .update({
+          regen_status: 'pending',
+          regen_pending_since: new Date().toISOString(),
+          regen_error: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('combination_id', combinationId)
+
+      outcomes.push({ user_id: userId, combination_id: combinationId, status: 'REPAIR_QUEUED', job_id: repairJob.id })
+      console.log(`[personal-hero-worker] reconcile: counted cell ${combinationId} for ${userId} has no hero and no live job; queued repair regeneration ${repairJob.id}`)
+    } catch (e) {
+      outcomes.push({ user_id: userId, combination_id: combinationId, status: 'ERROR', error: (e as Error).message })
+      console.error(`[personal-hero-worker] reconcile failed for cell ${combinationId} (${userId}):`, e)
+    }
+  }
+  return outcomes
+}
+
 // Guarded so the module's pure logic (prompt builder, gate port,
 // budget policy, anchor selection) is unit-testable via
 // index.test.ts; the edge runtime executes this file as main.
@@ -2012,6 +2212,7 @@ if (import.meta.main) {
     } catch { /* no body -> default drain */ }
 
     const reclaimed = await reclaimStaleJobs()
+    const reconciled = await reconcileOrphanedCells()
 
     // Gen-6 Wave A: claim in EFFECTIVE band order (see claimBand),
     // and keep draining while work remains and the chain budget
@@ -2072,6 +2273,7 @@ if (import.meta.main) {
       drained: true,
       attempted: results.length,
       reclaimed,
+      reconciled,
       chained,
       remaining_queued: Math.max(remainingQueued, 0),
       results
