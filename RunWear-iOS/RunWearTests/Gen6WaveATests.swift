@@ -201,8 +201,15 @@ final class Gen6WaveATests: XCTestCase {
         // photo applied never republishes the pool URL.
         XCTAssertTrue(vm.contains("personalAppliedForThisCell"),
                       "the Y-1 same-cell no-republish guard stands")
-        XCTAssertTrue(vm.contains("currentPersonalServeIsScaffold = lookState == .making"),
-                      "the scaffold fact is recorded at personal paint time (pill silence, RW-34)")
+        // RE-PINNED by the successor wave (build 30): RW-117
+        // proved the look state cannot carry the scaffold fact
+        // (a scaffold serve folds READY; an exact serve in its
+        // completion instant folds MAKING — the inference was
+        // wrong in both directions). The scaffold fact is still
+        // recorded at personal paint time (pill silence, RW-34)
+        // — now from the payload's own marker via the resolver.
+        XCTAssertTrue(vm.contains("currentPersonalServeIsScaffold = store.serveIsScaffold(for: combo)"),
+                      "the scaffold fact is recorded at personal paint time (pill silence, RW-34) — from the payload, RW-117")
     }
 
     func testColdStart_PlacePersistenceAndLaunchOrder_sourcePins() throws {

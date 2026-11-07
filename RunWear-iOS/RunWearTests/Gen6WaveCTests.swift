@@ -95,12 +95,17 @@ final class Gen6WaveCTests: XCTestCase {
 
     func testRW54OutfitNoteIsOneLineAndMomentIsBold_sourcePin() throws {
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        // The outfit-row note: exactly one lineLimit(1) on the
-        // description in DarkClothingItemCard, and no lineLimit(2)
-        // left on that card.
+        // RE-PINNED by the successor wave (build 30): RW-114 —
+        // Sol's build-29 device check, later than RW-54's
+        // one-line settlement — rules that outfit-item
+        // descriptions render WHOLE at default type size (his
+        // frame: "Eye protection from sun an…" cut mid-word).
+        // The one-line cap this pin asserted is the defect
+        // RW-114 names; the pin now asserts its absence. The
+        // moment-bold half of RW-54 stands unchanged below.
         let cardStart = try XCTUnwrap(home.range(of: "struct DarkClothingItemCard"))
         let card = String(home[cardStart.lowerBound...])
-        XCTAssertTrue(card.contains(".lineLimit(1)"), "the outfit-row note is one line")
+        XCTAssertFalse(card.contains(".lineLimit(1)"), "RW-114: no one-line cap truncates the outfit description")
         XCTAssertFalse(card.contains(".lineLimit(2)"), "the two-line note must not return")
         // The headline moment carries its own bold font, not the
         // line's inherited semibold.
