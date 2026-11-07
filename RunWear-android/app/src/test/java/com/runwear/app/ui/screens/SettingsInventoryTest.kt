@@ -94,9 +94,12 @@ class SettingsInventoryTest {
         // Gen-3 WS-D: photos group, then the Premium offer card.
         // GEN-5 (RW-28 item 25): the destructive rows live in the
         // Danger zone presentation now, not in this section.
+        // GEN-6 RW-84 (DS §13): the "Number of photos" row sits
+        // directly under Your photos in both enabled modes.
         assertEquals(
             listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
                 MakeItMeStrings.U2G_CARD_TITLE
             ),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.FREE)
@@ -104,6 +107,7 @@ class SettingsInventoryTest {
         assertEquals(
             listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
                 MakeItMeStrings.U2G_CARD_TITLE
             ),
             MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.SUBSCRIBED)

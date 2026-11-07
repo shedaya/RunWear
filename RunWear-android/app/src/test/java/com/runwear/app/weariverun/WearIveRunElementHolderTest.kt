@@ -167,7 +167,7 @@ class WearIveRunElementHolderTest {
         assertEquals(WearIveRunElementKind.CUE, kind(holder))
         assertEquals(1, holder.cueSequence.value)
         // And the creation narration still stands — no phantom
-        // "Update to…" was announced by any of these landings.
+        // "Updated to…" was announced by any of these landings.
         assertEquals("Added New York, NY, Now", present(holder).narration.text)
     }
 
@@ -195,7 +195,7 @@ class WearIveRunElementHolderTest {
         // GEN-5 (C-7): the payload names the dimension that
         // changed — at the same place and moment, the place
         // reading. A garment can never be named.
-        assertEquals("Update to New York, NY, Now", present(holder).narration.text)
+        assertEquals("Updated to New York, NY, Now", present(holder).narration.text)
         // The same update re-delivered does not cue a second time.
         holder.onEntriesChanged(
             listOf(entry(items = listOf("Thermal Tights", "Headband"))), today
@@ -223,7 +223,7 @@ class WearIveRunElementHolderTest {
         )
         assertEquals(WearIveRunElementKind.CUE, kind(holder))
         assertEquals(2, holder.cueSequence.value)
-        assertEquals("Update to Kansas City, MO, Now", present(holder).narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", present(holder).narration.text)
         assertEquals("Kansas City, MO", present(holder).entry.place)
     }
 

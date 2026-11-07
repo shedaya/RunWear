@@ -71,17 +71,17 @@ class WearIveRunNarrationDisciplineTest {
 
         holder.onEntriesChanged(listOf(iredellAt7pm), today)
         assertEquals(2, holder.cueSequence.value)
-        assertEquals("Update to 7 p.m.", present(holder).narration.text)
+        assertEquals("Updated to 7 p.m.", present(holder).narration.text)
 
         holder.onEntriesChanged(listOf(miami), today)
         assertEquals(3, holder.cueSequence.value)
-        assertEquals("Update to Miami, FL, Now", present(holder).narration.text)
+        assertEquals("Updated to Miami, FL, Now", present(holder).narration.text)
 
         // Identical re-delivery (a re-subscription emission of the
         // same state) fires nothing.
         holder.onEntriesChanged(listOf(miami), today)
         assertEquals(3, holder.cueSequence.value)
-        assertEquals("Update to Miami, FL, Now", present(holder).narration.text)
+        assertEquals("Updated to Miami, FL, Now", present(holder).narration.text)
 
         // ── RELAUNCH: a fresh holder restores the same persisted
         // collection. No cue, no new announcement — the element
@@ -103,7 +103,7 @@ class WearIveRunNarrationDisciplineTest {
         )
         relaunched.onEntriesChanged(listOf(miamiCooler), today)
         assertEquals(1, relaunched.cueSequence.value)
-        assertTrue(present(relaunched).narration.text.startsWith("Update to"))
+        assertTrue(present(relaunched).narration.text.startsWith("Updated to"))
     }
 
     @Test
@@ -123,7 +123,7 @@ class WearIveRunNarrationDisciplineTest {
 
         val state = present(holder)
         // The bar names Miami…
-        assertEquals("Update to Miami, FL, Now", state.narration.text)
+        assertEquals("Updated to Miami, FL, Now", state.narration.text)
         // …and the card content in the SAME emitted state is the
         // Miami solve the narration names — never the outgoing
         // entry's 85° / 3-item solve wearing the new name.

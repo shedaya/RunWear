@@ -84,7 +84,7 @@ class WearIveRunSimplePlaceTest {
         // gen-4 device build rendered as a garment narration), so
         // there is nothing garment-shaped left to assert on the
         // entry; the narration assertions below are the contract.
-        assertEquals("Update to New York, NY, Now", narration.text)
+        assertEquals("Updated to New York, NY, Now", narration.text)
         assertEquals("New York, NY, Now", narration.payload)
         assertFalse(narration.text.contains("Thermal Tights"))
         assertFalse(narration.text.contains("Today"))
@@ -97,7 +97,7 @@ class WearIveRunSimplePlaceTest {
             listOf(entry(place = "Aspen, Colorado", items = emptyList(), feels = 30.0)),
             today
         )
-        assertEquals("Update to Aspen, CO, Now", mini(holder).narration.text)
+        assertEquals("Updated to Aspen, CO, Now", mini(holder).narration.text)
     }
 
     @Test

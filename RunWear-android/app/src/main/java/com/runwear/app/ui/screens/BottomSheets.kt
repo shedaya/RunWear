@@ -96,21 +96,26 @@ internal fun buildAmazonSearchUrl(item: ClothingItem, gender: GenderPreference):
 
 /**
  * RW-26 (§8-I): the forecast-horizon rule for day browsing. The
- * forecast fetch covers [HORIZON_DAYS] days; days past it are NAMED
- * beyond-forecast and are not selectable — no weather is invented
- * for them (the Android equivalent of RW-23's iOS future-day flag).
+ * forecast fetch covers [HORIZON_DAYS] days; no weather is
+ * invented for days past it.
+ *
+ * RW-102 (Sol's directive, Nov 6, 2026 — supersedes the RW-26
+ * "named beyond-forecast" form): the date UI must not INCLUDE
+ * dates we can't give projections for. The strip therefore ENDS
+ * at the horizon — beyond-forecast days are not rendered at all,
+ * named or otherwise. [isBeyondHorizon] remains as the draft
+ * policy's refusal guard (defense in depth behind the strip).
  * Pure — unit-tested.
  */
 object ForecastHorizonPolicy {
     const val HORIZON_DAYS = 7
-    const val BROWSE_DAYS = 14
-    const val BEYOND_LABEL = "Beyond forecast"
 
     fun isBeyondHorizon(dayOffset: Int): Boolean = dayOffset >= HORIZON_DAYS
 
-    /** The cell's sublabel: the date inside the horizon, the name past it. */
-    fun cellSublabel(dayOffset: Int, dateLabel: String): String =
-        if (isBeyondHorizon(dayOffset)) BEYOND_LABEL else dateLabel
+    /** The days the Choose-a-Day strip offers: today through the
+     *  horizon's last day, and nothing past it (RW-102). */
+    fun stripDays(today: LocalDate): List<LocalDate> =
+        (0 until HORIZON_DAYS).map { today.plusDays(it.toLong()) }
 }
 
 /**
@@ -119,9 +124,9 @@ object ForecastHorizonPolicy {
  * picker (design-spec §6, C1): tapping a day moves the DRAFT
  * only; home re-solves ONLY on Confirm; Cancel (or dismiss)
  * restores the prior selection exactly because the committed
- * selection is never touched until Confirm. Days past the
- * 7-day horizon are named ("Beyond forecast") and never
- * selectable — no weather is invented for them.
+ * selection is never touched until Confirm. RW-102: the strip
+ * no longer renders days past the 7-day horizon at all; the
+ * refusal here remains as the policy-level guard behind it.
  */
 object DatePickerDraftPolicy {
 
@@ -210,7 +215,9 @@ internal fun DatePickerSheetContent(
     var draftDate by remember(selectedDate) {
         mutableStateOf(DatePickerDraftPolicy.open(selectedDate))
     }
-    val days = (0 until ForecastHorizonPolicy.BROWSE_DAYS).map { today.plusDays(it.toLong()) }
+    // RW-102: the strip ENDS at the forecast horizon — no
+    // beyond-forecast cells are rendered (see ForecastHorizonPolicy).
+    val days = ForecastHorizonPolicy.stripDays(today)
     // RW-73 detent ruling: the one vertical scroll consumer,
     // present only at the largest font scale (see
     // PickerSheetScrollPolicy).
@@ -239,29 +246,25 @@ internal fun DatePickerSheetContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 days.forEach { date ->
-                    val dayOffset = (date.toEpochDay() - today.toEpochDay()).toInt()
-                    val beyondHorizon = ForecastHorizonPolicy.isBeyondHorizon(dayOffset)
-                    val isSelected = date == draftDate && !beyondHorizon
+                    // RW-102: every rendered cell is inside the
+                    // horizon by construction (stripDays) — the
+                    // draft policy's refusal remains behind the tap.
+                    val isSelected = date == draftDate
                     val label = when {
                         date == today -> "Today"
                         date == today.plusDays(1) -> "Tomorrow"
                         else -> date.format(DateTimeFormatter.ofPattern("EEE"))
                     }
-                    val sublabel = ForecastHorizonPolicy.cellSublabel(
-                        dayOffset,
-                        date.format(DateTimeFormatter.ofPattern("MMM d"))
-                    )
+                    val sublabel = date.format(DateTimeFormatter.ofPattern("MMM d"))
 
                     Surface(
                         onClick = {
-                            if (!beyondHorizon) {
-                                // §1.7 (WS-9 fix, P-2): day selection
-                                // fires the selection-class tick.
-                                // RW-53: the tap moves the DRAFT —
-                                // nothing re-solves until Confirm.
-                                haptic.performHapticFeedback(HapticSpec.SELECTION)
-                                draftDate = DatePickerDraftPolicy.select(draftDate, date, today)
-                            }
+                            // §1.7 (WS-9 fix, P-2): day selection
+                            // fires the selection-class tick.
+                            // RW-53: the tap moves the DRAFT —
+                            // nothing re-solves until Confirm.
+                            haptic.performHapticFeedback(HapticSpec.SELECTION)
+                            draftDate = DatePickerDraftPolicy.select(draftDate, date, today)
                         },
                         shape = RoundedCornerShape(12.dp),
                         color = if (isSelected) RunWearColors.Primary else RunWearColors.BgCardLight
@@ -520,6 +523,16 @@ fun SettingsSheetContent(
                             onToggle = { onToggleUnit() }
                         )
                     }
+                    // RW-83 (settled, design-spec §6/§13): the
+                    // unit toggle's consequence line — what the
+                    // choice actually governs — stated under the
+                    // row, verbatim.
+                    Text(
+                        text = "Used for today's outfit, the hourly chart, and your watch.",
+                        fontSize = 12.sp,
+                        color = RunWearColors.TextSecondary,
+                        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
+                    )
                     SettingsDivider()
                 }
                 SettingsSectionId.BODY_TEMPERATURE -> item(key = section.name) {

@@ -74,4 +74,68 @@ class HeroRotationTest {
         val next = nextHeroInRotation(rotation, "https://pool/stale")
         assertEquals(personalUrl, next?.imageUrl)
     }
+
+    // ── RW-95 (Nov 6, 2026): serve stability — one stock serve
+    // per cell per view; the pool's second pick for the same cell
+    // never swaps the displayed stock photo mid-view.
+
+    @Test
+    fun `a displayed stock serve of the same cell is held - RW-95`() {
+        assertTrue(
+            HeroServeStabilityPolicy.holdsDisplayedStock(
+                displayedUrl = "file:///android_asset/hero_fallback/a.jpg",
+                displayedIsPersonal = false,
+                displayedCombinationId = "RAIN_WARM_DAY",
+                incomingCombinationId = "RAIN_WARM_DAY"
+            )
+        )
+    }
+
+    @Test
+    fun `a different cell always replaces - RW-95`() {
+        assertEquals(
+            false,
+            HeroServeStabilityPolicy.holdsDisplayedStock(
+                displayedUrl = "file:///android_asset/hero_fallback/a.jpg",
+                displayedIsPersonal = false,
+                displayedCombinationId = "RAIN_WARM_DAY",
+                incomingCombinationId = "CLEAR_MILD_DAY"
+            )
+        )
+    }
+
+    @Test
+    fun `a personal serve is never held against - RW-95`() {
+        assertEquals(
+            false,
+            HeroServeStabilityPolicy.holdsDisplayedStock(
+                displayedUrl = "https://signed/personal",
+                displayedIsPersonal = true,
+                displayedCombinationId = "RAIN_WARM_DAY",
+                incomingCombinationId = "RAIN_WARM_DAY"
+            )
+        )
+    }
+
+    @Test
+    fun `nothing displayed or an unlabelled serve is never held - RW-95`() {
+        assertEquals(
+            false,
+            HeroServeStabilityPolicy.holdsDisplayedStock(
+                displayedUrl = null,
+                displayedIsPersonal = false,
+                displayedCombinationId = "RAIN_WARM_DAY",
+                incomingCombinationId = "RAIN_WARM_DAY"
+            )
+        )
+        assertEquals(
+            false,
+            HeroServeStabilityPolicy.holdsDisplayedStock(
+                displayedUrl = "https://pool/a",
+                displayedIsPersonal = false,
+                displayedCombinationId = null,
+                incomingCombinationId = "RAIN_WARM_DAY"
+            )
+        )
+    }
 }

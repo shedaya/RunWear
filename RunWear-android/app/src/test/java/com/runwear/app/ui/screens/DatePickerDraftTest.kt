@@ -58,7 +58,8 @@ class DatePickerDraftTest {
     @Test
     fun `beyond-horizon days refuse the draft`() {
         // Horizon is 7 days (offsets 0..6 selectable); offset 7+
-        // is "Beyond forecast" and can never enter the draft.
+        // is beyond the forecast (RW-102: no longer rendered by
+        // the strip at all) and can never enter the draft.
         val draft = DatePickerDraftPolicy.select(today, today.plusDays(9), today)
         assertEquals(today, draft)
         val edge = DatePickerDraftPolicy.select(today, today.plusDays(6), today)

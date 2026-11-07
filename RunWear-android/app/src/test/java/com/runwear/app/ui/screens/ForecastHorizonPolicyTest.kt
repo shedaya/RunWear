@@ -1,11 +1,19 @@
 package com.runwear.app.ui.screens
 
+import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** RW-26 §8-I: days past the forecast horizon are named, never dressed. */
+/**
+ * RW-26 §8-I: days past the forecast horizon are never dressed.
+ * RW-102 (Sol's directive, Nov 6, 2026): the date strip must not
+ * INCLUDE dates we can't give projections for — it ends at the
+ * horizon. This supersedes the RW-26 form, which rendered
+ * beyond-horizon cells named "Beyond forecast"; the refusal
+ * guard behind the strip remains.
+ */
 class ForecastHorizonPolicyTest {
 
     @Test
@@ -17,8 +25,17 @@ class ForecastHorizonPolicyTest {
     }
 
     @Test
-    fun `cells inside the horizon keep their date, past it they are named`() {
-        assertEquals("Nov 8", ForecastHorizonPolicy.cellSublabel(6, "Nov 8"))
-        assertEquals("Beyond forecast", ForecastHorizonPolicy.cellSublabel(7, "Nov 9"))
+    fun `the strip ends at the horizon - RW-102`() {
+        val today = LocalDate.of(2026, 11, 6)
+        val days = ForecastHorizonPolicy.stripDays(today)
+        assertEquals(7, days.size)
+        assertEquals(today, days.first())
+        assertEquals(today.plusDays(6), days.last())
+        // No offered day is beyond the horizon.
+        assertTrue(days.none {
+            ForecastHorizonPolicy.isBeyondHorizon(
+                (it.toEpochDay() - today.toEpochDay()).toInt()
+            )
+        })
     }
 }

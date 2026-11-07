@@ -44,7 +44,7 @@ class WearIveRunUpdateNarrationTest {
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
-            "Update to Kansas City, MO, Now",
+            "Updated to Kansas City, MO, Now",
             WearIveRunUpdateNarration.narration(previous, next)?.text
         )
     }
@@ -58,14 +58,14 @@ class WearIveRunUpdateNarrationTest {
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
-            "Update to Miami, FL, Now",
+            "Updated to Miami, FL, Now",
             WearIveRunUpdateNarration.narration(previous, next)?.text
         )
     }
 
     @Test
     fun `a confirmed hour change names the clock reading`() {
-        // Census N-22 / C-7 nuance: "Update to 9 p.m." is in-spec.
+        // Census N-22 / C-7 nuance: "Updated to 9 p.m." is in-spec.
         val previous = entry(listOf("Light Long Sleeve"), momentLabel = null)
         val next = entry(listOf("Tank Top"), momentLabel = "9 p.m.")
         assertEquals(
@@ -73,7 +73,7 @@ class WearIveRunUpdateNarrationTest {
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
-            "Update to 9 p.m.",
+            "Updated to 9 p.m.",
             WearIveRunUpdateNarration.narration(previous, next)?.text
         )
     }
@@ -87,7 +87,7 @@ class WearIveRunUpdateNarrationTest {
             WearIveRunUpdateNarration.changedPayload(previous, next)
         )
         assertEquals(
-            "Update to Now",
+            "Updated to Now",
             WearIveRunUpdateNarration.narration(previous, next)?.text
         )
     }
@@ -140,7 +140,7 @@ class WearIveRunUpdateNarrationTest {
         )
         val present = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.CUE, present.kind)
-        assertEquals("Update to Kansas City, MO, Now", present.narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", present.narration.text)
         assertEquals(2, holder.cueSequence.value)
         // A weather-only re-delivery afterwards announces nothing new.
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
@@ -155,7 +155,7 @@ class WearIveRunUpdateNarrationTest {
         )
         val after = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.MINI, after.kind)
-        assertEquals("Update to Kansas City, MO, Now", after.narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", after.narration.text)
         assertEquals(2, holder.cueSequence.value)
     }
 
@@ -169,7 +169,7 @@ class WearIveRunUpdateNarrationTest {
         )
         val present = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.CUE, present.kind)
-        assertEquals("Update to 9 p.m.", present.narration.text)
+        assertEquals("Updated to 9 p.m.", present.narration.text)
         assertEquals(2, holder.cueSequence.value)
     }
 
@@ -208,7 +208,7 @@ class WearIveRunUpdateNarrationTest {
             today
         )
         val present = holder.state.value as WearIveRunBarState.Present
-        assertEquals("Update to Kansas City, MO, Now", present.narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", present.narration.text)
         assertFalse(present.narration.text.contains("Ear Warmer"))
         // The payload type itself: a kit-only change resolves to a
         // Place payload, never a string the kit could fill.
@@ -219,6 +219,32 @@ class WearIveRunUpdateNarrationTest {
         assertEquals(
             WearIveRunNarrationPayload.Place("Kansas City, MO", "Now"),
             payload
+        )
+    }
+
+    @Test
+    fun `a moment change on another day names the full date and the reading - RW-98`() {
+        // RW-98 (Sol's ruling, Nov 6, 2026): the line reads
+        // "Updated to," and a moment on a day other than today is
+        // named in full — "Updated to November 12 7 p.m." in Sol's
+        // own example. Both entries sit on Nov 12; only the moment
+        // changed, so the payload is the dated moment form.
+        val otherDay = LocalDate.of(2026, 11, 12)
+        fun otherDayEntry(momentLabel: String?) = WearIveRunDayEntry(
+            date = otherDay, place = "New York, NY", feelsLikeF = 52.0,
+            conditionLabel = "Clear", isSnowing = false, isRaining = false,
+            items = listOf("Light Long Sleeve"), heroRef = null,
+            momentLabel = momentLabel
+        )
+        val previous = otherDayEntry("9 a.m.")
+        val next = otherDayEntry("7 p.m.")
+        assertEquals(
+            WearIveRunNarrationPayload.Moment("7 p.m.", "November 12"),
+            WearIveRunUpdateNarration.changedPayload(previous, next, today)
+        )
+        assertEquals(
+            "Updated to November 12 7 p.m.",
+            WearIveRunUpdateNarration.narration(previous, next, today)?.text
         )
     }
 

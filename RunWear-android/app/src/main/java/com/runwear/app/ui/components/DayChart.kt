@@ -264,6 +264,34 @@ object DayChartBandPolicy {
     /** The selected dot follows the current selection's hour. */
     fun selectedDotHour(selectedHour: Int): Int = selectedHour
 
+    /**
+     * RW-103 (Nov 6, 2026): the horizontal footprint the
+     * "Change ›" control owns at the band's foot — its text
+     * (~58 dp at 12 sp bold), its start/end padding (8 + 12 dp)
+     * and an 8 dp breathing gap: 86 dp in all. The selected-hour
+     * axis label's travel is clamped so the label's END never
+     * enters this footprint: in the walkthrough build the clamp
+     * reserved only 124 dp for label-start + label, so at a
+     * late-day dot the label and the Change control collided at
+     * the strip's right end and "Change ›" read as covered.
+     */
+    const val CHANGE_FOOTPRINT_DP: Float = 86f
+
+    /** The axis label's width allowance ("12:00 PM" at 11 sp bold). */
+    const val AXIS_LABEL_WIDTH_DP: Float = 56f
+
+    /**
+     * The axis label's start (dp from the band's left edge): the
+     * dot's x pulled back 16 dp, clamped so the whole label
+     * stays inside the band and clear of the Change footprint.
+     */
+    fun axisLabelStartDp(dotXDp: Float, bandWidthDp: Float): Float {
+        val maxStart = maxOf(
+            4f, bandWidthDp - CHANGE_FOOTPRINT_DP - AXIS_LABEL_WIDTH_DP
+        )
+        return (dotXDp - 16f).coerceIn(4f, maxStart)
+    }
+
     /** Tapping Change opens the Choose-a-Time sheet — the band's
      * only action. */
     fun changeAction(): ChangeAction = ChangeAction.OPEN_TIME_SHEET
@@ -354,9 +382,23 @@ fun DayChartGlanceBand(
                     )
                 }
                 // Bracket bands.
-                for (band in model.bands) {
+                // RW-103 (Nov 6, 2026): the LAST band's tint runs
+                // to the strip's right edge. The bands model only
+                // covers the forecast span, so when the forecast
+                // ends before midnight the tint stopped short and
+                // the strip's foot — the "Change ›" control —
+                // sat past the visible tinted edge, reading as
+                // covered/clipped by the strip itself (the
+                // owner's circled frame). The band DATA is
+                // unchanged; only its paint extends.
+                val bandList = model.bands
+                for ((index, band) in bandList.withIndex()) {
                     val left = DayChartGeometry.cellLeftFraction(band.startHour) * size.width
-                    val right = DayChartGeometry.cellLeftFraction(band.endHourExclusive) * size.width
+                    val right = if (index == bandList.lastIndex) {
+                        size.width
+                    } else {
+                        DayChartGeometry.cellLeftFraction(band.endHourExclusive) * size.width
+                    }
                     drawRect(
                         color = temperatureBracketColor(band.bracket).copy(alpha = 0.13f),
                         topLeft = Offset(left, 0f),
@@ -439,12 +481,17 @@ fun DayChartGlanceBand(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = RunWearColors.TextPrimary,
+                softWrap = false,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(
-                        start = (
-                            DayChartGeometry.xFraction(dotPoint.hour) * maxWidth.value - 16
-                            ).dp.coerceIn(4.dp, (maxWidth - 52.dp - 72.dp).coerceAtLeast(4.dp)),
+                        // RW-103: the clamp is the policy's —
+                        // the label's END stays clear of the
+                        // Change control's true footprint.
+                        start = DayChartBandPolicy.axisLabelStartDp(
+                            dotXDp = DayChartGeometry.xFraction(dotPoint.hour) * maxWidth.value,
+                            bandWidthDp = maxWidth.value
+                        ).dp,
                         bottom = 4.dp
                     )
             )
@@ -455,6 +502,7 @@ fun DayChartGlanceBand(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = RunWearColors.PineAccent,
+                softWrap = false,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .clickable { onChangeClick() }

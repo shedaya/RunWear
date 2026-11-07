@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -40,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
@@ -332,10 +335,20 @@ private fun PosterCover(
     val cropped = remember(hero, anchor) {
         hero?.let { ShareAnchorCrop.cropBitmap(it, anchor, ShareExportFormat.FEED.aspect) }
     }
-    BoxWithConstraints(modifier = modifier) {
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
         val scale = maxWidth.value / 360f
         Box(
-            modifier = Modifier.width(360.dp).height(450.dp)
+            // RW-99 (Nov 6, 2026): the canvas MUST compose at its
+            // full 360x450 design size and be scaled down by the
+            // graphics layer. width()/height() are coercible — the
+            // cover slot's constraints (46x58 / 58x72) shrank the
+            // canvas itself to slot size, so the poster's
+            // fixed-canvas content clipped to a top-left fragment
+            // (the walkthrough's tiny broken remnant on every
+            // collection card). requiredWidth/requiredHeight hold
+            // the design size against the slot; the slot-sized,
+            // clipped wrapper bounds the scaled render.
+            modifier = Modifier.requiredWidth(360.dp).requiredHeight(450.dp)
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale

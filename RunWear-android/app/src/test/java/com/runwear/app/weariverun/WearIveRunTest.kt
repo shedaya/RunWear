@@ -46,13 +46,13 @@ class WearIveRunNarrationFormatterTest {
         val narration = WearIveRunNarrationFormatter.update(
             payload = WearIveRunNarrationPayload.Place("Aspen, CO", "Now")
         )
-        assertEquals("Update to Aspen, CO, Now", narration.text)
+        assertEquals("Updated to Aspen, CO, Now", narration.text)
         assertEquals("Aspen, CO, Now", narration.payload)
-        assertEquals("Update to ".length, narration.payloadStart)
+        assertEquals("Updated to ".length, narration.payloadStart)
         val moment = WearIveRunNarrationFormatter.update(
             payload = WearIveRunNarrationPayload.Moment("9 p.m.")
         )
-        assertEquals("Update to 9 p.m.", moment.text)
+        assertEquals("Updated to 9 p.m.", moment.text)
     }
 }
 
@@ -121,7 +121,7 @@ class WearIveRunAbsentStateTest {
         val narration = (holder.state.value as WearIveRunBarState.Cue).narration
         // GEN-5 (C-7): the update payload names the changed
         // dimension — the place reading — never the garment.
-        assertEquals("Update to New York, Now", narration.text)
+        assertEquals("Updated to New York, Now", narration.text)
         assertEquals("New York, Now", narration.payload)
     }
 }

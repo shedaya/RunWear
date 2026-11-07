@@ -16,7 +16,7 @@ import org.junit.Test
  *   keeps the session's last settled version;
  * - after the session's first "Added …", subsequent changes within
  *   the same session narrate as updates (census X-4: the recording
- *   showed three "Added …" and zero "Update to…");
+ *   showed three "Added …" and zero "Updated to…");
  * - the pinned TODAY card and the session's chapter are THE SAME
  *   entry (census X-5), and the collection does not accumulate one
  *   chapter per lookup;
@@ -216,7 +216,7 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Update to New York, NY, Now", narrations.last())
+        assertEquals("Updated to New York, NY, Now", narrations.last())
         assertEquals("New York, NY", present(holder).entry.place)
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
 
@@ -234,7 +234,7 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Update to Miami, FL, Now", narrations.last())
+        assertEquals("Updated to Miami, FL, Now", narrations.last())
         assertEquals("Miami, FL", present(holder).entry.place)
         assertEquals(90.0, present(holder).entry.feelsLikeF!!, 0.001)
 

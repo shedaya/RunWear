@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -578,13 +579,23 @@ internal fun TimePickerSheetContent(
                 }
 
                 // The drafted hour's outfit preview line.
-                if (draftPoint != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 14.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
+                // RW-87 (Sol, Nov 6, 2026 — confirmed on both
+                // platforms): the row's height is RESERVED at the
+                // two-line measure in every state, so scrubbing
+                // between an hour whose outfit fits one line and
+                // one whose outfit wraps to two can no longer push
+                // the Confirm/Cancel row up and down. The space is
+                // reserved, never the content shortened. Two lines
+                // of the 13.5 sp outfit text measure 48 dp at the
+                // largest font metrics this sheet renders under.
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 14.dp)
+                        .heightIn(min = 48.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    if (draftPoint != null) {
                         Text(
                             text = draftPoint.bracket.name,
                             fontSize = 11.sp,

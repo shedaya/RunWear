@@ -62,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -285,18 +286,23 @@ fun MakeItMeForkScreen(
             )
             // The dashed face box — same dashed language as the
             // guided capture's face oval, pine on the light image.
+            // RW-104 (Sol, Nov 6, 2026): properly visible — deep
+            // pine at 3.5dp with a longer dash. The gen-6 form
+            // (light PineAccent mint, 2.5dp, 10/7 dash) washed out
+            // against the photo, worst on the Fold's wide hero:
+            // "the user may not notice the dotted line square."
             androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
                 drawRoundRect(
-                    color = RunWearColors.PineAccent,
+                    color = RunWearColors.Primary,
                     topLeft = androidx.compose.ui.geometry.Offset(boxRect.left, boxRect.top),
                     size = androidx.compose.ui.geometry.Size(boxRect.width, boxRect.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(
                         boxRect.height * 0.12f, boxRect.height * 0.12f
                     ),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 2.5.dp.toPx(),
+                        width = 3.5.dp.toPx(),
                         pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(
-                            floatArrayOf(10.dp.toPx(), 7.dp.toPx())
+                            floatArrayOf(12.dp.toPx(), 6.dp.toPx())
                         )
                     )
                 )
@@ -1576,7 +1582,12 @@ fun MakeItMePaywallSheet(
         val offering = viewModel.offering()
         val monthlyMicros = offering?.monthly?.product?.price?.amountMicros
         monthly = offering?.monthly?.let {
-            PackagePrice(it, MakeItMeStrings.monthlyRowLabel(it.product.price.formatted))
+            PackagePrice(
+                it,
+                MakeItMeStrings.monthlyRowLabel(it.product.price.formatted),
+                formatted = it.product.price.formatted,
+                amountMicros = it.product.price.amountMicros
+            )
         }
         annual = offering?.annual?.let {
             PackagePrice(
@@ -1717,18 +1728,27 @@ fun MakeItMePaywallSheet(
                     )
                 }
             } else {
-            // The ONE highlighted card: "Premium" / "All of Make It
-            // Me." Its price slot is the ONLY price on the card and it
-            // renders from the fetched Offering (parameterized —
-            // design §6); the CTA carries no price. No Founding /
+            // The annual option: "Premium" / "All of Make It Me."
+            // Its price slot renders from the fetched Offering
+            // (parameterized — design §6). No Founding /
             // Limited-time / struck-through elements anywhere.
-            // GEN-5 (cream map): the highlighted card's fill is the
-            // design's pale pine tint inside a 2px pine border
-            // (mockups .pw.hero), not the plain card fill.
+            // RW-100 (Sol, Nov 6, 2026): the card is ONE OF TWO
+            // equally selectable plan options — its highlighted
+            // treatment (the design's pale pine tint inside a 2px
+            // pine border, mockups .pw.hero) now FOLLOWS the
+            // selection instead of dressing the card permanently:
+            // unselected it rests on the plain card fill inside a
+            // hairline, and the radio indicator shows the state.
+            // (The gen-6 form kept the tint constant, so the card
+            // read as chosen even with Monthly selected.)
             Surface(
                 onClick = { annualSelected = true },
                 shape = RoundedCornerShape(16.dp),
-                color = RunWearColors.PaywallTint,
+                color = if (annualSelected) {
+                    RunWearColors.PaywallTint
+                } else {
+                    RunWearColors.BgCard
+                },
                 border = androidx.compose.foundation.BorderStroke(
                     if (annualSelected) 2.dp else 1.dp,
                     if (annualSelected) {
@@ -1739,7 +1759,8 @@ fun MakeItMePaywallSheet(
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                Row(modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = MakeItMeStrings.U2G_CARD_TITLE,
                         fontSize = 17.sp,
@@ -1783,12 +1804,22 @@ fun MakeItMePaywallSheet(
                         )
                     }
                 }
+                PlanRadioIndicator(
+                    selected = annualSelected,
+                    modifier = Modifier.padding(start = 12.dp, top = 2.dp)
+                )
+                }
             }
             Spacer(Modifier.height(10.dp))
 
-            // The monthly product, as a quiet SELECTABLE row
-            // (price from the same Offering object, never a literal).
-            PaywallPriceRow(
+            // The monthly product, as the SECOND plan option —
+            // the same selectable row form as the annual card
+            // (radio, selection tint and border), its price from
+            // the same Offering object, never a literal. RW-100:
+            // it is no longer a "quiet door" subordinate to the
+            // card; both plans are explicit, equally selectable
+            // options and the selection visibly registers.
+            PlanOptionRow(
                 label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY,
                 enabled = monthly != null && !purchasing,
                 selected = !annualSelected,
@@ -1797,7 +1828,9 @@ fun MakeItMePaywallSheet(
             Spacer(Modifier.height(14.dp))
 
             // The sheet's ONE call to action — purchases the
-            // selected plan.
+            // selected plan. RW-100: its label NAMES the selected
+            // plan and its price (composed from the fetched
+            // offering), so what the button buys is never in doubt.
             Button(
                 onClick = { buy(if (annualSelected) annual else monthly) },
                 enabled = (if (annualSelected) annual else monthly) != null && !purchasing,
@@ -1806,7 +1839,17 @@ fun MakeItMePaywallSheet(
                 colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
             ) {
                 Text(
-                    MakeItMeStrings.U2I_CTA,
+                    if (annualSelected) {
+                        MakeItMeStrings.planCtaLabel(
+                            MakeItMeStrings.U2B_ANNUAL,
+                            annual?.formatted?.takeIf { it.isNotEmpty() }?.let { "$it/yr" }
+                        )
+                    } else {
+                        MakeItMeStrings.planCtaLabel(
+                            MakeItMeStrings.U2B_MONTHLY,
+                            monthly?.formatted?.takeIf { it.isNotEmpty() }?.let { "$it/month" }
+                        )
+                    },
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 15.sp,
                     color = com.runwear.app.ui.theme.PhotoInk
@@ -1890,54 +1933,98 @@ private class PackagePrice(
     val amountMicros: Long = 0L
 )
 
+/**
+ * RW-100 (Sol, Nov 6, 2026): the radio indicator every plan
+ * option carries — a filled pine dot inside a pine ring when
+ * selected, an empty hairline ring when not — so a plan
+ * selection is visible at a glance on both purchase surfaces
+ * (the paywall sheet and the Settings offer card).
+ */
 @Composable
-private fun PaywallPriceRow(
+internal fun PlanRadioIndicator(
+    selected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .border(
+                if (selected) 2.dp else 1.5.dp,
+                if (selected) {
+                    RunWearColors.Primary
+                } else {
+                    RunWearColors.TextSecondary.copy(alpha = 0.45f)
+                },
+                androidx.compose.foundation.shape.CircleShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Box(
+                modifier = Modifier
+                    .size(11.dp)
+                    .background(
+                        RunWearColors.Primary,
+                        androidx.compose.foundation.shape.CircleShape
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * RW-100 (Sol, Nov 6, 2026 — supersedes the GEN-5 C-6 "quiet
+ * subordinate row" form): ONE plan option — an explicit,
+ * equally selectable row carrying the radio indicator and the
+ * same selection treatment as the annual card (paywall tint +
+ * 2dp pine border when selected; transparent + hairline when
+ * not). Tapping SELECTS the plan; the surface's one confirm
+ * button below buys the selected one (select-then-confirm
+ * stands — FA-9). Shared by the paywall sheet (monthly) and
+ * the Settings offer card (both plans).
+ */
+@Composable
+internal fun PlanOptionRow(
     label: String,
     enabled: Boolean,
     selected: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    // The selected fill: the paywall tint on the sheet's plain
+    // ground; on the Settings card (itself tinted) the plain
+    // card fill, so the selected row still pops.
+    selectedContainerColor: Color = RunWearColors.PaywallTint
 ) {
-    // GEN-5 (C-6): the monthly element is "a little bit clickable"
-    // — a quiet outlined text row, visibly a door (border, pine
-    // chevron) but modest and clearly subordinate to the annual
-    // hero card: no filled button, no primary colour.
-    // GEN-5 (RW-29 FA-9): the row SELECTS the monthly plan — it
-    // no longer purchases on tap; the sheet's one CTA below both
-    // plans buys the selected one. Selected, its border firms up
-    // to pine; unselected it stays the quiet hairline door.
     Surface(
         onClick = onClick,
         enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
-        color = Color.Transparent,
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) selectedContainerColor else Color.Transparent,
         border = androidx.compose.foundation.BorderStroke(
-            if (selected) 1.5.dp else 1.dp,
+            if (selected) 2.dp else 1.dp,
             if (selected) {
-                RunWearColors.PineAccent
+                RunWearColors.Primary
             } else {
-                RunWearColors.TextSecondary.copy(alpha = 0.45f)
+                RunWearColors.Hairline
             }
         ),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .height(42.dp)
+            .height(52.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
         ) {
+            PlanRadioIndicator(selected = selected)
             Text(
                 label,
                 fontWeight = FontWeight.Medium,
-                fontSize = 13.5.sp,
-                color = if (enabled) RunWearColors.TextPrimary else RunWearColors.TextSecondary
-            )
-            Text(
-                " ›",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.5.sp,
-                color = RunWearColors.PineAccent
+                fontSize = 15.sp,
+                color = if (enabled) RunWearColors.TextPrimary else RunWearColors.TextSecondary,
+                modifier = Modifier.padding(start = 12.dp)
             )
         }
     }
@@ -1976,10 +2063,12 @@ object MakeItMeSettingsPresentation {
             // see dangerZoneRowTitles.
             MakeItMeMode.FREE -> listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
                 MakeItMeStrings.U2G_CARD_TITLE
             )
             MakeItMeMode.SUBSCRIBED -> listOf(
                 MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
                 MakeItMeStrings.U2G_CARD_TITLE
             )
         }
@@ -2045,9 +2134,16 @@ fun MakeItMeSettingsSection(
     // parameterized, never a literal (design §6).
     var offerAnnualFormatted by remember { mutableStateOf<String?>(null) }
     var offerMonthlyFormatted by remember { mutableStateOf<String?>(null) }
+    // RW-100: the card is a purchase surface of its own now, so
+    // it also keeps the offering's PACKAGES — its confirm button
+    // buys the selected one directly (see the card below).
+    var offerAnnualPkg by remember { mutableStateOf<com.revenuecat.purchases.Package?>(null) }
+    var offerMonthlyPkg by remember { mutableStateOf<com.revenuecat.purchases.Package?>(null) }
     LaunchedEffect(state.mode) {
         if (state.mode == MakeItMeMode.FREE && viewModel != null) {
             val offering = viewModel.offering()
+            offerAnnualPkg = offering?.annual
+            offerMonthlyPkg = offering?.monthly
             offerAnnualFormatted = offering?.annual?.product?.price?.formatted
             // C-5: the monthly price rides the same fetched offering.
             offerMonthlyFormatted = offering?.monthly?.product?.price?.formatted
@@ -2159,6 +2255,18 @@ fun MakeItMeSettingsSection(
                 )
                 Spacer(Modifier.height(14.dp))
 
+                // ── RW-84 (settled, design-spec §13): "Number of
+                // photos" — the intake cap stated as a plain value
+                // row. Not a door: the number is settled; changing
+                // the photos themselves happens in Your photos.
+                MakeItMeSettingsRow(
+                    title = MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
+                    sub = null,
+                    onClick = {},
+                    trailingValue = MakeItMeStrings.PHOTO_INTAKE_CAP.toString()
+                )
+                Spacer(Modifier.height(14.dp))
+
                 // ── GEN-6 WAVE C (RW-61): the "Your looks"
                 // library door — the surface where a gate-failed
                 // cell's explanation lives (frame 21 / §17).
@@ -2170,9 +2278,10 @@ fun MakeItMeSettingsSection(
                 Spacer(Modifier.height(14.dp))
 
                 // ── Premium offer card (WS-D group 4): a legible
-                // offer — the name "Premium", the parameterized
-                // price with term, the settled two-benefit line,
-                // and a real button opening the paywall. A
+                // offer — the name "Premium", the settled
+                // two-benefit line, and (RW-100) the two selectable
+                // plan options with a confirm button that names
+                // the selected plan and its price and buys it. A
                 // subscriber sees the subscribed state instead.
                 val card = MakeItMeStrings.premiumOfferCard(
                     annualFormatted = offerAnnualFormatted,
@@ -2204,6 +2313,20 @@ fun MakeItMeSettingsSection(
                         )
                     }
                 } else {
+                // RW-100 (Sol, Nov 6, 2026): the card carries TWO
+                // explicit, equally selectable plan options, and
+                // its confirm button names the selected plan and
+                // its price and buys THAT plan — the same fix as
+                // the paywall sheet, on this surface too. (The
+                // gen-6 form showed the annual price as loose
+                // ambient text — not an option at all — monthly
+                // as a lone quiet text door, and a "Get Premium"
+                // button naming neither plan nor price: the user
+                // could not tell what they were purchasing.)
+                var settingsAnnualSelected by remember { mutableStateOf(true) }
+                var settingsPurchasing by remember { mutableStateOf(false) }
+                var settingsPurchaseError by remember { mutableStateOf<String?>(null) }
+                val settingsContext = LocalContext.current
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     // GEN-5 (cream map): the Settings offer card
@@ -2227,48 +2350,105 @@ fun MakeItMeSettingsSection(
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 2.dp)
                         )
-
-                            card.priceLine?.let {
-                                Text(
-                                    text = it,
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = RunWearColors.TextPrimary,
-                                    modifier = Modifier.padding(top = 10.dp)
-                                )
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            Button(
-                                onClick = onSubscribeClick,
-                                modifier = Modifier.fillMaxWidth().height(50.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
-                            ) {
-                                Text(
-                                    card.ctaLabel ?: MakeItMeStrings.S27_GET_PREMIUM,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = com.runwear.app.ui.theme.PhotoInk
-                                )
-                            }
-                            // C-5 + C-6: the monthly price, present
-                            // on the card and "a little bit
-                            // clickable" — a quiet text door under
-                            // the annual CTA, clearly subordinate,
-                            // opening the same Premium offer.
-                            card.monthlyLine?.let { monthlyLine ->
-                                TextButton(
-                                    onClick = onSubscribeClick,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        monthlyLine,
-                                        fontSize = 13.sp,
-                                        color = RunWearColors.PineAccent
-                                    )
+                        Spacer(Modifier.height(12.dp))
+                        PlanOptionRow(
+                            label = card.priceLine?.let {
+                                "${MakeItMeStrings.U2B_ANNUAL} — $it"
+                            } ?: MakeItMeStrings.U2B_ANNUAL,
+                            enabled = !settingsPurchasing,
+                            selected = settingsAnnualSelected,
+                            onClick = { settingsAnnualSelected = true },
+                            selectedContainerColor = RunWearColors.BgCard
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        PlanOptionRow(
+                            label = card.monthlyLine ?: MakeItMeStrings.U2B_MONTHLY,
+                            enabled = !settingsPurchasing,
+                            selected = !settingsAnnualSelected,
+                            onClick = { settingsAnnualSelected = false },
+                            selectedContainerColor = RunWearColors.BgCard
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                val pkg = if (settingsAnnualSelected) {
+                                    offerAnnualPkg
+                                } else {
+                                    offerMonthlyPkg
                                 }
+                                val activity = settingsContext as? Activity
+                                if (viewModel != null && pkg != null && activity != null) {
+                                    settingsPurchasing = true
+                                    settingsPurchaseError = null
+                                    viewModel.purchase(activity, pkg) { outcome ->
+                                        settingsPurchasing = false
+                                        when (outcome) {
+                                            // Success lands the
+                                            // entitlement; the
+                                            // section's own state
+                                            // flips to the
+                                            // subscribed form.
+                                            BillingManager.PurchaseOutcome.Success -> Unit
+                                            BillingManager.PurchaseOutcome.AlreadySubscribed -> Unit
+                                            BillingManager.PurchaseOutcome.Cancelled -> Unit
+                                            is BillingManager.PurchaseOutcome.Failed ->
+                                                settingsPurchaseError = outcome.message
+                                        }
+                                    }
+                                } else {
+                                    // No purchase seam in this
+                                    // composition (no view model —
+                                    // e.g. render harnesses): the
+                                    // paywall door remains the path.
+                                    onSubscribeClick()
+                                }
+                            },
+                            enabled = !settingsPurchasing,
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
+                        ) {
+                            Text(
+                                if (settingsAnnualSelected) {
+                                    MakeItMeStrings.planCtaLabel(
+                                        MakeItMeStrings.U2B_ANNUAL,
+                                        card.priceLine
+                                    )
+                                } else {
+                                    MakeItMeStrings.planCtaLabel(
+                                        MakeItMeStrings.U2B_MONTHLY,
+                                        offerMonthlyFormatted?.let { "$it/month" }
+                                    )
+                                },
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                color = com.runwear.app.ui.theme.PhotoInk
+                            )
+                        }
+                        if (settingsPurchasing) {
+                            Spacer(Modifier.height(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    color = RunWearColors.PineAccent,
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = "Completing your purchase…",
+                                    fontSize = 13.sp,
+                                    color = RunWearColors.TextSecondary
+                                )
                             }
-
+                        }
+                        settingsPurchaseError?.let {
+                            Text(
+                                text = it,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 10.dp)
+                            )
+                        }
                     }
                 }
                 }
@@ -2422,13 +2602,24 @@ private fun MakeItMeSettingsRow(
     destructive: Boolean = false,
     onClick: () -> Unit,
     /** RW-57: the user's selfie thumbnail (Your photos row only). */
-    thumbnailUrl: String? = null
+    thumbnailUrl: String? = null,
+    /**
+     * RW-84: a stated value at the row's end (e.g. "3" for Number
+     * of photos). A value row is not a door — it carries no click.
+     */
+    trailingValue: String? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .clickable { onClick() }
+            .then(
+                if (trailingValue == null) {
+                    Modifier.clickable { onClick() }
+                } else {
+                    Modifier
+                }
+            )
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2458,6 +2649,13 @@ private fun MakeItMeSettingsRow(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
+        }
+        trailingValue?.let {
+            Text(
+                text = it,
+                fontSize = 15.sp,
+                color = RunWearColors.TextSecondary
+            )
         }
     }
 }
@@ -2528,6 +2726,7 @@ fun MakeItMeDeleteDialog(
 // price appears anywhere in onboarding.
 // ============================================================================
 
+
 @Composable
 fun FirstLookMoment(
     photoUrl: String?,
@@ -2580,20 +2779,24 @@ fun FirstLookMoment(
     // when the presentation becomes READY, which may be after the
     // moment has been up in its MAKING state; it never runs for a
     // photo that has not landed.
-    var revealed by remember { mutableStateOf(false) }
     var bandSettled by remember { mutableStateOf(false) }
-    // GEN-6 WAVE A (DA-03): the reveal is gated on the photo being
-    // actually LOADED, not merely on its URL being the displayed
-    // one — the iOS choreography's rule (displayed AND loaded →
-    // 0.4 s crossfade, one haptic, Premium band at 0.52 s). Gen-5
-    // keyed readiness to URL equality alone, so the haptic and band
-    // could fire over a photo that had not painted.
-    var photoLoaded by remember { mutableStateOf(false) }
+    // GEN-6 WAVE A (DA-03): the success sequence is gated on the
+    // photo being actually LOADED, not merely on its URL being
+    // the displayed one — the iOS choreography's rule (displayed
+    // AND loaded → 0.4 s crossfade, one haptic, Premium band at
+    // 0.52 s). Gen-5 keyed readiness to URL equality alone, so
+    // the haptic and band could fire over a photo that had not
+    // painted.
+    // RW-97 (Nov 6, 2026): "loaded" is tracked PER URL — this
+    // photo, actually painted. The gen-6 form set one boolean
+    // from the photo's own load callbacks while the photo itself
+    // composed only behind a reveal gate keyed on that boolean:
+    // a deadlock (see FirstLookPhotoLayers) that left the sheet
+    // blank in MAKING and DONE alike.
+    var loadedPhotoUrl by remember { mutableStateOf<String?>(null) }
+    val photoLoaded = photoUrl != null && loadedPhotoUrl == photoUrl
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(state, photoLoaded) {
-        if (FirstLookRevealPolicy.shouldReveal(state, photoLoaded, photoUrl != null)) {
-            revealed = true
-        }
         if (FirstLookRevealPolicy.shouldRunSuccessSequence(state, photoLoaded)) {
             delay(OnboardingMotion.FIRST_LOOK_HAPTIC_AT_MS.toLong())
             haptic.performHapticFeedback(
@@ -2650,32 +2853,14 @@ fun FirstLookMoment(
                 .height(340.dp)
                 .background(RunWearColors.BgCard)
         ) {
-            androidx.compose.animation.AnimatedVisibility(
-                visible = revealed && photoUrl != null,
-                enter = androidx.compose.animation.fadeIn(
-                    animationSpec = androidx.compose.animation.core.tween(
-                        OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS,
-                        easing = OnboardingMotion.EmphasizedEasing
-                    )
-                )
-            ) {
-                AsyncImage(
-                    model = photoUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    // GEN-5 (RW-29 FA-44): top-anchored like every
-                    // other hero surface — the gen-4 centre anchor
-                    // cropped the head on this surface alone.
-                    alignment = Alignment.TopCenter,
-                    // GEN-6 (DA-03): success AND error both settle
-                    // the load — the reveal choreography keys on the
-                    // photo having landed (or failed honestly),
-                    // never on URL bookkeeping alone.
-                    onSuccess = { photoLoaded = true },
-                    onError = { photoLoaded = true },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            // RW-97: the photo layers — the image composes
+            // whenever a URL exists (never gated on its own load
+            // state); the last loaded photo holds beneath a
+            // loading one, then the new one crossfades over it.
+            FirstLookPhotoLayers(
+                photoUrl = photoUrl,
+                onPhotoLoaded = { loadedPhotoUrl = it }
+            )
             // GEN-3 A-HERO (WS-B, X-1/X-2): while the look is being
             // made, the generating state sits ON the photo — the same
             // hero pill the home hero carries (WS-A(2) state (a)) —
@@ -2883,6 +3068,71 @@ fun FirstLookMoment(
 // with the act itself, and success is claimed only on the server's
 // receipt (the account_deleted confirmation), never optimistically.
 // ===========================================================================
+
+/**
+ * RW-97 (Nov 6, 2026) — the first-look sheet's photo layers.
+ * THE DEFECT this replaces: the sheet composed its AsyncImage
+ * only inside an AnimatedVisibility gated on a `revealed` flag,
+ * and `revealed` required the image's own load callback — but
+ * the host resolves the serving URL before the sheet composes,
+ * so the callback could never fire, the gate never opened, and
+ * the photo area stayed blank in MAKING and DONE alike (Sol's
+ * Android walkthrough, Nov 6). THE FORM: the current URL's image
+ * composes whenever a URL exists; the last fully loaded photo
+ * stays beneath it while a newer URL loads, then the new photo
+ * crossfades over it (§1.4's 400 ms) — no blank frame, no
+ * placeholder flash, and the previous photo never vanishes
+ * mid-wait. Success AND error both settle the load (DA-03): the
+ * parent keys its success sequence on the photo having landed
+ * or failed honestly, never on URL bookkeeping alone.
+ */
+@Composable
+private fun FirstLookPhotoLayers(
+    photoUrl: String?,
+    onPhotoLoaded: (String) -> Unit
+) {
+    var settledUrl by remember { mutableStateOf<String?>(null) }
+    var currentLoaded by remember { mutableStateOf(false) }
+    LaunchedEffect(photoUrl) { currentLoaded = false }
+    val fade by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (currentLoaded) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(
+            OnboardingMotion.FIRST_LOOK_PHOTO_CROSSFADE_MS,
+            easing = OnboardingMotion.EmphasizedEasing
+        ),
+        label = "firstLookPhotoFade"
+    )
+    if (settledUrl != null && settledUrl != photoUrl) {
+        AsyncImage(
+            model = settledUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            // Top-anchored like every other hero surface (FA-44).
+            alignment = Alignment.TopCenter,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+    if (photoUrl != null) {
+        AsyncImage(
+            model = photoUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter,
+            onSuccess = {
+                currentLoaded = true
+                settledUrl = photoUrl
+                onPhotoLoaded(photoUrl)
+            },
+            onError = {
+                currentLoaded = true
+                onPhotoLoaded(photoUrl)
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = fade }
+        )
+    }
+}
 
 @Composable
 fun MakeItMeDeleteDataDialog(

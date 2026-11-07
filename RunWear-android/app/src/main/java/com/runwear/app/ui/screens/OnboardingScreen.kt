@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,7 +32,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Cloud
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -51,8 +55,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.ui.components.HapticSpec
@@ -208,72 +215,116 @@ private fun PromiseStep(onGetStarted: () -> Unit) {
             )
         }
     ) {
-        Spacer(Modifier.height(48.dp))
+        // RW-104 (Sol, Nov 6, 2026): the iOS welcome screen's
+        // composition, adopted as the standard — the content is
+        // vertically centred between the weight spacers, the
+        // header block (logo + headline) is centred, and the
+        // points sit below it. (The gen-6 Android form top-loaded
+        // a 30sp display headline over full-width text rows with
+        // no icons.)
+        Spacer(Modifier.weight(1f))
 
         // The RunWear script logo (genuine Great Vibes) — the brand
-        // signature, as on home.
+        // signature, as on home. 64sp, matching iOS.
         Text(
             text = "RunWear",
             fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-            fontSize = 52.sp,
+            fontSize = 64.sp,
             color = RunWearColors.TextPrimary
         )
 
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(10.dp))
 
         // A2: the welcome headline — Sol's pick, character for
-        // character. Static text (Part 1 §1.4).
+        // character — in the iOS register: 15sp regular, secondary.
         Text(
             text = OnboardingCopy.HEADLINE,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = RunWearColors.TextPrimary,
+            fontSize = 15.sp,
+            color = RunWearColors.TextSecondary,
             textAlign = TextAlign.Center,
-            lineHeight = 36.sp,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
 
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(52.dp))
 
         // One promise per row (frame 28) — GEN-3 ROUND 2: the
         // name-led composition (feature name in pine bold, then
-        // the plain phrase in regular weight).
+        // the plain phrase in regular weight), each row over its
+        // icon seat as on iOS (cloud / person / stacked layers).
         OnboardingCopy.WELCOME_POINTS.forEachIndexed { index, point ->
             if (index > 0) Spacer(Modifier.height(24.dp))
-            PromiseRow(point = point)
+            PromiseRow(
+                point = point,
+                icon = when (index) {
+                    0 -> Icons.Outlined.Cloud
+                    1 -> Icons.Outlined.Person
+                    else -> Icons.Outlined.Layers
+                }
+            )
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.weight(1f))
     }
 }
 
 /**
- * One frame-28 promise row: the name-led headline — the feature
- * name in PINE BOLD leading, the plain phrase in regular weight
- * after it (GEN-3 ROUND 2, Sol's chosen composition).
+ * One frame-28 promise row (RW-104 form, matching iOS): a 20sp
+ * icon in deep pine seated in a 28dp column at the row's top,
+ * then the name-led headline as ONE composed line — the feature
+ * name bold in deep pine, " — ", then the plain phrase in
+ * regular ink — with the body line beneath in secondary.
  */
 @Composable
-private fun PromiseRow(point: OnboardingCopy.WelcomePoint) {
-    // GEN-5 (RW-28 item 27): the name-led HEADLINE ("Name —
-    // headline phrase", pine bold) on its own line, the body line
-    // separate beneath it — the gen-4 build ran the name straight
-    // into the body sentence (A-1).
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = point.headlineLine,
-            fontSize = 17.sp,
-            lineHeight = 23.sp,
-            fontWeight = FontWeight.Bold,
-            color = RunWearColors.PineAccent,
-            modifier = Modifier.fillMaxWidth()
-        )
-        Text(
-            text = point.phrase,
-            fontSize = 15.sp,
-            lineHeight = 21.sp,
-            color = RunWearColors.TextPrimary,
-            modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
-        )
+private fun PromiseRow(
+    point: OnboardingCopy.WelcomePoint,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = RunWearColors.PineAccent,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = buildAnnotatedString {
+                    // The settled headline line ("Name — phrase")
+                    // with the iOS hierarchy (RW-104): the NAME
+                    // carries the pine + bold; the separator and
+                    // the phrase stay regular ink.
+                    withStyle(
+                        SpanStyle(
+                            color = RunWearColors.PineAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                    ) {
+                        append(point.name)
+                    }
+                    append(point.headlineLine.drop(point.name.length))
+                },
+                fontSize = 17.sp,
+                lineHeight = 23.sp,
+                color = RunWearColors.TextPrimary,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = point.phrase,
+                fontSize = 13.5.sp,
+                lineHeight = 19.sp,
+                color = RunWearColors.TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            )
+        }
     }
 }
 
@@ -353,7 +404,7 @@ internal fun PreferencesStep(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(28.dp))
 
         PreferenceSection(
             title = OnboardingCopy.FIT_TITLE,
@@ -389,7 +440,7 @@ internal fun PreferencesStep(
             )
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(28.dp))
 
         PreferenceSection(
             title = OnboardingCopy.BODY_TITLE,
@@ -526,7 +577,9 @@ private fun LocationStep(
             Icon(
                 imageVector = Icons.Outlined.LocationOn,
                 contentDescription = null,
-                tint = RunWearColors.PineAccent,
+                // RW-104: deep pine, the iOS register (was the
+                // light PineAccent mint).
+                tint = RunWearColors.Primary,
                 modifier = Modifier.size(36.dp)
             )
         }
@@ -561,21 +614,39 @@ private fun LocationStep(
  * The shared step layout: a scrollable content column (horizontally
  * centered children) over a pinned action bar on a fade-to-background
  * scrim, so scroll content never fights the buttons.
+ *
+ * RW-104 (Nov 6, 2026): the content is measured against the
+ * viewport — the inner column is at least viewport-tall, so a
+ * step may centre its content with weight spacers (the iOS
+ * welcome screen's composition) while taller steps still scroll
+ * exactly as before.
  */
 @Composable
 private fun StepScaffold(
     actions: @Composable () -> Unit,
-    content: @Composable () -> Unit
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(
+        androidx.compose.foundation.layout.BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
         ) {
-            content()
+            val viewportHeight = maxHeight
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Column(
+                    modifier = Modifier.heightIn(min = viewportHeight),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    content()
+                }
+            }
         }
         Box(
             modifier = Modifier
@@ -632,7 +703,8 @@ private fun StepHeader(
     Text(
         text = title,
         fontSize = 26.sp,
-        fontWeight = FontWeight.SemiBold,
+        // RW-104: Bold, matching the iOS step titles' register.
+        fontWeight = FontWeight.Bold,
         color = RunWearColors.TextPrimary,
         modifier = Modifier.fillMaxWidth()
     )
@@ -650,9 +722,12 @@ private fun StepHeader(
 }
 
 /**
- * Preference question block on the Surface token card — the
- * SettingsSheet label hierarchy: 16sp SemiBold label in TextPrimary,
- * 13sp sublabel in TextSecondary 2dp below, control 14dp below that.
+ * Preference question block — the SettingsSheet label hierarchy:
+ * 16sp SemiBold label in TextPrimary, 13sp sublabel in
+ * TextSecondary 2dp below, control 14dp below that.
+ * RW-104 (Nov 6, 2026): the block is BARE — label and control sit
+ * directly on the page background, as on iOS's form — the gen-6
+ * Surface card + border around every question is retired.
  */
 @Composable
 private fun PreferenceSection(
@@ -661,12 +736,7 @@ private fun PreferenceSection(
     content: @Composable () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(RunWearColors.Surface)
-            .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
-            .padding(horizontal = 20.dp, vertical = 18.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = title,
@@ -708,6 +778,10 @@ private fun TokenSegmentedControl(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
+            // The track is the page Background token (the RW-81
+            // fit control's settled sample); the control reads as
+            // its own surface through the border + the selected
+            // segment's pine fill, on the bare RW-104 sections.
             .background(RunWearColors.Background)
             .border(1.dp, RunWearColors.TextSecondary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
             .padding(4.dp),

@@ -241,6 +241,36 @@ internal fun heroRotation(
 }
 
 /**
+ * RW-95 (Sol's Android walkthrough, Nov 6, 2026): hero serve
+ * stability. THE DEFECT: on a place switch the commit paints the
+ * new place's bundled fallback (stock photo A) immediately, and
+ * seconds later the pool resolution lands a DIFFERENT stock photo
+ * (B) for the same cell — the hero visibly swapped strangers
+ * mid-view (frames t_0083 → t_0085, "Making this you…" pill up
+ * throughout). THE RULE: one stock serve per cell per view — when
+ * the photo on screen is a non-personal serve OF THE SAME
+ * requested combination the pool resolution just resolved, the
+ * displayed photo stands; the resolution still lands its
+ * candidates and bookkeeping. A personal serve is never held
+ * against (it replaces through its own write path), a different
+ * cell always replaces, and the user's own refresh rotation is
+ * untouched.
+ */
+internal object HeroServeStabilityPolicy {
+    fun holdsDisplayedStock(
+        displayedUrl: String?,
+        displayedIsPersonal: Boolean,
+        displayedCombinationId: String?,
+        incomingCombinationId: String?
+    ): Boolean =
+        displayedUrl != null &&
+            !displayedIsPersonal &&
+            displayedCombinationId != null &&
+            incomingCombinationId != null &&
+            displayedCombinationId == incomingCombinationId
+}
+
+/**
  * The rotation entry after the one showing [currentImageUrl], wrapping
  * at the end; a current photo outside the rotation starts at the first
  * entry. Null when the rotation has fewer than two entries (nothing to
@@ -280,6 +310,11 @@ internal fun MainUiState.withFetchedConditions(
     nowSelected: Boolean,
     heroFallbackUrl: String? = null,
     heroFallbackIsScaffold: Boolean = false,
+    // RW-95: the fallback's own requested combination — on a place
+    // switch the fallback becomes the displayed hero, and its
+    // combination is what lets the later pool write recognise the
+    // same cell and hold this serve (see HeroServeStabilityPolicy).
+    heroFallbackCombinationId: String? = null,
     sunTimes: List<com.runwear.shared.domain.model.DaySunTimes>? = null
 ): MainUiState {
     val weatherNow = weather.dateTime.toJavaLocalDateTime()
@@ -310,10 +345,17 @@ internal fun MainUiState.withFetchedConditions(
         // scaffold label follows it in the same write.
         heroIsScaffold = if (switchingPlace) heroFallbackIsScaffold else heroIsScaffold,
         heroImageRowId = if (switchingPlace) null else heroImageRowId,
-        heroCombinationId = if (switchingPlace) null else heroCombinationId,
+        // RW-95: on a switch the displayed hero IS the fallback —
+        // its combination is recorded with it (the flag-context
+        // doc above: "the served row's own cell when known,
+        // otherwise the requested combination"), so the pool
+        // write for this same cell can hold the serve instead of
+        // swapping in a second stock photo mid-view.
+        heroCombinationId =
+            if (switchingPlace) heroFallbackCombinationId else heroCombinationId,
         heroCandidates = if (switchingPlace) emptyList() else heroCandidates,
         heroRequestedCombinationId =
-            if (switchingPlace) null else heroRequestedCombinationId,
+            if (switchingPlace) heroFallbackCombinationId else heroRequestedCombinationId,
         heroIsPersonal = if (switchingPlace) false else heroIsPersonal,
         personalHeroId = if (switchingPlace) null else personalHeroId,
         personalHeroImageUrl = if (switchingPlace) null else personalHeroImageUrl,
@@ -1097,7 +1139,28 @@ class MainViewModel @Inject constructor(
                         }
                     }.getOrElse { e ->
                         _uiState.update {
-                            it.copy(isLoading = false, error = e.message ?: "Weather error")
+                            it.copy(
+                                isLoading = false,
+                                error = e.message ?: "Weather error",
+                                // RW-92 (Nov 6, 2026): the parser
+                                // refused the selected moment (it
+                                // has no forecast entry — e.g. past
+                                // the horizon). The selection must
+                                // not stand over the previous solve:
+                                // home would keep rendering the old
+                                // moment's figures under the new
+                                // moment's label. Revert the
+                                // selection to the moment the
+                                // displayed weather actually
+                                // describes, so label and figures
+                                // can never disagree.
+                                selectedDateTime = if (nowSelected) {
+                                    it.selectedDateTime
+                                } else {
+                                    it.weather?.dateTime?.toJavaLocalDateTime()
+                                        ?: it.selectedDateTime
+                                }
+                            )
                         }
                         viewModelScope.launch { feedbackStore.markBadDay() }
                         return@fold
@@ -1143,6 +1206,7 @@ class MainViewModel @Inject constructor(
                             nowSelected = nowSelected,
                             heroFallbackUrl = fetchFallback.imageUrl,
                             heroFallbackIsScaffold = fetchFallback.isScaffold,
+                            heroFallbackCombinationId = fetchFallback.combinationId,
                             sunTimes = sunTimes
                         )
                     }
@@ -1432,21 +1496,43 @@ class MainViewModel @Inject constructor(
             recordHeroServeDiagnosticsOnly(chosen)
         }
         _uiState.update {
-            it.copy(
-                heroImageUrl = chosen.imageUrl,
-                heroFallbackUrl = fallbackUrl,
-                // GEN-4: the scaffold label of the displayed hero.
-                heroIsScaffold = chosen.isScaffold,
-                heroImageRowId = chosen.imageRowId,
-                heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
-                heroCandidates = chosen.candidates,
-                heroRequestedCombinationId = chosen.combinationId,
-                heroIsPersonal = false,
-                personalHeroId = null,
-                personalHeroImageUrl = null,
-                personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.None,
-                showMakeItMeUpsell = false
-            )
+            // RW-95: when the photo on screen is already a stock
+            // serve of THIS cell (the bundled fallback a place
+            // switch just committed, or the seed's), the pool's
+            // second stock pick for the same cell does NOT swap
+            // it mid-view — the displayed photo, its row id, its
+            // combination and its scaffold label stand; only the
+            // resolution's bookkeeping (candidates, requested
+            // combination, fallback) lands.
+            if (HeroServeStabilityPolicy.holdsDisplayedStock(
+                    displayedUrl = it.heroImageUrl,
+                    displayedIsPersonal = it.heroIsPersonal,
+                    displayedCombinationId = it.heroCombinationId,
+                    incomingCombinationId = chosen.combinationId
+                )
+            ) {
+                it.copy(
+                    heroFallbackUrl = fallbackUrl,
+                    heroCandidates = chosen.candidates,
+                    heroRequestedCombinationId = chosen.combinationId
+                )
+            } else {
+                it.copy(
+                    heroImageUrl = chosen.imageUrl,
+                    heroFallbackUrl = fallbackUrl,
+                    // GEN-4: the scaffold label of the displayed hero.
+                    heroIsScaffold = chosen.isScaffold,
+                    heroImageRowId = chosen.imageRowId,
+                    heroCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
+                    heroCandidates = chosen.candidates,
+                    heroRequestedCombinationId = chosen.combinationId,
+                    heroIsPersonal = false,
+                    personalHeroId = null,
+                    personalHeroImageUrl = null,
+                    personalLookStatus = com.runwear.app.makeitme.PersonalLookStatus.None,
+                    showMakeItMeUpsell = false
+                )
+            }
         }
     }
 
@@ -2099,6 +2185,14 @@ class MainViewModel @Inject constructor(
     }
     
     fun selectDate(date: LocalDate) {
+        // RW-102 (defense in depth, Nov 6, 2026): a date outside
+        // the forecast window — before the location's today or
+        // past its 7-day horizon — is refused here too, in the
+        // same form goToNextDay already guards its step. The
+        // Choose-a-Day strip no longer offers such dates; this
+        // keeps every other caller honest by construction.
+        val today = locationNow().toLocalDate()
+        if (date.isBefore(today) || date.isAfter(today.plusDays(6))) return
         val newDateTime = LocalDateTime.of(date, _uiState.value.selectedDateTime.toLocalTime())
         setDateTime(newDateTime)
         _uiState.update { it.copy(showDatePicker = false) }

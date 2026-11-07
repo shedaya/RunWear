@@ -118,7 +118,11 @@ class Gen3SettingsTest {
     fun `settings structure is status, photos, premium card - destructive quarantined in the danger zone`() {
         val rows = MakeItMeSettingsPresentation.rowTitles(true, MakeItMeMode.FREE)
         assertEquals(MakeItMeStrings.S6_PHOTOS_ROW, rows.first())
-        assertEquals("Premium", rows[1])
+        // GEN-6 RW-84 (DS §13, Nov 6, 2026): the "Number of
+        // photos" row sits directly under Your photos — the
+        // premium card follows it.
+        assertEquals(MakeItMeStrings.S35_NUMBER_OF_PHOTOS, rows[1])
+        assertEquals("Premium", rows[2])
         // GEN-5 (RW-28 item 25): no destructive row inside the
         // section; the Danger zone carries both, data last.
         assertFalse(rows.contains(MakeItMeStrings.S10_DELETE_ROW))

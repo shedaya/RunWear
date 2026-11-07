@@ -80,16 +80,32 @@ class GeneratingStateOnPhotoPinTest {
         assertTrue(momentStart in 0 until momentEnd)
         val moment = screens.substring(momentStart, momentEnd)
         // The photo itself: painted from photoUrl whenever one
-        // serves — visibility hangs on the reveal + the URL, never
-        // on the presentation state (a state gate here is what put
-        // the iOS generating state on a blur).
-        val photoBlock = moment.substring(
-            moment.indexOf("AnimatedVisibility("),
-            moment.indexOf("FirstLookState.MAKING")
+        // serves. GEN-6 RW-97 (Sol's Nov 6, 2026 walkthrough —
+        // the sheet's photo area was blank in MAKING and DONE):
+        // the old reveal gate deadlocked, because the load state
+        // it waited on was set only by the gated image's own
+        // callbacks, so a photo that was already resolved when
+        // the sheet opened never painted. The layers now compose
+        // the image UNGATED (the last loaded photo holds beneath
+        // a loading one; the reveal survives only as the fade +
+        // the success sequence's trigger, never as a composition
+        // gate). This pin follows the fix.
+        assertTrue(moment.contains("FirstLookPhotoLayers("))
+        val layersStart = screens.indexOf("private fun FirstLookPhotoLayers")
+        assertTrue(layersStart >= 0)
+        val layers = screens.substring(
+            layersStart,
+            screens.indexOf("\n}\n", layersStart) + 3
         )
-        assertTrue(photoBlock.contains("AsyncImage("))
-        assertTrue(photoBlock.contains("visible = revealed && photoUrl != null"))
-        assertFalse(photoBlock.contains("FirstLookState.READY"))
+        assertTrue(layers.contains("AsyncImage("))
+        assertFalse(
+            "the photo layers must never visibility-gate the image (RW-97)",
+            layers.contains("AnimatedVisibility")
+        )
+        assertFalse(
+            "the reveal flag must not gate composition (RW-97)",
+            moment.contains("visible = revealed")
+        )
         // The making overlay: the shared hero pill, on the photo.
         assertTrue(
             moment.contains("com.runwear.app.ui.components.HeroPill(")

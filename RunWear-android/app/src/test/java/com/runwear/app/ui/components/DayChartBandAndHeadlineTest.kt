@@ -35,6 +35,38 @@ class DayChartBandAndHeadlineTest {
         assertEquals(0, DayChartBandPolicy.selectedDotHour(0))
     }
 
+    // ── RW-103 (Nov 6, 2026): the axis label never reaches the
+    // Change control — its start is clamped so the whole label
+    // ends before the control's reserved footprint.
+
+    @Test
+    fun `a late dot's axis label ends before the Change footprint - RW-103`() {
+        // Band 312dp wide; the 19:00 dot of a 0..22 span sits at
+        // ~269dp. Unclamped, its label would run past 285dp —
+        // into the Change control. The clamp caps the start at
+        // 312 − 86 (Change) − 56 (label) = 170dp.
+        val start = DayChartBandPolicy.axisLabelStartDp(dotXDp = 269f, bandWidthDp = 312f)
+        assertEquals(170f, start, 0.01f)
+        assertTrue(start + DayChartBandPolicy.AXIS_LABEL_WIDTH_DP <=
+            312f - DayChartBandPolicy.CHANGE_FOOTPRINT_DP)
+    }
+
+    @Test
+    fun `a mid-band dot keeps the natural label position - RW-103`() {
+        // Dot at 100dp: label starts 16dp before it, unclamped.
+        assertEquals(
+            84f,
+            DayChartBandPolicy.axisLabelStartDp(dotXDp = 100f, bandWidthDp = 312f),
+            0.01f
+        )
+        // An early dot never pushes the label off the left edge.
+        assertEquals(
+            4f,
+            DayChartBandPolicy.axisLabelStartDp(dotXDp = 8f, bandWidthDp = 312f),
+            0.01f
+        )
+    }
+
     @Test
     fun `Change opens the Choose-a-Time sheet`() {
         assertEquals(

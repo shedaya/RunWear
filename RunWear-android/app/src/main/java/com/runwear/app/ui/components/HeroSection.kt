@@ -32,6 +32,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -814,13 +816,14 @@ private fun HeroPhotoLayer(
     contentDescription: String,
     verticalBias: Float
 ) {
-    val context = LocalContext.current
-    val painter = coil.compose.rememberAsyncImagePainter(
-        model = ImageRequest.Builder(context)
-            .data(url)
-            .size(widthPx, heightPx)
-            .crossfade(false)
-            .build()
+    // RW-106: the bounded retry rides along (a remote base —
+    // e.g. a personal photo seated directly by a scene change —
+    // gets the same recovery as an incoming one).
+    val painter = rememberRetryingHeroPainter(
+        url = url,
+        widthPx = widthPx,
+        heightPx = heightPx,
+        onSuccess = {}
     )
     androidx.compose.foundation.Image(
         painter = painter,
@@ -855,15 +858,16 @@ private fun HeroIncomingPhotoLayer(
     verticalBias: Float,
     onReady: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    val painter = coil.compose.rememberAsyncImagePainter(
-        model = ImageRequest.Builder(context)
-            .data(url)
-            .size(widthPx, heightPx)
-            .crossfade(false)
-            .build()
+    // RW-106: decoded is a state the retrying painter flips on
+    // success (including a retried success after a transient
+    // failure) — the fade/promotion below is unchanged.
+    var decoded by remember(url) { mutableStateOf(false) }
+    val painter = rememberRetryingHeroPainter(
+        url = url,
+        widthPx = widthPx,
+        heightPx = heightPx,
+        onSuccess = { decoded = true }
     )
-    val decoded = painter.state is coil.compose.AsyncImagePainter.State.Success
     val alpha = remember(url) { androidx.compose.animation.core.Animatable(0f) }
     LaunchedEffect(url, decoded) {
         if (decoded) {
@@ -909,6 +913,79 @@ object HeroTransitionPolicy {
 
     fun shouldCrossfade(previousIsPersonal: Boolean?, newIsPersonal: Boolean): Boolean =
         previousIsPersonal == null || previousIsPersonal == newIsPersonal
+}
+
+/**
+ * RW-106 (Nov 6, 2026): the bounded retry for one hero photo
+ * load. The hero layers settle silently on the base photo when
+ * an incoming load errors (the safe half of the design — a
+ * displayed photo is never blanked), but before this fix a
+ * single transient failure (a dropped connection, a momentary
+ * 5xx) stranded the cell on the fallback for the rest of the
+ * view: Coil does not re-issue a failed request, and nothing
+ * else restarted it. Now a failed load is re-issued up to
+ * [MAX_RETRIES] times with a short backoff; a success on any
+ * attempt lands in the same Coil cache slot (URL + size) as a
+ * first-try success, so promotion to base is unaffected. Pure
+ * so the schedule is unit-tested without composition.
+ */
+object HeroLoadRetryPolicy {
+
+    /** Retries after the first failure (3 attempts in total). */
+    const val MAX_RETRIES: Int = 2
+
+    /**
+     * Backoff before the retry that follows failure number
+     * [failedAttempt] (0-based); null when the budget is spent
+     * and the layer settles on the base for good.
+     */
+    fun retryDelayMs(failedAttempt: Int): Long? = when (failedAttempt) {
+        0 -> 1_200L
+        1 -> 2_400L
+        else -> null
+    }
+}
+
+/**
+ * RW-106: a hero painter with the [HeroLoadRetryPolicy] retry —
+ * shared by the base and incoming layers. The painter is re-keyed
+ * per attempt (a fresh painter for the SAME request content
+ * re-executes the fetch; the cache keys — URL + size — are
+ * unchanged, so a retried success is indistinguishable from a
+ * first-try one downstream). [onSuccess] fires on every success
+ * state the current painter reaches.
+ */
+@Composable
+private fun rememberRetryingHeroPainter(
+    url: String,
+    widthPx: Int,
+    heightPx: Int,
+    onSuccess: () -> Unit
+): coil.compose.AsyncImagePainter {
+    var attempt by remember(url) { mutableStateOf(0) }
+    val context = LocalContext.current
+    return key(url, attempt) {
+        val painter = coil.compose.rememberAsyncImagePainter(
+            model = ImageRequest.Builder(context)
+                .data(url)
+                .size(widthPx, heightPx)
+                .crossfade(false)
+                .build()
+        )
+        LaunchedEffect(painter.state) {
+            when (painter.state) {
+                is coil.compose.AsyncImagePainter.State.Success -> onSuccess()
+                is coil.compose.AsyncImagePainter.State.Error -> {
+                    HeroLoadRetryPolicy.retryDelayMs(attempt)?.let { backoff ->
+                        delay(backoff)
+                        attempt++
+                    }
+                }
+                else -> Unit
+            }
+        }
+        painter
+    }
 }
 
 /**

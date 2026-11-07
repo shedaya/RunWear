@@ -18,6 +18,12 @@ import org.junit.Test
  * renders DIRECTLY BELOW THE OUTFIT AREA — above the chart,
  * above the Pro Tip, above the feedback row. When not
  * generating, the band is absent and the C-3 order stands.
+ *
+ * RW-101 (Sol's direction, Nov 6, 2026 — SUPERSEDES the
+ * Addendum-4 seat): the band now renders DIRECTLY UNDER THE
+ * HERO, ahead of the outfit area, in every layout, so the
+ * subscriber sees what is happening the moment the screen
+ * opens. Order: hero → band → outfit → chart → trailing.
  */
 class Gen5HomeOrderTest {
 
@@ -96,11 +102,11 @@ class Gen5HomeOrderTest {
     }
 
     @Test
-    fun `every layout composes outfit then band then chart then trailing`() {
+    fun `every layout composes band then outfit then chart then trailing`() {
         val source = heroMainScreen()
-        // Slice each layout from its outfit call to just past its
-        // trailing call; inside the slice the order must be
-        // outfit → band → chart → trailing.
+        // RW-101 order, per layout: the band call sits BEFORE the
+        // outfit call (directly under the hero), and the chart
+        // and trailing blocks follow the outfit.
         val outfitCalls = listOf("outfitListItems(", "outfitGridItems(")
         var searchFrom = 0
         var sites = 0
@@ -118,11 +124,11 @@ class Gen5HomeOrderTest {
                 searchFrom = next + 1
                 continue
             }
-            val bandAt = source.indexOf("ConvergenceBand(", next)
+            val bandAt = source.lastIndexOf("ConvergenceBand(", next)
             val chartAt = source.indexOf("dayChartBandContent()", next)
             val trailingAt = source.indexOf("homeTrailing", next)
-            assertTrue("band follows the outfit block", bandAt > next)
-            assertTrue("chart follows the band", chartAt > bandAt)
+            assertTrue("band sits under the hero, ahead of the outfit block", bandAt in 0 until next)
+            assertTrue("chart follows the outfit block", chartAt > next)
             assertTrue("trailing follows the chart", trailingAt > chartAt)
             sites++
             searchFrom = trailingAt + 1

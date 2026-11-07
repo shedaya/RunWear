@@ -227,6 +227,12 @@ object MakeItMeStrings {
     const val S32_EPOCH_HEADING = "A new photo starts a new set"
     const val S33_RETAKE_SELFIE = "Retake Selfie"
     const val S34_CHOOSE_DIFFERENT_PHOTO = "Choose a Different Photo"
+    // RW-84 (settled, design-spec §13): the Make It Me section's
+    // "Number of photos" row states the intake cap. The value IS
+    // the upload flow's cap (the intake takes at most this many
+    // photos) — the two must never drift apart.
+    const val S35_NUMBER_OF_PHOTOS = "Number of photos"
+    const val PHOTO_INTAKE_CAP = 3
     const val S20_DELETE_DATA_ROW = "Delete my data"
     // GEN-5 (RW-28 item 25): the destructive rows' own heading,
     // quarantined at the very end of Settings.
@@ -273,6 +279,24 @@ object MakeItMeStrings {
      * GEN-5 (RW-28 item 29): the row names the plan and reads
      * "$0.99/month" — the compact term form of record. */
     fun monthlyRowLabel(monthlyFormatted: String): String = "Monthly — $monthlyFormatted/month"
+
+    /**
+     * RW-100 (Sol, Nov 6, 2026 — supersedes the DS §14 "CTA
+     * carries no price" form): the purchase confirm button NAMES
+     * the selected plan and its price — "Get Premium — Annual,
+     * $9.99/yr" / "Get Premium — Monthly, $0.99/month" — composed
+     * from the fetched offering's formatted price, on both
+     * purchase surfaces (paywall sheet and Settings offer card).
+     * Until the offering resolves there is no price to name and
+     * the button keeps the plain U2I form (and stays disabled
+     * wherever a package is required to proceed).
+     */
+    fun planCtaLabel(planName: String, priceWithTerm: String?): String =
+        if (priceWithTerm != null) {
+            "$S27_GET_PREMIUM — $planName, $priceWithTerm"
+        } else {
+            U2I_CTA
+        }
 
     /**
      * U2 annual row, from the offering's formatted price. Gen-3

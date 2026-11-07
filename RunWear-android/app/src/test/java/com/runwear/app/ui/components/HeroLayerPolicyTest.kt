@@ -126,4 +126,21 @@ class HeroLayerPolicyTest {
         assertEquals(miamiPhoto, layers.baseUrl)
         assertNull(layers.incomingUrl)
     }
+
+    // ── RW-106 (Nov 6, 2026): the bounded hero-load retry —
+    // two retries with backoff, then the layer settles on the
+    // base for good.
+
+    @Test
+    fun `the retry budget is two retries with growing backoff - RW-106`() {
+        assertEquals(2, HeroLoadRetryPolicy.MAX_RETRIES)
+        assertEquals(1_200L, HeroLoadRetryPolicy.retryDelayMs(0))
+        assertEquals(2_400L, HeroLoadRetryPolicy.retryDelayMs(1))
+    }
+
+    @Test
+    fun `the retry budget ends - the layer settles - RW-106`() {
+        assertNull(HeroLoadRetryPolicy.retryDelayMs(2))
+        assertNull(HeroLoadRetryPolicy.retryDelayMs(3))
+    }
 }

@@ -240,9 +240,10 @@ fun HeroMainScreen(
 
     // GEN-3 CONVERGENCE BAND (Sol's settled wording, Nov 4): the
     // home-sheet band while a subscribed user's bank converges —
-    // resolved once here, seated below the outfit items in every
-    // layout (mock frame 19's seat). Null unless convergence is
-    // genuinely in progress with real counts.
+    // resolved once here. RW-101 (Sol, Nov 6, 2026): seated
+    // DIRECTLY UNDER THE HERO in every layout (superseding the
+    // gen-3/gen-5 below-the-outfit seat). Null unless convergence
+    // is genuinely in progress with real counts.
     val convergenceBand = com.runwear.app.makeitme.ConvergenceBandPolicy.content(
         mode = makeItMeState.mode,
         coverage = makeItMeState.bankCoverage,
@@ -671,6 +672,22 @@ fun HeroMainScreen(
                                         }
                                     }
                                 }
+                                // RW-101 (Sol's direction, Nov 6,
+                                // 2026): the "Making your looks" band
+                                // sits DIRECTLY UNDER THE HERO — a
+                                // Premium subscriber sees what is
+                                // happening the moment the screen
+                                // opens. This supersedes the GEN-5
+                                // Addendum-4 seat (below the outfit
+                                // area) in every layout.
+                                if (convergenceBand != null) {
+                                    item {
+                                        com.runwear.app.makeitme.ConvergenceBand(
+                                            content = convergenceBand,
+                                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
                                 outfitListItems(
                                     uiState = uiState,
                                     contentVisible = contentVisible,
@@ -689,21 +706,6 @@ fun HeroMainScreen(
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
-                                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                                        )
-                                    }
-                                }
-                                // GEN-5 (Addendum 4): the convergence
-                                // band sits DIRECTLY BELOW THE OUTFIT
-                                // AREA — above the day chart, the Pro
-                                // Tip and the feedback row — inside
-                                // the first screenful, so a user who
-                                // has just subscribed sees what is
-                                // happening without scrolling.
-                                if (convergenceBand != null) {
-                                    item {
-                                        com.runwear.app.makeitme.ConvergenceBand(
-                                            content = convergenceBand,
                                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                                         )
                                     }
@@ -771,6 +773,16 @@ fun HeroMainScreen(
                                         }
                                     }
                                 }
+                                // RW-101 (Sol, Nov 6, 2026): the
+                                // band directly under the hero.
+                                if (convergenceBand != null) {
+                                    item(span = { GridItemSpan(maxLineSpan) }) {
+                                        com.runwear.app.makeitme.ConvergenceBand(
+                                            content = convergenceBand,
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
+                                    }
+                                }
                                 outfitGridItems(
                                     uiState = uiState,
                                     contentVisible = contentVisible,
@@ -787,17 +799,6 @@ fun HeroMainScreen(
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
-                                            modifier = Modifier.padding(vertical = 8.dp)
-                                        )
-                                    }
-                                }
-                                // GEN-5 (Addendum 4): band directly
-                                // below the outfit area, above the
-                                // chart and the Pro Tip.
-                                if (convergenceBand != null) {
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        com.runwear.app.makeitme.ConvergenceBand(
-                                            content = convergenceBand,
                                             modifier = Modifier.padding(vertical = 8.dp)
                                         )
                                     }
@@ -883,6 +884,18 @@ fun HeroMainScreen(
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
+                                    // RW-101 (Sol, Nov 6, 2026):
+                                    // the band tops the right pane,
+                                    // directly under the hero unit
+                                    // (the sheet block above it).
+                                    if (convergenceBand != null) {
+                                        item(span = { GridItemSpan(maxLineSpan) }) {
+                                            com.runwear.app.makeitme.ConvergenceBand(
+                                                content = convergenceBand,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
                                     outfitGridItems(
                                         uiState = uiState,
                                         contentVisible = contentVisible,
@@ -899,16 +912,6 @@ fun HeroMainScreen(
                                             com.runwear.app.makeitme.MakeItMeUpsellCard(
                                                 onSubscribeClick = { showMakeItMePaywall = true },
                                                 onDismiss = onDismissMakeItMeUpsell,
-                                                modifier = Modifier.padding(vertical = 8.dp)
-                                            )
-                                        }
-                                    }
-                                    // GEN-5 (Addendum 4): band
-                                    // directly below the outfit area.
-                                    if (convergenceBand != null) {
-                                        item(span = { GridItemSpan(maxLineSpan) }) {
-                                            com.runwear.app.makeitme.ConvergenceBand(
-                                                content = convergenceBand,
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
                                         }

@@ -31,18 +31,27 @@ import kotlinx.coroutines.flow.asStateFlow
  * constructor here a garment name can flow through.
  */
 sealed interface WearIveRunNarrationPayload {
-    /** What renders in pine after "Update to ". */
+    /** What renders in pine after "Updated to ". */
     fun render(): String
 
-    /** "Update to {place}, {day}" — the place form. */
+    /** "Updated to {place}, {day}" — the place form. */
     data class Place(val place: String, val dayForm: String) :
         WearIveRunNarrationPayload {
         override fun render(): String = "$place, $dayForm"
     }
 
-    /** "Update to {reading}" — a clock reading ("9 p.m.") or "Now". */
-    data class Moment(val reading: String) : WearIveRunNarrationPayload {
-        override fun render(): String = reading
+    /**
+     * "Updated to {reading}" — a clock reading ("9 p.m.") or
+     * "Now". RW-98 (Sol's ruling, Nov 6, 2026): when the moment
+     * is NOT today's, the payload names the date in full first —
+     * "November 12 7 p.m." — so [dateForm] carries the full-date
+     * form ("MMMM d") and the render is "{dateForm} {reading}".
+     * Today's moments carry no date form: the bare reading.
+     */
+    data class Moment(val reading: String, val dateForm: String? = null) :
+        WearIveRunNarrationPayload {
+        override fun render(): String =
+            if (dateForm != null) "$dateForm $reading" else reading
     }
 }
 
@@ -313,7 +322,28 @@ object WearIveRunUpdateNarration {
         entry.momentLabel ?: "Now"
 
     /**
-     * The changed dimension an "Update to […]" line names, if any
+     * RW-98 (Sol's ruling, Nov 6, 2026): the full-date form a
+     * moment payload carries when the entry's day is not today —
+     * "November 12" (MMMM d) — so the line reads "Updated to
+     * November 12 7 p.m.". Null for today's moments, whose bare
+     * reading (or "Now") already names them in full.
+     */
+    fun momentDateForm(
+        entry: WearIveRunDayEntry,
+        today: java.time.LocalDate
+    ): String? =
+        if (entry.date == today) {
+            null
+        } else {
+            entry.date.format(
+                java.time.format.DateTimeFormatter.ofPattern(
+                    "MMMM d", java.util.Locale.US
+                )
+            )
+        }
+
+    /**
+     * The changed dimension an "Updated to […]" line names, if any
      * — as a [WearIveRunNarrationPayload], so the answer is a
      * place or a moment BY CONSTRUCTION (Addendum 8 item 2: a kit
      * change resolves to the entry's moment when it is a changed
@@ -334,11 +364,15 @@ object WearIveRunUpdateNarration {
             )
         }
         if (previous.momentLabel != next.momentLabel) {
-            return WearIveRunNarrationPayload.Moment(momentReading(next))
+            return WearIveRunNarrationPayload.Moment(
+                momentReading(next), momentDateForm(next, today)
+            )
         }
         if (previous.items != next.items) {
             return if (next.momentLabel != null) {
-                WearIveRunNarrationPayload.Moment(momentReading(next))
+                WearIveRunNarrationPayload.Moment(
+                    momentReading(next), momentDateForm(next, today)
+                )
             } else {
                 WearIveRunNarrationPayload.Place(
                     simplePlace,
@@ -349,7 +383,7 @@ object WearIveRunUpdateNarration {
         return null
     }
 
-    /** The full "Update to […]" narration for an entry update. */
+    /** The full "Updated to […]" narration for an entry update. */
     fun narration(
         previous: WearIveRunDayEntry,
         next: WearIveRunDayEntry,
@@ -364,7 +398,7 @@ object WearIveRunUpdateNarration {
  * GEN-5 (RW-28, C-7): a moment's simple clock reading — "9 p.m.",
  * "12 a.m." — the in-spec time payload for update narrations.
  * Lowercase meridiem with periods, matching the ruling's example
- * verbatim ("Update to 9 p.m.").
+ * verbatim ("Updated to 9 p.m.").
  */
 object WearMomentLabel {
     fun of(moment: java.time.LocalDateTime): String = ofHour(moment.hour)
@@ -396,13 +430,16 @@ object WearIveRunNarrationFormatter {
     }
 
     /**
-     * "Update to {payload}" — the payload renders in pine. The
+     * "Updated to {payload}" — the payload renders in pine. The
      * payload is a [WearIveRunNarrationPayload]: there is no
      * overload that takes a free string, so no caller can name a
      * garment (Addendum 8 item 2).
+     *
+     * RW-98 (Sol's ruling, Nov 6, 2026): the line reads "Updated
+     * to," — never "Update to," — on both platforms.
      */
     fun update(payload: WearIveRunNarrationPayload): WearIveRunNarration {
-        val prefix = "Update to "
+        val prefix = "Updated to "
         val rendered = payload.render()
         return WearIveRunNarration(
             text = prefix + rendered,
@@ -608,7 +645,7 @@ class WearIveRunBarStateHolder {
         emit()
     }
 
-    /** GEN-3 (WS-C): the "Update to {place}, {day}" narration for a
+    /** GEN-3 (WS-C): the "Updated to {place}, {day}" narration for a
      * within-session change whose kit did not change — a place (or
      * day) move in the same session is an UPDATE of the session's
      * one entry, never a new "Added …" (census X-4). */
@@ -763,7 +800,7 @@ class WearIveRunBarStateHolder {
                 //   that actually changed, never an unchanged one);
                 // - a PLACE (or day) change within the session with
                 //   an unchanged kit — census X-4: this narrates as
-                //   an update too ("Update to {place}, Now"), and
+                //   an update too ("Updated to {place}, Now"), and
                 //   the presented entry follows the latest commit,
                 //   so the mini bar never announces a place home
                 //   has already moved past.
