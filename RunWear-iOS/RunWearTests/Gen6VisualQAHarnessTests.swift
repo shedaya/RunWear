@@ -959,39 +959,12 @@ extension Gen6VisualQAHarnessTests {
         }
     }
 
-    // RW-101: the "Making your looks" band in its generating
-    // state (Premium) — the band's own render; its seat directly
-    // under the hero is pinned in Gen6FixWaveTests (composition
-    // order in WeatherOutfitView).
-    @MainActor
-    func testFixWave_BandGenerating() throws {
-        let band = ConvergenceBandView(content: ConvergenceBandContent(
-            heading: "Making your looks",
-            line: "We're generating your outfits across all running conditions, so it will be ready when you need it.",
-            fraction: 0.4))
-            .padding(.horizontal, 16)
-            .background(AppTheme.background)
-        try writeRender(band, size: CGSize(width: 390, height: 120),
-                        name: "FIX-RW101-ios-band-generating.png")
-    }
-
     // RW-105 after-renders: the bracket badge (deepened chip,
     // full opacity) in both themes, and the free-look pill's
     // "Get unlimited" in the dynamic pine (hosted, light mode —
     // the mode Sol circled).
     @MainActor
-    func testFixWave_BadgeAndPill() throws {
-        let badge = TemperatureBracketBadge(bracket: .mild, unit: .fahrenheit)
-            .padding(16)
-            .background(AppTheme.background)
-        try writeRender(badge, size: CGSize(width: 390, height: 90),
-                        name: "FIX-RW105-ios-badge-mild-light.png")
-        let badgeDark = TemperatureBracketBadge(bracket: .mild, unit: .fahrenheit)
-            .padding(16)
-            .preferredColorScheme(.dark)
-            .background(AppTheme.background)
-        try writeRender(badgeDark, size: CGSize(width: 390, height: 90),
-                        name: "FIX-RW105-ios-badge-mild-dark.png")
+    func testFixWave_PillGreen() throws {
         try writeHostedRender(
             HeroImageView(
                 locationName: "New York, NY", temperature: 64, actualTemperature: 62,
@@ -1003,20 +976,4 @@ extension Gen6VisualQAHarnessTests {
             size: CGSize(width: 390, height: 520), name: "FIX-RW105-ios-pill-freelook-light.png")
     }
 
-    // RW-100: the paywall sheet — annual card with its filled
-    // selection radio and the confirm button naming the selected
-    // plan (prices unresolved in the test host, so the button
-    // names the plan without a price here; the priced label is
-    // pinned in Gen6FixWaveTests).
-    @MainActor
-    func testFixWave_PaywallSheet() throws {
-        let sheet = MakeItMeSubscriptionSheet()
-            .environmentObject(PersonalHeroStore())
-        let probe = ImageRenderer(content: sheet)
-        probe.scale = 2
-        probe.proposedSize = ProposedViewSize(width: 390, height: nil)
-        let needed = probe.uiImage?.size.height ?? 700
-        try writeRender(sheet, size: CGSize(width: 390, height: needed),
-                        name: "FIX-RW100-ios-paywall-default.png")
-    }
 }

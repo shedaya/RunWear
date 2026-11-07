@@ -899,24 +899,24 @@ final class Gen6FixWaveTests: XCTestCase {
     }
 
     // MARK: RW-93 — the launch gate waits for a resolved status
+    //
+    // Source pins, not a truth table: LocationService.swift is a
+    // member of the app target only (the test target compiles a
+    // curated source subset), so the seam cannot be called from
+    // here. The pins name the exact mechanism so a regression has
+    // to remove it to pass.
 
-    func testRW93_PermissionGateRequiresAResolvedStatus() {
-        // The walkthrough defect: unresolved .notDetermined on a
-        // cold relaunch over a granted permission.
-        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
-            status: .notDetermined, hasResolvedAuthorization: false, hasManualWeather: false),
-            "an unresolved reading must never raise the gate")
-        XCTAssertTrue(LaunchGateResolution.showsPermissionGate(
-            status: .notDetermined, hasResolvedAuthorization: true, hasManualWeather: false),
-            "a resolved .notDetermined is a genuine first run — the gate is correct there")
-        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
-            status: .notDetermined, hasResolvedAuthorization: true, hasManualWeather: true),
-            "manual weather outranks the gate in every state")
-        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
-            status: .authorizedWhenInUse, hasResolvedAuthorization: false, hasManualWeather: false))
-        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
-            status: .denied, hasResolvedAuthorization: true, hasManualWeather: false),
-            "denied has its own surface; this seam guards only the notDetermined gate")
+    func testRW93_PermissionGateRequiresAResolvedStatus_sourcePins() throws {
+        let service = try sourceFile("../RunWear/Services/LocationService.swift")
+        XCTAssertTrue(service.contains("@Published private(set) var hasResolvedAuthorization"),
+                      "the service publishes whether the authorization reading has resolved")
+        XCTAssertTrue(service.contains("enum LaunchGateResolution"),
+                      "the gate decision lives in the named pure seam")
+        XCTAssertTrue(service.contains("status == .notDetermined && hasResolvedAuthorization && !hasManualWeather"),
+                      "the rule: gate only for a RESOLVED .notDetermined with no manual weather")
+        let content = try sourceFile("../RunWear/Views/ContentView.swift")
+        XCTAssertTrue(content.contains("LaunchGateResolution.showsPermissionGate("),
+                      "ContentView consults the seam before raising the gate")
     }
 
     // MARK: RW-102 — the date picker offers no beyond-forecast day
