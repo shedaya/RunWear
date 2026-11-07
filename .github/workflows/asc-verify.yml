@@ -23,6 +23,7 @@ on:
           - opt3-stage1
           - opt3-submit
           - launch-prepare
+          - launch-diag
         default: verify
         required: true
       version:
@@ -77,3 +78,7 @@ jobs:
         if: inputs.task == 'launch-prepare'
         working-directory: scripts/asc
         run: python3 asc_launch_prepare.py
+      - name: Launch diag (read-only - subscription as inAppPurchase check)
+        if: inputs.task == 'launch-diag'
+        working-directory: scripts/asc
+        run: python3 asc_launch_diag.py
