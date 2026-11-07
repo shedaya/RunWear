@@ -23,6 +23,20 @@ import SwiftUI
 // presentation logic of its own. The pre-WS-3 end-of-scroll
 // LATCH (expansion with no collapse counterpart) is retired:
 // arrival at the end expands, departure collapses, symmetric.
+//
+// RW-135 (Direction A, owner's ruling Nov 7, 2026; research §7
+// + the same-day refinement): this view is the floating MINI
+// dock ONLY — inset, radius 16, translucent card material,
+// restored to the design of record. The synthesis form (an
+// always-present inline section + a floating jump chip) is
+// removed. The EXPANDED form is INTERIM: a full-width section
+// at the page footer in the page's section language
+// (`WearIveRunFooterSectionView` below), rendered by the host
+// while the machine is at full expression — pending the
+// owner's design/animation package for the final choreography.
+// Narration is a pure function of the recorded entry (§7.0);
+// the creation cue is the only pulse (§7.1); a changed settle
+// cross-fades the line quietly (§7.4).
 
 enum WearIveRunState: Equatable {
     /// No entry for today yet — the bar does not render.
@@ -36,6 +50,13 @@ enum WearIveRunState: Equatable {
     /// NarrationPayload (place or moment) — a garment payload
     /// is unrepresentable in this state.
     case updated(payload: NarrationPayload)
+    /// RW-135 §7.2 (Direction A, Nov 7, 2026): the session's
+    /// entry is recorded under a FUTURE day — it is a plan, and
+    /// the bar says so in plain words ("Planned for {place} ·
+    /// {day}"), never the "Updated to" form, which describes
+    /// today's settled mirror. Both fields derive from the
+    /// entry's own record (its place, its day) — §7.0.
+    case planned(place: String, dayLabel: String)
 }
 
 enum WearIveRunMiniBarModel {
@@ -59,11 +80,31 @@ enum WearIveRunMiniBarModel {
     static func state(
         todaysEntry: WearIveRunEntry?,
         moment: MomentReading,
-        wasUpdatedThisSession: Bool
+        wasUpdatedThisSession: Bool,
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> WearIveRunState {
         guard let entry = todaysEntry else { return .preAdd }
+        // RW-135 §7.2 (Direction A): a future-day entry is a
+        // PLAN — the planned form wins over both the creation
+        // and update forms, whatever the narration kind stamped
+        // on the entry, because the day it is recorded under is
+        // itself the fact the line must state.
+        if calendar.startOfDay(for: entry.dayStart) > calendar.startOfDay(for: now) {
+            return .planned(
+                place: entry.placeDisplayName,
+                dayLabel: WearIveRunNarration.plannedDayLabel(
+                    for: entry, calendar: calendar, now: now))
+        }
         if wasUpdatedThisSession {
-            return .updated(payload: entry.narrationPayload)
+            // RW-135 §7.2: the settled-today line names the
+            // entry's recorded PLACE ("Updated to {place}", the
+            // place in pine bold). This supersedes the GEN-5
+            // moment-payload form ON THE BAR: a moment-only
+            // change now reads as the place the entry holds —
+            // the entry still stores its C-7 update payload for
+            // the collection surfaces that render it.
+            return .updated(payload: .place(entry.placeDisplayName))
         }
         return .added(place: entry.placeDisplayName, moment: moment)
     }
@@ -85,7 +126,58 @@ enum WearIveRunNarration {
             return "Added \(place), \(moment.rendered)"
         case .updated(let payload):
             return "Updated to \(payload.rendered)"
+        case .planned(let place, let dayLabel):
+            return "Planned for \(place) · \(dayLabel)"
         }
+    }
+
+    /// RW-135 §7.2: the planned form's day word — "Tomorrow" for
+    /// the next day, the full weekday name beyond that (the same
+    /// day-word family the entry's own moment readings use).
+    /// Pure in (entry day, calendar, now): the word derives from
+    /// the RECORDED day, never from the viewed day (§7.0).
+    static func plannedDayLabel(
+        for entry: WearIveRunEntry,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> String {
+        // Compared against the INJECTED now, by day — never
+        // Calendar.isDateInTomorrow, which anchors to the system
+        // clock and would ignore the caller's frame.
+        let tomorrow = calendar.date(
+            byAdding: .day, value: 1,
+            to: calendar.startOfDay(for: now)) ?? now
+        if calendar.isDate(entry.dayStart, inSameDayAs: tomorrow) { return "Tomorrow" }
+        let weekday = DateFormatter()
+        weekday.calendar = calendar
+        weekday.locale = Locale(identifier: "en_US_POSIX")
+        weekday.dateFormat = "EEEE"
+        return weekday.string(from: entry.dayStart)
+    }
+
+    /// RW-135 §7.2: the expanded entry line's day form —
+    /// "Today" / "Tomorrow" / "{Weekday, Mon D}" — from the
+    /// entry's recorded day. (The pre-ruling expanded line
+    /// hardcoded "Today", so a future-day plan's entry row
+    /// contradicted its own date — the RW-132 family.)
+    static func expandedDayLabel(
+        for entry: WearIveRunEntry,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> String {
+        // Day comparisons against the INJECTED now (see
+        // plannedDayLabel — the isDateIn* family would anchor
+        // to the system clock instead).
+        if calendar.isDate(entry.dayStart, inSameDayAs: now) { return "Today" }
+        let tomorrow = calendar.date(
+            byAdding: .day, value: 1,
+            to: calendar.startOfDay(for: now)) ?? now
+        if calendar.isDate(entry.dayStart, inSameDayAs: tomorrow) { return "Tomorrow" }
+        let weekday = DateFormatter()
+        weekday.calendar = calendar
+        weekday.locale = Locale(identifier: "en_US_POSIX")
+        weekday.dateFormat = "EEEE, MMM d"
+        return weekday.string(from: entry.dayStart)
     }
 
     /// The expanded bar's entry line (frame 3 anatomy):
@@ -98,16 +190,25 @@ enum WearIveRunNarration {
     /// kit item on update), so the expanded card never prints
     /// the narration's payload twice (the D-08 duplication).
     /// The view renders it with NO line limit — it wraps.
-    static func expandedLine(for entry: WearIveRunEntry, formattedFeelsLike: String) -> String {
+    static func expandedLine(
+        for entry: WearIveRunEntry,
+        formattedFeelsLike: String,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> String {
         // GEN-5 (RW-29 FA-34): the expanded anatomy carries the
         // OUTFIT LINE — the item names themselves — where build
         // 25 stopped at the count. The count form remains only
         // for an entry with no recorded items.
+        // RW-135 §7.2: the day segment is the entry's OWN day
+        // form (Today / Tomorrow / Weekday, Mon D), derived from
+        // the recorded dayStart — never a hardcoded "Today".
+        let day = expandedDayLabel(for: entry, calendar: calendar, now: now)
         if entry.itemNames.isEmpty {
             let items = entry.itemNames.count == 1 ? "1 item" : "\(entry.itemNames.count) items"
-            return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(items)"
+            return "\(entry.placeDisplayName) · \(day) — \(formattedFeelsLike) feels like · \(items)"
         }
-        return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(entry.itemNames.joined(separator: " · "))"
+        return "\(entry.placeDisplayName) · \(day) — \(formattedFeelsLike) feels like · \(entry.itemNames.joined(separator: " · "))"
     }
 }
 
@@ -198,6 +299,55 @@ enum WearIveRunViewedNarration {
     }
 }
 
+// MARK: - Narration cross-fade deferral (RW-135 §7.4/§7.5)
+
+/// The gate between a changed recorded line and the bar's
+/// shown line. At rest, a new recorded line is released
+/// immediately (the view cross-fades it, opacity only, ~200
+/// ms). While a scroll gesture — or its deceleration — is
+/// live, the new line PARKS: the shown line does not move
+/// mid-gesture, and no fade runs concurrently with a
+/// scroll-handoff (§7.5). A second change while parked
+/// replaces the parked line (only the latest recorded line
+/// ever lands). When the gesture ends, the parked line is
+/// released exactly once, for the frame after deceleration.
+/// Pure value logic — the dock view drives it with its shown
+/// state; the unit tests drive it directly.
+struct WearIveRunNarrationDeferral: Equatable {
+    /// The line the bar is currently showing.
+    private(set) var shownLine: String?
+    /// The recorded line parked behind a live gesture.
+    private var pendingLine: String?
+
+    /// Offer a newly derived recorded line. Returns the line to
+    /// cross-fade to NOW, or nil when the offer parked (gesture
+    /// live) or cleared the gate (the entry is gone — the line
+    /// is nil, and with it the bar).
+    mutating func offer(line: String?, gestureActive: Bool) -> String? {
+        guard let line else {
+            shownLine = nil
+            pendingLine = nil
+            return nil
+        }
+        if gestureActive {
+            pendingLine = line
+            return nil
+        }
+        pendingLine = nil
+        shownLine = line
+        return line
+    }
+
+    /// The gesture ended: release the parked line, if any,
+    /// exactly once.
+    mutating func gestureEnded() -> String? {
+        guard let pendingLine else { return nil }
+        self.pendingLine = nil
+        shownLine = pendingLine
+        return pendingLine
+    }
+}
+
 // MARK: - Background policy (translucency, notes §1)
 //
 // MINI state is TRANSLUCENT at the settled tints (light 85% / dark
@@ -252,18 +402,33 @@ final class WearIveRunCollectionModel: ObservableObject {
         }
         return false
     }
-    /// Bumped ONLY on a cue-worthy landing (WS-3): the session's
-    /// creation, a settle that moved it to a new PLACE (GEN-3),
-    /// or a settle that changed its MOMENT (GEN-5, RW-28 C-7 —
-    /// the narration names place and time only). A settle that
-    /// changed only the kit, weather numbers, or the hero image
-    /// is an asynchronous landing — it is recorded below, but it
-    /// never bumps this counter, so it can never move the
-    /// element (D-07's abolished drivers, enforced at the source
-    /// via `WearIveRunLandingClassifier`). GEN-5 supersedes the
-    /// WS-4 kit cue: a kit-only re-solve narrates nothing, so it
-    /// cues nothing.
+    /// Bumped ONLY on the session's CREATION (RW-135 §7.1,
+    /// Direction A — supersedes the WS-3/GEN-3/GEN-5 cue-worthy
+    /// set): the creation cue is the ONLY pulse in the system.
+    /// A settle that moved the entry to a new place or changed
+    /// its moment no longer bumps this counter — §7.4: a changed
+    /// record cross-fades the narration line, with no pulse, no
+    /// haptic, and no expansion. A settle that changed only the
+    /// kit, weather numbers, or the hero image is an asynchronous
+    /// landing — recorded, but it never bumps this counter either
+    /// (D-07's abolished drivers, enforced at the source via
+    /// `WearIveRunLandingClassifier`).
     @Published private(set) var cueCount = 0
+
+    /// RW-135 §7.4: bumped when a settle changes the DERIVED
+    /// NARRATION LINE (the line the bar renders from the recorded
+    /// entry) — the cross-fade trigger. Distinct from `cueCount`:
+    /// a line change is quiet (opacity only, ~200 ms, deferred
+    /// past any scroll gesture per §7.5); it never pulses, never
+    /// fires a haptic, and never expands the bar. A settle whose
+    /// derived line is unchanged (a moment-only change under the
+    /// §7.2 place form, a weather/kit/hero landing) does not bump
+    /// it — there is nothing new for the line to say.
+    @Published private(set) var narrationVersion = 0
+    /// The last narration line this model derived, for the
+    /// change comparison above. Derived at record time from the
+    /// recorded entry alone (§7.0).
+    private var lastNarrationLine: String?
 
     /// The identity of the app session this model records for —
     /// the process session by default (`WearIveRunSession`), so
@@ -370,12 +535,22 @@ final class WearIveRunCollectionModel: ObservableObject {
                    && Calendar.current.isDate($0.dayStart, inSameDayAs: entry.dayStart)
            }) {
             store.removeLegacyTwin(of: entry)
-            store.record(entry.settingNarration(
+            let restored = entry.settingNarration(
                 wasUpdated: prior.wasUpdatedInSession,
                 payload: prior.updatePayload
-            ))
+            )
+            store.record(restored)
             entries = store.entries
             narratedEntryID = entry.id
+            // RW-135: a restore is silent — it re-baselines the
+            // narration line WITHOUT bumping the version (no
+            // cross-fade, no announcement; the bar simply renders
+            // the restored record).
+            lastNarrationLine = WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
+                todaysEntry: restored,
+                moment: restored.momentReading,
+                wasUpdatedThisSession: restored.wasUpdatedInSession
+            ))
             return
         }
         let classification = WearIveRunLandingClassifier.classify(
@@ -416,16 +591,29 @@ final class WearIveRunCollectionModel: ObservableObject {
         if classification == .created {
             store.removeLegacyTwin(of: entry)
         }
-        store.record(entry.settingNarration(wasUpdated: narrationUpdated, payload: narrationPayload))
+        let recorded = entry.settingNarration(wasUpdated: narrationUpdated, payload: narrationPayload)
+        store.record(recorded)
         entries = store.entries
-        switch classification {
-        case .created:
+        // RW-135 §7.1/§7.4 (Direction A): the cue counter moves
+        // ONLY on creation — the creation cue is the only pulse
+        // in the system. Place/moment updates move the NARRATION
+        // VERSION when (and only when) the derived line actually
+        // changes: the bar cross-fades to the new recorded line,
+        // quietly. (The pre-ruling code bumped cueCount on place
+        // and moment updates too, so every location switch fired
+        // the pulse + haptic + expansion §7.4 now forbids.)
+        if classification == .created {
             narratedEntryID = entry.id
             cueCount += 1
-        case .placeUpdated, .momentUpdated:
-            cueCount += 1
-        case .kitUpdated, .silentUpdate, .identical:
-            break
+        }
+        let newLine = WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
+            todaysEntry: recorded,
+            moment: recorded.momentReading,
+            wasUpdatedThisSession: recorded.wasUpdatedInSession
+        ))
+        if newLine != lastNarrationLine {
+            lastNarrationLine = newLine
+            narrationVersion += 1
         }
     }
 
@@ -451,6 +639,7 @@ final class WearIveRunCollectionModel: ObservableObject {
         store.remove(id: current.id)
         entries = store.entries
         narratedEntryID = nil
+        lastNarrationLine = nil
     }
 
     /// Fix wave 2026-11-07 (RW-122, iOS half): delete ONE entry
@@ -558,6 +747,10 @@ enum WearIveRunMorph {
     /// The Reduced Motion crossfade's length (≤150 ms, §6).
     static let reducedMotionDurationSeconds: Double = 0.15
 
+    /// RW-135 §7.4: the narration cross-fade's length — opacity
+    /// only, ~200 ms, when a settle lands on a changed record.
+    static let narrationCrossfadeSeconds: Double = 0.2
+
     /// The animation a driver runs, built from the pinned
     /// constants above — one animation of the one progress
     /// value, never separate per-property animations.
@@ -586,16 +779,18 @@ enum WearIveRunMorph {
         return mini + (1 - mini) * clamped(progress)
     }
 
-    /// Corner radius tokens. The iOS dock is a full-width strip
-    /// in BOTH states (it hosts in the safe-area inset, not as a
-    /// floating card), so its radius token is 0 at both ends and
-    /// the interpolation is constant — the decision's stated
-    /// constant case ("linear in progress; constant if the
-    /// tokens are equal"). The function still derives the
-    /// radius from the one progress value, so a future token
-    /// change animates with the same morph.
-    static let miniCornerRadius: Double = 0
-    static let expandedCornerRadius: Double = 0
+    /// Corner radius tokens. RW-135 §7.6 (Direction A, Nov 7,
+    /// 2026) RESTORES the design of record (2026-11-02): the
+    /// dock is a floating card, radius 16 in BOTH docked forms,
+    /// and the radius never animates to 0 — the interpolation is
+    /// constant at 16 by design. This supersedes the 2026-11-04
+    /// geometry decision that zeroed both tokens (the full-width
+    /// flat strip the owner's RW-135 complaint was about). The
+    /// function still derives the radius from the one progress
+    /// value, so a future token change animates with the same
+    /// morph.
+    static let miniCornerRadius: Double = 16
+    static let expandedCornerRadius: Double = 16
     static func cornerRadius(progress: Double) -> Double {
         miniCornerRadius + (expandedCornerRadius - miniCornerRadius) * clamped(progress)
     }
@@ -702,7 +897,9 @@ struct WearIveRunEmptyDockView: View {
 
 struct WearIveRunMiniBarView: View {
     let state: WearIveRunState
-    /// Today's entry, for the expanded anatomy; nil only in preAdd.
+    /// The session's entry, as recorded; nil only in preAdd.
+    /// (The footer section renders the expanded anatomy from its
+    /// own copy of this same record — one record, two seats.)
     let entry: WearIveRunEntry?
     /// The feels-like, formatted in the user's unit.
     let formattedFeelsLike: String
@@ -716,12 +913,22 @@ struct WearIveRunMiniBarView: View {
     /// sheets; this view only consumes their presented state):
     /// the element dims WITH the home backdrop (D-11).
     var isDimmedBySheet: Bool = false
-    /// RW-88: the viewed-state payload ("Miami, FL, Now" /
-    /// "November 12 7 p.m.") while the viewed place/moment
-    /// differs from the entry's settled state — the status line
-    /// renders "Updated to {payload}" instead of the entry's own
-    /// narration. Nil when the view matches the entry.
-    var viewedNarrationPayload: String? = nil
+    /// RW-135 §7.5: true while the host page's scroll gesture (or
+    /// its deceleration) is live. A settle that lands mid-gesture
+    /// defers its narration cross-fade to the frame after the
+    /// gesture ends — no morph or fade runs concurrently with a
+    /// scroll-handoff.
+    var isScrollGestureActive: Bool = false
+    /// RW-135 (Direction A, interim expanded form): the machine's
+    /// full-expression state, mirrored to the host — the EXPANDED
+    /// form itself is the full-width footer section in the page
+    /// flow (owner's Nov 7 refinement), not a taller dock. The
+    /// dock reports; the host renders the footer.
+    var onFullExpressionChange: (Bool) -> Void = { _ in }
+    /// RW-135: a collapse requested by the footer section (its
+    /// own tap-again / drag-down): the host bumps this nonce and
+    /// the machine collapses through its one transition table.
+    var externalCollapseNonce: Int = 0
     let onOpenCollection: () -> Void
     let onTrash: () -> Void
 
@@ -777,6 +984,19 @@ struct WearIveRunMiniBarView: View {
     /// Reduced Motion chevron: flipped at the crossfade
     /// midpoint instead of rotating (§6).
     @State private var reducedChevronFull = false
+    /// RW-135 §7.4/§7.5: the narration state the bar is actually
+    /// SHOWING. The rendered line derives from this, not directly
+    /// from `state`: when a settle changes the recorded line, the
+    /// shown state cross-fades (opacity only, ~200 ms) to the new
+    /// one; a settle landing mid-scroll-gesture parks its new
+    /// state in `pendingNarrationState` until the frame after
+    /// deceleration ends. The shown state is still a pure
+    /// function of a recorded entry (§7.0) — it is an EARLIER
+    /// recorded entry's state, never a computed preview.
+    @State private var displayedState: WearIveRunState?
+    @State private var pendingNarrationState: WearIveRunState?
+    /// The §7.5 deferral gate the shown line passes through.
+    @State private var narrationDeferral = WearIveRunNarrationDeferral()
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -799,12 +1019,59 @@ struct WearIveRunMiniBarView: View {
                 // Expand/collapse and scrolling are silent.
                 .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
                 .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
-                .onAppear { reconcileInitialState() }
+                .onAppear {
+                    reconcileInitialState()
+                    if displayedState == nil {
+                        displayedState = state
+                        _ = narrationDeferral.offer(
+                            line: WearIveRunNarration.line(for: state),
+                            gestureActive: false)
+                    }
+                }
                 .onChange(of: cueCount) { oldValue, newValue in
                     guard newValue > oldValue else { return }
-                    // A cue-worthy landing: creation when the machine
-                    // holds no entry, a user-caused update otherwise.
-                    send(machine.state == .absent ? .entryCreated : .userCausedUpdate)
+                    // RW-135 §7.1: the counter now moves ONLY on
+                    // creation, and creation is the only cue — a
+                    // landing here is fed as a creation, always.
+                    // (Changed settles move `narrationVersion`,
+                    // which this view deliberately does not
+                    // consume: the line cross-fades via the
+                    // `state` change path below, §7.4.)
+                    send(.entryCreated)
+                }
+                .onChange(of: state) { _, newState in
+                    // §7.4/§7.5: a changed recorded line passes
+                    // the deferral gate — released at rest,
+                    // parked while a scroll gesture (or its
+                    // deceleration) is live.
+                    let released = narrationDeferral.offer(
+                        line: WearIveRunNarration.line(for: newState),
+                        gestureActive: isScrollGestureActive)
+                    if released != nil {
+                        applyNarrationCrossfade(to: newState)
+                    } else if isScrollGestureActive {
+                        pendingNarrationState = newState
+                    }
+                }
+                .onChange(of: isScrollGestureActive) { _, active in
+                    // The frame after deceleration ends: a parked
+                    // cross-fade lands (§7.5).
+                    if !active, narrationDeferral.gestureEnded() != nil,
+                       let pending = pendingNarrationState {
+                        pendingNarrationState = nil
+                        DispatchQueue.main.async {
+                            applyNarrationCrossfade(to: pending)
+                        }
+                    }
+                }
+                .onChange(of: machine.isFullExpression) { _, full in
+                    onFullExpressionChange(full)
+                }
+                .onChange(of: externalCollapseNonce) { _, _ in
+                    // The footer section's collapse request (§7.2
+                    // tap-again / drag-down, interim mapping):
+                    // collapse through the one machine.
+                    if machine.isFullExpression { send(.tapToggleControl) }
                 }
                 .onChange(of: isAtEndOfScroll) { _, atEnd in
                     // BOTH edges — the symmetric rule that retires the
@@ -826,14 +1093,17 @@ struct WearIveRunMiniBarView: View {
 
     /// The dock's single rendered form: ONE copy of the content,
     /// rendered at its natural height in every state. The header
-    /// (wordmark + narration + controls) is present in both
-    /// states and never moves or fades; the expanded-only block
-    /// below it mounts while the element is at — or travelling
-    /// to or from — the full expression, and fades/drifts on the
-    /// windowed ramp. The background tint opacity and corner
-    /// radius are functions of `expansionProgress`; the height is
-    /// the content's own, animated by the driver's transaction
-    /// as the block mounts and unmounts.
+    /// (wordmark + narration + controls) never moves or scales;
+    /// the narration line cross-fades on a changed settle (§7.4,
+    /// via the deferral gate). RW-135 (Direction A): the dock no
+    /// longer carries an expanded block — the machine's
+    /// `expansionProgress` still runs (it drives the toggle
+    /// chevron's rotation and the cue's settle bookkeeping), but
+    /// the EXPANDED content itself is the footer section in the
+    /// page flow, mirrored through `onFullExpressionChange`.
+    /// The background tint stands at the MINI opacity and the
+    /// corner radius at 16 (§7.6); the height is the content's
+    /// own.
     ///
     /// RW-86 (root cause, Nov 6, 2026): the pre-fix form measured
     /// two hidden phantom copies of the content through
@@ -858,10 +1128,7 @@ struct WearIveRunMiniBarView: View {
     /// height shrink, which never gates a resting state.
     private var morphBar: some View {
         let visible = machine.state != .absent || trashScale < 1
-        return morphContent(
-            showsExpandedBlock: machine.isFullExpression || expansionProgress > 0,
-            progress: expansionProgress
-        )
+        return headerRow
         .opacity(visible ? trashScale : 0)
         .onGeometryChange(for: Double.self) { proxy in
             proxy.size.height
@@ -872,56 +1139,62 @@ struct WearIveRunMiniBarView: View {
             ? (trashScale < 1 ? CGFloat(contentHeight * trashScale) : nil)
             : 0)
         .background {
-            // The tint layer over .regularMaterial: the morph
-            // animates the TINT's opacity (progress-driven);
-            // the material itself is never animated (decision
+            // RW-135 §7.6 (Direction A): the MINI material — the
+            // translucent card tint over the system material blur.
+            // The tint is the CARD hex pair (light #FDFBF6 at
+            // 85% / dark #2A251E at 82%): in dark mode the tint is
+            // the card hex, not the sheet hex (the pre-ruling bar
+            // tinted with AppTheme.sheet, whose dark side is
+            // #211D17). The dock is always MINI (§7.2's expanded
+            // form is the footer section), so the tint stands at
+            // the MINI opacity — the morph's tint ramp now belongs
+            // to the footer relationship, not to this layer.
+            // The material itself is never animated (decision
             // §4 — no blur animation).
             ZStack {
                 Rectangle().fill(.regularMaterial)
-                Rectangle().fill(AppTheme.sheet.opacity(
-                    WearIveRunMorph.tintOpacity(
-                        progress: expansionProgress,
+                Rectangle().fill(
+                    (colorScheme == .dark
+                        ? Color(hex: AppTheme.cardDarkHex)
+                        : Color(hex: AppTheme.sheetLightHex)
+                    ).opacity(WearIveRunMorph.tintOpacity(
+                        progress: 0,
                         isDark: colorScheme == .dark
-                    )
-                ))
+                    ))
+                )
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: expansionProgress)))
-    }
-
-    /// The bar's content at a given morph progress. The caller
-    /// mounts the expanded block only while the element is at —
-    /// or travelling to or from — the full expression (RW-86:
-    /// the resting MINI form is the header alone, at its natural
-    /// height, with nothing clipped or measured).
-    @ViewBuilder
-    private func morphContent(showsExpandedBlock: Bool, progress: Double) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            headerRow
-            if showsExpandedBlock {
-                expandedBlock(progress: progress)
-            }
-        }
+        // §7.6: the soft shadow (0 offset-x, 6 offset-y, black
+        // 14%; SwiftUI's radius is half the CSS blur, so the
+        // design's 24 pt blur is radius 12 here).
+        .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
     }
 
     /// The continuity anchor (decision §2): wordmark, narration,
     /// and both controls — present in both states, never moving,
-    /// never fading, never scaling. The narration is the SAME
-    /// line in both states, so no mid-morph text swap is needed.
+    /// never scaling. RW-135 §7.2/§7.6 (Direction A): the MINI
+    /// bar is ONE row — the Great Vibes wordmark at 17 pt, the
+    /// one narration line at 12 pt, and the expand + delete
+    /// controls right-aligned, grayed until use (the frame-a
+    /// anatomy; the pre-ruling two-line stacked header was the
+    /// build-30 strip's anatomy). The narration renders from
+    /// `displayedState` — the recorded state the bar is showing
+    /// — so a changed settle cross-fades the line in place
+    /// (§7.4): the text is keyed by its line inside an opacity
+    /// transition, driven by the one 200 ms fade.
     private var headerRow: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                wordmarkView
-                if let line = WearIveRunNarration.line(for: state) {
-                    // GEN-5 (RW-29 FA-48) SUPERSEDES the frame-2
-                    // one-line limit: a long simple place in the
-                    // payload was end-truncated at one line on
-                    // Sol's device. The narration may wrap to two
-                    // lines — the payload is never amputated.
-                    narrationText(line)
-                        .font(.appFootnote)
-                        .lineLimit(2)
-                }
+        HStack(spacing: 8) {
+            wordmarkView
+            if let shown = displayedState ?? state, let line = WearIveRunNarration.line(for: shown) {
+                // GEN-5 (RW-29 FA-48): a long simple place in the
+                // payload may wrap to two lines — the payload is
+                // never amputated.
+                narrationText(line, for: shown)
+                    .font(.system(size: 12))
+                    .lineLimit(2)
+                    .id(line)
+                    .transition(.opacity)
             }
             Spacer(minLength: 0)
             barControls
@@ -932,69 +1205,19 @@ struct WearIveRunMiniBarView: View {
         .onTapGesture { send(.tapMiniBarBody) }
     }
 
-    /// The expanded-only block: the entry's thumbnail + its
-    /// frame-3 line, and the explicit jump into the full
-    /// collection (W-1: the expanded card must SHOW the way in —
-    /// a labelled door with a chevron, not a bare card tap).
-    /// It fades in on the windowed ramp (progress 0.45 → 1.00)
-    /// with a ≤4 pt upward drift; on collapse it is gone before
-    /// the card has visibly shrunk. The thumbnail renders ONLY
-    /// once its image has decoded — no placeholder graphic and
-    /// no broken-image frame ever paints (D-12).
-    private func expandedBlock(progress: Double) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                // GEN-5 (RW-29 FA-45): the thumbnail renders
-                // through HeroPhoto's top-anchored crop — build
-                // 25's bare centre fill could cut the head here
-                // as surely as on the poster.
-                AsyncImage(url: entry.flatMap { URL(string: $0.heroImageReference) }) { phase in
-                    if case .success(let image) = phase {
-                        HeroPhoto(image: image, width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                    } else {
-                        Color.clear
-                            .frame(width: 56, height: 56)
-                    }
-                }
-
-                if let entry {
-                    // No line limit, by design (WS-4): the
-                    // expanded subtitle wraps without limit —
-                    // a long simple place name wraps whole
-                    // rather than truncating.
-                    Text(WearIveRunNarration.expandedLine(
-                        for: entry,
-                        formattedFeelsLike: formattedFeelsLike
-                    ))
-                    .font(.appFootnote)
-                    .foregroundColor(AppTheme.inkSecondary)
-                }
-                Spacer(minLength: 0)
-            }
-            Button(action: onOpenCollection) {
-                HStack(spacing: 6) {
-                    Text("Open the collection")
-                        .font(.appFootnote.weight(.semibold))
-                        .foregroundColor(AppTheme.pinePayload)
-                    Image(systemName: "chevron.right")
-                        .font(.appFootnote.weight(.semibold))
-                        .foregroundColor(AppTheme.pinePayload)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open the full Wear I've Run collection")
+    /// §7.4: apply a changed recorded line as an opacity-only
+    /// cross-fade (~200 ms) — no pulse, no haptic, no expansion,
+    /// and (via the parking in `onChange(of: state)`) never
+    /// concurrent with a scroll gesture (§7.5).
+    private func applyNarrationCrossfade(to newState: WearIveRunState) {
+        guard displayedState != newState else { return }
+        if reduceMotion {
+            displayedState = newState
+            return
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-        .opacity(WearIveRunMorph.expandedContentOpacity(progress: progress))
-        .offset(y: WearIveRunMorph.expandedContentOffset(progress: progress))
-        // GEN-5 (RW-29 FA-33): the expanded block's body is a
-        // tap surface — tapping it settles the bar back to
-        // mini (the machine's new transition). The "Open the
-        // collection" button inside keeps its own tap.
-        .contentShape(Rectangle())
-        .onTapGesture { send(.tapMiniBarBody) }
+        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds)) {
+            displayedState = newState
+        }
     }
 
     /// The wordmark in the genuine Great Vibes (RW-26: the Snell
@@ -1002,7 +1225,10 @@ struct WearIveRunMiniBarView: View {
     /// bundled and `Font.greatVibes` resolves it).
     private var wordmarkView: some View {
         Text(WearIveRunMiniBarModel.wordmark)
-            .font(.greatVibes(size: 20))
+            // RW-135 §7.6: the wordmark in the bar is 17 pt (the
+            // in-flow section header size, 31 pt, is not used in
+            // the bar; the pre-ruling bar used 20 pt).
+            .font(.greatVibes(size: 17))
             .foregroundColor(AppTheme.inkPrimary)
     }
 
@@ -1045,23 +1271,31 @@ struct WearIveRunMiniBarView: View {
         }
     }
 
-    private func narrationText(_ line: String) -> Text {
-        if let viewedNarrationPayload {
-            // RW-88: the viewed place/moment differs from the
-            // entry's settled state — the strip follows the view.
+    /// The narration line's rich form: the verb in secondary
+    /// ink, the payload in pine (RW-135 §7.6: the settled-today
+    /// place in pine BOLD). Every case derives from the SHOWN
+    /// recorded state and nothing else — §7.0: the RW-88
+    /// viewed-state override branch that stood here is removed
+    /// outright (its parameter is gone; the pure function and
+    /// its tests remain in the tree, uncalled by the bar).
+    private func narrationText(_ line: String, for shownState: WearIveRunState) -> Text {
+        switch shownState {
+        case .updated(let payload):
             return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
-                + Text(viewedNarrationPayload).foregroundColor(AppTheme.pinePayload)
-        }
-        if case .updated(let payload) = state {
-            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
-                + Text(payload.rendered).foregroundColor(AppTheme.pinePayload)
-        }
-        if case .added(let place, let moment) = state {
+                + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+        case .added(let place, let moment):
             // The payload "{Place}, {Moment}" carries the pine.
             return Text("Added ").foregroundColor(AppTheme.inkSecondary)
                 + Text("\(place), \(moment.rendered)").foregroundColor(AppTheme.pinePayload)
+        case .planned(let place, let dayLabel):
+            // §7.2: "Planned for {place} · {day}" — the place in
+            // pine bold, the day word in secondary ink.
+            return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+                + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+                + Text(" · \(dayLabel)").foregroundColor(AppTheme.inkSecondary)
+        case .preAdd:
+            return Text(line).foregroundColor(AppTheme.inkSecondary)
         }
-        return Text(line).foregroundColor(AppTheme.inkSecondary)
     }
 
     // MARK: Machine plumbing
@@ -1310,6 +1544,139 @@ struct WearIveRunMiniBarView: View {
             )
             guard generation == cueTimerGeneration else { return }
             send(.cueTimedOut)
+        }
+    }
+}
+
+// MARK: - RW-135 expanded form (INTERIM): the footer section
+//
+// The owner's refinement (Nov 7, 2026): the EXPANDED state is a
+// full-width section at the page footer — NOT a taller floating
+// card, and NOT the build-30 flat hard-edged full-bleed slab:
+// "full width" here is section width in the page's own language
+// (the sheet container's inset, the card fill + stroke, a 24 pt
+// card radius, section spacing), seated at the foot of the flow
+// where the prior lane's inline section stood. The host renders
+// this section only while the dock's machine is at full
+// expression (end-of-scroll, tap on the bar, or the creation
+// cue — §7.2), so it is the dock's expansion, not a separate
+// always-present section. Its content is §7.2's anatomy, from
+// the recorded entry only (§7.0): the narration row, then the
+// full entry row (recorded thumbnail + the entry line), and
+// tapping the entry row opens the collection sheet with the
+// session entry in its location group (§7.3 — the doorway).
+// Collapse (§7.2): the narration row is the tap-again surface,
+// and a drag down on the section collapses it; both route
+// through the host to the dock's one machine. The final
+// MINI ↔ footer choreography is the design package's to
+// specify; this interim form follows §7.5's principles (one
+// form at a time in the footer seat, opacity-only appearance,
+// no concurrent scroll-handoff animation).
+struct WearIveRunFooterSectionView: View {
+    /// The recorded narration state (the same derivation the
+    /// dock renders — one record, one line).
+    let state: WearIveRunState
+    /// The session's recorded entry.
+    let entry: WearIveRunEntry
+    /// The entry's feels-like, formatted in the user's unit.
+    let formattedFeelsLike: String
+    let onOpenCollection: () -> Void
+    let onCollapse: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Narration row (§7.2): wordmark + the recorded line
+            // + the collapse control. Tapping the row is the
+            // tap-again collapse.
+            HStack(spacing: 8) {
+                Text(WearIveRunMiniBarModel.wordmark)
+                    .font(.greatVibes(size: 17))
+                    .foregroundColor(AppTheme.inkPrimary)
+                if let line = WearIveRunNarration.line(for: state) {
+                    footerNarrationText(line)
+                        .font(.system(size: 12))
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkMuted)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { onCollapse() }
+
+            // The entry row (§7.2 anatomy, §7.3 doorway): the
+            // recorded thumbnail + the full entry line. Tapping
+            // it opens the collection sheet.
+            Button(action: onOpenCollection) {
+                HStack(spacing: 12) {
+                    // The thumbnail renders ONLY once its image
+                    // has decoded — no placeholder graphic and no
+                    // broken-image frame ever paints (D-12).
+                    AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
+                        if case .success(let image) = phase {
+                            HeroPhoto(image: image, width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        } else {
+                            Color.clear
+                                .frame(width: 56, height: 56)
+                        }
+                    }
+                    // No line limit, by design (WS-4): the entry
+                    // line wraps whole rather than truncating.
+                    Text(WearIveRunNarration.expandedLine(
+                        for: entry,
+                        formattedFeelsLike: formattedFeelsLike
+                    ))
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkSecondary)
+                    .multilineTextAlignment(.leading)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open the full Wear I've Run collection")
+        }
+        .padding(16)
+        .background {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(AppTheme.cardFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(AppTheme.cardStroke, lineWidth: 1)
+                }
+        }
+        .padding(.horizontal, 16)
+        // §7.2: drag down on the expanded form collapses it.
+        .gesture(
+            DragGesture(minimumDistance: 16)
+                .onEnded { value in
+                    if value.translation.height > 24 { onCollapse() }
+                }
+        )
+        .accessibilityLabel("\(WearIveRunMiniBarModel.wordmark), expanded")
+    }
+
+    /// The footer's narration rich form — the same anatomy as
+    /// the dock's (verb secondary, payload pine bold), rendered
+    /// from the recorded state only (§7.0).
+    private func footerNarrationText(_ line: String) -> Text {
+        switch state {
+        case .updated(let payload):
+            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+        case .added(let place, let moment):
+            return Text("Added ").foregroundColor(AppTheme.inkSecondary)
+                + Text("\(place), \(moment.rendered)").foregroundColor(AppTheme.pinePayload)
+        case .planned(let place, let dayLabel):
+            return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+                + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+                + Text(" · \(dayLabel)").foregroundColor(AppTheme.inkSecondary)
+        case .preAdd:
+            return Text(line).foregroundColor(AppTheme.inkSecondary)
         }
     }
 }

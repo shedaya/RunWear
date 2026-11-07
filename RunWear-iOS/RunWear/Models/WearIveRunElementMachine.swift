@@ -36,9 +36,11 @@ enum WearIveRunElementState: Equatable {
     case mini
     /// The full expression, opaque, at rest until a driver moves it.
     case expanded
-    /// The timed presentation of EXPANDED after a creation or a
-    /// user-caused update: one pulse + one soft haptic, then the
-    /// 3.0 s timer collapses it to MINI.
+    /// The timed presentation of EXPANDED after a CREATION
+    /// (RW-135 §7.1/§7.4: the creation cue is the only pulse in
+    /// the system — a user-caused update no longer reaches this
+    /// state): one pulse + one soft haptic, then the 3.0 s timer
+    /// collapses it to MINI.
     case cue
 }
 
@@ -62,8 +64,16 @@ enum WearIveRunElementEvent: Equatable {
     /// settles (ABSENT → CUE).
     case entryCreated
     /// A user-caused update settles — the user changed location,
-    /// day, or time, or added the entry manually (→ CUE; in CUE
-    /// the timer restarts and NO second pulse fires).
+    /// day, or time, or added the entry manually. RW-135 §7.4
+    /// (Nov 7, 2026 ruling, Direction A) SUPERSEDES the pre-ruling
+    /// cue semantics this event used to carry: a settle landing on
+    /// a CHANGED record is NOT a driver — no pulse, no haptic, no
+    /// expansion, in every state. The bar's narration line simply
+    /// cross-fades to the new recorded line (view layer). The
+    /// creation cue is the only pulse in the system (§7.1), so
+    /// this event is retained in the vocabulary only so a call
+    /// site tempted to cue an update has to say so — and the
+    /// machine's answer is always: no movement, no effects.
     case userCausedUpdate
     /// The entry was already present when the element composed
     /// (cold start / re-entry): ABSENT → MINI, silently. This is
@@ -165,16 +175,13 @@ struct WearIveRunElementMachine: Equatable {
         case (.absent, .entryAlreadyPresent):
             state = .mini
             return []
-        // User-caused update from either resting state.
-        case (.mini, .userCausedUpdate), (.expanded, .userCausedUpdate):
-            state = .cue
-            return [.fireCuePulseAndSoftHaptic, .startCueTimer]
-        // A further user-caused update DURING the cue: the timer
-        // restarts; the pulse does NOT fire again — the cue is
-        // one presentation, and it fires exactly once per landing
-        // sequence, never in a loop (§1.2: "Then it is quiet").
-        case (.cue, .userCausedUpdate):
-            return [.startCueTimer]
+        // RW-135 §7.4 (Direction A): a user-caused update is NOT
+        // a driver — it falls through to the default no-op below
+        // in every state (MINI, EXPANDED, and CUE alike; the cue
+        // timer is neither started nor restarted by an update).
+        // The pre-ruling transitions (update → CUE with pulse +
+        // haptic) are superseded: the creation cue is the only
+        // pulse in the system.
         // The cue expires untouched.
         case (.cue, .cueTimedOut):
             state = .mini

@@ -54,15 +54,26 @@ struct WeatherOutfitView: View {
     /// GEN-6 (RW-61): the looks library sheet, opened from the
     /// failed cell's "See all your looks" door.
     @State private var showLooksLibrary = false
-    /// Fix wave 2026-11-07 (RW-135): the Wear I've Run section
-    /// lives INLINE in the home flow; while it is off-screen a
-    /// slim floating chip stands in for it. This is the
-    /// section's scroll-visibility, fed by its own
-    /// onScrollVisibilityChange.
-    @State private var wearSectionVisible = true
-    /// Chip tap → scroll-to-section request nonce; the scroll
-    /// readers inside the layouts consume it.
-    @State private var wearScrollNonce = 0
+    /// RW-135 (Direction A, Nov 7, 2026 — supersedes the
+    /// synthesis form this branch first carried): the floating
+    /// MINI dock is the Wear I've Run presence on Home; its
+    /// EXPANDED form is a full-width section at the page footer.
+    /// This is the dock machine's full-expression state, mirrored
+    /// up from the dock — the footer section renders while it
+    /// stands, and only then.
+    @State private var wearFooterPresented = false
+    /// Footer-initiated collapse requests (tap-again / drag
+    /// down on the section): bumped here, consumed by the dock,
+    /// which collapses through its one state machine.
+    @State private var wearCollapseNonce = 0
+    /// When the footer section last mounted (its growth window
+    /// for the end-of-scroll guard above).
+    @State private var wearFooterMountedAt: Date = .distantPast
+    /// RW-135 §7.5: true while any home scroll gesture (or its
+    /// deceleration) is live — fed by the layouts'
+    /// onScrollPhaseChange; the dock defers a mid-gesture
+    /// narration cross-fade until the frame after it ends.
+    @State private var isScrollGestureActive = false
     /// Fix wave 2026-11-07 (RW-133): the full-screen hero viewer.
     @State private var showHeroViewer = false
 
@@ -130,23 +141,22 @@ struct WeatherOutfitView: View {
                     .transition(.opacity)
                 }
             }
-            // Fix wave 2026-11-07 (RW-135, Sol's synthesis
-            // ruling): the Wear I've Run section is INLINE in
-            // the flow (see wearIveRunInlineSection in the sheet
-            // container) — it scrolls with the page like every
-            // other section. What stands in this inset now is
-            // only the slim JUMP CHIP, shown while the section
-            // is off-screen: a card-language chip (script mark +
-            // the entry's own live line + chevron, card surface,
-            // 20pt radius, soft shadow, inset on the page
-            // margin — never full-width, never a flat panel)
-            // whose tap scrolls back to the section. The entry
-            // lives ONLY in the section; the chip is a jump
-            // target, not a container. This also retires the
-            // RW-124 dock-boundary doubling: nothing detaches
-            // over the scrolling content anymore.
+            // RW-135 (Direction A, Nov 7, 2026): the floating
+            // MINI dock stands in this inset — restored to the
+            // design of record's geometry (§7.6: inset 12 pt
+            // left/right, 14 pt above the bottom safe edge,
+            // radius 16, translucent card material, soft
+            // shadow). No session entry → no bar, ever (§7.1):
+            // the dock renders nothing before the session's
+            // first recorded entry. The synthesis form that
+            // stood here first on this branch (an inline section
+            // + a jump chip in this inset) is removed — the
+            // EXPANDED form is the footer section in the flow
+            // (see wearIveRunFooterSection), not a chip.
             .safeAreaInset(edge: .bottom) {
-                wearIveRunJumpChip
+                miniBarDock
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 14)
             }
             .onChange(of: showFlagThanks) { _, visible in
                 if visible {
@@ -604,9 +614,11 @@ struct WeatherOutfitView: View {
                         }
                         .padding(.bottom, 24)
                     }
+                    .onScrollPhaseChange { _, phase in
+                        isScrollGestureActive = phase != .idle
+                    }
                 } secondary: {
                     VStack(spacing: 0) {
-                        ScrollViewReader { proxy in
                         ScrollView {
                             VStack(spacing: 0) {
                                 // RW-25 Duo: the sheet content block
@@ -635,37 +647,35 @@ struct WeatherOutfitView: View {
                                     .padding(.top, 24)
                                 personalSection
                                     .padding(.top, 24)
-                                // RW-135: the Wear I've Run
-                                // section, inline in the duo
-                                // column's flow as in the stacked
-                                // layouts.
-                                wearIveRunInlineSection
+                                // RW-135 (Direction A): the
+                                // footer's expanded section, in
+                                // the duo column's flow as in the
+                                // stacked layouts — rendered only
+                                // while the dock is expanded.
+                                wearIveRunFooterSection
                                     .padding(.top, 24)
                             }
                             .padding(.bottom, 16)
                         }
-                        .onChange(of: wearScrollNonce) { _, _ in
-                            withAnimation { proxy.scrollTo("wearIveRunSection", anchor: .center) }
-                        }
+                        .onScrollPhaseChange { _, phase in
+                            isScrollGestureActive = phase != .idle
                         }
                         .refreshable { onRefresh() }
                         fullWeatherEntry
                     }
                 }
             } else if horizontalSizeClass == .regular {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            heroWithScrollHandoff
-                            sheetContainer {
-                                outfitGridSection
-                                    .padding(.top, 24)
-                            }
+                ScrollView {
+                    VStack(spacing: 0) {
+                        heroWithScrollHandoff
+                        sheetContainer {
+                            outfitGridSection
+                                .padding(.top, 24)
                         }
                     }
-                    .onChange(of: wearScrollNonce) { _, _ in
-                        withAnimation { proxy.scrollTo("wearIveRunSection", anchor: .center) }
-                    }
+                }
+                .onScrollPhaseChange { _, phase in
+                    isScrollGestureActive = phase != .idle
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     max(0, geometry.contentOffset.y + geometry.contentInsets.top)
@@ -675,25 +685,35 @@ struct WeatherOutfitView: View {
                 .onScrollGeometryChange(for: Bool.self) { geometry in
                     geometry.visibleRect.maxY >= geometry.contentSize.height - 60
                 } action: { _, atEnd in
+                    // RW-135 (interim footer): the footer
+                    // section's own in-flow growth must not read
+                    // as "scrolled away" — when it mounts at the
+                    // page foot, the geometry reports not-at-end
+                    // for a beat though the user never moved.
+                    // Departures inside the mount window are the
+                    // footer's own shadow; a genuine scroll-away
+                    // arrives later, as its own event.
+                    if !atEnd, wearFooterPresented,
+                       Date().timeIntervalSince(wearFooterMountedAt) < 0.5 {
+                        return
+                    }
                     isAtEndOfScroll = atEnd
                 }
                 .refreshable { onRefresh() }
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 0) {
-                            heroWithScrollHandoff
-                            sheetContainer {
-                                outfitSection
-                                    .padding(.top, 24)
-                            }
+                ScrollView {
+                    VStack(spacing: 0) {
+                        heroWithScrollHandoff
+                        sheetContainer {
+                            outfitSection
+                                .padding(.top, 24)
                         }
-                        .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
-                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .onChange(of: wearScrollNonce) { _, _ in
-                        withAnimation { proxy.scrollTo("wearIveRunSection", anchor: .center) }
-                    }
+                    .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .onScrollPhaseChange { _, phase in
+                    isScrollGestureActive = phase != .idle
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     max(0, geometry.contentOffset.y + geometry.contentInsets.top)
@@ -703,6 +723,18 @@ struct WeatherOutfitView: View {
                 .onScrollGeometryChange(for: Bool.self) { geometry in
                     geometry.visibleRect.maxY >= geometry.contentSize.height - 60
                 } action: { _, atEnd in
+                    // RW-135 (interim footer): the footer
+                    // section's own in-flow growth must not read
+                    // as "scrolled away" — when it mounts at the
+                    // page foot, the geometry reports not-at-end
+                    // for a beat though the user never moved.
+                    // Departures inside the mount window are the
+                    // footer's own shadow; a genuine scroll-away
+                    // arrives later, as its own event.
+                    if !atEnd, wearFooterPresented,
+                       Date().timeIntervalSince(wearFooterMountedAt) < 0.5 {
+                        return
+                    }
                     isAtEndOfScroll = atEnd
                 }
                 .refreshable { onRefresh() }
@@ -749,9 +781,11 @@ struct WeatherOutfitView: View {
             // content on every scroll frame while its own
             // presentation animated — and the hero transform
             // could pick up the surrounding transaction's
-            // animation, double-drawing mid-handoff. The dock is
-            // gone (RW-135 inline section); this pins the
-            // transform un-animated so the handoff draws once.
+            // animation, double-drawing mid-handoff. RW-135
+            // Direction A restores the dock as a small inset
+            // floating bar (its boundary is short and its morph
+            // is transform/opacity only, §7.5); this pin stands
+            // unchanged so the handoff itself draws once.
             .animation(nil, value: heroScrollProgress)
     }
 
@@ -806,14 +840,15 @@ struct WeatherOutfitView: View {
                 .padding(.top, 24)
             personalSection
                 .padding(.top, 24)
-            // Fix wave 2026-11-07 (RW-135): the Wear I've Run
-            // section sits INLINE at the foot of the sheet flow —
-            // it replaced the detached bottom dock wholesale
-            // (the RW-136 "Making your looks" band redesign was
-            // declined; this section is the Wear I've Run band,
-            // Sol's complaint target, re-seated per his
-            // synthesis ruling).
-            wearIveRunInlineSection
+            // RW-135 (Direction A): the EXPANDED form's seat —
+            // a full-width section at the page footer, rendered
+            // only while the dock's machine is at full
+            // expression (the interim expanded form; the
+            // synthesis's always-present inline section that
+            // stood here first on this branch is removed). The
+            // RW-136 "Making your looks" band redesign remains
+            // declined and untouched.
+            wearIveRunFooterSection
                 .padding(.top, 24)
             Spacer(minLength: 40)
         }
@@ -1064,70 +1099,15 @@ struct WeatherOutfitView: View {
             || showLooksLibrary
     }
 
-    /// The mini bar dock: the session's entry drives the bar —
-    /// narrating once the session's first generation lands, and
-    /// standing in its designed empty form before that (RW-119:
-    /// the section is never absent from the home stack).
-    /// Fix wave 2026-11-07 (RW-135): the Wear I've Run SECTION,
-    /// inline in the home flow (composed by the sheet container
-    /// and the duo column). Same presentation the dock carried —
-    /// the session entry's bar, or the designed empty form —
-    /// now seated in the scroll like every other section, with
-    /// its scroll-visibility feeding the jump chip.
-    @ViewBuilder private var wearIveRunInlineSection: some View {
-        miniBarSectionContent
-            .id("wearIveRunSection")
-            .onScrollVisibilityChange(threshold: 0.15) { visible in
-                wearSectionVisible = visible
-            }
-    }
-
-    /// Fix wave 2026-11-07 (RW-135): the slim floating chip
-    /// that stands in for the section while it is off-screen —
-    /// Great Vibes script mark + the entry's own live line +
-    /// chevron, on the card surface with the card radius and
-    /// shadow, inset on the page margin (never full-width,
-    /// never a flat panel). Tapping it scrolls to the section;
-    /// the chip holds no entry of its own. Shown only when a
-    /// session entry exists and the section is off-screen.
-    @ViewBuilder private var wearIveRunJumpChip: some View {
-        let todays = collectionModel.sessionEntry()
-        let state = WearIveRunMiniBarModel.state(
-            todaysEntry: todays,
-            moment: todays?.momentReading ?? .now,
-            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
-        )
-        if !wearSectionVisible, let line = WearIveRunNarration.line(for: state) {
-            Button {
-                wearScrollNonce += 1
-            } label: {
-                HStack(spacing: 8) {
-                    Text("Wear I've Run")
-                        .font(.greatVibes(size: 20))
-                        .foregroundColor(AppTheme.inkPrimary)
-                    Text(line)
-                        .font(.appFootnote.weight(.semibold))
-                        .foregroundColor(AppTheme.inkPrimary)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.appFootnote.weight(.bold))
-                        .foregroundColor(AppTheme.inkSecondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(AppTheme.cardBackground)
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel("Wear I've Run: \(line). Scroll to the section.")
-        }
-    }
-
-    @ViewBuilder private var miniBarSectionContent: some View {
+    /// RW-135 (Direction A): the floating MINI dock — the
+    /// session's entry drives the bar, and the bar exists ONLY
+    /// while the session holds an entry (§7.1: no entry → no
+    /// bar, ever — no placeholder state; the RW-119 empty form
+    /// that stood in this seat is superseded on Home by §7.1,
+    /// and the collection's own empty state still carries that
+    /// copy behind the doorway). The dock renders the entry
+    /// record only (§7.0).
+    @ViewBuilder private var miniBarDock: some View {
         // GEN-3 (the presentation half, superseding W-15's
         // by-date key): the dock presents the CURRENT SESSION's
         // entry — the entry's own place is what the narration
@@ -1160,13 +1140,7 @@ struct WeatherOutfitView: View {
             moment: todays?.momentReading ?? .now,
             wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
         )
-        if state == .preAdd {
-            // RW-119 (successor wave): no session entry yet —
-            // the section still stands, in its designed empty
-            // form (see WearIveRunEmptyDockView). The dock is
-            // never absent from the home stack.
-            WearIveRunEmptyDockView(onOpenCollection: { showCollection = true })
-        } else {
+        if state != .preAdd {
             WearIveRunMiniBarView(
                 state: state,
                 entry: todays,
@@ -1176,16 +1150,18 @@ struct WeatherOutfitView: View {
                 cueCount: collectionModel.cueCount,
                 isAtEndOfScroll: isAtEndOfScroll,
                 isDimmedBySheet: anyHomeSheetPresented,
-                // Fix wave 2026-11-07 (Seam B unification,
-                // RW-132): narration derives from the ENTRY'S
-                // OWN RECORD only. The RW-88 viewed-state
-                // override is deleted: under the widened
-                // recording gate the viewed settle IS what the
-                // entry holds (the gate writes it at settle),
-                // so an ungated narration computed from live
-                // view state could only ever announce a state
-                // the record does not hold — the RW-132 split.
-                viewedNarrationPayload: nil,
+                // RW-135 §7.0/§7.5: narration derives from the
+                // ENTRY'S OWN RECORD only (the RW-88 viewed-state
+                // override parameter is removed from the bar
+                // outright — there is no live-view input left to
+                // pass), and a mid-gesture settle defers its
+                // cross-fade past the gesture's end.
+                isScrollGestureActive: isScrollGestureActive,
+                onFullExpressionChange: { full in
+                    wearFooterPresented = full
+                    if full { wearFooterMountedAt = Date() }
+                },
+                externalCollapseNonce: wearCollapseNonce,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
                     // Trash deletes the PRESENTED entry — the
@@ -1197,6 +1173,34 @@ struct WeatherOutfitView: View {
                     }
                 }
             )
+        }
+    }
+
+    /// RW-135 (Direction A, INTERIM expanded form): the
+    /// full-width footer section — §7.2's anatomy (narration
+    /// row + the full entry row) in the page's section language,
+    /// rendered at the page foot ONLY while the dock's machine
+    /// is at full expression (end-of-scroll, tap on the bar, or
+    /// the creation cue). Tapping its entry row opens the
+    /// collection sheet (§7.3); its collapse routes back through
+    /// the dock's machine via the collapse nonce. Awaiting the
+    /// owner's design/animation package for the final
+    /// choreography — see the lane report addendum.
+    @ViewBuilder private var wearIveRunFooterSection: some View {
+        if wearFooterPresented, let todays = collectionModel.sessionEntry() {
+            let state = WearIveRunMiniBarModel.state(
+                todaysEntry: todays,
+                moment: todays.momentReading,
+                wasUpdatedThisSession: todays.wasUpdatedInSession
+            )
+            WearIveRunFooterSectionView(
+                state: state,
+                entry: todays,
+                formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
+                onOpenCollection: { showCollection = true },
+                onCollapse: { wearCollapseNonce += 1 }
+            )
+            .transition(.opacity)
         }
     }
 
