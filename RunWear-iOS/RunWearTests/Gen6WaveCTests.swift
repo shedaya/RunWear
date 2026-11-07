@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// GEN-6 Wave C (iOS lane) — parity, occlusion, copy, and the
 /// missing looks library. Every test pins a wave item against the
@@ -1091,5 +1092,164 @@ final class Gen6FixWaveTests: XCTestCase {
         let sequence = try sourceFile("../RunWear/Models/OnboardingSequence.swift")
         XCTAssertTrue(sequence.contains("personalPhotoDisplayed && personalImageLoaded"),
                       "Y-1 preserved: no finished claim before the photo is on screen")
+    }
+}
+
+// MARK: - RW-106 — the remote hero loader (identity-keyed, retrying)
+//
+// The diagnosis (rw106-evidence/diagnosis.md): five counted
+// looks, five delivered heroes, and the bundled fallback on
+// screen in every count-pill frame — the AsyncImage layer hid on
+// every re-signed URL, restarted the ~1 MB download each time,
+// and never retried a failure. These pins cover the loader that
+// replaced it. Fetchers are scripted; identities are unique per
+// test so the shared caches cannot leak between tests.
+
+private final class RW106FetchScript: @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var attempts = 0
+    var handler: (Int, URL) async -> Result<Data, Error>
+    init(handler: @escaping (Int, URL) async -> Result<Data, Error>) {
+        self.handler = handler
+    }
+    func fetch(_ url: URL) async throws -> Data {
+        lock.lock()
+        attempts += 1
+        let n = attempts
+        lock.unlock()
+        switch await handler(n, url) {
+        case .success(let data): return data
+        case .failure(let error): throw error
+        }
+    }
+}
+
+extension Gen6FixWaveTests {
+
+    private func rw106FixturePNG(seed: CGFloat) -> Data {
+        let size = CGSize(width: 12, height: 18)
+        let image = UIGraphicsImageRenderer(size: size).image { ctx in
+            UIColor(red: seed, green: 0.25, blue: 0.6, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: size))
+        }
+        return image.pngData()!
+    }
+
+    private func rw106SignedURL(token: String) -> String {
+        "https://store.example/personal-heroes/user/hero-\(UUID().uuidString).png?token=\(token)"
+    }
+
+    private func rw106WaitForPaint(_ loader: HeroRemoteImageLoader, timeout: TimeInterval = 3) async -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if loader.image != nil { return true }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        return loader.image != nil
+    }
+
+    func testRW106_IdentityStripsTheSignature() {
+        let base = "https://store.example/personal-heroes/user/hero-1.png"
+        XCTAssertEqual(
+            HeroRemoteImageLoader.identity(for: "\(base)?token=AAA"),
+            HeroRemoteImageLoader.identity(for: "\(base)?token=BBB"),
+            "re-signed URLs for the same object share an identity")
+        XCTAssertEqual(HeroRemoteImageLoader.identity(for: "\(base)?token=AAA"), base)
+        XCTAssertNotEqual(
+            HeroRemoteImageLoader.identity(for: "\(base)?token=AAA"),
+            HeroRemoteImageLoader.identity(for: "https://store.example/personal-heroes/user/hero-2.png?token=AAA"),
+            "different objects never share an identity")
+    }
+
+    @MainActor
+    func testRW106_FailedFirstAttemptRetriesAndPaints() async {
+        let png = rw106FixturePNG(seed: 0.9)
+        let script = RW106FetchScript { n, _ in
+            n == 1 ? .failure(HeroRemoteLoadError.undecodable) : .success(png)
+        }
+        let loader = HeroRemoteImageLoader(fetch: script.fetch, retryDelays: [0.02, 0.02, 0.02])
+        let url = rw106SignedURL(token: "FIRST")
+        loader.load(urlString: url)
+        let painted = await rw106WaitForPaint(loader)
+        XCTAssertTrue(painted, "a failed first attempt must retry and paint — never settle on the fallback in silence")
+        XCTAssertEqual(script.attempts, 2)
+        XCTAssertEqual(loader.paintedIdentity, HeroRemoteImageLoader.identity(for: url))
+    }
+
+    @MainActor
+    func testRW106_ReResolutionSameIdentityNeverBlanksOrRefetches() async {
+        let png = rw106FixturePNG(seed: 0.7)
+        let script = RW106FetchScript { _, _ in .success(png) }
+        let loader = HeroRemoteImageLoader(fetch: script.fetch, retryDelays: [0.02])
+        let path = "https://store.example/personal-heroes/user/hero-\(UUID().uuidString).png"
+        loader.load(urlString: "\(path)?token=AAA")
+        let painted = await rw106WaitForPaint(loader)
+        XCTAssertTrue(painted)
+        let paintedImage = loader.image
+        let attemptsAfterPaint = script.attempts
+        // A re-resolution mints a fresh signature for the SAME photo.
+        loader.load(urlString: "\(path)?token=BBB")
+        XCTAssertEqual(script.attempts, attemptsAfterPaint,
+                       "the same identity must not refetch — the bytes are already here")
+        XCTAssertTrue(loader.image === paintedImage,
+                      "the painted photo must not blank or swap on a re-resolution")
+        XCTAssertEqual(loader.paintedIdentity, HeroRemoteImageLoader.identity(for: path))
+    }
+
+    @MainActor
+    func testRW106_SecondLoaderPaintsFromCacheWithoutFetching() async {
+        let png = rw106FixturePNG(seed: 0.5)
+        let url = rw106SignedURL(token: "CACHED")
+        let first = RW106FetchScript { _, _ in .success(png) }
+        let loaderA = HeroRemoteImageLoader(fetch: first.fetch, retryDelays: [0.02])
+        loaderA.load(urlString: url)
+        let painted = await rw106WaitForPaint(loaderA)
+        XCTAssertTrue(painted)
+        // A fresh loader (a relaunch, a new view) for the same
+        // identity paints from the identity-keyed cache — its
+        // fetcher (which always fails) is never even called.
+        let second = RW106FetchScript { _, _ in .failure(HeroRemoteLoadError.undecodable) }
+        let loaderB = HeroRemoteImageLoader(fetch: second.fetch, retryDelays: [0.02])
+        loaderB.load(urlString: url)
+        XCTAssertNotNil(loaderB.image, "cached bytes paint synchronously on load")
+        XCTAssertEqual(second.attempts, 0)
+        XCTAssertEqual(loaderB.paintedIdentity, HeroRemoteImageLoader.identity(for: url))
+    }
+
+    @MainActor
+    func testRW106_IdentityChangeDropsTheOldPaintUntilTheNewLands() async {
+        let pngA = rw106FixturePNG(seed: 0.3)
+        let pngB = rw106FixturePNG(seed: 0.95)
+        let script = RW106FetchScript { _, url in
+            if url.absoluteString.contains("slow-b") {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                return .success(pngB)
+            }
+            return .success(pngA)
+        }
+        let loader = HeroRemoteImageLoader(fetch: script.fetch, retryDelays: [0.02])
+        let urlA = "https://store.example/personal-heroes/user/fast-a-\(UUID().uuidString).png?token=A"
+        loader.load(urlString: urlA)
+        let paintedA = await rw106WaitForPaint(loader)
+        XCTAssertTrue(paintedA)
+        let urlB = "https://store.example/personal-heroes/user/slow-b-\(UUID().uuidString).png?token=B"
+        loader.load(urlString: urlB)
+        XCTAssertNil(loader.image,
+                     "a different photo never inherits the previous photo's paint (WS-1, per identity)")
+        let paintedB = await rw106WaitForPaint(loader)
+        XCTAssertTrue(paintedB)
+        XCTAssertEqual(loader.paintedIdentity, HeroRemoteImageLoader.identity(for: urlB))
+    }
+}
+
+extension Gen6FixWaveTests {
+    func testRW106_HeroLayerLoadsThroughTheIdentityKeyedLoader_sourcePins() throws {
+        let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        XCTAssertTrue(hero.contains("HeroRemoteImageView(urlString: aiUrl"),
+                      "the remote layer paints through the identity-keyed loader view")
+        XCTAssertFalse(hero.contains("AsyncImage(url: URL(string: aiUrl))"),
+                       "the bare AsyncImage remote layer (hide-on-change, no retry) is gone")
+        XCTAssertTrue(hero.contains("HeroRemoteImageLoader"),
+                      "the loader lives with the layer it serves")
     }
 }

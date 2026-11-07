@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import CryptoKit
 
 struct HeroImageView: View {
     let locationName: String
@@ -81,9 +83,9 @@ struct HeroImageView: View {
     /// pills. The date/time pills stay — they are content.
     var showsTopControls: Bool = true
 
-    // State for crossfade
-    @State private var showAIImage = false
-    @State private var aiImageLoaded = false
+    // (The remote layer's crossfade state moved into
+    // HeroRemoteImageView with RW-106 — the fade is keyed to the
+    // photo's identity there, not to this view's URL string.)
 
     // State for the flag chip: the reason sheet's presentation, and
     // the URL of the photo already flagged in this view (the chip
@@ -150,18 +152,16 @@ struct HeroImageView: View {
                     .padding(.bottom, HomeHandoffGeometry.flagChipBottomInset)
             }
         }
-        // WS-1 (§1.1): the crossfade belongs to EACH incoming
-        // photo. When the hero URL changes, the fade state resets
-        // — the new photo starts hidden and fades in only when
-        // ITS OWN load completes (the .success phase below).
-        // Before this, the first photo's landed state carried
-        // over, so every later photo swapped in with no crossfade
-        // at all — and a still-loading photo could inherit the
-        // previous photo's "shown" state.
-        .onChange(of: aiImageUrl) { _, _ in
-            showAIImage = false
-            aiImageLoaded = false
-        }
+        // WS-1 (§1.1) + RW-106: the crossfade/reset bookkeeping
+        // lives in the remote layer itself (HeroRemoteImageView),
+        // keyed to the photo's IDENTITY. There is deliberately no
+        // URL-change reset here anymore: a re-resolution mints a
+        // fresh signed URL for the SAME photo, and resetting on
+        // that change is what hid the photo and restarted its
+        // download on every settle (the RW-106 defect). A truly
+        // different photo is a different identity, and the layer
+        // still starts it hidden and fades it in on its own load
+        // — the WS-1 property, preserved per identity.
     }
 
     private var heroContent: some View {
@@ -413,32 +413,21 @@ struct HeroImageView: View {
                 }
             }
 
-            // AI image on top with crossfade
+            // Remote image on top (RW-106): loaded through the
+            // identity-keyed, retrying loader below. The
+            // AsyncImage this replaces hid on every URL change,
+            // restarted the ~1 MB download from zero on every
+            // re-signed URL (defeating the URL cache), and
+            // rendered EmptyView on failure with no retry — so on
+            // a weak connection the personal photo never painted,
+            // the bundled fallback below stayed on screen, and
+            // the pill (rendered from view-model state) counted a
+            // look the user never saw. Fallback-first loading is
+            // unchanged (the RW-4 contract): the fallback paints
+            // instantly underneath, the remote fades in over it
+            // when ITS load lands.
             if let aiUrl = aiImageUrl {
-                AsyncImage(url: URL(string: aiUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        HeroPhoto(image: image, width: width, height: height)
-                            .opacity(showAIImage ? 1 : 0)
-                            .onAppear {
-                                aiImageLoaded = true
-                                // Fallback-first loading is unchanged
-                                // (RW-4 contract); only the fade is
-                                // gated on Reduce Motion.
-                                if reduceMotion {
-                                    showAIImage = true
-                                } else {
-                                    withAnimation(.easeInOut(duration: AppTheme.crossfadeDuration)) {
-                                        showAIImage = true
-                                    }
-                                }
-                            }
-                    case .failure, .empty:
-                        EmptyView()
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
+                HeroRemoteImageView(urlString: aiUrl, width: width, height: height)
             }
         }
     }
@@ -620,4 +609,314 @@ struct HeroImageView: View {
         aiImageUrl: nil
     )
     .background(Color.black)
+}
+
+// MARK: - RW-106 · Remote hero image loading
+//
+// Diagnosis of record: release-prep/rw106-evidence/diagnosis.md.
+// Generation, counting, delivery, and the server's serve answer
+// were all correct on Sol's Nov 6 session — five looks counted,
+// five heroes of him delivered — but the photo on screen in every
+// count-pill frame was the bundled fallback, because this layer
+// (a) hid the remote image on every URL change while every
+// re-resolution mints a FRESH signed URL for the same image, so
+// the ~1 MB PNG restarted from zero and the changed URL defeated
+// the URL cache, and (b) rendered EmptyView on load failure with
+// no retry, ever, while the pill — rendered from view-model
+// state — asserted a personal serve. On WiFi-with-no-cellular
+// ("SOS" in every frame) the megabyte loads never landed.
+//
+// The loader below is the fix, in the render layer only:
+//  - Loads are keyed to the photo's IDENTITY — the URL with its
+//    signature (query) stripped — never to the signed URL string.
+//  - Memory + disk caches are keyed by identity, so
+//    re-resolutions and relaunches reuse downloaded bytes.
+//  - A re-resolution carrying the same identity never blanks a
+//    painted photo and never restarts a load; the freshest
+//    signed URL is remembered so a retry spends the new
+//    signature, not the stale one.
+//  - A failed or interrupted load retries with bounded backoff
+//    (1s, 2s, 4s, 8s — five attempts), and a later drive (a
+//    foreground revalidation, a cell revisit) re-arms it.
+//  - A DIFFERENT identity still starts unpainted (the fallback
+//    shows) and fades in on its own load — the WS-1 crossfade
+//    property, preserved per identity.
+
+enum HeroRemoteLoadError: Error {
+    case undecodable
+}
+
+@MainActor
+final class HeroRemoteImageLoader: ObservableObject {
+
+    typealias Fetcher = @Sendable (URL) async throws -> Data
+
+    /// The photo currently painted, and the identity it belongs
+    /// to. Both are published together; a view paints the image
+    /// only when `paintedIdentity` equals its current identity.
+    @Published private(set) var image: UIImage?
+    @Published private(set) var paintedIdentity: String?
+
+    nonisolated static let defaultRetryDelays: [TimeInterval] = [1, 2, 4, 8]
+
+    private let fetch: Fetcher
+    private let retryDelays: [TimeInterval]
+    private var currentIdentity: String?
+    private var freshestURL: URL?
+    private var loadTask: Task<Void, Never>?
+    private var generation = 0
+
+    init(fetch: @escaping Fetcher = HeroRemoteImageLoader.urlSessionFetch,
+         retryDelays: [TimeInterval] = HeroRemoteImageLoader.defaultRetryDelays) {
+        self.fetch = fetch
+        self.retryDelays = retryDelays
+    }
+
+    nonisolated static func urlSessionFetch(_ url: URL) async throws -> Data {
+        let (data, _) = try await URLSession.shared.data(from: url)
+        return data
+    }
+
+    /// The stable identity of a remote hero object: its URL with
+    /// the signature (query) and fragment stripped. Two signed
+    /// URLs for the same storage object share an identity; two
+    /// different objects never do.
+    nonisolated static func identity(for urlString: String) -> String {
+        guard var components = URLComponents(string: urlString) else { return urlString }
+        components.query = nil
+        components.fragment = nil
+        return components.url?.absoluteString ?? urlString
+    }
+
+    /// Drive the loader at a (possibly re-signed) URL. Safe to
+    /// call on every appearance and every URL change.
+    func load(urlString: String?) {
+        guard let urlString, let url = URL(string: urlString) else {
+            generation += 1
+            loadTask?.cancel()
+            loadTask = nil
+            currentIdentity = nil
+            freshestURL = nil
+            image = nil
+            paintedIdentity = nil
+            return
+        }
+        let identity = Self.identity(for: urlString)
+        // Always track the freshest signed URL: a retry after a
+        // re-resolution spends the new signature, not a stale one.
+        freshestURL = url
+        if identity == currentIdentity {
+            // The same underlying photo. Painted: nothing to do —
+            // a re-resolution must never blank or restart it. In
+            // flight: the running sequence picks the fresh URL up
+            // on its next attempt. Exhausted: re-arm a fresh
+            // bounded sequence.
+            if image != nil || loadTask != nil { return }
+            startLoad(identity: identity)
+            return
+        }
+        // A different photo: drop the old paint (the fallback
+        // underneath shows, as designed) and load the new one.
+        currentIdentity = identity
+        generation += 1
+        loadTask?.cancel()
+        loadTask = nil
+        image = nil
+        paintedIdentity = nil
+        if let cached = Self.memoryImage(for: identity) {
+            image = cached
+            paintedIdentity = identity
+            return
+        }
+        startLoad(identity: identity)
+    }
+
+    private func startLoad(identity: String) {
+        let gen = generation
+        let fetch = self.fetch
+        let delays = retryDelays
+        loadTask = Task { [weak self] in
+            // Disk first: bytes downloaded in an earlier session
+            // paint without touching the network.
+            if let disk = await Task.detached(priority: .userInitiated, operation: {
+                Self.diskImage(for: identity)
+            }).value {
+                await self?.publish(disk, identity: identity, generation: gen)
+                return
+            }
+            var attempt = 0
+            while true {
+                guard let self else { return }
+                guard await self.isCurrent(identity: identity, generation: gen),
+                      let url = await self.currentFreshestURL() else { return }
+                do {
+                    let data = try await fetch(url)
+                    guard let decoded = UIImage(data: data) else {
+                        throw HeroRemoteLoadError.undecodable
+                    }
+                    Self.storeToDisk(decoded, identity: identity)
+                    await self.publish(decoded, identity: identity, generation: gen)
+                    return
+                } catch {
+                    if attempt >= delays.count {
+                        await self.finishExhausted(generation: gen)
+                        return
+                    }
+                    let delay = delays[attempt]
+                    attempt += 1
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+    }
+
+    private func isCurrent(identity: String, generation gen: Int) -> Bool {
+        !Task.isCancelled && generation == gen && currentIdentity == identity
+    }
+
+    private func currentFreshestURL() -> URL? { freshestURL }
+
+    private func publish(_ decoded: UIImage, identity: String, generation gen: Int) {
+        guard isCurrent(identity: identity, generation: gen) else { return }
+        Self.storeInMemory(decoded, for: identity)
+        image = decoded
+        paintedIdentity = identity
+        loadTask = nil
+    }
+
+    private func finishExhausted(generation gen: Int) {
+        if generation == gen { loadTask = nil }
+    }
+
+    // MARK: Caches (identity-keyed; thread-safe, nonisolated)
+
+    nonisolated private static let memoryCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 24
+        cache.totalCostLimit = 48 * 1024 * 1024
+        return cache
+    }()
+
+    nonisolated private static func memoryImage(for identity: String) -> UIImage? {
+        memoryCache.object(forKey: identity as NSString)
+    }
+
+    nonisolated private static func storeInMemory(_ image: UIImage, for identity: String) {
+        let cost = Int(image.size.width * image.size.height * 4)
+        memoryCache.setObject(image, forKey: identity as NSString, cost: cost)
+    }
+
+    nonisolated private static var diskCacheDirectory: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("HeroRemoteImages", isDirectory: true)
+    }
+
+    nonisolated private static func diskFileURL(for identity: String) -> URL? {
+        let digest = SHA256.hash(data: Data(identity.utf8))
+        let name = digest.map { String(format: "%02x", $0) }.joined() + ".png"
+        return diskCacheDirectory?.appendingPathComponent(name)
+    }
+
+    nonisolated private static func diskImage(for identity: String) -> UIImage? {
+        guard let url = diskFileURL(for: identity),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
+    }
+
+    nonisolated private static func storeToDisk(_ image: UIImage, identity: String) {
+        guard let dir = diskCacheDirectory, let file = diskFileURL(for: identity),
+              let data = image.pngData() else { return }
+        Task.detached(priority: .utility) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try? data.write(to: file, options: .atomic)
+            pruneDiskCache(in: dir)
+        }
+    }
+
+    nonisolated private static func modificationDate(of url: URL) -> Date {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+        return values?.contentModificationDate ?? .distantPast
+    }
+
+    nonisolated private static func pruneDiskCache(in dir: URL) {
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let newestFirst = files.sorted { modificationDate(of: $0) > modificationDate(of: $1) }
+        for stale in newestFirst.dropFirst(40) {
+            try? FileManager.default.removeItem(at: stale)
+        }
+    }
+}
+
+/// The remote hero layer: paints the loader's image for the
+/// CURRENT identity over whatever sits beneath (the bundled
+/// fallback), fading in when the load lands. Renders nothing
+/// while the current identity has no painted image — the
+/// fallback shows, exactly as designed — but unlike the
+/// AsyncImage it replaces, a failure is a retrying state, not a
+/// terminal one.
+struct HeroRemoteImageView: View {
+    let urlString: String?
+    let width: CGFloat
+    let height: CGFloat
+
+    @StateObject private var loader: HeroRemoteImageLoader
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(urlString: String?, width: CGFloat, height: CGFloat,
+         fetch: HeroRemoteImageLoader.Fetcher? = nil,
+         retryDelays: [TimeInterval]? = nil) {
+        self.urlString = urlString
+        self.width = width
+        self.height = height
+        _loader = StateObject(wrappedValue: HeroRemoteImageLoader(
+            fetch: fetch ?? HeroRemoteImageLoader.urlSessionFetch,
+            retryDelays: retryDelays ?? HeroRemoteImageLoader.defaultRetryDelays))
+    }
+
+    private var currentIdentity: String? {
+        urlString.map { HeroRemoteImageLoader.identity(for: $0) }
+    }
+
+    var body: some View {
+        ZStack {
+            if let image = loader.image, loader.paintedIdentity == currentIdentity {
+                HeroPhoto(image: Image(uiImage: image), width: width, height: height)
+                    .opacity(shown ? 1 : 0)
+            }
+        }
+        .onAppear {
+            loader.load(urlString: urlString)
+            if loader.image != nil, loader.paintedIdentity == currentIdentity {
+                reveal()
+            }
+        }
+        .onChange(of: urlString) { oldValue, newValue in
+            // A different photo starts hidden (WS-1); a re-signed
+            // URL for the SAME photo changes nothing on screen.
+            if HeroRemoteImageLoader.identity(for: oldValue ?? "")
+                != HeroRemoteImageLoader.identity(for: newValue ?? "") {
+                shown = false
+            }
+            loader.load(urlString: newValue)
+        }
+        .onChange(of: loader.paintedIdentity) { _, _ in
+            if loader.image != nil, loader.paintedIdentity == currentIdentity {
+                reveal()
+            }
+        }
+    }
+
+    private func reveal() {
+        // Fallback-first loading is unchanged (the RW-4
+        // contract); only the fade is gated on Reduce Motion.
+        if reduceMotion {
+            shown = true
+        } else if !shown {
+            withAnimation(.easeInOut(duration: AppTheme.crossfadeDuration)) {
+                shown = true
+            }
+        }
+    }
 }

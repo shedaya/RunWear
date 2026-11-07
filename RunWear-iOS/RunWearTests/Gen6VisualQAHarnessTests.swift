@@ -977,3 +977,89 @@ extension Gen6VisualQAHarnessTests {
     }
 
 }
+
+// MARK: - RW-106 · the remote hero paints after a failed first attempt
+//
+// The rendered proof the diagnosis demands: the personal-serve
+// layer driven with a failing first fetch and a succeeding
+// retry, over the fallback tint — and the assertion is on
+// PIXELS (the fixture's two colours must be present in the
+// written PNG), not on view-model state. That distinction is
+// the whole defect: on Sol's phone the state said "personal
+// photo displayed" while the fallback's pixels never moved.
+
+private final class RW106AttemptCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func next() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        value += 1
+        return value
+    }
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
+extension Gen6VisualQAHarnessTests {
+
+    private func pngContainsColor(_ image: UIImage, rgb: (Int, Int, Int), tolerance: Int = 30) -> Bool {
+        guard let cg = image.cgImage else { return false }
+        let w = 96, h = 144
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data: &bytes, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let r = Int(bytes[i]), g = Int(bytes[i + 1]), b = Int(bytes[i + 2])
+            if abs(r - rgb.0) <= tolerance, abs(g - rgb.1) <= tolerance, abs(b - rgb.2) <= tolerance {
+                return true
+            }
+        }
+        return false
+    }
+
+    @MainActor
+    func testFixWave_RemoteHeroPaintsAfterRetry() throws {
+        let fixtureSize = CGSize(width: 120, height: 180)
+        let fixture = UIGraphicsImageRenderer(size: fixtureSize).image { ctx in
+            UIColor(red: 1.0, green: 0.35, blue: 0.0, alpha: 1).setFill()
+            ctx.fill(CGRect(origin: .zero, size: fixtureSize))
+            UIColor(red: 0.55, green: 0.0, blue: 0.85, alpha: 1).setFill()
+            ctx.fill(CGRect(x: 30, y: 45, width: 60, height: 90))
+        }
+        let fixtureData = try XCTUnwrap(fixture.pngData())
+        let attempts = RW106AttemptCounter()
+        let composition = ZStack {
+            AppTheme.temperatureTintOverlay(for: .MILD, opacity: 0.45)
+            HeroRemoteImageView(
+                urlString: "https://store.example/personal-heroes/proof/hero-rw106.png?token=FIRST",
+                width: 390, height: 520,
+                fetch: { _ in
+                    if attempts.next() == 1 {
+                        throw HeroRemoteLoadError.undecodable
+                    }
+                    return fixtureData
+                },
+                retryDelays: [0.05, 0.05, 0.05])
+        }
+        .frame(width: 390, height: 520)
+        .environment(\.accessibilityReduceMotion, true)
+        let name = "FIX-RW106-ios-remote-paints-after-retry.png"
+        try writeHostedRender(composition, size: CGSize(width: 390, height: 520), name: name)
+        XCTAssertEqual(attempts.count, 2,
+                       "exactly one failure and one retry — the retry is the behaviour under proof")
+        let written = artefactsDirectory().appendingPathComponent(name)
+        let image = try XCTUnwrap(UIImage(contentsOfFile: written.path), "written render unreadable")
+        XCTAssertTrue(pngContainsColor(image, rgb: (255, 89, 0)),
+                      "the fixture's field colour must be IN the rendered pixels")
+        XCTAssertTrue(pngContainsColor(image, rgb: (140, 0, 217)),
+                      "the fixture's centre colour must be IN the rendered pixels")
+    }
+}
