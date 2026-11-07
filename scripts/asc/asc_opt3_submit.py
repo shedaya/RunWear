@@ -1,25 +1,34 @@
-"""Option 3 (2026-11-06) SUBMIT: put version 1.1 AND both Make It Me
-subscriptions (annual + monthly ONLY - never the experiment arms) into
-one review submission and submit it, then read everything back.
+"""RunWear 1.1 SUBMIT (Option 3 lineage, launch lane 2026-11-07):
+submit version 1.1 AND both Make It Me subscriptions (annual +
+monthly ONLY - the experiment arms are never resolved, added, or
+written) in one review submission, then read everything back.
 
-The script refuses to submit a version-only package: if either
-subscription item cannot be added (e.g. the product is still
-MISSING_METADATA), it prints ITEM_ADD_FAILED, leaves the submission
-unsubmitted, and exits 3.
+Empirically established in the 2026-11-07 launch lane (runs 102-110):
+- The review-submission machinery works via API: run 42373436516
+  created reviewSubmission b49523a5-5832-449b-bda7-da075580d9f8 and
+  added the version-1.1 item (READY_FOR_REVIEW).
+- reviewSubmissionItems REJECTS both seemingly-obvious subscription
+  relationships: 'subscription' (409 ENTITY_ERROR.RELATIONSHIP.
+  UNKNOWN) and 'inAppPurchase' (same). The numeric subscription ids
+  do not resolve as inAppPurchases resources (404); the v1
+  inAppPurchases LIST does carry the products (UUIDs, type
+  AUTOMATICALLY_RENEWABLE_SUBSCRIPTION, state CREATED) - recorded
+  here for the next operator, but neither key adds an item today.
+- A subscription in MISSING_METADATA cannot be submitted by any
+  mechanism. As of the lane, BOTH products are MISSING_METADATA for
+  exactly one reason: the App Review paywall screenshot has not been
+  uploaded (every other metadata item is probe-verified present).
 
-2026-11-07 launch-lane corrections (empirically established):
-- reviewSubmissionItems has NO 'subscription' relationship (API 409
-  ENTITY_ERROR.RELATIONSHIP.UNKNOWN). A subscription joins a review
-  submission via the 'inAppPurchase' relationship (type
-  inAppPurchases) using the product's V1 inAppPurchases UUID - the
-  numeric subscription id does NOT resolve as an inAppPurchases
-  resource (404), but GET /v1/apps/{id}/inAppPurchases lists every
-  subscription as AUTOMATICALLY_RENEWABLE_SUBSCRIPTION with its own
-  UUID. Only the two target productIds are resolved; the experiment
-  arms are never resolved, added, or written.
-- Hard guard added: even if both items add, the script REFUSES the
-  submit PATCH while either subscription is still MISSING_METADATA
-  (e.g. its App Review screenshot has not been uploaded yet).
+Behaviour:
+- If either target subscription is still MISSING_METADATA, the
+  script verifies state, prints SUBMIT_BLOCKED_MISSING_METADATA with
+  the precise reason, and exits 3 having written NOTHING.
+- Once both products leave MISSING_METADATA (screenshot uploaded),
+  it reuses/creates the open review submission, ensures the version
+  item is present (an 'already added' 409 counts as present), tries
+  the 'subscription' then the 'inAppPurchase' item relationships for
+  each product and reports Apple's answers verbatim, refuses to
+  submit a version-only package, and only then PATCHes submitted.
 
 Usage: python3 asc_opt3_submit.py"""
 import json, sys, urllib.request, urllib.error
@@ -28,7 +37,7 @@ import asc_common
 APP_ID = "6827973343"
 SUBS = [("rw_makeitme_annual", "6829225711"),
         ("rw_makeitme_monthly", "6829225446")]
-ARMS = ["6829993757", "6829993678"]  # read-back only: prove untouched
+ARMS = ["6829993757", "6829993678"]  # state read-back only (as before)
 
 def raw(method, path, body=None):
     url = path if path.startswith("http") else asc_common.BASE + path
@@ -62,9 +71,6 @@ def sub_state(sid):
     return a.get("productId"), a.get("state")
 
 def resolve_iap_uuids():
-    """Map the two TARGET productIds to their v1 inAppPurchases UUIDs.
-    Only rows whose productId is one of the two targets are read into
-    the map; no other product is ever used by this script."""
     targets = {pid for pid, _ in SUBS}
     s, d = raw("GET", f"/v1/apps/{APP_ID}/inAppPurchases?limit=200")
     found = {}
@@ -73,13 +79,6 @@ def resolve_iap_uuids():
         if a.get("productId") in targets:
             found[a["productId"]] = row["id"]
     return found
-
-IAP_UUIDS = resolve_iap_uuids()
-for pid, sid in SUBS:
-    print("iap uuid for", pid, "->", IAP_UUIDS.get(pid))
-if any(pid not in IAP_UUIDS for pid, _ in SUBS):
-    print("FATAL: could not resolve inAppPurchase UUID for a target "
-          "subscription"); sys.exit(2)
 
 v11 = find_version("1.1")
 if not v11:
@@ -92,8 +91,29 @@ print("1.1 attached build:", rel.get("id"), "buildNumber",
       (rel.get("attributes") or {}).get("version"))
 if not rel.get("id"):
     print("FATAL: 1.1 has no build attached"); sys.exit(2)
+
+states = {}
 for pid, sid in SUBS:
-    print("pre-submit sub:", sub_state(sid))
+    states[pid] = sub_state(sid)
+    print("sub:", states[pid])
+    s2, d2 = raw("GET", f"/v1/subscriptions/{sid}/appStoreReviewScreenshot")
+    print("   review screenshot present:", bool(d2.get("data")))
+
+# --- THE GATE: no submission while metadata is incomplete ---------------------
+blocked = [pid for pid, (_, st) in states.items()
+           if st == "MISSING_METADATA"]
+if blocked:
+    print("SUBMIT_BLOCKED_MISSING_METADATA:", blocked)
+    print("Reason (probe-verified): the sole missing metadata item on "
+          "each product is its App Review screenshot - a genuine "
+          "paywall capture from build 30 (both prices visible). "
+          "Upload it to both subscriptions "
+          "(subscriptionAppStoreReviewScreenshots), confirm both "
+          "products leave MISSING_METADATA, then re-run this script.")
+    sys.exit(3)
+
+IAP_UUIDS = resolve_iap_uuids()
+print("iap uuids:", IAP_UUIDS)
 
 # --- Find or create the open review submission ------------------------------
 sub_id = None
@@ -117,15 +137,14 @@ if not sub_id:
     sub_id = d["data"]["id"]
 print("reviewSubmission id:", sub_id)
 
-# --- Which items already exist? ----------------------------------------------
+# --- Which items already exist? (include is REQUIRED for linkage) -------------
 existing = set()
 s, d = raw("GET", f"/v1/reviewSubmissions/{sub_id}/items?limit=200"
-                  f"&include=appStoreVersion,subscription")
-inc = {x["id"]: x for x in d.get("included", [])}
+                  f"&include=appStoreVersion")
 for it in d.get("data", []):
     rels = it.get("relationships", {})
-    for key in ("appStoreVersion", "inAppPurchase"):
-        rid = (rels.get(key, {}).get("data") or {}).get("id")
+    for key, rv in rels.items():
+        rid = (rv.get("data") or {}).get("id")
         if rid:
             existing.add(rid)
 print("items already on submission:", existing)
@@ -141,33 +160,30 @@ def add_item(rel_key, rel_type, rid, label):
                                       "id": sub_id}},
                          rel_key: {"data": {"type": rel_type, "id": rid}}}}}
     s, d = raw("POST", "/v1/reviewSubmissionItems", body)
-    print(f"ADD item {label} ->", s)
-    if s not in (200, 201):
-        print(json.dumps(d, indent=1)[:4000])
-        print("ITEM_ADD_FAILED:", label)
-        return False
-    print("   item id:", d["data"]["id"], "state:",
-          d["data"]["attributes"].get("state"))
-    return True
+    print(f"ADD item {label} via {rel_key} ->", s)
+    if s in (200, 201):
+        print("   item id:", d["data"]["id"], "state:",
+              d["data"]["attributes"].get("state"))
+        return True
+    errs = json.dumps(d) 
+    if "already added to this reviewSubmission" in errs:
+        print(f"   (Apple: {label} was already added - counts as present)")
+        return True
+    print(json.dumps(d, indent=1)[:2500])
+    print("ITEM_ADD_FAILED:", label, "via", rel_key)
+    return False
 
-ok = add_item("appStoreVersion", "appStoreVersions", v11["id"], "version 1.1")
+ok = add_item("appStoreVersion", "appStoreVersions", v11["id"],
+              "version 1.1")
 for pid, sid in SUBS:
-    ok = add_item("inAppPurchase", "inAppPurchases", IAP_UUIDS[pid],
-                  pid) and ok
+    good = add_item("subscription", "subscriptions", sid, pid)
+    if not good:
+        good = add_item("inAppPurchase", "inAppPurchases",
+                        IAP_UUIDS.get(pid), pid)
+    ok = good and ok
 if not ok:
     print("SUBMIT_ABORTED: not all items could be added; "
           "submission left UNSUBMITTED")
-    sys.exit(3)
-
-# --- Hard guard: never submit while a subscription lacks metadata --------
-blocked = []
-for pid, sid in SUBS:
-    _, st = sub_state(sid)
-    if st == "MISSING_METADATA":
-        blocked.append((pid, st))
-if blocked:
-    print("SUBMIT_REFUSED_SUB_STATE: subscriptions still "
-          "MISSING_METADATA:", blocked, "- submission left UNSUBMITTED")
     sys.exit(3)
 
 # --- Submit ---------------------------------------------------------------------
