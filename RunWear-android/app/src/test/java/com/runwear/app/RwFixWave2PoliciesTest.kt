@@ -399,6 +399,5 @@ class RwFixWave2PoliciesTest {
         assertFalse(HeroViewerPolicy.shouldDismissOnSwipeDown(40f))
     }
 
-    // ── RW-135: chip policy ─────────────────────────────────────
 
-    }
+}
