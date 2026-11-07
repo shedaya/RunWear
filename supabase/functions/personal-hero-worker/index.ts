@@ -203,7 +203,10 @@
 // complain. Loop safety: a cell whose regen-pending stamp is
 // fresher than RECONCILE_RETRY_AFTER_MS (24 h) is skipped, so a
 // cell whose repair cycle terminally fails is retried at most
-// daily instead of on every drain.
+// daily instead of on every drain. Candidate selection runs in
+// the database (public.reconcile_candidates) so the per-drain
+// scan limit bounds true candidates — counted, hero-less,
+// job-less — rather than the oldest healthy counted cells.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -2065,12 +2068,17 @@ async function reclaimStaleJobs(): Promise<Array<Record<string, unknown>>> {
 // regen-pending. Runs on every drain, so the repair happens
 // whether or not the user ever views the cell again.
 async function reconcileOrphanedCells(): Promise<Array<Record<string, unknown>>> {
+  // Candidate selection runs in the database
+  // (public.reconcile_candidates): counted, no hero row, no live
+  // job, oldest-stuck first — so RECONCILE_SCAN_LIMIT bounds
+  // true candidates, not the oldest healthy cells (a code-side
+  // filter over a limited scan window would starve recent
+  // orphans behind every older healthy counted cell). The
+  // per-cell hero/live-job checks below still run before any
+  // repair is queued, closing the race between selection and
+  // another path landing a hero or a job for the same cell.
   const { data: cells, error } = await supabase
-    .from('personal_cells')
-    .select('user_id, combination_id, free_counted, ever_delivered, regen_status, regen_pending_since')
-    .or('free_counted.eq.true,ever_delivered.eq.true')
-    .order('updated_at', { ascending: true })
-    .limit(RECONCILE_SCAN_LIMIT)
+    .rpc('reconcile_candidates', { p_limit: RECONCILE_SCAN_LIMIT })
   if (error) {
     console.error('[personal-hero-worker] reconcile scan failed:', error)
     return []
