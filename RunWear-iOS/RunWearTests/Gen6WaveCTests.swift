@@ -2107,6 +2107,22 @@ extension Gen6FixWaveTests {
             currentWeather: CurrentWeather(temperature: 10, windspeed: 8, weathercode: 0, isDay: 1),
             hourly: hourly, timezone: "America/Chicago", currentDetail: nil
         )
+        // The swap stands in for the fetch COMMIT, so it must
+        // also perform the commit's own step (RW-123/RW-125,
+        // review §5.2 row 1): in the Now state the commit
+        // re-anchors the projection from the fresh response's
+        // own frame BEFORE any solve — a switch lands on the
+        // new place's Now, never on the old place's hour number
+        // reinterpreted in the new frame. A pick's wall-clock
+        // numbers carry untouched, exactly as the commit
+        // leaves them. (Run 42421837806's pass on the Now leg
+        // was the fallback's luck: the old block was dated a
+        // day early, the stale hour missed every row, and the
+        // current-block fallback produced the expected value.)
+        if vm.isNowSelection {
+            vm.selectedDate = vm.locationNowDate()
+            vm.selectedHour = vm.locationNowHour()
+        }
     }
 
     /// S6-02 (return half) / RW-125: a picked selection survives
