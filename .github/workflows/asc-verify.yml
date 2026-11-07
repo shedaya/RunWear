@@ -25,6 +25,7 @@ on:
           - launch-prepare
           - launch-diag
           - launch-diag2
+          - launch-diag3
         default: verify
         required: true
       version:
@@ -87,3 +88,7 @@ jobs:
         if: inputs.task == 'launch-diag2'
         working-directory: scripts/asc
         run: python3 asc_launch_diag2.py
+      - name: Launch diag 3 (read-only - IAP listings + item serialization)
+        if: inputs.task == 'launch-diag3'
+        working-directory: scripts/asc
+        run: python3 asc_launch_diag3.py
