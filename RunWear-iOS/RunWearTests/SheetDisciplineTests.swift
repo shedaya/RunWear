@@ -227,7 +227,15 @@ final class SheetDisciplineTests: XCTestCase {
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
         XCTAssertEqual(occurrences(settings, ".fullScreenCover("), 0)
         let mim = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
-        XCTAssertEqual(occurrences(mim, ".fullScreenCover("), 0)
+        // RE-PINNED for RW-133 (Sol's Nov 7, 2026 ruling): the
+        // Your Looks library presents the settled full-screen
+        // hero viewer as a cover — the one sanctioned addition
+        // since §1.4. It is a photo viewer, not a Make It Me
+        // flow surface; no other cover may stand here.
+        XCTAssertEqual(occurrences(mim, ".fullScreenCover("), 1,
+                       "the RW-133 hero viewer is the one cover in the Make It Me settings surfaces")
+        XCTAssertTrue(mim.contains("HeroPhotoViewer("),
+                      "the one cover presents the RW-133 full-screen viewer")
     }
 
     func testDismissalPathsReturnToTheOpeningSurface_sourcePin() throws {

@@ -185,8 +185,15 @@ final class HomeCompositionTests: XCTestCase {
                       "handoff progress must be the geometry type's direct function of offset")
         // No spring / animation transaction may be attached to
         // the handoff itself (§1.1: 1:1, no spring, no lag).
-        XCTAssertFalse(view.contains(".animation("),
-                       "no animation transaction belongs on the home composition")
+        // RE-PINNED for RW-124 (fix wave): the ONE `.animation`
+        // the file now carries is the handoff's own nil-pinning
+        // — the mechanism that keeps the scroll handoff free of
+        // any animation transaction. Any other animated
+        // transaction in the composition breaks the count.
+        XCTAssertEqual(view.components(separatedBy: ".animation(").count - 1, 1,
+                       "exactly one animation modifier stands on the home composition — the handoff's nil-pinning")
+        XCTAssertTrue(view.contains(".animation(nil, value: heroScrollProgress)"),
+                      "the handoff transform is pinned to no animation (RW-124)")
     }
 
     func testInsetsAreConsumedOnce_sourcePin() throws {

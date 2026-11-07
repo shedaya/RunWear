@@ -85,7 +85,10 @@ final class Gen6WaveCTests: XCTestCase {
 
     func testDA21TimePickerRendersTheCaption_sourcePin() throws {
         let sheet = try sourceFile("../RunWear/Views/Modals/TimePickerSheet.swift")
-        XCTAssertTrue(sheet.contains("DayChartBeyondForecast.caption(for: chart)"),
+        // RW-131 re-pin: the session's working-day chart is
+        // `activeChart` (it re-derives in place on a day change);
+        // the caption renders from it exactly as before.
+        XCTAssertTrue(sheet.contains("DayChartBeyondForecast.caption(for: activeChart)"),
                       "the time picker must render the beyond-forecast caption for a partial day")
         XCTAssertTrue(sheet.contains("Forecast isn't available for this day yet."),
                       "the wholly-empty day keeps its own naming")
@@ -486,7 +489,7 @@ final class Gen6WaveCTests: XCTestCase {
         let time = try sourceFile("../RunWear/Views/Modals/TimePickerSheet.swift")
         XCTAssertTrue(time.contains("showDateSheet = true"), "the context line's date segment opens the day sheet")
         XCTAssertTrue(time.contains("DatePickerSheet("), "the sibling day sheet is presented from the picker")
-        XCTAssertTrue(time.contains("accessibilityLabel(\"Choose a day: \\(dateLabel)\")"))
+        XCTAssertTrue(time.contains("accessibilityLabel(\"Choose a day: \\(activeDateLabel)\")"))
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertTrue(home.contains("dateSelection: $viewModel.selectedDate"),
                       "home feeds the picker the selection binding — the date is pickable from home")
@@ -834,7 +837,18 @@ final class Gen6WaveCDA09Tests: XCTestCase {
 
     func testDA09RecordingSeamRefusesInFlightSettles_sourcePins() throws {
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains("guard !viewModel.isLoading else { return }"),
+        // RE-PINNED to the fix wave's gate form: the in-flight
+        // refusal moved out of the view into the one recording
+        // gate (WearIveRunRecordingGate) — the view feeds the
+        // fetch's loading state into the gate, and the gate
+        // refuses on it. The DA-09 discipline is unchanged; the
+        // pin now verifies it at the seam where it lives.
+        XCTAssertTrue(home.contains("WearIveRunRecordingGate.admits"),
+                      "DA-09: the recording stands on the one recording gate")
+        XCTAssertTrue(home.contains("isLoading: viewModel.isLoading"),
+                      "DA-09: the gate is fed the fetch's in-flight state")
+        let gate = try sourceFile("../RunWear/Models/DayChartModel.swift")
+        XCTAssertTrue(gate.contains("guard !isLoading, hasCommittedSnapshot"),
                       "DA-09: no entry is recorded from an in-flight fetch — the place can be named before its weather lands")
         XCTAssertTrue(home.contains(".onChange(of: viewModel.isLoading)"),
                       "DA-09: the fetch-completion re-offer records the one solved selection")
@@ -1071,8 +1085,18 @@ final class Gen6FixWaveTests: XCTestCase {
                        "the measured mini endpoint (the blank-bar mechanism) is gone")
         XCTAssertFalse(bar.contains("morphContent(showsExpandedBlock: false"),
                        "no phantom mini measurer copy exists")
-        XCTAssertTrue(bar.contains("machine.isFullExpression || expansionProgress > 0"),
-                      "the single content copy mounts the expanded block only around the full expression")
+        // RE-PINNED for RW-135 Direction A (Nov 7, 2026): the
+        // expanded block no longer lives inside the bar at all —
+        // the bar is MINI-only and REPORTS its full expression;
+        // the host mounts the single expanded copy (the footer
+        // section) only while the dock is at full expression.
+        // RW-86's discipline stands in the new shape: no second
+        // copy of the expanded content exists in any paint path.
+        XCTAssertTrue(bar.contains("onFullExpressionChange(full)"),
+                      "the bar reports its full expression — it mounts no expanded copy itself")
+        let homeView = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(homeView.contains("if wearFooterPresented"),
+                      "the single expanded copy (the footer section) mounts only around the full expression")
     }
 
     // MARK: RW-89 / RW-92 / RW-95 / RW-101 — composition pins
@@ -1580,7 +1604,12 @@ final class Gen6SuccessorWaveTests: XCTestCase {
         XCTAssertTrue(vm.contains("store.serveIsScaffold(for: combo)"),
                       "the classification reads the resolver's payload fact")
         let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
-        XCTAssertTrue(store.contains("scaffoldServes[cell] = lookup.scaffold == true"),
+        // RE-PINNED for the RW-130 contract v2 (fix wave): the
+        // payload's fact is the serve TIER now — scaffold and
+        // similar are the non-exact personal serves, folded from
+        // the tier on every resolving lookup (the v1 boolean
+        // marker `lookup.scaffold` is superseded by the tier).
+        XCTAssertTrue(store.contains("scaffoldServes[cell] = lookup.serveTier.isNonExactPersonalServe"),
                       "the store folds the payload's marker on every resolving lookup")
     }
 
@@ -2045,7 +2074,19 @@ extension Gen6FixWaveTests {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = tz
         formatter.dateFormat = "yyyy-MM-dd"
-        let dayString = formatter.string(from: day)
+        // The rows are the VIEWED calendar day's wall-clock
+        // rows in the new location — the frame the solve's
+        // textual prefix keys on (the viewed day's date at the
+        // picked wall-clock hour, as on Android). Formatting
+        // the New York-midnight INSTANT in Chicago time would
+        // date the whole block a day early (23:00 the day
+        // before) — a frame the app never requests — so the
+        // block is built on the viewed day's own calendar date,
+        // re-based into the Chicago calendar.
+        var viewedCalendar = Calendar(identifier: .gregorian)
+        viewedCalendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let viewedDay = viewedCalendar.dateComponents([.year, .month, .day], from: day)
+        let dayString = formatter.string(from: calendar.date(from: viewedDay) ?? day)
         let times = (0..<24).map { String(format: "%@T%02d:00", dayString, $0) }
         let hourly = HourlyWeather(
             time: times,
@@ -2158,15 +2199,23 @@ extension Gen6FixWaveTests {
     // MARK: Library bank merge (S6-06) + collection delete (RW-122)
 
     func testFixWave_LibraryCellsFromBank() {
-        let bank = [BankedLook(combinationId: "C1", heroId: "h1", imageURL: "https://x/1.jpg")]
+        // Combination ids carry the production format
+        // ({GENDER}_{WEATHER}_{BRACKET}_{TIME}_{hash}) — the
+        // library's title lines derive from the id, so a cell
+        // whose id does not parse cannot stand in the library
+        // at all; the fixture uses real-format ids (the first
+        // is the field-recorded banked cell's shape).
+        let bankedId = "MALE_CLOUDY_MILD_MIDDAY_491df101"
+        let sessionOnlyId = "MALE_RAIN_WARM_DAWN_7bc20455"
+        let bank = [BankedLook(combinationId: bankedId, heroId: "h1", imageURL: "https://x/1.jpg")]
         let cells = LooksLibrary.cells(
             fromBank: bank,
-            lookStates: ["C1": .failed(reason: .qualityRefused), "C2": .making])
+            lookStates: [bankedId: .failed(reason: .qualityRefused), sessionOnlyId: .making])
         XCTAssertEqual(cells.count, 2)
-        let banked = cells.first { $0.combinationId == "C1" }
+        let banked = cells.first { $0.combinationId == bankedId }
         XCTAssertEqual(banked?.state, .ready, "a banked look is ready — its stale session failure is discarded")
         XCTAssertEqual(banked?.imageURL, "https://x/1.jpg", "the banked cell carries its photograph")
-        XCTAssertEqual(cells.first { $0.combinationId == "C2" }?.state, .making,
+        XCTAssertEqual(cells.first { $0.combinationId == sessionOnlyId }?.state, .making,
                        "session cells not yet in the bank still show")
     }
 
@@ -2231,13 +2280,14 @@ extension Gen6FixWaveTests {
 
     private func rw135Entry(
         dayStart: Date, place: String, items: [String] = ["Tee", "Shorts"],
-        wasUpdated: Bool = false, payload: NarrationPayload? = nil
+        wasUpdated: Bool = false, payload: NarrationPayload? = nil,
+        sessionID: String = ""
     ) -> WearIveRunEntry {
         WearIveRunEntry(
             dayStart: dayStart, placeName: place,
             feelsLikeF: 55, actualF: 58, condition: "Clear",
             itemNames: items, itemKeys: items.map { $0.lowercased() },
-            heroImageReference: "hero-1",
+            heroImageReference: "hero-1", sessionID: sessionID,
             wasUpdatedInSession: wasUpdated, updatePayload: payload)
     }
 
@@ -2262,7 +2312,14 @@ extension Gen6FixWaveTests {
         let model = WearIveRunCollectionModel(
             store: WearIveRunStore(defaults: defaults), sessionID: "s-rw135")
         let today = Calendar.current.startOfDay(for: Date())
-        model.recordSettled(rw135Entry(dayStart: today, place: "New York, NY"))
+        // The entries carry the model's session identity —
+        // the stamp the production recording site always
+        // applies (recordTodaysEntry passes
+        // `sessionID: collectionModel.sessionID`). An unstamped
+        // entry takes the LEGACY day+place identity by design,
+        // under which a place move is a second entry, not the
+        // session's one entry updating in place (§7.2/GEN-3).
+        model.recordSettled(rw135Entry(dayStart: today, place: "New York, NY", sessionID: "s-rw135"))
         XCTAssertEqual(
             WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
                 todaysEntry: model.sessionEntry(), moment: .now,
@@ -2273,7 +2330,7 @@ extension Gen6FixWaveTests {
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "New York, NY")
         // The settle lands: the entry holds Miami, and only now
         // does the line name it (§7.2 settled-today form).
-        model.recordSettled(rw135Entry(dayStart: today, place: "Miami, FL", items: ["Tank"]))
+        model.recordSettled(rw135Entry(dayStart: today, place: "Miami, FL", items: ["Tank"], sessionID: "s-rw135"))
         XCTAssertEqual(
             WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
                 todaysEntry: model.sessionEntry(), moment: .now,

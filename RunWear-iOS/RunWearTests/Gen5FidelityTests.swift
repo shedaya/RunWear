@@ -273,7 +273,13 @@ final class Gen5FidelityTests: XCTestCase {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         let start = try XCTUnwrap(view.range(of: "private func recordTodaysEntry()"))
         let rest = view[start.upperBound..<view.endIndex]
-        let end = rest.range(of: "\n    private func ")?.lowerBound ?? view.endIndex
+        // The extraction bounds at the next MEMBER declaration,
+        // not the next function: the members that follow the
+        // recording function in the file are `private var`s, and
+        // a func-only bound swallows them — navDateString's
+        // date-LABEL use of isDateInToday ("Today"/"Tomorrow")
+        // is not a recording guard and must not trip this pin.
+        let end = rest.range(of: "\n    private ")?.lowerBound ?? view.endIndex
         let body = String(view[start.lowerBound..<end])
         XCTAssertTrue(body.contains("WearIveRunRecordingGate.admits"),
                       "RW-132: the recording stands on the same-solve gate")

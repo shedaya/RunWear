@@ -133,8 +133,15 @@ final class Gen6RW78RW79Tests: XCTestCase {
         let body = try region(store,
                               from: "func revalidateLookState(for combination: PersonalCombination) async -> String?",
                               to: "private func lookupAndMaybeGenerate")
-        XCTAssertTrue(body.contains("await resolveHero(for: combination)"),
-                      "the revalidation performs the one fresh read through the normal resolution path (which folds the server's word)")
+        // RE-PINNED for RW-134 (fix wave): the store's
+        // revalidation deliberately does NOT route through
+        // resolveHero — build 30 did, and its cache fresh-URL
+        // fast path returned the morning's answer while the
+        // exact cell banked behind it (the stranded
+        // settle-bank-return sequence). The one fresh read is
+        // the lookup itself, which folds the server's word.
+        XCTAssertTrue(body.contains("await lookupAndMaybeGenerate(combination: combination, userInitiated: false)"),
+                      "the revalidation performs the one fresh read through the lookup (which folds the server's word)")
         XCTAssertTrue(body.contains("LookRevalidationPolicy.shouldRearmPoll"),
                       "the poll re-arm is gated on the pure policy")
         XCTAssertTrue(body.contains("awaitHero(for: combination)"),
@@ -160,8 +167,13 @@ final class Gen6RW78RW79Tests: XCTestCase {
                       "a still-MAKING cell gets the swap-in awaiter re-attached")
         // The awaiter is ONE factored body, shared by the
         // resolution path and the hook — not two copies to drift.
-        XCTAssertEqual(occurrences(vm, "attachPersonalAwaiter(for"), 3,
-                       "the awaiter factory: one definition, two call sites (applyPersonalHero + the RW-79 hook)")
+        // RE-PINNED for RW-130 (fix wave): the exact-watch
+        // behind a non-exact serve is a THIRD call site, inside
+        // applyPersonalHero next to its in-flight attach. The
+        // discipline the count guards — ONE factored body,
+        // never a copy to drift — is unchanged.
+        XCTAssertEqual(occurrences(vm, "attachPersonalAwaiter(for"), 4,
+                       "the awaiter factory: one definition, three call sites (applyPersonalHero ×2 incl. the RW-130 exact-watch + the RW-79 hook)")
         XCTAssertEqual(occurrences(vm, "await store.awaitHero"), 1,
                        "the store poll is awaited in exactly one place — the factored awaiter")
     }
