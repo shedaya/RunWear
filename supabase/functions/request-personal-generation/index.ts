@@ -77,6 +77,12 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const FREE_GENERATION_LIMIT = 5
 const PRIORITY_FREE_ON_DEMAND = 20
 const PRIORITY_REGENERATION = 20
+// RW-96 (2026-11-06): the worker's current-band priority — the
+// convergence class (15) that get-personal-hero enqueues at and
+// start-personal-fill stamps its head cell with. Viewing a cell
+// promotes its EXISTING pending subscriber fill job to this
+// priority (see the request action's already-queued branch).
+const PRIORITY_CONVERGENCE = 15
 
 // (c) Flag reasons: the personal-specific default plus the pool flag
 // vocabulary (hero_flags: looks_broken / inappropriate /
@@ -536,15 +542,50 @@ serve(async (req) => {
       }
 
       // An active job already covers this cell? Report it, don't dup.
+      const entitled = profile.entitled === true
       const { data: active } = await sb
         .from('personal_generation_jobs')
-        .select('id, status')
+        .select('id, status, kind, priority')
         .eq('user_id', user.id)
         .eq('combination_id', cell.combinationId)
         .in('status', ['QUEUED', 'PROCESSING'])
-        .limit(1)
       if (active && active.length > 0) {
-        return jsonResponse({ status: 'already_queued', job_id: active[0].id, combination_id: cell.combinationId })
+        // RW-96 IN-VIEW PROMOTION (Sol's ruling, 2026-11-06): while
+        // a Premium user's bank is building, the cell they are
+        // actively viewing jumps the queue. If this cell's active
+        // job is a still-QUEUED bank fill sitting behind the
+        // current band, promote THAT job in place to the current
+        // band (convergence priority) — no duplicate job is ever
+        // created. A job already at the head of its band (on-
+        // demand/regeneration class), one already in the current
+        // band, and one already PROCESSING are left untouched, as
+        // is every free-tier job: free behaviour is unchanged.
+        let promoted = false
+        if (entitled) {
+          const fill = active.find(j =>
+            j.status === 'QUEUED' && j.kind === 'subscriber_fill' &&
+            (j.priority as number) > 2 &&
+            (j.priority as number) !== PRIORITY_CONVERGENCE)
+          if (fill) {
+            const { error: promoteError } = await sb
+              .from('personal_generation_jobs')
+              .update({ priority: PRIORITY_CONVERGENCE })
+              .eq('id', fill.id)
+              .eq('status', 'QUEUED')
+            if (!promoteError) {
+              promoted = true
+              kickWorker()
+              console.log(`[request-personal-generation] RW-96: promoted viewed cell's fill job ${fill.id} to priority ${PRIORITY_CONVERGENCE}`)
+            } else {
+              console.error('[request-personal-generation] RW-96 promotion failed:', promoteError)
+            }
+          }
+        }
+        return jsonResponse({
+          status: 'already_queued', job_id: active[0].id,
+          combination_id: cell.combinationId,
+          ...(promoted ? { promoted: true } : {})
+        })
       }
 
       // (b) Was this cell already delivered once? Then this request is
@@ -591,8 +632,8 @@ serve(async (req) => {
       }
 
       // Allowance: entitled users always; free users under the
-      // lifetime cap — for genuinely new cells only.
-      const entitled = profile.entitled === true
+      // lifetime cap — for genuinely new cells only. (entitled was
+      // resolved above, at the already-queued branch.)
       if (!isRegeneration && !entitled &&
           (profile.free_generations_used ?? 0) >= FREE_GENERATION_LIMIT) {
         return jsonResponse({

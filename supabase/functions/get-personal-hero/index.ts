@@ -447,6 +447,39 @@ serve(async (req) => {
           (j.status === 'QUEUED' || j.status === 'PROCESSING') &&
           j.kind !== 'replenishment')
         let converging = hasActiveJob
+        // RW-96 IN-VIEW PROMOTION (Sol's ruling, 2026-11-06): this
+        // block only runs for entitled users. If the viewed cell's
+        // converging job is a still-QUEUED bank fill sitting behind
+        // the current band, promote THAT job in place to the
+        // current band (PRIORITY_CONVERGENCE) — the cell the user
+        // is looking at generates first. No duplicate job is
+        // created; a job already in the current band or already
+        // PROCESSING is left untouched.
+        if (hasActiveJob) {
+          const { data: fillJobs } = await sb
+            .from('personal_generation_jobs')
+            .select('id, priority')
+            .eq('user_id', userId)
+            .eq('combination_id', combinationId)
+            .eq('status', 'QUEUED')
+            .eq('kind', 'subscriber_fill')
+          for (const fj of fillJobs ?? []) {
+            const pr = fj.priority as number
+            if (pr > 2 && pr !== PRIORITY_CONVERGENCE) {
+              const { error: promoteError } = await sb
+                .from('personal_generation_jobs')
+                .update({ priority: PRIORITY_CONVERGENCE })
+                .eq('id', fj.id)
+                .eq('status', 'QUEUED')
+              if (!promoteError) {
+                kickWorker()
+                console.log(`[get-personal-hero] RW-96: promoted viewed cell's fill job ${fj.id} to priority ${PRIORITY_CONVERGENCE}`)
+              } else {
+                console.error('[get-personal-hero] RW-96 promotion failed:', promoteError)
+              }
+            }
+          }
+        }
         if (!hasActiveJob) {
           const bodyItems = Array.isArray(body.outfit_items)
             ? (body.outfit_items as unknown[]).filter(

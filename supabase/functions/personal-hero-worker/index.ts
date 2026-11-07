@@ -119,6 +119,53 @@
 // into the scene and overrides the rain clause for both the
 // generator and the gate's read. Non-rain prompts are byte-
 // identical to before this amendment.
+//
+// RW-90 amendment (2026-11-06): a submitted draw can no longer
+// orphan its job. Field case (Sol's bank burst, 2026-11-06
+// 23:42 UTC): three draws were submitted to Replicate and their
+// invocations died mid-poll — no gate verdict, no error, no
+// completion was ever recorded; one job sat in PROCESSING until
+// the stale scan reclaimed it ~8 minutes later (it then delivered
+// from the retained prediction), and a fourth job failed at
+// delivery with "Hero upload failed: The resource already
+// exists" because an interrupted earlier attempt had stored the
+// object and died before the hero row landed. Three changes:
+// (1) HEARTBEATS DURING POLLS — pollPrediction now refreshes the
+// job's started_at every POLL_HEARTBEAT_MS while it waits, so a
+// live job never looks stale and a dead invocation's job goes
+// stale on schedule; the draw-boundary heartbeat alone left the
+// whole poll window (up to 180 s, twice with the edit pass)
+// unrefreshed against the 300 s stale threshold. (2) DRAW-LEVEL
+// TERMINAL DISCIPLINE — an outcome of a SUBMITTED draw (poll
+// timeout, prediction failed/canceled, poll HTTP error) is a
+// counted failed draw inside the job's existing budget, recorded
+// on the draw record ('draw_timeout' / 'draw_failed'), and the
+// loop redraws; only budget exhaustion fails the job, with the
+// reason recorded. Creating a prediction stays job-fatal (no
+// draw was submitted), as do the fail-closed screen/gate
+// dependencies. The per-draw poll bound is
+// DRAW_POLL_TIMEOUT_MS = 180 s: observed draws complete in
+// ~19-21 s (RW-80 gate timestamps; the RW-90 control job ran
+// end-to-end in 23.6 s), so 180 s is ~9x the observed draw with
+// headroom for provider slowness, and it stays below
+// STALE_PROCESSING_MS (300 s = one draw poll plus screen/gate/
+// edit headroom at a 30 s heartbeat cadence), which remains the
+// system bound: a job whose invocation dies reaches a terminal
+// state via the reclaim budget (3 reclaims, then FAILED
+// stale_processing_timeout) instead of sitting in PROCESSING
+// indefinitely. (3) IDEMPOTENT DELIVERY — if the hero object
+// already exists at the deterministic delivery path (an
+// interrupted attempt of this same job stored it and died
+// before the row insert), deliver() overwrites it with this
+// draw's verified bytes and completes the delivery instead of
+// failing the job on a duplicate.
+//
+// RW-96 note (2026-11-06): in-view promotion is written by the
+// view functions (request-personal-generation's already-queued
+// branch and get-personal-hero's convergence block stamp a
+// viewed cell's pending subscriber_fill job with priority 15,
+// the convergence class in claimBand below). The band system
+// itself is unchanged.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -178,6 +225,14 @@ const EDIT_MODEL_SLUG = 'black-forest-labs/flux-kontext-pro'
 const STALE_PROCESSING_MS = 300_000
 const STALE_MAX_RECLAIMS = 3
 const STALE_FAILURE_REASON = 'stale_processing_timeout'
+
+// RW-90 draw bounds (see the RW-90 header amendment for the full
+// reasoning): the per-draw poll bound, ~9x the observed ~19-21 s
+// draw; and the heartbeat cadence maintained DURING a poll, so a
+// live job's started_at never ages more than ~30 s plus one
+// screen/gate call while it waits on a prediction.
+const DRAW_POLL_TIMEOUT_MS = 180_000
+const POLL_HEARTBEAT_MS = 30_000
 
 // ---------------------------------------------------------------------
 // Draw budget by cell difficulty (commission §3): stop at first
@@ -1011,9 +1066,19 @@ export async function gateImageB64(imageBytes: Uint8Array): Promise<string> {
 // ---------------------------------------------------------------------
 // Replicate helpers
 // ---------------------------------------------------------------------
-async function pollPrediction(predictionId: string, maxWaitMs: number): Promise<Record<string, any>> {
+async function pollPrediction(predictionId: string, maxWaitMs: number, onHeartbeat?: () => Promise<void>): Promise<Record<string, any>> {
   const start = Date.now()
+  let lastHeartbeat = start
   while (Date.now() - start < maxWaitMs) {
+    // RW-90: heartbeat during the wait (see the header amendment).
+    // Without it a long poll is indistinguishable from a dead
+    // invocation to the stale scan — and a second invocation could
+    // reclaim a job whose first invocation is still legitimately
+    // polling. The callback refreshes started_at; it never throws.
+    if (onHeartbeat && Date.now() - lastHeartbeat >= POLL_HEARTBEAT_MS) {
+      lastHeartbeat = Date.now()
+      await onHeartbeat()
+    }
     const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
       headers: { 'Authorization': `Token ${REPLICATE_API_TOKEN}` }
     })
@@ -1105,8 +1170,8 @@ async function createHeadwearEdit(instruction: string, imageBytes: Uint8Array): 
   return created.id as string
 }
 
-async function predictionOutputBytes(predictionId: string, maxWaitMs: number): Promise<Uint8Array> {
-  const result = await pollPrediction(predictionId, maxWaitMs)
+async function predictionOutputBytes(predictionId: string, maxWaitMs: number, onHeartbeat?: () => Promise<void>): Promise<Uint8Array> {
+  const result = await pollPrediction(predictionId, maxWaitMs, onHeartbeat)
   if (result.status !== 'succeeded') {
     throw new Error(`Prediction ${predictionId} ${result.status}: ${result.error ?? ''}`)
   }
@@ -1353,7 +1418,10 @@ async function attemptHeadwearEdit(
   let editedBytes: Uint8Array
   try {
     edit.prediction_id = await createHeadwearEdit(instruction, bytes)
-    editedBytes = await predictionOutputBytes(edit.prediction_id, 180_000)
+    editedBytes = await predictionOutputBytes(
+      edit.prediction_id, DRAW_POLL_TIMEOUT_MS,
+      () => markJob(job.id, { started_at: new Date().toISOString() })
+    )
   } catch (e) {
     edit.error = (e as Error).message
     console.log(`[personal-hero-worker] job ${job.id}: headwear edit failed: ${edit.error}`)
@@ -1497,7 +1565,27 @@ async function deliver(
   const { error: uploadError } = await supabase.storage
     .from('personal-heroes')
     .upload(storagePath, d.bytes, { contentType: 'image/png', upsert: false })
-  if (uploadError) throw new Error(`Hero upload failed: ${uploadError.message}`)
+  if (uploadError) {
+    // RW-90 idempotent delivery: the object already present at this
+    // deterministic path can only be an interrupted earlier attempt
+    // of THIS job (or a raced reclaim of it) that stored the bytes
+    // and died before the hero row landed — the RAIN_WARM_DAWN scar
+    // ("Hero upload failed: The resource already exists"). The path
+    // is unique to this user+cell+variant, so overwriting it with
+    // this draw's verified bytes completes the delivery instead of
+    // failing a job whose draw already passed every gate.
+    if (!/already exists/i.test(uploadError.message)) {
+      throw new Error(`Hero upload failed: ${uploadError.message}`)
+    }
+    const { error: overwriteError } = await supabase.storage
+      .from('personal-heroes')
+      .upload(storagePath, d.bytes, { contentType: 'image/png', upsert: true })
+    if (overwriteError) {
+      throw new Error(`Hero upload failed: ${overwriteError.message}`)
+    }
+    console.log(`[personal-hero-worker] job ${job.id}: hero object already present at ${storagePath}; ` +
+      `overwrote with the verified draw (RW-90 idempotent delivery)`)
+  }
 
   const { data: hero, error: heroError } = await supabase
     .from('personal_heroes')
@@ -1737,7 +1825,35 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
         prompt, started_at: new Date().toISOString()
       })
       drawsUsedTotal = drawNo
-      const bytes = await predictionOutputBytes(predictionId, 180_000)
+      // RW-90 draw-level terminal discipline: the outcome of a
+      // SUBMITTED draw (poll timeout, prediction failed/canceled,
+      // poll/download error) is a counted failed draw inside this
+      // job's own budget — recorded on the draw record and the
+      // loop redraws — never a job-level death that can strand
+      // the job in PROCESSING. Only budget exhaustion (below)
+      // fails the job, with this stage as the recorded reason.
+      // The poll carries the RW-90 heartbeat so the stale scan
+      // can tell this live job from a terminated invocation.
+      let bytes: Uint8Array
+      try {
+        bytes = await predictionOutputBytes(
+          predictionId, DRAW_POLL_TIMEOUT_MS,
+          () => markJob(job.id, { started_at: new Date().toISOString() })
+        )
+      } catch (e) {
+        const message = (e as Error).message
+        const stage = message.startsWith('Prediction timed out')
+          ? 'draw_timeout' : 'draw_failed'
+        lastStage = stage
+        const rec: DrawRecord = {
+          draw: drawNo, prediction_id: predictionId,
+          image_hash: null, identity_similarity: null, stage,
+          failures: [{ rule: stage, message }]
+        }
+        draws.push(rec)
+        console.log(`[personal-hero-worker] job ${job.id} draw ${drawNo}/${budget} ended at ${stage}: ${message}`)
+        continue
+      }
       const rec: DrawRecord = {
         draw: drawNo, prediction_id: predictionId,
         image_hash: await sha256Hex(bytes),
@@ -1760,7 +1876,9 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     // silent.
     const failureText = lastStage === 'prescription_gate'
       ? `gate_failed: ${lastFailures.map(f => f.message).join('; ')}`
-      : `gate_failed: identity_screen (best similarity ${identityBest ?? 'none'})`
+      : lastStage === 'identity_screen'
+        ? `gate_failed: identity_screen (best similarity ${identityBest ?? 'none'})`
+        : `${lastStage}: draw never returned a usable image within the job's draw budget (${drawsUsedTotal}/${budget} draws used)`
     await markJob(job.id, {
       status: 'FAILED', stage: lastStage,
       error_message: failureText,
