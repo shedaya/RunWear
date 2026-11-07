@@ -198,8 +198,15 @@ final class HomeCompositionTests: XCTestCase {
                        "the hero must consume the top inset exactly once")
         XCTAssertTrue(hero.contains("HomeHandoffGeometry.flagChipBottomInset"),
                       "the flag chip's inset must derive from the overlap constant")
-        XCTAssertTrue(hero.contains(".onChange(of: aiImageUrl)"),
-                      "each incoming photo must reset the crossfade state")
+        // RW-106 (Nov 6, 2026) relocates this mechanism: the
+        // crossfade reset lives in the remote layer
+        // (HeroRemoteImageView), keyed to the photo's IDENTITY —
+        // a view-level reset on the URL string was the RW-106
+        // defect itself (every re-signed URL hid the photo and
+        // restarted its download). The property stands per
+        // identity: a different photo starts hidden.
+        XCTAssertTrue(hero.contains(".onChange(of: urlString)"),
+                      "each incoming photo (a new identity) must reset the crossfade state")
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         // The bar is opaque and its background is visible: no
         // sheet or header content renders under the status bar

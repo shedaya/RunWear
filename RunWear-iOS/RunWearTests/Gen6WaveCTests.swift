@@ -485,7 +485,14 @@ final class Gen6WaveCTests: XCTestCase {
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertTrue(home.contains("dateSelection: $viewModel.selectedDate"),
                       "home feeds the picker the selection binding — the date is pickable from home")
-        XCTAssertTrue(home.contains("onDateConfirmed: { showTimePicker = false }"))
+        // RW-92 (Nov 6, 2026): the confirm hook now ALSO re-solves
+        // home (updateSelectedTime) — the nested date picker's
+        // write otherwise never reached the recommendation. The
+        // dismissal this pin guards still stands as the hook's
+        // first act; the re-solve is pinned by
+        // Gen6FixWaveTests.testRW92_NestedDateConfirmReSolves.
+        XCTAssertTrue(home.contains("onDateConfirmed: {"))
+        XCTAssertTrue(home.contains("showTimePicker = false"))
         // The gate: the day sheet writes ONLY on Confirm.
         let date = try sourceFile("../RunWear/Views/Modals/DatePickerSheet.swift")
         XCTAssertTrue(date.contains("selectedDate = draft.commit()"), "Confirm is the one write")

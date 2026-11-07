@@ -438,9 +438,17 @@ final class Gen3HeroServingTests: XCTestCase {
         XCTAssertTrue(vm.contains("personalAppliedForThisCell"),
                       "a same-cell reload must not republish the pool URL over an applied personal photo")
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
-        XCTAssertTrue(onboarding.contains("firstLookLoadedImageURL"),
+        // RW-94 (Nov 6, 2026) supersedes the URL-string form of
+        // this pin: the load proof is keyed to the hero's
+        // IDENTITY, because the URL is a signed address a
+        // re-resolution can refresh for the SAME photo — the
+        // string-equality proof silently un-proved loaded photos
+        // and the finished claim never fired. The property this
+        // pin guards (the surface tracks the photo's ACTUAL load;
+        // the presentation is fed the load state) is unchanged.
+        XCTAssertTrue(onboarding.contains("firstLookLoadedHeroId"),
                       "the first-look surface must track the personal photo's actual load")
-        XCTAssertTrue(onboarding.contains("personalImageLoaded: firstLookLoadedImageURL != nil"),
+        XCTAssertTrue(onboarding.contains("personalImageLoaded: firstLookLoadedHeroId != nil"),
                       "the presentation must be fed the load state, not just the URL's presence")
     }
 }

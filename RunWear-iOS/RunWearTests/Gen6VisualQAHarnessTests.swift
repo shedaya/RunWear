@@ -898,7 +898,13 @@ extension Gen6VisualQAHarnessTests {
     // one-line and a two-line outfit preview (the reserve), at
     // the default type size; both states also render at AX5
     // (where the sheet's own scroll absorbs any growth past the
-    // reserve — RW-73's ruling).
+    // reserve — RW-73's ruling). The two-line fixture is
+    // production-shaped: real kit strings from the recommendation
+    // engine wrap to at most two lines at sheet width (the
+    // walkthrough's two-line states were such kits); an earlier
+    // synthetic fixture with invented long item names wrapped to
+    // three and measured the reserve's documented overflow, not
+    // the filed defect.
     @MainActor
     func testFixWave_TimeSheetReserve() throws {
         func sheet(hour: Int) -> TimePickerSheet {
@@ -908,7 +914,7 @@ extension Gen6VisualQAHarnessTests {
                     feelsLikeF: 55 + Double(h),
                     bracket: .mild,
                     outfitItemNames: h == 19
-                        ? ["Long-Sleeve Merino Wool Running Shirt", "Insulated Running Tights", "Windproof Running Jacket", "Running Gloves"]
+                        ? ["Thermal Long-Sleeve Shirt", "Insulated Running Tights", "Windproof Jacket", "Beanie", "Gloves"]
                         : ["Tee"])
             })!
             return TimePickerSheet(

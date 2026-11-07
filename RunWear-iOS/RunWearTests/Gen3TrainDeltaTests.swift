@@ -509,9 +509,15 @@ final class Gen3TrainDeltaTests: XCTestCase {
                       "the first-look finished surface's CTA is 'Upgrade to Premium'")
         XCTAssertFalse(onboarding.contains("Text(\"See Premium\")"),
                        "'See Premium' is gone from the first-look surface")
-        // Scope: Settings' approved wording does not move.
+        // Scope: Settings' wording moved ONCE, by Sol's RW-100
+        // sharpening (Nov 6, 2026): the bare "Get Premium" button
+        // was the filed defect ("the premium annual versus
+        // monthly hierarchy is a mess") — the confirm now names
+        // the selected plan and its price via the shared composer.
         let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
-        XCTAssertTrue(settings.contains("Text(\"Get Premium\")"),
-                      "Settings' 'Get Premium' is approved as mocked and stays")
+        XCTAssertTrue(settings.contains("MakeItMePriceLabels.confirmLabel("),
+                      "RW-100: Settings' confirm names the selected plan and its price")
+        XCTAssertFalse(settings.contains("Text(\"Get Premium\")"),
+                       "RW-100: the bare 'Get Premium' button does not return")
     }
 }
