@@ -24,6 +24,7 @@ on:
           - opt3-submit
           - launch-prepare
           - launch-diag
+          - launch-diag2
         default: verify
         required: true
       version:
@@ -82,3 +83,7 @@ jobs:
         if: inputs.task == 'launch-diag'
         working-directory: scripts/asc
         run: python3 asc_launch_diag.py
+      - name: Launch diag 2 (read-only - OpenAPI spec relationship ground truth)
+        if: inputs.task == 'launch-diag2'
+        working-directory: scripts/asc
+        run: python3 asc_launch_diag2.py
