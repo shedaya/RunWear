@@ -27,6 +27,7 @@ on:
           - launch-diag2
           - launch-diag3
           - launch-diag4
+          - launch-diag5
         default: verify
         required: true
       version:
@@ -97,3 +98,7 @@ jobs:
         if: inputs.task == 'launch-diag4'
         working-directory: scripts/asc
         run: python3 asc_launch_diag4.py
+      - name: Launch diag 5 (read-only - subscription versions relationship)
+        if: inputs.task == 'launch-diag5'
+        working-directory: scripts/asc
+        run: python3 asc_launch_diag5.py
