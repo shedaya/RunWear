@@ -1819,7 +1819,15 @@ extension Gen6FixWaveTests {
         XCTAssertEqual(PersonalServeTier(wireValue: "none"), .none)
         // An unrecognised tier is treated as none (§4.3).
         XCTAssertEqual(PersonalServeTier(wireValue: "surprise"), .none)
-        XCTAssertEqual(PersonalServeTier(wireValue: nil), .none)
+        // An absent tier (pre-v2 payload) is handled by the
+        // lookup's decoding path: no wire value and nothing
+        // found derives .none.
+        let absentTier = PersonalHeroLookup(
+            found: false, combinationId: "C1", heroId: nil, variant: nil,
+            imageUrl: nil, version: nil, replenishmentQueued: 0,
+            lookState: nil, lookReason: nil, scaffold: nil, scaffoldCombinationId: nil,
+            serveTierRaw: nil, servedCombinationId: nil, converging: nil)
+        XCTAssertEqual(absentTier.serveTier, .none)
         XCTAssertTrue(PersonalServeTier.scaffold.isNonExactPersonalServe)
         XCTAssertTrue(PersonalServeTier.similar.isNonExactPersonalServe)
         XCTAssertFalse(PersonalServeTier.exact.isNonExactPersonalServe)
@@ -1861,14 +1869,14 @@ extension Gen6FixWaveTests {
         let scaffold = cache.resolve(
             lookup: tieredLookup(cell: "C1", tier: "scaffold", url: "https://x/scaffold.jpg", version: 1),
             now: t0)
-        XCTAssertEqual(scaffold, "https://x/scaffold.jpg", "the fallback serve paints silently, now")
+        XCTAssertEqual(scaffold, .show("https://x/scaffold.jpg"), "the fallback serve paints silently, now")
         XCTAssertEqual(cache.cachedServeTier(for: "C1"), .scaffold)
         XCTAssertFalse(cache.isTerminalCacheHit(for: "C1", now: t0),
                        "a scaffold serve is never a terminal cache hit — the cell is always re-asked")
         let exact = cache.resolve(
             lookup: tieredLookup(cell: "C1", tier: "exact", url: "https://x/exact.jpg", version: 2),
             now: t0.addingTimeInterval(600))
-        XCTAssertEqual(exact, "https://x/exact.jpg", "the landed exact cell replaces the fallback serve")
+        XCTAssertEqual(exact, .show("https://x/exact.jpg"), "the landed exact cell replaces the fallback serve")
         XCTAssertTrue(cache.isTerminalCacheHit(for: "C1", now: t0.addingTimeInterval(600)))
     }
 
@@ -1885,9 +1893,13 @@ extension Gen6FixWaveTests {
 
     // MARK: RW-128 aligned allowance
 
-    func testFixWave_FreeAllowanceIsTen() {
-        XCTAssertEqual(PersonalHeroStore.freeAllowance, 10,
-                       "RW-128: the iOS free allowance is 10, in the one constant")
+    func testFixWave_FreeAllowanceIsTen() throws {
+        // The store is not compiled into the test target (the
+        // suite's standing pattern), so its ONE allowance
+        // constant is pinned against the source of record.
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("static let freeAllowance = 10"),
+                      "RW-128: the iOS free allowance is 10, in the one constant")
         XCTAssertTrue(OnboardingCopy.freeLooksPromise.contains("10"),
                       "the onboarding promise follows the allowance")
     }
@@ -1927,6 +1939,7 @@ extension Gen6FixWaveTests {
 
     // MARK: Now state + solve (S6-01/02/03/25; RW-123/RW-125)
 
+    @MainActor
     private func nowFixture() -> (vm: WeatherViewModel, day: Date, nowHour: Int) {
         let tz = TimeZone(identifier: "America/New_York")!
         var calendar = Calendar(identifier: .gregorian)
@@ -2022,6 +2035,7 @@ extension Gen6FixWaveTests {
                        "pick→switch: the pick solves from the new location's hourly row")
     }
 
+    @MainActor
     private func swapFrameToChicago(_ vm: WeatherViewModel, day: Date) {
         let tz = TimeZone(identifier: "America/Chicago")!
         var calendar = Calendar(identifier: .gregorian)
