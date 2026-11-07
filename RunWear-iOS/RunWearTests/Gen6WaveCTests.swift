@@ -1760,3 +1760,420 @@ final class Gen6SuccessorWaveTests: XCTestCase {
                        "the shop row's two-line description cap is gone too (RW-114)")
     }
 }
+
+// MARK: - Fix wave 2026-11-07 (build 31): reconciliation, Now
+// state, serve ladder, picker session, RW-122/132/133/135 seams
+//
+// The architecture review's 30-row regression matrix, executed
+// for the rows this lane touches. Row mapping is named per
+// test. Hosted-capture render rows (S6-29 and the visual half
+// of RW-133/RW-135) are NOT executed here — the hosted runner
+// returns black for hosted captures (build-30 gate record), so
+// those surfaces are reported UNPROVEN in the lane report,
+// never passed.
+
+final class Gen6FixWaveTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    // MARK: Serve ladder (review §4; S6-18/19/20)
+
+    func testFixWave_ServeTierWireMapping() {
+        XCTAssertEqual(PersonalServeTier(wireValue: "exact"), .exact)
+        XCTAssertEqual(PersonalServeTier(wireValue: "scaffold"), .scaffold)
+        XCTAssertEqual(PersonalServeTier(wireValue: "similar"), .similar)
+        XCTAssertEqual(PersonalServeTier(wireValue: "none"), .none)
+        // An unrecognised tier is treated as none (§4.3).
+        XCTAssertEqual(PersonalServeTier(wireValue: "surprise"), .none)
+        XCTAssertEqual(PersonalServeTier(wireValue: nil), .none)
+        XCTAssertTrue(PersonalServeTier.scaffold.isNonExactPersonalServe)
+        XCTAssertTrue(PersonalServeTier.similar.isNonExactPersonalServe)
+        XCTAssertFalse(PersonalServeTier.exact.isNonExactPersonalServe)
+        XCTAssertFalse(PersonalServeTier.none.isNonExactPersonalServe)
+    }
+
+    func testFixWave_LookupDecodesContractV2Fields() throws {
+        let json = """
+        {"found": true, "combination_id": "C1", "hero_id": "h9",
+         "variant": 1, "image_url": "https://x/1.jpg", "version": 3,
+         "replenishment_queued": 0, "look_state": null,
+         "look_reason": null, "scaffold": null,
+         "scaffold_combination_id": null,
+         "serve_tier": "similar", "served_combination_id": "C0",
+         "converging": true}
+        """
+        let lookup = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(json.utf8))
+        XCTAssertEqual(lookup.serveTier, .similar)
+        XCTAssertEqual(lookup.servedCombinationId, "C0")
+        XCTAssertEqual(lookup.converging, true)
+    }
+
+    private func tieredLookup(cell: String, tier: String?, url: String, version: Int) -> PersonalHeroLookup {
+        PersonalHeroLookup(
+            found: true, combinationId: cell, heroId: "h-\(version)", variant: 1,
+            imageUrl: url, version: version, replenishmentQueued: 0,
+            lookState: nil, lookReason: nil, scaffold: nil, scaffoldCombinationId: nil,
+            serveTierRaw: tier, servedCombinationId: cell, converging: nil
+        )
+    }
+
+    /// S6-19 + RW-130/RW-134 at the cache seam: a non-exact
+    /// serve paints but is NEVER a terminal hit; when the exact
+    /// cell lands, the next resolve serves it (the swap the
+    /// revalidation path performs on landing/return).
+    func testFixWave_NonExactServePaintsButNeverSettles() {
+        var cache = PersonalCellCache()
+        let t0 = Date()
+        let scaffold = cache.resolve(
+            lookup: tieredLookup(cell: "C1", tier: "scaffold", url: "https://x/scaffold.jpg", version: 1),
+            now: t0)
+        XCTAssertEqual(scaffold, "https://x/scaffold.jpg", "the fallback serve paints silently, now")
+        XCTAssertEqual(cache.cachedServeTier(for: "C1"), .scaffold)
+        XCTAssertFalse(cache.isTerminalCacheHit(for: "C1", now: t0),
+                       "a scaffold serve is never a terminal cache hit — the cell is always re-asked")
+        let exact = cache.resolve(
+            lookup: tieredLookup(cell: "C1", tier: "exact", url: "https://x/exact.jpg", version: 2),
+            now: t0.addingTimeInterval(600))
+        XCTAssertEqual(exact, "https://x/exact.jpg", "the landed exact cell replaces the fallback serve")
+        XCTAssertTrue(cache.isTerminalCacheHit(for: "C1", now: t0.addingTimeInterval(600)))
+    }
+
+    // MARK: Band terminal fold (RW-126 client half; S6-08)
+
+    func testFixWave_BandSettlesWhenGenerationProvenOver() {
+        let coverage = BankCoverage(ready: 2, total: 5)
+        XCTAssertNotNil(ConvergenceBand.content(isSubscribed: true, coverage: coverage, generationActive: nil),
+                        "an unread job state keeps the settled (coverage-only) behaviour")
+        XCTAssertNotNil(ConvergenceBand.content(isSubscribed: true, coverage: coverage, generationActive: true))
+        XCTAssertNil(ConvergenceBand.content(isSubscribed: true, coverage: coverage, generationActive: false),
+                     "a server read proving every job terminal settles the band — it cannot outlive generation")
+    }
+
+    // MARK: RW-128 aligned allowance
+
+    func testFixWave_FreeAllowanceIsTen() {
+        XCTAssertEqual(PersonalHeroStore.freeAllowance, 10,
+                       "RW-128: the iOS free allowance is 10, in the one constant")
+        XCTAssertTrue(OnboardingCopy.freeLooksPromise.contains("10"),
+                      "the onboarding promise follows the allowance")
+    }
+
+    // MARK: Recording gate (S6-13/14/15/16; RW-110/RW-132)
+
+    func testFixWave_RecordingGate() {
+        // Now settle admitted — including its marked
+        // current-conditions fallback (the Now ruling).
+        XCTAssertTrue(WearIveRunRecordingGate.admits(
+            isLoading: false, hasCommittedSnapshot: true, snapshotHour: 7,
+            selectedHour: 7, isNowSelection: true, selectedTimeOutsideForecast: true))
+        // Picked settle on a viewed future day admitted (S6-14
+        // as ruled Nov 7).
+        XCTAssertTrue(WearIveRunRecordingGate.admits(
+            isLoading: false, hasCommittedSnapshot: true, snapshotHour: 18,
+            selectedHour: 18, isNowSelection: false, selectedTimeOutsideForecast: false))
+        // S6-13: a mid-flight read never records.
+        XCTAssertFalse(WearIveRunRecordingGate.admits(
+            isLoading: true, hasCommittedSnapshot: true, snapshotHour: 7,
+            selectedHour: 7, isNowSelection: true, selectedTimeOutsideForecast: false))
+        // S6-16: an out-of-forecast PICK never records from the
+        // fallback solve.
+        XCTAssertFalse(WearIveRunRecordingGate.admits(
+            isLoading: false, hasCommittedSnapshot: true, snapshotHour: 7,
+            selectedHour: 7, isNowSelection: false, selectedTimeOutsideForecast: true))
+        // A snapshot of a different hour than the selection is
+        // not the same solve.
+        XCTAssertFalse(WearIveRunRecordingGate.admits(
+            isLoading: false, hasCommittedSnapshot: true, snapshotHour: 7,
+            selectedHour: 9, isNowSelection: false, selectedTimeOutsideForecast: false))
+        // No committed snapshot, no record.
+        XCTAssertFalse(WearIveRunRecordingGate.admits(
+            isLoading: false, hasCommittedSnapshot: false, snapshotHour: nil,
+            selectedHour: 7, isNowSelection: true, selectedTimeOutsideForecast: false))
+    }
+
+    // MARK: Now state + solve (S6-01/02/03/25; RW-123/RW-125)
+
+    private func nowFixture() -> (vm: WeatherViewModel, day: Date, nowHour: Int) {
+        let tz = TimeZone(identifier: "America/New_York")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = tz
+        let now = Date()
+        let nowHour = calendar.component(.hour, from: now)
+        let day = calendar.startOfDay(for: now)
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = tz
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dayString = formatter.string(from: day)
+        let times = (0..<24).map { String(format: "%@T%02d:00", dayString, $0) }
+        let hourly = HourlyWeather(
+            time: times,
+            temperature2m: (0..<24).map { Double($0) },
+            apparentTemperature: (0..<24).map { Double($0) },
+            relativeHumidity2m: times.map { _ in 50 },
+            precipitationProbability: times.map { _ in 0 },
+            precipitation: times.map { _ in 0.0 },
+            rain: times.map { _ in 0.0 },
+            uvIndex: nil,
+            windSpeed10m: times.map { _ in 5 },
+            windDirection10m: times.map { _ in 0 },
+            windGusts10m: times.map { _ in 5 },
+            weatherCode: times.map { _ in 0 }
+        )
+        let vm = WeatherViewModel()
+        vm.weatherData = WeatherData(
+            latitude: 40.7128, longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: 30, windspeed: 8, weathercode: 0, isDay: 1),
+            hourly: hourly, timezone: "America/New_York", currentDetail: nil
+        )
+        return (vm, day, nowHour)
+    }
+
+    /// S6-25 / RW-123: the Now solve reads the CURRENT block —
+    /// 30°C current against a 0–23°C hourly ladder, the snapshot
+    /// must carry the current value at the location's now hour.
+    @MainActor
+    func testFixWave_NowSolveUsesCurrentConditions() {
+        let (vm, day, nowHour) = nowFixture()
+        vm.selectedDate = day
+        vm.selectedHour = nowHour
+        XCTAssertTrue(vm.isNowSelection)
+        vm.updateSelectedWeatherSnapshot()
+        let snapshot = vm.selectedWeatherSnapshot
+        XCTAssertEqual(snapshot?.hour, nowHour)
+        XCTAssertEqual(snapshot?.temperatureFahrenheit ?? -1, 86, accuracy: 0.6,
+                       "Now solves from current conditions (30°C), not the hourly row")
+        XCTAssertFalse(vm.selectedTimeOutsideForecast)
+    }
+
+    /// S6-03: a manual pick solves from the HOURLY row at the
+    /// picked wall-clock hour — never the current block.
+    @MainActor
+    func testFixWave_PickedSolveUsesHourlyRow() {
+        let (vm, day, nowHour) = nowFixture()
+        let picked = (nowHour + 5) % 24
+        vm.updateSelectedTime(date: day, hour: picked)
+        XCTAssertFalse(vm.isNowSelection)
+        let snapshot = vm.selectedWeatherSnapshot
+        XCTAssertEqual(snapshot?.hour, picked)
+        XCTAssertEqual(snapshot?.temperatureFahrenheit ?? -1,
+                       Double(picked) * 9 / 5 + 32, accuracy: 0.6,
+                       "the pick reads its hourly row (\(picked)°C), not the 30°C current block")
+    }
+
+    /// Both switch sequences at the solve seam (S6-01/02): the
+    /// weather frame is swapped for a second location; in the
+    /// Now state the solve follows the NEW location's current
+    /// block; in a picked state the wall-clock pick survives
+    /// and solves from the new location's hourly row.
+    @MainActor
+    func testFixWave_SwitchSequencesAtTheSolveSeam() {
+        let (vm, day, nowHour) = nowFixture()
+        // Now → switch.
+        vm.selectedDate = day
+        vm.selectedHour = nowHour
+        swapFrameToChicago(vm, day: day)
+        vm.updateSelectedWeatherSnapshot()
+        XCTAssertEqual(vm.selectedWeatherSnapshot?.temperatureFahrenheit ?? -1, 50, accuracy: 0.6,
+                       "Now→switch: the solve is the new location's current conditions (10°C)")
+        // Pick → switch.
+        let picked = (nowHour + 5) % 24
+        vm.updateSelectedTime(date: day, hour: picked)
+        swapFrameToChicago(vm, day: day)
+        vm.updateSelectedWeatherSnapshot()
+        XCTAssertEqual(vm.selectedHour, picked, "pick→switch: the wall-clock pick survives")
+        XCTAssertEqual(vm.selectedWeatherSnapshot?.temperatureFahrenheit ?? -1,
+                       Double(picked + 40) * 9 / 5 + 32, accuracy: 0.6,
+                       "pick→switch: the pick solves from the new location's hourly row")
+    }
+
+    private func swapFrameToChicago(_ vm: WeatherViewModel, day: Date) {
+        let tz = TimeZone(identifier: "America/Chicago")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = tz
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = tz
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dayString = formatter.string(from: day)
+        let times = (0..<24).map { String(format: "%@T%02d:00", dayString, $0) }
+        let hourly = HourlyWeather(
+            time: times,
+            temperature2m: (0..<24).map { Double($0 + 40) },
+            apparentTemperature: (0..<24).map { Double($0 + 40) },
+            relativeHumidity2m: times.map { _ in 50 },
+            precipitationProbability: times.map { _ in 0 },
+            precipitation: times.map { _ in 0.0 },
+            rain: times.map { _ in 0.0 },
+            uvIndex: nil,
+            windSpeed10m: times.map { _ in 5 },
+            windDirection10m: times.map { _ in 0 },
+            windGusts10m: times.map { _ in 5 },
+            weatherCode: times.map { _ in 0 }
+        )
+        vm.weatherData = WeatherData(
+            latitude: 41.8781, longitude: -87.6298,
+            currentWeather: CurrentWeather(temperature: 10, windspeed: 8, weathercode: 0, isDay: 1),
+            hourly: hourly, timezone: "America/Chicago", currentDetail: nil
+        )
+    }
+
+    /// S6-02 (return half) / RW-125: a picked selection survives
+    /// a foreground return untouched; maintenance does nothing.
+    @MainActor
+    func testFixWave_PickSurvivesReturn() {
+        let (vm, day, nowHour) = nowFixture()
+        let picked = (nowHour + 5) % 24
+        vm.updateSelectedTime(date: day, hour: picked)
+        XCTAssertFalse(vm.maintainNowIfNeeded(), "no Now maintenance stands over a pick")
+        XCTAssertEqual(vm.selectedHour, picked)
+        XCTAssertFalse(vm.isNowSelection)
+    }
+
+    /// S6-01 (roll half): a standing Now whose projection has
+    /// decayed off the location's now hour is re-anchored by
+    /// maintenance.
+    @MainActor
+    func testFixWave_NowMaintenanceReanchorsDecayedProjection() {
+        let (vm, day, nowHour) = nowFixture()
+        vm.selectedDate = day
+        vm.selectedHour = (nowHour + 23) % 24 // one hour stale
+        XCTAssertTrue(vm.isNowSelection)
+        XCTAssertTrue(vm.maintainNowIfNeeded(), "the decayed Now projection is repaired")
+        XCTAssertEqual(vm.selectedHour, vm.locationNowHour())
+    }
+
+    /// Day-chart Now point (Sol's ruling with RW-125): today's
+    /// chart point for the current hour carries the live
+    /// current-conditions value; another day's chart is the
+    /// forecast untouched.
+    @MainActor
+    func testFixWave_DayChartNowPointSubstitution() {
+        let (vm, day, nowHour) = nowFixture()
+        let todayChart = vm.dayChart(for: day)
+        XCTAssertEqual(todayChart?.entry(forHour: nowHour)?.feelsLikeF ?? -1, 86, accuracy: 0.6,
+                       "the chart's Now point is the current-conditions value")
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: day)!
+        XCTAssertNil(vm.dayChart(for: tomorrow), "no forecast rows exist for tomorrow in this fixture")
+        // The pure substitution itself, on a synthetic model:
+        let points = (0..<24).map {
+            DayChartHour(hour: $0, feelsLikeF: 50, bracket: .mild, outfitItemNames: ["Tee"])
+        }
+        let model = DayChartModel.build(points: points)!
+        let substituted = DayChartModel.substitutingNowPoint(
+            in: model, nowHour: 7,
+            currentPoint: DayChartHour(hour: 7, feelsLikeF: 90, bracket: .hot, outfitItemNames: ["Shorts"]))
+        XCTAssertEqual(substituted.entry(forHour: 7)?.feelsLikeF, 90)
+        XCTAssertEqual(substituted.entry(forHour: 7)?.bracket, .hot,
+                       "the band shading follows the substituted point's own bracket")
+        XCTAssertEqual(substituted.entry(forHour: 8)?.feelsLikeF, 50, "other hours untouched")
+    }
+
+    // MARK: Picker session (S6-21/22/23/24; RW-131)
+
+    func testFixWave_PickerSessionDayChange() {
+        let day1 = Date(timeIntervalSince1970: 1_800_000_000)
+        let day2 = day1.addingTimeInterval(86_400)
+        var draft = TimePickerDraft(
+            originalHour: 9, openedInNowState: true, nowHour: 9,
+            selectableHours: Array(0..<24), originalDate: day1)
+        XCTAssertEqual(draft.commit(), .keepNow, "an untouched Now session keeps Now")
+        draft.changeDay(to: day2, selectableHours: [6, 7, 8])
+        XCTAssertTrue(draft.dayChanged)
+        XCTAssertEqual(draft.workingDate, day2)
+        XCTAssertEqual(draft.draftHour, 8, "the hour re-derives to the new day's nearest offered hour")
+        // S6-23: a day change alone breaks keep-Now.
+        XCTAssertEqual(draft.commit(), .explicitPick(hour: 8))
+        XCTAssertEqual(draft.commitDate, day2, "the one commit carries the working date")
+        // Stickiness: returning to the original day does not
+        // un-touch the session (risk P-2).
+        draft.changeDay(to: day1, selectableHours: Array(0..<24))
+        XCTAssertTrue(draft.dayChanged)
+        XCTAssertEqual(draft.commit(), .explicitPick(hour: 8))
+    }
+
+    /// The host's one apply path: (date, commit) lands once.
+    @MainActor
+    func testFixWave_ApplyPickerCommitLandsDateAndHourOnce() {
+        let (vm, day, _) = nowFixture()
+        let target = Calendar.current.date(byAdding: .day, value: 1, to: day)!
+        vm.applyPickerCommit(date: target, commit: .explicitPick(hour: 18))
+        XCTAssertEqual(vm.selectedHour, 18)
+        XCTAssertTrue(Calendar.current.isDate(vm.selectedDate, inSameDayAs: target))
+        XCTAssertFalse(vm.isNowSelection)
+        vm.applyPickerCommit(date: target, commit: .keepNow)
+        XCTAssertTrue(vm.isNowSelection, "keep-Now through the session path restores the Now state")
+    }
+
+    // MARK: Library bank merge (S6-06) + collection delete (RW-122)
+
+    func testFixWave_LibraryCellsFromBank() {
+        let bank = [BankedLook(combinationId: "C1", heroId: "h1", imageURL: "https://x/1.jpg")]
+        let cells = LooksLibrary.cells(
+            fromBank: bank,
+            lookStates: ["C1": .failed(reason: .qualityRefused), "C2": .making])
+        XCTAssertEqual(cells.count, 2)
+        let banked = cells.first { $0.combinationId == "C1" }
+        XCTAssertEqual(banked?.state, .ready, "a banked look is ready — its stale session failure is discarded")
+        XCTAssertEqual(banked?.imageURL, "https://x/1.jpg", "the banked cell carries its photograph")
+        XCTAssertEqual(cells.first { $0.combinationId == "C2" }?.state, .making,
+                       "session cells not yet in the bank still show")
+    }
+
+    func testFixWave_CollectionDeleteByEntryAndPlace() {
+        func entry(_ day: Int, _ place: String) -> WearIveRunEntry {
+            WearIveRunEntry(
+                dayStart: Date(timeIntervalSince1970: TimeInterval(day * 86_400)),
+                placeName: place, feelsLikeF: 50, actualF: 50, condition: "Clear",
+                itemNames: [], itemKeys: [], heroImageReference: "")
+        }
+        let entries = [entry(10, "New York, NY"), entry(11, "New York, NY"), entry(10, "Miami, FL")]
+        let afterPlace = WearIveRunCollection.removingPlace(entries, placeName: "New York, NY")
+        XCTAssertEqual(afterPlace.count, 1)
+        XCTAssertEqual(afterPlace.first?.placeName, "Miami, FL")
+        let target = entries[0]
+        let afterOne = WearIveRunCollection.removing(entries, id: target.id)
+        XCTAssertEqual(afterOne.count, 2)
+        XCTAssertFalse(afterOne.contains { $0.id == target.id })
+    }
+
+    // MARK: Source pins for the view-layer seams
+
+    func testFixWave_ViewSeams_sourcePins() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("viewedNarrationPayload: nil"),
+                      "Seam B: no viewed-state narration override stands at the bar's call site")
+        XCTAssertTrue(view.contains("wearIveRunInlineSection"),
+                      "RW-135: the section is composed inline")
+        XCTAssertFalse(view.contains("miniBarDock"),
+                       "RW-135: the detached dock is retired")
+        XCTAssertTrue(view.contains("wearIveRunJumpChip"),
+                      "RW-135: the jump chip stands in while the section is off-screen")
+        XCTAssertTrue(view.contains("reconcilePersonalLayer"),
+                      "landing/foreground run the reconciliation pass")
+        XCTAssertTrue(view.contains("HeroPhotoViewer("),
+                      "RW-133: the hero opens the full-screen viewer")
+        let sheet = try sourceFile("../RunWear/Views/Modals/TimePickerSheet.swift")
+        XCTAssertTrue(sheet.contains("applyWorkingDate"),
+                      "RW-131: the day sheet confirms into the session")
+        XCTAssertTrue(sheet.contains("onSessionConfirm"),
+                      "RW-131: Confirm is the session's one commit")
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("func applyPickerCommit"))
+        XCTAssertTrue(vm.contains("func handleForeground"))
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("func reconcilePersonalLayer"))
+        XCTAssertTrue(store.contains("func refreshBankLibrary"),
+                      "the library's genuine server bank read exists")
+    }
+}

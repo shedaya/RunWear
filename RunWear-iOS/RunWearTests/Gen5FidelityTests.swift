@@ -260,15 +260,27 @@ final class Gen5FidelityTests: XCTestCase {
     }
 
     func testRecordTodaysEntry_NeverWritesOutsideNow_FA2() throws {
+        // FIX WAVE 2026-11-07 — BEHAVIOUR CHANGE, NAMED: this
+        // pin is RE-PINNED under Sol's Nov 7, 2026 future-days
+        // ruling (RW-110/RW-132), which SUPERSEDES the FA-2
+        // Now-only recording gate. The entry now records the
+        // confirmed viewed selection — Now, a picked hour, or a
+        // viewed future day — through the one same-solve gate
+        // (WearIveRunRecordingGate), which keeps FA-2's honesty
+        // refusals (no mid-flight writes, no fallback-pick
+        // writes) in gate form. The old Now-only guard strings
+        // must NOT come back.
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         let start = try XCTUnwrap(view.range(of: "private func recordTodaysEntry()"))
         let rest = view[start.upperBound..<view.endIndex]
         let end = rest.range(of: "\n    private func ")?.lowerBound ?? view.endIndex
         let body = String(view[start.lowerBound..<end])
-        XCTAssertTrue(body.contains("guard viewModel.isViewingLocationNow"),
-                      "FA-2: the NOW-state guard stands at the recording gate")
-        XCTAssertTrue(body.contains("isDateInToday"),
-                      "the date guard remains as the second condition")
+        XCTAssertTrue(body.contains("WearIveRunRecordingGate.admits"),
+                      "RW-132: the recording stands on the same-solve gate")
+        XCTAssertFalse(body.contains("guard viewModel.isViewingLocationNow"),
+                       "RW-132: the superseded Now-only gate does not stand")
+        XCTAssertFalse(body.contains("isDateInToday"),
+                       "RW-132: the today-only date guard does not stand — the viewed day keys the entry")
     }
 
     func testNarrationMomentComesFromTheEntry_FA3() throws {
