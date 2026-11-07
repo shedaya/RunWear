@@ -1050,7 +1050,6 @@ extension Gen6VisualQAHarnessTests {
                 retryDelays: [0.05, 0.05, 0.05])
         }
         .frame(width: 390, height: 520)
-        .environment(\.accessibilityReduceMotion, true)
         let name = "FIX-RW106-ios-remote-paints-after-retry.png"
         try writeHostedRender(composition, size: CGSize(width: 390, height: 520), name: name)
         XCTAssertEqual(attempts.count, 2,

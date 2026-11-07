@@ -1139,6 +1139,7 @@ extension Gen6FixWaveTests {
         "https://store.example/personal-heroes/user/hero-\(UUID().uuidString).png?token=\(token)"
     }
 
+    @MainActor
     private func rw106WaitForPaint(_ loader: HeroRemoteImageLoader, timeout: TimeInterval = 3) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
