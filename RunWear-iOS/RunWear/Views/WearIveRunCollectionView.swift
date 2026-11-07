@@ -68,9 +68,33 @@ struct WearIveRunCollectionView: View {
                 } else {
                     if let today = pinned {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Today")
-                                .font(.appEyebrow)
-                                .foregroundColor(AppTheme.inkMuted)
+                            HStack {
+                                // Fix wave 2026-11-07 (RW-132):
+                                // the pinned card's header is the
+                                // ENTRY'S OWN day — under the
+                                // future-days ruling the session
+                                // entry can be dated tomorrow or
+                                // later, and a literal "Today"
+                                // would announce a day the record
+                                // does not hold.
+                                Text(Calendar.current.isDateInToday(today.dayStart)
+                                     ? "Today"
+                                     : WearIveRunDateFormatting.dayLabel(today.dayStart))
+                                    .font(.appEyebrow)
+                                    .foregroundColor(AppTheme.inkMuted)
+                                Spacer()
+                                // RW-122 (iOS half): the pinned
+                                // entry deletes from here too.
+                                Button {
+                                    model.removeEntry(id: today.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(.appFootnote.weight(.semibold))
+                                        .foregroundColor(AppTheme.inkSecondary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Delete this entry")
+                            }
                             NavigationLink {
                                 WearIveRunDayView(
                                     entry: today,
@@ -267,6 +291,21 @@ struct WearIveRunChapterView: View {
                     } else {
                         dayList(chapter.entries)
                     }
+
+                    // Fix wave 2026-11-07 (RW-122, iOS half):
+                    // delete the whole by-location group — every
+                    // entry filed under this place, across all
+                    // filters and stays.
+                    Button(role: .destructive) {
+                        model.removeEntries(placeName: placeName)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "trash")
+                            Text("Delete all entries for this place")
+                        }
+                        .font(.appSecondary.weight(.semibold))
+                    }
+                    .padding(.top, 4)
                 } else {
                     Text("No days match this filter yet.")
                         .font(.appSecondary)
@@ -338,31 +377,47 @@ struct WearIveRunChapterView: View {
     private func dayList(_ entries: [WearIveRunEntry]) -> some View {
         VStack(spacing: 10) {
             ForEach(entries) { entry in
-                NavigationLink {
-                    WearIveRunDayView(
-                        entry: entry,
-                        formatTemperature: formatTemperature,
-                        genderPreference: genderPreference
-                    )
-                } label: {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
-                                .font(.appItemName)
-                                .foregroundColor(AppTheme.inkPrimary)
-                            Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
-                                .font(.appFootnote)
-                                .foregroundColor(AppTheme.inkSecondary)
+                HStack(spacing: 8) {
+                    NavigationLink {
+                        WearIveRunDayView(
+                            entry: entry,
+                            formatTemperature: formatTemperature,
+                            genderPreference: genderPreference
+                        )
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
+                                    .font(.appItemName)
+                                    .foregroundColor(AppTheme.inkPrimary)
+                                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
+                                    .font(.appFootnote)
+                                    .foregroundColor(AppTheme.inkSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.appFootnote.weight(.semibold))
+                                .foregroundColor(AppTheme.inkMuted)
                         }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.appFootnote.weight(.semibold))
-                            .foregroundColor(AppTheme.inkMuted)
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
                     }
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+                    .buttonStyle(.plain)
+                    // Fix wave 2026-11-07 (RW-122, iOS half):
+                    // per-entry delete in the collection — the
+                    // row's own trash, beside (never inside) the
+                    // navigation target.
+                    Button {
+                        model.removeEntry(id: entry.id)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.appFootnote.weight(.semibold))
+                            .foregroundColor(AppTheme.inkSecondary)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Delete \(WearIveRunDateFormatting.dayLabel(entry.dayStart)) in \(entry.placeDisplayName)")
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -379,6 +434,9 @@ struct WearIveRunDayView: View {
     /// the chapter page's two plain text buttons and the
     /// per-card blank sheets are retired.
     @State private var showStudio = false
+    /// Fix wave 2026-11-07 (RW-133): the entry's photograph,
+    /// tapped, opens fitted full-screen.
+    @State private var showPhotoViewer = false
     /// The Studio's chosen export format. The render slots'
     /// keys carry it, so each (card, format) pair renders at
     /// most once and is cached process-wide.
@@ -470,6 +528,15 @@ struct WearIveRunDayView: View {
                 .frame(height: 300)
                 .clipped()
                 .cornerRadius(16)
+                // RW-133: the entry's photograph opens fitted
+                // full-screen, stored frame as-is.
+                .onTapGesture { showPhotoViewer = true }
+                .fullScreenCover(isPresented: $showPhotoViewer) {
+                    HeroPhotoViewer(
+                        imageURL: entry.heroImageReference,
+                        caption: entry.itemNames.joined(separator: " · ")
+                    )
+                }
 
                 Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition)")
                     .font(.appSectionTitle)

@@ -213,9 +213,15 @@ struct MakeItMeSettingsSection: View {
                 }
             }
             .task {
-                if thumbnailLoader.state == .idle {
-                    await thumbnailLoader.load()
-                }
+                // Fix wave 2026-11-07 (review §2 row 6): the
+                // thumbnail and the RW-84 count row revalidate
+                // on EVERY presentation — the single-shot idle
+                // guard this replaces froze both at their first
+                // read for the whole session (a photo added or
+                // replaced elsewhere never showed). RW-84's
+                // semantics are unchanged: the count is the
+                // actual on-file count this loader returns.
+                await thumbnailLoader.load()
             }
 
             // RW-84 (DS §13): the "Number of photos" row — the
@@ -1102,9 +1108,19 @@ struct YourLooksLibraryView: View {
     @EnvironmentObject var store: PersonalHeroStore
     @Environment(\.dismiss) private var dismiss
     @State private var showFailedExplanation = false
+    /// Fix wave 2026-11-07 (RW-133): a banked tile's photograph,
+    /// tapped, opens fitted full-screen.
+    @State private var viewerPhoto: BankedLook?
 
+    /// Fix wave 2026-11-07 (review §2 row 5): the library is
+    /// built from the SERVER BANK merged over the session's
+    /// look states — before this wave it rendered only
+    /// session-resolved cells and could show an empty or
+    /// partial library for a full bank. A banked cell carries
+    /// its photograph; session making/failed cells not yet in
+    /// the bank join it below.
     private var cells: [LooksLibrary.Cell] {
-        LooksLibrary.cells(from: store.lookStates)
+        LooksLibrary.cells(fromBank: store.bankedLooks, lookStates: store.lookStates)
     }
 
     var body: some View {
@@ -1128,6 +1144,12 @@ struct YourLooksLibraryView: View {
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle("Your looks")
         .navigationBarTitleDisplayMode(.inline)
+        // Landing on the library re-reads the bank (the
+        // reconciliation pass's library leg).
+        .task { await store.refreshBankLibrary() }
+        .fullScreenCover(item: $viewerPhoto) { look in
+            HeroPhotoViewer(imageURL: look.imageURL, caption: nil)
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
@@ -1146,9 +1168,34 @@ struct YourLooksLibraryView: View {
                 .fill(AppTheme.cardOnSheet)
                 .aspectRatio(0.8, contentMode: .fit)
                 .overlay {
-                    Image(systemName: cell.isFailed ? "photo" : "person.crop.rectangle")
-                        .font(.system(size: 28))
-                        .foregroundColor(AppTheme.inkSecondary)
+                    // A banked cell shows its actual photograph
+                    // (fix wave: the library renders photos, not
+                    // only icons); the icon remains for cells
+                    // with no banked photo yet.
+                    if let imageURL = cell.imageURL, let url = URL(string: imageURL) {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().scaledToFill()
+                            } else {
+                                Image(systemName: "person.crop.rectangle")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(AppTheme.inkSecondary)
+                            }
+                        }
+                    } else {
+                        Image(systemName: cell.isFailed ? "photo" : "person.crop.rectangle")
+                            .font(.system(size: 28))
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+                }
+                .clipped()
+                // RW-133: tapping a banked tile opens the
+                // stored photograph fitted full-screen.
+                .onTapGesture {
+                    if let imageURL = cell.imageURL,
+                       let look = store.bankedLooks.first(where: { $0.imageURL == imageURL }) {
+                        viewerPhoto = look
+                    }
                 }
             Text(cell.titleLine)
                 .font(.system(size: 15, weight: .semibold))

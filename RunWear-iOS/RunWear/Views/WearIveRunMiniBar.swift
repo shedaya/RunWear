@@ -452,6 +452,27 @@ final class WearIveRunCollectionModel: ObservableObject {
         entries = store.entries
         narratedEntryID = nil
     }
+
+    /// Fix wave 2026-11-07 (RW-122, iOS half): delete ONE entry
+    /// from the collection — any entry, not only the session's
+    /// (the collection sheets' per-entry trash). Resolves
+    /// through the store's own removal, so the collection,
+    /// chapters and counts all re-derive from the same write.
+    func removeEntry(id: String) {
+        store.remove(id: id)
+        entries = store.entries
+        if sessionEntry() == nil { narratedEntryID = nil }
+    }
+
+    /// Fix wave 2026-11-07 (RW-122, iOS half): delete a whole
+    /// by-location GROUP — every entry filed under one place
+    /// (the chapter view's delete-all-for-this-location
+    /// control).
+    func removeEntries(placeName: String) {
+        store.removePlace(placeName: placeName)
+        entries = store.entries
+        if sessionEntry() == nil { narratedEntryID = nil }
+    }
 }
 
 // MARK: - Morph mathematics (motion decision, 2026-11-04)

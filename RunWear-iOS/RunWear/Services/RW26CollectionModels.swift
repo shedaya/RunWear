@@ -630,6 +630,20 @@ enum WearIveRunCollection {
         entries.filter { $0.id != id }
     }
 
+    /// Fix wave 2026-11-07 (RW-122): remove a whole by-location
+    /// GROUP — every entry whose place key matches the named
+    /// place's key (chapters collate by place key, so the group
+    /// IS the key). Canonicalisation runs through the same
+    /// probe-entry path as the day removal above.
+    static func removingPlace(_ entries: [WearIveRunEntry], placeName: String) -> [WearIveRunEntry] {
+        let probe = WearIveRunEntry(
+            dayStart: Date(timeIntervalSince1970: 0), placeName: placeName,
+            feelsLikeF: 0, actualF: 0, condition: "", itemNames: [], itemKeys: [],
+            heroImageReference: ""
+        )
+        return entries.filter { $0.placeKey != probe.placeKey }
+    }
+
     /// The entry a session owns, if it has settled one yet —
     /// the dock's and the collection pin's lookup (GEN-3): by
     /// SESSION, never by date and never by the viewed place.
@@ -877,6 +891,12 @@ final class WearIveRunStore {
     /// entry with this identity (the presented session entry).
     func remove(id: String) {
         save(WearIveRunCollection.removing(entries, id: id))
+    }
+
+    /// Fix wave 2026-11-07 (RW-122): remove every entry filed
+    /// under one place (the chapter's delete-all control).
+    func removePlace(placeName: String) {
+        save(WearIveRunCollection.removingPlace(entries, placeName: placeName))
     }
 
     /// The entry the given session owns — what the home dock

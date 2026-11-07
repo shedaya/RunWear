@@ -45,9 +45,29 @@ struct TimePickerSheet: View {
     /// day is committed and home has re-solved to it.
     var dateSelection: Binding<Date>? = nil
     var onDateConfirmed: () -> Void = {}
+    /// Fix wave 2026-11-07 (RW-131, review §5.5): the unified
+    /// picker session. When the host provides a chart provider,
+    /// a date confirmed inside this sheet changes the session's
+    /// WORKING DAY in place — the chart/readout re-derive for
+    /// the new day from the already-fetched forecast, home does
+    /// not re-solve, and THIS SHEET STAYS OPEN; only this
+    /// sheet's own Confirm (through `onSessionConfirm`, one
+    /// commit carrying the date) or Cancel dismisses. Hosts
+    /// that provide no provider keep the legacy RW-66 flow.
+    var chartForDate: ((Date) -> DayChartModel?)? = nil
+    var onSessionConfirm: ((Date, TimePickerDraft.Commit) -> Void)? = nil
 
     @State private var draft: TimePickerDraft
     @State private var showDateSheet = false
+    /// The chart for the session's working day (starts as the
+    /// committed day's chart; re-derived on an in-place day
+    /// change — RW-131).
+    @State private var sessionChart: DayChartModel?
+    /// The nested day sheet's binding target: its Confirm
+    /// writes here, and the session then applies the day in
+    /// place (the committed selection is never written by the
+    /// day sheet under the unified session).
+    @State private var pendingWorkingDate: Date
 
     /// GEN-6 VQ FIX (RW-73): the sheet's composition adapts to
     /// the Dynamic Type size in force — at accessibility sizes
@@ -70,7 +90,10 @@ struct TimePickerSheet: View {
         isPresented: Binding<Bool>,
         onConfirm: @escaping (TimePickerDraft.Commit) -> Void = { _ in },
         dateSelection: Binding<Date>? = nil,
-        onDateConfirmed: @escaping () -> Void = {}
+        onDateConfirmed: @escaping () -> Void = {},
+        chartForDate: ((Date) -> DayChartModel?)? = nil,
+        onSessionConfirm: ((Date, TimePickerDraft.Commit) -> Void)? = nil,
+        initialDate: Date = Date()
     ) {
         self.chart = chart
         self.dateLabel = dateLabel
@@ -80,6 +103,8 @@ struct TimePickerSheet: View {
         self.onConfirm = onConfirm
         self.dateSelection = dateSelection
         self.onDateConfirmed = onDateConfirmed
+        self.chartForDate = chartForDate
+        self.onSessionConfirm = onSessionConfirm
         // Default draft: the currently selected hour; in the NOW
         // state on the location's today the host passes the
         // location's current hour as the initial hour, so the
@@ -88,8 +113,30 @@ struct TimePickerSheet: View {
             originalHour: initialHour,
             openedInNowState: openedInNowState,
             nowHour: nowHour,
-            selectableHours: chart?.selectableHours ?? []
+            selectableHours: chart?.selectableHours ?? [],
+            originalDate: initialDate
         ))
+        _sessionChart = State(initialValue: chart)
+        _pendingWorkingDate = State(initialValue: initialDate)
+    }
+
+    /// The chart the session currently shows: the working day's
+    /// chart once a day change has re-derived it, else the
+    /// committed day's chart the host opened with.
+    private var activeChart: DayChartModel? { sessionChart ?? chart }
+
+    /// The context line's date label for the WORKING day (the
+    /// host's label names the committed day; once the session's
+    /// day changes in place, the door must name the day the
+    /// session is actually showing — RW-131).
+    private var activeDateLabel: String {
+        guard draft.dayChanged else { return dateLabel }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(draft.workingDate) { return "Today" }
+        if calendar.isDateInTomorrow(draft.workingDate) { return "Tomorrow" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d"
+        return formatter.string(from: draft.workingDate)
     }
 
     // RW-73 DETENT RULING (Sol, Nov 6, 2026 — delegated to Tank's
@@ -119,8 +166,23 @@ struct TimePickerSheet: View {
         .sensoryFeedback(.selection, trigger: draft.draftHour)
         // GEN-6 (RW-66): the sibling day sheet, presented over
         // this one from the context line's date door.
+        // Fix wave 2026-11-07 (RW-131): under the unified
+        // session the day sheet confirms INTO THE SESSION —
+        // its binding is the session's pending working date,
+        // and its Confirm applies the day in place (this sheet
+        // stays open; the committed selection is untouched
+        // until this sheet's own Confirm). The legacy branch
+        // (no chart provider) is unchanged.
         .sheet(isPresented: $showDateSheet) {
-            if let dateSelection {
+            if chartForDate != nil {
+                DatePickerSheet(
+                    selectedDate: $pendingWorkingDate,
+                    isPresented: $showDateSheet,
+                    onConfirm: { applyWorkingDate(pendingWorkingDate) }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            } else if let dateSelection {
                 DatePickerSheet(
                     selectedDate: dateSelection,
                     isPresented: $showDateSheet,
@@ -130,6 +192,30 @@ struct TimePickerSheet: View {
                 .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    /// RW-131: apply a day confirmed inside the session — the
+    /// draft's working day changes in place and the chart
+    /// re-derives for the new day from the already-fetched
+    /// forecast. No dismissal, no commit, no home re-solve.
+    private func applyWorkingDate(_ date: Date) {
+        guard let chartForDate else { return }
+        let newChart = chartForDate(date)
+        draft.changeDay(to: date, selectableHours: newChart?.selectableHours ?? [])
+        sessionChart = newChart
+    }
+
+    /// The one Confirm: under the unified session the commit
+    /// carries the session's working date and lands through
+    /// the host's single apply path; legacy hosts keep the
+    /// hour-only commit.
+    private func confirmSession() {
+        if let onSessionConfirm {
+            onSessionConfirm(draft.commitDate, draft.commit())
+        } else {
+            onConfirm(draft.commit())
+        }
+        dismiss()
     }
 
     // Internal (not private) as the render-harness seam: a
@@ -149,10 +235,10 @@ struct TimePickerSheet: View {
 
             contextLine
 
-            if let chart {
-                readoutRow(chart: chart)
+            if let activeChart {
+                readoutRow(chart: activeChart)
                 DayChartView(
-                    model: chart,
+                    model: activeChart,
                     selectedHour: draft.draftHour,
                     nowHour: draft.nowHour,
                     interactive: true,
@@ -170,7 +256,7 @@ struct TimePickerSheet: View {
                 // words the date cells use — the wholly-empty day
                 // is named by the branch below, and a full day
                 // names nothing.
-                if let beyondCaption = DayChartBeyondForecast.caption(for: chart) {
+                if let beyondCaption = DayChartBeyondForecast.caption(for: activeChart) {
                     Text(beyondCaption)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
@@ -226,7 +312,7 @@ struct TimePickerSheet: View {
     /// plain settled text it always was.
     @ViewBuilder
     private var contextLine: some View {
-        if dateSelection != nil {
+        if dateSelection != nil || chartForDate != nil {
             // GEN-6 VQ FIX (RW-73): the one-line form is kept
             // wherever it fits whole; where the type size makes
             // it exceed the sheet's width, the line re-flows —
@@ -283,14 +369,14 @@ struct TimePickerSheet: View {
     private var dateDoor: some View {
         Button { showDateSheet = true } label: {
             HStack(spacing: 3) {
-                Text(dateLabel)
+                Text(activeDateLabel)
                 Text("›")
             }
             .font(.appSecondary.weight(.bold))
             .foregroundColor(AppTheme.pinePayload)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Choose a day: \(dateLabel)")
+        .accessibilityLabel("Choose a day: \(activeDateLabel)")
     }
 
     /// The Cancel / Confirm row. GEN-6 VQ FIX (RW-73): kept in
@@ -307,16 +393,14 @@ struct TimePickerSheet: View {
                     .foregroundColor(AppTheme.inkSecondary)
                 Spacer()
                 Button("Confirm") {
-                    onConfirm(draft.commit())
-                    dismiss()
+                    confirmSession()
                 }
                 .font(.appSecondary.weight(.bold))
                 .foregroundColor(AppTheme.pinePayload)
             }
             VStack(spacing: 10) {
                 Button("Confirm") {
-                    onConfirm(draft.commit())
-                    dismiss()
+                    confirmSession()
                 }
                 .font(.appSecondary.weight(.bold))
                 .foregroundColor(AppTheme.pinePayload)

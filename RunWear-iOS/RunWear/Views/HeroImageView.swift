@@ -960,3 +960,86 @@ struct HeroRemoteImageView: View {
         }
     }
 }
+
+// MARK: - Full-screen hero viewer (RW-133, fix wave 2026-11-07)
+
+/// The full-screen photograph viewer (Sol's RW-133 ruling):
+/// tapping the hero — or a Your Looks tile, or a Wear I've Run
+/// entry's photograph — opens the STORED photograph fitted
+/// whole on black, so the whole outfit is visible. The stored
+/// frame is fitted AS STORED (`.scaledToFit`): if a stored hero
+/// is itself a cropped frame, the viewer shows that frame whole
+/// and never crops further. At most ONE quiet caption line
+/// names the outfit's pieces. Dismiss by tapping again or
+/// swiping down; pinch zooms (and a double-tap toggles zoom).
+struct HeroPhotoViewer: View {
+    let imageURL: String?
+    /// The one quiet caption line (outfit piece names); nil or
+    /// empty renders no caption at all.
+    var caption: String? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var zoomScale: CGFloat = 1
+    @State private var lastZoomScale: CGFloat = 1
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let imageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .scaleEffect(zoomScale)
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        zoomScale = min(4, max(1, lastZoomScale * value))
+                                    }
+                                    .onEnded { _ in
+                                        lastZoomScale = zoomScale
+                                    }
+                            )
+                    case .failure:
+                        Image(systemName: "photo")
+                            .font(.largeTitle)
+                            .foregroundColor(.white.opacity(0.5))
+                    default:
+                        ProgressView().tint(.white)
+                    }
+                }
+            }
+            if let caption, !caption.isEmpty {
+                VStack {
+                    Spacer()
+                    Text(caption)
+                        .font(.appFootnote)
+                        .foregroundColor(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 28)
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            withAnimation {
+                zoomScale = zoomScale > 1 ? 1 : 2
+                lastZoomScale = zoomScale
+            }
+        }
+        .onTapGesture(count: 1) {
+            dismiss()
+        }
+        .gesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    if value.translation.height > 80 { dismiss() }
+                }
+        )
+    }
+}

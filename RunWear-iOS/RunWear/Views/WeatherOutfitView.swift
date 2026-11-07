@@ -54,6 +54,17 @@ struct WeatherOutfitView: View {
     /// GEN-6 (RW-61): the looks library sheet, opened from the
     /// failed cell's "See all your looks" door.
     @State private var showLooksLibrary = false
+    /// Fix wave 2026-11-07 (RW-135): the Wear I've Run section
+    /// lives INLINE in the home flow; while it is off-screen a
+    /// slim floating chip stands in for it. This is the
+    /// section's scroll-visibility, fed by its own
+    /// onScrollVisibilityChange.
+    @State private var wearSectionVisible = true
+    /// Chip tap → scroll-to-section request nonce; the scroll
+    /// readers inside the layouts consume it.
+    @State private var wearScrollNonce = 0
+    /// Fix wave 2026-11-07 (RW-133): the full-screen hero viewer.
+    @State private var showHeroViewer = false
 
     // R-15 rating moment: this view exists only when a recommendation
     // is on screen, so appearing here IS the proven-value signal. The
@@ -119,12 +130,23 @@ struct WeatherOutfitView: View {
                     .transition(.opacity)
                 }
             }
-            // RW-25: the "Wear I've Run" mini bar dock — attached
-            // to the home scroll's container; the bar when the
-            // session's entry exists, its designed empty form
-            // when none does yet (RW-119).
+            // Fix wave 2026-11-07 (RW-135, Sol's synthesis
+            // ruling): the Wear I've Run section is INLINE in
+            // the flow (see wearIveRunInlineSection in the sheet
+            // container) — it scrolls with the page like every
+            // other section. What stands in this inset now is
+            // only the slim JUMP CHIP, shown while the section
+            // is off-screen: a card-language chip (script mark +
+            // the entry's own live line + chevron, card surface,
+            // 20pt radius, soft shadow, inset on the page
+            // margin — never full-width, never a flat panel)
+            // whose tap scrolls back to the section. The entry
+            // lives ONLY in the section; the chip is a jump
+            // target, not a container. This also retires the
+            // RW-124 dock-boundary doubling: nothing detaches
+            // over the scrolling content anymore.
             .safeAreaInset(edge: .bottom) {
-                miniBarDock
+                wearIveRunJumpChip
             }
             .onChange(of: showFlagThanks) { _, visible in
                 if visible {
@@ -268,7 +290,24 @@ struct WeatherOutfitView: View {
                             date: viewModel.selectedDate,
                             hour: viewModel.selectedHour
                         )
-                    }
+                    },
+                    chartForDate: { viewModel.dayChart(for: $0) },
+                    onSessionConfirm: { date, commit in
+                        // Fix wave 2026-11-07 (RW-131, review
+                        // §5.5): the unified session's ONE
+                        // commit — (working date, hour) applied
+                        // once through the view model's apply
+                        // path. The day sheet's own confirm
+                        // never reaches here: under the session
+                        // it mutates the working day in place
+                        // and the time sheet stays open until
+                        // its own Confirm/Cancel. (The legacy
+                        // onDateConfirmed above is now only the
+                        // fallback for hosts without a chart
+                        // provider — this host provides one.)
+                        viewModel.applyPickerCommit(date: date, commit: commit)
+                    },
+                    initialDate: viewModel.selectedDate
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -339,6 +378,27 @@ struct WeatherOutfitView: View {
             // failed) while the user was anywhere else is the
             // server's word now, not whatever Home last rendered.
             viewModel.revalidatePersonalLookState()
+            // Fix wave 2026-11-07 (review §5.4): landing runs
+            // the store's reconciliation pass as a SET, so the
+            // bank, counter, entitlement and library all hold
+            // the same vintage as the hero.
+            Task {
+                await personalStore.reconcilePersonalLayer(
+                    currentCombination: viewModel.currentPersonalCombination
+                )
+            }
+        }
+        // Fix wave 2026-11-07 (RW-125): the Now tick — a
+        // standing Now view crosses the hour boundary as Now.
+        // The tick itself never refetches; maintenance refetches
+        // only when the location-frame hour/day actually rolled
+        // (review §5.2 row 5, risk N-4's discipline).
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                if Task.isCancelled { break }
+                viewModel.maintainNowIfNeeded()
+            }
         }
         // RW-79: the foreground re-read. A generation running
         // when the app was backgrounded keeps being watched by
@@ -347,9 +407,21 @@ struct WeatherOutfitView: View {
         // included); when the app comes back, one fresh read
         // folds the terminal state — or re-arms the poll when
         // the cell is still MAKING.
+        // Fix wave 2026-11-07: the foreground event is now ONE
+        // pass in the review's order (§5.2 row 4 + risk R-4):
+        // Now re-anchor (at the refetch's commit) → personal
+        // revalidation → the store's reconciliation as a set.
+        // A picked selection is NOT re-anchored (Sol's ruling:
+        // a return restores Now only if Now was active).
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                viewModel.handleForeground()
                 viewModel.revalidatePersonalLookState()
+                Task {
+                    await personalStore.reconcilePersonalLayer(
+                        currentCombination: viewModel.currentPersonalCombination
+                    )
+                }
             }
         }
         // A re-settled recommendation (refresh, hour change back to
@@ -469,6 +541,17 @@ struct WeatherOutfitView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        // Fix wave 2026-11-07 (RW-133): the full-screen hero
+        // viewer — the stored photograph fitted whole (never
+        // cropped further), one quiet caption line naming the
+        // outfit's pieces, tap-again or swipe-down dismisses,
+        // pinch zooms.
+        .fullScreenCover(isPresented: $showHeroViewer) {
+            HeroPhotoViewer(
+                imageURL: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl,
+                caption: recommendation.allItems.map(\.name).joined(separator: " · ")
+            )
+        }
         // Neutral THREE-door rating moment (frame 49): feedback
         // first, then the rating door, then not-now. Any door
         // closes it for the season; the rating door hands off to
@@ -523,6 +606,7 @@ struct WeatherOutfitView: View {
                     }
                 } secondary: {
                     VStack(spacing: 0) {
+                        ScrollViewReader { proxy in
                         ScrollView {
                             VStack(spacing: 0) {
                                 // RW-25 Duo: the sheet content block
@@ -551,21 +635,36 @@ struct WeatherOutfitView: View {
                                     .padding(.top, 24)
                                 personalSection
                                     .padding(.top, 24)
+                                // RW-135: the Wear I've Run
+                                // section, inline in the duo
+                                // column's flow as in the stacked
+                                // layouts.
+                                wearIveRunInlineSection
+                                    .padding(.top, 24)
                             }
                             .padding(.bottom, 16)
+                        }
+                        .onChange(of: wearScrollNonce) { _, _ in
+                            withAnimation { proxy.scrollTo("wearIveRunSection", anchor: .center) }
+                        }
                         }
                         .refreshable { onRefresh() }
                         fullWeatherEntry
                     }
                 }
             } else if horizontalSizeClass == .regular {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        heroWithScrollHandoff
-                        sheetContainer {
-                            outfitGridSection
-                                .padding(.top, 24)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            heroWithScrollHandoff
+                            sheetContainer {
+                                outfitGridSection
+                                    .padding(.top, 24)
+                            }
                         }
+                    }
+                    .onChange(of: wearScrollNonce) { _, _ in
+                        withAnimation { proxy.scrollTo("wearIveRunSection", anchor: .center) }
                     }
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
@@ -580,16 +679,21 @@ struct WeatherOutfitView: View {
                 }
                 .refreshable { onRefresh() }
             } else {
-                ScrollView {
-                    VStack(spacing: 0) {
-                        heroWithScrollHandoff
-                        sheetContainer {
-                            outfitSection
-                                .padding(.top, 24)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            heroWithScrollHandoff
+                            sheetContainer {
+                                outfitSection
+                                    .padding(.top, 24)
+                            }
                         }
+                        .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
+                        .frame(maxWidth: .infinity, alignment: .center)
                     }
-                    .frame(maxWidth: geo.size.width >= 600 ? 640 : .infinity)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                    .onChange(of: wearScrollNonce) { _, _ in
+                        withAnimation { proxy.scrollTo("wearIveRunSection", anchor: .center) }
+                    }
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     max(0, geometry.contentOffset.y + geometry.contentInsets.top)
@@ -635,6 +739,20 @@ struct WeatherOutfitView: View {
             .scaleEffect(HomeHandoffGeometry.scale(progress: progress))
             .clipShape(RoundedRectangle(cornerRadius: HomeHandoffGeometry.cornerRadius(progress: progress)))
             .padding(.horizontal, HomeHandoffGeometry.horizontalInset(progress: progress))
+            // Fix wave 2026-11-07 (RW-124): the handoff transform
+            // is a DIRECT function of the scroll offset (§1.1) —
+            // it must never be animated by an implicit
+            // transaction. Diagnosis (against the RW-135
+            // structure first, per the item): the doubling/
+            // ghosting concentrated at the detached dock's
+            // boundaries — the dock re-composed over scrolling
+            // content on every scroll frame while its own
+            // presentation animated — and the hero transform
+            // could pick up the surrounding transaction's
+            // animation, double-drawing mid-handoff. The dock is
+            // gone (RW-135 inline section); this pins the
+            // transform un-animated so the handoff draws once.
+            .animation(nil, value: heroScrollProgress)
     }
 
     /// RW-26 (notes §7.3): the script logo at the top of the main
@@ -687,6 +805,15 @@ struct WeatherOutfitView: View {
             proTipSection
                 .padding(.top, 24)
             personalSection
+                .padding(.top, 24)
+            // Fix wave 2026-11-07 (RW-135): the Wear I've Run
+            // section sits INLINE at the foot of the sheet flow —
+            // it replaced the detached bottom dock wholesale
+            // (the RW-136 "Making your looks" band redesign was
+            // declined; this section is the Wear I've Run band,
+            // Sol's complaint target, re-seated per his
+            // synthesis ruling).
+            wearIveRunInlineSection
                 .padding(.top, 24)
             Spacer(minLength: 40)
         }
@@ -941,7 +1068,66 @@ struct WeatherOutfitView: View {
     /// narrating once the session's first generation lands, and
     /// standing in its designed empty form before that (RW-119:
     /// the section is never absent from the home stack).
-    @ViewBuilder private var miniBarDock: some View {
+    /// Fix wave 2026-11-07 (RW-135): the Wear I've Run SECTION,
+    /// inline in the home flow (composed by the sheet container
+    /// and the duo column). Same presentation the dock carried —
+    /// the session entry's bar, or the designed empty form —
+    /// now seated in the scroll like every other section, with
+    /// its scroll-visibility feeding the jump chip.
+    @ViewBuilder private var wearIveRunInlineSection: some View {
+        miniBarSectionContent
+            .id("wearIveRunSection")
+            .onScrollVisibilityChange(threshold: 0.15) { visible in
+                wearSectionVisible = visible
+            }
+    }
+
+    /// Fix wave 2026-11-07 (RW-135): the slim floating chip
+    /// that stands in for the section while it is off-screen —
+    /// Great Vibes script mark + the entry's own live line +
+    /// chevron, on the card surface with the card radius and
+    /// shadow, inset on the page margin (never full-width,
+    /// never a flat panel). Tapping it scrolls to the section;
+    /// the chip holds no entry of its own. Shown only when a
+    /// session entry exists and the section is off-screen.
+    @ViewBuilder private var wearIveRunJumpChip: some View {
+        let todays = collectionModel.sessionEntry()
+        let state = WearIveRunMiniBarModel.state(
+            todaysEntry: todays,
+            moment: todays?.momentReading ?? .now,
+            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
+        )
+        if !wearSectionVisible, let line = WearIveRunNarration.line(for: state) {
+            Button {
+                wearScrollNonce += 1
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Wear I've Run")
+                        .font(.greatVibes(size: 20))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Text(line)
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(AppTheme.inkPrimary)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.appFootnote.weight(.bold))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(AppTheme.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.black.opacity(0.10), radius: 10, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel("Wear I've Run: \(line). Scroll to the section.")
+        }
+    }
+
+    @ViewBuilder private var miniBarSectionContent: some View {
         // GEN-3 (the presentation half, superseding W-15's
         // by-date key): the dock presents the CURRENT SESSION's
         // entry — the entry's own place is what the narration
@@ -990,22 +1176,16 @@ struct WeatherOutfitView: View {
                 cueCount: collectionModel.cueCount,
                 isAtEndOfScroll: isAtEndOfScroll,
                 isDimmedBySheet: anyHomeSheetPresented,
-                // RW-88: the strip follows the VIEWED place and
-                // moment — while they differ from the entry's
-                // settled state, the status line names the view
-                // ("Updated to Miami, FL, Now" / "Updated to
-                // November 12 7 p.m."); back at the entry's own
-                // place at Now, the entry's narration stands.
-                viewedNarrationPayload: todays.flatMap { entry in
-                    WearIveRunViewedNarration.payload(
-                        entryPlaceDisplayName: entry.placeDisplayName,
-                        entryMoment: entry.momentReading,
-                        viewedPlace: viewModel.simplePlace,
-                        viewedDate: viewModel.selectedDate,
-                        viewedHour: viewModel.selectedHour,
-                        isViewingNow: isViewingNow
-                    )
-                },
+                // Fix wave 2026-11-07 (Seam B unification,
+                // RW-132): narration derives from the ENTRY'S
+                // OWN RECORD only. The RW-88 viewed-state
+                // override is deleted: under the widened
+                // recording gate the viewed settle IS what the
+                // entry holds (the gate writes it at settle),
+                // so an ungated narration computed from live
+                // view state could only ever announce a state
+                // the record does not hold — the RW-132 split.
+                viewedNarrationPayload: nil,
                 onOpenCollection: { showCollection = true },
                 onTrash: {
                     // Trash deletes the PRESENTED entry — the
@@ -1025,8 +1205,10 @@ struct WeatherOutfitView: View {
     /// every later settle in the session — a new place, new
     /// weather — REPLACES that entry in place (the saved entry
     /// is the session's LAST settled version; updates never
-    /// accumulate). Only the viewed-now day records — browsing
-    /// another day never writes; the entry carries the current
+    /// accumulate). Fix wave 2026-11-07 (RW-132 ruling): the
+    /// CONFIRMED VIEWED day records — Now, a picked hour, or a
+    /// viewed future day (the pre-ruling Now-only sentence this
+    /// replaces is superseded); the entry carries the current
     /// session's identity, which is what makes the replacement
     /// land on the same entry across place changes.
     /// GEN-6 (RW-31 Wave B): the selected day's actual-
@@ -1052,32 +1234,37 @@ struct WeatherOutfitView: View {
     }
 
     private func recordTodaysEntry() {
-        // GEN-5 (RW-29 FA-2, design-spec §8.2): the settled entry
-        // is the NOW entry — browsing or confirming another hour
-        // never moves it. Build 25 guarded only the date, so a
-        // confirmed 9 p.m. overwrote today's entry with the
-        // future hour's kit, feels-like, and hero and narrated
-        // it as an update. The recording happens only in the
-        // location's Now state (Android's recording effect has
-        // the same guard); a session that only ever settles at
-        // changed hours records nothing, which is the settled
-        // session model's other side, not an accident.
-        guard viewModel.isViewingLocationNow else { return }
-        guard Calendar.current.isDateInToday(viewModel.selectedDate) else { return }
-        // GEN-6 (RW-42 / DA-09): never record while a fetch is
-        // in flight. A manual place switch names the new place
-        // synchronously (setManualLocation) and fetches its
-        // weather asynchronously — so the place trigger used to
-        // file the OUTGOING place's feels-like, kit, and hero
-        // under the INCOMING place's name, classify it a place
-        // update, and ANNOUNCE it ("Update to Miami, FL, Now")
-        // while the expanded card still showed that stale
-        // outfit — matching neither adjacent recommendation,
-        // exactly the recording's bar/card split. The
-        // isLoading re-offer below records the settle once the
-        // fetch has landed, from the one solved selection, so
-        // the announced state and the card are the same entry.
-        guard !viewModel.isLoading else { return }
+        // Fix wave 2026-11-07 (RW-110/RW-132, Sol's Nov 7
+        // future-days ruling; review §5.3): the settled entry
+        // records the CONFIRMED VIEWED selection — Now, a picked
+        // hour, or a viewed future day alike — under the VIEWED
+        // day's date (the upsert below keys on `selectedDate`).
+        // A place switch while viewing another day moves the
+        // entry to the new place under that day's date; when the
+        // day arrives, the ordinary session settle takes over.
+        // The Now-only gate this replaces (GEN-5 FA-2) is
+        // superseded by the ruling.
+        // What the gate still refuses, unchanged in spirit:
+        // GEN-6 (RW-42 / DA-09) — never record while a fetch is
+        // in flight (a place switch names the new place
+        // synchronously and fetches asynchronously; recording
+        // mid-flight filed the OUTGOING place's solve under the
+        // INCOMING place's name and announced it — the RW-132
+        // split). The isLoading re-offer below records the
+        // settle once the fetch lands, from the one solved
+        // selection, so the announced state and the card are
+        // the same entry. And an out-of-forecast PICK never
+        // records from a fallback solve — while the Now state
+        // itself solves from current conditions by ruling, so
+        // its marked fallback is admitted.
+        guard WearIveRunRecordingGate.admits(
+            isLoading: viewModel.isLoading,
+            hasCommittedSnapshot: viewModel.selectedWeatherSnapshot != nil,
+            snapshotHour: viewModel.selectedWeatherSnapshot?.hour,
+            selectedHour: viewModel.selectedHour,
+            isNowSelection: viewModel.isNowSelection,
+            selectedTimeOutsideForecast: viewModel.selectedTimeOutsideForecast
+        ) else { return }
         // W-15: never record under a placeholder. Until the
         // reverse geocode (or a manual selection) derives a
         // SimplePlace, `placeDisplayName` is a non-place label
@@ -1293,6 +1480,10 @@ struct WeatherOutfitView: View {
             heroSkeleton(heightMode: heightMode)
         } else {
             heroImageView(heightMode: heightMode)
+                // Fix wave 2026-11-07 (RW-133): tapping the
+                // hero opens the stored photograph fitted
+                // full-screen (see HeroPhotoViewer).
+                .onTapGesture { showHeroViewer = true }
         }
     }
 
