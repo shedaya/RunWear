@@ -6,6 +6,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
@@ -94,9 +97,12 @@ import com.runwear.app.weariverun.WearIveRunElementEvent
 import com.runwear.app.weariverun.WearIveRunElementMachine
 import com.runwear.app.weariverun.WearIveRunCollectionScreen
 import com.runwear.app.weariverun.WearIveRunDayEntry
-import com.runwear.app.weariverun.WearIveRunMiniBar
+import com.runwear.app.weariverun.WearIveRunDock
+import com.runwear.app.weariverun.WearIveRunDockNarration
+import com.runwear.app.weariverun.WearIveRunDockPolicy
+import com.runwear.app.weariverun.WearIveRunFooterSection
+import com.runwear.app.weariverun.WearIveRunNarration
 import com.runwear.app.weariverun.WearIveRunStore
-import com.runwear.app.weariverun.WearTransitionDriver
 import com.runwear.app.ui.viewmodel.LocationSearchState
 import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
@@ -512,91 +518,6 @@ fun HeroMainScreen(
     }
 
     val listState = rememberLazyListState()
-    // GEN-2 (motion decision §4/§5): the morph's driver for the next
-    // tap/scroll transition (cue and collapse are intrinsic to the
-    // target state and need no host driver), and whether a morph is
-    // currently in flight (reported by the element itself) — the
-    // scroll rules below latch on it.
-    var wearTransitionDriver by remember { mutableStateOf(WearTransitionDriver.TAP) }
-    var wearMorphInFlight by remember { mutableStateOf(false) }
-    // WS-3: end-of-scroll, SYMMETRIC (D-07's latch retired). The
-    // proximity zone is computed from the list's own layout info:
-    // NEAR = the last item is visible and its end is within 8 dp of
-    // the viewport's end; BEYOND = the last item is not the final
-    // one, or its end is more than 48 dp past the viewport's end;
-    // BETWEEN is a hysteresis dead zone that fires nothing. Events
-    // are EDGE-triggered: entering NEAR dispatches arrival, leaving
-    // NEAR all the way to BEYOND dispatches departure — so a tap
-    // expansion away from the end is never instantly collapsed by
-    // the element's resting scroll position.
-    val wearEndEpsilonPx = with(LocalDensity.current) {
-        WearIveRunElementMachine.END_ARRIVAL_EPSILON_DP.dp.roundToPx()
-    }
-    val wearEndDeparturePx = with(LocalDensity.current) {
-        WearIveRunElementMachine.END_DEPARTURE_THRESHOLD_DP.dp.roundToPx()
-    }
-    val wearEndZone by remember(listState, wearEndEpsilonPx, wearEndDeparturePx) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()
-            when {
-                info.totalItemsCount == 0 || last == null -> WearEndZone.BETWEEN
-                last.index < info.totalItemsCount - 1 -> WearEndZone.BEYOND
-                else -> {
-                    val pastEnd = (last.offset + last.size) - info.viewportEndOffset
-                    when {
-                        pastEnd <= wearEndEpsilonPx -> WearEndZone.NEAR
-                        pastEnd > wearEndDeparturePx -> WearEndZone.BEYOND
-                        else -> WearEndZone.BETWEEN
-                    }
-                }
-            }
-        }
-    }
-    // GEN-2 (motion decision §5): while a morph is in flight the
-    // scroll driver LATCHES — no zone edge dispatches, so a user
-    // hovering at the boundary gets one move, not a breathing card
-    // (§5.3), and during tap/cue transitions the list's offset is
-    // frozen: no scroll event moves the element mid-flight (§5.1;
-    // the dock is in the layout flow below the scroll area, so its
-    // growth alone never writes the list's offset either). When the
-    // flight ends, the CURRENT zone is re-read on the next emission
-    // and edges dispatch from the latched position.
-    LaunchedEffect(listState) {
-        var wasNearEnd = false
-        snapshotFlow { wearEndZone to wearMorphInFlight }.collect { (zone, inFlight) ->
-            if (inFlight) return@collect // latched (§5.3) / frozen (§5.1)
-            when {
-                zone == WearEndZone.NEAR && !wasNearEnd -> {
-                    wasNearEnd = true
-                    wearTransitionDriver = WearTransitionDriver.SCROLL
-                    wearIveRunHolder.onEvent(WearIveRunElementEvent.SCROLL_ARRIVED_AT_END)
-                }
-                zone == WearEndZone.BEYOND && wasNearEnd -> {
-                    wasNearEnd = false
-                    wearIveRunHolder.onEvent(WearIveRunElementEvent.SCROLL_DEPARTED_END)
-                }
-                zone == WearEndZone.BEYOND -> wasNearEnd = false
-            }
-        }
-    }
-    // GEN-2 (motion decision §5.2): end-anchored growth is 1:1 —
-    // while a SCROLL-driven expansion is in flight at the end, the
-    // list scrolls by exactly the dock's growth, so the last row
-    // stays stationary relative to the card's top edge. (Collapse on
-    // departure is the mirror: the same delta, reversed sign, runs
-    // through the COLLAPSE driver, not this seam.)
-    var wearDockHeightPx by remember { mutableIntStateOf(0) }
-    var wearPrevDockHeightPx by remember { mutableIntStateOf(0) }
-    LaunchedEffect(wearDockHeightPx) {
-        val delta = wearDockHeightPx - wearPrevDockHeightPx
-        wearPrevDockHeightPx = wearDockHeightPx
-        if (delta != 0 && wearMorphInFlight &&
-            wearTransitionDriver == WearTransitionDriver.SCROLL
-        ) {
-            listState.scrollBy(delta.toFloat())
-        }
-    }
     // Grid state for the MEDIUM/EXPANDED outfit grids (hoisted beside
     // listState so a fold/unfold posture change doesn't reset scroll).
     val gridState = rememberLazyGridState()
@@ -614,15 +535,6 @@ fun HeroMainScreen(
     // Kit Card, rasterized — see ShareArtifacts); the home text
     // share that lived here is removed with its emoji payload.
 
-    // WS-3 (D-11): the element's dim seam — true whenever ANY sheet
-    // or sheet-like surface hosted from home is up. The element dims
-    // with the home backdrop under the sheet's scrim. This lane does
-    // not rebuild any sheet (WS-5); it only consumes these existing
-    // open/closed booleans.
-    val wearAnySheetUp = showDatePicker || showTimePicker || showSettings ||
-        showLocationPicker || showShopAll || weatherDetailType != null ||
-        showHeroFlagSheet || showPersonalFlagSheet || showWearIveRunCollection ||
-        showMakeItMeFlow || showMakeItMePhotos || showMakeItMeLibrary || showMakeItMePaywall
 
     // Adaptive layout breakpoints (Material3 WindowSizeClass-aligned),
     // fluid at every width per the PWA's fully-responsive standard:
@@ -637,6 +549,116 @@ fun HeroMainScreen(
     ) {
         val spec = fluidLayoutSpec(maxWidth)
         val layout = spec.layout
+
+    // RW-135 (Direction A / A-prime): the Wear I've Run presence is
+    // a floating MINI dock (overlay, below) plus the expanded
+    // FOOTER section emitted as the lists' last item. Both surfaces
+    // present the RECORDED entry only (research section 7.0): the
+    // shown line is WearIveRunDockNarration over the holder's
+    // current recorded entry, and it refreshes only at scroll rest
+    // (the section 7.5 / package section 4.3 deferral — a settle
+    // that lands mid-scroll cross-fades once the scroll rests,
+    // never concurrent with a scroll-handoff).
+    val wearPresentState = wearIveRunState
+    val wirPresent = wearPresentState != WearIveRunBarState.Absent
+    val wirDayEntry by wearIveRunHolder.currentEntryFlow.collectAsState()
+    var wirShownLine by remember { mutableStateOf<WearIveRunNarration?>(null) }
+    val wirAnyScrolling = listState.isScrollInProgress || gridState.isScrollInProgress
+    LaunchedEffect(wirDayEntry, wirAnyScrolling) {
+        if (!wirAnyScrolling) {
+            wirShownLine = wirDayEntry?.let {
+                WearIveRunDockNarration.line(
+                    it, uiState.locationNow.toLocalDate()
+                )
+            }
+        }
+    }
+    // The footer is the last item of the active host; the dock
+    // shows only while the footer is off-screen (the legibility
+    // invariant — a pure function of scroll position).
+    val wirFooterVisible by remember(listState, gridState, layout) {
+        derivedStateOf {
+            when (layout) {
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    info.totalItemsCount > 0 && info.visibleItemsInfo.any {
+                        it.index == info.totalItemsCount - 1
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    info.totalItemsCount > 0 && info.visibleItemsInfo.any {
+                        it.index == info.totalItemsCount - 1
+                    }
+                }
+            }
+        }
+    }
+    // The dock tap: glide to the page end (the footer). Package
+    // section 4.4's duration rule is choreography pending owner
+    // approval — the platform glide stands in for now (named in
+    // the lane report).
+    val wirGlideToFooter: () -> Unit = {
+        screenScope.launch {
+            when (layout) {
+                AdaptiveLayout.COMPACT -> listState.animateScrollToItem(
+                    (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                )
+                else -> gridState.animateScrollToItem(
+                    (gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                )
+            }
+        }
+    }
+    val wirGlideFromFooter: () -> Unit = {
+        screenScope.launch {
+            when (layout) {
+                AdaptiveLayout.COMPACT -> listState.animateScrollToItem(
+                    (listState.layoutInfo.totalItemsCount - 2).coerceAtLeast(0)
+                )
+                else -> gridState.animateScrollToItem(
+                    (gridState.layoutInfo.totalItemsCount - 2).coerceAtLeast(0)
+                )
+            }
+        }
+    }
+    // One tap, NO confirmation (the settled delete rule): the
+    // machine goes ABSENT and the day's entry is deleted by
+    // identity — the collection copy is a separate surface
+    // (RW-122) and is untouched by the bar's delete.
+    val wirTrash: () -> Unit = {
+        val entry = wearIveRunHolder.currentEntry()
+        wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
+        if (entry != null) {
+            screenScope.launch {
+                wearIveRunStore.removeByIdentity(entry)
+            }
+        }
+    }
+    // The footer's content (research section 7.2 anatomy,
+    // INTERIM form): header + the record's line + the full entry
+    // row + the collection doorway.
+    val wirFooterContent: @Composable () -> Unit = {
+        val line = wirShownLine
+        val dayEntry = wirDayEntry
+        val presentState = wearIveRunState as? WearIveRunBarState.Present
+        if (line != null && dayEntry != null && presentState != null) {
+            WearIveRunFooterSection(
+                narration = line,
+                entry = presentState.entry,
+                entryLine = WearIveRunDockNarration.entryLine(
+                    dayEntry,
+                    uiState.locationNow.toLocalDate(),
+                    uiState.temperatureUnit
+                ),
+                onCollapse = wirGlideFromFooter,
+                onDelete = wirTrash,
+                onOpenCollection = { showWearIveRunCollection = true },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+    }
+
 
         when {
             // Content wins over the loading flag: once anything is on screen
@@ -660,18 +682,16 @@ fun HeroMainScreen(
                     }
                 }
 
-                // WS-3 (D-06): the content branch is a Column — the
-                // scroll area takes the flexible space and the Wear
-                // I've Run element docks BELOW it as a citizen of the
-                // layout flow (a sticky bottom dock at the end of the
-                // home content), never as a root-Box overlay floating
-                // over list rows.
-                Column(modifier = Modifier.fillMaxSize()) {
+                // RW-135: the content branch is a Box — the scroll
+                // area fills it and the MINI dock overlays its bottom
+                // (the ruled floating form); the expanded form is the
+                // footer section inside the scroll content itself.
+                Box(modifier = Modifier.fillMaxSize()) {
                 PullToRefreshBox(
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
                     state = pullToRefreshState,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     when (layout) {
                         AdaptiveLayout.COMPACT -> {
@@ -771,7 +791,9 @@ fun HeroMainScreen(
                                 // below the chart.
                                 homeTrailingListItems(
                                     uiState = uiState,
-                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
+                                    wirFooterPresent = wirPresent,
+                                    wirFooterContent = wirFooterContent
                                 )
                             }
                         }
@@ -869,7 +891,9 @@ fun HeroMainScreen(
                                 // below the chart.
                                 homeTrailingGridItems(
                                     uiState = uiState,
-                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                    onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
+                                    wirFooterPresent = wirPresent,
+                                    wirFooterContent = wirFooterContent
                                 )
                             }
                         }
@@ -987,64 +1011,55 @@ fun HeroMainScreen(
                                     // below the chart.
                                     homeTrailingGridItems(
                                         uiState = uiState,
-                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) }
+                                        onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
+                                        wirFooterPresent = wirPresent,
+                                        wirFooterContent = wirFooterContent
                                     )
                                 }
                             }
                         }
                     }
                 }
-                // WS-3: the Wear I've Run dock — the last citizen of
-                // the content Column, in flow, below the scroll area.
-                // It renders only for present states (the machine's
-                // ABSENT renders nothing and takes no space).
-                // D-11 seam: `dimmed` consumes the host's sheet state
-                // (any sheet up over home) — WS-5 owns sheet
-                // internals; this lane only reads their open/closed
-                // booleans, listed in wearAnySheetUp below.
-                if (wearIveRunState != WearIveRunBarState.Absent) {
-                    WearIveRunMiniBar(
-                        state = wearIveRunState,
-                        cueSequence = wearCueSequence,
-                        dimmed = wearAnySheetUp,
-                        transitionDriver = wearTransitionDriver,
-                        onTransitionRunningChanged = { wearMorphInFlight = it },
-                        onExpandClick = {
-                            // A tap expansion: the TAP driver (spring
-                            // 0.92/400, no overshoot) — set before the
-                            // event so the element picks it up with
-                            // the state change.
-                            wearTransitionDriver = WearTransitionDriver.TAP
-                            wearIveRunHolder.onEvent(WearIveRunElementEvent.TAP_BODY)
-                        },
-                        onCollapseClick = {
-                            wearIveRunHolder.onEvent(WearIveRunElementEvent.COLLAPSE_CONTROL)
-                        },
-                        onRemoveClick = {
-                            // Trash: one tap, NO confirmation; the
-                            // machine goes ABSENT and the day's entry
-                            // is deleted — a later generation
-                            // re-creates it and fires the creation cue.
-                            val entry = wearIveRunHolder.currentEntry()
-                            wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
-                            if (entry != null) {
-                                screenScope.launch {
-                                    // GEN-3: delete by identity —
-                                    // a session entry by sessionId
-                                    // (its place may have moved), a
-                                    // legacy entry by (date, place).
-                                    wearIveRunStore.removeByIdentity(entry)
-                                }
-                            }
-                        },
-                        onOpenCollection = { showWearIveRunCollection = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp)
-                            .padding(top = 8.dp, bottom = 8.dp)
-                            .navigationBarsPadding()
-                            .onSizeChanged { wearDockHeightPx = it.height }
-                    )
+                // RW-135: the MINI dock overlay — inset 12,
+                // lifted 14 above the bottom safe edge (over the
+                // bottom navigation), radius 16 in both forms,
+                // translucent card, soft shadow. Visible only while
+                // the footer is off-screen; enters/exits by opacity
+                // and translation only, and never while a form
+                // morph runs (there is no second form to morph
+                // with — the footer is scroll content).
+                AnimatedVisibility(
+                    visible = WearIveRunDockPolicy.dockVisible(
+                        wirPresent, wirFooterVisible
+                    ),
+                    enter = fadeIn(tween(200)) +
+                        slideInVertically(tween(300)) { it / 2 },
+                    exit = fadeOut(tween(200)) +
+                        slideOutVertically(tween(300)) { it / 2 },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    val line = wirShownLine
+                    if (line != null) {
+                        WearIveRunDock(
+                            narration = line,
+                            cueKey = wearCueSequence,
+                            cueArmed = wearIveRunState is
+                                WearIveRunBarState.Cue,
+                            onExpand = wirGlideToFooter,
+                            onDelete = wirTrash,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal =
+                                        WearIveRunDockPolicy.DOCK_INSET_DP.dp
+                                )
+                                .navigationBarsPadding()
+                                .padding(
+                                    bottom =
+                                        WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
+                                )
+                        )
+                    }
                 }
                 }
             }
@@ -1532,7 +1547,6 @@ internal enum class AdaptiveLayout { COMPACT, MEDIUM, EXPANDED }
  * visible), BETWEEN (the hysteresis dead zone between them). Only
  * NEAR→BEYOND and →NEAR edges dispatch machine events.
  */
-internal enum class WearEndZone { NEAR, BETWEEN, BEYOND }
 
 /** Minimum outfit-card cell width — the PWA grid's minmax(290px, 1fr). */
 internal val OUTFIT_GRID_MIN_CELL: Dp = 290.dp
@@ -1942,7 +1956,9 @@ private fun LazyListScope.outfitListItems(
  */
 private fun LazyListScope.homeTrailingListItems(
     uiState: MainUiState,
-    onFeedbackClick: () -> Unit
+    onFeedbackClick: () -> Unit,
+    wirFooterPresent: Boolean = false,
+    wirFooterContent: @Composable () -> Unit = {}
 ) {
     val outfit = uiState.outfit ?: return
 
@@ -1974,6 +1990,13 @@ private fun LazyListScope.homeTrailingListItems(
                 .clickable { onFeedbackClick() }
                 .padding(horizontal = 20.dp, vertical = 10.dp)
         )
+    }
+
+    // RW-135 (Direction A / A-prime): the expanded Wear I've Run
+    // form is the page's FOOTER — the final item, in the flow.
+    // INTERIM form pending the owner's package approval.
+    if (wirFooterPresent) {
+        item(key = "wir-footer") { wirFooterContent() }
     }
 }
 
@@ -2031,7 +2054,9 @@ private fun LazyGridScope.outfitGridItems(
  */
 private fun LazyGridScope.homeTrailingGridItems(
     uiState: MainUiState,
-    onFeedbackClick: () -> Unit
+    onFeedbackClick: () -> Unit,
+    wirFooterPresent: Boolean = false,
+    wirFooterContent: @Composable () -> Unit = {}
 ) {
     val outfit = uiState.outfit ?: return
 
@@ -2060,6 +2085,13 @@ private fun LazyGridScope.homeTrailingGridItems(
                 .clickable { onFeedbackClick() }
                 .padding(vertical = 10.dp)
         )
+    }
+
+    // RW-135: the footer section, full span — see the list helper.
+    if (wirFooterPresent) {
+        item(span = { GridItemSpan(maxLineSpan) }, key = "wir-footer") {
+            wirFooterContent()
+        }
     }
 }
 

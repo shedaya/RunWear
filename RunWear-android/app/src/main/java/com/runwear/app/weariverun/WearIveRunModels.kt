@@ -409,6 +409,84 @@ object WearMomentLabel {
     }
 }
 
+/**
+ * RW-135 (Direction A / A-prime, owner-ruled Nov 7, 2026): the
+ * dock and footer line as a PURE FUNCTION OF THE RECORDED ENTRY
+ * (research section 7.0 — the precondition). The bar renders the
+ * entry object and nothing computed from live view state: if the
+ * record has not changed, the line cannot change; a viewed but
+ * unsettled change never appears here, because this function can
+ * only be called on the recorded entry.
+ *
+ * Forms (research section 7.2):
+ * - settled, the location's today (or an older rest entry):
+ *   "Updated to {place}" — the payload is the place alone;
+ * - a future-day plan: "Planned for {place} · {day}" — a plan
+ *   never wears the "Updated to" form.
+ */
+object WearIveRunDockNarration {
+
+    /** "{Today | Tomorrow | Weekday, Mon D}" for a recorded day. */
+    fun dayLabel(date: java.time.LocalDate, today: java.time.LocalDate): String =
+        when (date) {
+            today -> "Today"
+            today.plusDays(1) -> "Tomorrow"
+            else -> date.format(
+                java.time.format.DateTimeFormatter.ofPattern(
+                    "EEEE, MMM d", java.util.Locale.US
+                )
+            )
+        }
+
+    /** The one line, from the record alone. */
+    fun line(
+        entry: WearIveRunDayEntry,
+        today: java.time.LocalDate
+    ): WearIveRunNarration {
+        val place = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(entry.place).display
+        return if (entry.date > today) {
+            val prefix = "Planned for "
+            val suffix = " · " + dayLabel(entry.date, today)
+            WearIveRunNarration(
+                text = prefix + place + suffix,
+                payloadStart = prefix.length,
+                payloadEnd = prefix.length + place.length
+            )
+        } else {
+            val prefix = "Updated to "
+            WearIveRunNarration(
+                text = prefix + place,
+                payloadStart = prefix.length,
+                payloadEnd = prefix.length + place.length
+            )
+        }
+    }
+
+    /**
+     * The footer's entry line (research section 7.2 anatomy):
+     * "{place} · {day} — {feelsLike} feels like · {item names}".
+     * Every field from the record.
+     */
+    fun entryLine(
+        entry: WearIveRunDayEntry,
+        today: java.time.LocalDate,
+        unit: com.runwear.shared.domain.model.TemperatureUnit
+    ): String {
+        val place = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(entry.place).display
+        val sb = StringBuilder()
+        sb.append(place).append(" · ").append(dayLabel(entry.date, today))
+        sb.append(" — ").append(unit.formatTemperature(entry.feelsLikeF))
+        sb.append(" feels like")
+        val items = entry.items.filter { it.isNotBlank() }
+        if (items.isNotEmpty()) {
+            sb.append(" · ").append(items.joinToString(" · "))
+        }
+        return sb.toString()
+    }
+}
+
 /** Pure narration composition for the bar's one line. */
 object WearIveRunNarrationFormatter {
 
@@ -533,6 +611,15 @@ class WearIveRunBarStateHolder {
     private val _state = MutableStateFlow<WearIveRunBarState>(WearIveRunBarState.Absent)
     val state: StateFlow<WearIveRunBarState> = _state.asStateFlow()
 
+    private val _currentEntry =
+        MutableStateFlow<WearIveRunDayEntry?>(null)
+
+    /** RW-135: the recorded entry the surfaces present, as state —
+     * the dock/footer read the record itself (section 7.0), never
+     * a reconstruction from view state. */
+    val currentEntryFlow: StateFlow<WearIveRunDayEntry?> =
+        _currentEntry.asStateFlow()
+
     private val _cueSequence = MutableStateFlow(0)
 
     /** Monotonic cue identity — increments exactly once per landing that cues. */
@@ -540,7 +627,6 @@ class WearIveRunBarStateHolder {
 
     private var kind: WearIveRunElementKind = WearIveRunElementKind.ABSENT
     private var current: WearIveRunDayEntry? = null
-    private var narration: WearIveRunNarration? = null
 
     /** The day the holder believes it is in; null until first contact. */
     private var knownDay: java.time.LocalDate? = null
@@ -564,7 +650,15 @@ class WearIveRunBarStateHolder {
 
     private fun emit() {
         val entry = current
-        val line = narration
+        _currentEntry.value = entry
+        // RW-135 (research section 7.0): the presented line is a
+        // pure function of the recorded entry — recomputed here,
+        // at the one funnel every presentation passes through, so
+        // no landing path can announce anything the record does
+        // not hold (the RW-132 fix, structural).
+        val line = entry?.let {
+            WearIveRunDockNarration.line(it, knownDay ?: it.date)
+        }
         _state.value = when {
             kind == WearIveRunElementKind.ABSENT || entry == null || line == null ->
                 WearIveRunBarState.Absent
@@ -596,20 +690,6 @@ class WearIveRunBarStateHolder {
         )
     }
 
-    private fun addedNarration(entry: WearIveRunDayEntry): WearIveRunNarration {
-        val simplePlace = com.runwear.shared.domain.model.SimplePlace
-            .fromRawDisplayString(entry.place).display
-        return WearIveRunNarrationFormatter.added(
-            simplePlace,
-            WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)
-        )
-    }
-
-    private fun updateNarration(entry: WearIveRunDayEntry): WearIveRunNarration =
-        // GEN-5 (C-7): the fallback update line is the place form —
-        // a garment payload can no longer be produced here either.
-        updatePlaceNarration(entry)
-
     /** Dispatch one machine event — the UI's only way to move the element. */
     fun onEvent(event: WearIveRunElementEvent) {
         if (event == WearIveRunElementEvent.DAY_ROLLOVER) {
@@ -624,7 +704,6 @@ class WearIveRunBarStateHolder {
             kind = WearIveRunElementMachine.transition(kind, event)
             if (kind == WearIveRunElementKind.ABSENT) {
                 current = null
-                narration = null
             }
             emit()
             return
@@ -639,25 +718,9 @@ class WearIveRunBarStateHolder {
         knownDay = newDay
         kind = WearIveRunElementMachine.transition(kind, WearIveRunElementEvent.DAY_ROLLOVER)
         current = null
-        narration = null
         trashedTodayIdentity = null
         awaitingTodaysGeneration = true
         emit()
-    }
-
-    /** GEN-3 (WS-C): the "Updated to {place}, {day}" narration for a
-     * within-session change whose kit did not change — a place (or
-     * day) move in the same session is an UPDATE of the session's
-     * one entry, never a new "Added …" (census X-4). */
-    private fun updatePlaceNarration(entry: WearIveRunDayEntry): WearIveRunNarration {
-        val simplePlace = com.runwear.shared.domain.model.SimplePlace
-            .fromRawDisplayString(entry.place).display
-        return WearIveRunNarrationFormatter.update(
-            WearIveRunNarrationPayload.Place(
-                simplePlace,
-                WearIveRunCollectionLogic.narrationDayForm(entry.date, knownDay ?: entry.date)
-            )
-        )
     }
 
     /**
@@ -683,14 +746,12 @@ class WearIveRunBarStateHolder {
         val next = todays ?: entries.maxByOrNull { it.date }
         if (next == null) {
             current = null
-            narration = null
             kind = WearIveRunElementKind.ABSENT
             emit()
             return
         }
         if (next.date == today) awaitingTodaysGeneration = false
         current = next
-        narration = addedNarration(next)
         kind = WearIveRunElementKind.MINI
         emit()
     }
@@ -726,7 +787,6 @@ class WearIveRunBarStateHolder {
                 // re-creation.
                 trashedTodayIdentity = null
                 current = back
-                narration = addedNarration(back)
                 kind = WearIveRunElementMachine.transition(
                     WearIveRunElementKind.ABSENT, WearIveRunElementEvent.GENERATION_LANDED
                 )
@@ -736,7 +796,6 @@ class WearIveRunBarStateHolder {
             }
             if (todays == null) {
                 current = null
-                narration = null
                 kind = WearIveRunElementKind.ABSENT
                 emit()
                 return
@@ -751,7 +810,6 @@ class WearIveRunBarStateHolder {
             // Rolled over and today has no generation yet: ABSENT,
             // and yesterday's entry does not present.
             current = null
-            narration = null
             kind = WearIveRunElementKind.ABSENT
             emit()
             return
@@ -760,7 +818,6 @@ class WearIveRunBarStateHolder {
         val next = todays ?: entries.maxByOrNull { it.date }
         if (next == null) {
             current = null
-            narration = null
             kind = WearIveRunElementKind.ABSENT
             emit()
             return
@@ -774,7 +831,6 @@ class WearIveRunBarStateHolder {
                 // day's generation landing (creation cue); an older
                 // entry is just the doorway at rest (MINI, no cue).
                 current = next
-                narration = addedNarration(next)
                 kind = if (next.date == today) {
                     _cueSequence.value = _cueSequence.value + 1
                     WearIveRunElementMachine.transition(
@@ -821,15 +877,11 @@ class WearIveRunBarStateHolder {
                 val kitChanged = previous.items != next.items
                 current = next
                 if (placeChanged) {
-                    narration = updatePlaceNarration(next)
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )
                     _cueSequence.value = _cueSequence.value + 1
                 } else if (momentChanged || kitChanged) {
-                    narration = WearIveRunUpdateNarration.narration(
-                        previous, next, knownDay ?: next.date
-                    ) ?: updateNarration(next)
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
                     )
@@ -844,7 +896,6 @@ class WearIveRunBarStateHolder {
                 // For today that is a creation; for an older entry
                 // it is a content swap at rest.
                 current = next
-                narration = addedNarration(next)
                 if (next.date == today) {
                     kind = WearIveRunElementMachine.transition(
                         kind, WearIveRunElementEvent.GENERATION_LANDED
