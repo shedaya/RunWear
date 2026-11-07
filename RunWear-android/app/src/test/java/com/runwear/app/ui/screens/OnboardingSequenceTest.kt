@@ -140,7 +140,8 @@ class OnboardingSequenceTest {
         // the perfect outfit ready to go." — the free-looks
         // sentence no longer rides the welcome point. The
         // canonical sentence itself stays defined verbatim.
-        assertEquals("Your first 5 looks are free.", OnboardingCopy.FREE_LOOKS_PROMISE)
+        // RW-128 re-pin (Nov 7, 2026): free allowance 5 → 10.
+        assertEquals("Your first 10 looks are free.", OnboardingCopy.FREE_LOOKS_PROMISE)
         assertEquals(
             "Picture yourself at the start line with the perfect outfit ready to go.",
             OnboardingCopy.PROMISE_2_PHRASE
@@ -205,8 +206,10 @@ class OnboardingSequenceTest {
         )
         // Frame 34's accounting line is design-mandated and stays,
         // character for character.
+        // RW-128 re-pin (Nov 7, 2026): the frame-34 accounting
+        // line follows the shared allowance of 10.
         assertEquals(
-            "That was look 1 of your 5 free looks — 4 remain, whenever you want them.",
+            "That was look 1 of your 10 free looks — 9 remain, whenever you want them.",
             MakeItMeStrings.FIRST_LOOK_COUNT_LINE
         )
     }

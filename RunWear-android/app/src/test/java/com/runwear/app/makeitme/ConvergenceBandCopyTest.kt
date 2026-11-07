@@ -45,15 +45,20 @@ class ConvergenceBandCopyTest {
     }
 
     @Test
-    fun `coverage derives from the banked set and the engaged set`() {
-        // The pre-target fallback (no forecast derivation yet this
-        // session): engaged-union denominator, as gen-3 pinned it.
+    fun `coverage without a target set reports no denominator`() {
+        // RW-126 / review row 19 (Nov 7, 2026): the gen-3
+        // engaged-union fallback is DELETED — after process death
+        // it invented a small denominator from whatever cells
+        // happened to be engaged and read as near-convergence.
+        // No target set means the denominator is UNKNOWN: the
+        // coverage is empty and the band stays retired until the
+        // forecast derivation restores the real target.
         val cov = deriveBankCoverage(
             heroCells = setOf("a", "b", "c"),
             jobCells = setOf("c", "d", "e", "f")
         )
-        assertEquals(3, cov.ready)
-        assertEquals(6, cov.total)
+        assertEquals(0, cov.ready)
+        assertEquals(0, cov.total)
     }
 
     @Test
@@ -150,15 +155,15 @@ class ConvergenceBandCopyTest {
     }
 
     @Test
-    fun `the FREE tier's own X of 5 counters are explicitly KEPT unchanged`() {
-        // COUNT RULING scope (Sol, Nov 4): the no-count treatment is
-        // the Premium band ONLY. The free counters Sol confirmed
-        // himself stay exactly as they were — the hero pill's
-        // "N of 5 looks" and the Settings meter family.
-        assertEquals("2 of 5 looks", MakeItMeStrings.heroPillLookCount(2))
-        assertEquals("0 of 5 looks", MakeItMeStrings.heroPillLookCount(0))
+    fun `the FREE tier's own counters follow the shared allowance`() {
+        // COUNT RULING scope (Sol, Nov 4) as re-pinned by RW-128
+        // (Nov 7, 2026): the free counters stay VISIBLE (the
+        // no-count treatment is the Premium band only) and now
+        // read against the raised allowance of 10.
+        assertEquals("2 of 10 looks", MakeItMeStrings.heroPillLookCount(2))
+        assertEquals("0 of 10 looks", MakeItMeStrings.heroPillLookCount(0))
         assertEquals(
-            "Your first 5 looks are free.",
+            "Your first 10 looks are free.",
             com.runwear.app.ui.screens.OnboardingCopy.FREE_LOOKS_PROMISE
         )
     }

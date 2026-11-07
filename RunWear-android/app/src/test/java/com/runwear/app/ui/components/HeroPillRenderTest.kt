@@ -43,7 +43,7 @@ import org.robolectric.annotation.GraphicsMode
  *
  *  - Generating: script + spinner + "Making this you…" + the green
  *    "Get it instantly next time" on FREE only.
- *  - Free exact: script + "— N of 5 looks · Get unlimited".
+ *  - Free exact: script + "— N of 10 looks · Get unlimited".
  *  - Exhausted: script + used-up count + "Get unlimited" as the
  *    main message, whole pill tappable.
  *  - Premium exact: script + "Premium" + lock, nothing else.
@@ -168,14 +168,14 @@ class HeroPillRenderTest {
     fun `render - free exact serve shows the look count and Get unlimited`() {
         val pill = resolve(used = 3)
         assertEquals(HeroPillKind.EXACT_FREE, pill?.kind)
-        val texts = renderPill("pill-exact-free-3-of-5", pill!!)
-        assertTrue(texts.any { it.contains("3 of 5 looks") })
+        val texts = renderPill("pill-exact-free-3-of-10", pill!!)
+        assertTrue(texts.any { it.contains("3 of 10 looks") })
         assertTrue(texts.any { it.contains(MakeItMeStrings.HERO_PILL_GET_UNLIMITED) })
     }
 
     @Test
     fun `render - exhausted shows the used-up count with Get unlimited as the main message`() {
-        val pill = resolve(used = 5)
+        val pill = resolve(used = 10)
         assertEquals(HeroPillKind.EXHAUSTED, pill?.kind)
         assertTrue(pill?.wholePillAction == true)
         val texts = renderPill("pill-exhausted", pill!!)
@@ -191,7 +191,7 @@ class HeroPillRenderTest {
         val texts = renderPill("pill-premium", pill!!)
         assertTrue(texts.any { it.contains(MakeItMeStrings.HERO_PILL_SCRIPT_MARK) })
         assertTrue(texts.any { it == MakeItMeStrings.HERO_PILL_PREMIUM })
-        assertTrue(texts.none { it.contains("of 5 looks") })
+        assertTrue(texts.none { it.contains("of 10 looks") })
         assertTrue(texts.none { it.contains("ready before you open") })
         assertTrue(texts.none { it.contains("Get unlimited") })
     }

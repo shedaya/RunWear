@@ -77,7 +77,9 @@ object OnboardingCopy {
     const val PROMISE_FOOTER = "Free to start · Set up in under a minute"
 
     /** The A1 promise sentence — sanctioned on frame 28 ONLY. */
-    const val FREE_LOOKS_PROMISE = "Your first 5 looks are free."
+    // RW-128: derives from the one allowance constant (10).
+    val FREE_LOOKS_PROMISE: String =
+        "Your first ${com.runwear.app.makeitme.MakeItMeUpsellRules.FREE_ALLOWANCE} looks are free."
 
     // ── Frame 29 · Setup (preferences, Android expression) ──────
     const val SETUP_STEP_LABEL = "Step 1 of 2"

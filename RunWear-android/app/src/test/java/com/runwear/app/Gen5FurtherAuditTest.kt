@@ -39,19 +39,20 @@ class Gen5FurtherAuditTest {
             MakeItMeStrings.FIRST_LOOK_COUNT_LINE,
             MakeItMeStrings.firstLookCountLine(1)
         )
+        // RW-128 (Nov 7, 2026): free allowance 5 → 10.
         assertEquals(
-            "That was look 3 of your 5 free looks — 2 remain, whenever you want them.",
+            "That was look 3 of your 10 free looks — 7 remain, whenever you want them.",
             MakeItMeStrings.firstLookCountLine(3)
         )
         assertEquals(
-            "That was look 5 of your 5 free looks — 0 remain, whenever you want them.",
-            MakeItMeStrings.firstLookCountLine(5)
+            "That was look 10 of your 10 free looks — 0 remain, whenever you want them.",
+            MakeItMeStrings.firstLookCountLine(10)
         )
         // A stale or out-of-range meter read can never produce a
         // nonsense count on the moment.
         assertEquals(
-            MakeItMeStrings.firstLookCountLine(5),
-            MakeItMeStrings.firstLookCountLine(9)
+            MakeItMeStrings.firstLookCountLine(10),
+            MakeItMeStrings.firstLookCountLine(15)
         )
     }
 

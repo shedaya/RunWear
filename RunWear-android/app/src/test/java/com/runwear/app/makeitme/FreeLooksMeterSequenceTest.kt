@@ -18,7 +18,10 @@ import org.junit.Test
  * exhaustion — in BOTH completion patterns (clean status settle,
  * and the stale-map pattern from the recording), asserting the
  * displayed used count and in-flight count at EVERY step and that
- * their sum never exceeds the allowance of 5.
+ * their sum never exceeds the allowance.
+ *
+ * RW-128 RE-PIN (Nov 7, 2026): the free allowance is 10 (was 5);
+ * every bound and sequence below follows the shared allowance.
  */
 class FreeLooksMeterSequenceTest {
 
@@ -55,8 +58,8 @@ class FreeLooksMeterSequenceTest {
 
     private fun parseDisplayed(line: String): Pair<Int, Int> {
         val used = when {
-            line.startsWith("All 5 free looks used") -> 5
-            else -> Regex("(\\d+) of 5 free looks used").find(line)
+            line.startsWith("All 10 free looks used") -> 10
+            else -> Regex("(\\d+) of 10 free looks used").find(line)
                 ?.groupValues?.get(1)?.toInt()
                 ?: error("no used count in '$line'")
         }
@@ -76,8 +79,8 @@ class FreeLooksMeterSequenceTest {
         assertEquals("[$step] displayed used in '$line'", expectedUsed, used)
         assertEquals("[$step] displayed making in '$line'", expectedMaking, making)
         assertTrue(
-            "[$step] used + making = ${used + making} exceeds 5 in '$line'",
-            used + making <= 5
+            "[$step] used + making = ${used + making} exceeds 10 in '$line'",
+            used + making <= 10
         )
         // The shared seam agrees with the line it produced.
         assertEquals(expectedUsed, FreeLooksMeter.displayedUsed(driver.deliveredUsed))
@@ -91,51 +94,50 @@ class FreeLooksMeterSequenceTest {
     fun `clean completions - request, in flight, complete, to exhaustion`() {
         val d = MeterDriver()
         assertStep(d, 0, 0, "start")
-        for (k in 1..5) {
+        for (k in 1..10) {
             val cell = "cell-$k"
             d.request(cell)
             assertStep(d, k - 1, 1, "request $k in flight")
             d.completeClean(cell)
             assertStep(d, k, 0, "completion $k")
         }
-        assertEquals("All 5 free looks used", d.line())
+        assertEquals("All 10 free looks used", d.line())
     }
 
     @Test
-    fun `stale map completions - the recording pattern never exceeds five`() {
+    fun `stale map completions - the recording pattern never exceeds the allowance`() {
         val d = MeterDriver()
-        // Four looks requested; deliveries land via counter refresh
+        // Ten looks requested; deliveries land via counter refresh
         // while every cell status still says Making.
-        listOf("a", "b", "c", "d").forEach { d.request(it) }
-        assertStep(d, 0, 4, "four in flight")
+        val cells = listOf("a", "b", "c", "d", "e", "f", "g", "h", "i", "j")
+        cells.forEach { d.request(it) }
+        assertStep(d, 0, 10, "ten in flight")
         d.completeStale("a")
-        // used 1 + raw making 4 = exactly the allowance: all four
-        // may still show as making (the sum binds, not each input).
-        assertStep(d, 1, 4, "first stale delivery (raw making still 4)")
+        // used 1 + raw making 10: the displayed making clamps so
+        // the sum binds at the allowance, not each input.
+        assertStep(d, 1, 9, "first stale delivery (raw making still 10)")
         d.completeStale("b")
-        // The recording's exact state: used 2, raw making 4.
-        assertEquals(4, d.rawMaking())
-        assertStep(d, 2, 3, "recording state 2 used + 4 raw making -> sum 5, not 6")
+        assertEquals(10, d.rawMaking())
+        assertStep(d, 2, 8, "recording pattern 2 used + 10 raw making -> sum 10")
         d.completeStale("c")
-        assertStep(d, 3, 2, "third stale delivery")
-        d.completeStale("d")
-        // The recording's second state: used 4, raw making 4.
-        assertStep(d, 4, 1, "recording state 4 used + 4 raw making -> sum 5, not 7")
-        d.request("e")
-        d.completeStale("e")
-        assertStep(d, 5, 0, "exhausted - stale making fully absorbed")
-        assertEquals("All 5 free looks used", d.line())
+        assertStep(d, 3, 7, "third stale delivery")
+        // Remaining deliveries absorb the stale map one-for-one.
+        listOf("d", "e", "f", "g", "h", "i").forEach { d.completeStale(it) }
+        assertStep(d, 9, 1, "ninth stale delivery")
+        d.completeStale("j")
+        assertStep(d, 10, 0, "exhausted - stale making fully absorbed")
+        assertEquals("All 10 free looks used", d.line())
         // The Settings block agrees: no "being made" tail at exhaustion.
         val block = FreeLooksMeter.block(d.deliveredUsed, d.rawMaking(), subscribed = false)
         assertEquals(MakeItMeStrings.S3_STATUS, block[0])
-        assertEquals("All 5 free looks used", block[1])
+        assertEquals("All 10 free looks used", block[1])
     }
 
     @Test
     fun `paywall line clamps an over-allowance counter`() {
         assertEquals(
-            MakeItMeStrings.u2MeterLine(5),
-            FreeLooksMeter.paywallLine(7, lookMaking = false)
+            MakeItMeStrings.u2MeterLine(10),
+            FreeLooksMeter.paywallLine(12, lookMaking = false)
         )
         assertEquals(
             MakeItMeStrings.u2MeterLine(3),

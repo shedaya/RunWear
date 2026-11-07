@@ -25,20 +25,20 @@ class Gen3SettingsTest {
         assertEquals(MakeItMeStrings.S26_MAKING_STATUS, block[0])
         assertEquals("Making your look…", block[0])
         // …and the meter line states the delivered count WITH the
-        // pending look in the same line — not a bare settled "0 of 5".
-        assertEquals("0 of 5 free looks used · 1 look is being made", block[1])
+        // pending look in the same line — not a bare settled "0 of 10".
+        assertEquals("0 of 10 free looks used · 1 look is being made", block[1])
         assertFalse(block[1] == MakeItMeStrings.s4FreeUsed(0))
     }
 
     @Test
     fun `settled block is the status line plus the delivered count`() {
         assertEquals(
-            listOf("You're in your photos.", "1 of 5 free looks used"),
+            listOf("You're in your photos.", "1 of 10 free looks used"),
             FreeLooksMeter.block(deliveredUsed = 1, looksMaking = 0, subscribed = false)
         )
         assertEquals(
-            listOf("You're in your photos.", "All 5 free looks used"),
-            FreeLooksMeter.block(deliveredUsed = 5, looksMaking = 0, subscribed = false)
+            listOf("You're in your photos.", "All 10 free looks used"),
+            FreeLooksMeter.block(deliveredUsed = 10, looksMaking = 0, subscribed = false)
         )
     }
 
@@ -47,7 +47,7 @@ class Gen3SettingsTest {
         // GEN-5 (RW-29 FA-10): three looks in flight read as
         // three — the gen-4 Boolean seam always printed one.
         val block = FreeLooksMeter.block(deliveredUsed = 2, looksMaking = 3, subscribed = false)
-        assertEquals("2 of 5 free looks used · 3 looks are being made", block[1])
+        assertEquals("2 of 10 free looks used · 3 looks are being made", block[1])
     }
 
     @Test
@@ -70,7 +70,7 @@ class Gen3SettingsTest {
             FreeLooksMeter.paywallLine(0, lookMaking = true)
         )
         assertEquals(
-            "2 of 5 used · Free looks never expire — and your first ones take about a minute to make.",
+            "2 of 10 used · Free looks never expire — and your first ones take about a minute to make.",
             FreeLooksMeter.paywallLine(2, lookMaking = false)
         )
     }

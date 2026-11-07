@@ -59,16 +59,17 @@ class HeroPillPolicyTest {
     }
 
     @Test
-    fun `gen-5 exhausted - at exactly 5 of 5 the free pill becomes the upsell status`() {
+    fun `gen-5 exhausted - at exactly 10 of 10 the free pill becomes the upsell status`() {
+        // RW-128 (Nov 7, 2026): free allowance 5 → 10.
         val pill = HeroPillPolicy.resolve(
             lookStatus = PersonalLookStatus.Ready,
             serveKind = PersonalServeKind.EXACT,
             heroIsPersonal = true,
             mode = MakeItMeMode.FREE,
-            freeGenerationsUsed = 5
+            freeGenerationsUsed = 10
         )
         assertEquals(HeroPillKind.EXHAUSTED, pill?.kind)
-        assertEquals("5 of 5 used", pill?.text)
+        assertEquals("10 of 10 used", pill?.text)
         assertEquals(MakeItMeStrings.HERO_PILL_GET_UNLIMITED, pill?.actionText)
         assertTrue(pill?.showScriptMark == true)
         assertTrue(pill?.wholePillAction == true)
@@ -76,16 +77,17 @@ class HeroPillPolicyTest {
     }
 
     @Test
-    fun `gen-5 exhausted - at 4 of 5 the pill is still the ordinary free status`() {
+    fun `gen-5 exhausted - at 9 of 10 the pill is still the ordinary free status`() {
+        // RW-128 (Nov 7, 2026): free allowance 5 → 10.
         val pill = HeroPillPolicy.resolve(
             lookStatus = PersonalLookStatus.Ready,
             serveKind = PersonalServeKind.EXACT,
             heroIsPersonal = true,
             mode = MakeItMeMode.FREE,
-            freeGenerationsUsed = 4
+            freeGenerationsUsed = 9
         )
         assertEquals(HeroPillKind.EXACT_FREE, pill?.kind)
-        assertEquals("4 of 5 looks", pill?.text)
+        assertEquals("9 of 10 looks", pill?.text)
     }
 
     @Test
@@ -138,7 +140,7 @@ class HeroPillPolicyTest {
         assertEquals(HeroPillKind.EXACT_FREE, pill?.kind)
         // GEN-3 DESIGN DELTA (Sol, Nov 4): "looks" wording per the
         // approved mock, and the script mark leads the state.
-        assertEquals("1 of 5 looks", pill?.text)
+        assertEquals("1 of 10 looks", pill?.text)
         assertEquals(MakeItMeStrings.HERO_PILL_GET_UNLIMITED, pill?.actionText)
         assertTrue(pill?.showScriptMark == true)
         assertTrue(pill?.showLock == false)
@@ -219,7 +221,7 @@ class HeroPillPolicyTest {
             freeGenerationsUsed = 1
         )
         assertEquals(HeroPillKind.EXACT_FREE, landing?.kind)
-        assertEquals("1 of 5 looks", landing?.text)
+        assertEquals("1 of 10 looks", landing?.text)
     }
 
     @Test

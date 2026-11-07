@@ -216,7 +216,9 @@ class PersonalHeroPoliciesTest {
     private fun upsell(
         personalizationOn: Boolean = true,
         entitled: Boolean = false,
-        freeGenerationsUsed: Int = 5,
+        // RW-128 (Nov 7, 2026): the free allowance is 10 (was 5) —
+        // the exhausted default follows the shared allowance.
+        freeGenerationsUsed: Int = 10,
         cellHasPersonalHero: Boolean = false,
         cellGenerationPending: Boolean = false,
         combinationId: String = "MALE_CLEAR_WARM_DAWN_aaaaaaaa",

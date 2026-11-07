@@ -122,14 +122,16 @@ object MakeItMeStrings {
     // GEN-5 ADDENDUM (Sol, Nov 5, 2026 ~06:30 CST): the EXHAUSTED
     // pill status — a free user who has used all 5 free looks. The
     // used-up count, stated honestly; the upsell is the main message.
-    const val HERO_PILL_EXHAUSTED_COUNT = "5 of 5 used"
+    // RW-128: the count derives from the one allowance constant.
+    val HERO_PILL_EXHAUSTED_COUNT: String =
+        "${MakeItMeUpsellRules.FREE_ALLOWANCE} of ${MakeItMeUpsellRules.FREE_ALLOWANCE} used"
 
     /** The script mark the pill carries in states (b)(c)(d). */
     const val HERO_PILL_SCRIPT_MARK = "Make It Me"
 
-    /** The pill's free-tier look count: "1 of 5 looks" (real server count). */
+    /** The pill's free-tier look count: "1 of 10 looks" (real server count). */
     fun heroPillLookCount(freeGenerationsUsed: Int): String =
-        "$freeGenerationsUsed of 5 looks"
+        "$freeGenerationsUsed of ${MakeItMeUpsellRules.FREE_ALLOWANCE} looks"
 
     const val G1_PROGRESS = "Making this outfit yours…"
     // GEN-6 WAVE A (RW-47): the settled §11 honesty line is
@@ -245,7 +247,11 @@ object MakeItMeStrings {
 
     /** S4 — free-tier sub-status with the user's real count. */
     fun s4FreeUsed(used: Int): String =
-        if (used >= 5) "All 5 free looks used" else "$used of 5 free looks used"
+        if (used >= MakeItMeUpsellRules.FREE_ALLOWANCE) {
+            "All ${MakeItMeUpsellRules.FREE_ALLOWANCE} free looks used"
+        } else {
+            "$used of ${MakeItMeUpsellRules.FREE_ALLOWANCE} free looks used"
+        }
 
     // U — Upsell and subscription sheet (spec §5)
     const val U1A_EYEBROW = "MAKE IT ME"
@@ -258,7 +264,8 @@ object MakeItMeStrings {
     // its text. The highlighted card is "Premium" / "All of Make It
     // Me." and the CTA carries NO price.
     const val U2A_SHEET_TITLE = "Make It Me"
-    const val U2D_FREE_BAR = "Free plan · 5 looks included"
+    val U2D_FREE_BAR: String =
+        "Free plan · ${MakeItMeUpsellRules.FREE_ALLOWANCE} looks included"
     const val U2E_HOW_PREMIUM_WORKS = "How Premium works"
     const val U2F_HOW_PREMIUM_WORKS_BODY = "Looks of you for every scenario. This week's weather is made first; the rest are made as you need them, and each one is banked for good once it's made."
     const val U2G_CARD_TITLE = "Premium"
@@ -266,7 +273,7 @@ object MakeItMeStrings {
     const val U2I_CTA = "Keep going with Premium"
     /** Free-looks meter line (frame 22 verbatim pattern, real numbers). */
     fun u2MeterLine(used: Int): String =
-        "$used of 5 used · Free looks never expire — and your first ones take about a minute to make."
+        "$used of ${MakeItMeUpsellRules.FREE_ALLOWANCE} used · Free looks never expire — and your first ones take about a minute to make."
     // Fallback row labels shown only until the current offering
     // resolves (the rows stay disabled until then). Price-free on
     // purpose — see S8 note above. Resolved rows are built by
@@ -436,8 +443,9 @@ object MakeItMeStrings {
         "No look was used. You can try again any time from your outfit."
     const val FIRST_LOOK_BAND_HEADER = "With Premium"
     const val FIRST_LOOK_HEADLINE = "You're in the photo now."
-    const val FIRST_LOOK_COUNT_LINE =
-        "That was look 1 of your 5 free looks — 4 remain, whenever you want them."
+    // RW-128: composed from the allowance (look 1 of 10, 9 remain).
+    val FIRST_LOOK_COUNT_LINE: String =
+        "That was look 1 of your ${MakeItMeUpsellRules.FREE_ALLOWANCE} free looks — ${MakeItMeUpsellRules.FREE_ALLOWANCE - 1} remain, whenever you want them."
 
     /**
      * GEN-5 (RW-29 FA-6): the first-look count line COMPOSED from
@@ -448,7 +456,10 @@ object MakeItMeStrings {
      * remains the canonical wording for the first look itself
      * (used = 1); every other count composes from the same words.
      */
-    fun firstLookCountLine(used: Int, total: Int = 5): String {
+    fun firstLookCountLine(
+        used: Int,
+        total: Int = MakeItMeUpsellRules.FREE_ALLOWANCE
+    ): String {
         val shownUsed = used.coerceIn(1, total)
         val remaining = (total - shownUsed).coerceAtLeast(0)
         val remainClause = if (remaining == 1) {
