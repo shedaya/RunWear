@@ -207,6 +207,54 @@
 // the database (public.reconcile_candidates) so the per-drain
 // scan limit bounds true candidates — counted, hero-less,
 // job-less — rather than the oldest healthy counted cells.
+//
+// RW-120 amendment (2026-11-07): provider failures are their own
+// failure class, distinct from gate_failed. Field case (Juneau job
+// 45f4ac65, 2026-11-06): both draws passed identity (0.72), failed
+// the gate ONLY on headwear absence, and were routed into the
+// headwear edit — whose predictions Replicate refused with E005
+// ("flagged as sensitive"). No edited image was ever produced, so
+// no gate verdict on a final image exists; the draw's terminal
+// blocker was the provider refusal. The job nevertheless terminated
+// as stage 'prescription_gate' with error "gate_failed: head seen
+// null != prompt headband" — the base draw's routing verdict
+// misrecorded as the job's reason, and downstream the serve path's
+// reason classifier (get-personal-hero's lookReasonClass) read it
+// as a quality refusal instead of a service refusal. A gate failure
+// on an unedited draw that is headwear-edit-eligible is a ROUTING
+// signal into the edit, not a terminal rejection; when the edit
+// (or a draw prediction) dies at the provider, the job now records
+// stage 'provider_error' and error "provider_error: <code>: <the
+// provider's verbatim message>" with the provider code (e.g. E005)
+// preserved. Genuine gate failures keep the exact gate_failed
+// strings; the per-draw records keep everything either way (base
+// verdict in the draw's failures / edit.trigger_failures, provider
+// text in edit.error). Gate-failure accounting — the stage column
+// and the gate_failed prefix — therefore excludes provider
+// refusals, and lookReasonClass maps the new string to its
+// pre-existing 'service_refused' class with no consumer change.
+//
+// RW-121 amendment (2026-11-07): a terminally failed FILL cell is
+// now visible to the RW-107 sweep. Field case (2026-11-06 burst):
+// cell MALE_CLEAR_COLD_DAWN failed its subscriber_fill job at the
+// gate (3 draws) and was left with no hero, no personal_cells row
+// (a cell row is only ever created by the hero-insert trigger),
+// and no retry — the sweep's candidates all live in
+// personal_cells, so the cell was invisible to it and the bank
+// could never complete. Now, when a subscriber_fill job fails
+// terminally (budget exhaustion or the fail-closed catch), the
+// worker records the failure on the cell (regen_status 'failed' +
+// regen_error, the same shape a failed regeneration cycle leaves),
+// guarded on the cell still having no hero. Migration
+// 20261107053000 extends public.reconcile_candidates to return
+// such cells (uncounted, hero-less, job-less, with a terminally
+// FAILED subscriber_fill job), and the existing sweep machinery —
+// candidate re-checks, 24 h retry floor via the regen-pending
+// stamp, 'regeneration' repair at the profile's current epoch,
+// never charging the free allowance — repairs them unchanged.
+// On view, the failed cell presents exactly like any other failed
+// cell (Lane C semantics); the sweep is what guarantees the
+// repair does not wait for that view.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -1233,6 +1281,78 @@ async function predictionOutputBytes(predictionId: string, maxWaitMs: number, on
   return new Uint8Array(await resp.arrayBuffer())
 }
 
+// ---------------------------------------------------------------------
+// RW-120: provider failure classification (see the RW-120 header
+// amendment). A provider refusal — a prediction that terminated
+// failed/canceled at Replicate with the provider's own error text,
+// or a prediction CREATE the provider refused with an HTTP error —
+// is a different failure class from a gate rejection: it retries
+// differently, reports differently, and must not be counted in
+// gate-failure statistics. Poll timeouts and transport errors are
+// NOT provider refusals (the provider never ruled on anything);
+// they keep the RW-90 draw_timeout / draw_failed names.
+// ---------------------------------------------------------------------
+export type ProviderFailure = { code: string | null, message: string }
+
+// The provider's error code, preserved verbatim (Replicate's
+// content-flag refusal carries "(E005)" in its message text).
+export function providerErrorCode(message: string): string | null {
+  const paren = message.match(/\((E\d{3,4})\)/)
+  if (paren) return paren[1]
+  const bare = message.match(/\b(E\d{3,4})\b/)
+  return bare ? bare[1] : null
+}
+
+// Classify a thrown pipeline error message as a provider refusal,
+// or null when the provider never refused anything. The two shapes
+// are the ones predictionOutputBytes / the create helpers throw:
+//   "Prediction <id> failed: <provider text>"   (terminal refusal)
+//   "Prediction <id> canceled: <provider text>" (terminal refusal)
+//   "PuLID create failed: <status> <body>"      (create refusal)
+//   "Kontext edit create failed: <status> <body>" (create refusal)
+export function classifyProviderFailure(message: string): ProviderFailure | null {
+  if (/^Prediction \S+ (failed|canceled):/.test(message)) {
+    return { code: providerErrorCode(message), message }
+  }
+  if (/^(PuLID create failed|Kontext edit create failed): \d{3}\b/.test(message)) {
+    return { code: providerErrorCode(message), message }
+  }
+  return null
+}
+
+// The job-level error string for a provider-terminated job. It
+// deliberately does NOT start with gate_failed (the serve path's
+// classifier reads that prefix as a quality refusal); it preserves
+// the provider code and the provider's verbatim message, which is
+// what routes it to the pre-existing 'service_refused' class.
+export function providerFailureText(pf: ProviderFailure | null): string {
+  if (!pf) return 'provider_error: provider failure (detail on the draw record)'
+  return `provider_error:${pf.code ? ` ${pf.code}:` : ''} ${pf.message}`
+}
+
+// The job's terminal failure text at draw-budget exhaustion,
+// composed from the LAST draw's terminal stage (the pipeline's
+// standing convention). The prescription_gate / identity_screen /
+// generic branches are byte-identical to the pre-RW-120 inline
+// composition; the provider_error branch is RW-120's.
+export function terminalFailureText(args: {
+  lastStage: string, lastFailures: GateFailure[],
+  identityBest: number | null,
+  lastProviderFailure: ProviderFailure | null,
+  drawsUsedTotal: number, budget: number
+}): string {
+  if (args.lastStage === 'prescription_gate') {
+    return `gate_failed: ${args.lastFailures.map(f => f.message).join('; ')}`
+  }
+  if (args.lastStage === 'identity_screen') {
+    return `gate_failed: identity_screen (best similarity ${args.identityBest ?? 'none'})`
+  }
+  if (args.lastStage === 'provider_error') {
+    return providerFailureText(args.lastProviderFailure)
+  }
+  return `${args.lastStage}: draw never returned a usable image within the job's draw budget (${args.drawsUsedTotal}/${args.budget} draws used)`
+}
+
 // Resume support (stale-claim recovery): fetch a completed
 // prediction's output bytes; null when no longer retrievable
 // (Replicate retains prediction outputs ~1h).
@@ -1518,7 +1638,7 @@ async function attemptHeadwearEdit(
 // rides along in the edit field.
 async function screenAndGate(
   job: JobRow, prompt: string, bytes: Uint8Array, refBytes: Uint8Array
-): Promise<{ stage: string, screen: ScreenResult, deliverable?: ScreenedDraw, verdict?: GateVerdict, gateCached?: boolean, edit?: EditRecord }> {
+): Promise<{ stage: string, screen: ScreenResult, deliverable?: ScreenedDraw, verdict?: GateVerdict, gateCached?: boolean, edit?: EditRecord, providerFailure?: ProviderFailure }> {
   const screen = await callIdentityScreen(refBytes, bytes)
   if (!screen.delivered) return { stage: 'identity_screen', screen }
   const imageHash = await sha256Hex(bytes)
@@ -1531,6 +1651,24 @@ async function screenAndGate(
         gateCached: edited.deliverable.gateCached,
         verdict: edited.deliverable.verdict,
         deliverable: edited.deliverable, edit: edited.edit
+      }
+    }
+    // RW-120: the edit was attempted and the PROVIDER refused it —
+    // no edited image was ever produced, so there is no gate
+    // verdict on a final image and the base draw's (routing)
+    // verdict is not the draw's terminal reason. The draw ends at
+    // the provider, under the provider's own failure class; the
+    // base verdict still rides along (draw record failures /
+    // edit.trigger_failures) for diagnosis. A non-provider edit
+    // error (timeout, download failure) leaves the original gate
+    // verdict as the draw's reason, as before.
+    if (edited && edited.edit.outcome === 'edit_error' && edited.edit.error) {
+      const pf = classifyProviderFailure(edited.edit.error)
+      if (pf) {
+        return {
+          stage: 'provider_error', screen, verdict, gateCached: cached,
+          edit: edited.edit, providerFailure: pf
+        }
       }
     }
     return {
@@ -1749,6 +1887,44 @@ async function recordFallback(job: JobRow, reason: string, entitled: boolean) {
   if (error) console.error('[personal-hero-worker] fallback event failed:', error)
 }
 
+// RW-121: record a fill job's terminal failure on its cell, so the
+// RW-107 reconciliation sweep can see the cell (its candidates
+// live in personal_cells, and a cell row otherwise exists only
+// after a hero insert). The record is the shape a failed
+// regeneration cycle leaves — regen_status 'failed' + regen_error
+// — and never touches the counted flags: on insert they take their
+// false defaults; on conflict the upsert updates only the columns
+// listed here, so a counted cell's free_counted / ever_delivered
+// survive. Guarded on the cell still having no hero: a cell that
+// holds a hero is served, not abandoned, whatever this job did.
+// Best-effort by design (a failed record must not fail the job
+// twice); the failure itself is already on the job row.
+async function recordFailedFillCell(job: JobRow, reason: string) {
+  try {
+    const { data: heroes } = await supabase
+      .from('personal_heroes')
+      .select('id')
+      .eq('user_id', job.user_id)
+      .eq('combination_id', job.combination_id)
+      .limit(1)
+    if (heroes && heroes.length > 0) return
+    const { error } = await supabase
+      .from('personal_cells')
+      .upsert({
+        user_id: job.user_id, combination_id: job.combination_id,
+        regen_status: 'failed', regen_error: reason,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,combination_id' })
+    if (error) {
+      console.error('[personal-hero-worker] fill failure cell record failed:', error)
+    } else {
+      console.log(`[personal-hero-worker] job ${job.id}: recorded terminal fill failure on cell ${job.combination_id} (RW-121)`)
+    }
+  } catch (e) {
+    console.error('[personal-hero-worker] fill failure cell record failed:', e)
+  }
+}
+
 async function processJob(job: JobRow): Promise<Record<string, unknown>> {
   // Guarded claim.
   const { data: claimed, error: claimError } = await supabase
@@ -1825,6 +2001,7 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     let identityBest: number | null = null
     let lastStage = 'identity_screen'
     let lastFailures: GateFailure[] = []
+    let lastProviderFailure: ProviderFailure | null = null
 
     const noteScreen = (rec: DrawRecord, screen: ScreenResult) => {
       rec.identity_similarity = screen.similarity
@@ -1849,11 +2026,18 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       if (outcome.verdict) {
         rec.gate_pass = outcome.verdict.pass
         rec.gate_cached = outcome.gateCached
-        rec.failures = outcome.verdict.failures
+        // RW-120: when the provider ended the draw, the draw record
+        // names the provider failure as the draw's failure; the base
+        // gate verdict that routed the draw into the edit is
+        // preserved in rec.edit.trigger_failures.
+        rec.failures = outcome.providerFailure
+          ? [{ rule: 'provider_error', message: outcome.providerFailure.message }]
+          : outcome.verdict.failures
         rec.notes = outcome.verdict.notes
       }
       lastStage = outcome.stage
       if (outcome.verdict) lastFailures = outcome.verdict.failures
+      lastProviderFailure = outcome.providerFailure ?? null
       if (!outcome.deliverable) return false
       const delivered = await deliver(job, outcome.deliverable, variant, rec)
       if (delivered === 'allowance_exhausted') {
@@ -1924,9 +2108,16 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
         )
       } catch (e) {
         const message = (e as Error).message
+        // RW-120: a provider-side prediction refusal (e.g. an E005
+        // content flag on the draw itself) is its own failure class
+        // at the draw step too; poll timeouts and transport errors
+        // keep the RW-90 names — the provider never ruled on those.
+        const providerFailure = message.startsWith('Prediction timed out')
+          ? null : classifyProviderFailure(message)
         const stage = message.startsWith('Prediction timed out')
-          ? 'draw_timeout' : 'draw_failed'
+          ? 'draw_timeout' : providerFailure ? 'provider_error' : 'draw_failed'
         lastStage = stage
+        lastProviderFailure = providerFailure
         const rec: DrawRecord = {
           draw: drawNo, prediction_id: predictionId,
           image_hash: null, identity_similarity: null, stage,
@@ -1956,11 +2147,10 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
     // Budget exhausted: nothing stored; stock keeps serving. For an
     // entitled user this is the RW-16.20 fallback — counted, never
     // silent.
-    const failureText = lastStage === 'prescription_gate'
-      ? `gate_failed: ${lastFailures.map(f => f.message).join('; ')}`
-      : lastStage === 'identity_screen'
-        ? `gate_failed: identity_screen (best similarity ${identityBest ?? 'none'})`
-        : `${lastStage}: draw never returned a usable image within the job's draw budget (${drawsUsedTotal}/${budget} draws used)`
+    const failureText = terminalFailureText({
+      lastStage, lastFailures, identityBest, lastProviderFailure,
+      drawsUsedTotal, budget
+    })
     await markJob(job.id, {
       status: 'FAILED', stage: lastStage,
       error_message: failureText,
@@ -1970,6 +2160,11 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       completed_at: new Date().toISOString()
     })
     await recordFallback(job, lastStage, entitled)
+    // RW-121: a fill job's terminal failure is recorded on its
+    // cell so the reconciliation sweep can repair the cell.
+    if (job.kind === 'subscriber_fill') {
+      await recordFailedFillCell(job, failureText)
+    }
     return { job_id: job.id, status: 'FAILED', error: failureText, draws }
   } catch (e) {
     if (e instanceof AllowanceExhausted) {
@@ -1984,6 +2179,12 @@ async function processJob(job: JobRow): Promise<Record<string, unknown>> {
       ...(stage ? { stage } : {}),
       completed_at: new Date().toISOString()
     })
+    // RW-121: a fill job that dies in the fail-closed catch is
+    // just as terminal as a budget exhaustion — record it on the
+    // cell for the reconciliation sweep.
+    if (job.kind === 'subscriber_fill') {
+      await recordFailedFillCell(job, message)
+    }
     if (stage === 'infrastructure') {
       const { data: profile } = await supabase
         .from('personal_profiles')
