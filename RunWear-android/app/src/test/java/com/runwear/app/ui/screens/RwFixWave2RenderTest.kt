@@ -6,8 +6,10 @@ import android.graphics.Canvas
 import android.os.Looper
 import android.view.View
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -42,7 +44,12 @@ import org.robolectric.annotation.GraphicsMode
  * RwFixWaveRenderTest pattern. Captures land in
  * build/render-out-rw-fix-wave-2/ and are staged with the lane report.
  *
- *  - RW-135 is HELD (owner ruling pending) — no capture in this wave.
+ *  - RW-135 (Direction A / A-prime, ruled Nov 7): the MINI dock
+ *    renders the ruled form (wordmark 17pt + the record's line +
+ *    controls), the INTERIM footer renders the section 7.2
+ *    anatomy, and the comparison-position composition proves the
+ *    chart label row stays fully visible with the dock present
+ *    (section 7.8 check 1, staged).
  *  - RW-133: the full-screen viewer composes with at most one quiet
  *    caption line naming the outfit pieces. (The stored photo itself
  *    is decoded by Coil from a remote URL at runtime; under
@@ -200,5 +207,158 @@ class RwFixWave2RenderTest {
             "chapter carries the by-place remove-all action: $all",
             all.any { it == "Remove all New York, NY entries" }
         )
+    }
+
+    // -- RW-135 ------------------------------------------------------
+
+    private fun wirEntry(
+        date: LocalDate = LocalDate.of(2026, 11, 7),
+        place: String = "Boston, Massachusetts"
+    ) = WearIveRunDayEntry(
+        date = date, place = place, feelsLikeF = 41.0,
+        conditionLabel = "Cloudy", isSnowing = false, isRaining = false,
+        items = listOf("Light Tights", "Wind Shell"), heroRef = null
+    )
+
+    @Test
+    fun `rw135 - the mini dock renders the ruled form`() {
+        val today = LocalDate.of(2026, 11, 7)
+        val line = com.runwear.app.weariverun.WearIveRunDockNarration
+            .line(wirEntry(), today)
+        val host = compose {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                com.runwear.app.weariverun.WearIveRunDock(
+                    narration = line,
+                    cueKey = 0,
+                    cueArmed = false,
+                    onExpand = {},
+                    onDelete = {},
+                    modifier = Modifier.padding(bottom = 14.dp)
+                )
+            }
+        }
+        val all = texts(host)
+        assertTrue("wordmark renders: $all",
+            all.any { it.contains("Wear I've Run") })
+        assertTrue("the record's line renders: $all",
+            all.any { it.contains("Updated to Boston, MA") })
+        val dock = boundsOf(host, "Updated to Boston, MA")
+        assertNotNull(dock)
+        // Inset on the page margin (12dp at xhdpi = 24px), never
+        // full-width: the line starts inside the inset.
+        assertTrue("dock is inset: $dock", dock!!.left >= 24f)
+        capture(host, "rw135-dock.png")
+        host.controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `rw135 - the interim footer renders the section 7_2 anatomy`() {
+        val today = LocalDate.of(2026, 11, 7)
+        val dayEntry = wirEntry(date = today.plusDays(1))
+        val line = com.runwear.app.weariverun.WearIveRunDockNarration
+            .line(dayEntry, today)
+        val entryLine = com.runwear.app.weariverun.WearIveRunDockNarration
+            .entryLine(
+                dayEntry, today,
+                com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT
+            )
+        val host = compose {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                com.runwear.app.weariverun.WearIveRunFooterSection(
+                    narration = line,
+                    entry = com.runwear.app.weariverun.WearIveRunEntry(
+                        place = "Boston, MA",
+                        timeLabel = "Tomorrow",
+                        thumbnailUrl = null,
+                        feelsLikeF = 41.0,
+                        itemCount = 2,
+                        itemNames = listOf("Light Tights", "Wind Shell")
+                    ),
+                    entryLine = entryLine,
+                    onCollapse = {},
+                    onDelete = {},
+                    onOpenCollection = {}
+                )
+            }
+        }
+        val all = texts(host)
+        assertTrue("plan-form narration: $all",
+            all.any { it.contains("Planned for Boston, MA · Tomorrow") })
+        assertTrue("entry line: $all", all.any {
+            it.contains("Boston, MA · Tomorrow — 41°F feels like")
+        })
+        assertTrue("collection doorway: $all",
+            all.any { it.contains("Open the collection") })
+        capture(host, "rw135-footer.png")
+        host.controller.pause().stop().destroy()
+    }
+
+    @Test
+    fun `rw135 - comparison position - chart labels fully visible with the dock present`() {
+        // Section 7.8 check 1, staged as a composition in the
+        // ruled geometry: the day chart's label row ends exactly
+        // where the dock's space begins (62dp of clearance = the
+        // dock's height + its 14dp lift); the dock must not cover
+        // any part of the label row.
+        val today = LocalDate.of(2026, 11, 7)
+        val line = com.runwear.app.weariverun.WearIveRunDockNarration
+            .line(wirEntry(), today)
+        val host = compose {
+            Box(modifier = Modifier.fillMaxSize()) {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(RunWearColors.Surface)
+                ) {
+                    androidx.compose.foundation.layout.Spacer(
+                        Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.Text(
+                        text = "Feels-like by hour"
+                    )
+                    androidx.compose.material3.Text(
+                        text = "6a   8a   10a   12p   2p   4p"
+                    )
+                    androidx.compose.foundation.layout.Spacer(
+                        Modifier.height(62.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    com.runwear.app.weariverun.WearIveRunDock(
+                        narration = line,
+                        cueKey = 0,
+                        cueArmed = false,
+                        onExpand = {},
+                        onDelete = {},
+                        modifier = Modifier.padding(bottom = 14.dp)
+                    )
+                }
+            }
+        }
+        val labels = boundsOf(host, "6a")
+        val dockLine = boundsOf(host, "Updated to Boston, MA")
+        assertNotNull(labels)
+        assertNotNull(dockLine)
+        assertTrue(
+            "label row fully above the dock: labels=$labels dock=$dockLine",
+            labels!!.bottom <= dockLine!!.top + 4f
+        )
+        capture(host, "rw135-comparison.png")
+        host.controller.pause().stop().destroy()
     }
 }

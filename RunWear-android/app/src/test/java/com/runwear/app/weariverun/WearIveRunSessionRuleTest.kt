@@ -196,7 +196,7 @@ class WearIveRunSessionRuleTest {
         holder.state.value as WearIveRunBarState.Present
 
     @Test
-    fun `the walkthrough sequence - one Added then only updates, and the bar follows the latest commit`() {
+    fun `the walkthrough sequence - one creation then only updates, and the bar follows the latest commit`() {
         val holder = WearIveRunBarStateHolder()
         val narrations = mutableListOf<String>()
 
@@ -204,7 +204,7 @@ class WearIveRunSessionRuleTest {
             listOf(entry(place = "Overland Park, KS", settledAt = 1L)), today
         )
         narrations += present(holder).narration.text
-        assertEquals("Added Overland Park, KS, Now", narrations.last())
+        assertEquals("Updated to Overland Park, KS", narrations.last())
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
 
         // Place change, kit unchanged: an UPDATE (X-4), and the
@@ -216,7 +216,7 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Updated to New York, NY, Now", narrations.last())
+        assertEquals("Updated to New York, NY", narrations.last())
         assertEquals("New York, NY", present(holder).entry.place)
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
 
@@ -234,11 +234,15 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Updated to Miami, FL, Now", narrations.last())
+        assertEquals("Updated to Miami, FL", narrations.last())
         assertEquals("Miami, FL", present(holder).entry.place)
         assertEquals(90.0, present(holder).entry.feelsLikeF!!, 0.001)
 
-        assertEquals(1, narrations.count { it.startsWith("Added ") })
+        // RW-135: the ruled line has no "Added" form — creation and
+        // updates alike read "Updated to {place}" (section 7.2);
+        // the one-entry discipline is pinned by the cue count
+        // below and the entry assertions above.
+        assertEquals(0, narrations.count { it.startsWith("Added ") })
         assertEquals(3, holder.cueSequence.value)
     }
 
@@ -272,12 +276,12 @@ class WearIveRunSessionRuleTest {
     }
 
     @Test
-    fun `a new session presents as a fresh Added in a new holder`() {
+    fun `a new session presents fresh in a new holder`() {
         val first = WearIveRunBarStateHolder()
         first.onEntriesChanged(
             listOf(entry(sessionId = "session-1", settledAt = 1L)), today
         )
-        assertEquals("Added Overland Park, KS, Now", present(first).narration.text)
+        assertEquals("Updated to Overland Park, KS", present(first).narration.text)
 
         // Process death -> new session -> new holder. The store now
         // holds both sessions' entries; the new holder presents the
@@ -290,7 +294,7 @@ class WearIveRunSessionRuleTest {
             ),
             today
         )
-        assertEquals("Added Miami, FL, Now", present(newHolder).narration.text)
+        assertEquals("Updated to Miami, FL", present(newHolder).narration.text)
         assertEquals("session-2", newHolder.currentEntry()?.sessionId)
     }
 

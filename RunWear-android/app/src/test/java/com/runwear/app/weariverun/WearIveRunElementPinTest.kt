@@ -21,6 +21,9 @@ import org.junit.Test
  *   counter) is gone, expand/collapse/trash all dispatch machine
  *   events, and the mini bar's expand callback can no longer open
  *   the collection;
+ * - RW-135 (Nov 7, 2026) re-pinned three host pins below: the
+ *   ruled floating dock reverses D-06, the dim seam is retired,
+ *   and expansion is the glide (scroll drivers gone).
  * - D-11 + F-2: the dim seam consumes the host's sheet booleans and
  *   passes them to the element; the sheets themselves are untouched
  *   by this lane — their dismiss paths (system Back → the hosting
@@ -56,28 +59,33 @@ class WearIveRunElementPinTest {
         sourceFile("app/src/main/java/com/runwear/app/weariverun/WearIveRunMiniBar.kt").readText()
 
     @Test
-    fun `the element is a dock in the layout flow - not a root overlay - D-06`() {
+    fun `rw135 - the mini dock is a bottom overlay and the expanded form is the footer`() {
+        // RW-135 (Direction A, owner-ruled Nov 7, 2026) REVERSES
+        // the D-06 in-flow dock: the MINI bar is a floating overlay
+        // above the bottom navigation, and the expanded form is
+        // the footer section inside the scroll content.
         val host = heroMainScreen()
-        // The old floating dock's fingerprints are gone.
-        assertFalse(
-            "no 88dp bottom-padded overlay dock (that was D-06)",
-            host.contains(".padding(bottom = 88.dp)")
-        )
-        // The dock is composed after the PullToRefreshBox, inside the
-        // content branch — layout order is the pin: find both and
-        // require dock-after-scroll-area.
         val pullAt = host.indexOf("PullToRefreshBox(")
-        val dockAt = host.indexOf("WearIveRunMiniBar(", pullAt)
+        val dockAt = host.indexOf("WearIveRunDock(", pullAt)
         assertTrue("PullToRefreshBox must exist", pullAt >= 0)
-        assertTrue("the dock must be composed after the scroll area", dockAt > pullAt)
-        val dockCall = host.substring(dockAt, host.indexOf("navigationBarsPadding", dockAt))
+        assertTrue("the dock is composed after the scroll area", dockAt > pullAt)
         assertTrue(
-            "the dock fills the flow width (a citizen, not an overlay)",
-            dockCall.contains(".fillMaxWidth()")
+            "the dock is bottom-aligned in the content Box (the ruled overlay)",
+            host.contains("WearIveRunDockPolicy.dockVisible(") &&
+                host.contains(".align(Alignment.BottomCenter)")
+        )
+        assertTrue(
+            "the dock takes the ruled 12dp inset seam",
+            host.contains("WearIveRunDockPolicy.DOCK_INSET_DP")
         )
         assertFalse(
-            "the dock must not be aligned to the root Box's bottom",
-            dockCall.contains(".align(Alignment.BottomCenter)")
+            "the in-flow MiniBar is retired as the Home presence",
+            host.contains("WearIveRunMiniBar(")
+        )
+        assertTrue(
+            "the expanded form is the footer section in the flow",
+            host.contains("WearIveRunFooterSection(") &&
+                host.contains("\"wir-footer\"")
         )
     }
 
@@ -105,15 +113,19 @@ class WearIveRunElementPinTest {
     }
 
     @Test
-    fun `every control dispatches a machine event - expand no longer opens the collection`() {
+    fun `rw135 - delete dispatches TRASH, expansion is the glide, the doorway opens the collection`() {
         val host = heroMainScreen()
-        assertTrue(host.contains("WearIveRunElementEvent.TAP_BODY"))
-        assertTrue(host.contains("WearIveRunElementEvent.COLLAPSE_CONTROL"))
+        // Delete: one tap through the shared trash wiring.
         assertTrue(host.contains("WearIveRunElementEvent.TRASH"))
-        assertTrue(host.contains("WearIveRunElementEvent.SCROLL_ARRIVED_AT_END"))
-        assertTrue(host.contains("WearIveRunElementEvent.SCROLL_DEPARTED_END"))
-        // The collection opens ONLY through the expanded card's
-        // doorway callback.
+        // Expansion is the glide to the footer — the host no
+        // longer dispatches tap/scroll machine events (the
+        // end-zone scroll drivers are retired with the in-flow
+        // dock; section 7.5's no-morph-with-scroll-handoff rule
+        // is structural now).
+        assertTrue(host.contains("wirGlideToFooter"))
+        assertFalse(host.contains("SCROLL_ARRIVED_AT_END"))
+        assertFalse(host.contains("SCROLL_DEPARTED_END"))
+        // The collection opens ONLY through the footer's doorway.
         assertTrue(host.contains("onOpenCollection = { showWearIveRunCollection = true }"))
         // Day rollover is dispatched as its own driver.
         assertTrue(host.contains("wearIveRunHolder.onDayRollover(wearToday)"))
@@ -129,17 +141,18 @@ class WearIveRunElementPinTest {
     }
 
     @Test
-    fun `the element dims with the backdrop whenever any sheet is up - D-11`() {
+    fun `rw135 - the dim seam is retired - sheets overlay the dock`() {
+        // RW-135: the dock carries no dim seam; the sheets are
+        // dialogs hosted after the content and scrim over the
+        // whole screen, the dock included.
         val host = heroMainScreen()
-        assertTrue(
-            "the dim seam is computed from the host's sheet booleans",
-            host.contains("val wearAnySheetUp = showDatePicker || showTimePicker || showSettings")
+        assertFalse(
+            "no sheet-boolean dim seam feeds the presence",
+            host.contains("dimmed = wearAnySheetUp")
         )
-        assertTrue(host.contains("dimmed = wearAnySheetUp"))
-        val bar = miniBar()
-        assertTrue(
-            "the element applies the backdrop alpha as a whole",
-            bar.contains("WearIveRunMiniBarPolicy.surfaceAlpha(dimmed)")
+        assertFalse(
+            "the seam itself is gone from the host",
+            host.contains("val wearAnySheetUp")
         )
     }
 

@@ -46,11 +46,11 @@ class WearIveRunSimplePlaceTest {
         holder.state.value as WearIveRunBarState.Present
 
     @Test
-    fun `creation narration is Added simple place comma Now - from a raw geocode input`() {
+    fun `creation narration is Updated to the simple place - from a raw geocode input`() {
         val holder = holderWith(entry(place = "New York, New York"))
         val narration = mini(holder).narration
-        assertEquals("Added New York, NY, Now", narration.text)
-        assertEquals("New York, NY, Now", narration.payload)
+        assertEquals("Updated to New York, NY", narration.text)
+        assertEquals("New York, NY", narration.payload)
         assertFalse(narration.text.contains("New York, New York"))
         assertFalse(narration.text.contains("Today"))
         // The bar entry itself carries the simple place, not the raw string.
@@ -62,11 +62,11 @@ class WearIveRunSimplePlaceTest {
     fun `creation narration with a long place name and multi-word region stays simple`() {
         val holder = holderWith(entry(place = "Truth or Consequences, New Mexico"))
         assertEquals(
-            "Added Truth or Consequences, NM, Now",
+            "Updated to Truth or Consequences, NM",
             mini(holder).narration.text
         )
         val nc = holderWith(entry(place = "Winston-Salem, North Carolina"))
-        assertEquals("Added Winston-Salem, NC, Now", mini(nc).narration.text)
+        assertEquals("Updated to Winston-Salem, NC", mini(nc).narration.text)
     }
 
     @Test
@@ -84,8 +84,8 @@ class WearIveRunSimplePlaceTest {
         // gen-4 device build rendered as a garment narration), so
         // there is nothing garment-shaped left to assert on the
         // entry; the narration assertions below are the contract.
-        assertEquals("Updated to New York, NY, Now", narration.text)
-        assertEquals("New York, NY, Now", narration.payload)
+        assertEquals("Updated to New York, NY", narration.text)
+        assertEquals("New York, NY", narration.payload)
         assertFalse(narration.text.contains("Thermal Tights"))
         assertFalse(narration.text.contains("Today"))
     }
@@ -97,11 +97,11 @@ class WearIveRunSimplePlaceTest {
             listOf(entry(place = "Aspen, Colorado", items = emptyList(), feels = 30.0)),
             today
         )
-        assertEquals("Updated to Aspen, CO, Now", mini(holder).narration.text)
+        assertEquals("Updated to Aspen, CO", mini(holder).narration.text)
     }
 
     @Test
-    fun `narration day form is Now for today and MMM d otherwise - never Today`() {
+    fun `an older entry presents the settled form - its day lives in the entry line, not the bar line`() {
         assertEquals("Now", WearIveRunCollectionLogic.narrationDayForm(today, today))
         assertEquals(
             "Nov 1",
@@ -111,7 +111,7 @@ class WearIveRunSimplePlaceTest {
         assertEquals("Today", WearIveRunCollectionLogic.dayForm(today, today))
 
         val holder = holderWith(entry(place = "Aspen, Colorado", date = LocalDate.of(2026, 11, 1)))
-        assertEquals("Added Aspen, CO, Nov 1", mini(holder).narration.text)
+        assertEquals("Updated to Aspen, CO", mini(holder).narration.text)
     }
 
     @Test
