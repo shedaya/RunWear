@@ -68,7 +68,9 @@ enum OnboardingCopy {
     /// placement — the sentence remains defined here as the
     /// canonical free-looks wording but is no longer rendered on
     /// the welcome screen.
-    static let freeLooksPromise = "Your first 5 looks are free."
+    /// RW-128 (fix wave 2026-11-07): the promise follows the
+    /// aligned allowance — 10, from the store's one constant.
+    static let freeLooksPromise = "Your first 10 looks are free."
 
     /// GEN-3 ROUND 2 (Sol, Nov 4 — the name-led welcome, CHOSEN by
     /// Sol; supersedes the I-SETTINGS/WS-E title+detail composition

@@ -104,7 +104,10 @@ final class PersonalHeroTests: XCTestCase {
             lookState: nil,
             lookReason: nil,
             scaffold: nil,
-            scaffoldCombinationId: nil
+            scaffoldCombinationId: nil,
+            serveTierRaw: nil,
+            servedCombinationId: nil,
+            converging: nil
         )
     }
 

@@ -206,6 +206,21 @@ struct PersonalHeroLookup: Decodable {
     /// The cell the scaffold hero actually belongs to, when
     /// `scaffold` is true.
     let scaffoldCombinationId: String?
+    /// Fix wave 2026-11-07 (RW-130, architecture review §4.3
+    /// contract v2): the serve tier the server named for THIS
+    /// payload — "exact" | "scaffold" | "similar" | "none".
+    /// Absent on pre-v2 payloads; `serveTier` derives the tier
+    /// from the legacy scaffold marker in that case. An unknown
+    /// future value classifies as `.none` (fall to generic) —
+    /// the forward-compatibility obligation of §4.3.
+    let serveTierRaw: String?
+    /// The cell the served photo actually belongs to; equals
+    /// `combinationId` iff the tier is exact.
+    let servedCombinationId: String?
+    /// True when the server has (or has just enqueued) an exact
+    /// generation job for the requested cell behind a non-exact
+    /// serve — the exact-watch guarantee of §4.5 step 3.
+    let converging: Bool?
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -219,6 +234,47 @@ struct PersonalHeroLookup: Decodable {
         case lookReason = "look_reason"
         case scaffold
         case scaffoldCombinationId = "scaffold_combination_id"
+        case serveTierRaw = "serve_tier"
+        case servedCombinationId = "served_combination_id"
+        case converging
+    }
+
+    /// The payload's serve tier (RW-130): the v2 field when the
+    /// server sent one, else the legacy scaffold marker, else
+    /// exact when a hero was found and none otherwise.
+    var serveTier: PersonalServeTier {
+        if let raw = serveTierRaw {
+            return PersonalServeTier(wireValue: raw)
+        }
+        if scaffold == true { return .scaffold }
+        return found ? .exact : .none
+    }
+}
+
+/// The serve tiers of the fallback ladder (architecture review
+/// §4.1): exact, scaffold (same prescription, neighbouring
+/// conditions), similar (nearest personal look), none (generic
+/// pool). Non-exact personal serves are SILENT — no pill, no
+/// narration (settled pill table; RW-130 client half).
+enum PersonalServeTier: Equatable {
+    case exact
+    case scaffold
+    case similar
+    case none
+
+    init(wireValue: String) {
+        switch wireValue {
+        case "exact": self = .exact
+        case "scaffold": self = .scaffold
+        case "similar": self = .similar
+        default: self = .none
+        }
+    }
+
+    /// A personal photo is on screen, but it is not this cell's
+    /// exact look — every exact-serve label must stand down.
+    var isNonExactPersonalServe: Bool {
+        self == .scaffold || self == .similar
     }
 }
 
@@ -833,6 +889,13 @@ struct PersonalCellCache {
         let heroId: String?
         let imageURL: String
         let fetchedAt: Date
+        /// Fix wave 2026-11-07 (RW-130/RW-134, review §4.5 step 2
+        /// + risk L-3): the tier of the serve this entry caches.
+        /// A NON-EXACT entry is never a terminal cache hit: it
+        /// paints, and every display of it schedules a background
+        /// revalidation of the requested cell, so a stock/similar
+        /// morning answer cannot strand the way RW-134's did.
+        var serveTier: PersonalServeTier = .exact
     }
 
     enum Resolution: Equatable {
@@ -868,11 +931,30 @@ struct PersonalCellCache {
         }
         if let existing = entries[cell],
            existing.version == version,
+           existing.serveTier == lookup.serveTier,
            now.timeIntervalSince(existing.fetchedAt) < Self.urlLifetime {
             return .show(existing.imageURL)
         }
-        entries[cell] = Entry(version: version, heroId: lookup.heroId, imageURL: url, fetchedAt: now)
+        entries[cell] = Entry(version: version, heroId: lookup.heroId, imageURL: url, fetchedAt: now, serveTier: lookup.serveTier)
         return .show(url)
+    }
+
+    /// The tier of the serve cached for a cell, if any entry
+    /// stands (fix wave: the revalidation discipline reads it —
+    /// a non-exact cached serve always re-asks the server).
+    func cachedServeTier(for combinationId: String) -> PersonalServeTier? {
+        entries[combinationId]?.serveTier
+    }
+
+    /// True when a fresh cached entry may serve as a TERMINAL
+    /// hit (no revalidation owed): only an exact serve may.
+    /// Non-exact entries paint from `freshURL` but always owe a
+    /// revalidation (review §4.5 step 2, risk L-3's pin).
+    func isTerminalCacheHit(for combinationId: String, now: Date) -> Bool {
+        guard let entry = entries[combinationId],
+              now.timeIntervalSince(entry.fetchedAt) < Self.urlLifetime
+        else { return false }
+        return entry.serveTier == .exact
     }
 
     /// RW-115 (successor wave): `resolve`, additionally reporting
@@ -1457,8 +1539,20 @@ enum ConvergenceBand {
     /// the seats map their mode at the call site
     /// (`mode == .subscribed`), so the rule itself stays
     /// testable in the model layer like everything else here.
-    static func content(isSubscribed: Bool, coverage: BankCoverage?, stalled: Bool = false) -> ConvergenceBandContent? {
+    /// Fix wave 2026-11-07 (RW-126, review §3 N2 + §5.4): the
+    /// band announces GENERATION, so it may render only while
+    /// generation is actually in flight. `generationActive` is
+    /// the store's latest server read of non-terminal generation
+    /// jobs: when a read proves NO job is non-terminal, the band
+    /// SETTLES (retires) even if the client-named fraction still
+    /// reads below 100% — the denominator can move under a
+    /// finished bank, and a finished bank must not announce
+    /// activity that does not exist. Nil (no job read yet) keeps
+    /// the pre-fix arithmetic-only behaviour for callers that
+    /// have not folded a job read.
+    static func content(isSubscribed: Bool, coverage: BankCoverage?, stalled: Bool = false, generationActive: Bool? = nil) -> ConvergenceBandContent? {
         guard isSubscribed, let coverage else { return nil }
+        if generationActive == false { return nil }
         guard coverage.total > 0, coverage.ready < coverage.total else { return nil }
         return ConvergenceBandContent(
             heading: heading,

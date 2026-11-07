@@ -1447,7 +1447,10 @@ final class Gen6SuccessorWaveTests: XCTestCase {
             lookState: lookState,
             lookReason: nil,
             scaffold: nil,
-            scaffoldCombinationId: nil
+            scaffoldCombinationId: nil,
+            serveTierRaw: nil,
+            servedCombinationId: nil,
+            converging: nil
         )
     }
 

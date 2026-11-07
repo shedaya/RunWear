@@ -1334,6 +1334,21 @@ enum PersonalServePolicy {
 // state, titled from the cell's own key ({weather} · {bracket},
 // then the time of day), with the gate-failed cell carrying the
 // settled "stock photo for now" suffix on its time line.
+/// One banked look as the SERVER holds it (fix wave
+/// 2026-11-07, review §2 row 5): a delivered hero row read
+/// fresh from the bank, independent of which cells this
+/// process happened to resolve in-session.
+struct BankedLook: Equatable, Identifiable {
+    let combinationId: String
+    let heroId: String?
+    /// Signed URL for the stored photograph, when signing
+    /// succeeded — the library tile and the RW-133 viewer
+    /// render the stored frame itself, never a placeholder.
+    let imageURL: String?
+
+    var id: String { combinationId }
+}
+
 enum LooksLibrary {
 
     struct Cell: Equatable, Identifiable {
@@ -1343,7 +1358,12 @@ enum LooksLibrary {
         /// The time-of-day line; a gate-failed cell appends the
         /// settled suffix: "Night · stock photo for now".
         let statusLine: String
-        let state: PersonalLookState
+        var state: PersonalLookState
+        /// The stored photograph's signed URL for a banked
+        /// cell (fix wave: the library renders real photos for
+        /// banked looks, and tapping one opens the RW-133
+        /// full-screen viewer). Nil for session-only cells.
+        var imageURL: String? = nil
 
         var id: String { combinationId }
         var isFailed: Bool { state.isFailed }
@@ -1372,6 +1392,32 @@ enum LooksLibrary {
                 )
             }
             .sorted { $0.combinationId < $1.combinationId }
+    }
+
+    /// Fix wave 2026-11-07 (review §2 row 5): the library's
+    /// content is the BANK AS THE SERVER HOLDS IT, re-read on
+    /// open — not only the cells this session resolved. Banked
+    /// looks render as ready cells carrying their stored
+    /// photograph; session-folded making/failed states for
+    /// cells the bank does not (yet) hold join them, so an
+    /// in-flight or failed cell is still explained in place.
+    static func cells(fromBank bank: [BankedLook], lookStates: [String: PersonalLookState]) -> [Cell] {
+        var byId: [String: Cell] = [:]
+        for cell in cells(from: lookStates) {
+            byId[cell.combinationId] = cell
+        }
+        for look in bank {
+            // A banked look is READY by the server's own record;
+            // its cell is rebuilt from the ready state so a
+            // session-folded failure for the same cell cannot
+            // keep its "stock photo for now" suffix standing
+            // over a delivered photograph.
+            guard var resolved = cells(from: [look.combinationId: .ready]).first
+            else { continue }
+            resolved.imageURL = look.imageURL
+            byId[look.combinationId] = resolved
+        }
+        return byId.values.sorted { $0.combinationId < $1.combinationId }
     }
 }
 

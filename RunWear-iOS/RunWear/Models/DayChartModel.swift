@@ -139,6 +139,74 @@ struct DayChartModel: Equatable {
     }
 }
 
+extension DayChartModel {
+    /// Fix wave 2026-11-07 (day-chart Now point; Sol's ruling
+    /// alongside RW-125): the chart's point for the CURRENT hour
+    /// takes the live current-conditions value — the same value
+    /// Home's Now solve quotes — and the outfit band at that
+    /// hour is shaded from that same value (the substituted
+    /// point carries the current-conditions bracket and outfit),
+    /// so chart and hero never quote two temperatures for
+    /// "now". Every other hour stays forecast. A model with no
+    /// point at `nowHour` is returned unchanged.
+    static func substitutingNowPoint(
+        in model: DayChartModel,
+        nowHour: Int,
+        currentPoint: DayChartHour
+    ) -> DayChartModel {
+        guard currentPoint.hour == nowHour,
+              model.entry(forHour: nowHour) != nil else { return model }
+        let points = model.hours.map { $0.hour == nowHour ? currentPoint : $0 }
+        return build(points: points) ?? model
+    }
+}
+
+// MARK: - Selection state (fix wave 2026-11-07, RW-123/RW-125)
+
+/// The ONE selection truth (architecture review §5.1): Now is a
+/// LIVE state that tracks the viewed location's current moment,
+/// not a materialised hour number; a pick is a Confirm-gated
+/// manual selection in location-local wall time. Gates, guards
+/// and narration read THIS state — never a derived comparison
+/// between a frozen hour number and the clock, which decays on
+/// its own (the RW-110/RW-123 mechanism).
+enum SelectionState: Equatable {
+    case now
+    case picked(date: Date, hour: Int)
+
+    var isNow: Bool { self == .now }
+}
+
+/// Whether a Wear I've Run settle may record (fix wave,
+/// RW-110/RW-132, review §5.4 same-solve gate): the settle is
+/// admitted only from a COMMITTED solve of the selection being
+/// viewed — Now anchored at this place's commit, or a pick
+/// whose weather snapshot is that pick's own solve. This
+/// replaces the build-30 Now-only gate (which refused every
+/// picked/future settle while the narration announced it) and
+/// the device-today guard (a future day's committed pick
+/// records under that day, per Sol's Nov 7 future-days ruling).
+/// FA-2's provenance protection stands: a mid-flight or
+/// fallback solve never records.
+enum WearIveRunRecordingGate {
+    static func admits(
+        isLoading: Bool,
+        hasCommittedSnapshot: Bool,
+        snapshotHour: Int?,
+        selectedHour: Int,
+        isNowSelection: Bool,
+        selectedTimeOutsideForecast: Bool
+    ) -> Bool {
+        guard !isLoading, hasCommittedSnapshot else { return false }
+        guard snapshotHour == selectedHour else { return false }
+        // An out-of-window fallback snapshot is not the picked
+        // moment's own solve; a Now selection's current-block
+        // solve is primary (RW-125 ruling), never a fallback.
+        if selectedTimeOutsideForecast && !isNowSelection { return false }
+        return true
+    }
+}
+
 // MARK: - NOW marker rule
 
 /// The band's NOW marker: it exists only when the selected day is
@@ -297,24 +365,49 @@ struct TimePickerDraft: Equatable {
     /// The viewed location's current hour when opened on its
     /// today in the NOW state; nil otherwise.
     let nowHour: Int?
-    /// The day's selectable (forecast) hours.
-    let selectableHours: [Int]
+    /// The day's selectable (forecast) hours. A var since the
+    /// fix wave: an in-picker day change re-derives the working
+    /// day's hours inside the SAME session (RW-131).
+    private(set) var selectableHours: [Int]
 
     private(set) var draftHour: Int
     /// Sticky: once the handle leaves the NOW position it has
     /// moved, even if it later returns to the same hour.
     private(set) var movedOffNow: Bool
 
+    // MARK: Picker session date axis (RW-131, review §5.5)
+    //
+    // One PickerSession, two panes: the draft ALSO carries the
+    // working day. Changing the day inside the picker is a
+    // session mutation only — it never writes the committed
+    // selection, never re-solves home, and never dismisses;
+    // only Confirm (one commit, carrying the date) or Cancel
+    // (the session discarded whole) ends the session.
+
+    /// The day the session opened on.
+    let originalDate: Date
+    /// The session's working day (starts as `originalDate`).
+    private(set) var workingDate: Date
+    /// Sticky, mirroring `movedOffNow`: once the working day has
+    /// left the original day the session is touched, even if it
+    /// later returns — a touched session confirms as an explicit
+    /// pick, never silently as keep-Now (review §5.5, risk P-2).
+    private(set) var dayChanged: Bool
+
     init(
         originalHour: Int,
         openedInNowState: Bool,
         nowHour: Int?,
-        selectableHours: [Int]
+        selectableHours: [Int],
+        originalDate: Date = Date(timeIntervalSince1970: 0)
     ) {
         self.originalHour = originalHour
         self.openedInNowState = openedInNowState
         self.nowHour = nowHour
         self.selectableHours = selectableHours
+        self.originalDate = originalDate
+        self.workingDate = originalDate
+        self.dayChanged = false
         if selectableHours.contains(originalHour) {
             self.draftHour = originalHour
         } else if let nearest = selectableHours.min(by: {
@@ -325,6 +418,30 @@ struct TimePickerDraft: Equatable {
             self.draftHour = originalHour
         }
         self.movedOffNow = false
+    }
+
+    /// RW-131: change the working day IN PLACE. The working
+    /// hour is kept when the new day offers it, else it lands
+    /// on the nearest selectable hour of the new day. Nothing
+    /// is committed and nothing dismisses — the caller re-derives
+    /// the chart/readout for the new day from the already-fetched
+    /// forecast and the sheet stays open.
+    mutating func changeDay(to date: Date, selectableHours newHours: [Int]) {
+        if !Calendar.current.isDate(date, inSameDayAs: originalDate) {
+            dayChanged = true
+        }
+        workingDate = date
+        selectableHours = newHours
+        if newHours.contains(draftHour) {
+            // Hour survives the day change untouched.
+        } else if let nearest = newHours.min(by: {
+            abs($0 - draftHour) < abs($1 - draftHour)
+        }) {
+            draftHour = nearest
+            if openedInNowState, let nowHour, nearest != nowHour {
+                movedOffNow = true
+            }
+        }
     }
 
     /// Moves the draft to the selectable hour nearest `hour`
@@ -362,11 +479,17 @@ struct TimePickerDraft: Equatable {
     }
 
     func commit() -> Commit {
-        if openedInNowState, let nowHour, !movedOffNow, draftHour == nowHour {
+        if openedInNowState, let nowHour, !movedOffNow, !dayChanged, draftHour == nowHour {
             return .keepNow
         }
         return .explicitPick(hour: draftHour)
     }
+
+    /// The session's full commit (RW-131): the working day
+    /// travels with the hour, so the host applies ONE commit of
+    /// (day, hour) — never an intermediate solve of the old day
+    /// or the new day at the old state (matrix S6-08).
+    var commitDate: Date { workingDate }
 }
 
 // MARK: - Date-picker draft (GEN-6 RW-66)

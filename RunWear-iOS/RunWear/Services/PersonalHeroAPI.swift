@@ -98,8 +98,63 @@ actor PersonalHeroAPI {
     }
 
     func getPersonalHero(combinationId: String) async throws -> PersonalHeroLookup {
-        let data = try await functionPost("get-personal-hero", body: ["combination_id": combinationId])
+        // Fix wave 2026-11-07 (RW-130, review §4.3): declare
+        // contract v2 — this client classifies scaffold AND
+        // similar serves from `serve_tier` and labels neither
+        // as exact, so the server may serve the ladder to it.
+        let data = try await functionPost("get-personal-hero", body: ["combination_id": combinationId, "client_contract": 2])
         return try JSONDecoder().decode(PersonalHeroLookup.self, from: data)
+    }
+
+    /// Fix wave 2026-11-07 (review §2 row 5): the bank as the
+    /// server holds it — every delivered hero row for the
+    /// caller (combination, hero id, storage path), for the
+    /// Your Looks library's genuine server read. Nil on any
+    /// failure — the library then falls back to session state
+    /// rather than inventing a bank.
+    func fetchBankHeroes() async -> [BankedLook]? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_heroes?select=combination_id,id,storage_path&user_id=eq.\(session.userId)&order=combination_id.asc"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable {
+            let combinationId: String
+            let id: String?
+            let storagePath: String?
+            enum CodingKeys: String, CodingKey {
+                case combinationId = "combination_id"
+                case id
+                case storagePath = "storage_path"
+            }
+        }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        // One row per cell (the first — variant rotation is the
+        // serve path's business, the library shows the cell).
+        var seen = Set<String>()
+        var looks: [BankedLook] = []
+        for row in rows where seen.insert(row.combinationId).inserted {
+            var url: String? = nil
+            if let storagePath = row.storagePath,
+               let signed = try? await signedReferenceURL(path: storagePath) {
+                url = signed.absoluteString
+            }
+            looks.append(BankedLook(combinationId: row.combinationId, heroId: row.id, imageURL: url))
+        }
+        return looks
+    }
+
+    /// Fix wave 2026-11-07 (RW-126, review §3 N2): the caller's
+    /// generation-job states, for the band's terminal fold —
+    /// true while ANY job is non-terminal (queued/processing),
+    /// false when a read proves every job terminal, nil when
+    /// no read landed (the band then keeps its prior truth).
+    func fetchGenerationActive() async -> Bool? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_generation_jobs?select=status&user_id=eq.\(session.userId)"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable { let status: String }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        let nonTerminal: Set<String> = ["QUEUED", "PROCESSING", "queued", "processing", "pending", "running"]
+        return rows.contains { nonTerminal.contains($0.status) }
     }
 
     /// RW-16.12 Lane B backstop: ask the server to reconcile this

@@ -212,6 +212,25 @@ class WeatherViewModel: ObservableObject {
     /// state as isNowSelected.)
     @Published private(set) var isNowSelection = true
 
+    /// Fix wave 2026-11-07 (RW-123/RW-125, review §5.1): the
+    /// selection as a STATE — the single truth every gate reads.
+    /// `isNowSelection` is its stored bit; the materialised
+    /// (selectedDate, selectedHour) pair is only a projection,
+    /// re-anchored at every fetch commit while the state is
+    /// `.now` (see fetchWeather), so a Now entered in one place
+    /// can never decay into a picked hour in the next.
+    var selectionState: SelectionState {
+        isNowSelection
+            ? .now
+            : .picked(date: selectedDate, hour: selectedHour)
+    }
+
+    /// Fetch-epoch guard (review §5.2 / risk N-2, matrix
+    /// S6-28): only the LATEST issued fetch may commit. A slow
+    /// fetch for place A landing after place B's commit is a
+    /// no-op for state, solve, hero and settle alike.
+    private var fetchEpoch = 0
+
     // Current weather snapshot for selected date/time
     @Published var selectedWeatherSnapshot: HourlyWeatherSnapshot?
 
@@ -348,6 +367,8 @@ class WeatherViewModel: ObservableObject {
     // MARK: - Public Methods
 
     func fetchWeather(for location: CLLocation) async {
+        fetchEpoch += 1
+        let epoch = fetchEpoch
         isLoading = true
         errorMessage = nil
         currentLocation = location
@@ -357,7 +378,24 @@ class WeatherViewModel: ObservableObject {
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude
             )
+            // S6-28: a superseded fetch commits nothing.
+            guard epoch == fetchEpoch else { return }
             weatherData = weather
+
+            // Fix wave 2026-11-07 (RW-123/RW-125, review §5.2
+            // row 1): the fetch COMMIT is the anchor of anchors.
+            // In the Now state the projection re-anchors from
+            // THIS response's own frame (its timezone is now the
+            // locationCalendar's) BEFORE any solve, recommendation,
+            // hero resolution or settle trigger evaluates — a
+            // place switch therefore lands on the new place's
+            // Now, never on the old place's hour number
+            // reinterpreted. A pick's wall-clock numbers carry
+            // untouched (the settled pick leg).
+            if selectionState.isNow {
+                selectedDate = locationNowDate()
+                selectedHour = locationNowHour()
+            }
 
             // Select the snapshot for the chosen date/hour, then run the
             // ONE engine-call assembly (see makeRecommendation).
@@ -487,6 +525,49 @@ class WeatherViewModel: ObservableObject {
         case .explicitPick(let hour):
             updateSelectedTime(date: selectedDate, hour: hour)
         }
+    }
+
+    /// Fix wave 2026-11-07 (RW-131, review §5.5): the unified
+    /// picker session's ONE commit — the working day travels
+    /// with the hour, applied exactly once through the same
+    /// apply path. The date the session changed in place is
+    /// committed here, at Confirm, and nowhere else.
+    func applyPickerCommit(date: Date, commit: TimePickerDraft.Commit) {
+        switch commit {
+        case .keepNow:
+            resetToNow()
+        case .explicitPick(let hour):
+            updateSelectedTime(date: date, hour: hour)
+        }
+    }
+
+    /// Fix wave 2026-11-07 (RW-125, review §5.2 rows 4–5): the
+    /// foreground / tick maintenance pass. In the Now state a
+    /// return (or a standing hour roll) re-anchors the
+    /// projection and refetches when the location-frame hour or
+    /// day has rolled; a picked selection survives a return
+    /// EXACTLY (Sol's Nov 7 ~8:24 AM ruling) and is never
+    /// re-anchored. Returns whether a roll was repaired.
+    @discardableResult
+    func maintainNowIfNeeded() -> Bool {
+        guard selectionState.isNow else { return false }
+        guard !isViewingLocationNow else { return false }
+        // Re-anchor the projection now; the refetch's commit
+        // re-anchors again from the fresh response's frame and
+        // the solve follows from the current block.
+        selectedDate = locationNowDate()
+        selectedHour = locationNowHour()
+        updateSelectedWeatherSnapshot()
+        makeRecommendation()
+        Task { await refreshCurrent() }
+        return true
+    }
+
+    /// The foreground pass the view drives on scenePhase
+    /// .active: Now maintenance (above) — the personal-layer
+    /// reconciliation rides the same event in the view.
+    func handleForeground() {
+        maintainNowIfNeeded()
     }
 
     /// THE engine-call assembly — the single construction every path
@@ -819,8 +900,25 @@ class WeatherViewModel: ObservableObject {
     /// absent from the model (horizon honesty). Nil when the day
     /// has no forecast hours at all.
     var dayChart: DayChartModel? {
+        dayChart(for: selectedDate)
+    }
+
+    /// Fix wave 2026-11-07 (RW-131, review §5.5 + risk P-1):
+    /// the day chart as a pure function of (hourly, date) — the
+    /// picker session derives the WORKING day's chart from the
+    /// already-fetched forecast without touching the committed
+    /// selection, and the committed day's chart is this same
+    /// function fed the committed date (behaviour identical for
+    /// the old input).
+    ///
+    /// Day-chart Now point (Sol's ruling with RW-125): on the
+    /// location's today, the point for the current hour is
+    /// substituted with the live current-conditions value and
+    /// its own bracket/outfit, so the chart's Now point, its
+    /// band shading, and Home's Now solve quote one temperature.
+    func dayChart(for date: Date) -> DayChartModel? {
         guard let hourly = weatherData?.hourly else { return nil }
-        let components = Calendar.current.dateComponents([.year, .month, .day], from: selectedDate)
+        let components = Calendar.current.dateComponents([.year, .month, .day], from: date)
         guard let year = components.year, let month = components.month, let day = components.day
         else { return nil }
         let dayPrefix = String(format: "%04d-%02d-%02d", year, month, day)
@@ -847,7 +945,45 @@ class WeatherViewModel: ObservableObject {
                 outfitItemNames: hourRecommendation.allItems.map(\.name)
             ))
         }
-        return DayChartModel.build(points: points)
+        guard var model = DayChartModel.build(points: points) else { return nil }
+        // Now-point substitution — only on the location's
+        // today, only from a live current block.
+        let isLocationToday = {
+            let selected = Calendar.current.dateComponents([.year, .month, .day], from: date)
+            let now = locationCalendar.dateComponents([.year, .month, .day], from: Date())
+            return selected.year == now.year && selected.month == now.month && selected.day == now.day
+        }()
+        if isLocationToday, let weatherData {
+            let nowHour = locationNowHour()
+            let currentSnapshot = HourlyWeatherSnapshot(
+                hour: nowHour,
+                current: weatherData.currentWeather,
+                detail: weatherData.currentDetail
+            )
+            let rawFeelsLike = currentSnapshot.feelsLikeFahrenheit
+            let adjustedFeelsLike = comfortLevel.adjustTemperature(rawFeelsLike)
+            let nowRecommendation = outfitService.getRecommendation(
+                for: adjustedFeelsLike,
+                rawTemperature: rawFeelsLike,
+                isRaining: currentSnapshot.rain > 0,
+                windSpeed: currentSnapshot.windSpeed,
+                humidity: currentSnapshot.humidity,
+                uvIndex: currentSnapshot.uvIndex,
+                precipitation: currentSnapshot.precipitation,
+                hour: nowHour
+            )
+            model = DayChartModel.substitutingNowPoint(
+                in: model,
+                nowHour: nowHour,
+                currentPoint: DayChartHour(
+                    hour: nowHour,
+                    feelsLikeF: adjustedFeelsLike,
+                    bracket: nowRecommendation.temperatureBracket,
+                    outfitItemNames: nowRecommendation.allItems.map(\.name)
+                )
+            )
+        }
+        return model
     }
 
     /// The chart's NOW marker hour for the current selection —
@@ -870,6 +1006,29 @@ class WeatherViewModel: ObservableObject {
     func updateSelectedWeatherSnapshot() {
         guard let weatherData else {
             selectedWeatherSnapshot = nil
+            selectedTimeOutsideForecast = false
+            return
+        }
+
+        // Fix wave 2026-11-07 (RW-125, Sol's Nov 7 ~8:16 AM
+        // ruling; review §5.3): the ONE solve branch point. In
+        // the Now state the snapshot is built from the response's
+        // CURRENT-CONDITIONS block — in any location, carried
+        // across every switch — and it is a primary source, not
+        // the RW-23 fallback, so no out-of-window notice stands.
+        // The hourly prediction is used ONLY for a manually
+        // picked hour. Everything downstream (recommendation,
+        // hero/cell keying, widget record, the Wear I've Run
+        // settle) reads this one snapshot, so Now cell keys may
+        // legitimately diverge from forecast cell keys (RW-134's
+        // CLOUDY current block vs CLEAR hourly row) — that
+        // divergence is the ruling, not a defect to reconcile.
+        if selectionState.isNow && isViewingLocationNow {
+            selectedWeatherSnapshot = HourlyWeatherSnapshot(
+                hour: locationNowHour(),
+                current: weatherData.currentWeather,
+                detail: weatherData.currentDetail
+            )
             selectedTimeOutsideForecast = false
             return
         }
@@ -1431,6 +1590,15 @@ class WeatherViewModel: ObservableObject {
                     trigger: "personal-overlay"
                 )
             )
+            // Fix wave 2026-11-07 (RW-130, review §4.5 step 3):
+            // a non-exact serve paints silently NOW, and the
+            // exact-watch attaches behind it — when the exact
+            // cell lands, the awaiter swaps it in place through
+            // the same path (and the Wear I've Run settle is
+            // re-offered by the landing triggers, RW-134).
+            if isScaffold {
+                attachPersonalAwaiter(for: combo, store: store)
+            }
             return true
         } else {
             attachPersonalAwaiter(for: combo, store: store)

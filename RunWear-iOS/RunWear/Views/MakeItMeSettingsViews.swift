@@ -774,7 +774,7 @@ struct MakeItMeSubscriptionSheet: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(AppTheme.inkPrimary)
                             Spacer()
-                            Text("5 looks included")
+                            Text("\(PersonalHeroStore.freeAllowance) looks included")
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
