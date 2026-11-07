@@ -220,7 +220,9 @@ final class SimplePlaceTests: XCTestCase {
     func testExpandedLineUsesSimplePlaceAndDoesNotDuplicateNarration() {
         let e = entry(place: "New York, New York, United States",
                       items: ["Insulated Jacket", "Tights", "Gloves", "Hat", "Socks"])
-        let expanded = WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "41°")
+        // RW-135 re-pin: fixture day injected as now (see
+        // testExpandedLineWithLongPlaceName).
+        let expanded = WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "41°", now: e.dayStart)
         // GEN-5 supersession (FA-34): the expanded line names
         // the outfit's items rather than counting them.
         XCTAssertEqual(expanded, "New York, NY · Today — 41° feels like · Insulated Jacket · Tights · Gloves · Hat · Socks")
@@ -239,7 +241,10 @@ final class SimplePlaceTests: XCTestCase {
     func testExpandedLineWithLongPlaceName() {
         let e = entry(place: "Rancho Santa Margarita, California", items: ["Tee"])
         XCTAssertEqual(
-            WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "72°"),
+            // RW-135 re-pin: the expanded line's day form
+            // derives from the recorded day (§7.2) — the
+            // fixture day is injected as now.
+            WearIveRunNarration.expandedLine(for: e, formattedFeelsLike: "72°", now: e.dayStart),
             // GEN-5 supersession (FA-34): items are named.
             "Rancho Santa Margarita, CA · Today — 72° feels like · Tee")
     }

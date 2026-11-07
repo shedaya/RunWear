@@ -872,26 +872,28 @@ extension Gen6VisualQAHarnessTests {
             .background(AppTheme.background)
         try writeHostedRender(miniDark, size: CGSize(width: 390, height: 110),
                               name: "FIX-RW86-ios-minibar-mini-dark.png")
-        // RW-88: the viewed-state line in the slim bar — a place
-        // change and a picked future moment.
-        let viewedPlace = WearIveRunMiniBarView(
-            state: .added(place: "New York, NY", moment: .now),
-            entry: entry,
-            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
-            viewedNarrationPayload: "Miami, FL, Now",
+        // RW-135 §7.0 (Direction A): the RW-88 viewed-state
+        // override is REMOVED from the bar — these renders now
+        // pin the record-derived forms that replaced it: the
+        // settled-today "Updated to {place}" form (the entry
+        // itself moved to Miami) and the future-day "Planned
+        // for" form. No live-view input reaches the bar.
+        let updatedPlace = WearIveRunMiniBarView(
+            state: .updated(payload: .place("Miami, FL")),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
-        try writeHostedRender(viewedPlace, size: CGSize(width: 390, height: 110),
-                              name: "FIX-RW88-ios-minibar-updated-place.png")
-        let viewedMoment = WearIveRunMiniBarView(
-            state: .added(place: "New York, NY", moment: .now),
-            entry: entry,
-            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
-            viewedNarrationPayload: "November 12 7 p.m.",
+        try writeHostedRender(updatedPlace, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW135-ios-minibar-updated-place.png")
+        let planned = WearIveRunMiniBarView(
+            state: .planned(place: "Miami, FL", dayLabel: "Tomorrow"),
+            entry: collectionEntry(place: "Miami, FL"),
+            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
-        try writeHostedRender(viewedMoment, size: CGSize(width: 390, height: 110),
-                              name: "FIX-RW88-ios-minibar-updated-moment.png")
+        try writeHostedRender(planned, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW135-ios-minibar-planned.png")
     }
 
     // RW-87: the time sheet's content height is IDENTICAL for a

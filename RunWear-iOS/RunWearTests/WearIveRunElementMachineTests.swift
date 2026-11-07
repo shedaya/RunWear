@@ -69,7 +69,12 @@ final class WearIveRunElementMachineTests: XCTestCase {
         switch (state, event) {
         case (.absent, .entryCreated): return .cue
         case (.absent, .entryAlreadyPresent): return .mini
-        case (.mini, .userCausedUpdate), (.expanded, .userCausedUpdate): return .cue
+        // RW-135 §7.4 RE-PIN (Nov 7, 2026, Direction A): a
+        // user-caused update is no longer a driver — it moves
+        // nothing in any state (the creation cue is the only
+        // pulse; a changed settle cross-fades the line). The
+        // pre-ruling rows ((.mini/.expanded, .userCausedUpdate)
+        // → .cue) are superseded and fall to the default.
         case (.cue, .cueTimedOut): return .mini
         case (.mini, .tapMiniBarBody), (.cue, .tapMiniBarBody): return .expanded
         // GEN-5 (FA-33): a body tap in EXPANDED collapses to mini.
@@ -105,9 +110,10 @@ final class WearIveRunElementMachineTests: XCTestCase {
     func testEffectsMatrix() {
         let effectful: [String: [WearIveRunElementEffect]] = [
             "absent|entryCreated": [.fireCuePulseAndSoftHaptic, .startCueTimer],
-            "mini|userCausedUpdate": [.fireCuePulseAndSoftHaptic, .startCueTimer],
-            "expanded|userCausedUpdate": [.fireCuePulseAndSoftHaptic, .startCueTimer],
-            "cue|userCausedUpdate": [.startCueTimer],
+            // RW-135 §7.4 RE-PIN: userCausedUpdate fires NO
+            // effects in any state (no pulse, no timer) — its
+            // pre-ruling entries are removed, so the matrix's
+            // default (no effects) is the expectation.
             "cue|tapMiniBarBody": [.cancelCueTimer],
             "cue|tapToggleControl": [.cancelCueTimer],
             "mini|tapTrash": [.deleteTodaysEntry, .fireTrashHaptic],
@@ -169,17 +175,22 @@ final class WearIveRunElementMachineTests: XCTestCase {
             XCTAssertEqual(machine.state, .cue)
         }
         XCTAssertEqual(pulseCount, 1)
-        // A user-caused update DURING the cue restarts the timer
-        // only — the presentation does not pulse again.
+        // RW-135 §7.4 RE-PIN (Direction A): a user-caused update
+        // DURING the cue is not a driver — no timer restart, no
+        // state change, no pulse. (Pre-ruling: it restarted the
+        // timer; from MINI it fired a second cue + pulse.)
         let restart = machine.send(.userCausedUpdate)
-        XCTAssertEqual(restart, [.startCueTimer])
+        XCTAssertEqual(restart, [])
+        XCTAssertEqual(machine.state, .cue)
         XCTAssertEqual(pulseCount, 1)
-        // Timeout → MINI. Landing 2 (from MINI) pulses once more.
+        // Timeout → MINI. A user-caused update from MINI is
+        // likewise inert: the creation cue remains the ONLY
+        // pulse in the system (§7.1).
         count(machine.send(.cueTimedOut))
         XCTAssertEqual(machine.state, .mini)
         count(machine.send(.userCausedUpdate))
-        XCTAssertEqual(pulseCount, 2)
-        XCTAssertEqual(machine.state, .cue)
+        XCTAssertEqual(pulseCount, 1)
+        XCTAssertEqual(machine.state, .mini)
     }
 
     // MARK: - Interruptions
@@ -935,7 +946,11 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         model.recordSettled(entry(
             session: "s1", place: "New York, NY", feels: 72,
             items: ["Tee", "Shorts"], day: d))
-        XCTAssertEqual(model.cueCount, 2)
+        // RW-135 §7.1/§7.4 RE-PIN: a place update no longer cues
+        // (the creation cue is the only pulse) — the counter
+        // stands at 1; the update moves the narration VERSION.
+        XCTAssertEqual(model.cueCount, 1)
+        XCTAssertEqual(model.narrationVersion, 2)
         XCTAssertEqual(state(of: model), .updated(payload: .place("New York, NY")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
@@ -947,7 +962,11 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         model.recordSettled(entry(
             session: "s1", place: "Miami, FL", feels: 90,
             items: ["Tee", "Shorts"], day: d))
-        XCTAssertEqual(model.cueCount, 3)
+        // RW-135 RE-PIN (as above): still no second cue — the
+        // line change is the narration version's third state
+        // (creation, New York, Miami).
+        XCTAssertEqual(model.cueCount, 1)
+        XCTAssertEqual(model.narrationVersion, 3)
         XCTAssertEqual(state(of: model), .updated(payload: .place("Miami, FL")))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
     }
@@ -1192,7 +1211,9 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         XCTAssertEqual(
             WearIveRunNarration.line(for: narration), "Updated to Miami, FL")
         XCTAssertEqual(
-            WearIveRunNarration.expandedLine(for: settled, formattedFeelsLike: "90°"),
+            // RW-135 re-pin: fixture day injected as now — the
+            // day form derives from the recorded day (§7.2).
+            WearIveRunNarration.expandedLine(for: settled, formattedFeelsLike: "90°", now: settled.dayStart),
             // GEN-5 supersession (FA-34): the expanded line names
             // the outfit's items rather than counting them.
             "Miami, FL · Today — 90° feels like · Tank Top · Shorts")

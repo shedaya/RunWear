@@ -529,6 +529,20 @@ final class Gen6WaveCTests: XCTestCase {
 // "announcement" is a cue-counter bump, and the announced line
 // is the narration derived from the presented entry at that
 // moment — the same derivation the dock renders.
+//
+// RW-135 RE-PIN (Nov 7, 2026, Direction A, §7.1/§7.2/§7.4):
+// the cue counter now moves ONLY on creation, so an
+// "announcement" in this suite is re-based on the NARRATION
+// VERSION — a bump means the derived line changed, which is
+// what the bar now does with a changed settle (a quiet
+// cross-fade, not a cue). Two sequence expectations change
+// with the ruling: a moment-only update no longer produces a
+// new line (the §7.2 settled-today form names the entry's
+// PLACE, so "Updated to 7 p.m." is superseded on the bar), and
+// the restored entry's bar state is the place form for the
+// same reason. The discipline these tests exist for — no
+// duplicate "Added", no stale place, restore silence — is
+// unchanged and still asserted.
 final class Gen6WaveCDA09Tests: XCTestCase {
 
     private let day = Date(timeIntervalSince1970: 1_762_560_000)
@@ -583,18 +597,18 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         WearIveRunNarration.line(for: state(of: model))
     }
 
-    /// Record one settle and, if it ANNOUNCED (the cue counter
-    /// moved — the only path by which the element cues), append
-    /// the line the bar announced to the sequence.
+    /// Record one settle and, if it ANNOUNCED (RW-135 re-pin:
+    /// the NARRATION VERSION moved — the derived line changed),
+    /// append the line the bar shows to the sequence.
     @MainActor
     private func settle(
         _ model: WearIveRunCollectionModel,
         _ entry: WearIveRunEntry,
         announcements: inout [String]
     ) {
-        let cuesBefore = model.cueCount
+        let versionBefore = model.narrationVersion
         model.recordSettled(entry)
-        if model.cueCount > cuesBefore, let line = announcedLine(of: model) {
+        if model.narrationVersion > versionBefore, let line = announcedLine(of: model) {
             announcements.append(line)
         }
     }
@@ -608,8 +622,12 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         var announcements: [String] = []
 
         // Session 1, live flow: add place A, move to place B,
-        // then a moment update — three real changes, three
-        // announcements (the recording's conforming forms).
+        // then a moment update. RW-135 RE-PIN: the moment update
+        // is recorded, but under §7.2 the bar's settled-today
+        // line names the PLACE — the line does not change, so
+        // there is no third announcement (the pre-ruling
+        // "Updated to 7 p.m." form is superseded on the bar;
+        // the entry still stores its moment payload).
         let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
         settle(first, entry(
             session: "s1", place: "Overland Park, KS", feels: 48,
@@ -623,8 +641,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
         XCTAssertEqual(announcements, [
             "Added Overland Park, KS, Now",
-            "Updated to Miami, FL",
-            "Updated to 7 p.m."
+            "Updated to Miami, FL"
         ])
 
         // RELAUNCH: a new process over the same persisted
@@ -645,13 +662,17 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             items: ["Tank Top", "Shorts"],
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 0, "a restore must not cue")
-        XCTAssertEqual(announcements.count, 3, "no duplicate Added on relaunch")
+        XCTAssertEqual(announcements.count, 2, "no duplicate Added on relaunch")
         XCTAssertEqual(relaunched.entries.count, 2,
                        "RW-91: saves accumulate — the prior session's save persists beside the restored session's (Sol's Nov 6, 2026 correction supersedes the gen-6 supersede rule)")
         XCTAssertEqual(relaunched.sessionEntry()?.sessionID, "s2")
         XCTAssertEqual(relaunched.sessionEntry()?.wasUpdatedInSession, true,
                        "the restored entry keeps the narration kind it already carried")
-        XCTAssertEqual(state(of: relaunched), .updated(payload: .moment(.clock(hour12: 7, isPM: true))))
+        // RW-135 RE-PIN (§7.2): the bar's state for the restored
+        // entry is the PLACE form — the entry's stored moment
+        // payload is preserved on the record (asserted in the
+        // store-level pins), but the bar names the place.
+        XCTAssertEqual(state(of: relaunched), .updated(payload: .place("Miami, FL")))
 
         // A weather-only re-settle after the restore is silent,
         // as it is in-session.
@@ -659,7 +680,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             session: "s2", place: "Miami, FL", feels: 92,
             items: ["Tank Top", "Shorts"],
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
-        XCTAssertEqual(announcements.count, 3)
+        XCTAssertEqual(announcements.count, 2)
 
         // A REAL change after the restore still announces —
         // once, and as an Update (the session already has an
@@ -670,7 +691,6 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         XCTAssertEqual(announcements, [
             "Added Overland Park, KS, Now",
             "Updated to Miami, FL",
-            "Updated to 7 p.m.",
             "Updated to New York, NY"
         ])
         XCTAssertEqual(relaunched.entries.count, 2,
@@ -771,7 +791,12 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             session: "s1", place: "Miami, FL", feels: 90,
             items: ["Tank Top", "Shorts"], hero: "hero-miami")
         model.recordSettled(miami)
-        XCTAssertEqual(model.cueCount, 2, "the update announced exactly once")
+        // RW-135 RE-PIN (§7.1/§7.4): the update no longer cues —
+        // the creation cue stands alone at 1; the update
+        // announced exactly once through the NARRATION VERSION
+        // (creation's line, then the updated line).
+        XCTAssertEqual(model.cueCount, 1, "creation is the only cue")
+        XCTAssertEqual(model.narrationVersion, 2, "the update announced exactly once")
 
         // Read the persisted value back ONCE: the bar's state
         // and the card's line both derive from this single
@@ -800,7 +825,8 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // entry value the bar derived from.
         let cardLine = WearIveRunNarration.expandedLine(
             for: settled,
-            formattedFeelsLike: "\(Int(settled.feelsLikeF))°")
+            formattedFeelsLike: "\(Int(settled.feelsLikeF))°",
+            now: settled.dayStart)
         XCTAssertEqual(cardLine, "Miami, FL · Today — 90° feels like · Tank Top · Shorts")
     }
 
@@ -1727,16 +1753,26 @@ final class Gen6SuccessorWaveTests: XCTestCase {
     // MARK: RW-119 — the section stands in its empty form
 
     func testRW119_DockStandsEmptyBeforeAnyEntry_sourcePins() throws {
+        // RW-135 RE-PIN (Nov 7, 2026, Direction A, §7.1)
+        // SUPERSEDES RW-119's Home presence: no session entry →
+        // NO bar, ever — no placeholder state stands in the
+        // dock's seat. (RW-119's defect — a session whose settles
+        // never recorded losing the section entirely — is
+        // answered under Direction A by the absence rule itself:
+        // the mini-player precedent §7.1 cites shows nothing
+        // when there is nothing to show.) The designed empty
+        // copy still lives where it belongs: the COLLECTION's
+        // empty state, behind the doorway.
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("WearIveRunEmptyDockView(onOpenCollection:"),
-                      "the dock renders the empty form when no session entry stands")
-        XCTAssertTrue(view.contains("if state == .preAdd"),
-                      "the empty form is the preAdd branch of the one dock")
+        XCTAssertFalse(view.contains("WearIveRunEmptyDockView"),
+                       "§7.1: no empty/placeholder form stands in the dock's seat")
+        XCTAssertTrue(view.contains("if state != .preAdd"),
+                      "the dock renders only while a session entry stands")
         XCTAssertEqual(WearIveRunEmptyDockView.emptyLine, "Your scrapbook starts with today's run.",
-                       "the empty dock carries the designed empty state's head line, verbatim")
+                       "the designed empty state's head line, verbatim (collection surface)")
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
         XCTAssertTrue(collection.contains("Your scrapbook starts with today's run."),
-                      "the dock's line and the collection's empty state are the same settled copy")
+                      "the collection's empty state carries the settled copy")
         // The model state for no entry is still .preAdd — the
         // dock's branch reads it; the bar itself is unchanged.
         XCTAssertEqual(
@@ -2151,14 +2187,21 @@ final class Gen6FixWaveTests: XCTestCase {
 
     func testFixWave_ViewSeams_sourcePins() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("viewedNarrationPayload: nil"),
-                      "Seam B: no viewed-state narration override stands at the bar's call site")
-        XCTAssertTrue(view.contains("wearIveRunInlineSection"),
-                      "RW-135: the section is composed inline")
-        XCTAssertFalse(view.contains("miniBarDock"),
-                       "RW-135: the detached dock is retired")
-        XCTAssertTrue(view.contains("wearIveRunJumpChip"),
-                      "RW-135: the jump chip stands in while the section is off-screen")
+        XCTAssertFalse(view.contains("viewedNarrationPayload"),
+                       "RW-135 §7.0: no viewed-state narration override reaches the bar at all (Seam B, completed — the parameter itself is gone)")
+        // RW-135 RE-PIN (Direction A, Nov 7, 2026): the
+        // synthesis pins that stood here (inline section + jump
+        // chip, dock retired) are superseded by the owner's
+        // ruling — the floating dock is restored and the
+        // expanded form is the footer section.
+        XCTAssertTrue(view.contains("miniBarDock"),
+                      "RW-135 Direction A: the floating dock is restored as the Home presence")
+        XCTAssertTrue(view.contains("wearIveRunFooterSection"),
+                      "RW-135 Direction A (interim): the expanded form is the footer section")
+        XCTAssertFalse(view.contains("wearIveRunInlineSection"),
+                       "RW-135: the synthesis inline section is removed")
+        XCTAssertFalse(view.contains("wearIveRunJumpChip"),
+                       "RW-135: the synthesis jump chip is removed — the bar itself is the jump (§7.3)")
         XCTAssertTrue(view.contains("reconcilePersonalLayer"),
                       "landing/foreground run the reconciliation pass")
         XCTAssertTrue(view.contains("HeroPhotoViewer("),
@@ -2175,5 +2218,189 @@ final class Gen6FixWaveTests: XCTestCase {
         XCTAssertTrue(store.contains("func reconcilePersonalLayer"))
         XCTAssertTrue(store.contains("func refreshBankLibrary"),
                       "the library's genuine server bank read exists")
+    }
+
+    // MARK: RW-135 Direction A (owner's ruling, Nov 7, 2026; research §7)
+    //
+    // Written for the gate to run — NOT run on this VM (no iOS
+    // toolchain; see the lane report's headline caveat).
+
+    private func rw135Entry(
+        dayStart: Date, place: String, items: [String] = ["Tee", "Shorts"],
+        wasUpdated: Bool = false, payload: NarrationPayload? = nil
+    ) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: dayStart, placeName: place,
+            feelsLikeF: 55, actualF: 58, condition: "Clear",
+            itemNames: items, itemKeys: items.map { $0.lowercased() },
+            heroImageReference: "hero-1",
+            wasUpdatedInSession: wasUpdated, updatePayload: payload)
+    }
+
+    /// §7.8(5) + §7.1: no entry → .preAdd → no line, no bar.
+    func testRW135_NoEntryNoBar() {
+        let state = WearIveRunMiniBarModel.state(
+            todaysEntry: nil, moment: .now, wasUpdatedThisSession: false)
+        XCTAssertEqual(state, .preAdd)
+        XCTAssertNil(WearIveRunNarration.line(for: state))
+    }
+
+    /// §7.8(2) (RW-132 regression): the location-switch sequence
+    /// at the derivation seam — before the Miami settle lands,
+    /// the bar still names the RECORDED place (New York); the
+    /// line names Miami only once the entry itself holds Miami.
+    /// There is no frame at which the bar names a place the
+    /// entry does not hold, because the line is a pure function
+    /// of the entry.
+    @MainActor
+    func testRW135_LocationSwitch_NarrationNamesOnlyRecordedPlaces() {
+        let defaults = UserDefaults(suiteName: "rw135-\(UUID().uuidString)")!
+        let model = WearIveRunCollectionModel(
+            store: WearIveRunStore(defaults: defaults), sessionID: "s-rw135")
+        let today = Calendar.current.startOfDay(for: Date())
+        model.recordSettled(rw135Entry(dayStart: today, place: "New York, NY"))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
+                todaysEntry: model.sessionEntry(), moment: .now,
+                wasUpdatedThisSession: model.sessionEntry()?.wasUpdatedInSession ?? false)),
+            "Added New York, NY, Now")
+        // The switch is being viewed; nothing has settled. The
+        // recorded entry — and therefore the line — is unmoved.
+        XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "New York, NY")
+        // The settle lands: the entry holds Miami, and only now
+        // does the line name it (§7.2 settled-today form).
+        model.recordSettled(rw135Entry(dayStart: today, place: "Miami, FL", items: ["Tank"]))
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
+                todaysEntry: model.sessionEntry(), moment: .now,
+                wasUpdatedThisSession: model.sessionEntry()?.wasUpdatedInSession ?? false)),
+            "Updated to Miami, FL")
+        // §7.1/§7.4: exactly one cue in the whole sequence (the
+        // creation); the switch moved only the narration version.
+        XCTAssertEqual(model.cueCount, 1)
+        XCTAssertEqual(model.narrationVersion, 2)
+    }
+
+    /// §7.8(3): the future-day sequence — the bar reads the
+    /// "Planned for" form while the entry is recorded under a
+    /// future day, and switching back to today restores the
+    /// "Updated to" form; both from the record.
+    func testRW135_FutureDay_PlannedFormAndBack() {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = utcDay(2026, 11, 7)
+        let tomorrow = utcDay(2026, 11, 8)
+        let planned = rw135Entry(dayStart: tomorrow, place: "Los Angeles, CA")
+        let plannedState = WearIveRunMiniBarModel.state(
+            todaysEntry: planned, moment: .now, wasUpdatedThisSession: false,
+            now: now, calendar: calendar)
+        XCTAssertEqual(plannedState, .planned(place: "Los Angeles, CA", dayLabel: "Tomorrow"))
+        XCTAssertEqual(WearIveRunNarration.line(for: plannedState),
+                       "Planned for Los Angeles, CA · Tomorrow")
+        // A plan further out names its weekday (Nov 10, 2026 is
+        // a Tuesday).
+        let later = rw135Entry(dayStart: utcDay(2026, 11, 10), place: "Los Angeles, CA")
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
+                todaysEntry: later, moment: .now, wasUpdatedThisSession: false,
+                now: now, calendar: calendar)),
+            "Planned for Los Angeles, CA · Tuesday")
+        // Back to today: the entry re-settles under today as an
+        // in-session update — the "Updated to" form returns.
+        let backToday = rw135Entry(dayStart: now, place: "Los Angeles, CA", wasUpdated: true)
+        XCTAssertEqual(
+            WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
+                todaysEntry: backToday, moment: .now, wasUpdatedThisSession: true,
+                now: now, calendar: calendar)),
+            "Updated to Los Angeles, CA")
+    }
+
+    /// §7.2: the settled-today form names the entry's PLACE even
+    /// when the entry's stored update payload is a moment (the
+    /// GEN-5 moment form is superseded on the bar).
+    func testRW135_SettledTodayNamesThePlace_NotTheMomentPayload() {
+        let entry = rw135Entry(
+            dayStart: utcDay(2026, 11, 7), place: "Miami, FL",
+            wasUpdated: true, payload: .moment(.clock(hour12: 7, isPM: true)))
+        let state = WearIveRunMiniBarModel.state(
+            todaysEntry: entry, moment: entry.momentReading,
+            wasUpdatedThisSession: true,
+            now: utcDay(2026, 11, 7), calendar: Calendar(identifier: .gregorian))
+        XCTAssertEqual(state, .updated(payload: .place("Miami, FL")))
+        XCTAssertEqual(WearIveRunNarration.line(for: state), "Updated to Miami, FL")
+    }
+
+    /// §7.2 expanded anatomy: the entry line's day form comes
+    /// from the recorded day — Today / Tomorrow / Weekday, Mon D
+    /// (Nov 9, 2026 is a Monday) — and the items are the recorded
+    /// names, joined.
+    func testRW135_ExpandedLine_DayFormFromTheRecord() {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = utcDay(2026, 11, 7)
+        let today = rw135Entry(dayStart: now, place: "New York, NY")
+        XCTAssertEqual(
+            WearIveRunNarration.expandedLine(for: today, formattedFeelsLike: "55°F", calendar: calendar, now: now),
+            "New York, NY · Today — 55°F feels like · Tee · Shorts")
+        let tomorrow = rw135Entry(dayStart: utcDay(2026, 11, 8), place: "New York, NY")
+        XCTAssertEqual(
+            WearIveRunNarration.expandedLine(for: tomorrow, formattedFeelsLike: "55°F", calendar: calendar, now: now),
+            "New York, NY · Tomorrow — 55°F feels like · Tee · Shorts")
+        let monday = rw135Entry(dayStart: utcDay(2026, 11, 9), place: "New York, NY")
+        XCTAssertEqual(
+            WearIveRunNarration.expandedLine(for: monday, formattedFeelsLike: "55°F", calendar: calendar, now: now),
+            "New York, NY · Monday, Nov 9 — 55°F feels like · Tee · Shorts")
+    }
+
+    /// §7.6 geometry: radius 16 in both docked forms, at every
+    /// morph progress — it never animates to 0.
+    func testRW135_RadiusIsSixteenInBothForms() {
+        XCTAssertEqual(WearIveRunMorph.miniCornerRadius, 16, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.expandedCornerRadius, 16, accuracy: 0.0001)
+        for progress in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            XCTAssertEqual(WearIveRunMorph.cornerRadius(progress: progress), 16, accuracy: 0.0001)
+        }
+        XCTAssertEqual(WearIveRunMorph.narrationCrossfadeSeconds, 0.2, accuracy: 0.0001)
+    }
+
+    /// §7.4/§7.5 sequence: a changed settle's cross-fade parks
+    /// while a scroll gesture is live and lands after it ends —
+    /// the deferral the dock view applies to its shown line.
+    func testRW135_CrossfadeDeferralAcrossAGesture() {
+        var deferral = WearIveRunNarrationDeferral()
+        // At rest, a new recorded line applies immediately.
+        XCTAssertEqual(deferral.offer(line: "Added New York, NY, Now", gestureActive: false),
+                       "Added New York, NY, Now")
+        // Mid-gesture, a changed line parks — the shown line
+        // does not move under the user's hand.
+        XCTAssertNil(deferral.offer(line: "Updated to Miami, FL", gestureActive: true))
+        XCTAssertEqual(deferral.shownLine, "Added New York, NY, Now")
+        // A second change mid-gesture replaces the parked one —
+        // only the latest recorded line ever lands.
+        XCTAssertNil(deferral.offer(line: "Updated to Chicago, IL", gestureActive: true))
+        // The frame after deceleration ends: the parked line is
+        // released for the cross-fade.
+        XCTAssertEqual(deferral.gestureEnded(), "Updated to Chicago, IL")
+        XCTAssertEqual(deferral.shownLine, "Updated to Chicago, IL")
+        XCTAssertNil(deferral.gestureEnded())
+    }
+
+    /// Direction A source pins: the dock's seat and geometry in
+    /// the host, the footer's interim anatomy, and the machine's
+    /// one-pulse rule.
+    func testRW135_DirectionA_sourcePins() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains(".safeAreaInset(edge: .bottom)"),
+                      "the dock hosts in the bottom safe-area inset")
+        XCTAssertTrue(view.contains("miniBarDock"),
+                      "the restored dock is what the inset hosts")
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(bar.contains("struct WearIveRunFooterSectionView"),
+                      "the interim expanded form is the footer section view")
+        XCTAssertTrue(bar.contains("WearIveRunNarration.expandedLine"),
+                      "the footer renders §7.2's entry line from the record")
+        XCTAssertFalse(bar.contains("viewedNarrationPayload"),
+                       "§7.0: the bar carries no live-view narration input")
+        let machine = try sourceFile("../RunWear/Models/WearIveRunElementMachine.swift")
+        XCTAssertFalse(machine.contains("(.mini, .userCausedUpdate)"),
+                       "§7.4: a changed settle is not a cue driver in the machine")
     }
 }
