@@ -22,6 +22,7 @@ on:
           - opt3-probe
           - opt3-stage1
           - opt3-submit
+          - launch-prepare
         default: verify
         required: true
       version:
@@ -72,3 +73,7 @@ jobs:
         if: inputs.task == 'opt3-submit'
         working-directory: scripts/asc
         run: python3 asc_opt3_submit.py
+      - name: Launch prepare (attach build 30, truthful 1.1 metadata + review notes)
+        if: inputs.task == 'launch-prepare'
+        working-directory: scripts/asc
+        run: python3 asc_launch_prepare.py
