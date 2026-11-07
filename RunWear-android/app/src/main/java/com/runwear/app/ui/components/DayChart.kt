@@ -126,7 +126,18 @@ object DayChartBuilder {
         hourly: List<HourlyForecast>,
         date: LocalDate,
         comfort: ComfortPreference,
-        sunTimes: List<com.runwear.shared.domain.model.DaySunTimes> = emptyList()
+        sunTimes: List<com.runwear.shared.domain.model.DaySunTimes> = emptyList(),
+        // RW-FIXWAVE (Sol's ruling, Nov 7, 2026; review row S6-27):
+        // the chart's point for the CURRENT hour takes the live
+        // current-conditions value, and the outfit band shading for
+        // that hour derives from the same value — so at Now the
+        // chart and the hero quote one temperature. Only the Now
+        // hour of the location's today is substituted; every other
+        // hour (and every picked hour's chart) stays forecast.
+        // [nowFeelsLikeF] is in the chart's comfort-adjusted frame.
+        nowDate: LocalDate? = null,
+        nowHour: Int? = null,
+        nowFeelsLikeF: Double? = null
     ): DayChartModel {
         val dayHours = hourly
             .map { it to it.dateTime.toJavaLocalDateTime() }
@@ -134,11 +145,22 @@ object DayChartBuilder {
             .sortedBy { (_, dt) -> dt.hour }
             .distinctBy { (_, dt) -> dt.hour }
             .map { (h, dt) ->
-                val adjusted = h.feelsLike + comfort.tempAdjustment
+                val forecastAdjusted = h.feelsLike + comfort.tempAdjustment
+                val adjusted = if (
+                    nowFeelsLikeF != null && nowDate == date && nowHour == dt.hour
+                ) {
+                    nowFeelsLikeF
+                } else {
+                    forecastAdjusted
+                }
                 DayChartHour(
                     hour = dt.hour,
                     feelsLikeF = adjusted,
-                    rawFeelsLikeF = h.feelsLike,
+                    rawFeelsLikeF = if (adjusted == forecastAdjusted) {
+                        h.feelsLike
+                    } else {
+                        adjusted - comfort.tempAdjustment
+                    },
                     bracket = TempBracket.fromFahrenheit(adjusted),
                     outfitItems = DayChartOutfitPreview.itemsFor(h, comfort),
                     weatherCode = h.weatherCode

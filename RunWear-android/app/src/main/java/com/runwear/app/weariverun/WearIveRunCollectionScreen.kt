@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
@@ -88,7 +89,13 @@ fun WearIveRunCollectionScreen(
     gender: GenderPreference = GenderPreference.UNISEX,
     /** Display-unit preference — fills the share captions and
      * poster figures in the user's unit. */
-    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /** RW-122: delete one entry (identity delete at the store). */
+    onDeleteEntry: (WearIveRunDayEntry) -> Unit = {},
+    /** RW-122: delete every entry under one place. */
+    onDeletePlace: (String) -> Unit = {},
+    /** RW-133: open an entry's stored photograph full-screen. */
+    onViewPhoto: (WearIveRunDayEntry) -> Unit = {}
 ) {
     var filter by remember { mutableStateOf(WearWeatherFilter.ALL) }
     var openChapter by remember { mutableStateOf<String?>(null) }
@@ -174,7 +181,13 @@ fun WearIveRunCollectionScreen(
                         today = today,
                         onShare = { shareEntry = it },
                         temperatureUnit = temperatureUnit,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        onDeleteEntry = onDeleteEntry,
+                        onDeletePlace = { place ->
+                            onDeletePlace(place)
+                            openChapter = null
+                        },
+                        onViewPhoto = onViewPhoto
                     )
                 } else if (entries.isEmpty()) {
                     HonestEmptyState(modifier = Modifier.weight(1f))
@@ -215,6 +228,8 @@ fun WearIveRunCollectionScreen(
                                                 System.currentTimeMillis()
                                             ),
                                         temperatureUnit = temperatureUnit,
+                                        onDelete = { onDeleteEntry(pinnedTodayEntry) },
+                                        onPhotoClick = { onViewPhoto(pinnedTodayEntry) },
                                         onView = if (
                                             listChapters.any {
                                                 it.place == pinnedTodayEntry.place
@@ -477,7 +492,13 @@ internal fun ChapterDetail(
     today: LocalDate,
     onShare: (WearIveRunDayEntry) -> Unit,
     modifier: Modifier = Modifier,
-    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /** RW-122: per-entry delete inside the chapter. */
+    onDeleteEntry: ((WearIveRunDayEntry) -> Unit)? = null,
+    /** RW-122: delete the whole location group (this chapter). */
+    onDeletePlace: ((String) -> Unit)? = null,
+    /** RW-133: open an entry's stored photograph full-screen. */
+    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null
 ) {
     LazyColumn(
         modifier = modifier.padding(horizontal = 16.dp),
@@ -495,6 +516,16 @@ internal fun ChapterDetail(
                     style = MaterialTheme.typography.bodyMedium,
                     color = RunWearColors.TextSecondary
                 )
+                // RW-122: the by-location group delete — every
+                // entry collated under this place, one action.
+                if (onDeletePlace != null) {
+                    TextButton(onClick = { onDeletePlace(chapter.place) }) {
+                        Text(
+                            text = "Remove all ${chapter.place} entries",
+                            color = RunWearColors.TextSecondary
+                        )
+                    }
+                }
             }
         }
         if (chapter.days.isEmpty()) {
@@ -529,7 +560,13 @@ internal fun ChapterDetail(
                                 color = RunWearColors.TextPrimary
                             )
                             group.days.forEach { day ->
-                                DayRow(entry = day, today = today, onShare = { onShare(day) })
+                                DayRow(
+                                    entry = day, today = today,
+                                    onShare = { onShare(day) },
+                                    onDelete = onDeleteEntry?.let {
+                                        { it(day) }
+                                    }
+                                )
                             }
                         }
                     }
@@ -563,6 +600,8 @@ internal fun ChapterDetail(
                         entry = day,
                         today = today,
                         onShare = { onShare(day) },
+                        onDelete = onDeleteEntry?.let { { it(day) } },
+                        onPhotoClick = onViewPhoto?.let { { it(day) } },
                         temperatureUnit = temperatureUnit
                     )
                 }
@@ -577,7 +616,11 @@ private fun DayRow(
     entry: WearIveRunDayEntry,
     today: LocalDate,
     onShare: () -> Unit,
-    onView: (() -> Unit)? = null
+    onView: (() -> Unit)? = null,
+    // RW-122: per-entry delete (the collection previously offered
+    // no delete at all). One tap, no confirmation — the same
+    // behaviour as the home section's trash.
+    onDelete: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -607,6 +650,15 @@ private fun DayRow(
         IconButton(onClick = onShare) {
             Icon(Icons.Outlined.Share, "Share this day", tint = RunWearColors.TextSecondary)
         }
+        if (onDelete != null) {
+            IconButton(onClick = onDelete) {
+                Icon(
+                    Icons.Outlined.Delete,
+                    "Delete this entry",
+                    tint = RunWearColors.TextSecondary
+                )
+            }
+        }
     }
 }
 
@@ -624,9 +676,22 @@ internal fun DayCard(
     /** GEN-5 (B-18): the view action chapter rows carry — the same
      * action set for the same entry type. Null = no chapter to view. */
     onView: (() -> Unit)? = null,
+    /** RW-122: per-entry delete. Null = no delete affordance. */
+    onDelete: (() -> Unit)? = null,
+    /** RW-133: open the entry's stored photograph full-screen.
+     * Wired only when the entry carries a photo reference. */
+    onPhotoClick: (() -> Unit)? = null,
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT
 ) {
-    Surface(shape = RoundedCornerShape(14.dp), color = RunWearColors.BgCard) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = RunWearColors.BgCard,
+        modifier = if (onPhotoClick != null && entry.heroRef != null) {
+            Modifier.clickable { onPhotoClick() }
+        } else {
+            Modifier
+        }
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             if (place != null) {
                 Row(
@@ -658,7 +723,10 @@ internal fun DayCard(
                     )
                 }
             }
-            DayRow(entry = entry, today = today, onShare = onShare, onView = onView)
+            DayRow(
+                entry = entry, today = today, onShare = onShare,
+                onView = onView, onDelete = onDelete
+            )
             if (lastSavedLabel != null) {
                 Text(
                     text = lastSavedLabel,

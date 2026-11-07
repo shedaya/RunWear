@@ -89,19 +89,36 @@ data class TimePickerSession(
     val nowHour: Int?,
     val draftHour: Int,
     val hasMovedOffNow: Boolean,
-    val selectableHours: Set<Int>
+    val selectableHours: Set<Int>,
+    // RW-131 (Nov 7, 2026): ONE session carries the working DATE
+    // as well as the working hour. Changing the date inside the
+    // picker mutates the session in place — it is not a commit
+    // and never a dismissal; only Confirm/Cancel dismiss.
+    val workingDate: LocalDate? = null,
+    /** Sticky once the day has been changed in this session —
+     * the date-axis twin of [hasMovedOffNow]: a touched session
+     * is an explicit choice, so changing away and back does not
+     * silently re-enter the tracking (Now) state. */
+    val dayChanged: Boolean = false
 )
 
 object TimePickerDraftPolicy {
 
-    data class Confirm(val hour: Int, val keepNow: Boolean)
+    data class Confirm(
+        val hour: Int,
+        val keepNow: Boolean,
+        /** RW-131: the session's working date — the Confirm
+         * commits (date, hour) as ONE selection. */
+        val date: LocalDate? = null
+    )
 
     fun open(
         selectedHour: Int,
         isNowSelected: Boolean,
         isToday: Boolean,
         nowHour: Int?,
-        selectableHours: Set<Int>
+        selectableHours: Set<Int>,
+        workingDate: LocalDate? = null
     ): TimePickerSession {
         // GEN-6 WAVE C (RW-53(iii) / FA-32): on a day that is NOT
         // today the handle opens on that day's FIRST forecast hour
@@ -119,7 +136,33 @@ object TimePickerDraftPolicy {
             nowHour = nowHour,
             draftHour = draft,
             hasMovedOffNow = false,
-            selectableHours = selectableHours
+            selectableHours = selectableHours,
+            workingDate = workingDate
+        )
+    }
+
+    /**
+     * RW-131: change the working DAY inside the open picker. A
+     * session mutation only — no commit, no dismissal, no
+     * re-solve of home behind the sheet. The working hour is kept
+     * when it is selectable on the new day, else it lands on the
+     * nearest selectable hour of that day. [dayChanged] sticks.
+     */
+    fun changeDay(
+        session: TimePickerSession,
+        newDate: LocalDate,
+        newSelectableHours: Set<Int>,
+        newIsToday: Boolean,
+        newNowHour: Int?
+    ): TimePickerSession {
+        val kept = snap(session.draftHour, newSelectableHours) ?: session.draftHour
+        return session.copy(
+            workingDate = newDate,
+            dayChanged = true,
+            isToday = newIsToday,
+            nowHour = newNowHour,
+            selectableHours = newSelectableHours,
+            draftHour = kept
         )
     }
 
@@ -157,10 +200,18 @@ object TimePickerDraftPolicy {
     }
 
     fun confirm(session: TimePickerSession): Confirm {
+        // RW-131: keep-Now additionally requires the day never
+        // changed — a session the user touched on the date axis
+        // is an explicit pick, even if it ends back on today at
+        // the now hour (the sticky rule, mirroring hasMovedOffNow).
         val keepNow = session.originalIsNow && session.isToday &&
             session.nowHour != null && session.draftHour == session.nowHour &&
-            !session.hasMovedOffNow
-        return Confirm(hour = session.draftHour, keepNow = keepNow)
+            !session.hasMovedOffNow && !session.dayChanged
+        return Confirm(
+            hour = session.draftHour,
+            keepNow = keepNow,
+            date = session.workingDate
+        )
     }
 
     /** Cancel restores the pre-open selection exactly. */
@@ -252,16 +303,39 @@ internal fun TimePickerSheetContent(
 ) {
     val haptic = LocalHapticFeedback.current
     val isToday = model.date == locationNow.toLocalDate()
-    var session by remember(model.date, selectedHour, isNowSelected) {
+    // RW-131: the session opens ONCE per sheet presentation. A
+    // model-date change while the sheet is open is a session
+    // day-change (below), never a re-open — re-opening would lose
+    // the scrubbed hour and the dayChanged stickiness.
+    var session by remember(selectedHour, isNowSelected) {
         mutableStateOf(
             TimePickerDraftPolicy.open(
                 selectedHour = selectedHour,
                 isNowSelected = isNowSelected,
                 isToday = isToday,
                 nowHour = if (isToday) locationNow.hour else null,
-                selectableHours = model.selectableHours
+                selectableHours = model.selectableHours,
+                workingDate = model.date
             )
         )
+    }
+    // RW-131: the host swapped the model to the newly chosen
+    // working day — fold it into the session in place. The sheet
+    // stays open; nothing is committed; home does not re-solve.
+    LaunchedEffect(model.date) {
+        if (session.workingDate != model.date) {
+            session = TimePickerDraftPolicy.changeDay(
+                session = session,
+                newDate = model.date,
+                newSelectableHours = model.selectableHours,
+                newIsToday = model.date == locationNow.toLocalDate(),
+                newNowHour = if (model.date == locationNow.toLocalDate()) {
+                    locationNow.hour
+                } else {
+                    null
+                }
+            )
+        }
     }
 
     // One haptic tick per hour crossed.

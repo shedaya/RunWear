@@ -166,7 +166,9 @@ object LooksLibraryStrings {
 internal fun LooksLibraryScreen(
     cells: List<LooksLibraryPolicy.LookCell>?,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** RW-133: a READY tile tap (the host resolves its photo). */
+    onTileClick: (LooksLibraryPolicy.LookCell) -> Unit = {}
 ) {
     var showExplanation by remember { mutableStateOf(false) }
     Column(
@@ -212,7 +214,7 @@ internal fun LooksLibraryScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     items(cells, key = { it.combinationId }) { cell ->
-                        LookCellTile(cell)
+                        LookCellTile(cell, onClick = { onTileClick(cell) })
                     }
                 }
                 // Frame 21: when a failed cell exists, the plain
@@ -257,11 +259,22 @@ internal fun LooksLibraryScreen(
 }
 
 @Composable
-private fun LookCellTile(cell: LooksLibraryPolicy.LookCell) {
+private fun LookCellTile(
+    cell: LooksLibraryPolicy.LookCell,
+    // RW-133: a READY tile is the door to its stored photograph.
+    onClick: () -> Unit = {}
+) {
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(RunWearColors.BgCard)
+            .then(
+                if (cell.state == LooksLibraryPolicy.CellState.READY) {
+                    Modifier.clickable { onClick() }
+                } else {
+                    Modifier
+                }
+            )
             .padding(12.dp)
     ) {
         // Scenario tile: the cell's weather glyph over a tinted
@@ -316,5 +329,25 @@ fun LooksLibraryScreen(
     LaunchedEffect(Unit) {
         viewModel.loadLooksLibrary { loaded -> cells = loaded ?: emptyList() }
     }
-    LooksLibraryScreen(cells = cells, onDismiss = onDismiss, modifier = modifier)
+    // RW-133: the tile's stored photograph, resolved on tap.
+    var viewerPhoto by remember {
+        mutableStateOf<Pair<String, LooksLibraryPolicy.LookCell>?>(null)
+    }
+    LooksLibraryScreen(
+        cells = cells,
+        onDismiss = onDismiss,
+        modifier = modifier,
+        onTileClick = { cell ->
+            viewModel.resolveLookPhoto(cell.combinationId) { url ->
+                if (url != null) viewerPhoto = url to cell
+            }
+        }
+    )
+    viewerPhoto?.let { (url, cell) ->
+        com.runwear.app.ui.components.HeroViewer(
+            imageRef = url,
+            captionItems = listOf(cell.title, cell.daypartLabel),
+            onDismiss = { viewerPhoto = null }
+        )
+    }
 }

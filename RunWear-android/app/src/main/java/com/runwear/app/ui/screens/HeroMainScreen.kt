@@ -132,6 +132,10 @@ fun HeroMainScreen(
     onSetAppearancePreference: (com.runwear.shared.domain.model.AppearancePreference) -> Unit = {},
     onDateSelected: (LocalDate) -> Unit,
     onTimeSelected: (Int) -> Unit,
+    /** RW-131: the picker session's single (date, hour, keepNow)
+     * commit. Null in render proofs, which fall back to the
+     * sequential date-then-hour path. */
+    onPickerCommit: ((LocalDate, Int, Boolean) -> Unit)? = null,
     onResetToNow: () -> Unit,
     onLocationSearch: (String) -> Unit,
     onLocationSelect: (Double, Double, String) -> Unit,
@@ -208,6 +212,12 @@ fun HeroMainScreen(
 
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    // RW-131: the picker session's working day while the time
+    // sheet is open. A date chosen through the sheet's day door
+    // lands here (session state), NOT in the committed selection;
+    // the sheet's model rebuilds for this day and the sheet stays
+    // open. Cleared whenever the time sheet closes.
+    var pickerWorkingDate by remember { mutableStateOf<LocalDate?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showLocationPicker by remember { mutableStateOf(false) }
     var showShopAll by remember { mutableStateOf(false) }
@@ -256,13 +266,30 @@ fun HeroMainScreen(
     // the home glance band and the Choose-a-Time sheet.
     val dayChartModel = remember(
         uiState.hourlyForecast, uiState.selectedDateTime, uiState.comfortPreference,
-        uiState.sunTimes
+        uiState.sunTimes, uiState.weather, uiState.isNowSelected, uiState.locationNow
     ) {
+        // RW-FIXWAVE (Nov 7 ruling): at Now, the chart's current-
+        // hour point is the live current-conditions feels-like —
+        // the same value the hero numeral quotes — never the
+        // hourly forecast row for that hour.
+        val nowWeather = uiState.weather
         com.runwear.app.ui.components.DayChartBuilder.build(
             hourly = uiState.hourlyForecast,
             date = uiState.selectedDateTime.toLocalDate(),
             comfort = uiState.comfortPreference,
-            sunTimes = uiState.sunTimes
+            sunTimes = uiState.sunTimes,
+            nowDate = if (uiState.isNowSelected) {
+                uiState.locationNow.toLocalDate()
+            } else {
+                null
+            },
+            nowHour = if (uiState.isNowSelected) uiState.locationNow.hour else null,
+            nowFeelsLikeF = if (uiState.isNowSelected && nowWeather != null) {
+                nowWeather.feelsLikeInFahrenheit +
+                    uiState.comfortPreference.tempAdjustment
+            } else {
+                null
+            }
         )
     }
     val dayChartBandContent: @Composable () -> Unit = {
@@ -308,6 +335,12 @@ fun HeroMainScreen(
     val wearCueSequence by wearIveRunHolder.cueSequence.collectAsState()
     val wearIveRunEntries by wearIveRunStore.entriesFlow.collectAsState(initial = emptyList())
     var showWearIveRunCollection by remember { mutableStateOf(false) }
+    // RW-133: full-screen hero viewer state — the home hero, or a
+    // collection entry's stored photograph.
+    var showHeroViewer by remember { mutableStateOf(false) }
+    var heroViewerEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
 
     // GEN-5 (RW-28, B-1): the FIRST emission in this process is
     // the stored collection restoring — it primes the holder at
@@ -387,8 +420,13 @@ fun HeroMainScreen(
             // frame; locationNow is java.time, same frame). Null
             // when the forecast carries no rows for that date —
             // never fabricated.
+            // RW-FIXWAVE (Nov 7, 2026; future-days ruling): the
+            // forecast range is the VIEWED day's, not always
+            // today's — a future-day settle records that day's
+            // range, held as that day's plan until the day arrives
+            // and the ordinary session settle takes over.
             val todaysForecast = uiState.hourlyForecast.filter {
-                it.dateTime.date.toJavaLocalDate() == uiState.locationNow.toLocalDate()
+                it.dateTime.date.toJavaLocalDate() == uiState.selectedDateTime.toLocalDate()
             }
             wearIveRunStore.recordSettled(
                 WearIveRunDayEntry(
@@ -398,7 +436,17 @@ fun HeroMainScreen(
                     // every later change within the session.
                     sessionId = com.runwear.app.weariverun.WearIveRunSession.currentId(),
                     settledAtMillis = System.currentTimeMillis(),
-                    date = uiState.locationNow.toLocalDate(),
+                    // RW-FIXWAVE (future-days ruling): the entry is
+                    // dated by the VIEWED day. It was previously
+                    // stamped with the location's today even for a
+                    // confirmed future-day pick, so a tomorrow
+                    // settle masqueraded as today's entry (the
+                    // Android half of RW-132's mismatch). A place
+                    // switch while viewing another day now moves
+                    // the session entry to the new place under that
+                    // viewed day's date, through the same in-place
+                    // session upsert.
+                    date = uiState.selectedDateTime.toLocalDate(),
                     // WS-4 (content seam): the entry's place is the
                     // SIMPLE form from the place model, so the
                     // collection, its chapter covers, and the narration
@@ -661,6 +709,11 @@ fun HeroMainScreen(
                                             onCycleHero = onCycleHero,
                                             heroPill = heroPill,
                                             onHeroPillAction = { showMakeItMePaywall = true },
+                                            onHeroPhotoClick = {
+                                                if (uiState.effectiveHeroUrl != null) {
+                                                    showHeroViewer = true
+                                                }
+                                            },
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                         if (uiState.personalLookStatus is
@@ -762,6 +815,11 @@ fun HeroMainScreen(
                                             onCycleHero = onCycleHero,
                                             heroPill = heroPill,
                                             onHeroPillAction = { showMakeItMePaywall = true },
+                                            onHeroPhotoClick = {
+                                                if (uiState.effectiveHeroUrl != null) {
+                                                    showHeroViewer = true
+                                                }
+                                            },
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                         if (uiState.personalLookStatus is
@@ -840,6 +898,11 @@ fun HeroMainScreen(
                                         onCycleHero = onCycleHero,
                                         heroPill = heroPill,
                                         onHeroPillAction = { showMakeItMePaywall = true },
+                                        onHeroPhotoClick = {
+                                            if (uiState.effectiveHeroUrl != null) {
+                                                showHeroViewer = true
+                                            }
+                                        },
                                         modifier = Modifier.fillMaxSize(),
                                         fillHeight = true
                                     )
@@ -1027,7 +1090,42 @@ fun HeroMainScreen(
                 today = uiState.locationNow.toLocalDate(),
                 onDismiss = { showWearIveRunCollection = false },
                 gender = uiState.genderPreference,
-                temperatureUnit = uiState.temperatureUnit
+                temperatureUnit = uiState.temperatureUnit,
+                // RW-122: collection deletes land at the store by
+                // identity / by place group.
+                onDeleteEntry = { entry ->
+                    screenScope.launch { wearIveRunStore.removeByIdentity(entry) }
+                },
+                onDeletePlace = { place ->
+                    screenScope.launch { wearIveRunStore.removePlace(place) }
+                },
+                // RW-133: an entry's stored photograph, full-screen.
+                onViewPhoto = { entry -> heroViewerEntry = entry }
+            )
+        }
+    }
+
+    // RW-133: the full-screen hero viewer — the home hero's
+    // stored photograph, fitted as-is, one quiet caption line.
+    if (showHeroViewer) {
+        val heroRef = uiState.effectiveHeroUrl
+        if (heroRef != null) {
+            com.runwear.app.ui.components.HeroViewer(
+                imageRef = heroRef,
+                captionItems = uiState.outfit?.allItems?.map { it.displayName }
+                    ?: emptyList(),
+                onDismiss = { showHeroViewer = false }
+            )
+        }
+    }
+    // RW-133: a collection entry's stored photograph.
+    heroViewerEntry?.let { entry ->
+        val ref = entry.heroRef
+        if (ref != null) {
+            com.runwear.app.ui.components.HeroViewer(
+                imageRef = ref,
+                captionItems = entry.items,
+                onDismiss = { heroViewerEntry = null }
             )
         }
     }
@@ -1035,39 +1133,91 @@ fun HeroMainScreen(
     // Date Picker
     if (showDatePicker) {
         DatePickerSheet(
-            selectedDate = uiState.selectedDateTime.toLocalDate(),
+            selectedDate = pickerWorkingDate
+                ?: uiState.selectedDateTime.toLocalDate(),
             today = uiState.locationNow.toLocalDate(),
             onSelectDate = {
-                onDateSelected(it)
-                showDatePicker = false
-                // RW-53: a confirmed date change re-solves home —
-                // the time sheet (if it hosted the day door) closes
-                // with it; its draft dies with the old day.
-                showTimePicker = false
+                if (showTimePicker) {
+                    // RW-131: hosted INSIDE the picker session —
+                    // the date changes the working day in place
+                    // and ONLY the date sheet closes. The time
+                    // sheet stays open on the new day; nothing is
+                    // committed and home does not re-solve. (This
+                    // supersedes RW-53's close-everything wiring
+                    // for the in-picker path only.)
+                    pickerWorkingDate = it
+                    showDatePicker = false
+                } else {
+                    // Standalone Choose-a-Day (RW-53, unchanged):
+                    // a confirmed date change re-solves home.
+                    onDateSelected(it)
+                    showDatePicker = false
+                }
             },
             onDismiss = { showDatePicker = false }
         )
     }
 
     // Time Picker — GEN-4: the chart sheet. Confirm commits the
-    // drafted hour (the same downstream re-solve as a tile pick:
-    // hero, headline, outfit, detail); confirming the untouched NOW
-    // hour keeps the NOW state (TimePickerDraftPolicy's pinned
-    // interpretation) and commits nothing. Cancel simply dismisses —
-    // the draft was sheet-local, so the pre-open selection stands.
+    // drafted (date, hour) as ONE selection (RW-131); confirming
+    // the untouched NOW hour keeps the NOW state
+    // (TimePickerDraftPolicy's pinned interpretation) and commits
+    // nothing. Cancel simply dismisses — the draft was
+    // sheet-local, so the pre-open selection stands.
     if (showTimePicker) {
+        // RW-131: the sheet's model follows the WORKING day while
+        // the session is open (the glance band keeps the
+        // committed day's model — DayChartBuilder is a pure
+        // function of (hourly, date), so the committed-day model
+        // is bit-identical when fed the committed date).
+        val pickerModel = remember(
+            uiState.hourlyForecast, pickerWorkingDate,
+            uiState.selectedDateTime, uiState.comfortPreference,
+            uiState.sunTimes, uiState.weather, uiState.isNowSelected,
+            uiState.locationNow
+        ) {
+            val workingDate = pickerWorkingDate
+                ?: uiState.selectedDateTime.toLocalDate()
+            if (workingDate == uiState.selectedDateTime.toLocalDate()) {
+                dayChartModel
+            } else {
+                com.runwear.app.ui.components.DayChartBuilder.build(
+                    hourly = uiState.hourlyForecast,
+                    date = workingDate,
+                    comfort = uiState.comfortPreference,
+                    sunTimes = uiState.sunTimes
+                )
+            }
+        }
         TimePickerSheet(
-            model = dayChartModel,
+            model = pickerModel,
             selectedHour = uiState.selectedDateTime.hour,
             locationNow = uiState.locationNow,
             isNowSelected = uiState.isNowSelected,
             temperatureUnit = uiState.temperatureUnit,
             locationName = uiState.locationName,
             onConfirm = { confirm ->
-                if (!confirm.keepNow) onTimeSelected(confirm.hour)
+                if (!confirm.keepNow) {
+                    val commitDate = confirm.date
+                        ?: pickerWorkingDate
+                        ?: uiState.selectedDateTime.toLocalDate()
+                    if (onPickerCommit != null) {
+                        onPickerCommit(commitDate, confirm.hour, false)
+                    } else {
+                        // Render-proof fallback: sequential path.
+                        if (commitDate != uiState.selectedDateTime.toLocalDate()) {
+                            onDateSelected(commitDate)
+                        }
+                        onTimeSelected(confirm.hour)
+                    }
+                }
+                pickerWorkingDate = null
                 showTimePicker = false
             },
-            onDismiss = { showTimePicker = false },
+            onDismiss = {
+                pickerWorkingDate = null
+                showTimePicker = false
+            },
             // RW-53: the time sheet's day door opens Choose-a-Day.
             onDayClick = { showDatePicker = true }
         )
@@ -1451,6 +1601,8 @@ private fun HeroSectionContent(
     /** GEN-3 A-HERO (WS-A(2)): the hero pill's content + its action. */
     heroPill: com.runwear.app.ui.components.HeroPillContent? = null,
     onHeroPillAction: () -> Unit = {},
+    /** RW-133: tapping the photo opens the full-screen viewer. */
+    onHeroPhotoClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     /** EXPANDED split pane only: the photo fills the pane's height. */
     fillHeight: Boolean = false
@@ -1481,6 +1633,7 @@ private fun HeroSectionContent(
             heroSceneKey = uiState.locationName,
             heroPill = heroPill,
             onHeroPillAction = onHeroPillAction,
+            onHeroPhotoClick = onHeroPhotoClick,
             scrollOffset = scrollOffset,
             onLocationClick = onLocationClick,
             onSettingsClick = onSettingsClick,
@@ -1589,6 +1742,8 @@ private fun HeroStackedUnit(
     onCycleHero: () -> Unit = {},
     heroPill: com.runwear.app.ui.components.HeroPillContent? = null,
     onHeroPillAction: () -> Unit = {},
+    /** RW-133: tapping the photo opens the full-screen viewer. */
+    onHeroPhotoClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -1623,6 +1778,7 @@ private fun HeroStackedUnit(
             onCycleHero = onCycleHero,
             heroPill = heroPill,
             onHeroPillAction = onHeroPillAction,
+            onHeroPhotoClick = onHeroPhotoClick,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth()

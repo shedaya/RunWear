@@ -201,6 +201,7 @@ class MainActivity : ComponentActivity() {
                                     onSetAppearancePreference = viewModel::setAppearancePreference,
                                     onDateSelected = viewModel::selectDate,
                                     onTimeSelected = viewModel::selectHour,
+                                    onPickerCommit = viewModel::applyPickerCommit,
                                     onResetToNow = viewModel::resetToNow,
                                     onLocationSearch = viewModel::searchLocation,
                                     onLocationSelect = viewModel::selectManualLocation,

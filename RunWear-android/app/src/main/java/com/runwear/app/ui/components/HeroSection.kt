@@ -7,6 +7,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -296,6 +297,8 @@ fun HeroSection(
     scrollOffset: Float = 0f,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-133: tapping the photo opens the full-screen viewer. */
+    onHeroPhotoClick: () -> Unit = {},
     /** Hero-flag affordance: shown only when a hero photo is displayed. */
     showFlagButton: Boolean = false,
     flagEnabled: Boolean = true,
@@ -446,6 +449,9 @@ fun HeroSection(
                     scaleY = handoffScale
                 }
                 .clip(RoundedCornerShape(HeroScrollHandoff.cornerRadius(handoff)))
+                // RW-133: the photo itself is the viewer's door
+                // (chrome buttons above consume their own taps).
+                .clickable { onHeroPhotoClick() }
         ) {
             Box(
                 modifier = Modifier.fillMaxSize(),

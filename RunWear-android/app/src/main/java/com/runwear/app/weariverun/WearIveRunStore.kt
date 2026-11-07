@@ -66,6 +66,15 @@ class WearIveRunStore(private val context: Context) {
         }
     }
 
+    /** RW-122: remove every entry collated under [place]. */
+    suspend fun removePlace(place: String) {
+        context.wearIveRunDataStore.edit { prefs ->
+            val current = decode(prefs[Keys.ENTRIES_JSON])
+            prefs[Keys.ENTRIES_JSON] =
+                encode(WearIveRunCollectionLogic.removePlace(current, place))
+        }
+    }
+
     companion object {
         fun encode(entries: List<WearIveRunDayEntry>): String {
             val array = JSONArray()

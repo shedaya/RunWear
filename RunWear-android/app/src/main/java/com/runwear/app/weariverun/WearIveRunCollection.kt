@@ -224,6 +224,18 @@ object WearIveRunCollectionLogic {
         entries.filterNot { sameIdentity(it, entry) }
 
     /**
+     * RW-122 (Nov 7, 2026): remove a whole location group — every
+     * entry collated under [place]. The collection is collated by
+     * location with sessions nested, so the group delete is the
+     * chapter-level counterpart of the per-entry delete.
+     */
+    fun removePlace(
+        entries: List<WearIveRunDayEntry>,
+        place: String
+    ): List<WearIveRunDayEntry> =
+        entries.filterNot { it.place == place }
+
+    /**
      * GEN-3 (X-5): THE entry for [today] — the day's latest settled
      * version, by [WearIveRunDayEntry.settledAtMillis]. Every
      * surface that names "today's entry" (the mini bar's holder,

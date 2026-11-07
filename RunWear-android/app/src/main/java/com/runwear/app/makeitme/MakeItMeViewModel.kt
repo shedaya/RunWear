@@ -111,6 +111,20 @@ class MakeItMeViewModel @Inject constructor(
         viewModelScope.launch { repository.markForkDecided() }
     }
 
+    /**
+     * RW-133: resolve one banked cell's stored photograph for the
+     * full-screen viewer (the library's own read carries labels
+     * and states, not photo URLs — photos are served one cell at
+     * a time by the serve function, so a tile tap resolves its
+     * cell here). Null when the cell has no serving photo.
+     */
+    fun resolveLookPhoto(combinationId: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val look = runCatching { repository.cellLookFor(combinationId) }.getOrNull()
+            onResult(look?.hit?.imageUrl)
+        }
+    }
+
     // ── Upload flow ────────────────────────────────────────────────────
 
     /** Step 1–2 of the sub-flow: consent + attestation recorded server-side. */
