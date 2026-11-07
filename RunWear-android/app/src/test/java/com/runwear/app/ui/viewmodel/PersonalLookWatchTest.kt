@@ -80,7 +80,17 @@ class PersonalLookWatchTest {
                 true, true, PersonalLookStatus.Failed(PersonalLookStatus.Reason.ERROR)
             )
         )
-        assertFalse(
+    }
+
+    @Test
+    fun `a recheck IS owed for an unresolved look - RW-134 widening`() {
+        // RW-134 / review §4.5 (Nov 7, 2026): None is NOT a
+        // terminal state — it is the unresolved state the old
+        // Making-only rule stranded (a delivered exact cell never
+        // replaced the stock serve on return). The recheck set is
+        // widened to Making-or-None; this assertion reverses the
+        // pre-wave pin on None deliberately.
+        assertTrue(
             PersonalLookRecheckPolicy.isRecheckOwed(
                 true, true, PersonalLookStatus.None
             )

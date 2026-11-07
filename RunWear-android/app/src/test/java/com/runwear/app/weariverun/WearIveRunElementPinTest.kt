@@ -152,7 +152,11 @@ class WearIveRunElementPinTest {
         assertTrue(host.contains("onDismiss = { showSettings = false }"))
         assertTrue(host.contains("onDismiss = { showLocationPicker = false }"))
         assertTrue(host.contains("onDismiss = { showDatePicker = false }"))
-        assertTrue(host.contains("onDismiss = { showTimePicker = false }"))
+        // RW-131 re-pin (Nov 7, 2026): the time sheet's dismiss
+        // also clears the picker session's working day — the
+        // return-home behaviour this pin protects is unchanged.
+        assertTrue(host.contains("pickerWorkingDate = null"))
+        assertTrue(host.contains("showTimePicker = false"))
         // This lane adds no BackHandler and no back interception of
         // its own anywhere in the element.
         assertFalse(miniBar().contains("BackHandler"))
