@@ -107,6 +107,7 @@ struct LocationPickerSheet: View {
                     }
                     .buttonStyle(.plain)
                 }
+                }
 
                 // Recents — actually-selected places only.
                 // (RW-89: suppressed while a search is active, so
