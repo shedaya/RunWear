@@ -208,7 +208,7 @@ final class Gen6WaveATests: XCTestCase {
         // wrong in both directions). The scaffold fact is still
         // recorded at personal paint time (pill silence, RW-34)
         // — now from the payload's own marker via the resolver.
-        XCTAssertTrue(vm.contains("currentPersonalServeIsScaffold = store.serveIsScaffold(for: combo)"),
+        XCTAssertTrue(vm.contains("let isScaffold = store.serveIsScaffold(for: combo)"),
                       "the scaffold fact is recorded at personal paint time (pill silence, RW-34) — from the payload, RW-117")
     }
 
