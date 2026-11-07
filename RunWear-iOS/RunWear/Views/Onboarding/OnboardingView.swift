@@ -486,12 +486,26 @@ private struct FirstLookView: View {
     /// the server's look state for exactly this cell.
     @State private var firstLookCombo: PersonalCombination?
     /// GEN-3 (census-ios Y-1, rendering defect 1): the personal
-    /// image URL whose pixels have actually loaded in the
-    /// first-look card. The finished claim requires the photo to
-    /// be ON SCREEN — a set URL whose image is still in flight
-    /// is not on screen (the census's claim-over-empty-band
-    /// step, ~0.7 s of claim and counter over an empty card).
-    @State private var firstLookLoadedImageURL: String?
+    /// image whose pixels have actually loaded in the first-look
+    /// card. The finished claim requires the photo to be ON
+    /// SCREEN — a set URL whose image is still in flight is not
+    /// on screen (the census's claim-over-empty-band step,
+    /// ~0.7 s of claim and counter over an empty card).
+    ///
+    /// RW-94 (Nov 6, 2026): the load is keyed to the personal
+    /// HERO'S IDENTITY, not its URL string. The gen-3 form stored
+    /// the loaded URL and required it to equal the view model's
+    /// current hero URL — but a personal photo's URL is a signed
+    /// address that a re-resolution can refresh for the SAME
+    /// photo, and every refresh silently un-proved the load: on
+    /// device the delivered photo swapped into the card while
+    /// "Making this outfit yours…" kept spinning (Sol's
+    /// walkthrough, frames f_044–f_046) — the surface never
+    /// signalled completion even though the photo was on screen.
+    /// The hero identity is stable across URL refreshes, so the
+    /// pixel proof now survives them. (The Y-1 rule itself is
+    /// unchanged: the claim still waits for loaded pixels.)
+    @State private var firstLookLoadedHeroId: String?
 
     /// The cell frame 34 is about: the kick's own cell, falling
     /// back to the preview's current personal cell.
@@ -507,8 +521,8 @@ private struct FirstLookView: View {
         FirstLookPresentation.resolve(
             lookState: firstLookCell.map { store.lookState(for: $0) } ?? .none,
             personalPhotoDisplayed: previewVM.currentPersonalHeroId != nil && previewVM.heroImageUrl != nil,
-            personalImageLoaded: firstLookLoadedImageURL != nil
-                && firstLookLoadedImageURL == previewVM.heroImageUrl,
+            personalImageLoaded: firstLookLoadedHeroId != nil
+                && firstLookLoadedHeroId == previewVM.currentPersonalHeroId,
             freeGenerationsUsed: store.freeGenerationsUsed,
             freeAllowance: PersonalHeroStore.freeAllowance,
             isSubscribed: store.mode == .subscribed
@@ -517,11 +531,12 @@ private struct FirstLookView: View {
 
     /// Records that the card's loaded image IS the delivered
     /// personal photo (called from the card's success branches —
-    /// a success phase means those pixels are on screen).
+    /// a success phase means those pixels are on screen). RW-94:
+    /// records the hero's IDENTITY (see firstLookLoadedHeroId).
     private func recordFirstLookImageLoad() {
-        guard previewVM.currentPersonalHeroId != nil,
-              let url = previewVM.heroImageUrl else { return }
-        firstLookLoadedImageURL = url
+        guard let heroId = previewVM.currentPersonalHeroId,
+              previewVM.heroImageUrl != nil else { return }
+        firstLookLoadedHeroId = heroId
     }
 
     private var hasRecommendation: Bool {
@@ -942,6 +957,13 @@ private struct FirstLookView: View {
                             .onAppear { recordFirstLookImageLoad() }
                     case .failed:
                         HeroPhoto(image: image, width: geo.size.width, height: 220)
+                            // RW-94: record the load in every
+                            // branch — the load record is the
+                            // presentation's pixel proof, and a
+                            // photo that lands while the phase
+                            // reads .failed (a late scaffold) must
+                            // not leave the record stale.
+                            .onAppear { recordFirstLookImageLoad() }
                     }
                 default:
                     AppTheme.cardOnSheet

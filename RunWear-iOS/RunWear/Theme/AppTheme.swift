@@ -50,6 +50,28 @@ enum AppTheme {
     static let tempWarm = Color(hex: tempWarmHex)
     static let tempHot = Color(hex: tempHotHex)
 
+    // RW-105 (Sol, Nov 6, 2026): the bracket BADGE's chip fills —
+    // the data palette above deepened (RGB × 0.62) to full
+    // strength for the white-text chip. The pre-fix chip filled
+    // with the bright data colour at 0.8 opacity over the cream
+    // ground, so the mild chip rendered pale mint with white
+    // text (≈2:1) — the surface Sol circled as unreadable. The
+    // data palette itself (chart bands, tints) is untouched;
+    // only the chip gets the deepened set. White text on every
+    // chip colour here measures ≈5:1 or better.
+    static let tempChipFreezingHex = "563999"
+    static let tempChipColdHex = "3D3F95"
+    static let tempChipCoolHex = "255199"
+    static let tempChipMildHex = "0A7350"
+    static let tempChipWarmHex = "986207"
+    static let tempChipHotHex = "9A470E"
+    static let tempChipFreezing = Color(hex: tempChipFreezingHex)
+    static let tempChipCold = Color(hex: tempChipColdHex)
+    static let tempChipCool = Color(hex: tempChipCoolHex)
+    static let tempChipMild = Color(hex: tempChipMildHex)
+    static let tempChipWarm = Color(hex: tempChipWarmHex)
+    static let tempChipHot = Color(hex: tempChipHotHex)
+
     // The bracket-typed temperature helpers (temperatureHex,
     // temperatureColor, temperatureTintOverlay) live in
     // AppThemeTemperature.swift — this file is membered into the

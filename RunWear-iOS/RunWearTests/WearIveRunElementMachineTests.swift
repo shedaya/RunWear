@@ -939,7 +939,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         XCTAssertEqual(state(of: model), .updated(payload: .place("New York, NY")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
-            "Update to New York, NY")
+            "Updated to New York, NY")
 
         // Place-only change (same kit): still an update — the
         // bar must never announce a place home has moved past,
@@ -1190,7 +1190,7 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             wasUpdatedThisSession: settled.wasUpdatedInSession)
         XCTAssertEqual(narration, .updated(payload: .place("Miami, FL")))
         XCTAssertEqual(
-            WearIveRunNarration.line(for: narration), "Update to Miami, FL")
+            WearIveRunNarration.line(for: narration), "Updated to Miami, FL")
         XCTAssertEqual(
             WearIveRunNarration.expandedLine(for: settled, formattedFeelsLike: "90°"),
             // GEN-5 supersession (FA-34): the expanded line names

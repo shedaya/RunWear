@@ -18,7 +18,11 @@ struct ContentView: View {
                 case .notDetermined:
                     if hasManualWeather {
                         outfitView
-                    } else {
+                    } else if LaunchGateResolution.showsPermissionGate(
+                        status: locationService.authorizationStatus,
+                        hasResolvedAuthorization: locationService.hasResolvedAuthorization,
+                        hasManualWeather: hasManualWeather
+                    ) {
                         LocationPermissionView(
                             onRequestPermission: {
                                 locationService.requestPermission()
@@ -27,6 +31,14 @@ struct ContentView: View {
                                 showManualLocationPicker = true
                             }
                         )
+                    } else {
+                        // RW-93: the status is not yet resolved on
+                        // this launch — a cold relaunch can read
+                        // .notDetermined over a long-granted
+                        // permission until the first authorization
+                        // callback lands. Show the loading skeleton,
+                        // never the gate, on an unproven reading.
+                        LoadingView()
                     }
                 case .denied, .restricted:
                     if hasManualWeather {

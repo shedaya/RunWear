@@ -217,6 +217,23 @@ struct MakeItMeSettingsSection: View {
                     await thumbnailLoader.load()
                 }
             }
+
+            // RW-84 (DS §13): the "Number of photos" row — the
+            // count of the user's reference photos on file, from
+            // the same loader the thumbnail reads. The value
+            // renders once the loader lands; the row itself is
+            // part of the inventory in every photos state.
+            HStack {
+                Text(MakeItMeSettingsRow.numberOfPhotos.title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(AppTheme.inkPrimary)
+                Spacer()
+                if case .loaded(let urls) = thumbnailLoader.state {
+                    Text("\(urls.count)")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+            }
         }
     }
 
@@ -282,9 +299,12 @@ struct MakeItMeSettingsSection: View {
                 // (WS-D): the name "Premium", the price with term
                 // from the store product, the settled two-benefit
                 // copy, and a real button opening the paywall.
-                MakeItMePremiumOfferCard(billing: store.billing) {
-                    presentation.present(.subscription)
-                }
+                // RW-100: the card now carries the full
+                // select-then-confirm itself (two selectable
+                // plans; the button names the selection and its
+                // price and purchases it) — it no longer routes
+                // through the paywall sheet.
+                MakeItMePremiumOfferCard(billing: store.billing)
             }
         }
     }
@@ -331,9 +351,17 @@ struct MakeItMeSettingsSection: View {
 // "Get Premium" button that opens the paywall. It observes the
 // billing object directly so the price lands the moment the
 // offering resolves.
+// RW-100 (Nov 6, 2026): the button no longer opens the paywall —
+// the card carries the complete select-then-confirm itself (see
+// the struct), per Sol's sharpened spec for both purchase
+// surfaces.
 private struct MakeItMePremiumOfferCard: View {
     @ObservedObject var billing: MakeItMeBilling
-    let onGetPremium: () -> Void
+    /// RW-100: the card's own plan selection — annual by default,
+    /// as on the paywall.
+    @State private var selectedPlan: PaywallPlan = MakeItMePriceLabels.defaultPlan
+    @State private var purchasing = false
+    @State private var unavailableLine: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -345,47 +373,55 @@ private struct MakeItMePremiumOfferCard: View {
             Text("Made ahead, without limit — every outfit is ready when you open the app.")
                 .font(.system(size: 14))
                 .foregroundColor(AppTheme.inkSecondary)
+            // RW-100 (Sol's sharpened spec, Nov 6, 2026): BOTH
+            // plans are explicit, equally selectable options in
+            // the card — the pre-fix card carried the annual price
+            // as loose ambient text (annual was not selectable at
+            // all) and a lone Monthly radio row that merely
+            // opened the paywall, under a button that named
+            // neither plan nor price: "the premium annual versus
+            // monthly hierarchy is a mess." The selection visibly
+            // registers (filled radio + tint, the paywall's
+            // grammar), and the confirm button below names the
+            // selected plan and its price and purchases it —
+            // select-then-confirm, on this surface too.
             if let priceLine = MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: billing.annualPriceString) {
-                Text(priceLine)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppTheme.inkPrimary)
+                planOptionRow(
+                    plan: .annual,
+                    label: "Annual — \(priceLine)",
+                    accessibility: "Annual plan, \(priceLine)"
+                )
             }
-            // GEN-5 (RW-28, C-5 + C-6): the monthly price joins
-            // the Settings card as a MODEST tappable element — a
-            // bordered row in the paywall row's family, clearly
-            // subordinate to the annual headline and its filled
-            // button; tapping it opens the same paywall, where
-            // monthly is selectable.
             if let monthlyLabel = MakeItMePriceLabels.settingsMonthlyLabel(monthlyPriceString: billing.monthlyPriceString) {
-                Button(action: onGetPremium) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .stroke(AppTheme.inkSecondary, lineWidth: 1.5)
-                            .frame(width: 16, height: 16)
-                        Text(monthlyLabel)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(AppTheme.inkPrimary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(AppTheme.cardFill))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.cardStroke, lineWidth: 1))
-                    .contentShape(RoundedRectangle(cornerRadius: 10))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Monthly plan, \(monthlyLabel)")
+                planOptionRow(
+                    plan: .monthly,
+                    label: monthlyLabel,
+                    accessibility: "Monthly plan, \(monthlyLabel)"
+                )
             }
-            Button(action: onGetPremium) {
-                Text("Get Premium")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.primaryColor))
+            Button(action: purchase) {
+                HStack {
+                    Text(MakeItMePriceLabels.confirmLabel(
+                        plan: selectedPlan,
+                        annualPriceString: billing.annualPriceString,
+                        monthlyPriceString: billing.monthlyPriceString
+                    ))
+                        .font(.system(size: 16, weight: .semibold))
+                    if purchasing { ProgressView() }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.primaryColor))
             }
             .buttonStyle(.plain)
+            .disabled(purchasing)
             .padding(.top, 4)
+            if let unavailableLine {
+                Text(unavailableLine)
+                    .font(.system(size: 13))
+                    .foregroundColor(AppTheme.inkSecondary)
+            }
         }
         .padding(.vertical, 6)
         // GEN-5 (cream map row 30): the offer card carries its
@@ -399,6 +435,58 @@ private struct MakeItMePremiumOfferCard: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.cardOnSheet))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppTheme.cardStroke, lineWidth: 1))
+    }
+
+    /// One selectable plan option in the card (RW-100): the
+    /// paywall's row family — radio, label, tint when selected.
+    private func planOptionRow(plan: PaywallPlan, label: String, accessibility: String) -> some View {
+        Button {
+            selectedPlan = plan
+        } label: {
+            HStack(spacing: 8) {
+                PlanSelectionIndicator(isSelected: selectedPlan == plan)
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppTheme.inkPrimary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(RoundedRectangle(cornerRadius: 10).fill(
+                selectedPlan == plan
+                    ? AppTheme.primaryColor.opacity(0.08)
+                    : AppTheme.cardFill
+            ))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(
+                selectedPlan == plan ? AppTheme.primaryColor : AppTheme.cardStroke,
+                lineWidth: selectedPlan == plan ? 1.5 : 1
+            ))
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibility)
+        .accessibilityAddTraits(selectedPlan == plan ? [.isSelected] : [])
+    }
+
+    /// The confirm: purchases the SELECTED plan through the same
+    /// billing calls the paywall sheet uses. On success the
+    /// store's mode flips and the Settings section re-renders
+    /// its subscribed state — no navigation needed.
+    private func purchase() {
+        purchasing = true
+        unavailableLine = nil
+        Task {
+            let outcome = selectedPlan == .annual
+                ? await billing.purchaseAnnual()
+                : await billing.purchaseMonthly()
+            purchasing = false
+            switch outcome {
+            case .subscribed, .cancelled:
+                break
+            case .unavailable:
+                unavailableLine = "Purchases aren't available right now. Please try again later."
+            }
+        }
     }
 }
 
@@ -634,6 +722,30 @@ private struct ReferencePhotoTileView: View {
 // highlighted card, the CTA. No Founding / Limited-time /
 // struck-through elements anywhere (the §5 contamination fix).
 
+/// RW-100: the plan selection's visible registration — a radio
+/// that FILLS when its plan is selected, with the selected row
+/// also taking a pine tint. (Stroke alone read as inert in
+/// Sol's walkthrough: tapping a plan row appeared to do
+/// nothing.) Shared by the paywall sheet and the Settings
+/// offer card — the two purchase surfaces carry the SAME
+/// selection grammar.
+private struct PlanSelectionIndicator: View {
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(isSelected ? AppTheme.primaryColor : AppTheme.inkMuted, lineWidth: 1.5)
+                .frame(width: 22, height: 22)
+            if isSelected {
+                Circle()
+                    .fill(AppTheme.primaryColor)
+                    .frame(width: 12, height: 12)
+            }
+        }
+    }
+}
+
 struct MakeItMeSubscriptionSheet: View {
     @EnvironmentObject var store: PersonalHeroStore
     @Environment(\.dismiss) private var dismiss
@@ -688,31 +800,42 @@ struct MakeItMeSubscriptionSheet: View {
                     // default selection. Its price slot is the
                     // Offering's annual price and nothing else.
                     // Tapping it re-selects annual.
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Premium")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(AppTheme.inkPrimary)
-                        Text("All of Make It Me.")
-                            .font(.system(size: 15))
-                            .foregroundColor(AppTheme.inkSecondary)
-                        if let price = store.billing.annualPriceString {
-                            Text("\(price)/yr")
-                                .font(.system(size: 19, weight: .bold))
+                    // RW-100: the selection VISIBLY registers — a
+                    // filled radio and a pine tint on the card,
+                    // not a stroke change alone.
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Premium")
+                                .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(AppTheme.inkPrimary)
-                        }
-                        // GEN-5 (RW-28 item 29): the per-run line
-                        // DIRECTLY under the annual price (the
-                        // gen-4 card omitted it; the 4¢ idea lived
-                        // only in the fine print below).
-                        if let perRun = MakeItMePriceLabels.perRunLine(annual: store.billing.annualPriceAmount) {
-                            Text(perRun)
-                                .font(.system(size: 13))
+                            Text("All of Make It Me.")
+                                .font(.system(size: 15))
                                 .foregroundColor(AppTheme.inkSecondary)
+                            if let price = store.billing.annualPriceString {
+                                Text("\(price)/yr")
+                                    .font(.system(size: 19, weight: .bold))
+                                    .foregroundColor(AppTheme.inkPrimary)
+                            }
+                            // GEN-5 (RW-28 item 29): the per-run line
+                            // DIRECTLY under the annual price (the
+                            // gen-4 card omitted it; the 4¢ idea lived
+                            // only in the fine print below).
+                            if let perRun = MakeItMePriceLabels.perRunLine(annual: store.billing.annualPriceAmount) {
+                                Text(perRun)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppTheme.inkSecondary)
+                            }
                         }
+                        Spacer()
+                        PlanSelectionIndicator(isSelected: selectedPlan == .annual)
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.sheet))
+                    .background(RoundedRectangle(cornerRadius: 16).fill(
+                        selectedPlan == .annual
+                            ? AppTheme.primaryColor.opacity(0.08)
+                            : AppTheme.sheet
+                    ))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(selectedPlan == .annual ? AppTheme.primaryColor : AppTheme.cardStroke,
@@ -744,7 +867,11 @@ struct MakeItMeSubscriptionSheet: View {
                     // that price has resolved. Tapping it selects
                     // monthly; the CTA then purchases monthly.
                     if store.billing.monthlyPriceString != nil {
-                        HStack {
+                        HStack(spacing: 10) {
+                            // RW-100: the same visible registration
+                            // as the annual card — filled radio +
+                            // tint when selected.
+                            PlanSelectionIndicator(isSelected: selectedPlan == .monthly)
                             // GEN-5 (item 29): the row IS the settled
                             // label — "Monthly — $0.99/month".
                             Text(store.billing.monthlyRowLabel)
@@ -753,7 +880,11 @@ struct MakeItMeSubscriptionSheet: View {
                         }
                         .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+                        .background(RoundedRectangle(cornerRadius: 14).fill(
+                            selectedPlan == .monthly
+                                ? AppTheme.primaryColor.opacity(0.08)
+                                : AppTheme.sheet
+                        ))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
                                 // GEN-5 (C-6): visibly tappable even
@@ -786,12 +917,20 @@ struct MakeItMeSubscriptionSheet: View {
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
                     } else {
-                        // The CTA carries NO price (§6, row 7).
+                        // RW-100 (Sol, Nov 6, 2026 — supersedes the
+                        // §6 "CTA carries no price" line): the
+                        // confirm button NAMES the selected plan
+                        // and its price, so it states what it buys.
+                        // Select-then-confirm is kept.
                         Button {
                             purchase()
                         } label: {
                             HStack {
-                                Text("Keep going with Premium")
+                                Text(MakeItMePriceLabels.confirmLabel(
+                                    plan: selectedPlan,
+                                    annualPriceString: store.billing.annualPriceString,
+                                    monthlyPriceString: store.billing.monthlyPriceString
+                                ))
                                     .font(.system(size: 17, weight: .semibold))
                                 if purchasing { ProgressView() }
                             }

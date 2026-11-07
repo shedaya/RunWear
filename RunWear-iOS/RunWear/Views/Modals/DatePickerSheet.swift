@@ -60,12 +60,14 @@ struct DatePickerSheet: View {
 
     private let calendar = Calendar.current
     /// The forecast horizon is 7 days (WeatherService forecast_days).
-    /// Browsing extends 3 days past it; those days are NAMED as
-    /// beyond the forecast in the grid (frame 42) and land on the
-    /// RW-23 out-of-forecast notice when picked — never dressed on
-    /// invented weather.
+    /// RW-102 (Sol's directive, Nov 6, 2026 — supersedes the
+    /// frame-42 browse-past-the-horizon design): the picker must
+    /// NOT offer dates it cannot give projections for, so browsing
+    /// stops AT the horizon. The day cell's "Beyond forecast"
+    /// treatment below is retained as the honest seam should the
+    /// horizon ever move, but the grid no longer reaches it.
     static let forecastHorizonDays = 7
-    static let browseDays = 10
+    static let browseDays = 7
     private var availableDates: [Date] {
         (0..<Self.browseDays).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: Date())) }
     }

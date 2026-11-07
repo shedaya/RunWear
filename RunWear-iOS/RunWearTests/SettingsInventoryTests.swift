@@ -257,12 +257,18 @@ final class SettingsInventoryTests: XCTestCase {
     /// the store product through the parameterized seam, and a
     /// real "Get Premium" button — plus the state-aware subscribed
     /// state for a subscriber.
+    /// RW-100 (Nov 6, 2026): the button no longer opens the
+    /// paywall and no longer reads a bare "Get Premium" — the card
+    /// carries the full select-then-confirm: two selectable plan
+    /// rows and a confirm button composed from
+    /// MakeItMePriceLabels.confirmLabel, naming the selected plan
+    /// and its price.
     func testGen3OfferCardIsARealOffer_sourcePin() throws {
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertTrue(section.contains("MakeItMePremiumOfferCard"),
                       "the free state renders the dedicated offer card")
-        XCTAssertTrue(section.contains("Text(\"Get Premium\")"),
-                      "the card carries a real button that opens the paywall")
+        XCTAssertTrue(section.contains("MakeItMePriceLabels.confirmLabel("),
+                      "the card's confirm button names the selected plan and its price (RW-100)")
         XCTAssertTrue(section.contains("MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: billing.annualPriceString)"),
                       "the card's price is the fetched product's price — parameterized, never hardcoded")
         XCTAssertTrue(section.contains("Made ahead, without limit — every outfit is ready when you open the app."),

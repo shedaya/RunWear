@@ -835,3 +835,188 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         print(out)
     }
 }
+
+// MARK: - GEN-6 FIX WAVE (Nov 6, 2026) · RW-85…RW-105 after-renders
+//
+// The fix lane's proof renders: same vehicles and fitting method
+// as the executor's renders above; file names carry the FIX-RW<nn>
+// prefix. Before-evidence for these items is Sol's device
+// walkthrough frames (rw-build28-walkthrough-frames) and his two
+// annotated screenshots — the renders below are the AFTER state
+// of the exact surfaces on the candidate build.
+
+extension Gen6VisualQAHarnessTests {
+
+    // RW-86 + RW-88: the slim (MINI) bar, hosted — the state Sol
+    // reported as a solid blank bar on device. Post-fix the bar
+    // is a plain header at natural height (no self-measurement
+    // in the paint path), so the hosted vehicle composes it like
+    // any other content: wordmark, narration, controls.
+    @MainActor
+    func testFixWave_MinibarMini_Hosted() throws {
+        let entry = collectionEntry(place: "New York, NY")
+        let mini = WearIveRunMiniBarView(
+            state: .added(place: "New York, NY", moment: .now),
+            entry: entry,
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(mini, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW86-ios-minibar-mini-light.png")
+        let miniDark = WearIveRunMiniBarView(
+            state: .added(place: "New York, NY", moment: .now),
+            entry: entry,
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            onOpenCollection: {}, onTrash: {})
+            .preferredColorScheme(.dark)
+            .background(AppTheme.background)
+        try writeHostedRender(miniDark, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW86-ios-minibar-mini-dark.png")
+        // RW-88: the viewed-state line in the slim bar — a place
+        // change and a picked future moment.
+        let viewedPlace = WearIveRunMiniBarView(
+            state: .added(place: "New York, NY", moment: .now),
+            entry: entry,
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            viewedNarrationPayload: "Miami, FL, Now",
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(viewedPlace, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW88-ios-minibar-updated-place.png")
+        let viewedMoment = WearIveRunMiniBarView(
+            state: .added(place: "New York, NY", moment: .now),
+            entry: entry,
+            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            viewedNarrationPayload: "November 12 7 p.m.",
+            onOpenCollection: {}, onTrash: {})
+            .background(AppTheme.background)
+        try writeHostedRender(viewedMoment, size: CGSize(width: 390, height: 110),
+                              name: "FIX-RW88-ios-minibar-updated-moment.png")
+    }
+
+    // RW-87: the time sheet's content height is IDENTICAL for a
+    // one-line and a two-line outfit preview (the reserve), at
+    // the default type size; both states also render at AX5
+    // (where the sheet's own scroll absorbs any growth past the
+    // reserve — RW-73's ruling).
+    @MainActor
+    func testFixWave_TimeSheetReserve() throws {
+        func sheet(hour: Int) -> TimePickerSheet {
+            let chart = DayChartModel.build(points: (0..<24).map { h in
+                DayChartHour(
+                    hour: h,
+                    feelsLikeF: 55 + Double(h),
+                    bracket: .mild,
+                    outfitItemNames: h == 19
+                        ? ["Long-Sleeve Merino Wool Running Shirt", "Insulated Running Tights", "Windproof Running Jacket", "Running Gloves"]
+                        : ["Tee"])
+            })!
+            return TimePickerSheet(
+                chart: chart, dateLabel: "Today", placeName: "New York, NY",
+                unit: .fahrenheit, initialHour: hour, openedInNowState: false,
+                nowHour: nil, isPresented: .constant(true))
+        }
+        func fittingHeight<Content: View>(_ content: Content) -> CGFloat {
+            let probe = ImageRenderer(content: content)
+            probe.scale = 2
+            probe.proposedSize = ProposedViewSize(width: 390, height: nil)
+            return probe.uiImage?.size.height ?? -1
+        }
+        let oneLine = sheet(hour: 7).sheetContent(size: .large)
+        let twoLine = sheet(hour: 19).sheetContent(size: .large)
+        XCTAssertEqual(fittingHeight(oneLine), fittingHeight(twoLine),
+                       "RW-87: the sheet must not jump between one-line and two-line outfit previews")
+        try writeRender(oneLine, size: CGSize(width: 390, height: fittingHeight(oneLine)),
+                        name: "FIX-RW87-ios-timesheet-oneline-default.png")
+        try writeRender(twoLine, size: CGSize(width: 390, height: fittingHeight(twoLine)),
+                        name: "FIX-RW87-ios-timesheet-twoline-default.png")
+        try writeRender(sheet(hour: 19).sheetContent(size: .accessibility5),
+                        size: CGSize(width: 390, height: fittingHeight(sheet(hour: 19).sheetContent(size: .accessibility5))),
+                        name: "FIX-RW87-ios-timesheet-twoline-max.png")
+    }
+
+    // RW-85: the collision fixture — selected hour == now hour
+    // == the day's warmest hour, at the sheet height and the
+    // accessibility height. The dot must sit clear below the
+    // NOW label (geometry pinned in Gen6FixWaveTests).
+    @MainActor
+    func testFixWave_DayChartNowCollision() throws {
+        let chart = DayChartModel.build(points: (0..<24).map { h in
+            DayChartHour(
+                hour: h,
+                feelsLikeF: h == 14 ? 80 : 50 + Double(abs(h - 6)),
+                bracket: .mild,
+                outfitItemNames: ["Tee"])
+        })!
+        for (height, suffix) in [(168, "sheet"), (120, "ax")] {
+            let view = DayChartView(
+                model: chart, selectedHour: 14, nowHour: 14,
+                interactive: false, showsAxisLabels: true)
+                .frame(width: 358, height: CGFloat(height))
+                .background(AppTheme.background)
+            try writeRender(view, size: CGSize(width: 358, height: height),
+                            name: "FIX-RW85-ios-daychart-nowcollision-\(suffix).png")
+        }
+    }
+
+    // RW-101: the "Making your looks" band in its generating
+    // state (Premium) — the band's own render; its seat directly
+    // under the hero is pinned in Gen6FixWaveTests (composition
+    // order in WeatherOutfitView).
+    @MainActor
+    func testFixWave_BandGenerating() throws {
+        let band = ConvergenceBandView(content: ConvergenceBandContent(
+            heading: "Making your looks",
+            line: "We're generating your outfits across all running conditions, so it will be ready when you need it.",
+            fraction: 0.4))
+            .padding(.horizontal, 16)
+            .background(AppTheme.background)
+        try writeRender(band, size: CGSize(width: 390, height: 120),
+                        name: "FIX-RW101-ios-band-generating.png")
+    }
+
+    // RW-105 after-renders: the bracket badge (deepened chip,
+    // full opacity) in both themes, and the free-look pill's
+    // "Get unlimited" in the dynamic pine (hosted, light mode —
+    // the mode Sol circled).
+    @MainActor
+    func testFixWave_BadgeAndPill() throws {
+        let badge = TemperatureBracketBadge(bracket: .mild, unit: .fahrenheit)
+            .padding(16)
+            .background(AppTheme.background)
+        try writeRender(badge, size: CGSize(width: 390, height: 90),
+                        name: "FIX-RW105-ios-badge-mild-light.png")
+        let badgeDark = TemperatureBracketBadge(bracket: .mild, unit: .fahrenheit)
+            .padding(16)
+            .preferredColorScheme(.dark)
+            .background(AppTheme.background)
+        try writeRender(badgeDark, size: CGSize(width: 390, height: 90),
+                        name: "FIX-RW105-ios-badge-mild-dark.png")
+        try writeHostedRender(
+            HeroImageView(
+                locationName: "New York, NY", temperature: 64, actualTemperature: 62,
+                weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
+                tempBracket: HeroTempBracket.from(feelsLikeTemperature: 64),
+                fallbackImageUrl: "", aiImageUrl: nil,
+                pillState: .freeLook(used: 1, allowance: 5), heightMode: .fill, showsTopControls: false)
+                .preferredColorScheme(.light),
+            size: CGSize(width: 390, height: 520), name: "FIX-RW105-ios-pill-freelook-light.png")
+    }
+
+    // RW-100: the paywall sheet — annual card with its filled
+    // selection radio and the confirm button naming the selected
+    // plan (prices unresolved in the test host, so the button
+    // names the plan without a price here; the priced label is
+    // pinned in Gen6FixWaveTests).
+    @MainActor
+    func testFixWave_PaywallSheet() throws {
+        let sheet = MakeItMeSubscriptionSheet()
+            .environmentObject(PersonalHeroStore())
+        let probe = ImageRenderer(content: sheet)
+        probe.scale = 2
+        probe.proposedSize = ProposedViewSize(width: 390, height: nil)
+        let needed = probe.uiImage?.size.height ?? 700
+        try writeRender(sheet, size: CGSize(width: 390, height: needed),
+                        name: "FIX-RW100-ios-paywall-default.png")
+    }
+}

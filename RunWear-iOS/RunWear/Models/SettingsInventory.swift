@@ -98,6 +98,16 @@ enum MakeItMeSettingsRow: String, CaseIterable {
     case notStarted
     /// Frame 38's door: Your photos (view or replace).
     case yourPhotos
+    /// DS §13's count row (RW-84): "Number of photos" — the
+    /// number of the user's reference photos on file, seated
+    /// with the Your photos door it counts. (The row existed in
+    /// the design spec but in no shipped Settings state on
+    /// either platform until this fix. The spec's era value was
+    /// 3, from the multi-photo intake; the shipped intake is
+    /// the guided single-photo route, so the row reports the
+    /// user's actual on-file count rather than a fixed number
+    /// the product would contradict.)
+    case numberOfPhotos
     /// Frame 35's quiet door in the free state.
     case premium
     /// Frame 37's management door in the subscribed state.
@@ -113,6 +123,7 @@ enum MakeItMeSettingsRow: String, CaseIterable {
         switch self {
         case .notStarted: return "See yourself in every outfit"
         case .yourPhotos: return "Your photos"
+        case .numberOfPhotos: return "Number of photos"
         case .premium: return "Premium"
         case .manageSubscription: return "Manage subscription"
         case .deletePhotos: return "Delete my photos"

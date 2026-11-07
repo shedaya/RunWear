@@ -244,12 +244,30 @@ struct WeatherOutfitView: View {
                     // GEN-6 (RW-66): the day picker's door inside
                     // the sheet (its context line's date segment).
                     // Confirm writes the view model's selectedDate
-                    // — the .onChange on the date-sheet modifier
-                    // above re-solves home exactly once, keeping
-                    // the selected hour — and dismisses this sheet
-                    // too, landing home on the new day.
+                    // and dismisses this sheet too, landing home
+                    // on the new day.
+                    // RW-92: the re-solve is fired HERE, explicitly.
+                    // The gen-6 form relied on the .onChange inside
+                    // the HOME-hosted date sheet's content — a
+                    // handler that exists only while that sheet is
+                    // presented, so a date confirmed from THIS
+                    // nested sheet wrote selectedDate (the header
+                    // recomposed to the picked day) but never
+                    // re-solved: home kept presenting Now's figures
+                    // under the picked day's name, with no
+                    // out-of-forecast notice (Sol's walkthrough,
+                    // frame f_104). The nested confirm now runs the
+                    // same updateSelectedTime the home path's
+                    // handler runs — exactly once, keeping the
+                    // selected hour.
                     dateSelection: $viewModel.selectedDate,
-                    onDateConfirmed: { showTimePicker = false }
+                    onDateConfirmed: {
+                        showTimePicker = false
+                        viewModel.updateSelectedTime(
+                            date: viewModel.selectedDate,
+                            hour: viewModel.selectedHour
+                        )
+                    }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -485,13 +503,20 @@ struct WeatherOutfitView: View {
                                 // background — no overlap in the split
                                 // layout (permanent legibility state).
                                 sheetHeader
+                                // RW-101 (Sol, Nov 6, 2026): the
+                                // "Making your looks" band sits
+                                // directly under the hero — first
+                                // content in the sheet — so a
+                                // Premium subscriber knows what's
+                                // going on; wording unchanged,
+                                // placement only.
+                                homeBandSection
+                                    .padding(.top, 16)
                                 if viewModel.selectedTimeOutsideForecast {
                                     outsideForecastNotice
                                         .padding(.top, 16)
                                 }
                                 outfitSection
-                                    .padding(.top, 24)
-                                homeBandSection
                                     .padding(.top, 24)
                                 dayChartBand
                                     .padding(.top, 24)
@@ -613,15 +638,18 @@ struct WeatherOutfitView: View {
     private func sheetContainer<Content: View>(@ViewBuilder outfit: () -> Content) -> some View {
         VStack(spacing: 0) {
             sheetHeader
+            // RW-101 (Sol, Nov 6, 2026): the "Making your looks"
+            // band sits directly under the hero — first content
+            // in the sheet — so a Premium subscriber knows what's
+            // going on; wording unchanged, placement only. (This
+            // supersedes the GEN-5 seat below the outfit.)
+            homeBandSection
+                .padding(.top, 16)
             if viewModel.selectedTimeOutsideForecast {
                 outsideForecastNotice
                     .padding(.top, 16)
             }
             outfit()
-            // GEN-5: the convergence band directly below the
-            // outfit, above the glance band (see homeBandSection).
-            homeBandSection
-                .padding(.top, 24)
             // GEN-4: the glance band sits below the outfit list.
             dayChartBand
                 .padding(.top, 24)
@@ -928,6 +956,22 @@ struct WeatherOutfitView: View {
                 cueCount: collectionModel.cueCount,
                 isAtEndOfScroll: isAtEndOfScroll,
                 isDimmedBySheet: anyHomeSheetPresented,
+                // RW-88: the strip follows the VIEWED place and
+                // moment — while they differ from the entry's
+                // settled state, the status line names the view
+                // ("Updated to Miami, FL, Now" / "Updated to
+                // November 12 7 p.m."); back at the entry's own
+                // place at Now, the entry's narration stands.
+                viewedNarrationPayload: todays.flatMap { entry in
+                    WearIveRunViewedNarration.payload(
+                        entryPlaceDisplayName: entry.placeDisplayName,
+                        entryMoment: entry.momentReading,
+                        viewedPlace: viewModel.simplePlace,
+                        viewedDate: viewModel.selectedDate,
+                        viewedHour: viewModel.selectedHour,
+                        isViewingNow: isViewingNow
+                    )
+                },
                 onOpenCollection: { showCollection = true },
                 onTrash: {
                     // Trash deletes the PRESENTED entry — the
@@ -1639,7 +1683,11 @@ struct TemperatureBracketBadge: View {
         .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(AppTheme.temperatureColor(fahrenheit: temperatureForBracket).opacity(0.8))
+                // RW-105: the deepened chip colour at FULL
+                // opacity — the pre-fix bright data colour at
+                // 0.8 over the cream ground read as pale mint
+                // under white text (Sol's circled surface).
+                .fill(AppTheme.temperatureChipColor(fahrenheit: temperatureForBracket))
         )
     }
 

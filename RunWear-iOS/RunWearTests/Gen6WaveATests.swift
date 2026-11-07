@@ -471,11 +471,15 @@ final class Gen6WaveATests: XCTestCase {
         XCTAssertFalse(hero.contains(".scaffold"), "the hero view has no scaffold pill case")
         XCTAssertFalse(hero.contains("\"Your photo\""), "the ruled-out label renders nowhere on the hero")
         // The free pill's "Get unlimited" is the green element.
+        // RW-105 (Nov 6, 2026): the green renders through the
+        // dynamic pine payload (deep pine in light mode) — the
+        // fixed dark accent read pale mint on the light glass
+        // pill in light mode (Sol's circled surface).
         let freeStart = try XCTUnwrap(hero.range(of: "case .freeLook")?.lowerBound)
         let premiumStart = try XCTUnwrap(hero.range(of: "case .premium:")?.lowerBound)
         let freeSlice = String(hero[freeStart..<premiumStart])
-        XCTAssertTrue(freeSlice.contains("AppTheme.pineAccentDark"),
-                      "free exact-serve pill: 'Get unlimited' renders in the green accent")
+        XCTAssertTrue(freeSlice.contains("AppTheme.pinePayload"),
+                      "free exact-serve pill: 'Get unlimited' renders in the green accent (RW-105: the dynamic pine payload)")
         // The exhausted pill is one whole-pill button to Premium.
         XCTAssertTrue(hero.contains("case .exhausted"))
         let outfit = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")

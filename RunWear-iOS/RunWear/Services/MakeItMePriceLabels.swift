@@ -66,6 +66,31 @@ enum MakeItMePriceLabels {
         monthlyPriceString.map { "Monthly — \($0)/month" }
     }
 
+    /// RW-100 (Sol, Nov 6, 2026): the confirm button's label on
+    /// BOTH purchase surfaces (paywall sheet and the Settings
+    /// offer card) — it NAMES the selected plan and its price,
+    /// so the button states what it buys: "Get Premium — Annual,
+    /// $9.99/yr" / "Get Premium — Monthly, $0.99/month". Prices
+    /// come only from the fetched offering; while a price is
+    /// unresolved the label names the plan without a price (the
+    /// surfaces render their option rows only once prices land,
+    /// so an unresolved label is a transient state). This
+    /// supersedes the gen-3 §6 "CTA carries no price" line.
+    static func confirmLabel(
+        plan: PaywallPlan,
+        annualPriceString: String?,
+        monthlyPriceString: String?
+    ) -> String {
+        switch plan {
+        case .annual:
+            return annualPriceString.map { "Get Premium — Annual, \($0)/yr" }
+                ?? "Get Premium — Annual"
+        case .monthly:
+            return monthlyPriceString.map { "Get Premium — Monthly, \($0)/month" }
+                ?? "Get Premium — Monthly"
+        }
+    }
+
     /// GEN-5 (RW-28 item 29): the per-run line that sits DIRECTLY
     /// under the annual price on the paywall's hero card —
     /// "only about 4¢ per run", derived from the displayed price

@@ -206,7 +206,15 @@ struct TimePickerSheet: View {
 
             Spacer().frame(height: 8)
         }
-        .padding(24)
+        // RW-87: the top padding is 36, not 24 — the sheet's
+        // drag indicator (presentationDragIndicator(.visible))
+        // floats over the top centre of the content, exactly
+        // where the centred title sits; at 24 the grabber
+        // overlapped the title's glyphs even in the one-line
+        // state (walkthrough frames f_087–f_097).
+        .padding(.horizontal, 24)
+        .padding(.bottom, 24)
+        .padding(.top, 36)
         .frame(maxWidth: .infinity)
     }
 
@@ -366,11 +374,29 @@ struct TimePickerSheet: View {
             }
 
             if let entry, !entry.outfitItemNames.isEmpty {
-                Text(entry.outfitItemNames.joined(separator: " · "))
-                    .font(.appFootnote)
-                    .foregroundColor(AppTheme.inkSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                // RW-87: the preview region reserves exactly TWO
+                // footnote lines at the current type size (the
+                // invisible twin below), so the sheet's content
+                // height is identical whether the drafted hour's
+                // outfit wraps to one line or two — the sheet no
+                // longer jumps between hours, and the detent no
+                // longer re-derives a height that clips the title
+                // mid-glyph. The preview itself keeps RW-73's
+                // no-line-cap rule: at the largest type sizes it
+                // may exceed the reserve and the sheet's own
+                // scroll (RW-73's ruling) absorbs the growth.
+                ZStack(alignment: .top) {
+                    Text("Outfit preview reserve\nOutfit preview reserve")
+                        .font(.appFootnote)
+                        .opacity(0)
+                        .accessibilityHidden(true)
+                    Text(entry.outfitItemNames.joined(separator: " · "))
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
     }

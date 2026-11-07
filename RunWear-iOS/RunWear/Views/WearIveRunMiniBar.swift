@@ -74,7 +74,9 @@ enum WearIveRunMiniBarModel {
 enum WearIveRunNarration {
     /// - preAdd: nil (the bar does not render at all)
     /// - added: "Added {place}, {moment}" — the comma form
-    /// - updated: "Update to {payload}" (payload renders pine)
+    /// - updated: "Updated to {payload}" (payload renders pine)
+    ///   (RW-98: the settled verb form is "Updated to" — the
+    ///   gen-5 "Update to" wording is retired.)
     static func line(for state: WearIveRunState) -> String? {
         switch state {
         case .preAdd:
@@ -82,7 +84,7 @@ enum WearIveRunNarration {
         case .added(let place, let moment):
             return "Added \(place), \(moment.rendered)"
         case .updated(let payload):
-            return "Update to \(payload.rendered)"
+            return "Updated to \(payload.rendered)"
         }
     }
 
@@ -106,6 +108,93 @@ enum WearIveRunNarration {
             return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(items)"
         }
         return "\(entry.placeDisplayName) · Today — \(formattedFeelsLike) feels like · \(entry.itemNames.joined(separator: " · "))"
+    }
+}
+
+// MARK: - Viewed-state narration (RW-88)
+
+/// The strip FOLLOWS THE VIEWED MOMENT (RW-88, Sol's Nov 6, 2026
+/// walkthrough): when the place or moment on screen differs from
+/// the session entry's settled place/moment, the status line
+/// names the VIEWED state — "Updated to Miami, FL, Now" for a
+/// place change, "Updated to November 12 7 p.m." for a picked
+/// moment on another day, "Updated to 7 p.m." for a picked hour
+/// today. Returning the view to the entry's own place at Now
+/// restores the entry's own narration (this returns nil). The
+/// entry itself is untouched — browsing a future moment never
+/// re-settles the save; only the line follows the view.
+///
+/// Grammar (Sol's examples, Nov 6, 2026): the changed condition
+/// is named in full — place, time, OR date. A place change
+/// carries the moment with it ("{place}, {moment}"); a
+/// moment-only change carries no place. Other-day moments render
+/// "{Month} {D} {h} {a.m./p.m.}" — the date in full, never a
+/// weekday daypart and never a numeric stamp.
+enum WearIveRunViewedNarration {
+    /// The payload that follows "Updated to " while the view
+    /// differs from the entry; nil when the view matches the
+    /// entry's settled place and moment.
+    static func payload(
+        entryPlaceDisplayName: String,
+        entryMoment: MomentReading,
+        viewedPlace: SimplePlace?,
+        viewedDate: Date,
+        viewedHour: Int,
+        isViewingNow: Bool,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> String? {
+        let placeChanged = viewedPlace.map {
+            $0.displayName != entryPlaceDisplayName
+        } ?? false
+        let momentText = viewedMomentText(
+            viewedDate: viewedDate,
+            viewedHour: viewedHour,
+            isViewingNow: isViewingNow,
+            calendar: calendar,
+            now: now
+        )
+        let momentChanged: Bool
+        if isViewingNow {
+            momentChanged = entryMoment != .now
+        } else if calendar.isDate(viewedDate, inSameDayAs: now) {
+            let display = viewedHour % 12 == 0 ? 12 : viewedHour % 12
+            momentChanged = entryMoment != .clock(hour12: display, isPM: viewedHour >= 12)
+        } else {
+            // An entry reading cannot carry a calendar date (the
+            // structural MomentReading has no such case), so a
+            // viewed moment on another day always differs from
+            // the entry's reading.
+            momentChanged = true
+        }
+        guard placeChanged || momentChanged else { return nil }
+        if placeChanged, let viewedPlace {
+            return "\(viewedPlace.displayName), \(momentText)"
+        }
+        return momentText
+    }
+
+    /// The viewed moment in the narration's grammar: "Now" at
+    /// now, the clock reading ("7 p.m.") for a picked hour
+    /// today, and the full date + clock ("November 12 7 p.m.")
+    /// for a picked moment on another day.
+    static func viewedMomentText(
+        viewedDate: Date,
+        viewedHour: Int,
+        isViewingNow: Bool,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> String {
+        if isViewingNow { return "Now" }
+        let display = viewedHour % 12 == 0 ? 12 : viewedHour % 12
+        let suffix = viewedHour >= 12 ? "p.m." : "a.m."
+        if calendar.isDate(viewedDate, inSameDayAs: now) {
+            return "\(display) \(suffix)"
+        }
+        let month = DateFormatter()
+        month.dateFormat = "MMMM"
+        let day = calendar.component(.day, from: viewedDate)
+        return "\(month.string(from: viewedDate)) \(day) \(display) \(suffix)"
     }
 }
 
@@ -243,11 +332,8 @@ final class WearIveRunCollectionModel: ObservableObject {
         // bar fired a second "Added {place}, Now" for an entry
         // that already existed (Sol's gen-5 recording: "Added
         // Miami, FL, Now" at 1:30 and again on relaunch at
-        // 3:47). A restore is not a state change: the new
-        // session SUPERSEDES the prior entry for that day+place
-        // (the FA-36 legacy-twin rule, extended to any prior
-        // session — the day keeps ONE entry for the place), the
-        // narration kind and payload it already carried are
+        // 3:47). A restore is not a state change: the narration
+        // kind and payload the prior entry already carried are
         // preserved untouched, and the cue counter does NOT
         // move — no announcement fires. The bar then composes
         // over the restored entry through the machine's
@@ -255,14 +341,35 @@ final class WearIveRunCollectionModel: ObservableObject {
         // silently. A first settle at a day+place with NO
         // pre-existing entry is a genuine creation and still
         // announces, exactly once.
+        //
+        // RW-91 (Sol's correction, Nov 6, 2026 — supersedes the
+        // GEN-6 supersede rule that stood here): saves
+        // ACCUMULATE in the collection — one save per session,
+        // and an earlier session's save is never deleted by a
+        // later session's settle, not even at the same day and
+        // place. The restore branch therefore records the new
+        // session's entry ALONGSIDE the prior session's entry
+        // (the store upserts on the entry's own session-scoped
+        // identity, so both persist, newest first in the
+        // collection's ordering). The one removal that remains
+        // is the pre-session LEGACY-twin dedupe (FA-36): a
+        // sessionless row is a migration artifact, not a
+        // session's save, and the session save that restores
+        // over it replaces it — that rule is unchanged.
         if existing == nil,
            let prior = entries.first(where: {
+               $0.id != entry.id
+                   && $0.sessionID != entry.sessionID
+                   && !$0.sessionID.isEmpty
+                   && $0.placeKey == entry.placeKey
+                   && Calendar.current.isDate($0.dayStart, inSameDayAs: entry.dayStart)
+           }) ?? entries.first(where: {
                $0.id != entry.id
                    && $0.sessionID != entry.sessionID
                    && $0.placeKey == entry.placeKey
                    && Calendar.current.isDate($0.dayStart, inSameDayAs: entry.dayStart)
            }) {
-            store.remove(id: prior.id)
+            store.removeLegacyTwin(of: entry)
             store.record(entry.settingNarration(
                 wasUpdated: prior.wasUpdatedInSession,
                 payload: prior.updatePayload
@@ -527,6 +634,12 @@ struct WearIveRunMiniBarView: View {
     /// sheets; this view only consumes their presented state):
     /// the element dims WITH the home backdrop (D-11).
     var isDimmedBySheet: Bool = false
+    /// RW-88: the viewed-state payload ("Miami, FL, Now" /
+    /// "November 12 7 p.m.") while the viewed place/moment
+    /// differs from the entry's settled state — the status line
+    /// renders "Updated to {payload}" instead of the entry's own
+    /// narration. Nil when the view matches the entry.
+    var viewedNarrationPayload: String? = nil
     let onOpenCollection: () -> Void
     let onTrash: () -> Void
 
@@ -552,11 +665,12 @@ struct WearIveRunMiniBarView: View {
     /// 1 = EXPANDED/CUE. Every visual property of the bar is a
     /// pure function of this one value via `WearIveRunMorph`.
     @State private var expansionProgress: Double = 0
-    /// Measured natural heights of the mini and full-expression
-    /// contents (the morph's height endpoints — measured, never
-    /// hardcoded, decision §2).
-    @State private var miniHeight: Double = 0
-    @State private var expandedHeight: Double = 0
+    /// The rendered content's own measured height — used ONLY
+    /// by the trash collapse (its height shrinks with the fade,
+    /// §1.2). RW-86: this measurement never gates painting; the
+    /// bar renders at its natural height in every state, and the
+    /// value only scales a collapse already in flight.
+    @State private var contentHeight: Double = 0
     /// Generation of the in-flight morph: bumped on every new
     /// driver, so a superseded animation's completion can never
     /// fire a stale settle, latch release, or trash.
@@ -628,55 +742,53 @@ struct WearIveRunMiniBarView: View {
 
     // MARK: The morph bar (one view, one progress value)
 
-    /// The dock's single rendered form. Two hidden measurers
-    /// (the mini content and the full-expression content, at
-    /// natural size) supply the height endpoints; the visible
-    /// content is the union anatomy — the header (wordmark +
-    /// narration + controls) is present in both states and
-    /// never moves or fades, and the expanded-only block below
-    /// it fades/drifts on the windowed ramp. The container's
-    /// height, background tint opacity, and corner radius are
-    /// all functions of `expansionProgress`.
+    /// The dock's single rendered form: ONE copy of the content,
+    /// rendered at its natural height in every state. The header
+    /// (wordmark + narration + controls) is present in both
+    /// states and never moves or fades; the expanded-only block
+    /// below it mounts while the element is at — or travelling
+    /// to or from — the full expression, and fades/drifts on the
+    /// windowed ramp. The background tint opacity and corner
+    /// radius are functions of `expansionProgress`; the height is
+    /// the content's own, animated by the driver's transaction
+    /// as the block mounts and unmounts.
+    ///
+    /// RW-86 (root cause, Nov 6, 2026): the pre-fix form measured
+    /// two hidden phantom copies of the content through
+    /// `onGeometryChange` and framed the bar at the interpolated
+    /// measured height, painting the visible copy at EXPANDED
+    /// natural height inside that frame, clipped. The MINI
+    /// endpoint was the fragile one: on device the slim bar
+    /// painted its background (material + sheet tint) with none
+    /// of its content — Sol's walkthroughs across builds: at
+    /// rest the slim bar is ALWAYS a solid white (light) / black
+    /// (dark) bar, while the expanded states, whose height the
+    /// content itself supplies, render fully. A surface whose
+    /// resting state depends on a self-measurement cycle is also
+    /// unrenderable off-device (the VQ harness could never
+    /// produce the bar: "it measures its own heights through
+    /// appear/layout cycles a static snapshot never runs").
+    /// The fix removes the measurement from the paint path
+    /// entirely: MINI is a plain header at natural height —
+    /// there is no frame, clip, or measured endpoint between
+    /// the content and the screen. The one remaining measurement
+    /// (of the real content) serves only the trash collapse's
+    /// height shrink, which never gates a resting state.
     private var morphBar: some View {
-        let targetHeight: Double? = (miniHeight > 0 && expandedHeight > 0)
-            ? WearIveRunMorph.height(
-                mini: miniHeight, expanded: expandedHeight,
-                progress: expansionProgress
-              ) * trashScale
-            : nil
         let visible = machine.state != .absent || trashScale < 1
-        return ZStack(alignment: .top) {
-            // Measurers: natural-size copies, never painted,
-            // never hit-tested. They exist so the morph's height
-            // endpoints are the contents' own measured heights
-            // at the user's current type size.
-            morphContent(showsExpandedBlock: false, progress: 0)
-                .fixedSize(horizontal: false, vertical: true)
-                .opacity(0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .onGeometryChange(for: Double.self) { proxy in
-                    proxy.size.height
-                } action: { _, height in
-                    if height > 0 { miniHeight = height }
-                }
-            morphContent(showsExpandedBlock: true, progress: 1)
-                .fixedSize(horizontal: false, vertical: true)
-                .opacity(0)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .onGeometryChange(for: Double.self) { proxy in
-                    proxy.size.height
-                } action: { _, height in
-                    if height > 0 { expandedHeight = height }
-                }
-            if visible {
-                morphContent(showsExpandedBlock: true, progress: expansionProgress)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .opacity(trashScale)
-            }
+        return morphContent(
+            showsExpandedBlock: machine.isFullExpression || expansionProgress > 0,
+            progress: expansionProgress
+        )
+        .opacity(visible ? trashScale : 0)
+        .onGeometryChange(for: Double.self) { proxy in
+            proxy.size.height
+        } action: { _, height in
+            if height > 0 { contentHeight = height }
         }
-        .frame(height: visible ? targetHeight.map { CGFloat($0) } : 0)
+        .frame(height: visible
+            ? (trashScale < 1 ? CGFloat(contentHeight * trashScale) : nil)
+            : 0)
         .background {
             // The tint layer over .regularMaterial: the morph
             // animates the TINT's opacity (progress-driven);
@@ -695,12 +807,11 @@ struct WearIveRunMiniBarView: View {
         .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: expansionProgress)))
     }
 
-    /// The bar's content at a given morph progress. The mini
-    /// measurer omits the expanded block from its LAYOUT (an
-    /// opacity-0 block would still measure at full height and
-    /// collapse the morph's travel to zero); the visible
-    /// content always carries the block, clipped by the
-    /// container's progress-driven height.
+    /// The bar's content at a given morph progress. The caller
+    /// mounts the expanded block only while the element is at —
+    /// or travelling to or from — the full expression (RW-86:
+    /// the resting MINI form is the header alone, at its natural
+    /// height, with nothing clipped or measured).
     @ViewBuilder
     private func morphContent(showsExpandedBlock: Bool, progress: Double) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -853,8 +964,14 @@ struct WearIveRunMiniBarView: View {
     }
 
     private func narrationText(_ line: String) -> Text {
+        if let viewedNarrationPayload {
+            // RW-88: the viewed place/moment differs from the
+            // entry's settled state — the strip follows the view.
+            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                + Text(viewedNarrationPayload).foregroundColor(AppTheme.pinePayload)
+        }
         if case .updated(let payload) = state {
-            return Text("Update to ").foregroundColor(AppTheme.inkSecondary)
+            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload)
         }
         if case .added(let place, let moment) = state {

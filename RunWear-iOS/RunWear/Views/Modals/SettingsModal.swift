@@ -174,6 +174,14 @@ struct SettingsModal: View {
                 TemperatureUnitPicker(unit: $temperatureUnit)
             } header: {
                 settingsSectionHeader("Temperature Unit")
+            } footer: {
+                // RW-83: the settled DS §6/§13 consequence line
+                // under the Temperature Unit row — what the unit
+                // choice governs, stated where the choice is made.
+                // (Absent from the product on both platforms until
+                // this fix; Sol's build-28 Settings frames
+                // corroborated the iOS half.)
+                Text("Used for today's outfit, the hourly chart, and your watch.")
             }
 
         case .fitPreference:

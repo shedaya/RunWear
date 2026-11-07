@@ -610,8 +610,8 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
         XCTAssertEqual(announcements, [
             "Added Overland Park, KS, Now",
-            "Update to Miami, FL",
-            "Update to 7 p.m."
+            "Updated to Miami, FL",
+            "Updated to 7 p.m."
         ])
 
         // RELAUNCH: a new process over the same persisted
@@ -623,16 +623,18 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // Home's automatic re-settle of the SAME persisted
         // state (onAppear / landing triggers — no user action)
         // is a RESTORE, not a creation: no cue, no second
-        // "Added Miami", and the day keeps ONE Miami entry —
-        // now the new session's, carrying the narration kind
-        // and payload it already had.
+        // "Added Miami". RW-91: the new session's save JOINS
+        // the prior session's in the collection (saves
+        // accumulate, one per session), carrying the narration
+        // kind and payload the entry already had.
         settle(relaunched, entry(
             session: "s2", place: "Miami, FL", feels: 90,
             items: ["Tank Top", "Shorts"],
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 0, "a restore must not cue")
         XCTAssertEqual(announcements.count, 3, "no duplicate Added on relaunch")
-        XCTAssertEqual(relaunched.entries.count, 1, "the day keeps one entry — the restored session's")
+        XCTAssertEqual(relaunched.entries.count, 2,
+                       "RW-91: saves accumulate — the prior session's save persists beside the restored session's (Sol's Nov 6, 2026 correction supersedes the gen-6 supersede rule)")
         XCTAssertEqual(relaunched.sessionEntry()?.sessionID, "s2")
         XCTAssertEqual(relaunched.sessionEntry()?.wasUpdatedInSession, true,
                        "the restored entry keeps the narration kind it already carried")
@@ -654,11 +656,12 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             items: ["Tee", "Shorts"]), announcements: &announcements)
         XCTAssertEqual(announcements, [
             "Added Overland Park, KS, Now",
-            "Update to Miami, FL",
-            "Update to 7 p.m.",
-            "Update to New York, NY"
+            "Updated to Miami, FL",
+            "Updated to 7 p.m.",
+            "Updated to New York, NY"
         ])
-        XCTAssertEqual(relaunched.entries.count, 1)
+        XCTAssertEqual(relaunched.entries.count, 2,
+                       "RW-91: s1's save + s2's one in-place entry — two saves, one per session")
     }
 
     @MainActor
@@ -683,7 +686,8 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             items: ["Tank Top"]), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 0)
         XCTAssertEqual(announcements, ["Added Miami, FL, Now"])
-        XCTAssertEqual(relaunched.entries.count, 1)
+        XCTAssertEqual(relaunched.entries.count, 2,
+                       "RW-91: the restored session's save joins the prior session's — the collection accumulates")
         XCTAssertEqual(state(of: relaunched), .added(place: "Miami, FL", moment: .now))
     }
 
@@ -776,7 +780,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // The bar announces THIS selection…
         let barState = state(of: model)
         XCTAssertEqual(barState, .updated(payload: .place("Miami, FL")))
-        XCTAssertEqual(WearIveRunNarration.line(for: barState), "Update to Miami, FL")
+        XCTAssertEqual(WearIveRunNarration.line(for: barState), "Updated to Miami, FL")
 
         // …and the expanded card renders THIS selection — same
         // place, same feels-like, same items, from the same
@@ -810,5 +814,282 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         let miniBar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
         XCTAssertTrue(miniBar.contains("RESTORE, not creation"),
                       "DA-09: the model's restore branch is the firing-discipline seam")
+    }
+}
+
+// MARK: - GEN-6 FIX WAVE (Sol's build-28 walkthrough, Nov 6, 2026)
+//
+// The iOS fix wave's pins: RW-83 … RW-105. Behavioural pins for
+// the pure seams; source pins where the defect lives in view
+// composition (the studio rule: the pin names the mechanism, so
+// a regression has to remove the mechanism to pass).
+
+final class Gen6FixWaveTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    private var utcCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    private func utcDay(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        utcCalendar.date(from: DateComponents(year: year, month: month, day: day, hour: 12))!
+    }
+
+    // MARK: RW-88 — the strip follows the viewed place/moment
+
+    func testRW88_ViewedNarrationNamesTheChangedConditionInFull() throws {
+        let now = utcDay(2026, 11, 6)
+        let miami = try XCTUnwrap(SimplePlace(city: "Miami", region: "FL"))
+        let newYork = try XCTUnwrap(SimplePlace(city: "New York", region: "NY"))
+
+        // Place change at Now: "Miami, FL, Now" (Sol's example).
+        XCTAssertEqual(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY", entryMoment: .now,
+                viewedPlace: miami, viewedDate: now, viewedHour: 12,
+                isViewingNow: true, calendar: utcCalendar, now: now),
+            "Miami, FL, Now")
+        // Moment change to another day: "November 12 7 p.m."
+        // (Sol's example — the date in full, no place).
+        XCTAssertEqual(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY", entryMoment: .now,
+                viewedPlace: newYork, viewedDate: utcDay(2026, 11, 12), viewedHour: 19,
+                isViewingNow: false, calendar: utcCalendar, now: now),
+            "November 12 7 p.m.")
+        // Moment change within today: the clock reading only.
+        XCTAssertEqual(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY", entryMoment: .now,
+                viewedPlace: newYork, viewedDate: now, viewedHour: 19,
+                isViewingNow: false, calendar: utcCalendar, now: now),
+            "7 p.m.")
+        // Both changed: place and the full moment together.
+        XCTAssertEqual(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY", entryMoment: .now,
+                viewedPlace: miami, viewedDate: utcDay(2026, 11, 12), viewedHour: 19,
+                isViewingNow: false, calendar: utcCalendar, now: now),
+            "Miami, FL, November 12 7 p.m.")
+        // Back at the entry's own place at Now: no override —
+        // the entry's own narration stands (the Now line restored).
+        XCTAssertNil(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY", entryMoment: .now,
+                viewedPlace: newYork, viewedDate: now, viewedHour: 12,
+                isViewingNow: true, calendar: utcCalendar, now: now))
+        // A picked hour the entry already carries: no override.
+        XCTAssertNil(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY",
+                entryMoment: .clock(hour12: 7, isPM: true),
+                viewedPlace: newYork, viewedDate: now, viewedHour: 19,
+                isViewingNow: false, calendar: utcCalendar, now: now))
+    }
+
+    // MARK: RW-93 — the launch gate waits for a resolved status
+
+    func testRW93_PermissionGateRequiresAResolvedStatus() {
+        // The walkthrough defect: unresolved .notDetermined on a
+        // cold relaunch over a granted permission.
+        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
+            status: .notDetermined, hasResolvedAuthorization: false, hasManualWeather: false),
+            "an unresolved reading must never raise the gate")
+        XCTAssertTrue(LaunchGateResolution.showsPermissionGate(
+            status: .notDetermined, hasResolvedAuthorization: true, hasManualWeather: false),
+            "a resolved .notDetermined is a genuine first run — the gate is correct there")
+        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
+            status: .notDetermined, hasResolvedAuthorization: true, hasManualWeather: true),
+            "manual weather outranks the gate in every state")
+        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
+            status: .authorizedWhenInUse, hasResolvedAuthorization: false, hasManualWeather: false))
+        XCTAssertFalse(LaunchGateResolution.showsPermissionGate(
+            status: .denied, hasResolvedAuthorization: true, hasManualWeather: false),
+            "denied has its own surface; this seam guards only the notDetermined gate")
+    }
+
+    // MARK: RW-102 — the date picker offers no beyond-forecast day
+
+    func testRW102_DatePickerStopsAtTheForecastHorizon() {
+        XCTAssertEqual(DatePickerSheet.browseDays, DatePickerSheet.forecastHorizonDays,
+                       "Sol's directive: the picker must not offer dates it cannot project for")
+        for index in 0..<DatePickerSheet.browseDays {
+            XCTAssertFalse(DatePickerSheet.isBeyondForecast(dayIndex: index),
+                           "no offered day may be a beyond-forecast day")
+        }
+    }
+
+    // MARK: RW-85 — the curve and dot clear the NOW label band
+
+    func testRW85_WarmestPointClearsTheNowLabel() {
+        let points = (0..<24).map { hour in
+            DayChartHour(
+                hour: hour,
+                feelsLikeF: hour == 14 ? 80 : 50,
+                bracket: .mild,
+                outfitItemNames: ["Tee"]
+            )
+        }
+        let model = DayChartModel.build(points: points)!
+        for height: CGFloat in [120, 168] {
+            let y = DayChartGeometry.y(forFeelsLike: 80, model: model, height: height)
+            XCTAssertGreaterThanOrEqual(y, DayChartGeometry.topAnnotationBand)
+            // The selected dot (11 pt + 2 pt stroke ≈ 7.5 pt
+            // radius) centred on the warmest point must clear
+            // the label band (y 0–10).
+            XCTAssertGreaterThan(y - 7.5, 10,
+                                 "the dot's top edge stays below the NOW label at height \(height)")
+        }
+    }
+
+    // MARK: RW-100 — the confirm button names plan + price
+
+    func testRW100_ConfirmLabelNamesTheSelectedPlanAndPrice() {
+        XCTAssertEqual(
+            MakeItMePriceLabels.confirmLabel(
+                plan: .annual, annualPriceString: "$9.99", monthlyPriceString: "$0.99"),
+            "Get Premium — Annual, $9.99/yr")
+        XCTAssertEqual(
+            MakeItMePriceLabels.confirmLabel(
+                plan: .monthly, annualPriceString: "$9.99", monthlyPriceString: "$0.99"),
+            "Get Premium — Monthly, $0.99/month")
+        XCTAssertEqual(
+            MakeItMePriceLabels.confirmLabel(
+                plan: .annual, annualPriceString: nil, monthlyPriceString: nil),
+            "Get Premium — Annual",
+            "an unresolved price degrades to the plan name, never a wrong price")
+    }
+
+    // MARK: RW-105 — the chip palette reads at full strength
+
+    private func whiteContrast(onHex hex: String) -> Double {
+        let value = UInt64(hex, radix: 16)!
+        let channels = [Double((value >> 16) & 0xFF), Double((value >> 8) & 0xFF), Double(value & 0xFF)]
+            .map { $0 / 255 }
+            .map { $0 <= 0.03928 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+        let luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+        return 1.05 / (luminance + 0.05)
+    }
+
+    func testRW105_ChipPaletteCarriesWhiteTextAtFullStrength() {
+        let chips = [
+            AppTheme.tempChipFreezingHex, AppTheme.tempChipColdHex,
+            AppTheme.tempChipCoolHex, AppTheme.tempChipMildHex,
+            AppTheme.tempChipWarmHex, AppTheme.tempChipHotHex,
+        ]
+        for hex in chips {
+            XCTAssertGreaterThanOrEqual(whiteContrast(onHex: hex), 4.5,
+                                        "white text on chip #\(hex) must meet the 4.5:1 floor")
+        }
+        XCTAssertEqual(AppTheme.tempChipMildHex, "0A7350",
+                       "the mild chip is the deepened variant of the pinned mild data colour")
+        // The DATA palette is untouched (chart bands/tints keep
+        // the pinned bright set).
+        XCTAssertEqual(AppTheme.tempMildHex, "10B981")
+    }
+
+    func testRW105_SurfacesUseTheStrongGreen_sourcePins() throws {
+        let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        XCTAssertFalse(hero.contains("AppTheme.pineAccentDark"),
+                       "the hero pill carries no fixed-accent green text (RW-105)")
+        let outfit = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(outfit.contains("AppTheme.temperatureChipColor(fahrenheit: temperatureForBracket)"),
+                      "the bracket badge fills with the deepened chip colour at full opacity")
+    }
+
+    // MARK: RW-83 / RW-84 — the Settings inventory is whole
+
+    func testRW83_TemperatureConsequenceLineStandsInSettings_sourcePin() throws {
+        let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
+        XCTAssertTrue(settings.contains("Used for today's outfit, the hourly chart, and your watch."),
+                      "the settled DS §6/§13 consequence line renders under the Temperature Unit row")
+    }
+
+    func testRW84_NumberOfPhotosRowIsInTheInventory() throws {
+        XCTAssertEqual(MakeItMeSettingsRow.numberOfPhotos.title, "Number of photos")
+        XCTAssertTrue(MakeItMeSettingsRow.allCases.contains(.numberOfPhotos))
+        let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
+        XCTAssertTrue(section.contains("MakeItMeSettingsRow.numberOfPhotos.title"),
+                      "the photos section renders the DS §13 row")
+    }
+
+    // MARK: RW-86 — the slim bar's paint path carries no measurers
+
+    func testRW86_MiniBarHasNoSelfMeasurementInItsPaintPath_sourcePins() throws {
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertFalse(bar.contains("miniHeight"),
+                       "the measured mini endpoint (the blank-bar mechanism) is gone")
+        XCTAssertFalse(bar.contains("morphContent(showsExpandedBlock: false"),
+                       "no phantom mini measurer copy exists")
+        XCTAssertTrue(bar.contains("machine.isFullExpression || expansionProgress > 0"),
+                      "the single content copy mounts the expanded block only around the full expression")
+    }
+
+    // MARK: RW-89 / RW-92 / RW-95 / RW-101 — composition pins
+
+    func testRW89_ResultsSitUnderTheFieldWhileSearching_sourcePins() throws {
+        let sheet = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
+        XCTAssertTrue(sheet.contains("if searchText.count >= 2 {\n                    resultsSection"),
+                      "search-active renders the results directly under the search field")
+        XCTAssertTrue(sheet.contains("No places found"),
+                      "a completed empty search says so in the results position")
+    }
+
+    func testRW92_NestedDateConfirmReSolves_sourcePin() throws {
+        let outfit = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        let start = try XCTUnwrap(outfit.range(of: "onDateConfirmed: {"))
+        let rest = outfit[start.lowerBound...]
+        let end = try XCTUnwrap(rest.range(of: "\n                    }"))
+        let closure = String(rest[..<end.lowerBound])
+        XCTAssertTrue(closure.contains("viewModel.updateSelectedTime("),
+                      "the time sheet's nested date confirm re-solves home (RW-92)")
+    }
+
+    func testRW95_StockStabilityMechanismStands_sourcePins() throws {
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("displayedStockServe"),
+                      "the on-screen stock serve is tracked per cell")
+        XCTAssertTrue(vm.contains("stockServeMemory"),
+                      "resolved stock serves are remembered per cell for the next view")
+        XCTAssertTrue(vm.contains("poolPaintSuppressedForStability"),
+                      "a second stock resolution for a viewed cell is suppressed, not painted")
+    }
+
+    func testRW101_BandSitsDirectlyUnderTheHero_sourcePins() throws {
+        let outfit = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertEqual(outfit.components(separatedBy: "RW-101 (Sol, Nov 6, 2026)").count - 1, 2,
+                       "both home layouts carry the elevated band seat")
+        let containerStart = try XCTUnwrap(outfit.range(of: "private func sheetContainer"))
+        let slice = String(outfit[containerStart.lowerBound...].prefix(1600))
+        let band = try XCTUnwrap(slice.range(of: "homeBandSection"))
+        let outfitCall = try XCTUnwrap(slice.range(of: "outfit()"))
+        XCTAssertTrue(band.lowerBound < outfitCall.lowerBound,
+                      "in the stacked sheet the band precedes the outfit — directly under the hero")
+    }
+
+    // MARK: RW-94 — the pixel proof is keyed to identity, not URL
+
+    func testRW94_LoadProofKeyedToHeroIdentity_sourcePins() throws {
+        let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
+        XCTAssertTrue(onboarding.contains("firstLookLoadedHeroId == previewVM.currentPersonalHeroId"),
+                      "the load proof compares hero identities — a refreshed signed URL cannot un-prove a loaded photo")
+        XCTAssertFalse(onboarding.contains("firstLookLoadedImageURL"),
+                       "the URL-string proof (the RW-94 stall mechanism) is removed")
+        // The Y-1 invariant itself stands: the claim still waits
+        // for loaded pixels in the resolver.
+        let sequence = try sourceFile("../RunWear/Models/OnboardingSequence.swift")
+        XCTAssertTrue(sequence.contains("personalPhotoDisplayed && personalImageLoaded"),
+                      "Y-1 preserved: no finished claim before the photo is on screen")
     }
 }

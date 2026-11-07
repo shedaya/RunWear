@@ -130,7 +130,7 @@ final class Gen4DayChartTests: XCTestCase {
         )
         // A flat day (low == high) renders mid-height, never NaN.
         let flat = DayChartModel.build(points: [point(6, 50, bracket: .mild), point(7, 50, bracket: .mild)])!
-        XCTAssertEqual(DayChartGeometry.y(forFeelsLike: 50, model: flat, height: 60), 30)
+        XCTAssertEqual(DayChartGeometry.y(forFeelsLike: 50, model: flat, height: 60), 37)
     }
 
     // MARK: - Draft semantics

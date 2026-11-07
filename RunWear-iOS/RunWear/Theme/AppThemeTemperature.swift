@@ -37,6 +37,28 @@ extension AppTheme {
         return temperatureColor(for: bracket)
     }
 
+    /// RW-105: the badge chip's fill for a bracket — the deepened
+    /// full-strength variant of the bracket colour (see the chip
+    /// palette in AppTheme.swift). For chip surfaces carrying
+    /// white text only; data surfaces keep `temperatureColor`.
+    static func temperatureChipColor(for bracket: HeroTempBracket) -> Color {
+        switch bracket {
+        case .FREEZING: return tempChipFreezing
+        case .COLD: return tempChipCold
+        case .COOL: return tempChipCool
+        case .MILD: return tempChipMild
+        case .WARM: return tempChipWarm
+        case .HOT: return tempChipHot
+        }
+    }
+
+    /// RW-105: the badge chip's fill for a temperature in
+    /// Fahrenheit — the deepened variant, at full opacity.
+    static func temperatureChipColor(fahrenheit: Double) -> Color {
+        let bracket = HeroTempBracket.from(feelsLikeTemperature: fahrenheit)
+        return temperatureChipColor(for: bracket)
+    }
+
     /// Creates a temperature-tinted overlay
     static func temperatureTintOverlay(for bracket: HeroTempBracket, opacity: Double = 0.12) -> Color {
         temperatureColor(for: bracket).opacity(opacity)

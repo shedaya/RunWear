@@ -281,7 +281,13 @@ struct HeroImageView: View {
                 Button(action: onPillGetUnlimited) {
                     Text(HeroPill.getInstantlyLabel)
                         .font(.appFootnote.weight(.bold))
-                        .foregroundColor(AppTheme.pineAccentDark)
+                        // RW-105: the dynamic pine payload — deep
+                        // pine (#175E4C) in light mode, the accent
+                        // in dark. The fixed dark accent (#5CC79F)
+                        // rendered pale mint on this light glass
+                        // pill in light mode (Sol's circled
+                        // surface, Nov 6, 2026).
+                        .foregroundColor(AppTheme.pinePayload)
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
@@ -314,7 +320,9 @@ struct HeroImageView: View {
                     }
                     Text(HeroPill.getUnlimitedLabel)
                         .font(.appFootnote.weight(.bold))
-                        .foregroundColor(AppTheme.pineAccentDark)
+                        // RW-105: dynamic pine payload (see the
+                        // making pill's note).
+                        .foregroundColor(AppTheme.pinePayload)
                         .lineLimit(1)
                 }
                 .glassPill()
@@ -340,9 +348,13 @@ struct HeroImageView: View {
                     // free exact-serve pill, "Get unlimited" is
                     // the GREEN element (the pine accent the
                     // generating and exhausted pills already use).
+                    // RW-105: the accent renders through the
+                    // dynamic pine payload — deep pine in light
+                    // mode (the fixed #5CC79F read pale mint on
+                    // the light glass pill; Sol, Nov 6, 2026).
                     Text(HeroPill.getUnlimitedLabel)
                         .font(.appFootnote.weight(.bold))
-                        .foregroundColor(AppTheme.pineAccentDark)
+                        .foregroundColor(AppTheme.pinePayload)
                         .lineLimit(1)
                 }
                 .glassPill()

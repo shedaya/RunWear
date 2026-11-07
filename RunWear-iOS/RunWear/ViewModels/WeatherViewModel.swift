@@ -146,6 +146,20 @@ class WeatherViewModel: ObservableObject {
     @Published var fallbackImageUrl: String?
     @Published var isHeroImageLoading = false
 
+    /// RW-95: stock-serve stability (Sol's build-28 walkthrough,
+    /// both platforms: the hero swapped between two different
+    /// stock photos ~2 s apart inside one view of one cell). The
+    /// stock serve the user is currently LOOKING at for the
+    /// requested cell: once a stock photo is on screen for a
+    /// cell in a continuous view, a later stock resolution for
+    /// the same cell never paints over it — only the user's own
+    /// personal photo may supersede stock. The resolved stock
+    /// serve is remembered per cell (session-scoped), so the
+    /// cell's NEXT view paints the resolved serve directly at
+    /// the commit instead of flashing the floor first.
+    private var displayedStockServe: (combinationId: String, url: String)?
+    private var stockServeMemory: [String: (url: String, isPool: Bool)] = [:]
+
     /// GEN-3 (WS-B / X-7): the place key the currently resolved
     /// hero URLs belong to — written in the SAME state write that
     /// commits a fetch's fallback (loadHeroImage's atomic commit),
@@ -995,13 +1009,17 @@ class WeatherViewModel: ObservableObject {
         // new cell's truthful fallback serves from this instant
         // while its pool/personal photo loads. The hero's place
         // ownership moves in the same write (HeroDisplayGate).
-        if previousRequestedCombinationId != requestedCombination.fullId
-            || heroOwnerPlaceKey != placeDisplayName {
+        let serveCellChanged = previousRequestedCombinationId != requestedCombination.fullId
+            || heroOwnerPlaceKey != placeDisplayName
+        if serveCellChanged {
             heroImageUrl = nil
             heroImageRowId = nil
             heroServedCombinationId = nil
             currentPersonalHeroId = nil
             currentPersonalServeIsScaffold = false
+            // RW-95: a new cell's view starts with no stock on
+            // screen; the commit below puts this cell's serve up.
+            displayedStockServe = nil
         }
         heroOwnerPlaceKey = placeDisplayName
 
@@ -1058,6 +1076,26 @@ class WeatherViewModel: ObservableObject {
             )
         }
         let gatedAssetName = chainResolution?.bundledAssetName
+
+        // RW-95: on a cell change, a stock serve this session
+        // already resolved for this exact cell paints AT THE
+        // COMMIT (a remembered pool serve over the floor, a
+        // remembered bundled serve as the floor) — the cell's
+        // second and later views never flash a different stock
+        // photo first. On the cell's first view the committed
+        // floor is the displayed stock serve.
+        if serveCellChanged {
+            if let remembered = stockServeMemory[requestedCombination.fullId] {
+                if remembered.isPool {
+                    heroImageUrl = remembered.url
+                } else if !remembered.url.isEmpty {
+                    fallbackImageUrl = remembered.url
+                }
+                displayedStockServe = (requestedCombination.fullId, remembered.url)
+            } else {
+                displayedStockServe = (requestedCombination.fullId, fallbackImageUrl ?? "")
+            }
+        }
 
         // Fetch AI hero image — with the actual outfit, so a
         // replenishment prompt describes what the engine recommended
@@ -1175,22 +1213,61 @@ class WeatherViewModel: ObservableObject {
         // no personal photo serves. Never the pool stranger
         // flashing in ahead of the user's own photo.
         let personalServed = await applyPersonalHero(frame: frame)
+        if personalServed {
+            // RW-95: the user's own photo holds the screen — no
+            // stock serve is displayed for this cell now.
+            displayedStockServe = nil
+        }
+
+        // RW-95: set when a stock resolution for this cell is
+        // remembered instead of painted, because a stock photo
+        // for the same cell is already on screen in this view.
+        // The telemetry below then records the serve that is
+        // ACTUALLY on screen (the committed floor), per D-18.
+        var poolPaintSuppressedForStability = false
+        var bundledAdoptionSuppressedForStability = false
 
         if !personalServed {
             // Publish the deferred pool resolution now that the
             // personal layer has had its first claim on the slot.
             if let paint = deferredPoolPaint {
-                heroImageUrl = paint.url
-                heroImageRowId = paint.rowId
-                heroServedCombinationId = paint.combinationId
+                if displayedStockServe?.combinationId == requestedCombination.fullId {
+                    // RW-95: a stock photo for this cell is
+                    // already on screen in this view (the
+                    // committed floor, or the remembered serve).
+                    // A second, different stock photo must not
+                    // swap in mid-view — remember the pool serve
+                    // for the cell's next view instead.
+                    stockServeMemory[requestedCombination.fullId] = (paint.url, true)
+                    poolPaintSuppressedForStability = true
+                } else {
+                    heroImageUrl = paint.url
+                    heroImageRowId = paint.rowId
+                    heroServedCombinationId = paint.combinationId
+                    displayedStockServe = (requestedCombination.fullId, paint.url)
+                    stockServeMemory[requestedCombination.fullId] = (paint.url, true)
+                }
             } else if result.fallbackLevel >= 8 && !isScaffoldPoolPaint {
                 heroImageUrl = nil // Will use fallback
                 heroImageRowId = nil
                 heroServedCombinationId = nil
                 if let adoption = deferredBundledAdoption {
-                    heroFallbackTier = adoption.tier
-                    heroFallbackAssetName = adoption.asset
-                    if !adoption.url.isEmpty { fallbackImageUrl = adoption.url }
+                    if displayedStockServe?.combinationId == requestedCombination.fullId,
+                       let displayed = displayedStockServe, !displayed.url.isEmpty,
+                       adoption.url != displayed.url {
+                        // RW-95: the chain's bundled adoption
+                        // names a different stock photo than the
+                        // one on screen for this cell — remember
+                        // it, never repaint mid-view.
+                        stockServeMemory[requestedCombination.fullId] = (adoption.url, false)
+                        bundledAdoptionSuppressedForStability = true
+                    } else {
+                        heroFallbackTier = adoption.tier
+                        heroFallbackAssetName = adoption.asset
+                        if !adoption.url.isEmpty { fallbackImageUrl = adoption.url }
+                        displayedStockServe = (requestedCombination.fullId, adoption.url)
+                        stockServeMemory[requestedCombination.fullId] = (adoption.url, false)
+                    }
                 }
             }
         }
@@ -1200,8 +1277,15 @@ class WeatherViewModel: ObservableObject {
         // itself inside applyPersonalHero; every other resolution
         // records exactly one record here — pool, or the bundled
         // fallback that paints on a pool miss.
+        // RW-95: when a stock resolution was suppressed for
+        // stability, the serve on screen is the COMMIT's floor —
+        // the record names that asset, not the remembered serve.
+        let effectivePaintedBundledAsset: String? =
+            (poolPaintSuppressedForStability || bundledAdoptionSuppressedForStability)
+                ? (gatedAssetName ?? paintedBundledAsset)
+                : paintedBundledAsset
         if !personalServed {
-            if result.fallbackLevel < 8 {
+            if result.fallbackLevel < 8 && !poolPaintSuppressedForStability {
                 HeroServeTelemetry.emitForResult(
                     result,
                     requestedCombinationId: heroRequestedCombinationId,
@@ -1210,7 +1294,7 @@ class WeatherViewModel: ObservableObject {
                     gender: genderPreference,
                     trigger: "pool-cascade"
                 )
-            } else if isScaffoldPoolPaint {
+            } else if isScaffoldPoolPaint && !poolPaintSuppressedForStability {
                 // GEN-4: the scaffold pool serve records as a
                 // scaffold — its own row identity, tier labelled —
                 // never as the exact pool serve it is not.
@@ -1227,7 +1311,7 @@ class WeatherViewModel: ObservableObject {
                         fallbackTier: .scaffold
                     )
                 )
-            } else if let paintedBundledAsset {
+            } else if let effectivePaintedBundledAsset {
                 // GEN-4: the bundled paint's source follows its
                 // chain tier — scaffold when the chain labelled
                 // it scaffold, bundled-fallback otherwise (the
@@ -1241,8 +1325,8 @@ class WeatherViewModel: ObservableObject {
                         tempBracket: tempBracket,
                         weatherCondition: weatherCondition,
                         gender: genderPreference,
-                        fallbackAssetFile: paintedBundledAsset,
-                        fallbackProvenance: FallbackImageProvider.provenance(forAssetName: paintedBundledAsset),
+                        fallbackAssetFile: effectivePaintedBundledAsset,
+                        fallbackProvenance: FallbackImageProvider.provenance(forAssetName: effectivePaintedBundledAsset),
                         trigger: isScaffoldTier ? "hero-fallback-chain" : "bundled-fallback",
                         fallbackTier: heroFallbackTier
                     )
@@ -1315,6 +1399,9 @@ class WeatherViewModel: ObservableObject {
             heroImageRowId = nil
             heroServedCombinationId = combo.combinationId
             currentPersonalHeroId = store.personalHeroId(for: combo)
+            // RW-95: a personal (or personal-scaffold) paint
+            // supersedes stock — no stock serve is displayed.
+            displayedStockServe = nil
             // WS-7: this paint is a personal serve — or a scaffold
             // serve when the exact look is still making and the
             // photo on screen is the user's own banked photo for
@@ -1365,6 +1452,8 @@ class WeatherViewModel: ObservableObject {
             self.heroImageRowId = nil
             self.heroServedCombinationId = combo.combinationId
             self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
+            // RW-95: the landed personal photo supersedes stock.
+            self.displayedStockServe = nil
             // The landed look is the exact photo by
             // definition — no longer a scaffold serve.
             self.currentPersonalServeIsScaffold = false
@@ -1418,6 +1507,9 @@ class WeatherViewModel: ObservableObject {
                 self.heroImageRowId = nil
                 self.heroServedCombinationId = combo.combinationId
                 self.currentPersonalHeroId = store.personalHeroId(for: combo)
+                // RW-95: the revalidated personal paint
+                // supersedes stock.
+                self.displayedStockServe = nil
                 self.currentPersonalServeIsScaffold = isScaffold
                 self.recordHeroServe(
                     HeroServeRecord(

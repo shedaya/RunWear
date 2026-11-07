@@ -215,16 +215,28 @@ enum DayChartGeometry {
         return Double(dayFirstHour) + fraction * span
     }
 
+    /// RW-85: the top annotation band reserved for the "NOW"
+    /// label (the label occupies y 0–10; its dashed rule starts
+    /// at y 10). The plot maps into the space BELOW this band, so
+    /// the curve's warmest point — and the selected dot centred
+    /// on it (11 pt + stroke) — can never strike the label. The
+    /// pre-fix mapping put the warmest point at 9.7% of the
+    /// height (≈11.6 pt at the accessibility height), inside the
+    /// label's band whenever the selected hour, the now hour,
+    /// and the warmest hour coincided.
+    static let topAnnotationBand: CGFloat = 14
+
     static func y(forFeelsLike feelsLikeF: Double, model: DayChartModel, height: CGFloat) -> CGFloat {
         let low = model.low.feelsLikeF
         let high = model.high.feelsLikeF
         let range = high - low
-        guard range > 0 else { return height / 2 }
+        let plotHeight = max(0, height - topAnnotationBand)
+        guard range > 0 else { return topAnnotationBand + plotHeight / 2 }
         // 12% headroom above the high and below the low.
         let paddedLow = low - range * 0.12
         let paddedHigh = high + range * 0.12
         let fraction = (feelsLikeF - paddedLow) / (paddedHigh - paddedLow)
-        return height * (1 - CGFloat(fraction))
+        return topAnnotationBand + plotHeight * (1 - CGFloat(fraction))
     }
 }
 

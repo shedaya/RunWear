@@ -86,12 +86,12 @@ final class RW25NextGenHomeTests: XCTestCase {
         // can no longer be written at all. A place payload:
         XCTAssertEqual(
             WearIveRunNarration.line(for: .updated(payload: .place("Miami, FL"))),
-            "Update to Miami, FL"
+            "Updated to Miami, FL"
         )
         // And a moment payload (a clock reading is in-spec, C-7):
         XCTAssertEqual(
             WearIveRunNarration.line(for: .updated(payload: .moment(.clock(hour12: 9, isPM: true)))),
-            "Update to 9 p.m."
+            "Updated to 9 p.m."
         )
     }
 

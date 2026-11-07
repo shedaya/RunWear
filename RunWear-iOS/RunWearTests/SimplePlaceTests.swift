@@ -193,7 +193,7 @@ final class SimplePlaceTests: XCTestCase {
         XCTAssertEqual(state, .updated(payload: .place("Miami, FL")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state),
-            "Update to Miami, FL")
+            "Updated to Miami, FL")
         let line = WearIveRunNarration.line(for: state) ?? ""
         XCTAssertFalse(line.contains("items"), line)
         XCTAssertFalse(line.contains("Tank"), line)

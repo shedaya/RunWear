@@ -18,6 +18,10 @@ struct LocationPickerSheet: View {
     @State private var searchText = ""
     @State private var searchResults: [LocationSearchResult] = []
     @State private var isSearching = false
+    /// RW-89: the last query whose search COMPLETED — the
+    /// "No places found" row renders only for a completed query
+    /// equal to the current text, never mid-debounce.
+    @State private var completedQuery: String?
     /// GEN-3 Y-15: the search debounce task and the staleness
     /// gate — see LocationSearchGate for the dead-tap diagnosis.
     @State private var searchTask: Task<Void, Never>?
@@ -48,6 +52,7 @@ struct LocationPickerSheet: View {
                                     searchGate.invalidate()
                                     isSearching = false
                                     searchResults = []
+                                    completedQuery = nil
                                 }
                             }
                         if isSearching {
@@ -62,7 +67,21 @@ struct LocationPickerSheet: View {
                     .listRowSeparator(.hidden)
                 }
 
+                // RW-89: while a search is active (2+ characters
+                // typed), the results own the space directly under
+                // the search field — visible WITH the keyboard up.
+                // The pre-fix layout kept Results last, below the
+                // Current-location row and the full recents/hint
+                // block, so results landed under the keyboard and
+                // the sheet read as finding nothing while typing
+                // (Sol's walkthrough: "Miami" typed, no results
+                // visible until the keyboard was dismissed).
+                if searchText.count >= 2 {
+                    resultsSection
+                }
+
                 // Current location row.
+                if searchText.count < 2 {
                 Section {
                     Button {
                         onUseCurrentLocation()
@@ -90,6 +109,10 @@ struct LocationPickerSheet: View {
                 }
 
                 // Recents — actually-selected places only.
+                // (RW-89: suppressed while a search is active, so
+                // the results under the field are never pushed
+                // below the keyboard by this block.)
+                if searchText.count < 2 {
                 if recentsModel.recents.isEmpty {
                     Section {
                         // First run (frame 25): no ghost rows —
@@ -139,40 +162,6 @@ struct LocationPickerSheet: View {
                     }
                 }
 
-                // Browse / search results below.
-                if !searchResults.isEmpty {
-                    Section("Results") {
-                        ForEach(searchResults) { result in
-                            Button {
-                                onSelectLocation(result.coordinate, result.displayName)
-                                recentsModel.record(RecentLocation(
-                                    name: result.displayName,
-                                    latitude: result.coordinate.latitude,
-                                    longitude: result.coordinate.longitude
-                                ))
-                                close()
-                            } label: {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(result.name)
-                                        .font(.appSecondary.weight(.medium))
-                                        .foregroundColor(AppTheme.inkPrimary)
-                                    Text(result.subtitle)
-                                        .font(.appFootnote)
-                                        .foregroundColor(AppTheme.inkSecondary)
-                                }
-                                // GEN-3 Y-15: the hit area is the
-                                // WHOLE row, not the text block —
-                                // with .plain, the contentShape is
-                                // the hit area, and the unframed
-                                // VStack made it text-sized (the
-                                // sheet's other tappable rows are
-                                // full-width HStacks with Spacers).
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
                 }
             }
             .listStyle(.insetGrouped)
@@ -191,6 +180,57 @@ struct LocationPickerSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { close() }
                 }
+            }
+        }
+    }
+
+    /// RW-89: the Results section — rendered directly under the
+    /// search field while a search is active. While the search
+    /// runs it carries a "Searching…" row; a completed search
+    /// with no matches carries "No places found" in the same
+    /// position, so the surface never reads as silently empty
+    /// while typing.
+    @ViewBuilder
+    private var resultsSection: some View {
+        if !searchResults.isEmpty {
+            Section("Results") {
+                ForEach(searchResults) { result in
+                    Button {
+                        onSelectLocation(result.coordinate, result.displayName)
+                        recentsModel.record(RecentLocation(
+                            name: result.displayName,
+                            latitude: result.coordinate.latitude,
+                            longitude: result.coordinate.longitude
+                        ))
+                        close()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(result.name)
+                                .font(.appSecondary.weight(.medium))
+                                .foregroundColor(AppTheme.inkPrimary)
+                            Text(result.subtitle)
+                                .font(.appFootnote)
+                                .foregroundColor(AppTheme.inkSecondary)
+                        }
+                        // GEN-3 Y-15: the hit area is the WHOLE
+                        // row, not the text block.
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } else if isSearching {
+            Section("Results") {
+                Text("Searching…")
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkSecondary)
+            }
+        } else if completedQuery == searchText {
+            Section("Results") {
+                Text("No places found")
+                    .font(.appSecondary)
+                    .foregroundColor(AppTheme.inkSecondary)
             }
         }
     }
@@ -224,6 +264,7 @@ struct LocationPickerSheet: View {
             // touch in flight on them, survive it.
             guard searchGate.shouldApply(token: token, query: query) else { return }
             isSearching = false
+            completedQuery = query
 
             guard let placemarks = placemarks, error == nil else {
                 searchResults = []
