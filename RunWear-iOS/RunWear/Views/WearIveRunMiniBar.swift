@@ -1186,7 +1186,8 @@ struct WearIveRunMiniBarView: View {
     private var headerRow: some View {
         HStack(spacing: 8) {
             wordmarkView
-            if let shown = displayedState ?? state, let line = WearIveRunNarration.line(for: shown) {
+            let shown = displayedState ?? state
+            if let line = WearIveRunNarration.line(for: shown) {
                 // GEN-5 (RW-29 FA-48): a long simple place in the
                 // payload may wrap to two lines — the payload is
                 // never amputated.
