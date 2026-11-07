@@ -285,7 +285,12 @@ class PersonalHeroService @Inject constructor(
             heroId = body["hero_id"]?.jsonPrimitive?.contentOrNull,
             lookState = body["look_state"]?.jsonPrimitive?.contentOrNull,
             lookReason = body["look_reason"]?.jsonPrimitive?.contentOrNull,
-            serveKind = body["serve_kind"]?.jsonPrimitive?.contentOrNull
+            // RW-130 contract v2: serve_tier is the single
+            // classification (exact | scaffold | similar | none);
+            // serve_kind / the legacy scaffold boolean remain as
+            // fallbacks for payloads from the older server line.
+            serveKind = body["serve_tier"]?.jsonPrimitive?.contentOrNull
+                ?: body["serve_kind"]?.jsonPrimitive?.contentOrNull
                 ?: if (body["scaffold"]?.jsonPrimitive?.booleanOrNull == true) "scaffold" else null
         )
     }
@@ -479,7 +484,24 @@ class PersonalHeroService @Inject constructor(
      * when there is no session or either read fails — the band
      * never shows invented counts.
      */
-    data class BankCoverage(val ready: Int, val total: Int)
+    data class BankCoverage(
+        val ready: Int,
+        val total: Int,
+        /**
+         * RW-126 (Nov 7, 2026): target cells whose generation ended
+         * terminally FAILED with no delivered hero — recorded
+         * failures (including the duplicate-insert races RW-126(b)
+         * proved were being miscounted as open work). The band's
+         * settle rule counts them as SETTLED, never as outstanding:
+         * a bank whose remaining cells all failed terminally is
+         * finished, and the band must retire instead of announcing
+         * generation that no longer exists.
+         */
+        val failed: Int = 0
+    ) {
+        /** Target cells neither delivered nor terminally failed. */
+        val outstanding: Int get() = (total - ready - failed).coerceAtLeast(0)
+    }
 
     suspend fun fetchBankCoverage(targetCells: Set<String>): BankCoverage? {
         val session = session() ?: return null
@@ -496,8 +518,33 @@ class PersonalHeroService @Inject constructor(
                 .toSet()
         }.onFailure { Log.w(TAG, "bank coverage read failed ($table)", it) }.getOrNull()
         val heroCells = cells("personal_heroes") ?: return null
-        val jobCells = cells("personal_generation_jobs") ?: return null
-        return deriveBankCoverage(heroCells, jobCells, targetCells)
+        // RW-126: the jobs read carries STATUS so terminal failures
+        // settle the band (see BankCoverage.failed). A cell counts
+        // failed only when a FAILED job exists and no hero landed.
+        val jobStatuses = runCatching {
+            val response = http.get(
+                "$BASE_URL/rest/v1/personal_generation_jobs?select=combination_id,status"
+            ) {
+                header("apikey", ANON_KEY)
+                header("Authorization", "Bearer ${session.accessToken}")
+            }
+            if (!response.status.isSuccess()) return@runCatching null
+            json.parseToJsonElement(response.bodyAsText()).jsonArray
+                .mapNotNull { row ->
+                    val id = row.jsonObject["combination_id"]?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
+                    val status = row.jsonObject["status"]?.jsonPrimitive?.contentOrNull
+                        ?: return@mapNotNull null
+                    id to status
+                }
+        }.onFailure { Log.w(TAG, "bank coverage job read failed", it) }.getOrNull()
+            ?: return null
+        val jobCells = jobStatuses.map { it.first }.toSet()
+        val failedCells = jobStatuses
+            .filter { it.second == "FAILED" }
+            .map { it.first }
+            .toSet() - heroCells
+        return deriveBankCoverage(heroCells, jobCells, targetCells, failedCells)
     }
 
     /**
@@ -619,18 +666,30 @@ class PersonalHeroService @Inject constructor(
 internal fun deriveBankCoverage(
     heroCells: Set<String>,
     jobCells: Set<String>,
-    targetCells: Set<String> = emptySet()
+    targetCells: Set<String> = emptySet(),
+    failedCells: Set<String> = emptySet()
 ): PersonalHeroService.BankCoverage =
     if (targetCells.isNotEmpty()) {
         PersonalHeroService.BankCoverage(
             ready = heroCells.count { it in targetCells },
-            total = targetCells.size
+            total = targetCells.size,
+            // RW-126: terminally failed target cells (recorded,
+            // no hero) are settled — they never hold the band open.
+            failed = failedCells.count { it in targetCells }
         )
     } else {
-        PersonalHeroService.BankCoverage(
-            ready = heroCells.size,
-            total = (heroCells union jobCells).size
-        )
+        // RW-FIXWAVE (architecture review §2 row 19): NO engaged-
+        // union fallback. Before the session's first forecast
+        // derivation the denominator is UNKNOWN, and the retired
+        // gen-4 union formula manufactured a wrong fraction for
+        // exactly that window of every cold session (worse after
+        // process death, when the in-memory target is gone but
+        // heroes/jobs persist). Unknown is reported as total 0,
+        // which the band policy renders as no band — an honest
+        // absence instead of an invented percentage. The
+        // repository also persists the target set (see
+        // PersonalHeroRepository) so the window is one read long.
+        PersonalHeroService.BankCoverage(ready = 0, total = 0, failed = 0)
     }
 
 /**

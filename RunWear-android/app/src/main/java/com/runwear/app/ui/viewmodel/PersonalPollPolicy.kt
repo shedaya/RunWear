@@ -85,22 +85,41 @@ object PersonalPollPolicy {
  * ever re-read the state or re-armed the poll. A job that failed
  * terminally at +82 s left Home claiming MAKING for minutes.
  *
- * A re-read is owed exactly while Home claims the look is still
- * MAKING for a cell in view with the personal layer engaged: that
- * claim is the one a dead or horizon-expired poll strands.
- * Terminal or absent states are already the truth on screen —
- * re-reading them would only churn. When the re-read lands, a
- * terminal state resolves Home within seconds; a still-Making
- * result (re)arms the poll.
+ * Original RW-79 rule: a re-read was owed exactly while Home
+ * claimed the look was still MAKING. The Nov 7, 2026 fix wave
+ * widened the set (see the policy body): an absent (None) state
+ * is no longer treated as settled truth, because a background
+ * delivery can supersede it — that was RW-134's Android shape.
  */
 object PersonalLookRecheckPolicy {
 
+    /**
+     * RW-FIXWAVE (Nov 7, 2026; architecture review §2 row 18):
+     * the recheck set is WIDENED from Making-only to the full
+     * revalidation set. The Making-only rule was Android's worst
+     * exposure in the review: a cell that resolved to stock/None
+     * and banked in the background — RW-134's exact shape — was
+     * never rechecked on landing or foreground, so the morning's
+     * stock answer stood for the rest of the session. A re-read
+     * is now owed whenever the in-view cell's served state could
+     * have been superseded server-side:
+     *  - Making: the poll may have died or hit its horizon.
+     *  - None: no personal photo is up; the cell may have banked
+     *    (a background fill, a ladder convergence delivery) since
+     *    the view last resolved it.
+     * Ready is NOT owed: the exact photo is already on screen and
+     * version bumps re-resolve through the serve path itself.
+     * Failed is NOT owed: the settled failure surface owns its
+     * re-request path (tap-to-retry), and silently re-asking on
+     * every landing would turn a terminal failure into a loop.
+     */
     fun isRecheckOwed(
         personalLayerEngages: Boolean,
         hasCellInView: Boolean,
         status: PersonalLookStatus
     ): Boolean =
-        personalLayerEngages && hasCellInView && status == PersonalLookStatus.Making
+        personalLayerEngages && hasCellInView &&
+            (status == PersonalLookStatus.Making || status == PersonalLookStatus.None)
 }
 
 /** What a MAKING poll concluded — never a silent strand. */

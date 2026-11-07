@@ -80,7 +80,16 @@ object ConvergenceBandPolicy {
         // because it waited for a completed read. Only a read that
         // proves the bank complete (ready >= total) retires it.
         val cov = coverage
-        if (cov != null && (cov.total <= 0 || cov.ready >= cov.total)) return null
+        // RW-126 (Nov 7, 2026): the band settles from TERMINAL JOB
+        // STATE, not from the raw fraction. When every target cell
+        // is delivered or terminally failed-and-recorded, nothing
+        // is generating — the band retires even though ready <
+        // total. (RW-126's device proof: the band stood at ~60%
+        // for an hour against zero non-terminal jobs, its missing
+        // cells all duplicate-race failures.) A coverage read with
+        // no known denominator (total 0 — the pre-derivation /
+        // post-process-death window) likewise renders no band.
+        if (cov != null && (cov.total <= 0 || cov.outstanding <= 0)) return null
         return ConvergenceBandContent(
             heading = MakeItMeStrings.BAND_MAKING_HEADING,
             line = MakeItMeStrings.BAND_MAKING_LINE,

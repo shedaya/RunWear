@@ -618,7 +618,7 @@ class MainViewModel @Inject constructor(
                     personalHeroId = pendingSeedPersonalHit?.heroId
                         ?: state.personalHeroId,
                     heroIsScaffold = pendingSeedPersonalHit?.let {
-                        it.serveKind == com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD
+                        com.runwear.app.makeitme.ScaffoldRenderPolicy.isNonExactServe(it.serveKind)
                     } ?: seededHero.isScaffold,
                     heroImageRowId = null,
                     heroCombinationId = seededHero.combinationId
@@ -1407,8 +1407,7 @@ class MainViewModel @Inject constructor(
                     // personal/scaffold classification lives there,
                     // once, for both serve sites.
                     HeroServeTelemetry.personalServeRecord(
-                        isScaffold = hit.serveKind ==
-                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
+                        isScaffold = com.runwear.app.makeitme.ScaffoldRenderPolicy.isNonExactServe(hit.serveKind),
                         requestedCombinationId = chosen.combinationId,
                         servedCombinationId = chosen.servedCombinationId ?: chosen.combinationId,
                         gender = gender,
@@ -1425,8 +1424,7 @@ class MainViewModel @Inject constructor(
                         heroRequestedCombinationId = chosen.combinationId,
                         heroIsPersonal = true,
                         heroServeKind = hit.serveKind,
-                        heroIsScaffold = hit.serveKind ==
-                            com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
+                        heroIsScaffold = com.runwear.app.makeitme.ScaffoldRenderPolicy.isNonExactServe(hit.serveKind),
                         personalHeroId = hit.heroId,
                         personalHeroImageUrl = hit.imageUrl,
                         personalLookStatus = status,
@@ -1797,8 +1795,7 @@ class MainViewModel @Inject constructor(
                 // WS-9 fix: built by the shared production seam
                 // (see the overlay site in resolveHeroImage).
                 HeroServeTelemetry.personalServeRecord(
-                    isScaffold = hit.serveKind ==
-                        com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
+                    isScaffold = com.runwear.app.makeitme.ScaffoldRenderPolicy.isNonExactServe(hit.serveKind),
                     requestedCombinationId = cell,
                     gender = _uiState.value.genderPreference,
                     trigger = "personal-poll-delivery"
@@ -1814,8 +1811,7 @@ class MainViewModel @Inject constructor(
                     heroImageRowId = null,
                     heroIsPersonal = true,
                     heroServeKind = hit.serveKind,
-                    heroIsScaffold = hit.serveKind ==
-                        com.runwear.app.makeitme.PersonalServeKind.SCAFFOLD,
+                    heroIsScaffold = com.runwear.app.makeitme.ScaffoldRenderPolicy.isNonExactServe(hit.serveKind),
                     personalHeroId = hit.heroId,
                     personalHeroImageUrl = hit.imageUrl,
                     showMakeItMeUpsell = false
@@ -2182,6 +2178,21 @@ class MainViewModel @Inject constructor(
         val newDateTime = _uiState.value.selectedDateTime.withHour(hour).withMinute(0)
         setDateTime(newDateTime)
         _uiState.update { it.copy(showTimePicker = false) }
+    }
+
+    /**
+     * RW-131 (Nov 7, 2026): the picker session's ONE commit —
+     * (workingDate, workingHour) applied as a single selection
+     * with a single fetch, so no intermediate (old day, hour) or
+     * (new day, old state) solve is ever presented or settled.
+     * keepNow is the session's untouched-Now confirm: the Now
+     * state simply continues (no write, no fetch needed).
+     */
+    fun applyPickerCommit(date: LocalDate, hour: Int, keepNow: Boolean) {
+        if (keepNow) return
+        val today = locationNow().toLocalDate()
+        if (date.isBefore(today) || date.isAfter(today.plusDays(6))) return
+        setDateTime(LocalDateTime.of(date, java.time.LocalTime.of(hour, 0)))
     }
     
     fun selectDate(date: LocalDate) {

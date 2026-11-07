@@ -81,7 +81,20 @@ object PersonalLookStatusPolicy {
  *   screen never badges it; the explanation lives one tap away in
  *   the looks library (frame 21).
  */
-enum class PersonalServeKind { EXACT, SCAFFOLD, STOCK_QUIET }
+enum class PersonalServeKind {
+    EXACT, SCAFFOLD, STOCK_QUIET,
+    // RW-130 (Nov 7, 2026): the fallback ladder's tier 2 — the
+    // user's own photo from a neighbouring scenario, served when
+    // neither the exact cell nor a same-prescription scaffold is
+    // banked. Like SCAFFOLD it is a NON-EXACT personal serve:
+    // silent (no pill, no badge, no count), and it swaps silently
+    // when the exact cell lands. An unknown serve_tier value from
+    // a newer server must NEVER classify as SIMILAR or EXACT —
+    // kindFor falls to EXACT only for the exact/absent markers the
+    // shipped contract defines; see the forward-compat pin in
+    // RwFixWave2PoliciesTest.
+    SIMILAR
+}
 
 object ScaffoldRenderPolicy {
 
@@ -92,8 +105,15 @@ object ScaffoldRenderPolicy {
     ): PersonalServeKind = when {
         status is PersonalLookStatus.Failed -> PersonalServeKind.STOCK_QUIET
         found && serveKindRaw == "scaffold" -> PersonalServeKind.SCAFFOLD
+        found && serveKindRaw == "similar" -> PersonalServeKind.SIMILAR
         else -> PersonalServeKind.EXACT
     }
+
+    /** True for every non-exact personal serve (scaffold + similar):
+     * the photo is the user's own but it is not the requested
+     * cell's photo, so no exact-serve label may attach to it. */
+    fun isNonExactServe(kind: PersonalServeKind): Boolean =
+        kind == PersonalServeKind.SCAFFOLD || kind == PersonalServeKind.SIMILAR
 
     /** The home badge for a serve kind.
      * GEN-6 WAVE A (RW-34): NO serve kind carries a badge any more.
@@ -241,7 +261,12 @@ object PersonalFlagSheetContent {
 object MakeItMeUpsellRules {
 
     const val WEEK_MS: Long = 7L * 24L * 3600L * 1000L
-    const val FREE_ALLOWANCE: Int = 5
+    // RW-128 (Sol ruled Nov 7, 2026): the free allowance is 10,
+    // landed as ONE aligned change — server gates and both clients
+    // together. This constant is the single client source; every
+    // free-count string derives from it so the surfaces can never
+    // disagree about the number again.
+    const val FREE_ALLOWANCE: Int = 10
 
     fun shouldShow(
         personalizationOn: Boolean,

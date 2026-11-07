@@ -116,7 +116,9 @@ object HeroPillPolicy {
         // unlimited" as the MAIN message, whole pill tappable to the
         // Premium offer. Driven by the same single meter as every
         // other surface, so it flips at exactly 5.
-        if (mode == MakeItMeMode.FREE && freeGenerationsUsed >= 5) {
+        if (mode == MakeItMeMode.FREE &&
+            freeGenerationsUsed >= com.runwear.app.makeitme.MakeItMeUpsellRules.FREE_ALLOWANCE
+        ) {
             return HeroPillContent(
                 kind = HeroPillKind.EXHAUSTED,
                 text = MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT,
@@ -133,6 +135,10 @@ object HeroPillPolicy {
             // standing in carries no claim label at all. (This
             // supersedes design-spec §3.6's older scaffold text.)
             PersonalServeKind.SCAFFOLD -> null
+            // RW-130: a SIMILAR serve (ladder tier 2) is silent for
+            // the same reason — it is not the exact photo, and every
+            // exact-serve label on it would be a false claim.
+            PersonalServeKind.SIMILAR -> null
             PersonalServeKind.EXACT -> when (mode) {
                 // (d) Subscribed: script mark + Premium status + lock glyph.
                 MakeItMeMode.SUBSCRIBED -> HeroPillContent(

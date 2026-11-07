@@ -120,6 +120,21 @@ class PersonalHeroRepository @Inject constructor(
             _selfieEpoch.value += 1
         }
         lastReferencePaths = refs
+        // RW-FIXWAVE (review §2 row 19): keep the target set
+        // durable. A non-empty in-memory set is persisted; an
+        // empty one (fresh process) is restored from the persisted
+        // set BEFORE the coverage read, so the read never runs
+        // against the post-process-death empty denominator.
+        if (fillTargetCells.isNotEmpty()) {
+            preferencesRepository.setString(
+                KEY_FILL_TARGET_CELLS, fillTargetCells.joinToString(",")
+            )
+        } else {
+            val persisted = preferencesRepository.getString(KEY_FILL_TARGET_CELLS)
+            if (!persisted.isNullOrBlank()) {
+                fillTargetCells = persisted.split(",").filter { it.isNotBlank() }.toSet()
+            }
+        }
         // GEN-3 (convergence band): the coverage read rides the same
         // refresh; a failed read leaves the previous value in place.
         val coverage = if (profile.personalizationOn) {
@@ -243,7 +258,25 @@ class PersonalHeroRepository @Inject constructor(
         combinationId: String,
         lookup: PersonalHeroService.HeroLookup
     ): PersonalHeroHit? {
-        val cached = readCachedEntry(combinationId)
+        // RW-130 / review §4.5 (cache honesty): a NON-EXACT serve
+        // (scaffold / similar) must never be cached under the
+        // requested cell, and a cached entry must never substitute
+        // for the server's current non-exact answer — either would
+        // strand the requested cell on a stand-in photo exactly as
+        // RW-134 stranded it on stock. Non-exact serves paint from
+        // the fresh payload and leave the cache untouched, so the
+        // next resolution re-asks and the exact photo swaps in.
+        val serveKind = ScaffoldRenderPolicy.kindFor(
+            status = PersonalLookStatusPolicy.fromServer(
+                found = lookup.found,
+                lookState = lookup.lookState,
+                lookReason = lookup.lookReason
+            ),
+            serveKindRaw = lookup.serveKind,
+            found = lookup.found
+        )
+        val nonExact = ScaffoldRenderPolicy.isNonExactServe(serveKind)
+        val cached = if (nonExact) null else readCachedEntry(combinationId)
         val decision = PersonalHeroCachePolicy.decide(
             cached = cached,
             found = lookup.found,
@@ -254,9 +287,9 @@ class PersonalHeroRepository @Inject constructor(
         )
         return when (decision) {
             is PersonalHeroCachePolicy.Decision.Serve -> {
-                if (cached == null || cached.version != decision.version ||
+                if (!nonExact && (cached == null || cached.version != decision.version ||
                     cached.imageUrl != decision.imageUrl ||
-                    cached.heroId != decision.heroId
+                    cached.heroId != decision.heroId)
                 ) {
                     writeCachedEntry(
                         combinationId,
@@ -270,15 +303,7 @@ class PersonalHeroRepository @Inject constructor(
                 }
                 PersonalHeroHit(
                     decision.imageUrl, decision.version, decision.heroId,
-                    serveKind = ScaffoldRenderPolicy.kindFor(
-                        status = PersonalLookStatusPolicy.fromServer(
-                            found = lookup.found,
-                            lookState = lookup.lookState,
-                            lookReason = lookup.lookReason
-                        ),
-                        serveKindRaw = lookup.serveKind,
-                        found = lookup.found
-                    )
+                    serveKind = serveKind
                 )
             }
             PersonalHeroCachePolicy.Decision.NoPersonalHero -> null
@@ -521,6 +546,11 @@ class PersonalHeroRepository @Inject constructor(
     companion object {
         private val KEY_FORK_DECIDED = stringPreferencesKey("mim_fork_decided")
         private val KEY_REQUESTED_CELLS = stringPreferencesKey("mim_requested_cells")
+        // RW-FIXWAVE (review §2 row 19): the coverage target set,
+        // persisted so a cold session after process death restores
+        // the real denominator instead of deriving coverage
+        // against an empty in-memory set.
+        private val KEY_FILL_TARGET_CELLS = stringPreferencesKey("mim_fill_target_cells")
         private val KEY_UPSELL_DISMISSED_AT = stringPreferencesKey("mim_upsell_dismissed_at")
         private val KEY_UPSELL_DISMISSED_CELL = stringPreferencesKey("mim_upsell_dismissed_cell")
     }
