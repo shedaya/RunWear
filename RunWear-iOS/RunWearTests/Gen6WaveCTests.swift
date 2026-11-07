@@ -1808,17 +1808,7 @@ final class Gen6SuccessorWaveTests: XCTestCase {
 // those surfaces are reported UNPROVEN in the lane report,
 // never passed.
 
-final class Gen6FixWaveTests: XCTestCase {
-
-    private func sourceFile(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-            throw XCTSkip("source of record unreachable at \(relativePath)")
-        }
-        return text
-    }
+extension Gen6FixWaveTests {
 
     // MARK: Serve ladder (review §4; S6-18/19/20)
 
