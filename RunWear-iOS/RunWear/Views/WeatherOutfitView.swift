@@ -120,8 +120,9 @@ struct WeatherOutfitView: View {
                 }
             }
             // RW-25: the "Wear I've Run" mini bar dock — attached
-            // to the home scroll's container; renders only when the
-            // state is not .preAdd (the session's entry exists).
+            // to the home scroll's container; the bar when the
+            // session's entry exists, its designed empty form
+            // when none does yet (RW-119).
             .safeAreaInset(edge: .bottom) {
                 miniBarDock
             }
@@ -398,6 +399,32 @@ struct WeatherOutfitView: View {
             if !isLoading {
                 recordTodaysEntry()
             }
+        }
+        // RW-112 / RW-116 (successor wave): the personal-landing
+        // re-offer. The entry's hero reference is read from the
+        // photo on screen at settle time, and a personal look
+        // commonly lands AFTER the settle that created the entry
+        // (a generation the user waited on, a retry that
+        // delivered) — the pre-fix trigger set re-offered the
+        // recording on the hero URL's change, but a landing that
+        // re-published an already-standing URL, or a settle whose
+        // guards were momentarily closed, left the entry
+        // thumbnailing the stock serve for the rest of the
+        // session (the "Miami, FL · Today" row) and the
+        // collection missing the session's latest look. A
+        // personal application is the precise signal: the view
+        // model's personal-hero id is set exactly when a personal
+        // hero applies (resolution, swap-in, revalidation) and
+        // cleared when it leaves, and the store bumps its landed
+        // version on every poll landing — either one re-offers
+        // the recording, whose own guards (Now, today, not
+        // loading, an eligible place) keep it honest, and whose
+        // classifier records a hero-only change silently.
+        .onChange(of: viewModel.currentPersonalHeroId) { _, _ in
+            recordTodaysEntry()
+        }
+        .onChange(of: personalStore.landedHeroVersion) { _, _ in
+            recordTodaysEntry()
         }
         .sheet(isPresented: $showCollection) {
             NavigationStack {
@@ -911,8 +938,9 @@ struct WeatherOutfitView: View {
     }
 
     /// The mini bar dock: the session's entry drives the bar —
-    /// absent pre-entry, narrating once the session's first
-    /// generation lands.
+    /// narrating once the session's first generation lands, and
+    /// standing in its designed empty form before that (RW-119:
+    /// the section is never absent from the home stack).
     @ViewBuilder private var miniBarDock: some View {
         // GEN-3 (the presentation half, superseding W-15's
         // by-date key): the dock presents the CURRENT SESSION's
@@ -946,7 +974,13 @@ struct WeatherOutfitView: View {
             moment: todays?.momentReading ?? .now,
             wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
         )
-        if state != .preAdd {
+        if state == .preAdd {
+            // RW-119 (successor wave): no session entry yet —
+            // the section still stands, in its designed empty
+            // form (see WearIveRunEmptyDockView). The dock is
+            // never absent from the home stack.
+            WearIveRunEmptyDockView(onOpenCollection: { showCollection = true })
+        } else {
             WearIveRunMiniBarView(
                 state: state,
                 entry: todays,
@@ -1132,7 +1166,10 @@ struct WeatherOutfitView: View {
                 .foregroundColor(AppTheme.inkPrimary)
                 .padding(.horizontal, 16)
 
-            TemperatureBracketBadge(bracket: recommendation.temperatureBracket, unit: viewModel.temperatureUnit)
+            // RW-109: the badge names the DISPLAY bracket — the
+            // bracket of the feels-like the hero prints — not the
+            // recommendation's comfort-adjusted engine bracket.
+            TemperatureBracketBadge(bracket: viewModel.displayTempBracket, unit: viewModel.temperatureUnit)
                 .padding(.horizontal, 16)
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -1186,7 +1223,10 @@ struct WeatherOutfitView: View {
             viewModel.placeDisplayName,
             navDateString,
             "\(viewModel.temperatureUnit.format(viewModel.currentTemperature)) · Feels like \(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))",
-            recommendation.temperatureBracket.description
+            // RW-109: this line stands beside the same displayed
+            // feels-like (the line above), so it names the
+            // DISPLAY bracket, not the engine bracket.
+            viewModel.displayTempBracket.description
         ]
     }
 
@@ -1320,6 +1360,16 @@ struct WeatherOutfitView: View {
             // REQUESTED cell's facts only (see heroPillState).
             pillState: heroPillState,
             onPillGetUnlimited: { showHeroPillPaywall = true },
+            // RW-111: the failed look's line at the hero, with
+            // its retry — the same retry the personal section's
+            // button used to fire from the bottom of the page.
+            lookFailed: currentCellLookIsFailed,
+            onRetryFailedLook: {
+                if let cell = viewModel.currentPersonalCombination {
+                    personalStore.retryLook(for: cell)
+                    viewModel.refreshHero()
+                }
+            },
             heightMode: heightMode,
             // The navigation container carries the chrome now:
             // location is the title, Settings/Share are toolbar
@@ -1349,24 +1399,41 @@ struct WeatherOutfitView: View {
             freeAllowance: PersonalHeroStore.freeAllowance,
             // GEN-6 Wave A (RW-34): a scaffold serve is silent —
             // the pill policy, not this view, decides the state.
-            isScaffoldServe: viewModel.currentPersonalServeIsScaffold
+            isScaffoldServe: viewModel.currentPersonalServeIsScaffold,
+            // RW-111 / RW-118: the cell the server refused with
+            // the allowance exhausted carries the exhausted pill
+            // at the hero even with no personal photo on screen.
+            isExhaustedCell: personalStore.exhaustedCell == cell.combinationId
         )
+    }
+
+    /// RW-111: whether the current cell's look stands failed —
+    /// the hero's failure-line input (the line itself renders in
+    /// HeroImageView, in the pill's eye line over the stock hero).
+    private var currentCellLookIsFailed: Bool {
+        guard let cell = viewModel.currentPersonalCombination else { return false }
+        return (personalStore.lookStates[cell.combinationId] ?? .none).isFailed
     }
 
     // MARK: - RW-14 Personal Section
 
     /// The "Make It Me" surfaces on the run screen, in spec order:
     /// (GEN-3: the making/scaffold states moved ONTO the hero as
-    /// the one hero pill — see heroPillState; this section keeps)
-    /// the failed line with
-    /// its retry when the server reports the look as failed (spec
-    /// §7 G5/G6, RW-16.16), and the free-tier upsell card when this
-    /// cell is the one that exhausted the allowance (spec §6 U1).
-    /// Both status lines are driven by the server's per-cell look
-    /// state (PersonalHeroStore.lookStates), so they render whoever
-    /// requested the generation — the save flow included — and they
-    /// survive navigation away and back. Ready renders nothing: the
-    /// personalized photo on screen is itself the state.
+    /// the one hero pill — see heroPillState.) RW-111 (successor
+    /// wave): the failed line and the exhausted state moved onto
+    /// the hero too — the failure line renders in HeroImageView's
+    /// eye line over the stock hero (tappable to retry), and the
+    /// exhausted state is the hero pill's own exhausted state
+    /// (HeroPill.resolve's refused-cell branch). Both used to
+    /// render HERE, at the bottom of the page — the failure block
+    /// and the §6 U1 upsell card — far from the hero the user was
+    /// looking at; the card's home rendering is retired with the
+    /// move (the exhausted pill is its replacement surface, and
+    /// rendering both would put the same message on one screen
+    /// twice). What remains in this section is the failed cell's
+    /// quiet library door (RW-61) — a door, not a status.
+    /// Ready renders nothing: the personalized photo on screen
+    /// is itself the state.
     @ViewBuilder private var personalSection: some View {
         if let cell = viewModel.currentPersonalCombination {
             switch personalStore.lookStates[cell.combinationId] ?? .none {
@@ -1385,42 +1452,21 @@ struct WeatherOutfitView: View {
                 // via the W-16 seam.)
                 EmptyView()
             case .failed:
-                // Spec §7 G5/G6 (RW-16.16): the durable failed line
-                // and its user-initiated retry. The retry goes
-                // through the store's request path; the hero reload
-                // re-attaches the view model's awaiter so a landed
-                // replacement swaps in.
-                VStack(spacing: 4) {
-                    Text(MakeItMeCopy.lookFailed)
-                        .font(.appSecondary.weight(.semibold))
-                        .foregroundColor(AppTheme.inkPrimary)
-                        .multilineTextAlignment(.center)
-                    Button(MakeItMeCopy.lookRetry) {
-                        personalStore.retryLook(for: cell)
-                        viewModel.refreshHero()
-                    }
-                    .font(.appSecondary.weight(.semibold))
-                    .foregroundColor(AppTheme.inkPrimary)
-                    // GEN-6 (RW-61): the library door, one tap from
-                    // where the failed cell is encountered (frame
-                    // 20's door wording). The failure itself is
-                    // never badged on home — this quiet door is the
-                    // whole home footprint.
-                    Button("See all your looks") {
-                        showLooksLibrary = true
-                    }
-                    .font(.appSecondary.weight(.semibold))
-                    .foregroundColor(AppTheme.inkPrimary)
+                // RW-111: the failed line + retry themselves now
+                // render AT THE HERO (HeroImageView's failure
+                // line, fed by currentCellLookIsFailed). The
+                // library door stays here — one tap from where
+                // the failed cell is encountered (frame 20's door
+                // wording, RW-61).
+                Button("See all your looks") {
+                    showLooksLibrary = true
                 }
+                .font(.appSecondary.weight(.semibold))
+                .foregroundColor(AppTheme.inkPrimary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 16)
             case .ready, .none:
                 EmptyView()
-            }
-
-            if personalStore.shouldShowUpsell(currentCell: cell.combinationId) {
-                // The card carries its own horizontal padding.
-                MakeItMeUpsellCard(currentCell: cell.combinationId)
             }
         }
 
@@ -1462,8 +1508,10 @@ struct WeatherOutfitView: View {
             }
             .padding(.horizontal, 16)
 
-            // Temperature bracket badge
-            TemperatureBracketBadge(bracket: recommendation.temperatureBracket, unit: viewModel.temperatureUnit)
+            // Temperature bracket badge — RW-109: the DISPLAY
+            // bracket (the hero's printed feels-like), not the
+            // recommendation's engine bracket.
+            TemperatureBracketBadge(bracket: viewModel.displayTempBracket, unit: viewModel.temperatureUnit)
                 .padding(.horizontal, 16)
                 .staggeredAnimation(index: 0, isVisible: hasAppeared)
 
@@ -1633,9 +1681,14 @@ struct DarkClothingItemCard: View {
                 Text(item.description)
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
-                    // GEN-6 (RW-54, iOS half): the design settles
-                    // a ONE-line outfit-row note.
-                    .lineLimit(1)
+                    // RW-114 (successor wave) SUPERSEDES the
+                    // GEN-6 RW-54 one-line note for this text:
+                    // the description renders WHOLE — it wraps as
+                    // many lines as it needs at the current type
+                    // size and never ellipsizes mid-word (Sol's
+                    // build-28 still: "Eye protection from sun
+                    // an…"). No line limit stands here.
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()

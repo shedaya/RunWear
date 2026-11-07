@@ -1261,3 +1261,494 @@ extension Gen6FixWaveTests {
                       "the loader lives with the layer it serves")
     }
 }
+
+// MARK: - Successor wave (build 30) — RW-109…RW-119
+//
+// The build-29 device check's findings: client state-truthfulness
+// defects (the server record exonerated the backend for the whole
+// list — two traces reconciled the session job by job). Each test
+// below pins one item's mechanism at the seam the fix lives in,
+// following the suite's pattern: pure logic on the dual-membered
+// models, view settlements by source pins, and the hosted-capture
+// surfaces named UNPROVEN in the lane report rather than passed.
+final class Gen6SuccessorWaveTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("source of record unreachable at \(relativePath)")
+        }
+        return text
+    }
+
+    // MARK: RW-109 — the badge classifies the displayed feels-like
+
+    /// The pure seam: at Sol's two frames, the ENGINE bracket of
+    /// the comfort-adjusted value and the DISPLAY bracket of the
+    /// printed value differ by exactly the filed one band — and
+    /// the display bracket is the one whose range holds the
+    /// printed number.
+    func testRW109_DisplayBracketClassifiesThePrintedFeelsLike() {
+        // New York frame: raw 64°F, runs-warm profile (+5) —
+        // the engine solved at 69 (Warm); the hero printed 64.
+        XCTAssertEqual(TemperatureBracket.from(temperature: 64 + 5), .warm,
+                       "the engine frame at the adjusted value — unchanged by this fix")
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 64), .mild)
+        // Miami frame: raw 79°F adjusted to 84 (Hot); printed 79.
+        XCTAssertEqual(TemperatureBracket.from(temperature: 79 + 5), .hot)
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 79), .warm)
+        // A runs-cold profile diverges the other way: raw 66
+        // adjusted to 61 (Mild) — the display bracket stays Warm,
+        // the bracket of the number on screen.
+        XCTAssertEqual(TemperatureBracket.from(temperature: 66 - 5), .mild)
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 66), .warm)
+        // Neutral comfort: the two frames agree, as they always
+        // did — the defect needed a non-neutral profile.
+        for raw in [9.0, 25.0, 45.0, 55.0, 70.0, 85.0] {
+            XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: raw),
+                           TemperatureBracket.from(temperature: raw))
+        }
+    }
+
+    /// The rounding edge: the classifier reads the value AS
+    /// PRINTED (Int(round)), so a raw 64.6 — which prints "65" —
+    /// classifies Warm, never Mild-beside-65.
+    func testRW109_DisplayBracketRoundsAsPrinted() {
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 64.6), .warm)
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 64.4), .mild)
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 79.5), .hot)
+        XCTAssertEqual(TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: 49.5), .mild)
+    }
+
+    /// The invariant the badge owes the numeral, swept: for every
+    /// raw feels-like, the display bracket's printed bounds
+    /// contain the printed numeral.
+    func testRW109_DisplayBracketRangeAlwaysContainsThePrintedNumeral() {
+        var raw = -10.0
+        while raw <= 110.0 {
+            let printed = Int(round(raw))
+            let bracket = TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: raw)
+            let bounds = bracket.fahrenheitBounds
+            if let lower = bounds.lower {
+                XCTAssertGreaterThanOrEqual(printed, lower,
+                    "raw \(raw) prints \(printed) but \(bracket) starts at \(lower)")
+            }
+            if let upper = bounds.upper {
+                if bracket == .extreme {
+                    XCTAssertLessThan(printed, upper,
+                        "raw \(raw) prints \(printed) but extreme is below \(upper)")
+                } else {
+                    XCTAssertLessThanOrEqual(printed, upper,
+                        "raw \(raw) prints \(printed) but \(bracket) ends at \(upper)")
+                }
+            }
+            raw += 0.25
+        }
+    }
+
+    /// The view-model seam, end to end at Sol's two frames: the
+    /// recommendation keeps its engine bracket (photo keying and
+    /// the chart are untouched), while every display surface
+    /// reads the display bracket.
+    @MainActor
+    func testRW109_ViewModelDisplayBracketAtSolFrames() {
+        // 64°F frame: apparent 17.8°C ≈ 64.0°F, comfort warm.
+        let vmNY = successorLoadedViewModel(apparentC: 17.8, comfort: .warm)
+        XCTAssertEqual(vmNY.temperatureUnit.format(vmNY.currentFeelsLike), "64°F")
+        XCTAssertEqual(vmNY.recommendation?.temperatureBracket, .warm,
+                       "the recommendation's engine bracket is the adjusted frame — by design")
+        XCTAssertEqual(vmNY.displayTempBracket, .mild,
+                       "the badge's bracket is the printed number's bracket")
+        XCTAssertEqual(vmNY.currentTempBracket, .MILD,
+                       "the numeral chip classifies the raw value it stands beside")
+        // 79°F frame: apparent 26.1°C ≈ 79.0°F.
+        let vmMIA = successorLoadedViewModel(apparentC: 26.1, comfort: .warm)
+        XCTAssertEqual(vmMIA.temperatureUnit.format(vmMIA.currentFeelsLike), "79°F")
+        XCTAssertEqual(vmMIA.recommendation?.temperatureBracket, .hot)
+        XCTAssertEqual(vmMIA.displayTempBracket, .warm)
+        XCTAssertEqual(vmMIA.currentTempBracket, .WARM)
+        // Neutral comfort at the same raw values: no divergence.
+        let vmNeutral = successorLoadedViewModel(apparentC: 17.8, comfort: .neutral)
+        XCTAssertEqual(vmNeutral.displayTempBracket, vmNeutral.recommendation?.temperatureBracket)
+    }
+
+    @MainActor
+    private func successorLoadedViewModel(apparentC: Double, comfort: ComfortLevel) -> WeatherViewModel {
+        UserDefaults.standard.set(TemperatureUnit.fahrenheit.rawValue, forKey: "temperatureUnit")
+        let hourly = HourlyWeather(
+            time: ["2026-11-06T07:00"],
+            temperature2m: [20],
+            apparentTemperature: [apparentC],
+            relativeHumidity2m: [50],
+            precipitationProbability: [0],
+            precipitation: [0],
+            rain: [0],
+            uvIndex: [0],
+            windSpeed10m: [8],
+            windDirection10m: [0],
+            windGusts10m: [8],
+            weatherCode: [0]
+        )
+        let vm = WeatherViewModel()
+        vm.locationName = "New York, NY"
+        vm.comfortLevel = comfort
+        vm.weatherData = WeatherData(
+            latitude: 40.7128, longitude: -74.0060,
+            currentWeather: CurrentWeather(temperature: 20, windspeed: 8, weathercode: 0, isDay: 1),
+            hourly: hourly,
+            timezone: "America/New_York",
+            currentDetail: nil
+        )
+        vm.selectedDate = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 6))!
+        vm.selectedHour = 7
+        vm.updateSelectedWeatherSnapshot()
+        vm.makeRecommendation()
+        return vm
+    }
+
+    func testRW109_BadgeSurfacesReadTheDisplayBracket_sourcePins() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertEqual(view.components(separatedBy: "TemperatureBracketBadge(bracket: viewModel.displayTempBracket").count - 1, 2,
+                       "both badge call sites (list + grid) read the display bracket")
+        XCTAssertFalse(view.contains("TemperatureBracketBadge(bracket: recommendation.temperatureBracket"),
+                       "no badge site reads the engine bracket any more")
+        XCTAssertTrue(view.contains("viewModel.displayTempBracket.description"),
+                      "the detail context line names the display bracket beside the displayed feels-like")
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertTrue(vm.contains("var displayTempBracket: TemperatureBracket"),
+                      "the display bracket lives on the view model, from the headline's own selection")
+        let chipRange = try XCTUnwrap(vm.range(of: "var currentTempBracket"))
+        let chipBody = String(vm[chipRange.lowerBound...].prefix(900))
+        XCTAssertFalse(chipBody.contains("adjustTemperature"),
+                       "the numeral chip no longer classifies the comfort-adjusted value")
+    }
+
+    // MARK: RW-115 — a delivery clears the cell's failure
+
+    private func successorLookup(
+        cell: String, found: Bool = true, heroId: String? = "hero-1",
+        version: Int? = 1, lookState: String? = nil
+    ) -> PersonalHeroLookup {
+        PersonalHeroLookup(
+            found: found,
+            combinationId: cell,
+            heroId: heroId,
+            variant: 1,
+            imageUrl: found ? "https://signed.example/\(cell)-\(version ?? 0).jpg" : nil,
+            version: version,
+            replenishmentQueued: 0,
+            lookState: lookState,
+            lookReason: nil,
+            scaffold: nil,
+            scaffoldCombinationId: nil
+        )
+    }
+
+    func testRW115_CacheDeliveryFact() {
+        var cache = PersonalCellCache()
+        let t0 = Date()
+        // First resolve of a hero: a delivery.
+        let first = cache.resolveWithDelivery(lookup: successorLookup(cell: "C1"), now: t0)
+        XCTAssertEqual(first.resolution, .show("https://signed.example/C1-1.jpg"))
+        XCTAssertTrue(first.deliveredHero, "storing a hero where none stood is a delivery")
+        // Same version re-resolve: NOT a delivery (the cached
+        // photo is the one already there).
+        let again = cache.resolveWithDelivery(lookup: successorLookup(cell: "C1"), now: t0.addingTimeInterval(60))
+        XCTAssertFalse(again.deliveredHero, "a same-version re-resolve delivers nothing new")
+        // A version bump (a regeneration landed): a delivery.
+        let bumped = cache.resolveWithDelivery(lookup: successorLookup(cell: "C1", heroId: "hero-2", version: 2), now: t0.addingTimeInterval(120))
+        XCTAssertTrue(bumped.deliveredHero, "a new hero version is a delivery")
+        // A miss delivers nothing.
+        let miss = cache.resolveWithDelivery(lookup: successorLookup(cell: "C1", found: false, version: 3), now: t0.addingTimeInterval(180))
+        XCTAssertEqual(miss.resolution, .none)
+        XCTAssertFalse(miss.deliveredHero)
+    }
+
+    func testRW115_FailureClearsExactlyOnDelivery() {
+        let failed = PersonalLookState.failed(reason: .qualityRefused)
+        XCTAssertEqual(failed.reconciledWithDelivery(true), .ready,
+                       "the Miami sequence: the retry's delivery clears the first attempt's failure")
+        XCTAssertEqual(failed.reconciledWithDelivery(false), failed,
+                       "no delivery, no clear — the keep-serving failure surface stands")
+        // Non-failure states are untouched by the rule.
+        XCTAssertEqual(PersonalLookState.making.reconciledWithDelivery(true), .making)
+        XCTAssertEqual(PersonalLookState.ready.reconciledWithDelivery(false), .ready)
+        XCTAssertEqual(PersonalLookState.none.reconciledWithDelivery(true), .none)
+    }
+
+    func testRW115_StoreFoldsThroughTheOneFold_sourcePins() throws {
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("private func foldLookup(_ lookup: PersonalHeroLookup) -> PersonalCellCache.Resolution"),
+                      "one fold routes every lookup path")
+        XCTAssertTrue(store.contains("resolveWithDelivery"),
+                      "the fold carries the cache's delivery fact")
+        XCTAssertTrue(store.contains("reconciledWithDelivery(deliveredHero)"),
+                      "the fold applies the delivery-clear rule")
+        XCTAssertFalse(store.contains("noteLookState"),
+                       "the pre-fix per-path fold is gone — paths cannot drift again")
+    }
+
+    // MARK: RW-113 / RW-117(a) — the poll settles on the settled fold
+
+    func testRW113_PollEndsOnlyOnASettledFold() {
+        // The Juneau instant: a hero resolved while the fold
+        // still reads MAKING (hero inserted, job completion
+        // 0.54 s behind it) — the poll must NOT end there.
+        XCTAssertFalse(HeroPollPolicy.shouldEndPoll(landed: true, foldedState: .making),
+                       "a landing under a MAKING fold keeps polling — the pre-fix loop stranded the pill here")
+        // The fold turns terminal: the poll ends and returns the
+        // landed URL.
+        XCTAssertTrue(HeroPollPolicy.shouldEndPoll(landed: true, foldedState: .ready))
+        XCTAssertTrue(HeroPollPolicy.shouldEndPoll(landed: true, foldedState: .failed(reason: .error)))
+        XCTAssertTrue(HeroPollPolicy.shouldEndPoll(landed: true, foldedState: .none))
+        // No landing: the pre-existing terminal rule stands.
+        XCTAssertTrue(HeroPollPolicy.shouldEndPoll(landed: false, foldedState: .failed(reason: .qualityRefused)))
+        XCTAssertTrue(HeroPollPolicy.shouldEndPoll(landed: false, foldedState: .ready))
+        XCTAssertFalse(HeroPollPolicy.shouldEndPoll(landed: false, foldedState: .making))
+        XCTAssertFalse(HeroPollPolicy.shouldEndPoll(landed: false, foldedState: .none))
+    }
+
+    // MARK: RW-117 — scaffold truth comes from the payload
+
+    func testRW117_ScaffoldMarkerDecodesFromThePayload() throws {
+        let scaffoldJSON = """
+        {"found": true, "scaffold": true, "scaffold_combination_id": "MALE_CLEAR_WARM_MIDDAY_ab12",
+         "combination_id": "MALE_CLEAR_WARM_DAWN_ab12", "hero_id": "hero-scaffold", "variant": 1,
+         "image_url": "https://signed.example/scaffold.jpg", "version": 3,
+         "look_state": "ready", "look_reason": null}
+        """
+        let lookup = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(scaffoldJSON.utf8))
+        XCTAssertEqual(lookup.scaffold, true)
+        XCTAssertEqual(lookup.scaffoldCombinationId, "MALE_CLEAR_WARM_MIDDAY_ab12")
+        XCTAssertEqual(PersonalLookState.from(lookup: lookup), .ready,
+                       "a scaffold serve folds READY — which is why the look state could never classify it")
+        // The Juneau shape: an exact serve in its completion
+        // instant — no scaffold marker, look_state MAKING.
+        let exactJSON = """
+        {"found": true, "combination_id": "MALE_CLOUDY_COOL_MIDDAY_84c1", "hero_id": "hero-exact",
+         "variant": 1, "image_url": "https://signed.example/exact.jpg", "version": 1,
+         "look_state": "making", "look_reason": null}
+        """
+        let exact = try JSONDecoder().decode(PersonalHeroLookup.self, from: Data(exactJSON.utf8))
+        XCTAssertNil(exact.scaffold)
+        XCTAssertEqual(PersonalLookState.from(lookup: exact), .making,
+                       "an exact hero can fold MAKING — the second half of why the inference failed both ways")
+    }
+
+    func testRW117_ClassificationReadsThePayloadFact_sourcePins() throws {
+        let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
+        XCTAssertFalse(vm.contains("currentPersonalServeIsScaffold = lookState == .making"),
+                       "the paint-time scaffold inference is gone")
+        XCTAssertFalse(vm.contains("let isScaffold = lookState == .making"),
+                       "the revalidation scaffold inference is gone")
+        XCTAssertTrue(vm.contains("store.serveIsScaffold(for: combo)"),
+                      "the classification reads the resolver's payload fact")
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("scaffoldServes[cell] = lookup.scaffold == true"),
+                      "the store folds the payload's marker on every resolving lookup")
+    }
+
+    // MARK: RW-111 / RW-118 — exhausted at the hero; no fall-through
+
+    func testRW111_ExhaustedPillRendersForTheRefusedCell() {
+        // The end-state cell: free account, allowance used, the
+        // server refused THIS cell, no personal photo on screen.
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .none, personalPhotoDisplayed: false,
+                isSubscribed: false, freeGenerationsUsed: 5, freeAllowance: 5,
+                isExhaustedCell: true),
+            .exhausted(used: 5, allowance: 5),
+            "the refused cell carries the exhausted pill at the hero — RW-118's fall-through is closed")
+        // A cell that was NOT refused stays silent over stock.
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .none, personalPhotoDisplayed: false,
+                isSubscribed: false, freeGenerationsUsed: 5, freeAllowance: 5,
+                isExhaustedCell: false),
+            .hidden)
+        // Below the allowance, a refused-marked cell is not
+        // exhausted (the marker only stands with the count).
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .none, personalPhotoDisplayed: false,
+                isSubscribed: false, freeGenerationsUsed: 3, freeAllowance: 5,
+                isExhaustedCell: true),
+            .hidden)
+        // A subscribed account never resolves to exhausted.
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .none, personalPhotoDisplayed: false,
+                isSubscribed: true, freeGenerationsUsed: 5, freeAllowance: 5,
+                isExhaustedCell: true),
+            .hidden)
+        // Precedence preserved: MAKING outranks the exhausted
+        // branch; a scaffold serve stays silent over it.
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .making, personalPhotoDisplayed: false,
+                isSubscribed: false, freeGenerationsUsed: 5, freeAllowance: 5,
+                isExhaustedCell: true),
+            .makingWithUpsell)
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
+                isSubscribed: true, freeGenerationsUsed: 5, freeAllowance: 5,
+                isScaffoldServe: true, isExhaustedCell: true),
+            .hidden)
+        // The in-photo exhausted branch is unchanged.
+        XCTAssertEqual(
+            HeroPill.resolve(
+                optedIn: true, lookState: .ready, personalPhotoDisplayed: true,
+                isSubscribed: false, freeGenerationsUsed: 5, freeAllowance: 5),
+            .exhausted(used: 5, allowance: 5))
+    }
+
+    func testRW111_FailureAndExhaustedLiveAtTheHero_sourcePins() throws {
+        let hero = try sourceFile("../RunWear/Views/HeroImageView.swift")
+        XCTAssertTrue(hero.contains("var lookFailed: Bool"),
+                      "the hero carries the failed state as an input")
+        XCTAssertTrue(hero.contains("Text(MakeItMeCopy.lookFailed)"),
+                      "the hero renders the settled failure line verbatim")
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("lookFailed: currentCellLookIsFailed"),
+                      "home feeds the hero the current cell's failed state")
+        XCTAssertTrue(view.contains("isExhaustedCell: personalStore.exhaustedCell == cell.combinationId"),
+                      "home feeds the pill the refused-cell fact")
+        XCTAssertFalse(view.contains("MakeItMeUpsellCard(currentCell:"),
+                       "the exhausted upsell card no longer renders at the bottom of home")
+        XCTAssertFalse(view.contains("Text(MakeItMeCopy.lookFailed)"),
+                       "the failure line no longer renders in the scroll content")
+        XCTAssertTrue(view.contains("See all your looks"),
+                      "the failed cell's library door stays (RW-61)")
+    }
+
+    // MARK: RW-110 — the banner follows a location switch (replay)
+
+    private func successorEntry(
+        session: String, place: String, items: [String], hero: String = "hero-1"
+    ) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: Date(timeIntervalSince1970: 1_762_560_000),
+            placeName: place,
+            feelsLikeF: 64,
+            actualF: 66,
+            condition: "Clear",
+            itemNames: items,
+            itemKeys: items.map { $0.lowercased() },
+            heroImageReference: hero,
+            sessionID: session,
+            momentReading: .now
+        )
+    }
+
+    @MainActor
+    private func successorDockLine(of model: WearIveRunCollectionModel) -> String? {
+        let presented = model.sessionEntry()
+        let state = WearIveRunMiniBarModel.state(
+            todaysEntry: presented,
+            moment: presented?.momentReading ?? .now,
+            wasUpdatedThisSession: presented?.wasUpdatedInSession ?? false
+        )
+        return WearIveRunNarration.line(for: state)
+    }
+
+    /// Sol's sequence, replayed through the production model:
+    /// settle New York (the bar names it), switch to Miami (the
+    /// settle moves the session's one entry), and the bar names
+    /// Miami — via the entry itself once settled, and via the
+    /// RW-88 viewed-place override in the interval before the
+    /// settle lands.
+    @MainActor
+    func testRW110_BannerFollowsTheLocationSwitch() {
+        let defaults = UserDefaults(suiteName: "gen6-successor-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s-rw110")
+        model.recordSettled(successorEntry(session: "s-rw110", place: "New York, NY", items: ["Tee"]))
+        XCTAssertEqual(successorDockLine(of: model), "Added New York, NY, Now")
+        // Before the Miami settle lands, the viewed-place
+        // override already names Miami.
+        XCTAssertEqual(
+            WearIveRunViewedNarration.payload(
+                entryPlaceDisplayName: "New York, NY", entryMoment: .now,
+                viewedPlace: SimplePlace(city: "Miami", region: "FL"),
+                viewedDate: Date(timeIntervalSince1970: 1_762_560_000), viewedHour: 12,
+                isViewingNow: true,
+                calendar: Calendar(identifier: .gregorian),
+                now: Date(timeIntervalSince1970: 1_762_560_000)),
+            "Miami, FL, Now")
+        // The settle lands: the entry itself moves, and the
+        // bar's own narration names Miami in full.
+        model.recordSettled(successorEntry(session: "s-rw110", place: "Miami, FL", items: ["Tank"]))
+        XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
+        XCTAssertEqual(successorDockLine(of: model), "Updated to Miami, FL")
+    }
+
+    // MARK: RW-112 / RW-116 — the settle records the landed look
+
+    /// A hero-only settle (the personal landing re-offer) updates
+    /// the session entry's hero reference in place, silently —
+    /// the collection row then thumbnails the personal look, and
+    /// the entry the landing belongs to is the one that stands.
+    @MainActor
+    func testRW112_HeroOnlySettleUpdatesTheEntrySilently() {
+        let defaults = UserDefaults(suiteName: "gen6-successor-\(UUID().uuidString)")!
+        let store = WearIveRunStore(defaults: defaults)
+        let model = WearIveRunCollectionModel(store: store, sessionID: "s-rw112")
+        model.recordSettled(successorEntry(session: "s-rw112", place: "Miami, FL", items: ["Tank"], hero: "stock-url"))
+        let cuesAfterCreate = model.cueCount
+        model.recordSettled(successorEntry(session: "s-rw112", place: "Miami, FL", items: ["Tank"], hero: "personal-url"))
+        XCTAssertEqual(model.sessionEntry()?.heroImageReference, "personal-url",
+                       "the entry thumbnails the personal look once it has landed and re-settled")
+        XCTAssertEqual(model.cueCount, cuesAfterCreate,
+                       "a hero-only landing is silent — recorded, never announced")
+        XCTAssertEqual(model.entries.count, 1,
+                       "the landing updates the session's one entry in place (GEN-3 session rule)")
+    }
+
+    func testRW112_LandingReOfferTriggersStand_sourcePins() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains(".onChange(of: viewModel.currentPersonalHeroId)"),
+                      "a personal application re-offers the recording")
+        XCTAssertTrue(view.contains(".onChange(of: personalStore.landedHeroVersion)"),
+                      "a poll landing re-offers the recording")
+    }
+
+    // MARK: RW-119 — the section stands in its empty form
+
+    func testRW119_DockStandsEmptyBeforeAnyEntry_sourcePins() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(view.contains("WearIveRunEmptyDockView(onOpenCollection:"),
+                      "the dock renders the empty form when no session entry stands")
+        XCTAssertTrue(view.contains("if state == .preAdd"),
+                      "the empty form is the preAdd branch of the one dock")
+        XCTAssertEqual(WearIveRunEmptyDockView.emptyLine, "Your scrapbook starts with today's run.",
+                       "the empty dock carries the designed empty state's head line, verbatim")
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        XCTAssertTrue(collection.contains("Your scrapbook starts with today's run."),
+                      "the dock's line and the collection's empty state are the same settled copy")
+        // The model state for no entry is still .preAdd — the
+        // dock's branch reads it; the bar itself is unchanged.
+        XCTAssertEqual(
+            WearIveRunMiniBarModel.state(todaysEntry: nil, moment: .now, wasUpdatedThisSession: false),
+            .preAdd)
+    }
+
+    // MARK: RW-114 — descriptions render whole
+
+    func testRW114_DescriptionsCarryNoLineCap_sourcePins() throws {
+        let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        let cardStart = try XCTUnwrap(view.range(of: "struct DarkClothingItemCard"))
+        let card = String(view[cardStart.lowerBound...])
+        XCTAssertTrue(card.contains("Text(item.description)"), "the card renders the description")
+        let descriptionRange = try XCTUnwrap(card.range(of: "Text(item.description)"))
+        let descriptionBlock = String(card[descriptionRange.lowerBound...].prefix(700))
+        XCTAssertFalse(descriptionBlock.contains(".lineLimit("),
+                       "no line cap stands on the outfit card's description (RW-114)")
+        let shop = try sourceFile("../RunWear/Views/Modals/ShopModal.swift")
+        XCTAssertFalse(shop.contains(".lineLimit(2)"),
+                       "the shop row's two-line description cap is gone too (RW-114)")
+    }
+}

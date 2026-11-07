@@ -106,6 +106,30 @@ enum TemperatureBracket: String, CaseIterable {
         }
     }
 
+    /// RW-109 (successor wave): the DISPLAY bracket — the bracket
+    /// of the feels-like the hero actually prints. The hero
+    /// headline is the RAW measured feels-like, rounded to the
+    /// nearest degree for display (the documented Android/PWA
+    /// contract `currentFeelsLike` carries); any surface that
+    /// names a bracket BESIDE that number — the weather-band
+    /// badge, the detail sheet's context line — must classify
+    /// this value, so the bracket's printed range always
+    /// contains the printed number. The recommendation's own
+    /// bracket (`OutfitRecommendation.temperatureBracket`) keeps
+    /// its engine-frame meaning — it classifies the
+    /// comfort-adjusted feels-like the prescription was solved
+    /// from, and it keys photo selection and the day chart;
+    /// RW-109's defect was the badge reading the ENGINE bracket
+    /// while standing next to the RAW number (a runs-warm
+    /// profile: raw 64°F prints as 64 but the adjusted 69
+    /// classified Warm beside it; raw 79 printed while the
+    /// adjusted 84 classified Hot). The bounds themselves are
+    /// not moved — the two frames are simply no longer mixed on
+    /// one surface.
+    static func displayBracket(forDisplayedFeelsLikeF feelsLikeF: Double) -> TemperatureBracket {
+        from(temperature: feelsLikeF.rounded())
+    }
+
     /// The bracket's Fahrenheit bounds — the single source the
     /// badge's range label renders from. (The range previously lived
     /// ONLY in the rawValue string, hard-coded "°F": a Celsius user's

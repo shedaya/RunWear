@@ -310,7 +310,12 @@ private struct ShopItemRow: View {
                     Text(item.description)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
-                        .lineLimit(2)
+                        // RW-114 (successor wave): item
+                        // descriptions render whole — no line
+                        // cap, so no mid-word ellipsis (the
+                        // modal's other description render
+                        // already wraps fully).
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()

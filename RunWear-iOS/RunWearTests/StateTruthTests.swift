@@ -155,7 +155,12 @@ final class StateTruthTests: XCTestCase {
             actualLine: HomeHeaderCopy.actualLine(
                 formattedTemperature: vm.temperatureUnit.format(vm.currentTemperature)
             ),
-            badgeRange: vm.recommendation!.temperatureBracket.rangeText(for: vm.temperatureUnit),
+            // RW-109 (successor wave): the badge renders the
+            // DISPLAY bracket's range (the bracket of the
+            // printed feels-like), not the recommendation's
+            // engine bracket — this helper reads the same
+            // production surface the view renders.
+            badgeRange: vm.displayTempBracket.rangeText(for: vm.temperatureUnit),
             miniBar: vm.temperatureUnit.formatFromFahrenheit(entry.feelsLikeF)
         )
     }

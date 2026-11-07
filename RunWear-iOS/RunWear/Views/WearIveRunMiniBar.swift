@@ -618,6 +618,67 @@ enum WearIveRunMorph {
 
 // MARK: - View
 
+/// RW-119 (successor wave): the dock's EMPTY form — the Wear
+/// I've Run section's presence before any session entry exists.
+/// The section is a persistent part of the home stack (the
+/// settled design's empty state is a designed surface, not a
+/// disappearance), but the pre-fix dock mounted the bar only
+/// once a session entry stood, so a session whose settles never
+/// recorded — a fresh account browsing non-Now cells, whose
+/// recording guards rightly refuse — lost the section entirely
+/// (Sol's build-29 end state: 23 delivered cells server-side,
+/// no banner at all). The empty form carries the section's
+/// wordmark and the designed empty state's own head line
+/// (frame 10, verbatim — the collection's emptyState text);
+/// tapping it opens the collection, whose full empty state
+/// explains the rest. It borrows the MINI bar's chrome exactly
+/// (material + sheet tint at the resting opacity, same insets),
+/// so the section reads as one element in both forms.
+struct WearIveRunEmptyDockView: View {
+    let onOpenCollection: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// The designed empty state's head line, verbatim (frame 10;
+    /// the same string the collection's emptyState carries).
+    static let emptyLine = "Your scrapbook starts with today's run."
+
+    var body: some View {
+        Button(action: onOpenCollection) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(WearIveRunMiniBarModel.wordmark)
+                        .font(.greatVibes(size: 20))
+                        .foregroundColor(AppTheme.inkPrimary)
+                    Text(Self.emptyLine)
+                        .font(.appFootnote)
+                        .foregroundColor(AppTheme.inkSecondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.appFootnote.weight(.semibold))
+                    .foregroundColor(AppTheme.inkMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background {
+            ZStack {
+                Rectangle().fill(.regularMaterial)
+                Rectangle().fill(AppTheme.sheet.opacity(
+                    WearIveRunMorph.tintOpacity(
+                        progress: 0,
+                        isDark: colorScheme == .dark
+                    )
+                ))
+            }
+        }
+        .accessibilityLabel("\(WearIveRunMiniBarModel.wordmark). \(Self.emptyLine)")
+    }
+}
+
 struct WearIveRunMiniBarView: View {
     let state: WearIveRunState
     /// Today's entry, for the expanded anatomy; nil only in preAdd.

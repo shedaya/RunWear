@@ -131,6 +131,17 @@ protocol PersonalHeroResolving: AnyObject {
     /// personal serve for its serve-source record (scaffold while
     /// the exact look is still making, personal when it is ready).
     func lookState(for combination: PersonalCombination) -> PersonalLookState
+    /// RW-117 (successor wave): whether the serve the resolver last
+    /// resolved for this cell was a SCAFFOLD serve — the user's own
+    /// banked photo for a close-by cell standing in for the exact
+    /// look. The fact comes from the serving payload itself
+    /// (get-personal-hero's `scaffold: true`), never from an
+    /// inference off the look state: an exact hero caught in the
+    /// instant before its job's completion folds reads MAKING while
+    /// serving, and the pre-fix inference classified exactly that
+    /// serve as scaffold — while a true scaffold serve, whose
+    /// payload folds READY, classified as the exact personal serve.
+    func serveIsScaffold(for combination: PersonalCombination) -> Bool
     /// GEN-5 (Addendum 8 follow-up, Defect 1): hand the resolver
     /// the composed fill set — the forecast's cluster cells
     /// first, then the canonical core matrix — so a subscription
@@ -152,6 +163,7 @@ extension PersonalHeroResolving {
     func personalHeroId(for combination: PersonalCombination) -> String? { nil }
     func flagPersonalHero(combination: PersonalCombination, reason: PersonalHeroFlagReason) async -> Bool { false }
     func lookState(for combination: PersonalCombination) -> PersonalLookState { .none }
+    func serveIsScaffold(for combination: PersonalCombination) -> Bool { false }
     func updateForecastPriorityCells(_ cells: [String]) {}
 }
 
@@ -180,6 +192,20 @@ struct PersonalHeroLookup: Decodable {
     /// "quality_refused" | "service_refused" | "error". The raw
     /// gate/moderation strings never cross the wire.
     let lookReason: String?
+    /// RW-117 (successor wave): the serving payload's own scaffold
+    /// marker (get-personal-hero's convergence serve, entitled
+    /// callers only): true when the hero in this payload is the
+    /// user's banked photo for a CLOSE-BY cell standing in for the
+    /// requested cell's exact look. Absent (nil) on exact serves
+    /// and on pre-convergence payloads. This — not the look state —
+    /// is what classifies a serve as scaffold: a scaffold payload
+    /// folds look_state "ready", while an exact hero in its
+    /// completion instant folds "making", so the pre-fix inference
+    /// (making ⇒ scaffold) classified both backwards.
+    let scaffold: Bool?
+    /// The cell the scaffold hero actually belongs to, when
+    /// `scaffold` is true.
+    let scaffoldCombinationId: String?
 
     enum CodingKeys: String, CodingKey {
         case found
@@ -191,6 +217,8 @@ struct PersonalHeroLookup: Decodable {
         case replenishmentQueued = "replenishment_queued"
         case lookState = "look_state"
         case lookReason = "look_reason"
+        case scaffold
+        case scaffoldCombinationId = "scaffold_combination_id"
     }
 }
 
@@ -258,6 +286,25 @@ enum PersonalLookState: Equatable {
     static func from(lookup: PersonalHeroLookup) -> PersonalLookState {
         fromServer(found: lookup.found, lookState: lookup.lookState, lookReason: lookup.lookReason)
     }
+
+    /// RW-115 (successor wave): the fold of one lookup into the
+    /// rendered state, given whether THAT lookup delivered a hero
+    /// into the cell's cache (a new entry, or the stored hero's
+    /// version/id changed — see PersonalCellCache's delivery rule).
+    /// A delivery clears a folded failure: the server's precedence
+    /// can still report the cell's earlier failed cycle in the same
+    /// payload that carries the retry's delivered hero (the Miami
+    /// sequence the item was filed from: attempt one failed at the
+    /// gate, the retry delivered 46 seconds later, and the failure
+    /// block stood over the delivered look). A re-resolve of the
+    /// SAME cached hero is not a delivery and clears nothing — the
+    /// designed keep-serving failure surface (a failed regeneration
+    /// over a hero that still serves) stands until a NEW hero
+    /// actually lands.
+    func reconciledWithDelivery(_ deliveredHero: Bool) -> PersonalLookState {
+        guard deliveredHero, case .failed = self else { return self }
+        return .ready
+    }
 }
 
 /// GEN-6 Wave A (DA-02, RW-38): the client poll horizon for a
@@ -324,6 +371,31 @@ enum HeroPollPolicy {
     /// The schedule's total poll window.
     static var totalDurationSeconds: TimeInterval {
         delays.reduce(0, +)
+    }
+
+    /// RW-113 / RW-117 (successor wave): whether one poll fold ends
+    /// the poll. The pre-fix loop ended the moment ANY lookup
+    /// resolved a hero — folding whatever look_state that sample
+    /// carried. The server's precedence reports MAKING whenever a
+    /// look job is active, even in the instant the finished hero
+    /// already serves (the Juneau delivery: hero row inserted,
+    /// job completion recorded 0.54 s later; a lookup inside that
+    /// window returns the exact hero with look_state "making").
+    /// The poll folded MAKING, landed, and ended — nothing ever
+    /// re-folded, so the generating pill stood over the painted
+    /// hero indefinitely and the serve was recorded as a scaffold.
+    /// The rule now: a landing settles the poll only once the fold
+    /// agrees the cell has settled (any state but MAKING); a
+    /// landing under a still-MAKING fold keeps polling on the
+    /// normal schedule and returns the landed URL when the fold
+    /// turns terminal — or, at the cap, returns it anyway (the
+    /// hero is real; a later revalidation settles the state).
+    /// With no landing, the pre-existing rule stands: a terminal
+    /// fold (READY / FAILED) ends the poll, MAKING / NONE poll on.
+    static func shouldEndPoll(landed: Bool, foldedState: PersonalLookState) -> Bool {
+        if foldedState == .making { return false }
+        if landed { return true }
+        return isTerminal(foldedState)
     }
 
     /// A look state is terminal for polling when the server has
@@ -803,6 +875,27 @@ struct PersonalCellCache {
         return .show(url)
     }
 
+    /// RW-115 (successor wave): `resolve`, additionally reporting
+    /// whether the lookup DELIVERED a hero into the cell — the
+    /// resolve stored an entry where none stood, or the stored
+    /// entry's hero changed (version or hero id). A same-version
+    /// re-resolve (which returns the cached URL, or re-stores the
+    /// same hero under a re-signed URL after the cached one aged
+    /// out) is NOT a delivery: the photo on the cell is the one
+    /// that was already there. The store's fold consumes this to
+    /// clear a stale failure exactly when a new hero lands and
+    /// never before (see PersonalLookState.reconciledWithDelivery).
+    mutating func resolveWithDelivery(lookup: PersonalHeroLookup, now: Date) -> (resolution: Resolution, deliveredHero: Bool) {
+        let cell = lookup.combinationId
+        let before = entries[cell]
+        let resolution = resolve(lookup: lookup, now: now)
+        guard case .show = resolution, let after = entries[cell] else {
+            return (resolution, false)
+        }
+        guard let before else { return (resolution, true) }
+        return (resolution, before.version != after.version || before.heroId != after.heroId)
+    }
+
     /// The cached URL for a cell, if still fresh — lets a re-display
     /// paint instantly while a revalidation lookup runs.
     func freshURL(for combinationId: String, now: Date) -> String? {
@@ -975,9 +1068,12 @@ enum FreeLooksMeter {
 // Every rendered state carries the Make It Me script mark
 // (Sol's pill clarification, Nov 5, 2026: the script leads
 // EVERY status). A failed look renders NO pill: the standard
-// photo serves quietly and the failure line + retry live in
-// the personal section, as before. Not opted in renders no
-// pill. A scaffold serve renders no pill (silent, above).
+// photo serves and the failure line renders AT THE HERO in
+// the pill's eye line, tappable to retry (RW-111, successor
+// wave — it lived in the personal section at the bottom of
+// the page before, which is the placement RW-111 filed).
+// Not opted in renders no pill. A scaffold serve renders no
+// pill (silent, above).
 enum HeroPillState: Equatable {
     case hidden
     /// Generating, subscribed (or otherwise not sellable): the
@@ -1036,7 +1132,8 @@ enum HeroPill {
         isSubscribed: Bool,
         freeGenerationsUsed: Int,
         freeAllowance: Int,
-        isScaffoldServe: Bool = false
+        isScaffoldServe: Bool = false,
+        isExhaustedCell: Bool = false
     ) -> HeroPillState {
         guard optedIn else { return .hidden }
         // GEN-5 (RW-29 FA-1, parity settlement): a generation in
@@ -1062,6 +1159,24 @@ enum HeroPill {
         // only.
         if isScaffoldServe {
             return .hidden
+        }
+        // RW-111 / RW-118 (successor wave): the EXHAUSTED state
+        // belongs to the cell the server refused, whether or not
+        // a personal photo is on screen for it. Before this, the
+        // exhausted branch sat inside `personalPhotoDisplayed`
+        // below, so the very cell that defines exhaustion — one
+        // with no hero, whose request the allowance refused —
+        // fell through to .hidden and the hero carried no status
+        // at all (RW-118's end state), while the exhausted
+        // message rendered as an upsell card at the bottom of
+        // the page (RW-111). The pill now carries it at the
+        // hero, from the same one counter, under the same
+        // condition the in-photo branch uses (the shared meter
+        // at the allowance). A subscribed account never resolves
+        // to exhausted (its branch below is Premium); a cell
+        // that was not refused keeps the silent stock serve.
+        if isExhaustedCell, !isSubscribed, freeGenerationsUsed >= freeAllowance {
+            return .exhausted(used: freeGenerationsUsed, allowance: freeAllowance)
         }
         if personalPhotoDisplayed {
             if isSubscribed { return .premium }

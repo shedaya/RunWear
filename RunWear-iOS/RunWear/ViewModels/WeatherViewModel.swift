@@ -282,11 +282,11 @@ class WeatherViewModel: ObservableObject {
     /// GEN-6 Wave A (RW-34): whether the personal photo currently
     /// ON SCREEN is a SCAFFOLD serve — the user's own banked photo
     /// for nearest conditions standing in while this cell's exact
-    /// look is still making (the PersonalServePolicy distinction,
-    /// recorded at paint time in applyPersonalHero). The hero pill
-    /// reads it: a scaffold serve is silent and never receives an
-    /// exact-serve label. False whenever the exact photo (or no
-    /// personal photo) is on screen.
+    /// look converges (recorded at paint time in applyPersonalHero
+    /// from the serving payload's own scaffold marker — RW-117).
+    /// The hero pill reads it: a scaffold serve is silent and
+    /// never receives an exact-serve label. False whenever the
+    /// exact photo (or no personal photo) is on screen.
     @Published private(set) var currentPersonalServeIsScaffold = false
 
     /// The in-flight wait for a personalized hero to land for the
@@ -1367,9 +1367,9 @@ class WeatherViewModel: ObservableObject {
     /// the caller records the pool/bundled serve only when it is
     /// not, so each paint carries exactly one serve record. A
     /// personal paint records itself here (personal, or scaffold
-    /// when the server's look state for the cell is still making —
-    /// the PersonalServePolicy distinction); a swap-in that lands
-    /// later records its own personal serve when it paints.
+    /// when the serving payload carried the scaffold marker —
+    /// RW-117); a swap-in that lands later records its own
+    /// personal serve when it paints.
     @discardableResult
     private func applyPersonalHero(frame: (feelsLikeF: Double, weatherCode: Int, hour: Int)) async -> Bool {
         guard let store = personalStore, store.isOptedIn,
@@ -1403,20 +1403,26 @@ class WeatherViewModel: ObservableObject {
             // supersedes stock — no stock serve is displayed.
             displayedStockServe = nil
             // WS-7: this paint is a personal serve — or a scaffold
-            // serve when the exact look is still making and the
-            // photo on screen is the user's own banked photo for
-            // nearest conditions (PersonalServePolicy's rule, read
-            // off the store's folded look state through the
-            // resolving contract — the concrete store is not part
-            // of every target this view model compiles into).
-            let lookState = store.lookState(for: combo)
+            // serve when the photo on screen is the user's own
+            // banked photo for nearest conditions standing in for
+            // the exact look. RW-117 (successor wave): the scaffold
+            // fact is the serving payload's own marker, read
+            // through the resolving contract — the pre-fix code
+            // inferred it from the folded look state (MAKING ⇒
+            // scaffold), which classified both real cases
+            // backwards: a true scaffold serve folds READY (it
+            // classified as the exact personal serve, Premium pill
+            // and all), and an exact hero resolved in its job's
+            // completion instant folds MAKING (it classified as
+            // scaffold — the Juneau sequence's mislabelled serve).
+            let isScaffold = store.serveIsScaffold(for: combo)
             // GEN-6 Wave A (RW-34): record the scaffold fact at
             // paint time — the pill's silent-scaffold gate reads
             // exactly this distinction.
-            currentPersonalServeIsScaffold = lookState == .making
+            currentPersonalServeIsScaffold = isScaffold
             recordHeroServe(
                 HeroServeRecord(
-                    source: lookState == .making ? .scaffold : .personal,
+                    source: isScaffold ? .scaffold : .personal,
                     requestedCombinationId: heroRequestedCombinationId,
                     servedCombinationId: combo.combinationId,
                     tempBracket: HeroTempBracket.from(feelsLikeTemperature: frame.feelsLikeF),
@@ -1454,14 +1460,18 @@ class WeatherViewModel: ObservableObject {
             self.currentPersonalHeroId = self.personalStore?.personalHeroId(for: combo)
             // RW-95: the landed personal photo supersedes stock.
             self.displayedStockServe = nil
-            // The landed look is the exact photo by
-            // definition — no longer a scaffold serve.
-            self.currentPersonalServeIsScaffold = false
+            // RW-117 (successor wave): the landed serve's
+            // scaffold fact is whatever the poll's resolving
+            // payload carried — an entitled cell's poll can land
+            // the banked scaffold photo, not only the exact look —
+            // read it from the resolver instead of assuming exact.
+            let isScaffold = self.personalStore?.serveIsScaffold(for: combo) ?? false
+            self.currentPersonalServeIsScaffold = isScaffold
             // WS-7: the swap-in is a new paint — a personal
-            // serve (the landed look is ready by definition).
+            // serve, or the scaffold serve the payload named.
             self.recordHeroServe(
                 HeroServeRecord(
-                    source: .personal,
+                    source: isScaffold ? .scaffold : .personal,
                     requestedCombinationId: self.heroRequestedCombinationId,
                     servedCombinationId: combo.combinationId,
                     gender: self.genderPreference,
@@ -1496,13 +1506,11 @@ class WeatherViewModel: ObservableObject {
             if let url = await store.revalidateLookState(for: combo) {
                 guard self.currentPersonalCombination?.combinationId == combo.combinationId,
                       self.heroImageUrl != url else { return }
-                let lookState = store.lookState(for: combo)
                 // The same scaffold truth applyPersonalHero
-                // records at paint time: a URL resolving while
-                // the cell is still MAKING is the user's own
-                // banked photo serving as scaffold, not the
-                // finished look.
-                let isScaffold = lookState == .making
+                // records at paint time (RW-117): the serving
+                // payload's own scaffold marker, not the folded
+                // look state.
+                let isScaffold = store.serveIsScaffold(for: combo)
                 self.heroImageUrl = url
                 self.heroImageRowId = nil
                 self.heroServedCombinationId = combo.combinationId
@@ -1712,6 +1720,36 @@ class WeatherViewModel: ObservableObject {
         return 0
     }
 
+    /// RW-109 (successor wave): the SAME measured feels-like the
+    /// headline prints (the `currentFeelsLike` selection above),
+    /// expressed in Fahrenheit regardless of the display unit —
+    /// the frame every display-bracket classification reads.
+    /// Brackets are °F-native (their bounds and range labels are
+    /// defined in °F), so a Celsius display converts its printed
+    /// (rounded) numeral back at this seam rather than
+    /// classifying a Celsius value against Fahrenheit bounds.
+    var displayFeelsLikeFahrenheit: Double {
+        if let snapshot = selectedWeatherSnapshot {
+            return snapshot.feelsLikeFahrenheit
+        } else if let current = weatherData?.currentWeather {
+            let feelsC = weatherData?.currentDetail?.apparentTemperature ?? current.temperature
+            return feelsC * 9 / 5 + 32
+        }
+        return 0
+    }
+
+    /// RW-109: the bracket the display surfaces name — the
+    /// weather-band badge and the weather detail's context line.
+    /// It classifies the DISPLAYED feels-like (raw, rounded as
+    /// printed), never the recommendation's comfort-adjusted
+    /// engine bracket: beside the hero's raw number, the
+    /// adjusted bracket read one band high at every floor
+    /// boundary for a non-neutral comfort profile (raw 64°F
+    /// beside "Warm 65–79°F"; raw 79°F beside "Hot 80°F+").
+    var displayTempBracket: TemperatureBracket {
+        TemperatureBracket.displayBracket(forDisplayedFeelsLikeF: displayFeelsLikeFahrenheit)
+    }
+
     var currentCondition: WeatherCondition {
         selectedWeatherSnapshot?.condition ?? weatherData?.currentWeather.condition ?? .unknown
     }
@@ -1724,7 +1762,19 @@ class WeatherViewModel: ObservableObject {
     // path (Wave B territory), not in a view-model string.
 
     var currentTempBracket: HeroTempBracket {
-        let feelsLike = selectedWeatherSnapshot?.feelsLikeFahrenheit ?? weatherData?.currentWeather.temperatureFahrenheit ?? 60
-        return HeroTempBracket.from(feelsLikeTemperature: comfortLevel.adjustTemperature(feelsLike))
+        // RW-109 (successor wave): the chip beside the hero
+        // numeral classifies the same RAW feels-like the numeral
+        // prints (see displayFeelsLikeFahrenheit), through the
+        // hero frame's own bracket mapping — it previously
+        // classified the comfort-ADJUSTED value (and fell back
+        // to the ACTUAL temperature when no snapshot stood), so
+        // the chip named one band above the number beside it
+        // for a non-neutral comfort profile, the badge's
+        // contradiction in miniature. The 60°F placeholder for
+        // the no-data instant is unchanged.
+        guard selectedWeatherSnapshot != nil || weatherData != nil else {
+            return HeroTempBracket.from(feelsLikeTemperature: 60)
+        }
+        return HeroTempBracket.from(feelsLikeTemperature: displayFeelsLikeFahrenheit)
     }
 }

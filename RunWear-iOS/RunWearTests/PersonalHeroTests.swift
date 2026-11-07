@@ -102,7 +102,9 @@ final class PersonalHeroTests: XCTestCase {
             version: version,
             replenishmentQueued: 0,
             lookState: nil,
-            lookReason: nil
+            lookReason: nil,
+            scaffold: nil,
+            scaffoldCombinationId: nil
         )
     }
 

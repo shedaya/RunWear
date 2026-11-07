@@ -64,6 +64,19 @@ struct HeroImageView: View {
     var pillState: HeroPillState = .hidden
     var onPillGetUnlimited: () -> Void = {}
 
+    // RW-111 (successor wave): the failed look's surface AT THE
+    // HERO — the settled failure line in the pill's eye line over
+    // the stock hero, the whole line tappable to retry (the copy
+    // itself says "tap to try again"; Android renders the same
+    // line over the hero). Before this, the line lived in the
+    // scroll content at the bottom of the page, far from the
+    // hero the user was looking at. Rendered only while the pill
+    // itself is hidden — the failed state resolves no pill, and
+    // on the one overlap (a refused retry on the exhausted cell)
+    // the exhausted pill is the surface and this line yields.
+    var lookFailed: Bool = false
+    var onRetryFailedLook: () -> Void = {}
+
     /// How the hero's height is derived (design record §5.2: no
     /// UIScreen.main anywhere — the container decides).
     enum HeightMode {
@@ -136,6 +149,15 @@ struct HeroImageView: View {
         .overlay(alignment: .bottomLeading) {
             if pillState != .hidden {
                 heroPill
+                    .padding(.leading, 14)
+                    .padding(.bottom, HomeHandoffGeometry.flagChipBottomInset)
+                    .padding(.trailing, 60) // clear the flag chip's disc
+            } else if lookFailed {
+                // RW-111: the failure line at the hero (see the
+                // input's note) — same accessory zone, same
+                // clearance from the sheet's top edge and the
+                // flag chip as the pill it stands in for.
+                heroFailureLine
                     .padding(.leading, 14)
                     .padding(.bottom, HomeHandoffGeometry.flagChipBottomInset)
                     .padding(.trailing, 60) // clear the flag chip's disc
@@ -228,6 +250,24 @@ struct HeroImageView: View {
             .font(.greatVibes(size: 15))
             .foregroundColor(.white)
             .lineLimit(1)
+    }
+
+    /// RW-111: the failed look's line at the hero — the settled
+    /// copy verbatim (MakeItMeCopy.lookFailed), in the pill's
+    /// glass chrome, the whole surface the retry (the copy names
+    /// the act: "tap to try again"). It wraps as many lines as it
+    /// needs inside the pill's granted width; nothing truncates.
+    private var heroFailureLine: some View {
+        Button(action: onRetryFailedLook) {
+            Text(MakeItMeCopy.lookFailed)
+                .font(.appFootnote.weight(.semibold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .buttonStyle(.plain)
+        .glassPill()
+        .accessibilityLabel(MakeItMeCopy.lookFailed)
     }
 
     @ViewBuilder

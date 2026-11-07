@@ -104,12 +104,43 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         )
     }
 
+    /// RW-117 (successor wave): per-cell scaffold facts, folded
+    /// from the serving payload's own `scaffold` marker on every
+    /// resolving lookup — the paint layer's classification source
+    /// (see PersonalHeroResolving.serveIsScaffold). A cell with no
+    /// resolving lookup yet, or whose last lookup resolved
+    /// nothing, reads false.
+    private var scaffoldServes: [String: Bool] = [:]
+
     /// RW-16.16: fold one get-personal-hero payload into the
-    /// per-cell look state the hero renders. Called on every lookup
-    /// path so the rendered status is always the server's latest
-    /// word for the cell.
-    private func noteLookState(_ lookup: PersonalHeroLookup) {
-        lookStates[lookup.combinationId] = PersonalLookState.from(lookup: lookup)
+    /// per-cell look state the hero renders — now the ONE fold
+    /// every lookup path routes through (resolution, the poll,
+    /// revalidation's lookups, the already-available re-lookup),
+    /// so the cache, the look state, and the scaffold fact can
+    /// never be folded by different rules on different paths.
+    /// Returns the cache's resolution for the caller.
+    ///
+    /// RW-115 (successor wave): the fold carries the cache's
+    /// delivery fact — when THIS lookup delivered a hero into the
+    /// cell (a new entry, or the stored hero changed), a folded
+    /// failure clears to ready (PersonalLookState's
+    /// reconciledWithDelivery): the failure the payload still
+    /// reports belongs to the cell's earlier cycle, and the
+    /// delivered hero is the cell's present truth. A re-resolve
+    /// of the same cached hero delivers nothing and clears
+    /// nothing — the keep-serving failure surface stands.
+    private func foldLookup(_ lookup: PersonalHeroLookup) -> PersonalCellCache.Resolution {
+        let (resolution, deliveredHero) = cache.resolveWithDelivery(lookup: lookup, now: Date())
+        let cell = lookup.combinationId
+        lookStates[cell] = PersonalLookState.from(lookup: lookup)
+            .reconciledWithDelivery(deliveredHero)
+        switch resolution {
+        case .show:
+            scaffoldServes[cell] = lookup.scaffold == true
+        case .none:
+            scaffoldServes[cell] = false
+        }
+        return resolution
     }
 
     // MARK: - Bootstrap
@@ -312,8 +343,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         // request decision, so the hero renders the truth for this
         // cell even when the request guard below suppresses a new
         // automatic request.
-        noteLookState(lookup)
-        switch cache.resolve(lookup: lookup, now: Date()) {
+        switch foldLookup(lookup) {
         case .show(let url):
             return url
         case .none:
@@ -352,20 +382,34 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 if Task.isCancelled { break }
                 guard let lookup = try? await self.api.getPersonalHero(combinationId: cell) else { continue }
-                self.noteLookState(lookup)
-                if case .show(let url) = self.cache.resolve(lookup: lookup, now: Date()) {
+                if case .show(let url) = self.foldLookup(lookup) {
                     landed = url
-                    break
                 }
-                // A terminal failure resolves the poll: the failed
-                // state folded above is the durable surface now.
-                if let state = self.lookStates[cell], HeroPollPolicy.isTerminal(state) { break }
+                // RW-113 / RW-117 (successor wave): the poll
+                // settles on the policy's rule, not on the first
+                // resolution — a hero that resolves under a
+                // still-MAKING fold (the server reports the job
+                // active in the same instant the finished hero
+                // already serves) keeps the poll alive until the
+                // fold turns terminal, so the state the hero
+                // renders is the settled one, never a stranded
+                // MAKING folded in the completion instant. A
+                // terminal failure with no landing still resolves
+                // the poll: the failed state folded above is the
+                // durable surface now.
+                let folded = self.lookStates[cell] ?? .none
+                if HeroPollPolicy.shouldEndPoll(landed: landed != nil, foldedState: folded) { break }
             }
-            if landed == nil, !Task.isCancelled,
+            if !Task.isCancelled,
                let state = self.lookStates[cell], state == .making {
                 // Cap expiry (the loop ran its full schedule
                 // without a terminal word): leave the honest,
-                // usable state the policy names.
+                // usable state the policy names. RW-117: this now
+                // applies whether or not a hero landed under the
+                // MAKING fold — a landed hero paints either way,
+                // and a generating pill stranded over it is the
+                // defect this wave removes; the next display's
+                // revalidation folds the server's settled word.
                 self.lookStates[cell] = HeroPollPolicy.stateAfterCapExpiry(state)
             }
             self.userInitiatedPending.remove(cell)
@@ -435,8 +479,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             case "already_available":
                 // A hero exists but the lookup raced it; re-lookup.
                 if let lookup = try? await api.getPersonalHero(combinationId: cell) {
-                    noteLookState(lookup)
-                    if case .show = cache.resolve(lookup: lookup, now: Date()) {
+                    if case .show = foldLookup(lookup) {
                         landedHeroVersion += 1
                         // W-18: the hero this response names was
                         // delivered (and, if chargeable, charged)
@@ -533,6 +576,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         lookStates[combination.combinationId] ?? .none
     }
 
+    /// RW-117: the scaffold fact for this cell, folded from the
+    /// serving payload's own marker by foldLookup — the paint
+    /// layer's classification source (see the protocol's note on
+    /// why the look state cannot carry this fact).
+    func serveIsScaffold(for combination: PersonalCombination) -> Bool {
+        scaffoldServes[combination.combinationId] ?? false
+    }
+
     /// "This doesn't look like me" (spec §4): flag the cell's
     /// personalized hero with the backend. On success the server
     /// has already retired the hero (its cell version bumped) and
@@ -553,6 +604,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             return false
         }
         cache.evict(combinationId: cell)
+        scaffoldServes[cell] = false
         requestedCells.remove(cell)
         return true
     }
@@ -579,6 +631,7 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     private func resetToStock() {
         cache.removeAll()
         lookStates.removeAll()
+        scaffoldServes.removeAll()
         requestedCells.removeAll()
         pollingTasks.values.forEach { $0.cancel() }
         pollingTasks.removeAll()
