@@ -2,6 +2,7 @@ package com.runwear.app.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -191,7 +192,7 @@ fun HeroPill(
             } else {
                 Modifier
             }).widthIn(max = maxWidth)
-                .androidx.compose.ui.draw.shadow(
+                .shadow(
                     elevation = 8.dp,
                     shape = RoundedCornerShape(100.dp),
                     ambientColor = Color(0xFF140E08).copy(alpha = 0.25f),
