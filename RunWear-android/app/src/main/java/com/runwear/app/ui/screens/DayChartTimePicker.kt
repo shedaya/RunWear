@@ -574,6 +574,18 @@ internal fun TimePickerSheetContent(
                         }
                     }
                     if (showNowLine) {
+                        // WT-5: the NOW label drops BELOW the
+                        // per-hour condition-glyph row — the
+                        // glyphs occupy the chart's top strip at
+                        // this same x range and painted over the
+                        // label ("N☀W"). The offset derives from
+                        // the glyphs' own size (9 sp, converted
+                        // through the current density) so it
+                        // tracks every font scale, default and
+                        // largest alike.
+                        val glyphRowBottom = with(
+                            androidx.compose.ui.platform.LocalDensity.current
+                        ) { 9.sp.toDp() } * 1.4f + 2.dp
                         Text(
                             text = "NOW",
                             fontSize = 8.sp,
@@ -584,7 +596,8 @@ internal fun TimePickerSheetContent(
                                 .padding(
                                     start = (
                                         DayChartGeometry.xFraction(locationNow.hour) * maxWidth.value - 10
-                                        ).dp.coerceAtLeast(0.dp)
+                                        ).dp.coerceAtLeast(0.dp),
+                                    top = glyphRowBottom
                                 )
                         )
                     }

@@ -126,11 +126,19 @@ class RwFixWave2RenderTest {
         return found ?: throw IllegalStateException("no ViewRootForTest")
     }
 
+    // RW-138/WT-2 (Nov 7, 2026): the dock narration renders the
+    // place payload's comma-space as a NON-BREAKING space so the
+    // "City, Region" unit can never split across lines — a
+    // line-break control, visually identical to a space. Text
+    // comparisons here therefore normalize NBSP back to a space;
+    // the assertions still pin the full visible line verbatim.
     private fun texts(host: Host): List<String> {
         val out = mutableListOf<String>()
         fun walk(node: SemanticsNode) {
             if (node.config.contains(SemanticsProperties.Text)) {
-                node.config[SemanticsProperties.Text].forEach { out.add(it.text) }
+                node.config[SemanticsProperties.Text].forEach {
+                    out.add(it.text.replace('\u00A0', ' '))
+                }
             }
             node.children.forEach { walk(it) }
         }
@@ -142,7 +150,9 @@ class RwFixWave2RenderTest {
         var bounds: Rect? = null
         fun walk(node: SemanticsNode) {
             if (bounds == null && node.config.contains(SemanticsProperties.Text) &&
-                node.config[SemanticsProperties.Text].any { it.text.contains(text) }
+                node.config[SemanticsProperties.Text].any {
+                    it.text.replace('\u00A0', ' ').contains(text)
+                }
             ) {
                 bounds = node.boundsInRoot
             }

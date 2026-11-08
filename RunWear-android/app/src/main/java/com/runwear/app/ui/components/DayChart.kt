@@ -3,6 +3,7 @@ package com.runwear.app.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -457,22 +458,6 @@ fun DayChartGlanceBand(
                 drawCircle(color = RunWearColors.Surface, radius = 11f, center = Offset(dx, dy))
                 drawCircle(color = RunWearColors.Primary, radius = 8f, center = Offset(dx, dy))
             }
-            Text(
-                text = "${temperatureUnit.displayValue(low.feelsLikeF)}° low",
-                fontSize = 11.sp,
-                color = RunWearColors.TextSecondary,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 8.dp, top = 5.dp)
-            )
-            Text(
-                text = "${temperatureUnit.displayValue(high.feelsLikeF)}° high",
-                fontSize = 11.sp,
-                color = RunWearColors.TextSecondary,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = 8.dp, top = 5.dp)
-            )
             if (showNow) {
                 Text(
                     text = "NOW",
@@ -529,6 +514,28 @@ fun DayChartGlanceBand(
                     .align(Alignment.BottomEnd)
                     .clickable { onChangeClick() }
                     .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
+            )
+        }
+        // WT-6 (parity with iOS): the day's low/high live BELOW
+        // the plot, at its ends — inside the plot the rising
+        // curve's stroke crossed the "high" label whenever the
+        // day's peak sat near the right edge. Below the plot no
+        // curve position can reach them.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 8.dp, end = 8.dp, top = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "${temperatureUnit.displayValue(low.feelsLikeF)}° low",
+                fontSize = 11.sp,
+                color = RunWearColors.TextSecondary
+            )
+            Text(
+                text = "${temperatureUnit.displayValue(high.feelsLikeF)}° high",
+                fontSize = 11.sp,
+                color = RunWearColors.TextSecondary
             )
         }
     }

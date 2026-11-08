@@ -254,7 +254,7 @@ private fun DockNarrationText(
     narration: WearIveRunNarration,
     fontSizeSp: Float,
     modifier: Modifier = Modifier,
-    maxLines: Int = 2
+    maxLines: Int = Int.MAX_VALUE
 ) {
     val annotated = buildAnnotatedString {
         append(narration.text.substring(0, narration.payloadStart))
@@ -264,7 +264,15 @@ private fun DockNarrationText(
                 fontWeight = FontWeight.SemiBold
             )
         ) {
-            append(narration.payload)
+            // RW-138/WT-2: the payload's city–region space is
+            // NON-BREAKING, so the line breaker can move the
+            // whole place to the next line but can never split
+            // it between city and region ("Boston," / "MA").
+            // Breaks fall only at the segment spaces around the
+            // payload — before the place, and before "· {day}" —
+            // the same break points iOS takes (spec section
+            // 4.3). Display-only: the model's text is untouched.
+            append(narration.payload.replace(", ", ",\u00A0"))
         }
         append(narration.text.substring(narration.payloadEnd))
     }
@@ -272,6 +280,9 @@ private fun DockNarrationText(
         text = annotated,
         fontSize = fontSizeSp.sp,
         color = RunWearColors.TextSecondary,
+        // RW-138: no line cap — the narration wraps and the
+        // surface grows, exactly like iOS; the payload is never
+        // ellipsized at any font scale (spec section 4.3).
         maxLines = maxLines,
         modifier = modifier
     )
@@ -786,8 +797,7 @@ fun WearIveRunFooterSection(
                                 ) { line ->
                                     DockNarrationText(
                                         narration = line,
-                                        fontSizeSp = 15f,
-                                        maxLines = 2
+                                        fontSizeSp = 15f
                                     )
                                 }
                             }

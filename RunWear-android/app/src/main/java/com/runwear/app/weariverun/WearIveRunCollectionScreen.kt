@@ -633,7 +633,11 @@ private fun DayRow(
                 color = RunWearColors.TextPrimary
             )
             Text(
-                text = "${entry.feelsLikeF.toInt()}° feels like · ${entry.conditionLabel} · ${entry.items.size} items",
+                // WT-3: singular agreement — the same
+                // "1 item" / "N items" rule WearIveRunSubtitle
+                // already applies (the card read "1 items").
+                text = "${entry.feelsLikeF.toInt()}° feels like · ${entry.conditionLabel} · " +
+                    if (entry.items.size == 1) "1 item" else "${entry.items.size} items",
                 style = MaterialTheme.typography.bodySmall,
                 color = RunWearColors.TextSecondary
             )

@@ -394,7 +394,9 @@ class MainActivity : ComponentActivity() {
                                 val items = uiState.outfit?.allItems?.size ?: 0
                                 "${uiState.temperatureUnit.formatTemperature(weather.feelsLike)} " +
                                     "feels like · ${weather.weatherCode.description}" +
-                                    if (items > 0) " · $items items" else ""
+                                    // WT-3 (same copy class as the
+                                    // collection card): singular.
+                                    if (items == 1) " · 1 item" else if (items > 1) " · $items items" else ""
                             },
                             // RW-79: leaving the first-look sheet for
                             // Home re-reads the look state — the sheet

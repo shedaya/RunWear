@@ -2,8 +2,10 @@ package com.runwear.app.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -192,15 +194,25 @@ fun HeroPill(
             shape = RoundedCornerShape(100.dp),
             color = Color.Black.copy(alpha = 0.45f)
         ) {
-            Row(
+            // WT-4 (parity with iOS): the FREE generating pill
+            // STACKS — the generating row keeps its one-row form
+            // and the green upsell line takes its own line beneath
+            // it. (It previously trailed the row, where the hero's
+            // granted width squeezed it into a narrow right-hand
+            // column that wrapped it mid-phrase: "Get it instantly
+            // next / time".) Every other state is the single row
+            // it has always been.
+            Column(
                 modifier = Modifier.padding(
                     start = if (content.showScriptMark) 15.dp else 10.dp,
                     end = 10.dp,
                     top = 6.dp,
                     bottom = 6.dp
-                ),
-                verticalAlignment = Alignment.CenterVertically
+                )
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 if (content.showSpinner) {
                     CircularProgressIndicator(
                         color = com.runwear.app.ui.theme.PhotoInk,
@@ -234,16 +246,6 @@ fun HeroPill(
                         modifier = Modifier.size(11.dp)
                     )
                 }
-                if (content.upsellText != null) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = content.upsellText,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = com.runwear.app.ui.theme.PineAccentOnDark,
-                        modifier = Modifier.clickable { onAction() }
-                    )
-                }
                 if (content.actionText != null) {
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -266,6 +268,17 @@ fun HeroPill(
                         } else {
                             com.runwear.app.ui.theme.PhotoInk
                         },
+                        modifier = Modifier.clickable { onAction() }
+                    )
+                }
+                }
+                if (content.upsellText != null) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = content.upsellText,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = com.runwear.app.ui.theme.PineAccentOnDark,
                         modifier = Modifier.clickable { onAction() }
                     )
                 }
