@@ -71,7 +71,11 @@ class WearIveRunElementPinTest {
         assertTrue("the dock is composed after the scroll area", dockAt > pullAt)
         assertTrue(
             "the dock is bottom-aligned in the content Box (the ruled overlay)",
-            host.contains("WearIveRunDockPolicy.dockVisible(") &&
+            // Re-pointed (RW-135 footer alignment, Nov 7, 2026):
+            // the interim binary dockVisible is superseded by the
+            // approved spec section 3 — the overlay is driven
+            // continuously by the position-derived fade.
+            host.contains("WearIveRunDockPolicy.fade(") &&
                 host.contains(".align(Alignment.BottomCenter)")
         )
         assertTrue(

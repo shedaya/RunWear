@@ -80,14 +80,60 @@ class Rw135DockTest {
         )
     }
 
-    // -- the dock-visibility invariant -------------------------------
+    // -- the handoff (approved spec section 3) ----------------------
+    // Re-pointed (RW-135 footer alignment, Nov 7, 2026): the
+    // interim binary dockVisible is superseded by the approved
+    // spec section 3 — visibility is the continuous fade, a pure
+    // function of a = how far (dp) the footer's top edge is above
+    // the viewport's bottom edge: fade = smoothstep(clamp(
+    // (a - 83) / 37, 0, 1)); dockOpacity = 1 - fade; sink =
+    // 12 * fade; scale = 1 - 0.02 * fade; hit-testable iff
+    // fade < 0.5. The 37dp window is kept exactly (spec 11.2).
 
     @Test
-    fun `the dock shows only while present and its footer is off-screen`() {
-        assertTrue(WearIveRunDockPolicy.dockVisible(true, false))
-        assertFalse(WearIveRunDockPolicy.dockVisible(true, true))
-        assertFalse(WearIveRunDockPolicy.dockVisible(false, false))
-        assertFalse(WearIveRunDockPolicy.dockVisible(false, true))
+    fun `spec 3 - the fade endpoints and midpoint`() {
+        assertEquals(0f, WearIveRunDockPolicy.fade(0f), 0.0001f)
+        assertEquals(0f, WearIveRunDockPolicy.fade(83f), 0.0001f)
+        assertEquals(1f, WearIveRunDockPolicy.fade(120f), 0.0001f)
+        assertEquals(1f, WearIveRunDockPolicy.fade(200f), 0.0001f)
+        // Window midpoint: a = 101.5 -> t = 0.5 -> smoothstep 0.5.
+        assertEquals(0.5f, WearIveRunDockPolicy.fade(101.5f), 0.0001f)
+    }
+
+    @Test
+    fun `spec 3 - dock opacity sink and scale derive from the fade`() {
+        assertEquals(1f, WearIveRunDockPolicy.dockOpacity(0f), 0.0001f)
+        assertEquals(0f, WearIveRunDockPolicy.dockOpacity(1f), 0.0001f)
+        assertEquals(0.5f, WearIveRunDockPolicy.dockOpacity(0.5f), 0.0001f)
+        assertEquals(0f, WearIveRunDockPolicy.dockSinkDp(0f), 0.0001f)
+        assertEquals(12f, WearIveRunDockPolicy.dockSinkDp(1f), 0.0001f)
+        assertEquals(6f, WearIveRunDockPolicy.dockSinkDp(0.5f), 0.0001f)
+        assertEquals(1f, WearIveRunDockPolicy.dockScale(0f), 0.0001f)
+        assertEquals(0.98f, WearIveRunDockPolicy.dockScale(1f), 0.0001f)
+    }
+
+    @Test
+    fun `spec 3 - the dock is hit-testable only below fade 0_5`() {
+        assertTrue(WearIveRunDockPolicy.dockHitTestable(0f))
+        assertTrue(WearIveRunDockPolicy.dockHitTestable(0.49f))
+        assertFalse(WearIveRunDockPolicy.dockHitTestable(0.5f))
+        assertFalse(WearIveRunDockPolicy.dockHitTestable(1f))
+    }
+
+    // -- the glide (approved spec section 4.4) -----------------------
+    // duration = clamp(450ms, 350 + 0.55 x distanceDp, 950ms).
+
+    @Test
+    fun `spec 4_4 - the glide duration clamps at both ends`() {
+        // 350 + 0 = 350 -> clamped up to the 450 floor.
+        assertEquals(450, WearIveRunDockPolicy.glideDurationMs(0f))
+        // 350 + 0.55 x 1000 = 900, inside the clamp.
+        assertEquals(900, WearIveRunDockPolicy.glideDurationMs(1000f))
+        // 350 + 0.55 x 2000 = 1450 -> clamped down to 950.
+        assertEquals(950, WearIveRunDockPolicy.glideDurationMs(2000f))
+        // The chevron's inverse glide passes a signed delta; the
+        // magnitude rules.
+        assertEquals(900, WearIveRunDockPolicy.glideDurationMs(-1000f))
     }
 
     @Test

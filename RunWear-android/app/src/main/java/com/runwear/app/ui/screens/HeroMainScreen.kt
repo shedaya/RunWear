@@ -2,8 +2,12 @@ package com.runwear.app.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -11,6 +15,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,12 +74,16 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -95,8 +104,10 @@ import com.runwear.app.weariverun.WearIveRunBarState
 import com.runwear.app.weariverun.WearIveRunBarStateHolder
 import com.runwear.app.weariverun.WearIveRunElementEvent
 import com.runwear.app.weariverun.WearIveRunElementMachine
+import com.runwear.app.weariverun.WearIveRunCollectionLogic
 import com.runwear.app.weariverun.WearIveRunCollectionScreen
 import com.runwear.app.weariverun.WearIveRunDayEntry
+import com.runwear.app.weariverun.WearIveRunEntry
 import com.runwear.app.weariverun.WearIveRunDock
 import com.runwear.app.weariverun.WearIveRunDockNarration
 import com.runwear.app.weariverun.WearIveRunDockPolicy
@@ -108,6 +119,7 @@ import com.runwear.app.ui.viewmodel.MainUiState
 import com.runwear.shared.domain.model.ClothingItem
 import com.runwear.shared.domain.model.GenderPreference
 import java.time.LocalDate
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import kotlinx.datetime.toJavaLocalDate
 
@@ -550,33 +562,120 @@ fun HeroMainScreen(
         val spec = fluidLayoutSpec(maxWidth)
         val layout = spec.layout
 
-    // RW-135 (Direction A / A-prime): the Wear I've Run presence is
-    // a floating MINI dock (overlay, below) plus the expanded
-    // FOOTER section emitted as the lists' last item. Both surfaces
-    // present the RECORDED entry only (research section 7.0): the
-    // shown line is WearIveRunDockNarration over the holder's
-    // current recorded entry, and it refreshes only at scroll rest
-    // (the section 7.5 / package section 4.3 deferral — a settle
-    // that lands mid-scroll cross-fades once the scroll rests,
-    // never concurrent with a scroll-handoff).
+    // RW-135 (Direction A-prime, APPROVED consolidated spec Nov 7,
+    // 2026): the Wear I've Run presence is a floating MINI dock
+    // (overlay, below) plus the expanded FOOTER section emitted as
+    // the lists' last item. Both surfaces present the RECORDED
+    // entry only (spec section 1.2): the shown line is
+    // WearIveRunDockNarration over the holder's current recorded
+    // entry, and it refreshes only at scroll rest (the spec
+    // section 4.3 deferral — a settle that lands mid-scroll
+    // cross-fades once the scroll rests, never concurrent with a
+    // scroll-handoff; that refresh point is also the update
+    // bounce's landing, section 4.3).
     val wearPresentState = wearIveRunState
     val wirPresent = wearPresentState != WearIveRunBarState.Absent
     val wirDayEntry by wearIveRunHolder.currentEntryFlow.collectAsState()
     var wirShownLine by remember { mutableStateOf<WearIveRunNarration?>(null) }
+    // Reduce Motion (spec section 5) = animator duration scale 0.
+    val wirReduceMotion = remember {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f
+        ) == 0f
+    }
+    val wirDensity = LocalDensity.current
     val wirAnyScrolling = listState.isScrollInProgress || gridState.isScrollInProgress
-    LaunchedEffect(wirDayEntry, wirAnyScrolling) {
-        if (!wirAnyScrolling) {
-            wirShownLine = wirDayEntry?.let {
-                WearIveRunDockNarration.line(
-                    it, uiState.locationNow.toLocalDate()
-                )
+
+    // -- Exit choreography state (spec sections 4.7/4.8) ------------
+    // A frozen snapshot of the entry + line the surfaces exit
+    // with. While an exit runs, the surfaces render the snapshot;
+    // the DATA removal (holder TRASH + store removeByIdentity)
+    // fires only when the longest running exit completes.
+    data class WirExitSnapshot(
+        val line: WearIveRunNarration,
+        val barEntry: WearIveRunEntry,
+        val dayEntry: WearIveRunDayEntry,
+        val entryLine: String,
+        val fromTrash: Boolean
+    )
+    var wirExit by remember { mutableStateOf<WirExitSnapshot?>(null) }
+    var wirExitFromTrashDone by remember { mutableStateOf(false) }
+    // The last live snapshot, kept so a session end (holder ->
+    // Absent without a user trash) can exit with it (section 4.8).
+    var wirLastSnapshot by remember { mutableStateOf<WirExitSnapshot?>(null) }
+    // The dock's exit progress (fade + 26dp sink over 300ms exit
+    // easing — section 4.7), driven here because the dock overlay
+    // lives in this host.
+    val wirDockExit = remember { Animatable(0f) }
+
+    // Exit completion (spec section 4.7): the data removal fires
+    // when the longest running exit completes — never before.
+    // Idempotent: the first caller wins; later calls (the other
+    // surface finishing, the host's own timer) see wirExit
+    // already cleared and do nothing.
+    val wirFinishExit: (WirExitSnapshot) -> Unit = { exit ->
+        if (wirExit != null) {
+            wirExit = null
+            if (exit.fromTrash) {
+                wirExitFromTrashDone = true
+                wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
+                val entry = exit.dayEntry
+                screenScope.launch {
+                    wearIveRunStore.removeByIdentity(entry)
+                }
             }
+            screenScope.launch { wirDockExit.snapTo(0f) }
         }
     }
-    // The footer is the last item of the active host; the dock
-    // shows only while the footer is off-screen (the legibility
-    // invariant — a pure function of scroll position).
-    val wirFooterVisible by remember(listState, gridState, layout) {
+
+    // The surfaces render while the record is present OR while
+    // an exit is running off its frozen snapshot (a session end
+    // takes the holder Absent before the exit plays — spec
+    // section 4.8).
+    val wirSurfacesPresent = wirPresent || wirExit != null
+
+    // The handoff (spec section 3): a PURE function of the
+    // footer's position in the ACTIVE host. a = how far (dp) the
+    // footer's top edge is above the viewport's bottom edge,
+    // from layoutInfo (LazyList: viewportEndOffset - footerItem
+    // .offset, px -> dp; the footer is the last item; when it is
+    // not among visibleItemsInfo, a <= 0 -> fade 0; same via the
+    // LazyGrid layoutInfo for the grid hosts).
+    val wirFooterFade by remember(listState, gridState, layout) {
+        derivedStateOf {
+            val aDp = when (layout) {
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        info.totalItemsCount > 0 &&
+                            it.index == info.totalItemsCount - 1
+                    }
+                    if (footer == null) 0f else {
+                        (info.viewportEndOffset - footer.offset) /
+                            wirDensity.density
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        info.totalItemsCount > 0 &&
+                            it.index == info.totalItemsCount - 1
+                    }
+                    if (footer == null) 0f else {
+                        (info.viewportEndOffset - footer.offset.y) /
+                            wirDensity.density
+                    }
+                }
+            }
+            WearIveRunDockPolicy.fade(aDp)
+        }
+    }
+    // Whether the footer item is among the active host's visible
+    // items (its content is composed and on screen) — the delete
+    // choreography branches on this (spec section 4.7).
+    val wirFooterComposed by remember(listState, gridState, layout) {
         derivedStateOf {
             when (layout) {
                 AdaptiveLayout.COMPACT -> {
@@ -594,59 +693,397 @@ fun HeroMainScreen(
             }
         }
     }
-    // The dock tap: glide to the page end (the footer). Package
-    // section 4.4's duration rule is choreography pending owner
-    // approval — the platform glide stands in for now (named in
-    // the lane report).
+
+    // Creation / update cue bookkeeping. A CREATION is an
+    // Absent -> Present flip with the cue armed (the holder's Cue
+    // state): the dock rises (or, handed off, the footer grows)
+    // and the creation pulse plays on the visible surface. A
+    // cold-start presence (restore prime -> Mini, no cue) gets
+    // NO entrance and NO pulse. An UPDATE is a shown-line change
+    // to a different record line for the SAME entry at scroll
+    // rest: it fires the update bounce (section 4.3) on the
+    // visible surface, and never doubles with the creation cue.
+    var wirWasPresent by remember { mutableStateOf(false) }
+    var wirCreationKey by remember { mutableIntStateOf(0) }
+    var wirFooterGrowKey by remember { mutableIntStateOf(0) }
+    var wirDockBounceKey by remember { mutableIntStateOf(0) }
+    var wirFooterBounceKey by remember { mutableIntStateOf(0) }
+    var wirPrevShownEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+
+    LaunchedEffect(wirDayEntry, wirAnyScrolling) {
+        if (!wirAnyScrolling) {
+            val newEntry = wirDayEntry
+            val newLine = newEntry?.let {
+                WearIveRunDockNarration.line(
+                    it, uiState.locationNow.toLocalDate()
+                )
+            }
+            val oldLine = wirShownLine
+            val oldEntry = wirPrevShownEntry
+            wirShownLine = newLine
+            wirPrevShownEntry = newEntry
+            if (newLine != null && oldLine != null && newEntry != null &&
+                oldEntry != null && newLine.text != oldLine.text &&
+                wirExit == null &&
+                WearIveRunCollectionLogic.sameIdentity(oldEntry, newEntry)
+            ) {
+                // The settle's landing (spec section 4.3): the
+                // update bounce fires on the surface the user can
+                // see — the dock while it is not handed off, the
+                // footer's header zone once it is — so only that
+                // surface's key increments. The first line of a
+                // creation never reaches here (oldLine is null):
+                // the creation cue owns that moment alone, and
+                // the two never double.
+                if (wirFooterFade >= 1f) {
+                    wirFooterBounceKey += 1
+                } else {
+                    wirDockBounceKey += 1
+                }
+            }
+        }
+    }
+
+    // Absent -> Present / Present -> Absent flips: creation
+    // arming, snapshot keeping, session-end exit (section 4.8).
+    LaunchedEffect(wirPresent) {
+        if (wirPresent && !wirWasPresent) {
+            // A flip up. Armed as a creation only when the holder
+            // is in its Cue presentation with a fresh sequence —
+            // a restore (Mini at first composition) is a
+            // cold-start presence and gets no entrance.
+            if (wearIveRunState is WearIveRunBarState.Cue &&
+                wearCueSequence > 0
+            ) {
+                wirCreationKey = wearCueSequence
+                // Footer grow (section 4.1): only when the footer
+                // is in or near the viewport (the handoff has
+                // begun); far off-screen it inserts silently.
+                if (wirFooterFade > 0f || wirFooterComposed) {
+                    wirFooterGrowKey = wearCueSequence
+                }
+            }
+        }
+        if (!wirPresent && wirWasPresent) {
+            // A flip down NOT driven by our trash exit (that path
+            // sets wirExitFromTrashDone as it completes): this is
+            // a session end (section 4.8) — the record has already
+            // passed to the collection in the holder/store, so
+            // only the exit choreography runs here, minus the
+            // haptic, off the last live snapshot.
+            if (wirExit == null && !wirExitFromTrashDone) {
+                wirLastSnapshot?.let { snap ->
+                    wirExit = snap.copy(fromTrash = false)
+                }
+            }
+            wirExitFromTrashDone = false
+        }
+        wirWasPresent = wirPresent
+    }
+
+    // Keep the last live snapshot current while present.
+    LaunchedEffect(wirShownLine, wirDayEntry, wearPresentState) {
+        val line = wirShownLine
+        val dayEntry = wirDayEntry
+        val presentState = wearPresentState as? WearIveRunBarState.Present
+        if (line != null && dayEntry != null && presentState != null) {
+            wirLastSnapshot = WirExitSnapshot(
+                line = line,
+                barEntry = presentState.entry,
+                dayEntry = dayEntry,
+                entryLine = WearIveRunDockNarration.entryLine(
+                    dayEntry,
+                    uiState.locationNow.toLocalDate(),
+                    uiState.temperatureUnit
+                ),
+                fromTrash = false
+            )
+        }
+    }
+
+    // The dock's exit animation + the exit completion for the
+    // paths where the footer cannot report it (footer off-screen
+    // at trash: dock exit only, 300ms — section 4.7; session end
+    // with the footer off-screen likewise). When the footer IS
+    // composed, its fold is the longest exit and IT reports
+    // completion via onExitFinished; this effect then only drives
+    // the dock's own fade/sink.
+    LaunchedEffect(wirExit) {
+        val exit = wirExit ?: return@LaunchedEffect
+        wirDockExit.snapTo(0f)
+        if (wirReduceMotion) {
+            wirDockExit.animateTo(1f, tween(durationMillis = 200))
+        } else {
+            wirDockExit.animateTo(
+                1f,
+                tween(
+                    durationMillis = WearIveRunDockPolicy.DELETE_DOCK_EXIT_MS,
+                    easing = WearIveRunDockPolicy.EXIT_EASING
+                )
+            )
+        }
+        if (!wirFooterComposed) {
+            wirFinishExit(exit)
+        }
+    }
+
+    // The glides (spec section 4.4): duration from distance under
+    // the glide easing; the handoff runs off the glide's own
+    // scroll position (it is position-derived — there is no
+    // separate dock animation). A user touch cancels the glide
+    // (Compose scroll mutual exclusion). Reduce Motion: instant
+    // jumps (section 5).
     val wirGlideToFooter: () -> Unit = {
         screenScope.launch {
             when (layout) {
-                AdaptiveLayout.COMPACT -> listState.animateScrollToItem(
-                    (listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                )
-                else -> gridState.animateScrollToItem(
-                    (gridState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                )
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    val total = info.totalItemsCount
+                    if (total > 0) {
+                        if (wirReduceMotion) {
+                            listState.scrollToItem(total - 1)
+                            val f = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f != null) {
+                                listState.scrollBy(
+                                    ((f.offset + f.size) -
+                                        listState.layoutInfo.viewportEndOffset)
+                                        .toFloat()
+                                )
+                            }
+                        } else {
+                            val footer = info.visibleItemsInfo.firstOrNull {
+                                it.index == total - 1
+                            }
+                            val distancePx = if (footer != null) {
+                                (footer.offset + footer.size) -
+                                    info.viewportEndOffset
+                            } else {
+                                val visible = info.visibleItemsInfo
+                                val last = visible.lastOrNull()
+                                if (last == null) {
+                                    0
+                                } else {
+                                    val pitch = if (visible.size >= 2) {
+                                        (last.offset - visible.first().offset)
+                                            .toFloat() /
+                                            (last.index - visible.first().index)
+                                    } else {
+                                        last.size.toFloat()
+                                    }
+                                    ((last.offset + last.size -
+                                        info.viewportEndOffset) +
+                                        (total - 1 - last.index) * pitch)
+                                        .roundToInt()
+                                }
+                            }
+                            val duration = WearIveRunDockPolicy.glideDurationMs(
+                                distancePx / wirDensity.density
+                            )
+                            listState.animateScrollBy(
+                                distancePx.toFloat(),
+                                tween(
+                                    durationMillis = duration,
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                            // Land exactly at the end if the
+                            // estimate was short.
+                            val f2 = listState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f2 != null) {
+                                val delta = (f2.offset + f2.size) -
+                                    listState.layoutInfo.viewportEndOffset
+                                if (kotlin.math.abs(delta) > 1) {
+                                    listState.animateScrollBy(
+                                        delta.toFloat(),
+                                        tween(
+                                            durationMillis = 150,
+                                            easing = WearIveRunDockPolicy.GLIDE_EASING
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    val total = info.totalItemsCount
+                    if (total > 0) {
+                        if (wirReduceMotion) {
+                            gridState.scrollToItem(total - 1)
+                            val f = gridState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f != null) {
+                                gridState.scrollBy(
+                                    ((f.offset.y + f.size.height) -
+                                        gridState.layoutInfo.viewportEndOffset)
+                                        .toFloat()
+                                )
+                            }
+                        } else {
+                            val footer = info.visibleItemsInfo.firstOrNull {
+                                it.index == total - 1
+                            }
+                            val distancePx = if (footer != null) {
+                                (footer.offset.y + footer.size.height) -
+                                    info.viewportEndOffset
+                            } else {
+                                val visible = info.visibleItemsInfo
+                                val last = visible.lastOrNull()
+                                if (last == null) {
+                                    0
+                                } else {
+                                    val columns = visible
+                                        .map { it.offset.x }
+                                        .distinct().size.coerceAtLeast(1)
+                                    val avgHeight = visible
+                                        .map { it.size.height }
+                                        .average().toFloat()
+                                    ((last.offset.y + last.size.height -
+                                        info.viewportEndOffset) +
+                                        ((total - 1 - last.index + columns - 1) /
+                                            columns) *
+                                            (avgHeight + 10f * wirDensity.density))
+                                        .roundToInt()
+                                }
+                            }
+                            val duration = WearIveRunDockPolicy.glideDurationMs(
+                                distancePx / wirDensity.density
+                            )
+                            gridState.animateScrollBy(
+                                distancePx.toFloat(),
+                                tween(
+                                    durationMillis = duration,
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                            val f2 = gridState.layoutInfo.visibleItemsInfo
+                                .firstOrNull { it.index == total - 1 }
+                            if (f2 != null) {
+                                val delta = (f2.offset.y + f2.size.height) -
+                                    gridState.layoutInfo.viewportEndOffset
+                                if (kotlin.math.abs(delta) > 1) {
+                                    gridState.animateScrollBy(
+                                        delta.toFloat(),
+                                        tween(
+                                            durationMillis = 150,
+                                            easing = WearIveRunDockPolicy.GLIDE_EASING
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+    // The footer's chevron (spec section 4.4): the inverse glide
+    // up, landing with the footer's top edge 24dp BELOW the
+    // viewport's bottom edge — delta = footerItem.offset -
+    // (viewportHeight + 24dp) in px, same duration rule from
+    // |delta|. The chevron exists only on the footer, so the
+    // footer item is composed when this runs.
     val wirGlideFromFooter: () -> Unit = {
         screenScope.launch {
+            val extraPx = (24 * wirDensity.density).roundToInt()
             when (layout) {
-                AdaptiveLayout.COMPACT -> listState.animateScrollToItem(
-                    (listState.layoutInfo.totalItemsCount - 2).coerceAtLeast(0)
-                )
-                else -> gridState.animateScrollToItem(
-                    (gridState.layoutInfo.totalItemsCount - 2).coerceAtLeast(0)
-                )
+                AdaptiveLayout.COMPACT -> {
+                    val info = listState.layoutInfo
+                    val total = info.totalItemsCount
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        total > 0 && it.index == total - 1
+                    }
+                    if (footer != null) {
+                        val viewportHeight =
+                            info.viewportEndOffset - info.viewportStartOffset
+                        val delta = footer.offset - (viewportHeight + extraPx)
+                        if (wirReduceMotion) {
+                            listState.scrollBy(delta.toFloat())
+                        } else {
+                            listState.animateScrollBy(
+                                delta.toFloat(),
+                                tween(
+                                    durationMillis =
+                                        WearIveRunDockPolicy.glideDurationMs(
+                                            delta / wirDensity.density
+                                        ),
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                        }
+                    }
+                }
+                else -> {
+                    val info = gridState.layoutInfo
+                    val total = info.totalItemsCount
+                    val footer = info.visibleItemsInfo.firstOrNull {
+                        total > 0 && it.index == total - 1
+                    }
+                    if (footer != null) {
+                        val viewportHeight =
+                            info.viewportEndOffset - info.viewportStartOffset
+                        val delta = footer.offset.y - (viewportHeight + extraPx)
+                        if (wirReduceMotion) {
+                            gridState.scrollBy(delta.toFloat())
+                        } else {
+                            gridState.animateScrollBy(
+                                delta.toFloat(),
+                                tween(
+                                    durationMillis =
+                                        WearIveRunDockPolicy.glideDurationMs(
+                                            delta / wirDensity.density
+                                        ),
+                                    easing = WearIveRunDockPolicy.GLIDE_EASING
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     }
-    // One tap, NO confirmation (the settled delete rule): the
-    // machine goes ABSENT and the day's entry is deleted by
-    // identity — the collection copy is a separate surface
-    // (RW-122) and is untouched by the bar's delete.
+    // One tap, NO confirmation (the settled delete rule). The
+    // exit choreography runs FIRST off a frozen snapshot (spec
+    // section 4.7); the data removal — holder TRASH + the store
+    // delete by identity — fires when the longest running exit
+    // completes (wirFinishExit). The collection copy is a
+    // separate surface (RW-122) and is untouched by this delete.
     val wirTrash: () -> Unit = {
-        val entry = wearIveRunHolder.currentEntry()
-        wearIveRunHolder.onEvent(WearIveRunElementEvent.TRASH)
-        if (entry != null) {
-            screenScope.launch {
-                wearIveRunStore.removeByIdentity(entry)
+        if (wirExit == null) {
+            wirLastSnapshot?.let { snap ->
+                wirExit = snap.copy(fromTrash = true)
             }
         }
     }
-    // The footer's content (research section 7.2 anatomy,
-    // INTERIM form): header + the record's line + the full entry
-    // row + the collection doorway.
-    val wirFooterContent: @Composable () -> Unit = {
-        val line = wirShownLine
-        val dayEntry = wirDayEntry
-        val presentState = wearIveRunState as? WearIveRunBarState.Present
-        if (line != null && dayEntry != null && presentState != null) {
+    // The creation key arms the pulse on exactly one surface at
+    // a time (dock below fade 1, footer at fade 1); clear it once
+    // the cue window has passed so a later scroll into the other
+    // surface cannot replay the pulse.
+    LaunchedEffect(wirCreationKey) {
+        if (wirCreationKey > 0) {
+            kotlinx.coroutines.delay(2_000)
+            wirCreationKey = 0
+        }
+    }
+
+    // The shared footer render: live record while present, the
+    // frozen snapshot while an exit runs (spec section 4.7).
+    val wirFooterRender: @Composable (Int) -> Unit = { gap ->
+        val exit = wirExit
+        val line = exit?.line ?: wirShownLine
+        val dayEntry = exit?.dayEntry ?: wirDayEntry
+        val barEntry = exit?.barEntry ?:
+            (wearPresentState as? WearIveRunBarState.Present)?.entry
+        if (line != null && dayEntry != null && barEntry != null) {
             WearIveRunFooterSection(
                 narration = line,
-                entry = presentState.entry,
-                entryLine = WearIveRunDockNarration.entryLine(
+                entry = barEntry,
+                entryLine = exit?.entryLine ?: WearIveRunDockNarration.entryLine(
                     dayEntry,
                     uiState.locationNow.toLocalDate(),
                     uiState.temperatureUnit
@@ -654,8 +1091,63 @@ fun HeroMainScreen(
                 onCollapse = wirGlideFromFooter,
                 onDelete = wirTrash,
                 onOpenCollection = { showWearIveRunCollection = true },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                sheetGapDp = gap,
+                growInKey = if (exit == null) wirFooterGrowKey else 0,
+                cueKey = wirCreationKey,
+                cueArmed = exit == null && wirCreationKey > 0 &&
+                    wirFooterFade >= 1f,
+                bounceKey = wirFooterBounceKey,
+                exiting = exit != null,
+                reduceMotion = wirReduceMotion,
+                onExitFinished = {
+                    wirExit?.let { wirFinishExit(it) }
+                }
             )
+        }
+    }
+
+    // The footer's content (spec section 2.2): header + the
+    // record's line + the full entry row + the collection
+    // doorway. FULL-BLEED — no call-site inset in either host
+    // (the section's own background spans edge to edge; its
+    // content keeps the 16dp inset internally). The grid hosts'
+    // content padding insets their items, so the grid lambda
+    // breaks the footer out of that padding by the pane's
+    // pagePadding (see wirFooterContentGrid).
+    val wirFooterContent: @Composable () -> Unit = {
+        wirFooterRender(WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP)
+    }
+    val wirFooterContentGrid: @Composable () -> Unit = {
+        // The grid's 10dp vertical spacing sits between the
+        // preceding item and the footer item, so the section's
+        // own sheet gap is 34 - 10 = 24dp (spec section 2.2).
+        // Full-bleed (spec section 2.2): the grid hosts inset
+        // their items by the pane's pagePadding via content
+        // padding, so the footer breaks out of it — measured
+        // wider by twice the padding and placed at its negative.
+        Box(
+            modifier = Modifier.layout { measurable, constraints ->
+                val padPx = (spec.pagePadding.value * 2 * wirDensity.density)
+                    .roundToInt()
+                val placeable = measurable.measure(
+                    constraints.copy(
+                        minWidth = (constraints.minWidth + padPx)
+                            .coerceAtLeast(0),
+                        maxWidth = if (constraints.maxWidth ==
+                            Constraints.Infinity
+                        ) {
+                            Constraints.Infinity
+                        } else {
+                            constraints.maxWidth + padPx
+                        }
+                    )
+                )
+                layout(placeable.width, placeable.height) {
+                    placeable.place(-padPx / 2, 0)
+                }
+            }
+        ) {
+            wirFooterRender(24)
         }
     }
 
@@ -705,7 +1197,15 @@ fun HeroMainScreen(
                                     .fillMaxSize()
                                     .background(RunWearColors.Surface),
                                 contentPadding = PaddingValues(
-                                    bottom = 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                    // RW-135 spec section 2.2: when
+                                    // the footer is present it is the
+                                    // page's foot — no sheet renders
+                                    // below it at max scroll, so the
+                                    // trailing bottom padding is 0
+                                    // (the footer's own 32dp bottom
+                                    // padding carries the clearance).
+                                    bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 )
                             ) {
                                 item {
@@ -792,8 +1292,8 @@ fun HeroMainScreen(
                                 homeTrailingListItems(
                                     uiState = uiState,
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
-                                    wirFooterPresent = wirPresent,
-                                    wirFooterContent = wirFooterContent
+                                    wirFooterPresent = wirSurfacesPresent,
+                                    wirFooterContent = wirFooterContentGrid
                                 )
                             }
                         }
@@ -811,7 +1311,11 @@ fun HeroMainScreen(
                                 contentPadding = PaddingValues(
                                     start = spec.pagePadding,
                                     end = spec.pagePadding,
-                                    bottom = 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                    // RW-135 spec section 2.2: as
+                                    // the list host — no sheet below
+                                    // the footer when it is present.
+                                    bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -892,8 +1396,8 @@ fun HeroMainScreen(
                                 homeTrailingGridItems(
                                     uiState = uiState,
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
-                                    wirFooterPresent = wirPresent,
-                                    wirFooterContent = wirFooterContent
+                                    wirFooterPresent = wirSurfacesPresent,
+                                    wirFooterContent = wirFooterContentGrid
                                 )
                             }
                         }
@@ -950,7 +1454,11 @@ fun HeroMainScreen(
                                     contentPadding = PaddingValues(
                                         start = spec.pagePadding,
                                         end = spec.pagePadding,
-                                        bottom = 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                        // RW-135 spec section 2.2:
+                                        // no sheet below the footer
+                                        // when it is present.
+                                        bottom = if (wirSurfacesPresent) 0.dp
+                                            else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1012,8 +1520,8 @@ fun HeroMainScreen(
                                     homeTrailingGridItems(
                                         uiState = uiState,
                                         onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
-                                        wirFooterPresent = wirPresent,
-                                        wirFooterContent = wirFooterContent
+                                        wirFooterPresent = wirSurfacesPresent,
+                                        wirFooterContent = wirFooterContentGrid
                                     )
                                 }
                             }
@@ -1022,43 +1530,84 @@ fun HeroMainScreen(
                 }
                 // RW-135: the MINI dock overlay — inset 12,
                 // lifted 14 above the bottom safe edge (over the
-                // bottom navigation), radius 16 in both forms,
-                // translucent card, soft shadow. Visible only while
-                // the footer is off-screen; enters/exits by opacity
-                // and translation only, and never while a form
-                // morph runs (there is no second form to morph
-                // with — the footer is scroll content).
-                AnimatedVisibility(
-                    visible = WearIveRunDockPolicy.dockVisible(
-                        wirPresent, wirFooterVisible
-                    ),
-                    enter = fadeIn(tween(200)) +
-                        slideInVertically(tween(300)) { it / 2 },
-                    exit = fadeOut(tween(200)) +
-                        slideOutVertically(tween(300)) { it / 2 },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                ) {
-                    val line = wirShownLine
+                // bottom navigation), radius 16, translucent card,
+                // soft shadow. Driven CONTINUOUSLY by the handoff
+                // fade (spec section 3): graphicsLayer alpha /
+                // translationY / scale are pure functions of the
+                // footer's scroll position — no binary visibility,
+                // no AnimatedVisibility. Hit-testing is off at
+                // fade >= 0.5; at fade >= 1 the dock leaves the
+                // semantics tree. Reduce Motion (spec section 5):
+                // the handoff steps at the window's midpoint with
+                // a single 160ms crossfade, no sink/scale. During
+                // an exit (sections 4.7/4.8) the snapshot's line
+                // renders and the dock's own exit (fade + 26dp
+                // sink, 300ms exit) multiplies in.
+                if (wirSurfacesPresent) {
+                    val exitSnap = wirExit
+                    val line = exitSnap?.line ?: wirShownLine
                     if (line != null) {
-                        WearIveRunDock(
-                            narration = line,
-                            cueKey = wearCueSequence,
-                            cueArmed = wearIveRunState is
-                                WearIveRunBarState.Cue,
-                            onExpand = wirGlideToFooter,
-                            onDelete = wirTrash,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    horizontal =
-                                        WearIveRunDockPolicy.DOCK_INSET_DP.dp
-                                )
-                                .navigationBarsPadding()
-                                .padding(
-                                    bottom =
-                                        WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
-                                )
+                        val fade = wirFooterFade
+                        val steppedOpacity by animateFloatAsState(
+                            targetValue = if (fade < 0.5f) 1f else 0f,
+                            animationSpec = tween(160),
+                            label = "wirDockHandoffStep"
                         )
+                        val handoffAlpha = if (wirReduceMotion) {
+                            steppedOpacity
+                        } else {
+                            WearIveRunDockPolicy.dockOpacity(fade)
+                        }
+                        val exitP = wirDockExit.value
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .then(
+                                    if (fade >= 1f && exitSnap == null) {
+                                        Modifier.clearAndSetSemantics {}
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .graphicsLayer {
+                                    alpha = handoffAlpha * (1f - exitP)
+                                    translationY =
+                                        ((if (wirReduceMotion) 0f
+                                        else WearIveRunDockPolicy.dockSinkDp(fade)) +
+                                            WearIveRunDockPolicy
+                                                .DELETE_DOCK_SINK_DP * exitP) *
+                                            wirDensity.density
+                                    val s = (if (wirReduceMotion) 1f
+                                    else WearIveRunDockPolicy.dockScale(fade))
+                                    scaleX = s
+                                    scaleY = s
+                                }
+                        ) {
+                            WearIveRunDock(
+                                narration = line,
+                                cueKey = wirCreationKey,
+                                cueArmed = exitSnap == null &&
+                                    wirCreationKey > 0 && fade < 1f,
+                                onExpand = wirGlideToFooter,
+                                onDelete = wirTrash,
+                                entranceKey = wirCreationKey,
+                                bounceKey = wirDockBounceKey,
+                                hitTestable = exitSnap == null &&
+                                    WearIveRunDockPolicy.dockHitTestable(fade),
+                                reduceMotion = wirReduceMotion,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal =
+                                            WearIveRunDockPolicy.DOCK_INSET_DP.dp
+                                    )
+                                    .navigationBarsPadding()
+                                    .padding(
+                                        bottom =
+                                            WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
+                                    )
+                            )
+                        }
                     }
                 }
                 }

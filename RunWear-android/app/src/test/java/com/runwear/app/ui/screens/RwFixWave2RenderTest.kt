@@ -257,7 +257,13 @@ class RwFixWave2RenderTest {
     }
 
     @Test
-    fun `rw135 - the interim footer renders the section 7_2 anatomy`() {
+    fun `rw135 - the footer renders the approved spec 2_2 anatomy`() {
+        // Re-pointed (RW-135 footer alignment, Nov 7, 2026): the
+        // interim footer is superseded by the APPROVED spec
+        // section 2.2 — full-bleed ground surface, 24dp top
+        // corners, 20/16/32 internal padding. The staging box's
+        // own padding here is the harness's, not the section's;
+        // the anatomy assertions below are unchanged.
         val today = LocalDate.of(2026, 11, 7)
         val dayEntry = wirEntry(date = today.plusDays(1))
         val line = com.runwear.app.weariverun.WearIveRunDockNarration

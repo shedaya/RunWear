@@ -49,6 +49,13 @@ data class RunWearPalette(
     val Surface: Color,
     /** Card-on-sheet fill: outfit cards sit on the sheet surface. */
     val BgCard: Color,
+    /**
+     * RW-135 spec §2.2/§6: the Wear I've Run footer's ground —
+     * light: the page ground #F5F1E8; dark: #2A251E (Warm Charcoal
+     * ground). Deliberately NOT [BgCard] in light (that is the
+     * card fill #FDFBF6) and NOT [Background] in dark (#16130F).
+     */
+    val FooterGround: Color,
     val SurfaceElevated: Color,
     val BgCardLight: Color,
     val TextPrimary: Color,
@@ -160,6 +167,7 @@ val DarkPalette = RunWearPalette(
     Background = Color(0xFF16130F),
     Surface = Color(0xFF211D17),
     BgCard = Color(0xFF2A251E),
+    FooterGround = Color(0xFF2A251E),
     SurfaceElevated = Color(0xFF2A251E),
     BgCardLight = Color(0xFF2A251E),
     TextPrimary = Color(0xFFF5F1EA),
@@ -194,6 +202,7 @@ val LightPalette = RunWearPalette(
     Background = Color(0xFFF5F1E8),
     Surface = Color(0xFFFDFBF6),
     BgCard = Color(0xFFFDFBF6),
+    FooterGround = Color(0xFFF5F1E8),
     SurfaceElevated = Color(0xFFFDFBF6),
     BgCardLight = Color(0xFFFDFBF6),
     TextPrimary = Color(0xFF17191C),
@@ -246,6 +255,7 @@ object RunWearColors {
     val Background: Color get() = activePalette.Background
     val Surface: Color get() = activePalette.Surface
     val BgCard: Color get() = activePalette.BgCard
+    val FooterGround: Color get() = activePalette.FooterGround
     val SurfaceElevated: Color get() = activePalette.SurfaceElevated
     val BgCardLight: Color get() = activePalette.BgCardLight
 
