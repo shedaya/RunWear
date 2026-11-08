@@ -594,21 +594,22 @@ final class StateTruthTests: XCTestCase {
         let heroView = try sourceFile("../RunWear/Views/HeroImageView.swift")
         // GEN-6 (RW-67): the numeral moved — re-pinned against
         // its new home, as this pin's own instruction directs.
-        // The sheet header now composes HomeHeroNumeralRow with
-        // the same value expression; the numeral Text lives in
-        // that file's HeroNumeralText.
-        let numeralRow = try sourceFile("../RunWear/Views/HomeHeroNumeralRow.swift")
-        XCTAssertTrue(outfitView.contains("HomeHeroNumeralRow("),
-                      "the sheet header composes the extracted numeral row")
-        XCTAssertTrue(outfitView.contains("viewModel.temperatureUnit.format(viewModel.currentFeelsLike)"),
-                      "the row is fed the same feels-like value expression")
+        // RW-144 (Nov 8, 2026): the numeral moved AGAIN — from
+        // the sheet header onto the hero, in the feels-like
+        // block of the v8 first screen (FirstScreenHero.swift),
+        // fed the same formatted feels-like value.
+        let numeralRow = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
+        XCTAssertTrue(outfitView.contains("HeroChromeOverlayView("),
+                      "home composes the hero chrome that carries the numeral (RW-144)")
+        XCTAssertTrue(outfitView.contains("formattedFeelsLike: viewModel.temperatureUnit.format("),
+                      "the block is fed the formatted feels-like value expression")
 
-        // The sheet numeral and its modifier chain: a plain Text —
+        // The hero numeral and its modifier chain: a plain Text —
         // no gesture, no animation, no content transition.
         let lines = numeralRow.components(separatedBy: "\n")
         let numeralIndex = try XCTUnwrap(
-            lines.firstIndex(where: { $0.contains("Text(text)") && $0.count < 20 }),
-            "the sheet numeral was not found in its new home — if it moved again, re-pin WS-2 against its new home"
+            lines.firstIndex(where: { $0.contains("Text(formattedFeelsLike)") }),
+            "the hero numeral was not found in its new home — if it moved again, re-pin WS-2 against its new home"
         )
         let chain = lines[numeralIndex...min(numeralIndex + 5, lines.count - 1)].joined(separator: "\n")
         for forbidden in ["onTapGesture", "onLongPressGesture", "gesture", "contentTransition", ".animation", "withAnimation", "Button"] {

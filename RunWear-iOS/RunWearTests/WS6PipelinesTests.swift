@@ -308,9 +308,16 @@ final class WS6PipelinesTests: XCTestCase {
                        "the home share button is removed, not merely unwired")
         XCTAssertFalse(view.contains("heroShareImage"),
                        "the home share payload state is removed with the button")
-        // The toolbar itself survives with its designed items.
-        XCTAssertTrue(view.contains("Label(\"Settings\", systemImage: \"gearshape\")"))
-        XCTAssertTrue(view.contains("Label(\"Shop\", systemImage: \"cart\")"))
+        // RW-144 (Nov 8, 2026) RE-PIN: the nav bar is hidden on
+        // the v8 first screen, so the two entries the toolbar
+        // carried moved seats — Settings to the hero's gear
+        // circle (FirstScreenHero), Shop to the outfit header.
+        // Both survive; neither carries a share action.
+        let chrome = codeOnly(try sourceFile("../RunWear/Views/FirstScreenHero.swift"))
+        XCTAssertTrue(chrome.contains("Image(systemName: \"gearshape.fill\")"))
+        XCTAssertTrue(chrome.contains(".accessibilityLabel(\"Settings\")"))
+        XCTAssertTrue(view.contains("Image(systemName: \"cart\")"))
+        XCTAssertTrue(view.contains(".accessibilityLabel(\"Shop\")"))
     }
 
     func testCollectionShareIsUntouched_sourcePin() throws {

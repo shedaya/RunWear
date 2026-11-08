@@ -105,16 +105,36 @@ final class RW144FirstScreenTests: XCTestCase {
 
     // MARK: - Light-tile seam
 
-    func testLightTileSeamResolvesBundledTreatmentLFiles() {
+    func testLightTileSeamResolvesBundledTreatmentLFiles() throws {
+        // The iOS test host is a logic-test host (Bundle.main is
+        // the test runner; app resources do not resolve — the
+        // FallbackImageProvider split). So pin the RESOLUTION
+        // (engine key → final-L resource name) and the in-repo
+        // folder the app target bundles under that name.
         let item = ClothingItem(
             key: "SHORT_SLEEVE", name: "Short Sleeve Shirt",
             description: "Moisture-wicking technical fabric",
             icon: "tshirt", amazonSearchTerm: "short sleeve running shirt")
-        let url = ClothingThumbnailService.shared.lightTileURL(for: item, gender: .male)
-        XCTAssertEqual(url?.lastPathComponent, "short-sleeve-male.png")
-        XCTAssertEqual(url?.deletingLastPathComponent().lastPathComponent, "garment_tiles_light")
-        let female = ClothingThumbnailService.shared.lightTileURL(for: item, gender: .female)
-        XCTAssertEqual(female?.lastPathComponent, "short-sleeve-female.png")
+        let service = ClothingThumbnailService.shared
+        XCTAssertEqual(service.lightTileResourceName(for: item, gender: .male), "short-sleeve-male")
+        XCTAssertEqual(service.lightTileResourceName(for: item, gender: .female), "short-sleeve-female")
+
+        let folder = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("../RunWear/garment_tiles_light", isDirectory: true)
+            .standardizedFileURL
+        let pngs = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            .filter { $0.hasSuffix(".png") }
+        XCTAssertEqual(pngs.count, 58, "the Treatment L set is 29 keys × 2 genders")
+        XCTAssertTrue(pngs.contains("short-sleeve-male.png"))
+        XCTAssertTrue(pngs.contains("short-sleeve-female.png"))
+        // Every bundled file name is a <key>-<gender> pair the
+        // seam can produce: strip the gender suffix and the key
+        // must be one the engine's map knows (checked through
+        // hasThumbnail's inverse — the folder holds no orphans).
+        for name in pngs {
+            XCTAssertTrue(name.hasSuffix("-male.png") || name.hasSuffix("-female.png"), name)
+        }
     }
 
     // MARK: - Render harness

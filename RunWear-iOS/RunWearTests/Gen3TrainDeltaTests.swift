@@ -38,16 +38,22 @@ final class Gen3TrainDeltaTests: XCTestCase {
 
     func testWordmarkScrimGradientShape_sourcePin() throws {
         let theme = try sourceFile("../RunWear/Theme/AppTheme.swift")
-        XCTAssertTrue(theme.contains(".init(color: .black.opacity(heroTopScrimAlphas[0]), location: 0)"),
-                      "the gradient's top stop is the poster's 0.62 on black")
-        XCTAssertTrue(theme.contains(".init(color: .black.opacity(heroTopScrimAlphas[1]), location: 0.175)"),
+        // RW-144 (Nov 8, 2026) RE-PIN: the scrim's stops and seat
+        // are unchanged (0.62 / 0.31, gone by 0.35), but its ink
+        // is now the v8 warm black (26,20,14) — pure black is
+        // out of the palette.
+        XCTAssertTrue(theme.contains(".init(color: Color(hex: \"1A140E\").opacity(heroTopScrimAlphas[0]), location: 0)"),
+                      "the gradient's top stop is the poster's 0.62 on the warm-black ink")
+        XCTAssertTrue(theme.contains(".init(color: Color(hex: \"1A140E\").opacity(heroTopScrimAlphas[1]), location: 0.175)"),
                       "the mid stop is the poster's 0.31 at the seat's midpoint")
         XCTAssertTrue(theme.contains(".init(color: .clear, location: 0.35)"),
                       "the seat is unchanged: the scrim is gone by 0.35 of the hero height")
         // The wordmark's own shadow token is NOT part of the
-        // treatment — it stays exactly as shipped.
-        let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains(".shadow(color: .black.opacity(0.35), radius: 6, y: 2)"),
+        // treatment — it stays exactly as shipped. RW-144: the
+        // wordmark itself moved to the hero chrome
+        // (FirstScreenHero.swift); the token rides with it.
+        let chrome = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
+        XCTAssertTrue(chrome.contains(".shadow(color: Color.black.opacity(0.35), radius: 6, y: 2)"),
                       "the wordmark shadow token is unchanged by delta 1")
     }
 
@@ -57,8 +63,12 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertFalse(home.contains(".toolbarTitleMenu"),
                        "Y-16: no intermediate title menu in the home location path")
-        XCTAssertTrue(home.contains("ToolbarItem(placement: .principal)"),
-                      "the location is a principal toolbar button")
+        // RW-144 RE-PIN: the location entry's seat moved from
+        // the (now hidden) nav bar's principal item to the
+        // hero's place pill; the Y-16 substance — one tap,
+        // straight to the picker — is unchanged.
+        XCTAssertTrue(home.contains("onPlaceTapped: { showLocationPicker = true }"),
+                      "the location is the hero place pill, bound straight to the picker")
         // The button's action is the picker presentation itself:
         // the first tap opens the sheet directly — no menu, no
         // intermediate step — and the sheet's content is the

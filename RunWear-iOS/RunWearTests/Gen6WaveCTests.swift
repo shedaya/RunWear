@@ -110,10 +110,19 @@ final class Gen6WaveCTests: XCTestCase {
         let card = String(home[cardStart.lowerBound...])
         XCTAssertFalse(card.contains(".lineLimit(1)"), "RW-114: no one-line cap truncates the outfit description")
         XCTAssertFalse(card.contains(".lineLimit(2)"), "the two-line note must not return")
-        // The headline moment carries its own bold font, not the
-        // line's inherited semibold.
-        XCTAssertTrue(home.contains(".font(.system(size: 15.5, weight: .bold))"),
-                      "the headline moment renders in pine bold per the design")
+        // RW-144 (Nov 8, 2026) RE-PIN: the sheet's outfit rows
+        // are now FirstScreenOutfitRow (FirstScreenSheet.swift)
+        // — the RW-114 whole-description rule binds there too.
+        let rowFile = try sourceFile("../RunWear/Views/FirstScreenSheet.swift")
+        let rowStart = try XCTUnwrap(rowFile.range(of: "struct FirstScreenOutfitRow"))
+        let row = String(rowFile[rowStart.lowerBound...])
+        XCTAssertFalse(row.contains(".lineLimit(1)"), "RW-114: no one-line cap on the first-screen row's description")
+        XCTAssertFalse(row.contains(".lineLimit(2)"), "RW-114: no two-line cap either — descriptions render whole")
+        // The moment-bold half of RW-54 is RETIRED by RW-144:
+        // the sheet headline line it bolded (place · moment in
+        // pine bold) no longer exists — the moment moved to the
+        // hero's date/time chip, whose text is cream per the v8
+        // design. Nothing on the sheet restates the moment.
     }
 
     // MARK: - DA-20 + RW-58: per-run stated once; fine print is basis only
@@ -1151,7 +1160,12 @@ final class Gen6FixWaveTests: XCTestCase {
         XCTAssertEqual(outfit.components(separatedBy: "RW-101 (Sol, Nov 6, 2026)").count - 1, 2,
                        "both home layouts carry the elevated band seat")
         let containerStart = try XCTUnwrap(outfit.range(of: "private func sheetContainer"))
-        let slice = String(outfit[containerStart.lowerBound...].prefix(1600))
+        // RW-144: the sheet now opens with the straddle pill,
+        // the boxless weather line and a hairline before the
+        // band, so the seat check reads the container's whole
+        // body rather than its first 1600 characters; the
+        // invariant — band before outfit — is unchanged.
+        let slice = String(outfit[containerStart.lowerBound...].prefix(4200))
         let band = try XCTUnwrap(slice.range(of: "homeBandSection"))
         let outfitCall = try XCTUnwrap(slice.range(of: "outfit()"))
         XCTAssertTrue(band.lowerBound < outfitCall.lowerBound,
@@ -1482,8 +1496,20 @@ final class Gen6SuccessorWaveTests: XCTestCase {
 
     func testRW109_BadgeSurfacesReadTheDisplayBracket_sourcePins() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertEqual(view.components(separatedBy: "TemperatureBracketBadge(bracket: viewModel.displayTempBracket").count - 1, 2,
-                       "both badge call sites (list + grid) read the display bracket")
+        // RW-144 (Nov 8, 2026) RE-PIN: the outfit-header badge
+        // is retired — the band naming moved to the hero's
+        // feels-like block, where the band word + numeral colour
+        // derive from the DISPLAYED feels-like (the value on
+        // screen, never the comfort-adjusted or engine value)
+        // through HeroBandPalette. The RW-109 rule — display
+        // value, not engine bracket — is preserved at that seat.
+        let chrome = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
+        XCTAssertTrue(chrome.contains("HeroBandPalette.name(feelsLikeF: feelsLikeF)"),
+                      "the hero band word derives from the displayed feels-like")
+        XCTAssertTrue(chrome.contains("HeroBandPalette.color(feelsLikeF: feelsLikeF)"),
+                      "the hero numeral colour derives from the displayed feels-like")
+        XCTAssertTrue(view.contains("feelsLikeF: viewModel.currentFeelsLike"),
+                      "home feeds the hero the view model's current feels-like — the displayed value")
         XCTAssertFalse(view.contains("TemperatureBracketBadge(bracket: recommendation.temperatureBracket"),
                        "no badge site reads the engine bracket any more")
         XCTAssertTrue(view.contains("viewModel.displayTempBracket.description"),

@@ -278,7 +278,8 @@ struct HeroTopChromeView: View {
             // Wordmark, centered on the hero (not on the row's
             // remaining space — the frames center it on screen).
             Text("RunWear")
-                .font(.greatVibes(size: 30))
+                .font(.greatVibes(size: 25))
+                .lineLimit(1)
                 .foregroundColor(HeroChrome.cream)
                 .shadow(color: Color.black.opacity(0.35), radius: 6, y: 2)
                 .accessibilityHidden(true)
@@ -286,11 +287,17 @@ struct HeroTopChromeView: View {
             HStack(alignment: .top, spacing: 8) {
                 Button(action: onPlaceTapped) {
                     HStack(spacing: 6) {
-                        Image(systemName: "mappin.and.ellipse")
+                        Image(systemName: "mappin")
                             .font(.system(size: 13, weight: .semibold))
                         Text(placeName)
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
+                            .truncationMode(.tail)
+                            // The pill must never reach the
+                            // centered wordmark: long place names
+                            // truncate inside the pill (the mock's
+                            // pill is ~118 pt wide).
+                            .frame(maxWidth: 110, alignment: .leading)
                     }
                     .foregroundColor(HeroChrome.cream)
                     .padding(.horizontal, 12)
@@ -463,7 +470,7 @@ struct HeroFeelsLikeBlockView: View {
                 .tracking(2.2)
                 .foregroundColor(HeroChrome.cream)
 
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .bottom, spacing: 10) {
                 Text(formattedFeelsLike)
                     .font(.system(size: numeralSize, weight: .semibold))
                     .monospacedDigit()
@@ -483,6 +490,11 @@ struct HeroFeelsLikeBlockView: View {
                         .tracking(1.4)
                         .foregroundColor(bandColor)
                 }
+                // The band word sits ON the numeral's baseline
+                // (the frames' seat): bottom-aligned to the
+                // numeral's view box, lifted by the system
+                // font's descender depth so the baselines meet.
+                .padding(.bottom, 13)
             }
 
             HStack(spacing: 0) {
@@ -598,7 +610,14 @@ struct HeroChromeOverlayView: View {
                 .offset(y: HeroChipPlacement.chipTop(frameSize: size, chipHeight: HeroChipGeometry.hitHeight))
 
                 // Feels-like block, seated in the scrim zone at
-                // the hero's foot.
+                // the hero's foot. Its bottom edge clears the
+                // straddle pill by construction: the pill is
+                // centred on the sheet boundary (the hero's foot
+                // minus the 28 pt sheet overlap) and stands
+                // 44 pt tall, so its top edge sits 50 pt above
+                // the hero's foot — the block's last line
+                // (Actual) ends 52 pt above it and can never be
+                // occluded, whatever the pill's width.
                 VStack(spacing: 0) {
                     Spacer()
                     HeroFeelsLikeBlockView(
@@ -607,7 +626,7 @@ struct HeroChromeOverlayView: View {
                         feelsLikeF: feelsLikeF
                     )
                     .padding(.leading, 16)
-                    .padding(.bottom, 26)
+                    .padding(.bottom, 52)
                 }
                 .frame(width: size.width, height: size.height, alignment: .bottomLeading)
                 .allowsHitTesting(false)

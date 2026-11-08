@@ -60,14 +60,27 @@ class ClothingThumbnailService {
     /// with NO code change. Dark mode does not use this seam —
     /// it keeps the remote thumbnail treatment.
     func lightTileURL(for item: ClothingItem, gender: GenderPreference, bundle: Bundle = .main) -> URL? {
+        guard let resource = lightTileResourceName(for: item, gender: gender) else {
+            return nil
+        }
+        return bundle.url(
+            forResource: resource,
+            withExtension: "png",
+            subdirectory: "garment_tiles_light"
+        )
+    }
+
+    /// The bundled resource name (`<key>-<gender>`) a light tile
+    /// resolves to, before bundle-URL resolution. Internal (not
+    /// private) so unit tests can pin the resolution in a
+    /// logic-test host, where Bundle.main is the test runner and
+    /// no app resources resolve — the same split FallbackImage
+    /// Provider uses for the hero pool.
+    func lightTileResourceName(for item: ClothingItem, gender: GenderPreference) -> String? {
         guard let key = RunWearEngine.ClothingThumbnailService.shared.thumbnailKeyForName(itemName: item.key) else {
             return nil
         }
         let suffix = gender == .female ? "female" : "male"
-        return bundle.url(
-            forResource: "\(key)-\(suffix)",
-            withExtension: "png",
-            subdirectory: "garment_tiles_light"
-        )
+        return "\(key)-\(suffix)"
     }
 }

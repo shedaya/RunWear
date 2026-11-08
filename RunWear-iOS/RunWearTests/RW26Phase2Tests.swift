@@ -57,8 +57,13 @@ final class RW26Phase2Tests: XCTestCase {
     func testConsolidatedTokenHexes() {
         XCTAssertEqual(AppTheme.groundLightHex, "F5F1E8")
         XCTAssertEqual(AppTheme.sheetLightHex, "FDFBF6")
-        XCTAssertEqual(AppTheme.inkLightHex, "17191C")
-        XCTAssertEqual(AppTheme.inkSecondaryLightHex, "5F5B52")
+        // RW-144 (Nov 8, 2026) RE-PIN: the v8 palette audit table
+        // supersedes the RW-26 ink pair — light ink is now the
+        // warm ink #33291F and light secondary #685D4F (the
+        // owner's palette-of-record for the first-screen
+        // redesign; dark tokens below are unchanged).
+        XCTAssertEqual(AppTheme.inkLightHex, "33291F")
+        XCTAssertEqual(AppTheme.inkSecondaryLightHex, "685D4F")
         XCTAssertEqual(AppTheme.groundDarkHex, "16130F")
         XCTAssertEqual(AppTheme.sheetDarkHex, "211D17")
         XCTAssertEqual(AppTheme.cardDarkHex, "2A251E")
@@ -79,10 +84,10 @@ final class RW26Phase2Tests: XCTestCase {
 
     func testWeatherPillContentIsInkInLightWhiteInDark() {
         // White on the cream sheet measures ~1.03:1 (fails every
-        // floor); ink on the sheet is 17.03:1 per the design's own
-        // contrast table. Dark mode keeps white (~16.7:1 on the
+        // floor); the RW-144 warm ink #33291F on the sheet
+        // measures ~14:1. Dark mode keeps white (~16.7:1 on the
         // Warm Charcoal sheet).
-        XCTAssertEqual(AppTheme.weatherPillContentHex(isDark: false), "17191C")
+        XCTAssertEqual(AppTheme.weatherPillContentHex(isDark: false), "33291F")
         XCTAssertEqual(AppTheme.weatherPillContentHex(isDark: true), "FFFFFF")
     }
 
@@ -694,7 +699,8 @@ final class RW26Phase2Tests: XCTestCase {
     /// control's labels (current level + Runs Cold / Runs Warm),
     /// Settings' analytics helper text, the feedback disclosure,
     /// and the Make It Me settings rows all take
-    /// AppTheme.inkSecondary — #5F5B52 light / #B8AEA0 dark.
+    /// AppTheme.inkSecondary — #685D4F light (RW-144; was
+    /// #5F5B52) / #B8AEA0 dark.
     /// Asserted on the design grounds AND on the Form grounds the
     /// Settings surfaces actually sit on (system grouped
     /// backgrounds: white / #F2F2F7 light rows and ground,
@@ -728,7 +734,9 @@ final class RW26Phase2Tests: XCTestCase {
     /// UI-code text renders in the system .primary/.secondary pair
     /// that acted as one (source sweep, gate report).
     func testWS8MutedStructureIsTheDesignPair() {
-        XCTAssertEqual(AppTheme.inkSecondaryLightHex, "5F5B52")
+        // RW-144 RE-PIN: light secondary is #685D4F per the v8
+        // palette audit table (was #5F5B52 under RW-26).
+        XCTAssertEqual(AppTheme.inkSecondaryLightHex, "685D4F")
         XCTAssertEqual(AppTheme.mutedDarkHex, "B8AEA0")
         // Both tiers clear the floor on their mode's grounds.
         XCTAssertGreaterThanOrEqual(

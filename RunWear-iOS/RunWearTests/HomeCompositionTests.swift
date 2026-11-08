@@ -112,18 +112,20 @@ final class HomeCompositionTests: XCTestCase {
     // MARK: - No scroll void (D-04 iOS verdict), by construction
 
     func testComposedHeightHasNoReservedVoid() {
-        // The stacked composition is hero (0.75 of the container)
-        // then the sheet pulled UP by the overlap: total composed
-        // height = hero + sheet − 28, with no reserved-but-empty
-        // segment at any content height. (Android's D-04 void was
-        // a first item reserving hero + sheet − 28 while its
-        // visible content ended at hero.) Here the sheet's own
-        // content BEGINS at hero − 28, for short and tall sheets
-        // alike — the arithmetic this test pins is the whole
-        // claim; the frame census belongs to WS-9's walkthrough.
+        // The stacked composition is hero (RW-144: 0.45 of the
+        // container — the v8 first screen's ≈45% hero, superseding
+        // the 0.75 seat) then the sheet pulled UP by the overlap:
+        // total composed height = hero + sheet − 28, with no
+        // reserved-but-empty segment at any content height.
+        // (Android's D-04 void was a first item reserving
+        // hero + sheet − 28 while its visible content ended at
+        // hero.) Here the sheet's own content BEGINS at hero − 28,
+        // for short and tall sheets alike — the arithmetic this
+        // test pins is the whole claim; the frame census belongs
+        // to WS-9's walkthrough.
         let container = 800.0
         let hero = container * AppTheme.heroHeightRatio
-        XCTAssertEqual(hero, 600)
+        XCTAssertEqual(hero, 360)
         for sheetContent in [120.0, 340.0, 900.0] {
             let sheetTop = hero - HomeHandoffGeometry.sheetOverlap
             let composed = sheetTop + sheetContent + 40 // foot spacer
@@ -215,18 +217,23 @@ final class HomeCompositionTests: XCTestCase {
         XCTAssertTrue(hero.contains(".onChange(of: urlString)"),
                       "each incoming photo (a new identity) must reset the crossfade state")
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        // The bar is opaque and its background is visible: no
-        // sheet or header content renders under the status bar
-        // (the D-03 iOS verdict), and the location entry lives in
-        // that always-visible bar. GEN-3 Y-16 supersedes the
-        // title-menu seat: the location is a principal toolbar
-        // BUTTON bound straight to the picker — one tap, no
-        // intermediate menu.
-        XCTAssertTrue(view.contains(".toolbarBackgroundVisibility(.visible, for: .navigationBar)"))
+        // RW-144 (Nov 8, 2026) RE-PIN: the opaque nav bar is
+        // RETIRED — the v8 first screen is full-bleed photo with
+        // its chrome ON the hero, so the bar is hidden and the
+        // D-03 concern moves to the hero chrome itself (the top
+        // scrim + luminance-boosted pill fills keep the status
+        // area legible). The location entry keeps the Y-16 rule
+        // — one tap straight to the picker, no intermediate
+        // menu — from its new seat: the hero's place pill.
+        XCTAssertTrue(view.contains(".toolbar(.hidden, for: .navigationBar)"),
+                      "RW-144: home carries no nav bar; the hero chrome replaces it")
         XCTAssertFalse(view.contains(".toolbarTitleMenu"),
                        "Y-16: the title menu's extra tap is removed")
-        XCTAssertTrue(view.contains("ToolbarItem(placement: .principal)"))
-        XCTAssertTrue(view.contains("showLocationPicker = true"))
+        XCTAssertTrue(view.contains("onPlaceTapped: { showLocationPicker = true }"),
+                      "Y-16 preserved: the hero place pill is bound straight to the picker")
+        let heroChrome = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
+        XCTAssertTrue(heroChrome.contains("Button(action: onPlaceTapped)"),
+                      "the place pill is a single direct button — one tap, no menu")
     }
 
     func testHeroFirstPaintIsSkeletonUntilTheServeResolves_sourcePin() throws {

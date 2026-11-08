@@ -470,12 +470,15 @@ final class Gen4DayChartTests: XCTestCase {
 
     func testHomeSurfaces_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("headlineLocationLine"), "the headline moment is the second entry")
-        // GEN-6 (RW-67): the figures moved with the numeral row
-        // into HomeHeroNumeralRow — pinned at their new home;
-        // the header composes that row.
-        XCTAssertTrue(view.contains("HomeHeroNumeralRow("), "the header composes the extracted numeral row")
-        XCTAssertTrue(try sourceFile("../RunWear/Views/HomeHeroNumeralRow.swift").contains("heroWeatherFigures"), "the right-justified figures beside the numeral")
+        // RW-144 (Nov 8, 2026) RE-PIN: the sheet headline
+        // (place · moment line + numeral row) is retired by the
+        // v8 first screen. The moment now lives on the hero —
+        // the date/time chip in the hero chrome — and the sheet
+        // opens with the boxless weather line; the detailed
+        // weather block stands below the glance band.
+        XCTAssertTrue(view.contains("HeroChromeOverlayView("), "the moment lives on the hero chip (RW-144)")
+        XCTAssertTrue(view.contains("BoxlessWeatherLineView("), "the sheet opens with the boxless weather line (RW-144)")
+        XCTAssertTrue(view.contains("DetailedWeatherBlockView("), "the complete detailed block stands below the fold (RW-144)")
         XCTAssertTrue(view.contains("DayChartBandView("), "the glance band below the outfit")
         XCTAssertTrue(view.contains("applyTimePickerCommit"), "Confirm lands through the one apply path")
         XCTAssertFalse(view.contains("WeatherPillsRow("), "the pills row is retired from home")

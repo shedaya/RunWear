@@ -659,6 +659,14 @@ struct WeatherOutfitView: View {
                                     .frame(height: 1)
                                     .padding(.horizontal, 16)
                                     .padding(.top, 16)
+                                // RW-101 (Sol, Nov 6, 2026): the
+                                // elevated band seat, Duo layout —
+                                // directly under the hero, above
+                                // the outfit, as in the stacked
+                                // sheet (RW-144 keeps the seat;
+                                // the weather line and hairline
+                                // now precede it per the v8 sheet
+                                // order).
                                 homeBandSection
                                     .padding(.top, 16)
                                 if viewModel.selectedTimeOutsideForecast {
