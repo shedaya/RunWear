@@ -8,8 +8,10 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDate
@@ -40,9 +42,19 @@ class WearIveRunStore(private val context: Context) {
 
     /** Record the day's settled version (replaces any earlier one). */
     suspend fun recordSettled(entry: WearIveRunDayEntry) {
-        context.wearIveRunDataStore.edit { prefs ->
-            val current = decode(prefs[Keys.ENTRIES_JSON])
-            prefs[Keys.ENTRIES_JSON] = encode(WearIveRunCollectionLogic.upsert(current, entry))
+        // RW-142 (Nov 8, 2026): an ADMITTED write always completes.
+        // The recording policy admits a settle only from the
+        // selection's own committed solve; once admitted, the edit
+        // runs under NonCancellable so a caller torn down in the
+        // same instant (a composition leaving, a superseding state
+        // arriving) cannot strand it — the failure mode behind the
+        // confirmed-time-pick entry that never updated on device.
+        withContext(NonCancellable) {
+            context.wearIveRunDataStore.edit { prefs ->
+                val current = decode(prefs[Keys.ENTRIES_JSON])
+                prefs[Keys.ENTRIES_JSON] =
+                    encode(WearIveRunCollectionLogic.upsert(current, entry))
+            }
         }
     }
 
