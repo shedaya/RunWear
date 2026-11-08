@@ -608,7 +608,7 @@ class Rw140DockRestoreRenderTest {
             uvIndex = 3.0,
             weatherCode = com.runwear.shared.domain.model.WeatherCode.CLEAR_SKY
         )
-        val now = LocalDateTime.of(2026, 11, 8, 7, 0)
+        val now = java.time.LocalDateTime.of(2026, 11, 8, 7, 0)
         val dayEntry = phoenixEntry()
         val line = WearIveRunDockNarration.line(dayEntry, today)
         val host = compose {
