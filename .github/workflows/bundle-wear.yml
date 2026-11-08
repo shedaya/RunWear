@@ -1,4 +1,4 @@
-name: RW-140 Wear Bundle (dispatch only)
+name: Bundle Wear (dispatch only)
 
 # Manual, dispatch-only: builds the standalone Wear release AAB on a
 # hosted runner and uploads it UNSIGNED as an artifact. Signing
