@@ -25,6 +25,7 @@ import com.runwear.app.makeitme.PersonalServeKind
 import com.runwear.app.ui.components.HeroPill
 import com.runwear.app.ui.components.HeroPillContent
 import com.runwear.app.ui.components.HeroPillPolicy
+import com.runwear.app.ui.components.HeroFeelsLikeBlock
 import com.runwear.app.ui.components.HeroSheetBlock
 import com.runwear.app.ui.theme.RunWearColors
 import com.runwear.app.ui.theme.RunWearTheme
