@@ -33,8 +33,6 @@ jobs:
         working-directory: RunWear-android
         run: ./gradlew :wear:bundleRelease --stacktrace
 
-        working-directory: RunWear-android
-
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
