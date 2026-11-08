@@ -423,6 +423,7 @@ fun HeroSection(
     var topLuminance by remember { mutableStateOf(HeroLuminancePolicy.FLOOR_LUMINANCE) }
     var chipLuminance by remember { mutableStateOf(HeroLuminancePolicy.FLOOR_LUMINANCE) }
     var footLuminance by remember { mutableStateOf(HeroLuminancePolicy.FLOOR_LUMINANCE) }
+    val context = LocalContext.current
     val displayedPhotoUrl = heroLayers.baseUrl
     LaunchedEffect(displayedPhotoUrl) {
         val url = displayedPhotoUrl ?: return@LaunchedEffect
@@ -462,7 +463,7 @@ fun HeroSection(
                     bitmap, 0f, 0f, 1f, 0.30f * sliceShare
                 )
                 chipLuminance = HeroLuminancePolicy.sampleRegionLuminance(
-                    bitmap, 0f, 0.34f * sliceShare, 0.75f, 0.58f * sliceShare
+                    bitmap, 0.1f, 0.34f * sliceShare, 0.9f, 0.58f * sliceShare
                 )
                 footLuminance = HeroLuminancePolicy.sampleRegionLuminance(
                     bitmap, 0f, 0.52f * sliceShare, 1f, sliceShare
