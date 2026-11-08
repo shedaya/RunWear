@@ -192,28 +192,47 @@ class Rw144FirstScreenRenderTest {
         activity.setContentView(composeView)
         composeView.setContent { RunWearTheme(darkTheme = dark) { content() } }
         val host = Host(composeView, controller, activity)
-        pump(host, 40)
+        settle(host)
         return host
     }
 
-    private fun pump(host: Host, times: Int) {
+    /**
+     * The settle contract proven for this exact screen by
+     * HeroMainScreenRenderTest ("same contract as the wear
+     * harness"): long scheduler advances WITHOUT mid-loop draws,
+     * then idleFor, then WINDOW FOCUS — the recomposer's frame
+     * pulses (and with them the content reveal the first screen
+     * gates on) only run once the window is focused. A short
+     * flush/measure/draw loop leaves the gated hero and sheet
+     * uncomposed in this harness; that is a harness artefact, not
+     * the production behaviour (on device the window is focused
+     * and the UI thread lives).
+     */
+    private fun settle(host: Host) {
+        val scheduler = Robolectric.getForegroundThreadScheduler()
+        repeat(80) {
+            scheduler.advanceBy(100, TimeUnit.MILLISECONDS)
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+        shadowOf(Looper.getMainLooper()).idleFor(5, TimeUnit.SECONDS)
+        shadowOf(Looper.getMainLooper()).idle()
+        host.composeView.dispatchWindowFocusChanged(true)
+        host.composeView.requestFocus()
+        shadowOf(Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS)
+        shadowOf(Looper.getMainLooper()).idle()
         val view = host.composeView
         val w = view.resources.displayMetrics.widthPixels
         val h = view.resources.displayMetrics.heightPixels
-        val wSpec = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
-        val hSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
-        val scheduler = Robolectric.getForegroundThreadScheduler()
-        repeat(times) {
-            Robolectric.flushForegroundThreadScheduler()
-            scheduler.advanceBy(50, TimeUnit.MILLISECONDS)
-            shadowOf(Looper.getMainLooper()).idle()
-            view.measure(wSpec, hSpec)
-            view.layout(0, 0, w, h)
-            val frame = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            view.draw(Canvas(frame))
-            frame.recycle()
-        }
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+        )
+        view.layout(0, 0, w, h)
+        val frame = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        view.draw(Canvas(frame))
+        frame.recycle()
     }
+
 
     private fun capture(host: Host, name: String): Bitmap {
         val view = host.composeView
