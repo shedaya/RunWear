@@ -577,6 +577,131 @@ class Rw140DockRestoreRenderTest {
         )
         host.controller.pause().stop().destroy()
     }
+
+    @Test
+    fun `rw140 - first open rest frame - dock residence measured against the weather block`() {
+        // Spec section 2.1 residence audit (Sol's Nov 8, 2026
+        // 8:48 AM EST device evidence): on first open, at rest, the
+        // dock floats over the weather card — the HUMIDITY and UV
+        // values half-legible behind it and the foot of the giant
+        // numeral clipped. This frame reproduces the production
+        // first-screen geometry faithfully: the REAL HeroSheetBlock
+        // inside the production stacked unit (photo =
+        // heroPhotoHeight(screenHeight) = 0.75 x 844 = 633dp;
+        // sheet bottom-anchored, overlapping the photo's foot by
+        // HeroSheetOverlap 28dp), the production dock overlay at
+        // its section 2.1 rest position (BottomCenter, inset 12,
+        // 14 above the bottom edge), scroll at 0.
+        val weather = com.runwear.shared.domain.model.WeatherConditions(
+            dateTime = kotlinx.datetime.LocalDateTime(2026, 11, 8, 7, 0),
+            temperature = 62.0,
+            feelsLike = 58.0,
+            humidity = 23,
+            windSpeed = 3.0,
+            windGusts = 6.0,
+            windDirection = 180,
+            precipitationProbability = 0,
+            precipitation = 0.0,
+            isRaining = false,
+            isSnowing = false,
+            cloudCover = 10,
+            uvIndex = 3.0,
+            weatherCode = com.runwear.shared.domain.model.WeatherCode.CLEAR_SKY
+        )
+        val now = LocalDateTime.of(2026, 11, 8, 7, 0)
+        val dayEntry = phoenixEntry()
+        val line = WearIveRunDockNarration.line(dayEntry, today)
+        val host = compose {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(RunWearColors.Background)
+            ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(RunWearColors.Surface)
+                ) {
+                    item {
+                        val heroH = com.runwear.app.ui.components
+                            .heroPhotoHeight(844)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(heroH + 248.dp - 28.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(heroH)
+                                    .background(Color(0xFF9DB89A))
+                            )
+                            com.runwear.app.ui.components.HeroSheetBlock(
+                                weather = weather,
+                                locationName = "Phoenix, AZ",
+                                selectedDateTime = now,
+                                locationNow = now,
+                                isNowSelected = true,
+                                onDateClick = {},
+                                onTimeClick = {},
+                                onNowClick = {},
+                                overlapsPhoto = true,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                            )
+                        }
+                    }
+                    item { Spacer(Modifier.height(900.dp)) }
+                }
+                // The production dock overlay at rest (fade 0).
+                Box(
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    WearIveRunDock(
+                        narration = line,
+                        cueKey = 0,
+                        cueArmed = false,
+                        onExpand = {},
+                        onDelete = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal =
+                                    WearIveRunDockPolicy.DOCK_INSET_DP.dp
+                            )
+                            .padding(
+                                bottom =
+                                    WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
+                            )
+                    )
+                }
+            }
+        }
+        capture(host, "h-first-open-rest.png")
+        val density = host.composeView.resources
+            .displayMetrics.density
+        fun bottomDpOf(text: String): Float? =
+            boundsOf(host, text)?.let { it.bottom / density }
+        val dock = boundsOf(host, "Updated to Phoenix, AZ")
+        assertNotNull("dock narration at rest", dock)
+        val dockTopDp = dock!!.top / density
+        // The residence measurements (printed for the lane
+        // report): how far the weather block's lowest elements
+        // extend BELOW the dock's top edge — i.e. how much of
+        // them sits behind the translucent dock at rest.
+        val uvBottom = bottomDpOf("3 of 11")
+        val humidityBottom = bottomDpOf("23%")
+        val numeralBottom = bottomDpOf("58°")
+        println(
+            "RW140-REST dockTopDp=$dockTopDp " +
+                "uvBottomDp=$uvBottom humidityBottomDp=$humidityBottom " +
+                "numeralBottomDp=$numeralBottom viewportHDp=844"
+        )
+        assertNotNull("UV value bounds", uvBottom)
+        assertNotNull("humidity value bounds", humidityBottom)
+        host.controller.pause().stop().destroy()
+    }
 }
 
 /**
