@@ -13,7 +13,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.Opacity
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.WaterDrop
+import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -266,81 +270,70 @@ object HeroNumeralPolicy {
     fun shown(held: String?, candidate: String?, transitionInFlight: Boolean): String? =
         if (transitionInFlight) held ?: candidate else candidate ?: held
 }
-
-/** RW-75: the §3.3 figures' label style (shared by the grid and its measurer). */
-private val WeatherFigureLabelStyle = TextStyle(
-    fontFamily = FontFamily.Default,
-    fontWeight = FontWeight.Bold,
-    fontSize = 10.sp,
-    letterSpacing = 1.sp
-)
-
-/** RW-75: the §3.3 figures' value style (shared by the grid and its measurer). */
-private val WeatherFigureValueStyle = TextStyle(
-    fontFamily = FontFamily.Default,
-    fontWeight = FontWeight.SemiBold,
-    fontSize = 13.5.sp,
-    fontFeatureSettings = "tnum"
-)
-
 /**
- * RW-75 (GEN-6 VQ fix wave, VQ-2.2): the §3.3 weather figures grid —
- * labels in one column, values flush right — at a RESERVED width.
- *
- * The gen-6 candidate composed this grid at a nominal 150.dp inside
- * the hero row; when the numeral + bracket chip took more of the row
- * (a three-digit numeral at either type scale, the FREEZING chip at
- * max type), Compose squeezed the grid to ~92–100.dp and its values
- * clipped mid-glyph at the sheet edge, with a too-wide value drawing
- * back over its label. The grid now carries its measured width as a
- * required width ([labelColumnWidth] + [figuresWidth] are computed
- * from the actual strings at the actual type scale in
- * [HeroSheetBlock]), so it can never be squeezed below the width its
- * glyphs need; the hero row re-flows around it instead (see
- * [HeroSheetBlock]).
+ * RW-144: the sheet's opening weather line — BOXLESS (no card):
+ * four stats spread across the sheet's width, each an icon + value
+ * above its small tracked label: WIND (mph), RAIN (%),
+ * HUMIDITY (%), UV ("0 of 11" form). Icons take the theme's pine
+ * accent (pine #175E4C in light, #5CC79F in dark — the PineAccent
+ * token). Values are the engine state's own figures, projected
+ * through the render-time unit via [HeroSheetFormat].
  */
 @Composable
-private fun WeatherFiguresGrid(
-    rows: List<Pair<String, String>>,
-    labelColumnWidth: androidx.compose.ui.unit.Dp,
-    figuresWidth: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit,
+fun WeatherLine(
+    weather: WeatherConditions?,
+    temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    onClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    if (weather == null) return
+    val rows = HeroSheetFormat.weatherGridRows(weather, temperatureUnit)
+    val icons = listOf(
+        Icons.Outlined.Air,
+        Icons.Outlined.WaterDrop,
+        Icons.Outlined.Opacity,
+        Icons.Outlined.WbSunny
+    )
     Surface(
         onClick = onClick,
         color = androidx.compose.ui.graphics.Color.Transparent,
         modifier = modifier
     ) {
-        Column(
-            modifier = Modifier
-                .requiredWidth(figuresWidth)
-                .padding(top = 4.dp),
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)
-        ) {
-            rows.forEach { (label, value) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(19.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            rows.forEachIndexed { index, (label, value) ->
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = icons[index],
+                            contentDescription = null,
+                            tint = RunWearColors.PineAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.size(6.dp))
+                        Text(
+                            text = value,
+                            style = TextStyle(
+                                fontFamily = FontFamily.Default,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 17.sp,
+                                fontFeatureSettings = "tnum"
+                            ),
+                            color = RunWearColors.TextPrimary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                     Text(
                         text = label,
-                        style = WeatherFigureLabelStyle,
+                        style = TextStyle(
+                            fontFamily = FontFamily.Default,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.sp,
+                            letterSpacing = 1.sp
+                        ),
                         color = RunWearColors.TextSecondary,
-                        modifier = Modifier.requiredWidth(labelColumnWidth),
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                    Text(
-                        text = value,
-                        style = WeatherFigureValueStyle,
-                        color = RunWearColors.TextPrimary,
-                        modifier = Modifier.weight(1f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.End,
-                        maxLines = 1,
-                        softWrap = false
+                        modifier = Modifier.padding(top = 3.dp),
+                        maxLines = 1
                     )
                 }
             }
@@ -349,412 +342,42 @@ private fun WeatherFiguresGrid(
 }
 
 /**
- * RW-25: the home SHEET block — the lower zone of the two-zone home.
+ * RW-144: the home SHEET's opening block — the boxless weather
+ * line over a hairline, on the sheet surface. Everything the
+ * pre-RW-144 block carried (feels-like label, location line, the
+ * giant numeral, the bracket chip, the figures grid) moved to the
+ * hero in the redesign (HeroSection / HeroOverlay); the sheet now
+ * opens with weather, then the outfit (the host's next items).
  *
- * In the stacked layouts this block overlaps the photo's foot by
- * [HeroSheetOverlap] (HeroMainScreen sizes the overlap); in the
- * EXPANDED split it tops the right pane with no overlap. It owns, in
- * order: the eyebrow, the hero number row (tabular sans numeral in
- * ink — never temperature-colored — beside the bracket chip), the
- * caption line, the flat DateTimePill, and the flat WeatherPillsRow.
- * The outfit content follows it in the same scroll on the same sheet
- * surface.
- *
- * @param overlapsPhoto stacked layouts: top corners rounded 28dp over
- * the photo. Split layout: the block is a pane-top card, all corners
- * rounded.
+ * @param topPadding clearance above the weather line — the stacked
+ * host passes room for the Make It Me pill straddling the
+ * hero/sheet boundary; the split pane passes its plain inset.
  */
 @Composable
 fun HeroSheetBlock(
     weather: WeatherConditions?,
-    locationName: String,
-    selectedDateTime: LocalDateTime,
-    locationNow: LocalDateTime,
-    isNowSelected: Boolean,
-    onDateClick: () -> Unit,
-    onTimeClick: () -> Unit,
-    onNowClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit = {},
-    overlapsPhoto: Boolean = true,
     modifier: Modifier = Modifier,
-    /**
-     * GEN-2 A2 (W-7): true while a fetch/switch transition is in
-     * flight — the hero numeral holds its last committed value whole
-     * until the transition lands (see [HeroNumeralPolicy]).
-     */
-    holdNumeral: Boolean = false,
-    /**
-     * WS-2: the render-time unit projection. Every figure in this
-     * block (numeral, caption, wind pill) converts from the canonical
-     * store through this ONE preference value in the same composition
-     * pass, so a unit change swaps the whole sheet atomically.
-     */
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
-    /**
-     * GEN-5 (RW-28 item 11): the comfort frame for the numeral and
-     * the bracket chip — the RW-23 adjusted frame, shared with the
-     * day chart (see HeroSheetFormat.heroNumeral).
-     */
-    comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
-        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL
+    topPadding: androidx.compose.ui.unit.Dp = 16.dp
 ) {
-    val shape = if (overlapsPhoto) {
-        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    } else {
-        RoundedCornerShape(28.dp)
-    }
-
-    val bracket = weather?.let { HeroSheetFormat.bracketFor(it, comfortPreference) }
-
     Column(
         modifier = modifier
-            .clip(shape)
             .background(RunWearColors.Surface)
             .padding(horizontal = 20.dp)
-            .padding(top = 20.dp, bottom = 12.dp)
+            .padding(top = topPadding, bottom = 14.dp)
     ) {
-        // (a) RW-26 settled header stack: (i) "Feels like" small
-        // uppercase label, (ii) the location line "{Place} · {Moment}"
-        // at 15.5sp semibold sentence case — distinct pieces, never
-        // one undifferentiated eyebrow block (design §7 amendment 2).
-        Text(
-            text = HeroSheetFormat.FEELS_LIKE_LABEL.uppercase(Locale.US),
-            style = MaterialTheme.typography.labelMedium,
-            letterSpacing = 1.sp,
-            color = RunWearColors.TextSecondary,
-            maxLines = 1
+        WeatherLine(
+            weather = weather,
+            temperatureUnit = temperatureUnit,
+            onClick = { onWeatherPillClick("condition") }
         )
-        // GEN-4 headline-line entry: the MOMENT segment is tappable
-        // (pine, bold, chevron — opens the Choose-a-Time sheet); in
-        // the changed-time state a compact pine refresh + "Now"
-        // segment follows it in the same dot-separated rhythm and
-        // performs exactly resetToNow(). The place segment stays
-        // non-interactive.
-        val headlineState = HeadlineLinePolicy.state(isNowSelected)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 2.dp)
-        ) {
-            Text(
-                text = HeroSheetFormat.placeText(locationName),
-                style = TextStyle(
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.5.sp,
-                    lineHeight = 20.sp
-                ),
-                color = RunWearColors.TextPrimary,
-                maxLines = 1,
-                // GEN-5 (RW-29 FA-47): the place segment carries
-                // the row's weight and ellipsizes ITSELF — the
-                // gen-4 row measured the place at full width, so
-                // a long place name pushed the moment segment and
-                // the refresh + "Now" way-back off the sheet
-                // entirely, stranding a changed-time user.
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Text(
-                text = " · ",
-                style = TextStyle(
-                    fontFamily = FontFamily.Default,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.5.sp,
-                    lineHeight = 20.sp
-                ),
-                color = RunWearColors.TextPrimary
-            )
-            // Surface onClick, not a tap modifier on the numeral's
-            // file: the T-1 pin (HeroNumeralReadoutTest) keeps this
-            // file free of tap modifiers — the numeral itself stays
-            // a pure readout, and these segments are buttons.
-            //
-            // GEN-6 WAVE C (RW-53 — the date-path break): gen-5
-            // (RW-28 item 12) removed the duplicate DateTimePill row
-            // and left this moment segment as the headline's ONLY
-            // entry — wired to the TIME sheet alone. onDateClick
-            // dangled unrendered, so on the phone layout the date
-            // picker was UNREACHABLE from Home (device-confirmed:
-            // "can change the time but not the date"). The moment
-            // is now TWO segments in the changed state — the date
-            // part opens the date sheet, the time part opens
-            // Choose-a-Time — reading as the same single line.
-            // The NOW state keeps its single "Now" segment (its
-            // date is today by definition).
-            if (isNowSelected) {
-                Surface(
-                    onClick = { onTimeClick() },
-                    color = androidx.compose.ui.graphics.Color.Transparent
-                ) {
-                    Text(
-                        text = HeroSheetFormat.momentText(selectedDateTime, locationNow, isNowSelected) + " ›",
-                        style = TextStyle(
-                            fontFamily = FontFamily.Default,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.5.sp,
-                            lineHeight = 20.sp
-                        ),
-                        color = RunWearColors.PineAccent,
-                        maxLines = 1,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    )
-                }
-            } else {
-                // The date segment renders when the moment NAMES
-                // a day (tomorrow / a later date). For an explicit
-                // TODAY pick the settled reading is the bare time
-                // (gen-5 B-13: no "Today," prefix) — that state's
-                // date door is the day word in Choose-a-Time's
-                // context line, one tap inside the same entry.
-                if (selectedDateTime.toLocalDate() != locationNow.toLocalDate()) {
-                Surface(
-                    onClick = { onDateClick() },
-                    color = androidx.compose.ui.graphics.Color.Transparent
-                ) {
-                    Text(
-                        text = HeroSheetFormat.dateSegmentText(selectedDateTime, locationNow) + ", ",
-                        style = TextStyle(
-                            fontFamily = FontFamily.Default,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.5.sp,
-                            lineHeight = 20.sp
-                        ),
-                        color = RunWearColors.PineAccent,
-                        maxLines = 1,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    )
-                }
-                }
-                Surface(
-                    onClick = { onTimeClick() },
-                    color = androidx.compose.ui.graphics.Color.Transparent
-                ) {
-                    Text(
-                        text = HeroSheetFormat.timeSegmentText(selectedDateTime) + " ›",
-                        style = TextStyle(
-                            fontFamily = FontFamily.Default,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.5.sp,
-                            lineHeight = 20.sp
-                        ),
-                        color = RunWearColors.PineAccent,
-                        maxLines = 1,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    )
-                }
-            }
-            if (headlineState.showNowReset) {
-                Text(
-                    text = " · ",
-                    style = TextStyle(
-                        fontFamily = FontFamily.Default,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.5.sp,
-                        lineHeight = 20.sp
-                    ),
-                    color = RunWearColors.TextPrimary
-                )
-                Surface(
-                    onClick = { onNowClick() },
-                    color = androidx.compose.ui.graphics.Color.Transparent
-                ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Refresh,
-                        contentDescription = "Jump to now",
-                        tint = RunWearColors.PineAccent,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(Modifier.size(4.dp))
-                    Text(
-                        text = "Now",
-                        style = TextStyle(
-                            fontFamily = FontFamily.Default,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            lineHeight = 20.sp
-                        ),
-                        color = RunWearColors.PineAccent,
-                        maxLines = 1
-                    )
-                }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        // (b) Hero number row: the numeral in ink beside the bracket
-        // chip. Only the chip's dot carries the temperature color.
-        // WS-2 (T-1 ruling): the numeral is display-only — no tap
-        // target, no haptic, no counter animation. The unit is
-        // changed in Settings only.
-        // GEN-2 A2 (W-7): the rendered string passes through
-        // HeroNumeralPolicy — held whole during a transition, swapped
-        // whole at the commit, never a partial or blended rendering.
-        val candidateNumeral = weather?.let {
-            HeroSheetFormat.heroNumeral(it, temperatureUnit, comfortPreference)
-        }
-        var heldNumeral by remember { mutableStateOf<String?>(null) }
-        val shownNumeral = HeroNumeralPolicy.shown(
-            held = heldNumeral,
-            candidate = candidateNumeral,
-            transitionInFlight = holdNumeral
+        Spacer(Modifier.height(14.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(RunWearColors.Hairline)
         )
-        LaunchedEffect(candidateNumeral, holdNumeral) {
-            if (!holdNumeral && candidateNumeral != null) heldNumeral = candidateNumeral
-        }
-        // GEN-4: the weather figures live HERE, right-justified in
-        // the hero beside the numeral — a strict two-column grid
-        // (labels in one fixed column, values flush right), its top
-        // aligned to the numeral's top, rows evenly spaced. Nothing
-        // weather-related sits below the headline on home anymore:
-        // the pills row that used to live under the pill is gone.
-        //
-        // RW-75 (GEN-6 VQ fix wave, VQ-2.2): the beside composition
-        // is kept ONLY when it genuinely fits. The candidate's fixed
-        // 150.dp grid was squeezed by the numeral + chip whenever
-        // their combined width grew (108° at both type scales, −4°
-        // with the FREEZING chip at max type), clipping values
-        // mid-glyph at the sheet edge and letting a value draw back
-        // over its label (the HUMIDITY overlap). The row now
-        // MEASURES its citizens at the current type scale — numeral,
-        // chip (label + 24.dp padding + 9.dp dot + 7.dp spacer),
-        // and the figures at their glyph widths — and reserves the
-        // figures their full measured width. When the measured sum
-        // exceeds the sheet's content width, the figures re-flow to
-        // a reserved right-anchored slot directly under the numeral
-        // row, values still flush at the sheet's right edge; the
-        // numeral and the chip beside it never move or shrink.
-        val numeralStyle = TextStyle(
-            fontFamily = FontFamily.Default,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 80.sp,
-            lineHeight = 80.sp,
-            fontFeatureSettings = "tnum"
-        )
-        val figureRows = weather?.let {
-            HeroSheetFormat.weatherGridRows(it, temperatureUnit)
-        } ?: emptyList()
-        val textMeasurer = rememberTextMeasurer()
-        val density = LocalDensity.current
-        fun measuredWidth(text: String, style: TextStyle): androidx.compose.ui.unit.Dp =
-            with(density) {
-                textMeasurer.measure(AnnotatedString(text), style).size.width.toDp()
-            }
-        val labelColumnWidth = (figureRows.maxOfOrNull { (label, _) ->
-            measuredWidth(label, WeatherFigureLabelStyle)
-        } ?: 0.dp) + 4.dp
-        val valueColumnWidth = (figureRows.maxOfOrNull { (_, value) ->
-            measuredWidth(value, WeatherFigureValueStyle)
-        } ?: 0.dp) + 4.dp
-        // 8.dp of air between the label column and the value column.
-        val figuresWidth = labelColumnWidth + valueColumnWidth + 8.dp
-        val numeralWidth = measuredWidth(shownNumeral ?: "0°", numeralStyle)
-        val chipWidth = bracket?.let {
-            measuredWidth(it.name, MaterialTheme.typography.labelLarge) + 40.dp
-        } ?: 0.dp
-        val chipGap = if (bracket != null) 14.dp else 0.dp
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val figuresFitBeside = figureRows.isEmpty() ||
-                numeralWidth + chipGap + chipWidth + 8.dp + figuresWidth <= maxWidth
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text(
-                        text = shownNumeral ?: "0°",
-                        style = numeralStyle,
-                        color = RunWearColors.TextPrimary
-                    )
-                    if (bracket != null) {
-                        Spacer(Modifier.size(14.dp))
-                        Box(modifier = Modifier.padding(top = 14.dp)) {
-                            TemperatureBracketChip(bracket = bracket)
-                        }
-                    }
-                    if (figuresFitBeside && figureRows.isNotEmpty()) {
-                        Spacer(Modifier.weight(1f))
-                        WeatherFiguresGrid(
-                            rows = figureRows,
-                            labelColumnWidth = labelColumnWidth,
-                            figuresWidth = figuresWidth,
-                            onClick = { onWeatherPillClick("condition") }
-                        )
-                    }
-                }
-                if (!figuresFitBeside && figureRows.isNotEmpty()) {
-                    WeatherFiguresGrid(
-                        rows = figureRows,
-                        labelColumnWidth = labelColumnWidth,
-                        figuresWidth = figuresWidth,
-                        onClick = { onWeatherPillClick("condition") },
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .padding(top = 6.dp)
-                    )
-                }
-            }
-        }
-
-        // (c) Caption line
-        weather?.let {
-            Text(
-                text = HeroSheetFormat.caption(it, temperatureUnit),
-                style = MaterialTheme.typography.bodyMedium,
-                color = RunWearColors.TextSecondary,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-        }
-
-        // GEN-5 (RW-28 item 12, A-22/B-13): the duplicate
-        // DateTimePill "Today | Now" segmented row is GONE. The
-        // moment lives in exactly one place — the headline line
-        // above: its DATE segment opens the date sheet and its
-        // TIME segment opens Choose-a-Time (GEN-6 WAVE C RW-53:
-        // gen-5 left only the time segment rendered, stranding
-        // the date entry — see the segment block above), and the
-        // compact refresh + "Now" way-back appears in the same
-        // line in the changed state.
-
-        // GEN-4: no weather row below the headline — the figures
-        // are in the right-justified grid beside the numeral above.
-        // The weather DETAIL sheet (frames 40/41) is unchanged and
-        // still opens from that grid.
-    }
-}
-
-/**
- * The temperature bracket chip beside the hero number: a filled dot
- * in the bracket's temperature color + the bracket label in ink, on a
- * tonal pill. The numeral itself is never temperature-colored.
- */
-@Composable
-private fun TemperatureBracketChip(bracket: TempBracket) {
-    Surface(
-        shape = RoundedCornerShape(100.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(9.dp)
-                    .clip(CircleShape)
-                    .background(temperatureBracketColor(bracket))
-            )
-            Spacer(Modifier.size(7.dp))
-            Text(
-                text = bracket.name,
-                style = MaterialTheme.typography.labelLarge,
-                color = RunWearColors.TextPrimary
-            )
-        }
     }
 }

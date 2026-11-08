@@ -190,9 +190,20 @@ fun HeroPill(
                 Modifier.clickable { onAction() }
             } else {
                 Modifier
-            }).widthIn(max = maxWidth),
+            }).widthIn(max = maxWidth)
+                .androidx.compose.ui.draw.shadow(
+                    elevation = 8.dp,
+                    shape = RoundedCornerShape(100.dp),
+                    ambientColor = Color(0xFF140E08).copy(alpha = 0.25f),
+                    spotColor = Color(0xFF140E08).copy(alpha = 0.25f)
+                ),
             shape = RoundedCornerShape(100.dp),
-            color = Color.Black.copy(alpha = 0.45f)
+            // RW-144: the pill's material is the SHEET's — card
+            // cream #FDFBF6 in light, warm charcoal #2A251E in
+            // dark (the palette's BgCard in both modes) — because
+            // its seat now straddles the hero/sheet boundary in
+            // the v8 frames' form, with ink text on it.
+            color = com.runwear.app.ui.theme.RunWearColors.BgCard
         ) {
             // WT-4 (parity with iOS): the FREE generating pill
             // STACKS — the generating row keeps its one-row form
@@ -204,10 +215,10 @@ fun HeroPill(
             // it has always been.
             Column(
                 modifier = Modifier.padding(
-                    start = if (content.showScriptMark) 15.dp else 10.dp,
-                    end = 10.dp,
-                    top = 6.dp,
-                    bottom = 6.dp
+                    start = if (content.showScriptMark) 16.dp else 12.dp,
+                    end = 12.dp,
+                    top = 8.dp,
+                    bottom = 8.dp
                 )
             ) {
                 Row(
@@ -215,7 +226,7 @@ fun HeroPill(
                 ) {
                 if (content.showSpinner) {
                     CircularProgressIndicator(
-                        color = com.runwear.app.ui.theme.PhotoInk,
+                        color = com.runwear.app.ui.theme.RunWearColors.TextPrimary,
                         modifier = Modifier.size(12.dp),
                         strokeWidth = 1.5.dp
                     )
@@ -225,15 +236,15 @@ fun HeroPill(
                     Text(
                         text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
                         fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
-                        fontSize = 15.sp,
-                        color = com.runwear.app.ui.theme.PhotoInk
+                        fontSize = 19.sp,
+                        color = com.runwear.app.ui.theme.RunWearColors.TextPrimary
                     )
                     Spacer(Modifier.width(7.dp))
                 }
                 Text(
                     text = content.text,
-                    fontSize = 12.sp,
-                    color = com.runwear.app.ui.theme.PhotoInk,
+                    fontSize = 13.5.sp,
+                    color = com.runwear.app.ui.theme.RunWearColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -242,7 +253,7 @@ fun HeroPill(
                     Icon(
                         imageVector = Icons.Filled.Lock,
                         contentDescription = null,
-                        tint = com.runwear.app.ui.theme.PhotoInk,
+                        tint = com.runwear.app.ui.theme.RunWearColors.TextPrimary,
                         modifier = Modifier.size(11.dp)
                     )
                 }
@@ -264,9 +275,9 @@ fun HeroPill(
                         color = if (content.kind == HeroPillKind.EXHAUSTED ||
                             content.kind == HeroPillKind.EXACT_FREE
                         ) {
-                            com.runwear.app.ui.theme.PineAccentOnDark
+                            com.runwear.app.ui.theme.RunWearColors.PineAccent
                         } else {
-                            com.runwear.app.ui.theme.PhotoInk
+                            com.runwear.app.ui.theme.RunWearColors.TextPrimary
                         },
                         modifier = Modifier.clickable { onAction() }
                     )
@@ -278,7 +289,7 @@ fun HeroPill(
                         text = content.upsellText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = com.runwear.app.ui.theme.PineAccentOnDark,
+                        color = com.runwear.app.ui.theme.RunWearColors.PineAccent,
                         modifier = Modifier.clickable { onAction() }
                     )
                 }

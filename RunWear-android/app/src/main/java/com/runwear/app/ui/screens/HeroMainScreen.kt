@@ -81,6 +81,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
@@ -324,6 +326,46 @@ fun HeroMainScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 8.dp)
         )
+    }
+
+    // RW-144 (Nov 4, 2026 ruling, carried into the redesign): below
+    // the day-chart glance band sits the COMPLETE detailed weather
+    // block — the same unified detail the weather sheet carries
+    // (RW-63), rendered in place. It describes the hour the chart
+    // marker is on: the marker follows the selection and
+    // uiState.weather IS the selected moment's conditions, so the
+    // block and the marker can never name different hours.
+    val detailedWeatherBlockContent: @Composable () -> Unit = {
+        val w = uiState.weather
+        if (w != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(RunWearColors.Hairline)
+                )
+                Spacer(Modifier.height(16.dp))
+                UnifiedWeatherDetail(
+                    weather = w,
+                    unit = uiState.temperatureUnit,
+                    locationName = uiState.simplePlace?.display
+                        ?: uiState.locationName,
+                    momentLabel = com.runwear.app.ui.components.HeroSheetFormat
+                        .momentText(
+                            uiState.selectedDateTime,
+                            uiState.locationNow,
+                            uiState.isNowSelected
+                        ),
+                    runningTip = uiState.outfit?.tips?.firstOrNull(),
+                    comfortPreference = uiState.comfortPreference
+                )
+            }
+        }
     }
 
     // Hero-flag flow: the sheet, plus the URL already flagged in this
@@ -1319,6 +1361,9 @@ fun HeroMainScreen(
                                 if (!dayChartModel.isEmpty) {
                                 item { dayChartBandContent() }
                                 }
+                                // RW-144: the complete detailed
+                                // weather block below the glance band.
+                                item { detailedWeatherBlockContent() }
                                 // GEN-5 (C-3): Pro Tip + feedback,
                                 // below the chart.
                                 homeTrailingListItems(
@@ -1435,6 +1480,9 @@ fun HeroMainScreen(
                                 if (!dayChartModel.isEmpty) {
                                 item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
                                 }
+                                // RW-144: the complete detailed
+                                // weather block below the glance band.
+                                item(span = { GridItemSpan(maxLineSpan) }) { detailedWeatherBlockContent() }
                                 // GEN-5 (C-3): Pro Tip + feedback,
                                 // below the chart.
                                 homeTrailingGridItems(
@@ -1475,8 +1523,12 @@ fun HeroMainScreen(
                                                 showHeroViewer = true
                                             }
                                         },
+                                        onDateClick = { showDatePicker = true },
+                                        onTimeClick = { showTimePicker = true },
+                                        onNowClick = onResetToNow,
                                         modifier = Modifier.fillMaxSize(),
-                                        fillHeight = true
+                                        fillHeight = true,
+                                        pillAtHeroFoot = true
                                     )
                                     if (uiState.personalLookStatus is
                                         com.runwear.app.makeitme.PersonalLookStatus.Failed
@@ -1515,11 +1567,7 @@ fun HeroMainScreen(
                                         HeroSheetContent(
                                             uiState = uiState,
                                             contentVisible = contentVisible,
-                                            onDateClick = { showDatePicker = true },
-                                            onTimeClick = { showTimePicker = true },
-                                            onNowClick = onResetToNow,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
-                                            overlapsPhoto = false,
                                             modifier = Modifier.fillMaxWidth()
                                         )
                                     }
@@ -1558,6 +1606,8 @@ fun HeroMainScreen(
                                     // GEN-4: the day-chart glance band.
                                     if (!dayChartModel.isEmpty) {
                                     item(span = { GridItemSpan(maxLineSpan) }) { dayChartBandContent() }
+                                    // RW-144: the complete detailed weather block below the glance band.
+                                    item(span = { GridItemSpan(maxLineSpan) }) { detailedWeatherBlockContent() }
                                     }
                                     // GEN-5 (C-3): Pro Tip + feedback,
                                     // below the chart.
@@ -2236,8 +2286,12 @@ internal fun outfitGridColumns(contentWidth: Dp, gap: Dp): Int {
 
 /**
  * Hero PHOTO zone with entrance animation (shared across all adaptive
- * layouts). RW-25: the photo carries chrome only — everything else
- * lives on the sheet ([HeroSheetContent]).
+ * layouts). RW-144: the photo zone now also carries the date/time
+ * chip and the feels-like block (HeroSection's own overlays); the
+ * Make It Me pill is seated by the CALLER — straddling the
+ * hero/sheet boundary in the stacked layouts ([HeroStackedUnit]),
+ * or at the hero pane's foot in the EXPANDED split
+ * ([pillAtHeroFoot]).
  */
 @Composable
 private fun HeroSectionContent(
@@ -2254,9 +2308,16 @@ private fun HeroSectionContent(
     onHeroPillAction: () -> Unit = {},
     /** RW-133: tapping the photo opens the full-screen viewer. */
     onHeroPhotoClick: () -> Unit = {},
+    /** RW-144: the chip's doors (date picker / hourly chart / Now). */
+    onDateClick: () -> Unit = {},
+    onTimeClick: () -> Unit = {},
+    onNowClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     /** EXPANDED split pane only: the photo fills the pane's height. */
-    fillHeight: Boolean = false
+    fillHeight: Boolean = false,
+    /** EXPANDED only: the pill seats at the hero pane's foot
+     * (there is no hero/sheet boundary inside the pane). */
+    pillAtHeroFoot: Boolean = false
 ) {
     // WS-1 (D-01 mechanism, applied to the photo half): the caller's
     // modifier belongs to THIS root — the direct child of the
@@ -2267,81 +2328,84 @@ private fun HeroSectionContent(
         enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
         modifier = modifier
     ) {
-        HeroSection(
-            weather = uiState.weather,
-            outfit = uiState.outfit,
-            // WS-4/WS-1: the photo-zone chrome (the location pill)
-            // shows the SIMPLE place form, never the raw geocode
-            // string.
-            locationName = uiState.simplePlace?.display ?: uiState.locationName,
-            heroImageUrl = uiState.heroImageUrl,
-            // GEN-3 A-HERO (WS-A(1)/X-7): the scene's bundled fallback
-            // is the hero band's base from the scene's first frame —
-            // the band never sits on the designed gradient while a
-            // truthful photo is servable, and a place switch re-bases
-            // on the NEW place's fallback, never the old photo.
-            heroFallbackUrl = uiState.heroFallbackUrl,
-            heroSceneKey = uiState.locationName,
-            heroPill = heroPill,
-            onHeroPillAction = onHeroPillAction,
-            onHeroPhotoClick = onHeroPhotoClick,
-            scrollOffset = scrollOffset,
-            onLocationClick = onLocationClick,
-            onSettingsClick = onSettingsClick,
-            // RW-16.27: the flag chip shows for ANY hero photo — a
-            // personal photo most of all (its menu is the personal
-            // one) — and the refresh chip follows the ROTATION size
-            // (personal photo + pool candidates), so both controls
-            // live in the personal state too.
-            showFlagButton = uiState.effectiveHeroUrl != null,
-            flagEnabled = heroFlagEnabled,
-            onFlagClick = onFlagClick,
-            heroIsPersonal = uiState.heroIsPersonal,
-            // GEN-5 (RW-28 item 32, A-23): the Now-state hero shows
-            // the FLAG control only; the refresh chip joins in
-            // CHANGED states (a non-Now moment selected), where
-            // cycling the moment's photos is meaningful. The gen-4
-            // build showed refresh at Now too whenever the cell had
-            // more than one candidate.
-            showRefreshButton = !uiState.isNowSelected &&
-                uiState.effectiveHeroUrl != null &&
-                uiState.heroCandidates.size +
-                (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
-            onRefreshHeroClick = onCycleHero,
-            scaffoldBadge = if (uiState.heroIsPersonal) {
-                com.runwear.app.makeitme.ScaffoldRenderPolicy.homeBadge(uiState.heroServeKind)
-            } else {
-                null
-            },
-            modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
-        )
+        Box(modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
+            HeroSection(
+                weather = uiState.weather,
+                outfit = uiState.outfit,
+                // WS-4/WS-1: the photo-zone chrome (the location pill)
+                // shows the SIMPLE place form, never the raw geocode
+                // string.
+                locationName = uiState.simplePlace?.display ?: uiState.locationName,
+                heroImageUrl = uiState.heroImageUrl,
+                // GEN-3 A-HERO (WS-A(1)/X-7): the scene's bundled fallback
+                // is the hero band's base from the scene's first frame —
+                // the band never sits on the designed gradient while a
+                // truthful photo is servable, and a place switch re-bases
+                // on the NEW place's fallback, never the old photo.
+                heroFallbackUrl = uiState.heroFallbackUrl,
+                heroSceneKey = uiState.locationName,
+                onHeroPhotoClick = onHeroPhotoClick,
+                scrollOffset = scrollOffset,
+                onLocationClick = onLocationClick,
+                onSettingsClick = onSettingsClick,
+                // RW-144: chip + feels-like frames.
+                selectedDateTime = uiState.selectedDateTime,
+                isNowSelected = uiState.isNowSelected,
+                onDateClick = onDateClick,
+                onTimeClick = onTimeClick,
+                onNowClick = onNowClick,
+                temperatureUnit = uiState.temperatureUnit,
+                comfortPreference = uiState.comfortPreference,
+                // RW-16.27: the flag chip shows for ANY hero photo — a
+                // personal photo most of all (its menu is the personal
+                // one) — and the refresh chip follows the ROTATION size
+                // (personal photo + pool candidates), so both controls
+                // live in the personal state too.
+                showFlagButton = uiState.effectiveHeroUrl != null,
+                flagEnabled = heroFlagEnabled,
+                onFlagClick = onFlagClick,
+                heroIsPersonal = uiState.heroIsPersonal,
+                // GEN-5 (RW-28 item 32, A-23): the Now-state hero shows
+                // the FLAG control only; the refresh chip joins in
+                // CHANGED states (a non-Now moment selected).
+                showRefreshButton = !uiState.isNowSelected &&
+                    uiState.effectiveHeroUrl != null &&
+                    uiState.heroCandidates.size +
+                    (if (uiState.personalHeroImageUrl != null) 1 else 0) > 1,
+                onRefreshHeroClick = onCycleHero,
+                modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()
+            )
+            // EXPANDED split only: the pill at the hero pane's foot.
+            if (pillAtHeroFoot && heroPill != null) {
+                com.runwear.app.ui.components.HeroPill(
+                    content = heroPill,
+                    onAction = onHeroPillAction,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                )
+            }
+        }
     }
 }
 
 /**
- * The home SHEET block with the same entrance treatment as the photo
- * zone. [overlapsPhoto] is true in the stacked layouts (rounded top
- * over the photo's foot) and false atop the EXPANDED right pane.
+ * The home SHEET's opening block with the same entrance treatment
+ * as the photo zone. RW-144: the block is the boxless weather line
+ * over a hairline (HeroSheetBlock); the feels-like content it used
+ * to carry lives on the hero now.
  */
 @Composable
 private fun HeroSheetContent(
     uiState: MainUiState,
     contentVisible: Boolean,
-    onDateClick: () -> Unit,
-    onTimeClick: () -> Unit,
-    onNowClick: () -> Unit,
     onWeatherPillClick: (String) -> Unit,
-    overlapsPhoto: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Clearance for the straddling Make It Me pill (stacked layouts). */
+    topPadding: Dp = 16.dp
 ) {
-    // WS-1 (D-01, THE critical fix): [modifier] is applied to THIS
-    // AnimatedVisibility — the DIRECT child of the stacking Box — so
-    // the Box reads its Alignment.BottomStart from it and the sheet
-    // composes overlapping the photo's foot. Before WS-1 the
-    // modifier was forwarded to the inner HeroSheetBlock and this
-    // root carried none, so the Box placed the sheet at its default
-    // TopStart — ON TOP of the photo, burying the chrome row
-    // (D-02/A3) and manufacturing the scroll void (D-04).
+    // WS-1 (D-01): [modifier] stays on THIS root (the stacking
+    // unit's direct child) — see HeroStackedUnit.
     AnimatedVisibility(
         visible = contentVisible,
         enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
@@ -2349,33 +2413,22 @@ private fun HeroSheetContent(
     ) {
         HeroSheetBlock(
             weather = uiState.weather,
-            locationName = uiState.locationName,
-            selectedDateTime = uiState.selectedDateTime,
-            locationNow = uiState.locationNow,
-            isNowSelected = uiState.isNowSelected,
-            onDateClick = onDateClick,
-            onTimeClick = onTimeClick,
-            onNowClick = onNowClick,
             onWeatherPillClick = onWeatherPillClick,
-            overlapsPhoto = overlapsPhoto,
             modifier = Modifier.fillMaxWidth(),
             temperatureUnit = uiState.temperatureUnit,
-            // GEN-2 A2 (W-7): hold the hero numeral whole while a
-            // fetch/switch is in flight; it swaps at the commit.
-            holdNumeral = uiState.isLoading,
-            // GEN-5 (RW-28 item 11): the RW-23 comfort-adjusted
-            // frame for the numeral and the bracket chip.
-            comfortPreference = uiState.comfortPreference
+            topPadding = topPadding
         )
     }
 }
 
 /**
- * RW-25: the stacked layouts' two-zone unit — the photo zone with the
- * sheet block overlapping its foot by [HeroSheetOverlap]. The Box is
- * sized heroHeight + sheetBlockHeight − overlap; the sheet's height
- * is measured as it composes (seeded with a close estimate so the
- * first frame barely moves).
+ * RW-144: the stacked layouts' first-screen unit — the hero
+ * (≈44% of screen height) with the sheet opening DIRECTLY below
+ * it on the same surface, and the Make It Me pill STRADDLING the
+ * hero/sheet boundary (centered, half over the photo's foot,
+ * half over the sheet), exactly as the v8 frames seat it. When no
+ * pill state exists (a stock serve), the sheet opens at the
+ * hero's foot with its plain inset — no gap is faked.
  */
 @Composable
 private fun HeroStackedUnit(
@@ -2398,58 +2451,47 @@ private fun HeroStackedUnit(
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
     val heroHeight = heroPhotoHeight(configuration.screenHeightDp)
-    var sheetHeight by remember { mutableStateOf(248.dp) }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            // WS-1: the reservation is HeroStackedGeometry's — the
-            // first item reserves EXACTLY hero + sheet − 28dp, the
-            // sheet is bottom-anchored inside it, and the accessory
-            // rows that follow the unit (Make It Me progress/failed
-            // lines) live in the same first list item, so they scroll
-            // with the page. No height in this item is unoccupied at
-            // any sheet height (D-04's void is zero by construction).
-            .height(
-                com.runwear.app.ui.components.HeroStackedGeometry.unitHeight(
-                    heroHeight, sheetHeight
-                )
+    // The pill's half-height: its seat straddles the boundary, so
+    // the sheet's weather line clears its lower half by this much
+    // of extra top padding (the pill is ~38dp tall in every state).
+    val pillHalf = 19.dp
+    Box(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HeroSectionContent(
+                uiState = uiState,
+                contentVisible = contentVisible,
+                scrollOffset = scrollOffset,
+                onLocationClick = onLocationClick,
+                onSettingsClick = onSettingsClick,
+                onFlagClick = onFlagClick,
+                heroFlagEnabled = heroFlagEnabled,
+                onCycleHero = onCycleHero,
+                heroPill = heroPill,
+                onHeroPillAction = onHeroPillAction,
+                onHeroPhotoClick = onHeroPhotoClick,
+                onDateClick = onDateClick,
+                onTimeClick = onTimeClick,
+                onNowClick = onNowClick,
+                modifier = Modifier.fillMaxWidth()
             )
-    ) {
-        HeroSectionContent(
-            uiState = uiState,
-            contentVisible = contentVisible,
-            scrollOffset = scrollOffset,
-            onLocationClick = onLocationClick,
-            onSettingsClick = onSettingsClick,
-            onFlagClick = onFlagClick,
-            heroFlagEnabled = heroFlagEnabled,
-            onCycleHero = onCycleHero,
-            heroPill = heroPill,
-            onHeroPillAction = onHeroPillAction,
-            onHeroPhotoClick = onHeroPhotoClick,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .fillMaxWidth()
-        )
-        HeroSheetContent(
-            uiState = uiState,
-            contentVisible = contentVisible,
-            onDateClick = onDateClick,
-            onTimeClick = onTimeClick,
-            onNowClick = onNowClick,
-            onWeatherPillClick = onWeatherPillClick,
-            overlapsPhoto = true,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .onSizeChanged { size ->
-                    val measured = with(density) { size.height.toDp() }
-                    if (measured != sheetHeight) sheetHeight = measured
-                }
-        )
+            HeroSheetContent(
+                uiState = uiState,
+                contentVisible = contentVisible,
+                onWeatherPillClick = onWeatherPillClick,
+                modifier = Modifier.fillMaxWidth(),
+                topPadding = if (heroPill != null) pillHalf + 12.dp else 16.dp
+            )
+        }
+        if (heroPill != null) {
+            com.runwear.app.ui.components.HeroPill(
+                content = heroPill,
+                onAction = onHeroPillAction,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = heroHeight - pillHalf)
+            )
+        }
     }
 }
 
@@ -2482,51 +2524,18 @@ private fun OutfitSectionHeader(
                 // the home surface; M3 headlineSmall (semibold sans).
                 Text(
                     text = com.runwear.app.ui.components.OutfitHeaderCopy.header(itemCount),
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = TextStyle(
+                        fontFamily = FontFamily.Default,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 19.sp,
+                        lineHeight = 24.sp
+                    ),
                     color = RunWearColors.TextPrimary
                 )
 
-                // Shop button - opens shop modal
-                Box(
-                    modifier = Modifier
-                        .shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(50),
-                            ambientColor = RunWearColors.PrimaryGlow,
-                            spotColor = RunWearColors.PrimaryGlow
-                        )
-                        .background(
-                            brush = Brush.linearGradient(
-                                colors = listOf(
-                                    RunWearColors.Primary,
-                                    RunWearColors.PrimaryLight
-                                ),
-                                start = Offset(0f, 0f),
-                                end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
-                            ),
-                            shape = RoundedCornerShape(50)
-                        )
-                        .clickable { onShopAllClick() }
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ShoppingBag,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = com.runwear.app.ui.theme.PhotoInk
-                        )
-                        Text(
-                            text = "Shop",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            color = com.runwear.app.ui.theme.PhotoInk
-                        )
-                    }
-                }
+                // RW-144: the v8 frames' header is the count line
+                // alone — no Shop button rides it. (Shop-all remains
+                // reachable from an outfit item's own shop door.)
             }
         }
 }

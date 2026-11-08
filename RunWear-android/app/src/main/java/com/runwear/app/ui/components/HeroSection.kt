@@ -69,8 +69,14 @@ import com.runwear.shared.domain.model.WeatherConditions
  */
 val HeroSheetOverlap: Dp = 28.dp
 
-/** The hero photo's height: 75% of the screen height (unchanged). */
-fun heroPhotoHeight(screenHeightDp: Int): Dp = (screenHeightDp * 0.75).dp
+/**
+ * RW-144: the hero photo's height — ≈44% of the screen height, so
+ * the sheet's top edge lands at ≈43–45% (the v8 frames' ruled
+ * geometry). Pre-RW-144 the photo took 75% and the sheet's content
+ * lived on top of its foot; the redesign moves the feels-like
+ * block onto the hero and opens the sheet below it.
+ */
+fun heroPhotoHeight(screenHeightDp: Int): Dp = (screenHeightDp * 0.44).dp
 
 /**
  * RW-25 scroll handoff: as the home list scrolls, the photo settles
@@ -319,8 +325,22 @@ fun HeroSection(
      */
     showRefreshButton: Boolean = false,
     onRefreshHeroClick: () -> Unit = {},
-    /** RW-26: the scaffold serve's honest badge (null = no badge). */
-    scaffoldBadge: String? = null,
+    /**
+     * RW-144: the hero date/time chip's selection + doors. The
+     * date segment opens the date picker; the time segment opens
+     * the hourly chart; the return segment (picked state only)
+     * resets to Now.
+     */
+    selectedDateTime: java.time.LocalDateTime = java.time.LocalDateTime.now(),
+    isNowSelected: Boolean = true,
+    onDateClick: () -> Unit = {},
+    onTimeClick: () -> Unit = {},
+    onNowClick: () -> Unit = {},
+    /** RW-144: the render-time unit + comfort frame for the hero's feels-like block. */
+    temperatureUnit: com.runwear.shared.domain.model.TemperatureUnit =
+        com.runwear.shared.domain.model.TemperatureUnit.FAHRENHEIT,
+    comfortPreference: com.runwear.shared.domain.model.ComfortPreference =
+        com.runwear.shared.domain.model.ComfortPreference.NEUTRAL,
     /**
      * GEN-3 A-HERO (WS-A(1)): the synchronous bundled fallback for
      * the CURRENT committed conditions — the photo the band paints
@@ -341,10 +361,6 @@ fun HeroSection(
      * The new scene's base is its own fallback, never the old photo.
      */
     heroSceneKey: String = "",
-    /** GEN-3 A-HERO (WS-A(2)): THE hero pill's content (null = none). */
-    heroPill: HeroPillContent? = null,
-    /** The pill's trailing action (EXACT_FREE's "Get unlimited"). */
-    onHeroPillAction: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -394,6 +410,66 @@ fun HeroSection(
             HeroLayerPolicy.onSceneChange(heroImageUrl, heroFallbackUrl)
         } else {
             HeroLayerPolicy.onTarget(heroLayers, heroImageUrl)
+        }
+    }
+
+    // RW-144 CONTRAST GUARANTEE: sample the DISPLAYED photo's
+    // regions (top chrome zone / chip zone / feels-like foot) from
+    // a thumbnail decode of the served bitmap, and drive every
+    // hero scrim from the measured luminance (HeroLuminancePolicy).
+    // The decode rides Coil like the layers' own; a failure (or a
+    // not-yet-landed photo) leaves the last measured values — the
+    // floor defaults reproduce the approved frames' treatment.
+    var topLuminance by remember { mutableStateOf(HeroLuminancePolicy.FLOOR_LUMINANCE) }
+    var chipLuminance by remember { mutableStateOf(HeroLuminancePolicy.FLOOR_LUMINANCE) }
+    var footLuminance by remember { mutableStateOf(HeroLuminancePolicy.FLOOR_LUMINANCE) }
+    val displayedPhotoUrl = heroLayers.baseUrl
+    LaunchedEffect(displayedPhotoUrl) {
+        val url = displayedPhotoUrl ?: return@LaunchedEffect
+        try {
+            val result = coil.ImageLoader(context).execute(
+                ImageRequest.Builder(context)
+                    .data(url)
+                    .size(96, 144)
+                    .allowHardware(false)
+                    .build()
+            )
+            val drawable = (result as? coil.request.SuccessResult)?.drawable
+            val bitmap = (drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                ?: drawable?.let {
+                    val b = android.graphics.Bitmap.createBitmap(
+                        it.intrinsicWidth.coerceAtLeast(1),
+                        it.intrinsicHeight.coerceAtLeast(1),
+                        android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                    val canvas = android.graphics.Canvas(b)
+                    it.setBounds(0, 0, b.width, b.height)
+                    it.draw(canvas)
+                    b
+                }
+            if (bitmap != null) {
+                // The displayed slice is the bitmap's top-anchored
+                // crop (HeroImageGeometry): display fractions map
+                // onto the bitmap through the slice's height share.
+                val dm = context.resources.displayMetrics
+                val sliceShare = HeroImageGeometry.sliceHeightSourcePx(
+                    dm.widthPixels.toFloat(),
+                    heroPhotoHeight(
+                        (dm.heightPixels / dm.density).toInt()
+                    ).value * dm.density
+                ) / HeroImageGeometry.SOURCE_HEIGHT_PX.toFloat()
+                topLuminance = HeroLuminancePolicy.sampleRegionLuminance(
+                    bitmap, 0f, 0f, 1f, 0.30f * sliceShare
+                )
+                chipLuminance = HeroLuminancePolicy.sampleRegionLuminance(
+                    bitmap, 0f, 0.34f * sliceShare, 0.75f, 0.58f * sliceShare
+                )
+                footLuminance = HeroLuminancePolicy.sampleRegionLuminance(
+                    bitmap, 0f, 0.52f * sliceShare, 1f, sliceShare
+                )
+            }
+        } catch (e: Exception) {
+            // Sampling is best-effort: the floor treatment stands.
         }
     }
 
@@ -511,11 +587,23 @@ fun HeroSection(
                 }
             }
 
-            // 2. Temperature Tint Overlay (12%, unchanged)
+            // 2. RW-144: the band-tinted wash over the photo (the
+            // PWA's .hero-tint treatment, notes-v6): the band colour
+            // at alpha 0.15 at the top, 0.05 at mid-hero, 0 at the
+            // hero's foot — under the scrims and chrome, decorative
+            // only; legibility is the scrims' job, never the wash's.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(tempColor.copy(alpha = 0.12f))
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to tempColor.copy(alpha = HeroBand.WASH_TOP_ALPHA),
+                                0.5f to tempColor.copy(alpha = HeroBand.WASH_MID_ALPHA),
+                                1.0f to tempColor.copy(alpha = 0f)
+                            )
+                        )
+                    )
             )
         }
 
@@ -538,6 +626,12 @@ fun HeroSection(
         // pg_male_long_o1_tights_cap_none,
         // pg_female_long_o1_tights_headband_gloves, cool_rain_male)
         // — before the shadow's glyph-local darkening is counted.
+        // RW-144: the scrim ink is the warm black (26,20,14) and
+        // its strength is LUMINANCE-DRIVEN (HeroLuminancePolicy.
+        // chromeScrimBoost over the measured top region) — the
+        // 0.62 / 0.31 stops are the floor treatment, scaled up for
+        // bright photos so the cream chrome holds contrast.
+        val topScrimBoost = HeroLuminancePolicy.chromeScrimBoost(topLuminance)
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -546,8 +640,10 @@ fun HeroSection(
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.00f to Color.Black.copy(alpha = 0.62f),
-                            0.55f to Color.Black.copy(alpha = 0.31f),
+                            0.00f to com.runwear.app.ui.theme.HeroTopScrimInk
+                                .copy(alpha = (0.62f * topScrimBoost).coerceAtMost(0.92f)),
+                            0.55f to com.runwear.app.ui.theme.HeroTopScrimInk
+                                .copy(alpha = (0.31f * topScrimBoost).coerceAtMost(0.60f)),
                             1.00f to Color.Transparent
                         )
                     )
@@ -555,12 +651,13 @@ fun HeroSection(
         )
 
         // 3b. RW-26: the RunWear script logo — genuine Great Vibes,
-        // warm-white #F5F1EA, ~29sp, centered at the top of home as
+        // warm-white #F5F1EA, centered at the top of home as
         // photo-zone chrome (a brand mark, not data; design §7.3).
+        // RW-144: sized to the v8 frames' wordmark (~40sp).
         Text(
             text = "RunWear",
             fontFamily = GreatVibesFontFamily,
-            fontSize = 29.sp,
+            fontSize = 40.sp,
             color = com.runwear.app.ui.theme.PhotoInk,
             style = TextStyle(
                 shadow = Shadow(
@@ -593,9 +690,10 @@ fun HeroSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Location button (pill with text) - constrained to prevent overflow
-            GlassButton(
-                icon = Icons.Outlined.LocationOn,
+            // RW-144 place pill: warm-black chrome fill (24,20,16)
+            // at alpha 84, cream outline at alpha 30, pin + place
+            // name in cream — the v8 chrome language.
+            HeroPlacePill(
                 text = com.runwear.shared.domain.model.SimplePlace
                     .fromRawDisplayString(locationName).display,
                 onClick = onLocationClick,
@@ -605,54 +703,98 @@ fun HeroSection(
 
             Spacer(Modifier.width(8.dp))
 
-            // Right side: Settings (icon-only circular button).
-            // WS-6 (D-15): no home share button — sharing lives in
-            // the collection, card by card, by design.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                GlassButtonIcon(
-                    icon = Icons.Outlined.Settings,
-                    onClick = onSettingsClick,
-                    contentDescription = "Settings",
-                    enabled = chromeInteractive
-                )
-            }
+            // RW-144: settings gear in a circle of the same chrome.
+            HeroGearButton(
+                onClick = onSettingsClick,
+                enabled = chromeInteractive
+            )
         }
 
-        // 4b. GEN-3 A-HERO (WS-A(2)): THE hero pill — ONE component
-        // at the bottom of the hero image carrying the personal
-        // layer's state in every case (making / scaffold / exact-free
-        // count + Get unlimited / Premium). It subsumes the RW-26
-        // scaffold badge (same position, same capsule). It renders
-        // whenever its state exists — including over the fallback
-        // photo while a personal photo generates, which is precisely
-        // the frame X-2/X-8 found missing — and a stock serve carries
-        // no pill (§9 silence, preserved by HeroPillPolicy).
-        if (heroPill != null) {
-            HeroPill(
-                content = heroPill,
-                onAction = onHeroPillAction,
+        // 4b. RW-144: the date/time CHIP — one translucent pill,
+        // two targets (HeroDateTimeChip), seated by the crop-
+        // protection policy so it never lands across the runner's
+        // face zone (HeroChipPlacement over HeroImageGeometry's
+        // audited head band). A soft luminance-driven scrim patch
+        // sits beneath it: its strength grows with the measured
+        // luminance of the chip's own photo region.
+        val chipHeadTopDp = with(density) {
+            HeroImageGeometry.headTopDisplayPx(
+                heroWidthPx.toFloat(), heroHeightPx.toFloat()
+            ).toDp().value
+        }
+        val chipHeadBottomDp = with(density) {
+            (HeroImageGeometry.headTopDisplayPx(
+                heroWidthPx.toFloat(), heroHeightPx.toFloat()
+            ) + (HeroImageGeometry.HEAD_BAND_BOTTOM_FRACTION -
+                HeroImageGeometry.HEAD_BAND_TOP_FRACTION) *
+                HeroImageGeometry.SOURCE_HEIGHT_PX *
+                HeroImageGeometry.cropScale(
+                    heroWidthPx.toFloat(), heroHeightPx.toFloat()
+                )).toDp().value
+        }
+        val chipTopDp = HeroChipPlacement.topDp(
+            chromeBottomDp = 96f,
+            chipHeightDp = HeroChipGeometry.HEIGHT.value,
+            headTopDp = chipHeadTopDp,
+            headBottomDp = chipHeadBottomDp
+        )
+        val chipScrimAlpha = 0.05f + (
+            HeroLuminancePolicy.scrimPeakAlpha(chipLuminance) -
+                HeroLuminancePolicy.SCRIM_PEAK_FLOOR
+            ) * 0.85f
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 8.dp, top = (chipTopDp - 8f).dp)
+                .width(320.dp)
+                .height(HeroChipGeometry.HEIGHT + 16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            com.runwear.app.ui.theme.HeroScrimInk.copy(alpha = chipScrimAlpha),
+                            com.runwear.app.ui.theme.HeroScrimInk.copy(alpha = chipScrimAlpha * 0.4f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
+        HeroDateTimeChip(
+            selectedDateTime = selectedDateTime,
+            isNowSelected = isNowSelected,
+            onDateClick = onDateClick,
+            onTimeClick = onTimeClick,
+            onNowClick = onNowClick,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 16.dp, top = chipTopDp.dp)
+        )
+
+        // 4c. RW-144: the FEELS-LIKE BLOCK on the hero's foot, over
+        // its luminance-driven scrim zone (ink (14,11,8); the
+        // mock's peak 0.73 is the floor — HeroLuminancePolicy
+        // scales it up from the measured luminance of the foot
+        // region). The Make It Me pill no longer lives here: it
+        // straddles the hero/sheet boundary in the stacked unit
+        // (HeroMainScreen), per the v8 frames.
+        if (weather != null) {
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 14.dp, bottom = HeroSheetOverlap + 12.dp)
-            )
-        } else if (heroImageUrl != null && scaffoldBadge != null) {
-            // Legacy badge path (kept for the existing call sites
-            // that still pass a badge directly; HeroPillPolicy's
-            // SCAFFOLD state is its successor).
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 14.dp, bottom = HeroSheetOverlap + 12.dp),
-                shape = RoundedCornerShape(100.dp),
-                color = Color.Black.copy(alpha = 0.45f)
+                    .fillMaxWidth()
+                    .height(196.dp)
             ) {
-                Text(
-                    text = scaffoldBadge,
-                    fontSize = 12.sp,
-                    color = com.runwear.app.ui.theme.PhotoInk,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                HeroFeelsLikeScrim(
+                    peakAlpha = HeroLuminancePolicy.scrimPeakAlpha(footLuminance),
+                    modifier = Modifier.fillMaxSize()
+                )
+                HeroFeelsLikeBlock(
+                    weather = weather,
+                    temperatureUnit = temperatureUnit,
+                    comfortPreference = comfortPreference,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 16.dp, bottom = 16.dp, end = 16.dp)
                 )
             }
         }
@@ -660,15 +802,14 @@ fun HeroSection(
         // 5. Hero corner chips — bottom-trailing corner of the photo:
         // refresh (cycle to the cell's next approved image) beside the
         // flag. Deliberately quiet: small dark translucent discs, no
-        // labels. RW-25: the inset no longer derives from a pills row
-        // (the pills moved to the sheet) — the chips sit above the
-        // sheet's overlap of the photo's foot: overlap (28dp) + a
-        // 12dp gap. Rendered only while a photo is actually on screen.
+        // labels. RW-144: they sit at the hero foot itself (the sheet
+        // no longer overlaps the photo). Rendered only while a photo
+        // is actually on screen.
         if (heroImageUrl != null && (showFlagButton || showRefreshButton)) {
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = HeroSheetOverlap + 12.dp),
+                    .padding(end = 14.dp, bottom = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -683,6 +824,82 @@ fun HeroSection(
                 }
             }
         }
+    }
+}
+
+/**
+ * RW-144: the place pill — warm-black chrome fill (24,20,16) at
+ * alpha 84, cream outline at alpha 30, pin + SimplePlace name in
+ * cream #F5F1EA. The home entry to the location picker.
+ */
+@Composable
+fun HeroPlacePill(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        shape = RoundedCornerShape(100.dp),
+        color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 84f / 255f),
+        border = BorderStroke(
+            1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 30f / 255f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.LocationOn,
+                contentDescription = null,
+                tint = com.runwear.app.ui.theme.PhotoInk,
+                modifier = Modifier.size(15.dp)
+            )
+            Text(
+                text = text,
+                fontSize = 13.5.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                color = com.runwear.app.ui.theme.PhotoInk,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
+ * RW-144: the settings gear in a circle of the same chrome fill
+ * and outline as the place pill.
+ */
+@Composable
+fun HeroGearButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.size(38.dp),
+        shape = CircleShape,
+        color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 84f / 255f),
+        border = BorderStroke(
+            1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 30f / 255f)
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Settings,
+            contentDescription = "Settings",
+            tint = com.runwear.app.ui.theme.PhotoInk,
+            modifier = Modifier
+                .padding(9.dp)
+                .size(20.dp)
+        )
     }
 }
 
@@ -702,8 +919,8 @@ private fun HeroFlagChip(
         enabled = enabled,
         modifier = modifier.size(32.dp),
         shape = CircleShape,
-        color = Color.Black.copy(alpha = if (enabled) 0.35f else 0.22f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+        color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = if (enabled) 0.55f else 0.38f),
+        border = BorderStroke(1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.30f))
     ) {
         Icon(
             imageVector = Icons.Outlined.Flag,
@@ -731,8 +948,8 @@ private fun HeroRefreshChip(
         onClick = onClick,
         modifier = modifier.size(32.dp),
         shape = CircleShape,
-        color = Color.Black.copy(alpha = 0.35f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+        color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 0.55f),
+        border = BorderStroke(1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.30f))
     ) {
         Icon(
             imageVector = Icons.Outlined.Refresh,

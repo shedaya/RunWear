@@ -101,6 +101,29 @@ object ClothingThumbnailService {
         getThumbnailAssetPath(item, gender)?.let { "file:///android_asset/$it" }
 
     /**
+     * RW-144 (Nov 8, 2026): the LIGHT-treatment twin of
+     * [getThumbnailAssetPath] — the Treatment L garment tiles
+     * (warm-sand garments on a pale warm ground, for the light
+     * theme's outfit rows) bundled at `assets/thumbnails-light/…`.
+     * Same seam, same key map, same gender rule: the file BASENAME
+     * is identical to the dark set's (`<key>-<gender>`), only the
+     * directory and the extension differ (.png vs .webp), so a
+     * file-for-file replacement of the light set needs no code
+     * change — drop the new PNGs into `assets/thumbnails-light/`
+     * under the same names. There is no remote light set; a failed
+     * light asset falls back to the standard asset/URL chain in the
+     * UI layer.
+     */
+    fun getLightThumbnailAssetPath(item: ClothingItem, gender: GenderPreference): String? {
+        val thumbnailKey = THUMBNAIL_KEYS[item] ?: return null
+        return "thumbnails-light/$thumbnailKey-${genderSuffix(gender)}.png"
+    }
+
+    /** `file:///android_asset/` URI for [getLightThumbnailAssetPath]. */
+    fun getLightThumbnailAssetUri(item: ClothingItem, gender: GenderPreference): String? =
+        getLightThumbnailAssetPath(item, gender)?.let { "file:///android_asset/$it" }
+
+    /**
      * Check if a clothing item has a thumbnail available.
      */
     fun hasThumbnail(item: ClothingItem): Boolean {

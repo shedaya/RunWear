@@ -61,6 +61,20 @@ data class RunWearPalette(
     val TextPrimary: Color,
     val TextSecondary: Color,
     /**
+     * RW-144: description-line ink (outfit row second lines) — a
+     * step softer than [TextSecondary]: light #807363, dark #988E80.
+     */
+    val TextDescription: Color,
+    /** RW-144: the outfit rows' garment-tile fill: light #F3EEE5, dark #25201A. */
+    val GarmentTile: Color,
+    /**
+     * RW-144: garment silhouette ink on the tiles: light warm ink
+     * #33291F at α168, dark cream #F5F1EA at α178.
+     */
+    val Silhouette: Color,
+    /** RW-144: which mode this palette is (drives theme-keyed asset seams). */
+    val isDark: Boolean,
+    /**
      * WS-8 (RC-8): pine as TEXT. The design table's pine pair — light
      * themes read the seed pine #175E4C on cream (7.41:1 on sheet);
      * dark themes read the design's dark accent #5CC79F (8.08:1 on the
@@ -110,6 +124,21 @@ private val PinePrimaryGlow = Color(0x4D175E4C) // pine at 30% alpha
  * are dark in BOTH themes (the guided-capture camera surface).
  */
 val PineAccentOnDark = Color(0xFF5CC79F)
+
+/**
+ * RW-144 hero chrome/scrim inks (theme-independent — they live over
+ * the photograph in both modes, per the v8 palette audit):
+ * the translucent chrome fill (24,20,14→ (24,20,16)) — place pill,
+ * gear circle and the date/time chip draw this ink at their ruled
+ * alphas (84 / 84 / 72 of 255).
+ */
+val HeroChromeInk = Color(0xFF181410)
+
+/** RW-144: the feels-like scrim zone's ink (14,11,8). */
+val HeroScrimInk = Color(0xFF0E0B08)
+
+/** RW-144: the hero's top scrim ink (26,20,14). */
+val HeroTopScrimInk = Color(0xFF1A140E)
 
 /**
  * WS-8: warm white #F5F1EA — the design's ink for photography and
@@ -172,12 +201,17 @@ val DarkPalette = RunWearPalette(
     BgCardLight = Color(0xFF2A251E),
     TextPrimary = Color(0xFFF5F1EA),
     TextSecondary = Color(0xFFB8AEA0),
+    TextDescription = Color(0xFF988E80),
+    GarmentTile = Color(0xFF25201A),
+    Silhouette = Color(0xB2F5F1EA),
+    isDark = true,
     PineAccent = PineAccentOnDark,
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
     GlassBackgroundHover = GlassBackgroundHoverHex,
     MiniBarContainer = Color(0xFF2A251E),
-    Hairline = Color(0x1AF5F1EA),
+    // RW-144 palette of record: dark hairline is cream at α22.
+    Hairline = Color(0x16F5F1EA),
     PaywallTint = Color(0xFF1E2B24)
 )
 
@@ -198,21 +232,30 @@ val LightPalette = RunWearPalette(
     TempWarm = TempWarmHex,
     TempHot = TempHotHex,
     // RW-26 consolidated tokens (cream pair): ground #F5F1E8,
-    // sheet/cards #FDFBF6, ink #17191C (never brown), secondary #5F5B52.
+    // sheet/cards #FDFBF6. RW-144 (Nov 8, 2026) warms the ink per
+    // the approved first-screen palette of record: primary ink is
+    // now the deep warm brown #33291F (the RW-26 near-black
+    // #17191C is retired on the cream — "nothing on the cream
+    // stays true black"), secondary #685D4F, descriptions #807363,
+    // hairline warm ink at α26.
     Background = Color(0xFFF5F1E8),
     Surface = Color(0xFFFDFBF6),
     BgCard = Color(0xFFFDFBF6),
     FooterGround = Color(0xFFF5F1E8),
     SurfaceElevated = Color(0xFFFDFBF6),
     BgCardLight = Color(0xFFFDFBF6),
-    TextPrimary = Color(0xFF17191C),
-    TextSecondary = Color(0xFF5F5B52),
+    TextPrimary = Color(0xFF33291F),
+    TextSecondary = Color(0xFF685D4F),
+    TextDescription = Color(0xFF807363),
+    GarmentTile = Color(0xFFF3EEE5),
+    Silhouette = Color(0xA833291F),
+    isDark = false,
     PineAccent = PinePrimary,
     GlassBackground = GlassBackgroundHex,
     GlassBorder = GlassBorderHex,
     GlassBackgroundHover = GlassBackgroundHoverHex,
     MiniBarContainer = Color(0xFFFDFBF6),
-    Hairline = Color(0x1A17191C),
+    Hairline = Color(0x1A33291F),
     PaywallTint = Color(0xFFF2F8F5)
 )
 
@@ -261,6 +304,11 @@ object RunWearColors {
 
     val TextPrimary: Color get() = activePalette.TextPrimary
     val TextSecondary: Color get() = activePalette.TextSecondary
+    val TextDescription: Color get() = activePalette.TextDescription
+    val GarmentTile: Color get() = activePalette.GarmentTile
+    val Silhouette: Color get() = activePalette.Silhouette
+    /** RW-144: theme-keyed seams (e.g. garment tiles) read this. */
+    val isDarkTheme: Boolean get() = activePalette.isDark
     val PineAccent: Color get() = activePalette.PineAccent
 
     val GlassBackground: Color get() = activePalette.GlassBackground
@@ -392,9 +440,9 @@ internal val LightColorScheme = lightColorScheme(
     primary = LightPalette.Primary,
     onPrimary = com.runwear.app.ui.theme.PhotoInk,
     primaryContainer = LightPalette.PrimaryLight,
-    onPrimaryContainer = Color.White,
+    onPrimaryContainer = PhotoInk,
     secondary = LightPalette.Primary,
-    onSecondary = Color.White,
+    onSecondary = PhotoInk,
     secondaryContainer = LightPalette.BgCard,
     onSecondaryContainer = LightPalette.PrimaryDark,
     tertiary = LightPalette.TempWarm,
@@ -420,7 +468,7 @@ internal val LightColorScheme = lightColorScheme(
     outline = LightPalette.TextSecondary,
     outlineVariant = Color(0xFFEAE5D8),
     error = Color(0xFFB3261E),
-    onError = Color.White,
+    onError = PhotoInk,
     errorContainer = Color(0xFFF9DEDC),
     onErrorContainer = Color(0xFF410E0B)
 )

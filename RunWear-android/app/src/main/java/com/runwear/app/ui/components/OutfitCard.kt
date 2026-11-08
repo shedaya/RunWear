@@ -100,12 +100,27 @@ fun OutfitCard(
     val thumbnailAssetUri = remember(item, gender) {
         ClothingThumbnailService.getThumbnailAssetUri(item, gender)
     }
+    // RW-144 ICON SWAP SEAM: in the LIGHT theme the row's tile
+    // loads the Treatment L set through the SAME service seam
+    // (assets/thumbnails-light/<key>-<gender>.png — a file-for-file
+    // swap of that directory needs no code change). A failed light
+    // asset falls through to the standard asset, then the remote
+    // URL, exactly like the standard asset's own failure path.
+    val isDarkTheme = RunWearColors.isDarkTheme
+    val lightThumbnailAssetUri = remember(item, gender, isDarkTheme) {
+        if (isDarkTheme) null
+        else ClothingThumbnailService.getLightThumbnailAssetUri(item, gender)
+    }
     val thumbnailUrl = remember(item, gender) {
         ClothingThumbnailService.getThumbnailUrl(item, gender)
     }
     var assetFailed by remember(item, gender) { mutableStateOf(false) }
-    val thumbnailModel =
-        if (thumbnailAssetUri != null && !assetFailed) thumbnailAssetUri else thumbnailUrl
+    var lightAssetFailed by remember(item, gender) { mutableStateOf(false) }
+    val thumbnailModel = when {
+        lightThumbnailAssetUri != null && !lightAssetFailed -> lightThumbnailAssetUri
+        thumbnailAssetUri != null && !assetFailed -> thumbnailAssetUri
+        else -> thumbnailUrl
+    }
 
     // Track thumbnail load state for fallback
     var thumbnailLoaded by remember { mutableStateOf(false) }
@@ -158,7 +173,7 @@ fun OutfitCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(RunWearColors.BgCard)
+                    .background(RunWearColors.GarmentTile)
                     .border(1.dp, RunWearColors.Hairline, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
@@ -168,7 +183,7 @@ fun OutfitCard(
                     Icon(
                         painter = painterResource(id = getCategoryIconRes(item.category)),
                         contentDescription = null,
-                        tint = categoryColor,
+                        tint = RunWearColors.Silhouette,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -187,7 +202,11 @@ fun OutfitCard(
                             .graphicsLayer { alpha = if (thumbnailLoaded) 1f else 0f },
                         onSuccess = { thumbnailLoaded = true },
                         onError = {
-                            if (!assetFailed && thumbnailAssetUri != null) {
+                            if (!lightAssetFailed && lightThumbnailAssetUri != null &&
+                                thumbnailModel == lightThumbnailAssetUri
+                            ) {
+                                lightAssetFailed = true // fall to the standard asset
+                            } else if (!assetFailed && thumbnailAssetUri != null) {
                                 assetFailed = true // retry once from the remote URL
                             } else {
                                 thumbnailLoaded = false
@@ -205,7 +224,7 @@ fun OutfitCard(
                 Text(
                     text = item.displayName,
                     style = TextStyle(
-                        fontSize = 15.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = RunWearColors.TextPrimary
                     ),
@@ -223,8 +242,8 @@ fun OutfitCard(
                     // `desc || category` rule, now on both layouts).
                     text = item.description.ifBlank { item.category.displayName },
                     style = TextStyle(
-                        fontSize = 13.sp,
-                        color = RunWearColors.TextSecondary
+                        fontSize = 14.sp,
+                        color = RunWearColors.TextDescription
                     ),
                     textAlign = if (centeredText) TextAlign.Center else TextAlign.Start,
                     maxLines = 1

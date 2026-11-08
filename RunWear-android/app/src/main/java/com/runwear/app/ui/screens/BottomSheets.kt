@@ -1995,7 +1995,7 @@ object WeatherSheetCopy {
 }
 
 @Composable
-private fun UnifiedWeatherDetail(
+fun UnifiedWeatherDetail(
     weather: WeatherConditions,
     unit: TemperatureUnit,
     locationName: String,
