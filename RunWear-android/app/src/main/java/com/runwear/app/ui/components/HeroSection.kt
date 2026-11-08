@@ -490,8 +490,6 @@ fun HeroSection(
         label = "temperatureColorAnimation"
     )
 
-    val context = LocalContext.current
-
     // Safe-boot diagnostic (1.1.3): the outfit hero card composable was
     // entered — its body executed during composition. remember{} so the
     // mark fires once per composition instance, not per recomposition.
