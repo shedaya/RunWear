@@ -75,7 +75,11 @@ class WearIveRunElementPinTest {
             // the interim binary dockVisible is superseded by the
             // approved spec section 3 — the overlay is driven
             // continuously by the position-derived fade.
-            host.contains("WearIveRunDockPolicy.fade(") &&
+            // Re-pointed (RW-140, Nov 8, 2026): the fade derivation
+            // moved into WearIveRunDockPolicy.fadeFromLayoutPx —
+            // the single code path the host derives the fade
+            // through (the literal it wraps is fade() itself).
+            host.contains("WearIveRunDockPolicy.fadeFromLayoutPx(") &&
                 host.contains(".align(Alignment.BottomCenter)")
         )
         assertTrue(
