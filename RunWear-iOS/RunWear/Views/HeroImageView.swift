@@ -236,20 +236,19 @@ struct HeroImageView: View {
 
     // MARK: - Hero Image Layer
 
-    // MARK: - Hero Pill (GEN-3 WS-A(2))
+    // MARK: - Hero Pill (GEN-3 WS-A(2); RW-144 seat)
 
-    /// The ONE pill at the bottom of the hero image. Native iOS
-    /// expression: the app's glass pill chrome (glass belongs on
-    /// chrome — this is chrome), footnote type, a spinner only in
-    /// the making state. The freeLook state is the only tappable
-    /// one: its "Get unlimited" half opens the Premium paywall.
-    /// GEN-3 DESIGN DELTA 2: states (b)(c)(d) lead with the Make
-    /// It Me script mark; (d) trails a lock glyph.
-    private var pillScriptMark: some View {
-        Text(HeroPill.scriptMarkText)
-            .font(.greatVibes(size: 15))
-            .foregroundColor(.white)
-            .lineLimit(1)
+    /// RW-144: the pill rendering lives in HeroPillView (below)
+    /// so Home can seat the SAME pill — same settled table, same
+    /// copy — straddling the hero/sheet boundary. HeroImageView's
+    /// own seat (bottom of the hero) remains the default for its
+    /// other callers.
+    @ViewBuilder
+    private var heroPill: some View {
+        HeroPillView(
+            pillState: pillState,
+            onPillGetUnlimited: onPillGetUnlimited
+        )
     }
 
     /// RW-111: the failed look's line at the hero — the settled
@@ -258,165 +257,11 @@ struct HeroImageView: View {
     /// the act: "tap to try again"). It wraps as many lines as it
     /// needs inside the pill's granted width; nothing truncates.
     private var heroFailureLine: some View {
-        Button(action: onRetryFailedLook) {
-            Text(MakeItMeCopy.lookFailed)
-                .font(.appFootnote.weight(.semibold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .buttonStyle(.plain)
-        .glassPill()
-        .accessibilityLabel(MakeItMeCopy.lookFailed)
-    }
-
-    @ViewBuilder
-    private var heroPill: some View {
-        switch pillState {
-        case .hidden:
-            EmptyView()
-        case .making:
-            // GEN-5 (pill restatement): EVERY status leads with
-            // the Make It Me script — the generating state was the
-            // one state that dropped it (census A-13/B-14).
-            HStack(spacing: 6) {
-                pillScriptMark
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(.white)
-                Text(HeroPill.makingLabel)
-                    .font(.appFootnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-            }
-            .glassPill()
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel)")
-        case .makingWithUpsell:
-            // GEN-5 (C-4 AMENDED): the FREE generating pill — the
-            // clean generating content plus ONE small green
-            // upsell line; the upsell half taps to the same
-            // Premium offer as "Get unlimited".
-            // GEN-6 VQ FIX (RW-71): the settled content does not
-            // fit the pill's one-row width in the hero composition
-            // (the hero grants the pill its width minus the flag
-            // chip's 60 pt clearance, and script + spinner +
-            // "Making this you…" + "Get it instantly next time"
-            // exceeds it — the gen-6 VQ render ellipsised BOTH
-            // texts). The pill now STACKS: the generating row
-            // keeps its settled one-row form, and the green
-            // upsell line takes its own line beneath it. Every
-            // settled string renders whole; nothing is resized,
-            // reworded, or clipped.
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    pillScriptMark
-                    ProgressView()
-                        .controlSize(.mini)
-                        .tint(.white)
-                    Text(HeroPill.makingLabel)
-                        .font(.appFootnote.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                }
-                Button(action: onPillGetUnlimited) {
-                    Text(HeroPill.getInstantlyLabel)
-                        .font(.appFootnote.weight(.bold))
-                        // RW-105: the dynamic pine payload — deep
-                        // pine (#175E4C) in light mode, the accent
-                        // in dark. The fixed dark accent (#5CC79F)
-                        // rendered pale mint on this light glass
-                        // pill in light mode (Sol's circled
-                        // surface, Nov 6, 2026).
-                        .foregroundColor(AppTheme.pinePayload)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-            }
-            .glassPill()
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel). \(HeroPill.getInstantlyLabel)")
-        case .exhausted(let used, let allowance):
-            // GEN-5 (OUT OF FREE LOOKS): the upsell IS the pill's
-            // main message — script lead, the used-up count stated
-            // honestly, "Get unlimited" bold as the headline act;
-            // the whole pill taps through to the Premium offer.
-            Button(action: onPillGetUnlimited) {
-                // GEN-6 VQ FIX (RW-72): the one-row form squeezed
-                // the honest count out at the hero composition's
-                // pill width (the gen-6 VQ render ellipsised it to
-                // "5 of 5 looks u…"). The pill STACKS: script +
-                // the whole count on the first line, "Get
-                // unlimited" — still the pill's main message in
-                // the green accent — on its own line beneath. The
-                // one-row "·" separator has no seat in the stacked
-                // form and is dropped; every settled string
-                // renders whole.
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        pillScriptMark
-                        Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
-                            .font(.appFootnote.weight(.semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                    }
-                    Text(HeroPill.getUnlimitedLabel)
-                        .font(.appFootnote.weight(.bold))
-                        // RW-105: dynamic pine payload (see the
-                        // making pill's note).
-                        .foregroundColor(AppTheme.pinePayload)
-                        .lineLimit(1)
-                }
-                .glassPill()
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.exhaustedCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
-        // GEN-6 Wave A (RW-34): NO scaffold case exists — a
-        // scaffold serve is silent (HeroPill.resolve returns
-        // .hidden for it); the removed scaffold label was ruled
-        // not an approved pill (Sol, Nov 5, 2026).
-        case .freeLook(let used, let allowance):
-            Button(action: onPillGetUnlimited) {
-                HStack(spacing: 6) {
-                    pillScriptMark
-                    Text(HeroPill.freeLookCountLabel(used: used, allowance: allowance))
-                        .font(.appFootnote.weight(.semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    Text("·")
-                        .font(.appFootnote)
-                        .foregroundColor(.white.opacity(0.7))
-                    // GEN-6 Wave A (approved pill table): on the
-                    // free exact-serve pill, "Get unlimited" is
-                    // the GREEN element (the pine accent the
-                    // generating and exhausted pills already use).
-                    // RW-105: the accent renders through the
-                    // dynamic pine payload — deep pine in light
-                    // mode (the fixed #5CC79F read pale mint on
-                    // the light glass pill; Sol, Nov 6, 2026).
-                    Text(HeroPill.getUnlimitedLabel)
-                        .font(.appFootnote.weight(.bold))
-                        .foregroundColor(AppTheme.pinePayload)
-                        .lineLimit(1)
-                }
-                .glassPill()
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.freeLookCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
-        case .premium:
-            HStack(spacing: 6) {
-                pillScriptMark
-                Text(HeroPill.premiumLabel)
-                    .font(.appFootnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                // GEN-3 DESIGN DELTA 2: the mock's device is the
-                // lock, not the glyph I-HERO shipped.
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .glassPill()
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.premiumLabel)")
-        }
+        HeroPillView(
+            pillState: .hidden,
+            lookFailed: true,
+            onRetryFailedLook: onRetryFailedLook
+        )
     }
 
     @ViewBuilder
@@ -649,6 +494,221 @@ struct HeroImageView: View {
         aiImageUrl: nil
     )
     .background(Color.black)
+}
+
+// MARK: - Hero Pill View (GEN-3 WS-A(2); RW-144 seats)
+
+/// THE Make It Me pill — one component, state-driven by
+/// HeroPill from the requested cell's facts, rendering ONLY the
+/// settled pill table: generating (script + spinner + "Making
+/// this you…"), free generating (+ the one green upsell line),
+/// free serve (script + "— N of 10 looks" count form + "Get
+/// unlimited"), exhausted, Premium (script + "Premium" + lock).
+/// A scaffold serve resolves .hidden and renders nothing.
+///
+/// Two seats, one pill:
+/// - `.hero`: the GEN-3 seat at the bottom of the hero image —
+///   native glass chrome, cream content over the photograph.
+/// - `.straddle` (RW-144): the v8 seat straddling the hero/sheet
+///   boundary — the theme pill fill (#FDFBF6 light / #2A251E
+///   dark) with a warm-black soft shadow, content in the theme
+///   ink (warm ink on cream; cream on Warm Charcoal), the CTA
+///   in the pine payload. Only the seat and its surface change;
+///   every state, string, and behaviour is the settled table's.
+struct HeroPillView: View {
+    enum Seat {
+        case hero
+        case straddle
+    }
+
+    let pillState: HeroPillState
+    var seat: Seat = .hero
+    var lookFailed: Bool = false
+    var onPillGetUnlimited: () -> Void = {}
+    var onRetryFailedLook: () -> Void = {}
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    /// Primary content ink for the seat: cream over the photo
+    /// (and on the dark straddle fill); warm ink on the cream
+    /// straddle fill. Never pure white (RW-144 palette rule).
+    private var ink: Color {
+        switch seat {
+        case .hero: return HeroChrome.cream
+        case .straddle: return isDark ? HeroChrome.cream : AppTheme.inkPrimary
+        }
+    }
+
+    private var secondaryInk: Color {
+        switch seat {
+        case .hero: return HeroChrome.cream.opacity(0.7)
+        case .straddle: return isDark ? HeroChrome.cream.opacity(0.7) : AppTheme.inkSecondary
+        }
+    }
+
+    private var pillScriptMark: some View {
+        Text(HeroPill.scriptMarkText)
+            .font(.greatVibes(size: 15))
+            .foregroundColor(ink)
+            .lineLimit(1)
+    }
+
+    /// The seat's surface: glass on the hero; the theme pill
+    /// fill + the mock's warm-black shadow (20,14,8)@α64 at the
+    /// straddle.
+    @ViewBuilder
+    private func seated<Content: View>(_ content: Content) -> some View {
+        switch seat {
+        case .hero:
+            content.glassPill()
+        case .straddle:
+            content
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(AppTheme.firstScreenPillFill))
+                .shadow(color: Color(hex: "140E08").opacity(64.0 / 255.0), radius: 12, y: 5)
+        }
+    }
+
+    var body: some View {
+        if lookFailed {
+            // RW-111: the failed look's line — the settled copy
+            // verbatim, the whole surface the retry.
+            seated(
+                Button(action: onRetryFailedLook) {
+                    Text(MakeItMeCopy.lookFailed)
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(ink)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .buttonStyle(.plain)
+            )
+            .accessibilityLabel(MakeItMeCopy.lookFailed)
+        } else {
+            pillBody
+        }
+    }
+
+    @ViewBuilder
+    private var pillBody: some View {
+        switch pillState {
+        case .hidden:
+            EmptyView()
+        case .making:
+            // GEN-5 (pill restatement): EVERY status leads with
+            // the Make It Me script — the generating state was the
+            // one state that dropped it (census A-13/B-14).
+            seated(
+                HStack(spacing: 6) {
+                    pillScriptMark
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(ink)
+                    Text(HeroPill.makingLabel)
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(ink)
+                        .lineLimit(1)
+                }
+            )
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel)")
+        case .makingWithUpsell:
+            // GEN-5 (C-4 AMENDED) + GEN-6 VQ FIX (RW-71): the
+            // FREE generating pill — the clean generating row
+            // plus ONE small green upsell line on its own line
+            // beneath (the one-row form ellipsised both texts at
+            // the hero composition's width). Every settled
+            // string renders whole.
+            seated(
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        pillScriptMark
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(ink)
+                        Text(HeroPill.makingLabel)
+                            .font(.appFootnote.weight(.semibold))
+                            .foregroundColor(ink)
+                            .lineLimit(1)
+                    }
+                    Button(action: onPillGetUnlimited) {
+                        Text(HeroPill.getInstantlyLabel)
+                            .font(.appFootnote.weight(.bold))
+                            // RW-105: the dynamic pine payload.
+                            .foregroundColor(AppTheme.pinePayload)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                }
+            )
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel). \(HeroPill.getInstantlyLabel)")
+        case .exhausted(let used, let allowance):
+            // GEN-5 (OUT OF FREE LOOKS) + GEN-6 VQ FIX (RW-72):
+            // script + the whole honest count on the first line,
+            // "Get unlimited" — the pill's main message in the
+            // green accent — on its own line beneath; the whole
+            // pill taps through to the Premium offer.
+            Button(action: onPillGetUnlimited) {
+                seated(
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            pillScriptMark
+                            Text(HeroPill.exhaustedCountLabel(used: used, allowance: allowance))
+                                .font(.appFootnote.weight(.semibold))
+                                .foregroundColor(ink)
+                                .lineLimit(1)
+                        }
+                        Text(HeroPill.getUnlimitedLabel)
+                            .font(.appFootnote.weight(.bold))
+                            .foregroundColor(AppTheme.pinePayload)
+                            .lineLimit(1)
+                    }
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.exhaustedCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
+        case .freeLook(let used, let allowance):
+            Button(action: onPillGetUnlimited) {
+                seated(
+                    HStack(spacing: 6) {
+                        pillScriptMark
+                        Text(HeroPill.freeLookCountLabel(used: used, allowance: allowance))
+                            .font(.appFootnote.weight(.semibold))
+                            .foregroundColor(ink)
+                            .lineLimit(1)
+                        Text("·")
+                            .font(.appFootnote)
+                            .foregroundColor(secondaryInk)
+                        // Approved pill table: "Get unlimited" is
+                        // the GREEN element (pine payload, RW-105).
+                        Text(HeroPill.getUnlimitedLabel)
+                            .font(.appFootnote.weight(.bold))
+                            .foregroundColor(AppTheme.pinePayload)
+                            .lineLimit(1)
+                    }
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.freeLookCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
+        case .premium:
+            seated(
+                HStack(spacing: 6) {
+                    pillScriptMark
+                    Text(HeroPill.premiumLabel)
+                        .font(.appFootnote.weight(.semibold))
+                        .foregroundColor(ink)
+                        .lineLimit(1)
+                    // GEN-3 DESIGN DELTA 2: the lock glyph.
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(ink)
+                }
+            )
+            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.premiumLabel)")
+        }
+    }
 }
 
 // MARK: - RW-106 · Remote hero image loading

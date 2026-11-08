@@ -56,6 +56,12 @@
 		A10002000000000000000012 /* HeroImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000012 /* HeroImageView.swift */; };
 		R67002000000000000000001 /* HomeHeroNumeralRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67001000000000000000001 /* HomeHeroNumeralRow.swift */; };
 		R67002000000000000000002 /* HomeHeroNumeralRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = R67001000000000000000001 /* HomeHeroNumeralRow.swift */; };
+		W14402000000000000000001 /* FirstScreenHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000001 /* FirstScreenHero.swift */; };
+		W14402000000000000000002 /* FirstScreenHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000001 /* FirstScreenHero.swift */; };
+		W14402000000000000000003 /* FirstScreenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000002 /* FirstScreenSheet.swift */; };
+		W14402000000000000000004 /* FirstScreenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000002 /* FirstScreenSheet.swift */; };
+		W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000004 /* RW144FirstScreenTests.swift */; };
+		W14402000000000000000010 /* garment_tiles_light in Resources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000003 /* garment_tiles_light */; };
 		D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
 		D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
 		C10002000000000000000040 /* RW25NextGenHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10001000000000000000031 /* RW25NextGenHomeTests.swift */; };
@@ -356,6 +362,10 @@
 		A10001000000000000000011 /* StaggeredAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StaggeredAnimation.swift; sourceTree = "<group>"; };
 		A10001000000000000000012 /* HeroImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeroImageView.swift; sourceTree = "<group>"; };
 		R67001000000000000000001 /* HomeHeroNumeralRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeHeroNumeralRow.swift; sourceTree = "<group>"; };
+		W14401000000000000000001 /* FirstScreenHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstScreenHero.swift; sourceTree = "<group>"; };
+		W14401000000000000000002 /* FirstScreenSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstScreenSheet.swift; sourceTree = "<group>"; };
+		W14401000000000000000004 /* RW144FirstScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW144FirstScreenTests.swift; sourceTree = "<group>"; };
+		W14401000000000000000003 /* garment_tiles_light */ = {isa = PBXFileReference; lastKnownFileType = folder; path = garment_tiles_light; sourceTree = "<group>"; };
 		D10001000000000000000001 /* WearIveRunMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunMiniBar.swift; sourceTree = "<group>"; };
 		C10001000000000000000031 /* RW25NextGenHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW25NextGenHomeTests.swift; sourceTree = "<group>"; };
 		C10001000000000000000032 /* GreatVibesFontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GreatVibesFontTests.swift; sourceTree = "<group>"; };
@@ -520,6 +530,7 @@
 				A1000025233456780000006 /* Theme */,
 				A1000006233456780000003 /* Assets.xcassets */,
 				F10001000000000000000001 /* hero_fallback */,
+				W14401000000000000000003 /* garment_tiles_light */,
 				F10001000000000000000010 /* GreatVibes-Regular.ttf */,
 				A10000062334567800000010 /* PrivacyInfo.xcprivacy */,
 			);
@@ -557,6 +568,8 @@
 				A1000018233456780000012 /* SupportingViews.swift */,
 				A10001000000000000000012 /* HeroImageView.swift */,
 				R67001000000000000000001 /* HomeHeroNumeralRow.swift */,
+				W14401000000000000000001 /* FirstScreenHero.swift */,
+				W14401000000000000000002 /* FirstScreenSheet.swift */,
 				D10001000000000000000001 /* WearIveRunMiniBar.swift */,
 				G10001000000000000000002 /* GuidedSelfieCaptureView.swift */,
 				G10001000000000000000003 /* WearIveRunCollectionView.swift */,
@@ -733,6 +746,7 @@
 				D60000000000000000000001 /* Gen6WidgetRenderTests.swift */,
 				D60000000000000000000002 /* Gen6PickerWatchRenderTests.swift */,
 				VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */,
+				W14401000000000000000004 /* RW144FirstScreenTests.swift */,
 				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
 				W50001000000000000000002 /* SettingsInventoryTests.swift */,
@@ -922,6 +936,7 @@
 			files = (
 				A1000005233456780000003 /* Assets.xcassets in Resources */,
 				F10002000000000000000001 /* hero_fallback in Resources */,
+				W14402000000000000000010 /* garment_tiles_light in Resources */,
 				F10002000000000000000010 /* GreatVibes-Regular.ttf in Resources */,
 				A10000052334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -989,6 +1004,8 @@
 				A10002000000000000000011 /* StaggeredAnimation.swift in Sources */,
 				A10002000000000000000012 /* HeroImageView.swift in Sources */,
 				R67002000000000000000001 /* HomeHeroNumeralRow.swift in Sources */,
+				W14402000000000000000001 /* FirstScreenHero.swift in Sources */,
+				W14402000000000000000003 /* FirstScreenSheet.swift in Sources */,
 				D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */,
 				A10002000000000000000090 /* HeroPhoto.swift in Sources */,
 				A10002000000000000000013 /* PreferenceControls.swift in Sources */,
@@ -1098,6 +1115,9 @@
 				C10002000000000000000023 /* WatchGlyphRenderingTests.swift in Sources */,
 				C10002000000000000000024 /* HomePresentationTests.swift in Sources */,
 				R67002000000000000000002 /* HomeHeroNumeralRow.swift in Sources */,
+				W14402000000000000000002 /* FirstScreenHero.swift in Sources */,
+				W14402000000000000000004 /* FirstScreenSheet.swift in Sources */,
+				W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */,
 				C10002000000000000000026 /* WatchOutfitView.swift in Sources */,
 				C10002000000000000000027 /* WatchViewModel.swift in Sources */,
 				C10002000000000000000028 /* WatchSettingsView.swift in Sources */,

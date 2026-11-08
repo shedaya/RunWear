@@ -112,7 +112,11 @@ enum AppTheme {
     static let modalTransitionDuration: Double = 0.3
 
     // MARK: - Sizing
-    static let heroHeightRatio: CGFloat = 0.75
+    /// RW-144 (first-screen redesign, approved Nov 8, 2026): the
+    /// hero is ≈45% of the screen — the sheet's top edge sits at
+    /// ≈43–45% — superseding the 0.75 photo-dominant seat. The
+    /// v8 frames are the design of record.
+    static let heroHeightRatio: CGFloat = 0.45
     static let pillCornerRadius: CGFloat = 16
     static let cardCornerRadius: CGFloat = 12
     static let modalCornerRadius: CGFloat = 24
@@ -139,8 +143,18 @@ enum AppTheme {
     // providers are unavailable) the tokens resolve to the dark side.
     static let groundLightHex = "F5F1E8"
     static let sheetLightHex = "FDFBF6"
-    static let inkLightHex = "17191C"
-    static let inkSecondaryLightHex = "5F5B52"
+    /// RW-144 palette of record (Nov 8, 2026): the light ink is
+    /// the deep warm brown #33291F — nothing on cream is true
+    /// black — superseding the phase-1 near-black #17191C, and
+    /// the light secondary is #685D4F, superseding #5F5B52.
+    static let inkLightHex = "33291F"
+    static let inkSecondaryLightHex = "685D4F"
+    /// RW-144: description tone (light #807363 / dark #988E80)
+    /// and the garment-tile fill (light #F3EEE5 / dark #25201A).
+    static let descriptionLightHex = "807363"
+    static let descriptionDarkHex = "988E80"
+    static let tileLightHex = "F3EEE5"
+    static let tileDarkHex = "25201A"
     static let groundDarkHex = "16130F"
     static let sheetDarkHex = "211D17"
     static let cardDarkHex = "2A251E"
@@ -174,6 +188,20 @@ enum AppTheme {
     /// Pine for payload text (mini-bar narration, accents): the seed
     /// in light mode, the brightened accent on Warm Charcoal.
     static let pinePayload = dynamicColor(lightHex: "175E4C", darkHex: pineAccentDarkHex)
+    /// RW-144: description text tone — #807363 on cream, #988E80
+    /// on Warm Charcoal (the v8 palette audit table).
+    static let descriptionInk = dynamicColor(lightHex: descriptionLightHex, darkHex: descriptionDarkHex)
+    /// RW-144: garment-tile fill — #F3EEE5 light, #25201A dark.
+    static let garmentTileFill = dynamicColor(lightHex: tileLightHex, darkHex: tileDarkHex)
+    /// RW-144: the Make It Me pill / dock fill — the card cream
+    /// #FDFBF6 in light mode, #2A251E in dark (cardDarkHex).
+    static let firstScreenPillFill = dynamicColor(lightHex: sheetLightHex, darkHex: cardDarkHex)
+    /// RW-144: the sheet hairline — warm ink at α26/255 in light
+    /// mode, cream at α22/255 in dark.
+    static let sheetHairline = dynamicColor(
+        light: UIColor(hexRGB: inkLightHex, alpha: 26.0 / 255.0),
+        dark: UIColor(hexRGB: inkDarkHex, alpha: 22.0 / 255.0)
+    )
     /// The dark pine accent as a fixed color, for surfaces that are
     /// dark in BOTH modes (e.g. the refresh error banner's black
     /// fill): pine-as-text there must be the accent, never the seed
@@ -255,7 +283,7 @@ enum AppTheme {
         dark: UIColor(hexRGB: "FFFFFF", alpha: 0.05)
     )
     static let cardStroke = dynamicColor(
-        light: UIColor(hexRGB: "17191C", alpha: 0.08),
+        light: UIColor(hexRGB: inkLightHex, alpha: 0.08),
         dark: UIColor(hexRGB: "FFFFFF", alpha: 0.10)
     )
     /// Bounded TOP gradient only (RW-25): chrome legibility at the
@@ -280,10 +308,12 @@ enum AppTheme {
     /// cool_rain_male 2.05 → 4.00.
     static let heroTopScrimAlphas: [Double] = [0.62, 0.31]
     static func heroTopGradient() -> LinearGradient {
+        // RW-144: the top scrim's ink is the warm black (26,20,14)
+        // of the v8 design, not pure black.
         LinearGradient(
             stops: [
-                .init(color: .black.opacity(heroTopScrimAlphas[0]), location: 0),
-                .init(color: .black.opacity(heroTopScrimAlphas[1]), location: 0.175),
+                .init(color: Color(hex: "1A140E").opacity(heroTopScrimAlphas[0]), location: 0),
+                .init(color: Color(hex: "1A140E").opacity(heroTopScrimAlphas[1]), location: 0.175),
                 .init(color: .clear, location: 0.35)
             ],
             startPoint: .top,

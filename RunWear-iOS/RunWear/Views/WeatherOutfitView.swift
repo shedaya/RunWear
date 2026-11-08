@@ -103,6 +103,10 @@ struct WeatherOutfitView: View {
     @State private var isScrollGestureActive = false
     /// Fix wave 2026-11-07 (RW-133): the full-screen hero viewer.
     @State private var showHeroViewer = false
+    /// RW-144: the hero photo's measured zone luminances — the
+    /// contrast guarantee's input (the scrims and chrome fills
+    /// scale from these, never from a fixed constant).
+    @StateObject private var heroLuminance = HeroLuminanceModel()
 
     // R-15 rating moment: this view exists only when a recommendation
     // is on screen, so appearing here IS the proven-value signal. The
@@ -214,6 +218,14 @@ struct WeatherOutfitView: View {
             // vocabulary, so the hook lands here on the confirmation
             // state itself.
             .sensoryFeedback(.impact(weight: .light), trigger: showFlagThanks)
+            // RW-144: the navigation bar is hidden on Home — the
+            // v8 hero carries the chrome itself (place pill,
+            // wordmark, gear circle over the photograph's top
+            // scrim). The title stays set for accessibility and
+            // state restoration; the location entry is the hero's
+            // place pill (one tap straight to the picker — the
+            // Y-16 rule, preserved at its new seat).
+            .toolbar(.hidden, for: .navigationBar)
             .navigationTitle(viewModel.placeDisplayName)
             // The design record's date-as-subtitle needs
             // navigationSubtitle, which the current iOS SDK marks
@@ -223,57 +235,13 @@ struct WeatherOutfitView: View {
             // menu, and the weather detail's context until the
             // build SDK offers the subtitle on iOS.
             .navigationBarTitleDisplayMode(.inline)
-            // The chrome band is OPAQUE. With no toolbar background
-            // the iOS 26 bar is translucent glass over a hero that
-            // ignores the top safe area, so scrolled content — the
-            // weather pills row above all — slid underneath the
-            // location title and the glass action capsule, ghosting
-            // through both and clipping pill values behind the
-            // capsule (field finding 2026-10-31, both scroll states
-            // photographed). The title row and the action group now
-            // own their band exclusively; content scrolls beneath a
-            // solid bar, as it does under Android's app bar.
-            .toolbarBackground(AppTheme.background, for: .navigationBar)
-            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
-            // GEN-3 Y-16 (FIRM): ONE tap on the location opens the
-            // COMPLETE change-location UI immediately. The pre-fix
-            // entry was a toolbarTitleMenu — tapping the title
-            // opened a one-item menu ("Set Location") and only the
-            // second tap reached the picker. The title is now a
-            // principal toolbar BUTTON bound straight to the
-            // picker; there is no intermediate menu anywhere in
-            // the home location path.
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Button {
-                        showLocationPicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(viewModel.placeDisplayName)
-                                .font(.headline)
-                                .foregroundColor(AppTheme.inkPrimary)
-                                .lineLimit(1)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppTheme.inkSecondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Location: \(viewModel.placeDisplayName). Change location")
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gearshape")
-                    }
-                    Button {
-                        showShop = true
-                    } label: {
-                        Label("Shop", systemImage: "cart")
-                    }
-                }
-            }
+            // RW-144 supersedes the opaque-bar composition: with
+            // the bar hidden there is no chrome band for scrolled
+            // content to ghost through (the 2026-10-31 finding's
+            // mechanism is removed with the bar itself), and the
+            // hero's own top scrim carries its chrome. The Shop
+            // entry the toolbar carried moves to the outfit
+            // header (see outfitSection) — no surface is dropped.
             .sheet(isPresented: $showSettings) {
                 SettingsModal(
                     isPresented: $showSettings,
@@ -425,6 +393,9 @@ struct WeatherOutfitView: View {
                 showRatingPrompt = true
             }
             recordTodaysEntry()
+            // RW-144: measure the served photo's zone luminances
+            // for the hero scrims (the contrast guarantee).
+            heroLuminance.update(imageURLString: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl)
             // RW-79: returning to Home re-reads the current
             // cell's look state — a generation that finished (or
             // failed) while the user was anywhere else is the
@@ -497,7 +468,11 @@ struct WeatherOutfitView: View {
         .onChange(of: viewModel.placeDisplayName) { _, _ in
             recordTodaysEntry()
         }
+        .onChange(of: viewModel.fallbackImageUrl) { _, _ in
+            heroLuminance.update(imageURLString: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl)
+        }
         .onChange(of: viewModel.heroImageUrl) { _, _ in
+            heroLuminance.update(imageURLString: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl)
             recordTodaysEntry()
         }
         // And when a fetch's weather settles (the snapshot's
@@ -651,7 +626,6 @@ struct WeatherOutfitView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             heroSection(heightMode: .fill)
-                                .overlay(alignment: .top) { scriptLogo }
                                 .frame(height: geo.size.height * 0.62)
                         }
                         .padding(.bottom, 24)
@@ -663,18 +637,28 @@ struct WeatherOutfitView: View {
                     VStack(spacing: 0) {
                         ScrollView {
                             VStack(spacing: 0) {
-                                // RW-25 Duo: the sheet content block
-                                // (a)-(e) as a FLAT header on the theme
-                                // background — no overlap in the split
-                                // layout (permanent legibility state).
-                                sheetHeader
-                                // RW-101 (Sol, Nov 6, 2026): the
-                                // "Making your looks" band sits
-                                // directly under the hero — first
-                                // content in the sheet — so a
-                                // Premium subscriber knows what's
-                                // going on; wording unchanged,
-                                // placement only.
+                                // RW-144 Duo: the same sheet order
+                                // as the stacked layouts, flat on
+                                // the theme background — the boxless
+                                // weather line opens the column (the
+                                // feels-like block is on the hero
+                                // pane), then the band, the outfit,
+                                // the glance band, and the detailed
+                                // weather block. The Make It Me
+                                // pill stands at the column's head
+                                // (the split layout has no boundary
+                                // to straddle).
+                                sheetStraddlePill
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.top, 20)
+                                sheetWeatherLine
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 20)
+                                Rectangle()
+                                    .fill(AppTheme.sheetHairline)
+                                    .frame(height: 1)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 16)
                                 homeBandSection
                                     .padding(.top, 16)
                                 if viewModel.selectedTimeOutsideForecast {
@@ -684,6 +668,8 @@ struct WeatherOutfitView: View {
                                 outfitSection
                                     .padding(.top, 24)
                                 dayChartBand
+                                    .padding(.top, 24)
+                                detailedWeatherBlock
                                     .padding(.top, 24)
                                 proTipSection
                                     .padding(.top, 24)
@@ -829,18 +815,18 @@ struct WeatherOutfitView: View {
     /// entirely (the state still updates; nothing animates/scales).
     private var heroWithScrollHandoff: some View {
         let progress = reduceMotion ? 0 : heroScrollProgress
-        return heroSection()
+        return heroSection(
+            chromeOpacity: HomeHandoffGeometry.chromeOpacity(progress: progress),
+            chromeInteractive: HomeHandoffGeometry.chromeIsInteractive(progress: progress)
+        )
             // WS-1 (§1.1): the photo-zone chrome fades 1 → 0
             // across the FIRST 40% of the handoff and is
             // non-interactive from the moment the fade begins —
             // it never slides, and it is fully present again at
-            // rest. (Before this fix the logo only rode the
-            // hero's scale transform and never faded at all.)
-            .overlay(alignment: .top) {
-                scriptLogo
-                    .opacity(HomeHandoffGeometry.chromeOpacity(progress: progress))
-                    .allowsHitTesting(HomeHandoffGeometry.chromeIsInteractive(progress: progress))
-            }
+            // rest. RW-144: the chrome that fades is now the
+            // whole v8 hero chrome (top row, chip, feels-like
+            // block), carried inside heroSection and driven by
+            // the two parameters above.
             .scaleEffect(HomeHandoffGeometry.scale(progress: progress))
             .clipShape(RoundedRectangle(cornerRadius: HomeHandoffGeometry.cornerRadius(progress: progress)))
             .padding(.horizontal, HomeHandoffGeometry.horizontalInset(progress: progress))
@@ -862,19 +848,6 @@ struct WeatherOutfitView: View {
             .animation(nil, value: heroScrollProgress)
     }
 
-    /// RW-26 (notes §7.3): the script logo at the top of the main
-    /// screen — genuine Great Vibes "RunWear", warm-white #F5F1EA,
-    /// 29pt, centered, as photo-zone chrome (a brand mark, not
-    /// data). The family's 24pt floor is respected.
-    private var scriptLogo: some View {
-        Text("RunWear")
-            .font(.greatVibes(size: 29))
-            .foregroundColor(AppTheme.warmWhite)
-            .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
-            .padding(.top, 10)
-            .accessibilityHidden(true)
-    }
-
     /// Scroll-offset -> handoff progress: full transition over the
     /// first 220pt of scroll (HomeHandoffGeometry.handoffRange).
     /// Scroll-coupled 1:1 per §1.1 — a direct function of the
@@ -889,12 +862,26 @@ struct WeatherOutfitView: View {
     /// header down through the outfit and personal sections.
     private func sheetContainer<Content: View>(@ViewBuilder outfit: () -> Content) -> some View {
         VStack(spacing: 0) {
-            sheetHeader
+            // RW-144 sheet order (v8 frames): the BOXLESS
+            // weather line opens the sheet (the feels-like block
+            // lives on the hero now — the old sheet header's
+            // numeral/figures/Actual line moved there), then the
+            // hairline, then the outfit. The straddle pill (see
+            // the overlay below) seats on this container's top
+            // edge, so the weather line's top padding clears its
+            // lower half.
+            sheetWeatherLine
+                .padding(.horizontal, 16)
+                .padding(.top, 36)
+            Rectangle()
+                .fill(AppTheme.sheetHairline)
+                .frame(height: 1)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
             // RW-101 (Sol, Nov 6, 2026): the "Making your looks"
-            // band sits directly under the hero — first content
-            // in the sheet — so a Premium subscriber knows what's
-            // going on; wording unchanged, placement only. (This
-            // supersedes the GEN-5 seat below the outfit.)
+            // band — wording unchanged; RW-144 seats it directly
+            // under the weather line, the sheet's first band, so
+            // a Premium subscriber knows what's going on.
             homeBandSection
                 .padding(.top, 16)
             if viewModel.selectedTimeOutsideForecast {
@@ -904,6 +891,12 @@ struct WeatherOutfitView: View {
             outfit()
             // GEN-4: the glance band sits below the outfit list.
             dayChartBand
+                .padding(.top, 24)
+            // RW-144 (Nov 4, 2026 ruling carried into the
+            // redesign): the COMPLETE detailed weather block
+            // follows the glance band — every metric describing
+            // the hour the chart marker is on.
+            detailedWeatherBlock
                 .padding(.top, 24)
             // GEN-5 (RW-28, C-3 settlement): the Pro Tip sits
             // BELOW the hourly band — the bottom of the normal
@@ -939,130 +932,62 @@ struct WeatherOutfitView: View {
         // it is the same at rest and at every handoff position.
         .padding(.top, -HomeHandoffGeometry.sheetOverlap)
         .zIndex(1)
+        // RW-144: the Make It Me pill STRADDLES this container's
+        // top edge (the hero/sheet boundary in the v8 frames) —
+        // centered, its center on the sheet's top edge. Only its
+        // seat changed; the state is the same heroPillState and
+        // the rendering is HeroPillView's settled table.
+        .overlay(alignment: .top) {
+            sheetStraddlePill
+        }
     }
 
-    /// The sheet header block, in order (notes §7.2, GEN-4
-    /// amended): (i) "Feels like" label, (ii) location line —
-    /// its moment segment is the second time-picking entry,
-    /// (iii) hero number + temperature chip with the
-    /// right-justified weather figures beside the numeral,
-    /// (iv) "Actual NN°" line — then the flat date/time pills.
-    /// Used by the stacked sheet and, flat, by the Duo trailing
-    /// column.
-    private var sheetHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // (a)+(b) RW-26 settled header stack (notes §7.2): the
-            // "Feels like" label stands alone as the small uppercase
-            // label, and the location line sits beneath it as its
-            // own piece — never one undifferentiated eyebrow block.
-            VStack(alignment: .leading, spacing: 4) {
-                Text(HomeHeaderCopy.feelsLikeLabel)
-                    .font(.appEyebrow)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-                    .foregroundColor(AppTheme.inkMuted)
-                headlineLocationLine
-            }
-
-            // (b) Hero number (ink, never temperature-colored) +
-            // temperature chip (filled dot + bracket label), with
-            // GEN-4's right-justified weather figures beside the
-            // numeral: WIND / RAIN / HUMIDITY / UV in a strict
-            // two-column grid — labels in one fixed column, values
-            // flush right — its block top aligned to the
-            // numeral's top. Nothing weather-related sits below
-            // the headline on home anymore (the weather pills
-            // row that used to render under the date/time pills
-            // is retired from home; the weather detail sheet
-            // itself is unchanged).
-            HomeHeroNumeralRow(
-                formattedTemperature: viewModel.temperatureUnit.format(viewModel.currentFeelsLike),
-                bracket: viewModel.currentTempBracket,
-                windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
-                rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
-                humidityPercent: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
-                uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0
+    /// The straddle-seat Make It Me pill: rendered only while
+    /// the settled pill state is not hidden (a scaffold serve
+    /// stays silent — HeroPill.resolve returns .hidden).
+    @ViewBuilder private var sheetStraddlePill: some View {
+        if heroPillState != .hidden {
+            HeroPillView(
+                pillState: heroPillState,
+                seat: .straddle,
+                onPillGetUnlimited: { showHeroPillPaywall = true }
             )
-
-            // (c) RW-26 (notes §7.1): the line carries the actual
-            // temperature ONLY.
-            Text(HomeHeaderCopy.actualLine(
-                formattedTemperature: viewModel.temperatureUnit.format(viewModel.currentTemperature)
-            ))
-            .font(.appSecondary)
-            .foregroundColor(AppTheme.inkSecondary)
-
-            // GEN-5 (RW-28 item 12): the duplicate date/time pill
-            // row that sat here is REMOVED — one moment system
-            // only (the headline line above is the entry; the
-            // glance band's Change is the other).
+            .offset(y: -22)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 20)
     }
 
-    /// GEN-4 (day-chart wave, Concept 1): the headline location
-    /// line with its second entry into time-picking. The line
-    /// still reads "{Place} · {Moment}" in the line's own
-    /// typography, but the MOMENT segment is now tappable —
-    /// pine, bold, chevron — and opens the Choose-a-Time sheet
-    /// (the same sheet the pill's time segment and the glance
-    /// band's Change button open). The place segment stays
-    /// non-interactive. In the changed-time state only, the way
-    /// back rides in the same line, immediately after the
-    /// moment in its dot-separated rhythm: a compact pine
-    /// refresh + "Now" (~13pt against the line's ~15.5pt, same
-    /// baseline) performing exactly the existing reset-to-now.
-    /// It is an ADDITION — the pill row below keeps its own Now
-    /// segment and behaviour.
-    private var headlineLocationLine: some View {
-        HStack(spacing: 0) {
-            // GEN-5 (RW-29 FA-47): layout priority belongs to
-            // the interactive segments — the MOMENT and the
-            // "↻ Now" way-back keep their full width at every
-            // place-name length, and the PLACE truncates first.
-            // Build 25 let a long place name squeeze the moment
-            // segment (the row's actual control) off the line.
-            Text("\(HomeHeaderCopy.placeSegment(place: viewModel.placeDisplayName)) · ")
-                .foregroundColor(AppTheme.inkPrimary)
-                .lineLimit(1)
-                .layoutPriority(0)
-
-            Button { showTimePicker = true } label: {
-                HStack(spacing: 3) {
-                    Text(sheetMoment)
-                    Text("›")
-                }
-                // GEN-6 (RW-54, iOS half): the design specifies
-                // the moment in pine BOLD — the line's inherited
-                // semibold rendered it a weight light.
-                .font(.system(size: 15.5, weight: .bold))
-                .foregroundColor(AppTheme.pinePayload)
-            }
-            .buttonStyle(.plain)
-            .layoutPriority(1)
-            .accessibilityLabel("Choose a time: \(sheetMoment)")
-
-            if HeadlineNowReturn.isShown(isViewingNow: isViewingNow) {
-                Text(" · ")
-                    .foregroundColor(AppTheme.inkPrimary)
-                    .layoutPriority(1)
-                Button { viewModel.resetToNow() } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.counterclockwise")
-                        Text("Now")
-                    }
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(AppTheme.pinePayload)
-                }
-                .layoutPriority(1)
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back to now")
-            }
-        }
-        .font(.system(size: 15.5, weight: .semibold))
-        .lineLimit(1)
+    /// RW-144: the sheet's opening weather line — the four
+    /// boxless stats (WIND / RAIN / HUMIDITY / UV) for the
+    /// selected moment, from the same snapshot the retired
+    /// numeral row's figures read.
+    private var sheetWeatherLine: some View {
+        BoxlessWeatherLineView(
+            windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
+            rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
+            humidityPercent: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
+            uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0
+        )
     }
+
+    /// RW-144: the complete detailed weather block below the
+    /// glance band — the settled metric set for the hour the
+    /// chart marker is on (allWeatherDetails), each row opening
+    /// its existing detail sheet.
+    private var detailedWeatherBlock: some View {
+        DetailedWeatherBlockView(
+            details: allWeatherDetails,
+            onSelect: { selectedWeatherDetail = $0 }
+        )
+    }
+
+    // RW-144: the former sheet header (feels-like label +
+    // location line + numeral row + Actual line) is REMOVED —
+    // its content moved to the hero (feels-like block, place
+    // pill, date/time chip) and its weather figures became the
+    // sheet's opening boxless line (sheetWeatherLine, above).
+    // HomeHeroNumeralRow remains in the tree as the RW-67
+    // render-proven numeral composition; Home no longer
+    // composes it.
 
     /// GEN-4: the hero's right-justified weather figures — the
     /// strict two-column grid beside the feels-like numeral
@@ -1571,16 +1496,20 @@ struct WeatherOutfitView: View {
     /// Portrait-regular outfit: the same cards in a two-column grid.
     private var outfitGridSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("\(recommendation.allItems.count) items for your run")
-                .font(.appSectionTitle)
-                .foregroundColor(AppTheme.inkPrimary)
-                .padding(.horizontal, 16)
+            HStack {
+                Text("\(recommendation.allItems.count) items for your run")
+                    .font(.appSectionTitle)
+                    .foregroundColor(AppTheme.inkPrimary)
+                Spacer()
+                shopEntryButton
+            }
+            .padding(.horizontal, 16)
 
-            // RW-109: the badge names the DISPLAY bracket — the
-            // bracket of the feels-like the hero prints — not the
-            // recommendation's comfort-adjusted engine bracket.
-            TemperatureBracketBadge(bracket: viewModel.displayTempBracket, unit: viewModel.temperatureUnit)
-                .padding(.horizontal, 16)
+            // RW-144: the temperature bracket badge no longer
+            // stands over the outfit — the band word rides the
+            // hero's feels-like block now (in the band colour,
+            // beside the numeral). RW-109's rule is preserved at
+            // that seat: it names the DISPLAY bracket.
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(Array(recommendation.allItems.enumerated()), id: \.element.id) { index, item in
@@ -1590,6 +1519,25 @@ struct WeatherOutfitView: View {
             }
             .padding(.horizontal, 16)
         }
+    }
+
+    /// RW-144: the Shop entry — it lived in the navigation bar's
+    /// trailing group until the bar was hidden; it stands in the
+    /// outfit header now so the surface is not dropped.
+    private var shopEntryButton: some View {
+        Button {
+            showShop = true
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "cart")
+                    .font(.appFootnote.weight(.semibold))
+                Text("Shop")
+                    .font(.appSecondary.weight(.semibold))
+            }
+            .foregroundColor(AppTheme.pinePayload)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Shop")
     }
 
     /// The settled metric details the detail sheet tabs between
@@ -1680,8 +1628,60 @@ struct WeatherOutfitView: View {
 
     // MARK: - Hero Section
 
+    /// RW-144: the hero = the photograph (heroPhotoSection) plus
+    /// the v8 chrome overlay (top row, date/time chip,
+    /// feels-like block on its luminance-driven scrim zone).
+    /// The stacked layouts drive the chrome's fade/interactivity
+    /// from the scroll handoff (WS-1 §1.1, above); the Duo pane
+    /// takes it at rest.
     @ViewBuilder
-    private func heroSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
+    private func heroSection(
+        heightMode: HeroImageView.HeightMode = .containerFraction,
+        chromeOpacity: Double = 1,
+        chromeInteractive: Bool = true
+    ) -> some View {
+        heroPhotoSection(heightMode: heightMode)
+            .overlay {
+                heroChrome
+                    .opacity(chromeOpacity)
+                    .allowsHitTesting(chromeInteractive)
+            }
+            .clipped()
+    }
+
+    /// The RW-144 hero chrome, fed by the current selection and
+    /// the photo's measured luminances.
+    private var heroChrome: some View {
+        HeroChromeOverlayView(
+            placeName: HomeHeaderCopy.placeSegment(place: viewModel.placeDisplayName),
+            dateText: chipDateString,
+            timeText: isViewingNow ? "Now" : heroHourString,
+            isNow: isViewingNow,
+            formattedFeelsLike: viewModel.temperatureUnit.format(viewModel.currentFeelsLike),
+            formattedActual: viewModel.temperatureUnit.format(viewModel.currentTemperature),
+            feelsLikeF: viewModel.currentFeelsLike,
+            topLuminance: heroLuminance.topLuminance,
+            chipLuminance: heroLuminance.chipLuminance,
+            footLuminance: heroLuminance.footLuminance,
+            onPlaceTapped: { showLocationPicker = true },
+            onSettingsTapped: { showSettings = true },
+            onDateTapped: { showDatePicker = true },
+            onTimeTapped: { showTimePicker = true },
+            onNowTapped: { viewModel.resetToNow() }
+        )
+    }
+
+    /// The chip's date segment: the selected date in the
+    /// "Sun, Nov 8" form (the frames' form), read with the same
+    /// calendar the sheet's moment line has always used.
+    private var chipDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d"
+        return formatter.string(from: viewModel.selectedDate)
+    }
+
+    @ViewBuilder
+    private func heroPhotoSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
         // GEN-3 (WS-A(1) + WS-B) SUPERSEDES the WS-1 §1.1 skeleton
         // gate below it in history: the bundled fallback is a FINAL
         // truthful serve, not a "for now" paint — the view model
@@ -1770,9 +1770,12 @@ struct WeatherOutfitView: View {
                 viewModel.flagCurrentPersonalHero(reason: reason)
                 withAnimation { showFlagThanks = true }
             },
-            // GEN-3 (WS-A(2)): the hero pill, derived from the
-            // REQUESTED cell's facts only (see heroPillState).
-            pillState: heroPillState,
+            // RW-144: the hero pill no longer seats at the
+            // hero's foot — it straddles the hero/sheet boundary
+            // in the sheet container (see sheetStraddlePill,
+            // fed by the same heroPillState). HeroImageView's
+            // own pill seat is passed .hidden here.
+            pillState: .hidden,
             onPillGetUnlimited: { showHeroPillPaywall = true },
             // RW-111: the failed look's line at the hero, with
             // its retry — the same retry the personal section's
@@ -1919,19 +1922,21 @@ struct WeatherOutfitView: View {
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Spacer()
+
+                shopEntryButton
             }
             .padding(.horizontal, 16)
 
-            // Temperature bracket badge — RW-109: the DISPLAY
-            // bracket (the hero's printed feels-like), not the
-            // recommendation's engine bracket.
-            TemperatureBracketBadge(bracket: viewModel.displayTempBracket, unit: viewModel.temperatureUnit)
-                .padding(.horizontal, 16)
-                .staggeredAnimation(index: 0, isVisible: hasAppeared)
+            // RW-144: no bracket badge over the outfit — the
+            // band word rides the hero's feels-like block (see
+            // outfitGridSection's note; RW-109's display-bracket
+            // rule is preserved at that seat).
 
-            // All clothing items in layer order (v4.1)
+            // All clothing items in layer order (v4.1), as the
+            // v8 BOXLESS rows: garment tile, name, description —
+            // no card (FirstScreenOutfitRow).
             ForEach(Array(recommendation.allItems.enumerated()), id: \.element.id) { index, item in
-                DarkClothingItemCard(item: item, gender: viewModel.genderPreference)
+                FirstScreenOutfitRow(item: item, gender: viewModel.genderPreference)
                     .staggeredAnimation(index: 1 + index, isVisible: hasAppeared)
             }
 
@@ -2022,8 +2027,17 @@ struct DarkClothingItemCard: View {
     var category: String? = nil
     var gender: GenderPreference = .unisex
 
+    @Environment(\.colorScheme) private var colorScheme
+
     private var thumbnailURL: URL? {
-        ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: gender)
+        // RW-144: the same garment-tile seam as the first
+        // screen's rows — bundled Treatment L tiles in light
+        // mode, the remote thumbnail in dark.
+        if colorScheme == .light {
+            return ClothingThumbnailService.shared.lightTileURL(for: item, gender: gender)
+                ?? ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: gender)
+        }
+        return ClothingThumbnailService.shared.getThumbnailURL(for: item, gender: gender)
     }
 
     var body: some View {
@@ -2042,9 +2056,10 @@ struct DarkClothingItemCard: View {
         HStack(spacing: 16) {
             // Thumbnail container - 56x56, border-radius 12 per PWA v3.12
             ZStack {
-                // Background
+                // Background — RW-144 garment-tile fill
+                // (#F3EEE5 light / #25201A dark).
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(AppTheme.inkPrimary.opacity(0.08))
+                    .fill(AppTheme.garmentTileFill)
 
                 // Emoji icon (shown as fallback)
                 if thumbnailURL == nil {
@@ -2094,7 +2109,7 @@ struct DarkClothingItemCard: View {
                     .foregroundColor(AppTheme.inkPrimary)
                 Text(item.description)
                     .font(.appFootnote)
-                    .foregroundColor(AppTheme.inkSecondary)
+                    .foregroundColor(AppTheme.descriptionInk)
                     // RW-114 (successor wave) SUPERSEDES the
                     // GEN-6 RW-54 one-line note for this text:
                     // the description renders WHOLE — it wraps as
