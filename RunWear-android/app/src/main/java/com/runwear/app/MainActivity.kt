@@ -212,13 +212,22 @@ class MainActivity : ComponentActivity() {
                                     // selection also sets as a bypass.
                                     hasLocationPermission = viewModel.hasLocationPermission(),
                                     onUseCurrentLocation = {
-                                        // Request GPS permission or retry if already granted
-                                        if (viewModel.hasLocationPermission()) {
-                                            viewModel.retryGPS()
-                                        } else {
+                                        // RW-141: register the explicit
+                                        // request with the ViewModel
+                                        // (its outcome survives the
+                                        // sheet), then run the system
+                                        // permission prompt if the
+                                        // grant is missing — the grant
+                                        // (or denial) completes the
+                                        // pending request in
+                                        // onPermissionResult.
+                                        viewModel.useCurrentLocation()
+                                        if (!viewModel.hasLocationPermission()) {
                                             requestLocationPermission()
                                         }
                                     },
+                                    onCurrentLocationRequestHandled =
+                                        viewModel::acknowledgeCurrentLocationRequest,
                                     analyticsOptIn = analyticsOptIn,
                                     onAnalyticsOptInChange = viewModel::setAnalyticsOptIn,
                                     onRateRunWear = { launchInAppReview() },
@@ -440,8 +449,28 @@ class MainActivity : ComponentActivity() {
 
                     // Manual Location Picker (shown from PermissionScreen)
                     if (showManualLocationPicker) {
+                        // RW-141: same request discipline as the
+                        // Home sheet — this picker closes when the
+                        // Current location request it started
+                        // SUCCEEDS, not at tap time; a failure stays
+                        // in the row.
+                        var manualPickerSawLocating by remember { mutableStateOf(false) }
+                        LaunchedEffect(uiState.currentLocationRequest) {
+                            when (uiState.currentLocationRequest) {
+                                com.runwear.app.ui.screens.CurrentLocationRequestState.Locating ->
+                                    manualPickerSawLocating = true
+                                com.runwear.app.ui.screens.CurrentLocationRequestState.Succeeded -> {
+                                    if (manualPickerSawLocating) {
+                                        showManualLocationPicker = false
+                                    }
+                                    viewModel.acknowledgeCurrentLocationRequest()
+                                }
+                                else -> Unit
+                            }
+                        }
                         LocationPickerSheet(
                             currentLocation = uiState.locationName,
+                            currentLocationRequest = uiState.currentLocationRequest,
                             onSearch = viewModel::searchLocation,
                             onSelectLocation = { lat, lon, name ->
                                 viewModel.selectManualLocation(lat, lon, name)
@@ -454,7 +483,7 @@ class MainActivity : ComponentActivity() {
                             // HeroMainScreen call above).
                             hasLocationPermission = viewModel.hasLocationPermission(),
                             onUseCurrentLocation = {
-                                showManualLocationPicker = false
+                                viewModel.useCurrentLocation()
                                 requestLocationPermission()
                             }
                         )

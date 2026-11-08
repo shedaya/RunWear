@@ -57,9 +57,26 @@ object ColdStartPolicy {
      * when the persisted place is a manual pick, and never when
      * the place currently in view is manual — a picked place
      * persists across relaunch and across foreground revalidation.
+     *
+     * RW-141: [explicitRequest] is the one exception, and it is
+     * not a loosening of this rule — the guard exists to stop
+     * UNSOLICITED adoption (launch, foreground revalidation)
+     * from discarding the user's pick. When the user themselves
+     * taps "Current location" in the Set Location sheet (or
+     * grants permission in answer to that tap), their own
+     * instruction outranks the guard. The gen-6 defect was that
+     * the sheet's tap flowed through this same seam with no
+     * explicit marker, so a successful fix was refused and the
+     * saved manual place silently re-applied — the button did
+     * nothing. Ordinary launches and foreground revalidation
+     * never pass `explicitRequest = true`.
      */
-    fun gpsAdoptionAllowed(savedSource: String?, currentSource: String?): Boolean =
-        savedSource != SOURCE_MANUAL && currentSource != SOURCE_MANUAL
+    fun gpsAdoptionAllowed(
+        savedSource: String?,
+        currentSource: String?,
+        explicitRequest: Boolean = false
+    ): Boolean =
+        explicitRequest || (savedSource != SOURCE_MANUAL && currentSource != SOURCE_MANUAL)
 
     /**
      * The first hero of a cold start: the banked own photo when
