@@ -273,7 +273,7 @@ final class RW144FirstScreenTests: XCTestCase {
         .overlay(alignment: .top) {
             if let pill, pill != .hidden {
                 HeroPillView(pillState: pill, seat: .straddle, onPillGetUnlimited: {})
-                    .offset(y: -22)
+                    .offset(y: -9)
             }
         }
     }

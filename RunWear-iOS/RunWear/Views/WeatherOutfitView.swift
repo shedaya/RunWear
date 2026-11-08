@@ -942,9 +942,10 @@ struct WeatherOutfitView: View {
         .zIndex(1)
         // RW-144: the Make It Me pill STRADDLES this container's
         // top edge (the hero/sheet boundary in the v8 frames) —
-        // centered, its center on the sheet's top edge. Only its
-        // seat changed; the state is the same heroPillState and
-        // the rendering is HeroPillView's settled table.
+        // seated on the boundary per the frames (see
+        // sheetStraddlePill). Only its seat changed; the state
+        // is the same heroPillState and the rendering is
+        // HeroPillView's settled table.
         .overlay(alignment: .top) {
             sheetStraddlePill
         }
@@ -953,6 +954,18 @@ struct WeatherOutfitView: View {
     /// The straddle-seat Make It Me pill: rendered only while
     /// the settled pill state is not hidden (a scaffold serve
     /// stays silent — HeroPill.resolve returns .hidden).
+    ///
+    /// Seat (measured from frame A at full resolution): the
+    /// pill's centre sits ON the hero's foot line — 13 pt BELOW
+    /// the sheet's top edge (the sheet overlaps the hero by the
+    /// settled 28 pt; the pill centre is at foot − 15). With
+    /// the pill's 44 pt height its top edge is at foot − 37,
+    /// and the feels-like block's last line ends at foot − 44:
+    /// a 7 pt clearance, the frames' own ≈6 pt. (Centering the
+    /// pill on the sheet's top edge instead puts its top edge
+    /// at foot − 50 — HIGHER than the frames' seat — and the
+    /// Actual line, ending at foot − 44, would slip 6 pt
+    /// behind it wherever they overlap horizontally.)
     @ViewBuilder private var sheetStraddlePill: some View {
         if heroPillState != .hidden {
             HeroPillView(
@@ -960,7 +973,7 @@ struct WeatherOutfitView: View {
                 seat: .straddle,
                 onPillGetUnlimited: { showHeroPillPaywall = true }
             )
-            .offset(y: -22)
+            .offset(y: -9)
         }
     }
 

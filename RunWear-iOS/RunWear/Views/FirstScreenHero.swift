@@ -611,14 +611,13 @@ struct HeroChromeOverlayView: View {
 
                 // Feels-like block, seated in the scrim zone at
                 // the hero's foot. Its bottom edge clears the
-                // straddle pill by construction: the pill is
-                // centred on the sheet boundary (the hero's foot
-                // minus the 28 pt sheet overlap) and stands
-                // 44 pt tall, so its top edge sits 50 pt above
-                // the hero's foot — the block's last line
-                // (Actual) ends 34 pt above the foot (the mock's
-                // own seat is ≈25 pt), a 16 pt clearance that
-                // holds whatever the pill's width.
+                // straddle pill by construction (the pill seat
+                // is measured from frame A — see
+                // WeatherOutfitView.sheetStraddlePill): the
+                // pill's top edge sits 37 pt above the hero's
+                // foot, and the block's last line (Actual) ends
+                // 44 pt above it — a 7 pt clearance, the frames'
+                // own ≈6 pt, holding whatever the pill's width.
                 VStack(spacing: 0) {
                     Spacer()
                     HeroFeelsLikeBlockView(
@@ -627,7 +626,7 @@ struct HeroChromeOverlayView: View {
                         feelsLikeF: feelsLikeF
                     )
                     .padding(.leading, 16)
-                    .padding(.bottom, 34)
+                    .padding(.bottom, 44)
                 }
                 .frame(width: size.width, height: size.height, alignment: .bottomLeading)
                 .allowsHitTesting(false)
