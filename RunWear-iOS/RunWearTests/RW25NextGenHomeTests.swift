@@ -62,23 +62,16 @@ final class RW25NextGenHomeTests: XCTestCase {
         XCTAssertNil(WearIveRunNarration.line(for: .preAdd))
     }
 
-    func testNarrationAddedUsesCommaForm() {
-        XCTAssertEqual(
-            WearIveRunNarration.line(for: .added(place: "New York", moment: .now)),
-            "Added New York, Now"
-        )
-    }
-
-    func testNarrationAddedWithPlaceAndTime() {
-        // GEN-5 (Addendum 8) SUPERSEDES the stamped literal: the
-        // moment is a structural clock reading now, rendering
-        // the C-7 simple form "7 a.m." — the "7:00 AM" stamp
-        // this pin carried is unrepresentable in the type.
-        XCTAssertEqual(
-            WearIveRunNarration.line(for: .added(place: "Central Park", moment: .clock(hour12: 7, isPM: false))),
-            "Added Central Park, 7 a.m."
-        )
-    }
+    // RW-138/WT-7 (Nov 7, 2026): the two formatter pins for the
+    // ".added" comma form ("Added New York, Now" / "Added
+    // Central Park, 7 a.m.") are REMOVED with the case itself.
+    // RW-135 spec §9.1 forbids the "Added" line on these
+    // surfaces; while the case existed, §9.1 conformance rested
+    // on the derivation never emitting it. The case is now
+    // unrepresentable, so there is nothing left to pin at the
+    // formatter level — the creation form is pinned at the
+    // derivation level in testMiniBarStateDerivation below and
+    // in SimplePlaceTests.
 
     func testNarrationUpdateToPayload() {
         // GEN-5 (Addendum 8): the payload is structural — the
@@ -115,8 +108,9 @@ final class RW25NextGenHomeTests: XCTestCase {
             heroImageReference: "hero"
         )
         // RW-135 spec §9.1 RE-PIN: the derivation's creation
-        // form is "Updated to {place}" (the .added formatter
-        // branch pinned above remains for stored data).
+        // form is "Updated to {place}" (the .added state case
+        // itself was removed in the RW-138 pass — the form is
+        // unrepresentable, not merely unemitted).
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: entry, moment: .now,

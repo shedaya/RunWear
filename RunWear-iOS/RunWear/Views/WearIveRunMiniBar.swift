@@ -29,10 +29,6 @@ import SwiftUI
 enum WearIveRunState: Equatable {
     /// No entry for today yet — the bar does not render.
     case preAdd
-    /// Today's entry was created at a place and moment.
-    /// GEN-5 (Addendum 8): the moment is the structural
-    /// MomentReading — no free-text moment exists.
-    case added(place: String, moment: MomentReading)
     /// Today's entry was re-settled to a new payload.
     /// GEN-5 (Addendum 8): the payload is the structural
     /// NarrationPayload (place or moment) — a garment payload
@@ -51,20 +47,18 @@ enum WearIveRunMiniBarModel {
     static let wordmark = "Wear I've Run"
 
     /// The bar's state from the session's entry: absent without
-    /// one; "Added" on the session's first settle; "Update to"
-    /// when a later in-session settle changed the entry the
-    /// session already narrated (narration-from-diff, X-4).
+    /// one; a future-day entry is the planned form; anything
+    /// else is "Updated to {place}" — a creation reads exactly
+    /// like a later settle (spec §9.1: no "Added" line; the
+    /// creation moment is the §4.1 cue's, not a wording's).
     ///
-    /// WS-4: both payloads derive from the ENTRY, never from a
-    /// caller-assembled string — "Added" carries the entry's
-    /// place in its simple form (city + abbreviated region), and
-    /// "Update to" carries the entry's stored payload (GEN-5:
-    /// what changed — the place or the moment reading; the WS-4
-    /// first-kit-item payload was the gen-4 garment defect).
-    /// (The pre-WS-4 iOS caller fed "Update to" a
-    /// "{n} items · {temp}" summary the entry never said; the
-    /// Android holder fed it the raw place + "Today" — D-08 on
-    /// both sides, different strings.)
+    /// WS-4: the payload derives from the ENTRY, never from a
+    /// caller-assembled string — the entry's place in its
+    /// simple form (city + abbreviated region). (The pre-WS-4
+    /// iOS caller fed the line a "{n} items · {temp}" summary
+    /// the entry never said; the Android holder fed it the raw
+    /// place + "Today" — D-08 on both sides, different
+    /// strings.)
     static func state(
         todaysEntry: WearIveRunEntry?,
         moment: MomentReading,
@@ -89,10 +83,14 @@ enum WearIveRunMiniBarModel {
         // (wasUpdatedThisSession == false) reads exactly like a
         // later settle — "Updated to {place}" — and the creation
         // moment is marked by the motion cue (§4.1), not by a
-        // wording. The `.added` case and its formatter branch
-        // are KEPT (stored-data decode in RW26CollectionModels
-        // and formatter-level unit tests rely on them); this
-        // derivation simply never produces it. §7.2's
+        // wording. RW-138/WT-7 (Nov 7, 2026): the former
+        // `.added` state case and its formatter branches are
+        // REMOVED — the superseded line is now unrepresentable
+        // rather than merely unproduced, so §9.1 conformance no
+        // longer rests on caller discipline. (Stored-data
+        // decode never involved this state type: the entry's
+        // own `wasUpdatedInSession` flag in RW26CollectionModels
+        // is a separate stored field and is untouched.) §7.2's
         // settled-today place form stands for both branches: a
         // moment-only change reads as the place the entry
         // holds — the entry still stores its C-7 update payload
@@ -107,16 +105,16 @@ enum WearIveRunMiniBarModel {
 
 enum WearIveRunNarration {
     /// - preAdd: nil (the bar does not render at all)
-    /// - added: "Added {place}, {moment}" — the comma form
     /// - updated: "Updated to {payload}" (payload renders pine)
     ///   (RW-98: the settled verb form is "Updated to" — the
     ///   gen-5 "Update to" wording is retired.)
+    /// - planned: "Planned for {place} · {day}"
+    /// There is no "Added" form (spec §9.1; the state case was
+    /// removed in the RW-138 pass — see the derivation note).
     static func line(for state: WearIveRunState) -> String? {
         switch state {
         case .preAdd:
             return nil
-        case .added(let place, let moment):
-            return "Added \(place), \(moment.rendered)"
         case .updated(let payload):
             return "Updated to \(payload.rendered)"
         case .planned(let place, let dayLabel):
@@ -626,7 +624,8 @@ final class WearIveRunCollectionModel: ObservableObject {
     /// entry — this session's — goes away in one tap, whatever
     /// place it settled at; the bar leaves with it, and a later
     /// settle in the same session re-creates the session's entry
-    /// (a fresh "Added", as after any trash).
+    /// (a fresh creation, narrated "Updated to {place}" per
+    /// §9.1, as after any trash).
     func removeSessionEntry() {
         guard let current = sessionEntry() else { return }
         store.remove(id: current.id)
@@ -1183,12 +1182,13 @@ struct WearIveRunMiniBarView: View {
             wordmarkView
             let shown = displayedState ?? state
             if let line = WearIveRunNarration.line(for: shown) {
-                // GEN-5 (RW-29 FA-48): a long simple place in the
-                // payload may wrap to two lines — the payload is
-                // never amputated.
-                narrationText(line, for: shown)
-                    .font(.system(size: 12))
-                    .lineLimit(2)
+                // RW-138 (RW-135 spec §4.3): the narration WRAPS
+                // and the bar's height follows — there is NO
+                // line cap, so the payload can never be
+                // ellipsized at any type size. (The two-line cap
+                // that stood here cut the plan form's day —
+                // "Tomorr…" — and long place names mid-word.)
+                dockNarration(line, for: shown)
                     .id(line)
                     .transition(.opacity)
             }
@@ -1273,6 +1273,50 @@ struct WearIveRunMiniBarView: View {
         }
     }
 
+    /// RW-138: the dock's narration in its wrap-and-grow form
+    /// (RW-135 spec §4.3). The settled form is a single text
+    /// with NO line limit: it wraps at word boundaries and the
+    /// bar grows — the payload is never truncated, at default
+    /// type or AX5. The planned form carries §4.3's break
+    /// rule — the wrap breaks before "· {day}", never inside
+    /// the place name — expressed structurally: a one-line
+    /// candidate (taken whenever the whole line fits the
+    /// offered width) and a stacked candidate in which the
+    /// head (verb + place, itself wrapping uncapped at word
+    /// boundaries) stands over the day segment on its own
+    /// line. `ViewThatFits` picks the first candidate that
+    /// fits; neither candidate can ellipsize the payload.
+    @ViewBuilder
+    private func dockNarration(_ line: String, for shownState: WearIveRunState) -> some View {
+        switch shownState {
+        case .planned(let place, let dayLabel):
+            ViewThatFits(in: .horizontal) {
+                narrationText(line, for: shownState)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                VStack(alignment: .leading, spacing: 0) {
+                    plannedNarrationHead(place: place)
+                        .font(.system(size: 12))
+                    Text("· \(dayLabel)")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.inkSecondary)
+                }
+            }
+        default:
+            narrationText(line, for: shownState)
+                .font(.system(size: 12))
+        }
+    }
+
+    /// The planned narration's head segment: "Planned for
+    /// {place}" — the verb in secondary ink, the place in pine
+    /// semibold (the same spans the one-line form renders).
+    private func plannedNarrationHead(place: String) -> Text {
+        Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+            + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+    }
+
     /// The narration line's rich form: the verb in secondary
     /// ink, the payload in pine (RW-135 §7.6: the settled-today
     /// place in pine BOLD). Every case derives from the SHOWN
@@ -1283,12 +1327,6 @@ struct WearIveRunMiniBarView: View {
         case .updated(let payload):
             return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
-        case .added(let place, let moment):
-            // The payload "{Place}, {Moment}" carries the pine.
-            // (Formatter-level case, kept per spec §9.1 — the
-            // derivation never produces it on these surfaces.)
-            return Text("Added ").foregroundColor(AppTheme.inkSecondary)
-                + Text("\(place), \(moment.rendered)").foregroundColor(AppTheme.pinePayload)
         case .planned(let place, let dayLabel):
             // §7.2: "Planned for {place} · {day}" — the place in
             // pine bold, the day word in secondary ink.
@@ -1502,9 +1540,13 @@ struct WearIveRunFooterSectionView: View {
             // semibold — cross-fades in place via the deferral
             // gate, exactly like the dock's (§4.3/§4.5).
             if let line = WearIveRunNarration.line(for: shownState) {
+                // RW-138 (spec §4.3): no line cap here either —
+                // the footer narration wraps whole and the
+                // section's height follows, exactly like the
+                // entry line below it. Truncating the payload
+                // is never acceptable on either surface.
                 footerNarrationText(line)
                     .font(.system(size: 15))
-                    .lineLimit(3)
                     .id(line)
                     .transition(.opacity)
             }
@@ -1800,9 +1842,6 @@ struct WearIveRunFooterSectionView: View {
         case .updated(let payload):
             return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
-        case .added(let place, let moment):
-            return Text("Added ").foregroundColor(AppTheme.inkSecondary)
-                + Text("\(place), \(moment.rendered)").foregroundColor(AppTheme.pinePayload)
         case .planned(let place, let dayLabel):
             return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
                 + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)

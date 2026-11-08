@@ -147,8 +147,8 @@ final class SimplePlaceTests: XCTestCase {
         // RW-135 spec §9.1 RE-PIN: MiniBarModel.state no longer
         // produces the "Added" form on these surfaces — a
         // creation reads "Updated to {simple place}". (The
-        // .added formatter branch itself is kept and pinned at
-        // the formatter level in RW25NextGenHomeTests.)
+        // .added state case was removed outright in the RW-138
+        // pass: the superseded form is unrepresentable.)
         for fixture in rawFixtures {
             let state = WearIveRunMiniBarModel.state(
                 todaysEntry: entry(place: fixture.raw),

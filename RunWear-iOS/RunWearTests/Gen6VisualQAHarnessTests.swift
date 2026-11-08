@@ -115,6 +115,14 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
 
     @MainActor
     func testVQ1PillStates_Light() throws {
+        // RW-138/WT-7 RE-PIN (Nov 7, 2026): the VQ-1.x pill
+        // fixtures now carry the LIVE allowance (RW-128: 10) —
+        // freeLook reads against 10 and the exhausted fixture
+        // is 10 of 10 — so this gate's own artefact proves the
+        // allowance-10 pill without a scratch fixture. (The
+        // resolve assertion below keeps allowance 5 as a mere
+        // input parameter: scaffold → hidden is
+        // allowance-independent.)
         // The policy resolves the scaffold serve to silence —
         // pinned here so the silent render below is the policy's
         // own output, not a hand-picked state.
@@ -125,8 +133,8 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
             .hidden, "scaffold serve resolves silent per the operative pill table")
         try renderPill(state: .makingWithUpsell, name: "VQ-1.1-ios-F-FREE-0-default.png")
         try renderPill(state: .making, name: "VQ-1.2-ios-F-PREM-GEN-default.png")
-        try renderPill(state: .freeLook(used: 3, allowance: 5), name: "VQ-1.3-ios-F-FREE-3-default.png")
-        try renderPill(state: .exhausted(used: 5, allowance: 5), name: "VQ-1.4-ios-F-FREE-5-default.png")
+        try renderPill(state: .freeLook(used: 3, allowance: 10), name: "VQ-1.3-ios-F-FREE-3-default.png")
+        try renderPill(state: .exhausted(used: 10, allowance: 10), name: "VQ-1.4-ios-F-FREE-10-default.png")
         try renderPill(state: .premium, name: "VQ-1.5-ios-F-PREM-BANK-default.png")
         try renderPill(state: .hidden, name: "VQ-1.6-ios-F-SCAFFOLD-default.png")
     }
@@ -134,8 +142,8 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     @MainActor
     func testVQ110PillStates_Dark() throws {
         try renderPill(state: .makingWithUpsell, dark: true, name: "VQ-1.10-ios-F-FREE-0-dark.png")
-        try renderPill(state: .freeLook(used: 3, allowance: 5), dark: true, name: "VQ-1.10-ios-F-FREE-3-dark.png")
-        try renderPill(state: .exhausted(used: 5, allowance: 5), dark: true, name: "VQ-1.10-ios-F-FREE-5-dark.png")
+        try renderPill(state: .freeLook(used: 3, allowance: 10), dark: true, name: "VQ-1.10-ios-F-FREE-3-dark.png")
+        try renderPill(state: .exhausted(used: 10, allowance: 10), dark: true, name: "VQ-1.10-ios-F-FREE-10-dark.png")
     }
 
     // MARK: - §2.9 / §11.5 · Widget at plan fixtures + missing states
@@ -462,13 +470,13 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
     @MainActor
     func testVQ17MiniBarNarration() throws {
         let miami = WearIveRunMiniBarView(
-            state: .added(place: "Miami, FL", moment: .now),
+            state: .updated(payload: .place("Miami, FL")),
             entry: collectionEntry(place: "Miami, FL"),
             formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeRender(miami, size: CGSize(width: 390, height: 110),
-                        name: "VQ-1.7-ios-minibar-added-default.png")
+                        name: "VQ-1.7-ios-minibar-updated-default.png")
         let longPlace = WearIveRunMiniBarView(
             state: .updated(payload: .place("Truth or Consequences, New Mexico")),
             entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
@@ -476,7 +484,15 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
             onOpenCollection: {}, onTrash: {})
             .environment(\.dynamicTypeSize, .accessibility5)
             .background(AppTheme.background)
-        try writeRender(longPlace, size: CGSize(width: 390, height: 150),
+        // RW-138: fitting height (the RW-67 probe method) — the
+        // wrap-and-grow dock at AX5 is taller than the fixed
+        // 150 pt canvas this render used, and a fixed canvas
+        // would clip the very growth the fix exists to show.
+        let probe = ImageRenderer(content: longPlace)
+        probe.scale = 2
+        probe.proposedSize = ProposedViewSize(width: 390, height: nil)
+        let needed = probe.uiImage?.size.height ?? 182
+        try writeRender(longPlace, size: CGSize(width: 390, height: max(needed, 60)),
                         name: "VQ-2.10-ios-minibar-F-LONGPLACE-max.png")
     }
 
@@ -563,7 +579,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .freeLook(used: 3, allowance: 5), heightMode: .fill, showsTopControls: false),
+                pillState: .freeLook(used: 3, allowance: 10), heightMode: .fill, showsTopControls: false),
             size: CGSize(width: 390, height: 520), name: "VQ-1.3-ios-F-FREE-3-default.png")
         try writeHostedRender(
             HeroImageView(
@@ -571,8 +587,8 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .exhausted(used: 5, allowance: 5), heightMode: .fill, showsTopControls: false),
-            size: CGSize(width: 390, height: 520), name: "VQ-1.4-ios-F-FREE-5-default.png")
+                pillState: .exhausted(used: 10, allowance: 10), heightMode: .fill, showsTopControls: false),
+            size: CGSize(width: 390, height: 520), name: "VQ-1.4-ios-F-FREE-10-default.png")
         try writeHostedRender(
             HeroImageView(
                 locationName: "New York, NY", temperature: 72, actualTemperature: 75,
@@ -596,7 +612,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .freeLook(used: 3, allowance: 5), heightMode: .fill, showsTopControls: false)
+                pillState: .freeLook(used: 3, allowance: 10), heightMode: .fill, showsTopControls: false)
                 .preferredColorScheme(.dark),
             size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-3-dark.png")
         try writeHostedRender(
@@ -605,21 +621,21 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 72),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .exhausted(used: 5, allowance: 5), heightMode: .fill, showsTopControls: false)
+                pillState: .exhausted(used: 10, allowance: 10), heightMode: .fill, showsTopControls: false)
                 .preferredColorScheme(.dark),
-            size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-5-dark.png")
+            size: CGSize(width: 390, height: 520), name: "VQ-1.10-ios-F-FREE-10-dark.png")
     }
 
     @MainActor
     func testVQ17MiniBarNarration_Hosted() throws {
         let miami = WearIveRunMiniBarView(
-            state: .added(place: "Miami, FL", moment: .now),
+            state: .updated(payload: .place("Miami, FL")),
             entry: collectionEntry(place: "Miami, FL"),
             formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeHostedRender(miami, size: CGSize(width: 390, height: 110),
-                              name: "VQ-1.7-ios-minibar-added-default.png")
+                              name: "VQ-1.7-ios-minibar-updated-default.png")
         let longPlace = WearIveRunMiniBarView(
             state: .updated(payload: .place("Truth or Consequences, New Mexico")),
             entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
@@ -704,8 +720,8 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         }
         try pill(.makingWithUpsell, "VQ-1.1-ios-F-FREE-0-default-fixed.png")
         try pill(.making, "VQ-1.2-ios-F-PREM-GEN-default-fixed.png")
-        try pill(.freeLook(used: 3, allowance: 5), "VQ-1.3-ios-F-FREE-3-default-fixed.png")
-        try pill(.exhausted(used: 5, allowance: 5), "VQ-1.4-ios-F-FREE-5-default-fixed.png")
+        try pill(.freeLook(used: 3, allowance: 10), "VQ-1.3-ios-F-FREE-3-default-fixed.png")
+        try pill(.exhausted(used: 10, allowance: 10), "VQ-1.4-ios-F-FREE-10-default-fixed.png")
         try pill(.premium, "VQ-1.5-ios-F-PREM-BANK-default-fixed.png")
     }
 
@@ -852,11 +868,14 @@ extension Gen6VisualQAHarnessTests {
     // is a plain header at natural height (no self-measurement
     // in the paint path), so the hosted vehicle composes it like
     // any other content: wordmark, narration, controls.
+    // RW-138 (Nov 7, 2026): the creation state fed here is the
+    // §9.1 form itself — "Updated to {place}" — the .added case
+    // the fixture originally fed was removed as unreachable.
     @MainActor
     func testFixWave_MinibarMini_Hosted() throws {
         let entry = collectionEntry(place: "New York, NY")
         let mini = WearIveRunMiniBarView(
-            state: .added(place: "New York, NY", moment: .now),
+            state: .updated(payload: .place("New York, NY")),
             entry: entry,
             formattedFeelsLike: "57°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
@@ -864,7 +883,7 @@ extension Gen6VisualQAHarnessTests {
         try writeHostedRender(mini, size: CGSize(width: 390, height: 110),
                               name: "FIX-RW86-ios-minibar-mini-light.png")
         let miniDark = WearIveRunMiniBarView(
-            state: .added(place: "New York, NY", moment: .now),
+            state: .updated(payload: .place("New York, NY")),
             entry: entry,
             formattedFeelsLike: "57°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
@@ -979,7 +998,7 @@ extension Gen6VisualQAHarnessTests {
                 weatherCondition: .clear, date: Date(timeIntervalSince1970: 1_798_000_000), hour: 7,
                 tempBracket: HeroTempBracket.from(feelsLikeTemperature: 64),
                 fallbackImageUrl: "", aiImageUrl: nil,
-                pillState: .freeLook(used: 1, allowance: 5), heightMode: .fill, showsTopControls: false)
+                pillState: .freeLook(used: 1, allowance: 10), heightMode: .fill, showsTopControls: false)
                 .preferredColorScheme(.light),
             size: CGSize(width: 390, height: 520), name: "FIX-RW105-ios-pill-freelook-light.png")
     }
