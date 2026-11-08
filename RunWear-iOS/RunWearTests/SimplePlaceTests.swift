@@ -144,30 +144,36 @@ final class SimplePlaceTests: XCTestCase {
     // MARK: - Narration, both states (notes §1 pattern)
 
     func testAddedNarrationUsesSimplePlaceAndNow() {
+        // RW-135 spec §9.1 RE-PIN: MiniBarModel.state no longer
+        // produces the "Added" form on these surfaces — a
+        // creation reads "Updated to {simple place}". (The
+        // .added formatter branch itself is kept and pinned at
+        // the formatter level in RW25NextGenHomeTests.)
         for fixture in rawFixtures {
             let state = WearIveRunMiniBarModel.state(
                 todaysEntry: entry(place: fixture.raw),
                 moment: .now,
                 wasUpdatedThisSession: false)
             XCTAssertEqual(
-                state, .added(place: fixture.simple, moment: .now), fixture.raw)
+                state, .updated(payload: .place(fixture.simple)), fixture.raw)
             XCTAssertEqual(
                 WearIveRunNarration.line(for: state),
-                "Added \(fixture.simple), Now", fixture.raw)
+                "Updated to \(fixture.simple)", fixture.raw)
         }
     }
 
     func testAddedNarrationDayFormIsNowNotToday() {
-        // The narration's moment is the header's "Now" form; the
-        // collection's "Today" day label belongs to the expanded
-        // subtitle only (frame 3). A "Today" in the mini line is
-        // the D-08 defect.
+        // RW-135 spec §9.1 RE-PIN: the creation line is the
+        // settled-today place form — it carries no moment
+        // segment at all, so the D-08 defect this pin guards
+        // (a "Today" day label in the mini line, which belongs
+        // to the expanded subtitle only) cannot occur.
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: entry(place: "New York, New York"),
             moment: .now,
             wasUpdatedThisSession: false)
         let line = WearIveRunNarration.line(for: state) ?? ""
-        XCTAssertTrue(line.hasSuffix(", Now"), line)
+        XCTAssertEqual(line, "Updated to New York, NY", line)
         XCTAssertFalse(line.contains("Today"), line)
     }
 
@@ -210,9 +216,11 @@ final class SimplePlaceTests: XCTestCase {
             moment: .now,
             wasUpdatedThisSession: false)
         let line = WearIveRunNarration.line(for: state) ?? ""
-        XCTAssertEqual(line, "Added Rancho Santa Margarita, CA, Now")
-        XCTAssertEqual(line.components(separatedBy: ",").count, 3,
-                       "verb + city, region, moment — no raw third component: \(line)")
+        // RW-135 spec §9.1 RE-PIN: the line is the place form —
+        // verb + city, region, and no moment segment.
+        XCTAssertEqual(line, "Updated to Rancho Santa Margarita, CA")
+        XCTAssertEqual(line.components(separatedBy: ",").count, 2,
+                       "verb + city, region — no raw third component: \(line)")
     }
 
     // MARK: - Expanded entry subtitle

@@ -12,10 +12,6 @@ struct WeatherOutfitView: View {
     /// rule); the store behind it is the collection itself.
     @StateObject private var collectionModel = WearIveRunCollectionModel()
     @State private var showCollection = false
-    /// End-of-scroll signal for the mini bar's full expression,
-    /// driven by the same onScrollGeometryChange feed as the hero
-    /// handoff.
-    @State private var isAtEndOfScroll = false
     /// RW-26 feedback door from the rating moment (frame 49).
     @State private var showFeedbackSheet = false
     /// RW-25 scroll-handoff progress (0 = hero full-frame at rest,
@@ -54,21 +50,52 @@ struct WeatherOutfitView: View {
     /// GEN-6 (RW-61): the looks library sheet, opened from the
     /// failed cell's "See all your looks" door.
     @State private var showLooksLibrary = false
-    /// RW-135 (Direction A, Nov 7, 2026 — supersedes the
-    /// synthesis form this branch first carried): the floating
-    /// MINI dock is the Wear I've Run presence on Home; its
-    /// EXPANDED form is a full-width section at the page footer.
-    /// This is the dock machine's full-expression state, mirrored
-    /// up from the dock — the footer section renders while it
-    /// stands, and only then.
-    @State private var wearFooterPresented = false
-    /// Footer-initiated collapse requests (tap-again / drag
-    /// down on the section): bumped here, consumed by the dock,
-    /// which collapses through its one state machine.
-    @State private var wearCollapseNonce = 0
-    /// When the footer section last mounted (its growth window
-    /// for the end-of-scroll guard above).
-    @State private var wearFooterMountedAt: Date = .distantPast
+    /// RW-135 spec (Direction A′, approved Nov 7, 2026): the
+    /// floating MINI dock is the Wear I've Run presence on
+    /// Home; its EXPANDED form is a full-bleed section at the
+    /// page footer, ALWAYS in the layout while a session entry
+    /// exists (§2.2). The handoff between them is a pure
+    /// function of the footer's measured position (§3) — the
+    /// interim build's machine-gated footer presentation
+    /// (wearFooterPresented / onFullExpressionChange /
+    /// externalCollapseNonce) and the isAtEndOfScroll dock
+    /// wiring are removed; the measurements below are the only
+    /// inputs.
+    /// The shared scroll position both glides (§4.4) drive,
+    /// bound to each footer-bearing ScrollView.
+    @State private var wearScrollPosition = ScrollPosition()
+    /// The footer's frame and its scroll view's frame, both in
+    /// .global space (§3 measurement), written by whichever
+    /// layout is on screen.
+    @State private var wearFooterGlobalFrame: CGRect = .zero
+    @State private var wearScrollGlobalFrame: CGRect = .zero
+    /// The footer's measured height — host scroll bookkeeping
+    /// only (glide targets); never in the dock's paint path
+    /// (RW-86).
+    @State private var wearFooterHeight: Double = 0
+    /// Scroll geometry from the footer-bearing scroll views:
+    /// content height, visible height, raw content offset.
+    @State private var wearContentHeight: Double = 0
+    @State private var wearVisibleHeight: Double = 0
+    @State private var wearContentOffsetY: Double = 0
+    /// The footer's top edge in content coordinates
+    /// (= contentHeight − bottomPadding − footerHeight),
+    /// recomputed by each layout's geometry feed.
+    @State private var wearFooterTopContentY: Double = 0
+    /// §4.7/§4.8 exit orchestration: while an exit runs, both
+    /// surfaces render this FROZEN snapshot of the record; the
+    /// store removal fires when the longest exit completes.
+    @State private var wearExitEntry: WearIveRunEntry?
+    @State private var wearExitState: WearIveRunState?
+    @State private var wearExitInProgress = false
+    @State private var wearExitRemovesData = false
+    @State private var wearDockExitProgress: Double = 0
+    @State private var wearFooterExitOpacity: Double = 1
+    @State private var wearFooterExitHeightFraction: Double = 1
+    /// The last presented session entry, kept so a session end
+    /// (day rollover — the entry leaves the store without a
+    /// trash tap) can still run the §4.8 exit over a snapshot.
+    @State private var lastWearEntry: WearIveRunEntry?
     /// RW-135 §7.5: true while any home scroll gesture (or its
     /// deceleration) is live — fed by the layouts'
     /// onScrollPhaseChange; the dock defers a mid-gesture
@@ -141,22 +168,37 @@ struct WeatherOutfitView: View {
                     .transition(.opacity)
                 }
             }
-            // RW-135 (Direction A, Nov 7, 2026): the floating
-            // MINI dock stands in this inset — restored to the
-            // design of record's geometry (§7.6: inset 12 pt
-            // left/right, 14 pt above the bottom safe edge,
-            // radius 16, translucent card material, soft
-            // shadow). No session entry → no bar, ever (§7.1):
-            // the dock renders nothing before the session's
-            // first recorded entry. The synthesis form that
-            // stood here first on this branch (an inline section
-            // + a jump chip in this inset) is removed — the
-            // EXPANDED form is the footer section in the flow
-            // (see wearIveRunFooterSection), not a chip.
-            .safeAreaInset(edge: .bottom) {
+            // RW-135 spec §3 (Direction A′, approved Nov 7,
+            // 2026): the floating MINI dock is a true OVERLAY on
+            // the root ZStack — alignment bottom, inset 12 pt
+            // left/right, 14 pt above the bottom edge, radius
+            // 16, translucent card material, soft shadow. (The
+            // interim build hosted it in a safeAreaInset; the
+            // spec's dock floats OVER the page, and the §3
+            // handoff fade is a pure function of the footer's
+            // position.) No session entry → no bar, ever
+            // (§7.1): the dock renders nothing before the
+            // session's first recorded entry. The EXPANDED form
+            // is the footer section in the flow (see
+            // wearIveRunFooterSection), not a chip.
+            .overlay(alignment: .bottom) {
                 miniBarDock
                     .padding(.horizontal, 12)
                     .padding(.bottom, 14)
+            }
+            // §4.8 session end: the session entry leaving the
+            // store without a trash tap (day rollover) runs the
+            // same exit over the last presented snapshot, minus
+            // any haptic. Trash taps run their own exit through
+            // beginWearExit and set wearExitInProgress first, so
+            // this hook stands down for them.
+            .onChange(of: collectionModel.sessionEntry()?.id) { _, newID in
+                if let entry = collectionModel.sessionEntry() {
+                    lastWearEntry = entry
+                } else if newID == nil, !wearExitInProgress,
+                          let snapshot = lastWearEntry {
+                    beginWearExit(snapshot: snapshot, removesData: false)
+                }
             }
             .onChange(of: showFlagThanks) { _, visible in
                 if visible {
@@ -647,18 +689,37 @@ struct WeatherOutfitView: View {
                                     .padding(.top, 24)
                                 personalSection
                                     .padding(.top, 24)
-                                // RW-135 (Direction A): the
-                                // footer's expanded section, in
-                                // the duo column's flow as in the
-                                // stacked layouts — rendered only
-                                // while the dock is expanded.
+                                // RW-135 spec §2.2: the footer
+                                // section, in the duo column's
+                                // flow as in the stacked layouts
+                                // — always in the layout while a
+                                // session entry exists, as the
+                                // column's final section, with
+                                // 34 pt of sheet above its top
+                                // edge. The duo takes the same
+                                // position-derived handoff (§3)
+                                // via this column's scroll view.
                                 wearIveRunFooterSection
-                                    .padding(.top, 24)
+                                    .padding(.top, 34)
                             }
                             .padding(.bottom, 16)
                         }
+                        .scrollPosition($wearScrollPosition)
                         .onScrollPhaseChange { _, phase in
                             isScrollGestureActive = phase != .idle
+                        }
+                        .onScrollGeometryChange(for: WearScrollMetrics.self) { geometry in
+                            WearScrollMetrics(geometry)
+                        } action: { _, metrics in
+                            wearContentHeight = metrics.contentHeight
+                            wearVisibleHeight = metrics.visibleHeight
+                            wearContentOffsetY = metrics.offsetY
+                            wearFooterTopContentY = metrics.contentHeight - 16 - wearFooterHeight
+                        }
+                        .onGeometryChange(for: CGRect.self) { proxy in
+                            proxy.frame(in: .global)
+                        } action: { _, frame in
+                            wearScrollGlobalFrame = frame
                         }
                         .refreshable { onRefresh() }
                         fullWeatherEntry
@@ -682,22 +743,28 @@ struct WeatherOutfitView: View {
                 } action: { _, offset in
                     updateHeroScrollProgress(offset: offset)
                 }
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.visibleRect.maxY >= geometry.contentSize.height - 60
-                } action: { _, atEnd in
-                    // RW-135 (interim footer): the footer
-                    // section's own in-flow growth must not read
-                    // as "scrolled away" — when it mounts at the
-                    // page foot, the geometry reports not-at-end
-                    // for a beat though the user never moved.
-                    // Departures inside the mount window are the
-                    // footer's own shadow; a genuine scroll-away
-                    // arrives later, as its own event.
-                    if !atEnd, wearFooterPresented,
-                       Date().timeIntervalSince(wearFooterMountedAt) < 0.5 {
-                        return
-                    }
-                    isAtEndOfScroll = atEnd
+                .scrollPosition($wearScrollPosition)
+                .onScrollGeometryChange(for: WearScrollMetrics.self) { geometry in
+                    WearScrollMetrics(geometry)
+                } action: { _, metrics in
+                    // RW-135 spec §3/§4.4 bookkeeping: content
+                    // height, visible height and offset feed the
+                    // glide targets; the footer's top in content
+                    // coordinates is content height minus its
+                    // measured height (it is the final section;
+                    // no bottom padding in the stacked layouts).
+                    // The interim isAtEndOfScroll feed and its
+                    // 0.5 s footer-mount guard are removed — the
+                    // handoff is a pure position function now.
+                    wearContentHeight = metrics.contentHeight
+                    wearVisibleHeight = metrics.visibleHeight
+                    wearContentOffsetY = metrics.offsetY
+                    wearFooterTopContentY = metrics.contentHeight - wearFooterHeight
+                }
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { _, frame in
+                    wearScrollGlobalFrame = frame
                 }
                 .refreshable { onRefresh() }
             } else {
@@ -720,22 +787,28 @@ struct WeatherOutfitView: View {
                 } action: { _, offset in
                     updateHeroScrollProgress(offset: offset)
                 }
-                .onScrollGeometryChange(for: Bool.self) { geometry in
-                    geometry.visibleRect.maxY >= geometry.contentSize.height - 60
-                } action: { _, atEnd in
-                    // RW-135 (interim footer): the footer
-                    // section's own in-flow growth must not read
-                    // as "scrolled away" — when it mounts at the
-                    // page foot, the geometry reports not-at-end
-                    // for a beat though the user never moved.
-                    // Departures inside the mount window are the
-                    // footer's own shadow; a genuine scroll-away
-                    // arrives later, as its own event.
-                    if !atEnd, wearFooterPresented,
-                       Date().timeIntervalSince(wearFooterMountedAt) < 0.5 {
-                        return
-                    }
-                    isAtEndOfScroll = atEnd
+                .scrollPosition($wearScrollPosition)
+                .onScrollGeometryChange(for: WearScrollMetrics.self) { geometry in
+                    WearScrollMetrics(geometry)
+                } action: { _, metrics in
+                    // RW-135 spec §3/§4.4 bookkeeping: content
+                    // height, visible height and offset feed the
+                    // glide targets; the footer's top in content
+                    // coordinates is content height minus its
+                    // measured height (it is the final section;
+                    // no bottom padding in the stacked layouts).
+                    // The interim isAtEndOfScroll feed and its
+                    // 0.5 s footer-mount guard are removed — the
+                    // handoff is a pure position function now.
+                    wearContentHeight = metrics.contentHeight
+                    wearVisibleHeight = metrics.visibleHeight
+                    wearContentOffsetY = metrics.offsetY
+                    wearFooterTopContentY = metrics.contentHeight - wearFooterHeight
+                }
+                .onGeometryChange(for: CGRect.self) { proxy in
+                    proxy.frame(in: .global)
+                } action: { _, frame in
+                    wearScrollGlobalFrame = frame
                 }
                 .refreshable { onRefresh() }
             }
@@ -840,17 +913,19 @@ struct WeatherOutfitView: View {
                 .padding(.top, 24)
             personalSection
                 .padding(.top, 24)
-            // RW-135 (Direction A): the EXPANDED form's seat —
-            // a full-width section at the page footer, rendered
-            // only while the dock's machine is at full
-            // expression (the interim expanded form; the
-            // synthesis's always-present inline section that
-            // stood here first on this branch is removed). The
-            // RW-136 "Making your looks" band redesign remains
-            // declined and untouched.
+            // RW-135 spec §2.2: the EXPANDED form's seat — a
+            // full-bleed section at the page footer, ALWAYS in
+            // the layout while a session entry exists (the
+            // interim build rendered it only at the dock
+            // machine's full expression; that gating is
+            // removed). 34 pt of sheet sit between the preceding
+            // section and the footer's top edge; the footer is
+            // the page's final section (no trailing spacer —
+            // its own 32 pt bottom padding closes the page).
+            // The RW-136 "Making your looks" band redesign
+            // remains declined and untouched.
             wearIveRunFooterSection
-                .padding(.top, 24)
-            Spacer(minLength: 40)
+                .padding(.top, 34)
         }
         .background {
             UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
@@ -1099,14 +1174,27 @@ struct WeatherOutfitView: View {
             || showLooksLibrary
     }
 
-    /// RW-135 (Direction A): the floating MINI dock — the
+    /// RW-135 spec §3: the handoff fade as a pure function of
+    /// the footer's measured position — a = the footer's top
+    /// edge above the scroll viewport's bottom edge, both in
+    /// .global space. Before the first measurement (frames
+    /// still .zero) the fade is 0: the dock stands.
+    private var wearHandoffFade: Double {
+        guard wearFooterGlobalFrame != .zero, wearScrollGlobalFrame != .zero else { return 0 }
+        let a = wearScrollGlobalFrame.maxY - wearFooterGlobalFrame.minY
+        return WearIveRunMorph.handoffFade(
+            footerTopAboveViewportBottom: a, reduceMotion: reduceMotion)
+    }
+
+    /// RW-135 (Direction A′): the floating MINI dock — the
     /// session's entry drives the bar, and the bar exists ONLY
     /// while the session holds an entry (§7.1: no entry → no
     /// bar, ever — no placeholder state; the RW-119 empty form
     /// that stood in this seat is superseded on Home by §7.1,
     /// and the collection's own empty state still carries that
     /// copy behind the doorway). The dock renders the entry
-    /// record only (§7.0).
+    /// record only (§7.0). During a §4.7/§4.8 exit it renders
+    /// the host's frozen snapshot instead.
     @ViewBuilder private var miniBarDock: some View {
         // GEN-3 (the presentation half, superseding W-15's
         // by-date key): the dock presents the CURRENT SESSION's
@@ -1114,94 +1202,225 @@ struct WeatherOutfitView: View {
         // names, so the element survives the user browsing
         // another place, and it can never announce a place the
         // session has moved past, because the session's one
-        // entry always holds the last settled place. (W-15's
-        // history: the original viewed-place lookup returned nil
-        // for the placeholder-filed entry forever, and for any
-        // entry whose place differed from the view; gen-2 keyed
-        // the lookup by date instead; the session rule keys it
-        // by session.)
-        let todays = collectionModel.sessionEntry()
+        // entry always holds the last settled place.
+        let liveEntry = collectionModel.sessionEntry()
+        let todays = wearExitInProgress ? wearExitEntry : liveEntry
         // WS-4 + Y-5: the state derives EVERYTHING from the one
-        // entry value above — both narration payloads (simple
-        // place for "Added"; per C-7 the entry's own update
-        // payload — place or moment reading, never garments) AND
-        // the narration kind, which the entry carries on itself
+        // entry value above — the narration payload AND the
+        // narration kind, which the entry carries on itself
         // (`wasUpdatedInSession`, committed in the same store
-        // write as the content). There is no second state holder
-        // for the flag to lag behind in: build 21 read the kind
-        // from separate model state and the payload from an
-        // older entry, and the card disagreed with itself for
-        // the rest of the session.
+        // write as the content).
         // GEN-5 (RW-29 FA-3): the moment below is the ENTRY's
-        // recorded momentReading — never the live sheetMoment,
-        // which browsing would rewrite into stamped forms.
-        let state = WearIveRunMiniBarModel.state(
-            todaysEntry: todays,
-            moment: todays?.momentReading ?? .now,
-            wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
-        )
-        if state != .preAdd {
+        // recorded momentReading — never the live sheetMoment.
+        let state = wearExitInProgress
+            ? (wearExitState ?? .preAdd)
+            : WearIveRunMiniBarModel.state(
+                todaysEntry: todays,
+                moment: todays?.momentReading ?? .now,
+                wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
+            )
+        if state != .preAdd, let todays {
             WearIveRunMiniBarView(
                 state: state,
                 entry: todays,
-                formattedFeelsLike: todays.map {
-                    viewModel.temperatureUnit.formatFromFahrenheit($0.feelsLikeF)
-                } ?? "",
+                formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
                 cueCount: collectionModel.cueCount,
-                isAtEndOfScroll: isAtEndOfScroll,
+                narrationVersion: collectionModel.narrationVersion,
+                handoffFade: wearHandoffFade,
+                exitProgress: wearDockExitProgress,
                 isDimmedBySheet: anyHomeSheetPresented,
                 // RW-135 §7.0/§7.5: narration derives from the
                 // ENTRY'S OWN RECORD only (the RW-88 viewed-state
-                // override parameter is removed from the bar
-                // outright — there is no live-view input left to
-                // pass), and a mid-gesture settle defers its
-                // cross-fade past the gesture's end.
+                // override is removed outright), and a mid-gesture
+                // settle defers its cross-fade past the gesture.
                 isScrollGestureActive: isScrollGestureActive,
-                onFullExpressionChange: { full in
-                    wearFooterPresented = full
-                    if full { wearFooterMountedAt = Date() }
-                },
-                externalCollapseNonce: wearCollapseNonce,
+                onGlideToFooter: { glideToWearFooter() },
                 onOpenCollection: { showCollection = true },
                 onTrash: {
-                    // Trash deletes the PRESENTED entry — the
-                    // session's own entry — not an entry at the
-                    // viewed place; the two differ once the user
-                    // has browsed elsewhere.
-                    if todays != nil {
-                        collectionModel.removeSessionEntry()
+                    // §4.7: the host orchestrates the exit over
+                    // a frozen snapshot; the store removal fires
+                    // when the longest exit completes.
+                    if let entry = liveEntry {
+                        beginWearExit(snapshot: entry, removesData: true)
                     }
                 }
             )
         }
     }
 
-    /// RW-135 (Direction A, INTERIM expanded form): the
-    /// full-width footer section — §7.2's anatomy (narration
-    /// row + the full entry row) in the page's section language,
-    /// rendered at the page foot ONLY while the dock's machine
-    /// is at full expression (end-of-scroll, tap on the bar, or
-    /// the creation cue). Tapping its entry row opens the
-    /// collection sheet (§7.3); its collapse routes back through
-    /// the dock's machine via the collapse nonce. Awaiting the
-    /// owner's design/animation package for the final
-    /// choreography — see the lane report addendum.
+    /// RW-135 spec §2.2: the footer section — ALWAYS in the
+    /// layout while a session entry exists (or while an exit
+    /// renders its frozen snapshot), as the page's final
+    /// section in every layout. Its frame (in .global) and its
+    /// height are measured here for the §3 handoff and the
+    /// host's glide bookkeeping — never for the dock's paint
+    /// path (RW-86).
     @ViewBuilder private var wearIveRunFooterSection: some View {
-        if wearFooterPresented, let todays = collectionModel.sessionEntry() {
-            let state = WearIveRunMiniBarModel.state(
-                todaysEntry: todays,
-                moment: todays.momentReading,
-                wasUpdatedThisSession: todays.wasUpdatedInSession
-            )
+        let liveEntry = collectionModel.sessionEntry()
+        if let todays = wearExitInProgress ? wearExitEntry : liveEntry {
+            let state = wearExitInProgress
+                ? (wearExitState ?? .preAdd)
+                : WearIveRunMiniBarModel.state(
+                    todaysEntry: todays,
+                    moment: todays.momentReading,
+                    wasUpdatedThisSession: todays.wasUpdatedInSession
+                )
             WearIveRunFooterSectionView(
                 state: state,
                 entry: todays,
                 formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
+                narrationVersion: collectionModel.narrationVersion,
+                cueCount: collectionModel.cueCount,
+                presentsCues: wearHandoffFade >= 1,
+                isScrollGestureActive: isScrollGestureActive,
+                // §4.1: grow only when in/near the viewport at
+                // creation — the footer's top within one
+                // viewport below the fold still counts as near.
+                growOnAppear: wearFooterGlobalFrame == .zero
+                    || (wearScrollGlobalFrame.maxY - wearFooterGlobalFrame.minY) > -wearVisibleHeight,
+                exitContentOpacity: wearFooterExitOpacity,
+                exitHeightFraction: wearFooterExitHeightFraction,
                 onOpenCollection: { showCollection = true },
-                onCollapse: { wearCollapseNonce += 1 }
+                onGlideUp: { glideUpFromWearFooter() },
+                onTrash: {
+                    if let entry = liveEntry {
+                        beginWearExit(snapshot: entry, removesData: true)
+                    }
+                }
             )
-            .transition(.opacity)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { _, frame in
+                wearFooterGlobalFrame = frame
+            }
+            .onGeometryChange(for: Double.self) { proxy in
+                proxy.size.height
+            } action: { _, height in
+                if height > 0 { wearFooterHeight = height }
+            }
         }
+    }
+
+    // MARK: - RW-135 spec §4.4 — glides
+
+    /// Tap the dock: glide the page to its end. Duration from
+    /// the remaining distance (§4.4's clamp rule); a user touch
+    /// cancels natively. Reduce Motion: instant jump (§5).
+    private func glideToWearFooter() {
+        let distance = max(0, (wearContentHeight - wearVisibleHeight) - wearContentOffsetY)
+        if reduceMotion {
+            wearScrollPosition.scrollTo(edge: .bottom)
+            return
+        }
+        withAnimation(.timingCurve(
+            0.65, 0, 0.15, 1,
+            duration: WearIveRunMorph.glideDurationSeconds(distancePt: distance)
+        )) {
+            wearScrollPosition.scrollTo(edge: .bottom)
+        }
+    }
+
+    /// The footer's chevron-down: the inverse glide, landing at
+    /// content offset (footerTop − viewportHeight − 24) so the
+    /// dock re-docks through the same handoff function.
+    private func glideUpFromWearFooter() {
+        let target = max(0, wearFooterTopContentY - wearVisibleHeight - 24)
+        if reduceMotion {
+            wearScrollPosition.scrollTo(point: CGPoint(x: 0, y: target))
+            return
+        }
+        withAnimation(.timingCurve(
+            0.65, 0, 0.15, 1,
+            duration: WearIveRunMorph.glideDurationSeconds(
+                distancePt: abs(target - wearContentOffsetY))
+        )) {
+            wearScrollPosition.scrollTo(point: CGPoint(x: 0, y: target))
+        }
+    }
+
+    // MARK: - RW-135 spec §4.7/§4.8 — delete + session-end exits
+
+    /// Orchestrate the exit over a FROZEN snapshot of the
+    /// record. Footer in the viewport at all → its content
+    /// fades 160 ms, then its height folds to 0 over 400 ms
+    /// fold, the dock (if not handed off) fading + sinking
+    /// concurrently over 300 ms exit. Footer off-screen → dock
+    /// fade+sink 300 ms only; the footer leaves silently with
+    /// the data. The store removal fires when the longest
+    /// running exit completes. Session end (§4.8) runs the
+    /// same choreography with removesData == false (the record
+    /// has already passed to the collection) and no haptic —
+    /// haptics live at the trash tap sites, never here.
+    /// Reduce Motion (§5): dock fade 200 ms no sink; footer
+    /// fade 200 ms then height snaps.
+    private func beginWearExit(snapshot: WearIveRunEntry, removesData: Bool) {
+        guard !wearExitInProgress else { return }
+        wearExitEntry = snapshot
+        wearExitState = WearIveRunMiniBarModel.state(
+            todaysEntry: snapshot,
+            moment: snapshot.momentReading,
+            wasUpdatedThisSession: snapshot.wasUpdatedInSession
+        )
+        wearExitRemovesData = removesData
+        wearExitInProgress = true
+        let footerInViewport = wearFooterGlobalFrame != .zero
+            && wearScrollGlobalFrame != .zero
+            && (wearScrollGlobalFrame.maxY - wearFooterGlobalFrame.minY) > 0
+        let handedOff = wearHandoffFade >= 1
+        // The dock's exit (skipped when already handed off).
+        if !handedOff {
+            withAnimation(.timingCurve(
+                0.5, 0, 0.75, 0, duration: reduceMotion ? 0.2 : 0.3
+            )) {
+                wearDockExitProgress = 1
+            }
+        }
+        if footerInViewport {
+            if reduceMotion {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    wearFooterExitOpacity = 0
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 220_000_000)
+                    wearFooterExitHeightFraction = 0
+                    finishWearExit()
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    wearFooterExitOpacity = 0
+                }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 160_000_000)
+                    withAnimation(.timingCurve(0.65, 0, 0.35, 1, duration: 0.4)) {
+                        wearFooterExitHeightFraction = 0
+                    }
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    finishWearExit()
+                }
+            }
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: reduceMotion ? 200_000_000 : 300_000_000)
+                finishWearExit()
+            }
+        }
+    }
+
+    /// The longest exit completed: the store removal fires
+    /// (delete only — a session end's record already passed to
+    /// the collection), and the exit state resets.
+    private func finishWearExit() {
+        if wearExitRemovesData {
+            collectionModel.removeSessionEntry()
+        }
+        wearExitInProgress = false
+        wearExitRemovesData = false
+        wearExitEntry = nil
+        wearExitState = nil
+        lastWearEntry = nil
+        wearDockExitProgress = 0
+        wearFooterExitOpacity = 1
+        wearFooterExitHeightFraction = 1
     }
 
     /// Automatic entry creation (checklist §C; GEN-3 session
@@ -2006,5 +2225,24 @@ extension View {
             .background(
                 Capsule().fill(isSelected ? AppTheme.primaryColor.opacity(0.25) : AppTheme.cardOnSheet)
             )
+    }
+}
+
+// MARK: - RW-135 scroll metrics (host bookkeeping)
+
+/// One geometry sample from a footer-bearing scroll view:
+/// content height, visible height, and the raw content
+/// offset. Feeds the §4.4 glide targets and the §3 handoff's
+/// bookkeeping in WeatherOutfitView. Equatable so it can ride
+/// `onScrollGeometryChange`.
+struct WearScrollMetrics: Equatable {
+    var contentHeight: Double
+    var visibleHeight: Double
+    var offsetY: Double
+
+    init(_ geometry: ScrollGeometry) {
+        contentHeight = geometry.contentSize.height
+        visibleHeight = geometry.visibleRect.height
+        offsetY = geometry.contentOffset.y
     }
 }

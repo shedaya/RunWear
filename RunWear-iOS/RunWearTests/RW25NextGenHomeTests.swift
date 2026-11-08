@@ -114,12 +114,15 @@ final class RW25NextGenHomeTests: XCTestCase {
             condition: "Cloudy", itemNames: ["Tee"], itemKeys: ["tee"],
             heroImageReference: "hero"
         )
+        // RW-135 spec §9.1 RE-PIN: the derivation's creation
+        // form is "Updated to {place}" (the .added formatter
+        // branch pinned above remains for stored data).
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: entry, moment: .now,
                 wasUpdatedThisSession: false
             ),
-            .added(place: "New York", moment: .now)
+            .updated(payload: .place("New York"))
         )
         // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment payload:
         // an entry carrying no stored update payload narrates

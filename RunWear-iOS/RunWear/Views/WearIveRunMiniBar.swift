@@ -1,42 +1,30 @@
 import SwiftUI
 
-// MARK: - "Wear I've Run" Mini Bar (RW-25 scaffolding; RW-26 full behavior; WS-3 one machine)
+// MARK: - "Wear I've Run" Mini Bar (RW-25 scaffolding; RW-26 full behavior)
 //
-// The bar is the collection's doorway (no tab bar — notes §1):
-// - absent before the session's entry exists (GEN-3: one entry
-//   per app session, updated in place — see RW26CollectionModels);
-// - collapsed at rest, semi-transparent (light 85% / dark 82% sheet
-//   tint layered over .regularMaterial; text/icons 100%);
-// - expanded at end-of-scroll, on tap, and on the creation/update
-//   cue — with ONE gentle pulse + a soft haptic, then quiet;
-// - two grayed right-end controls: expand/collapse and trash, the
-//   SAME controls with the SAME semantics in both resting states.
-//   Trash removes the session's entry in one tap, no confirmation;
-//   the bar leaves until a later generation re-creates the entry.
-// The narration pattern: the script wordmark leads, a verb, and
-// the payload in pine.
-//
-// WS-3 (RC-3): presentation is owned by ONE state machine
-// (`WearIveRunElementMachine` — ABSENT / MINI / EXPANDED / CUE)
-// whose driver table is the only transition source. This view
-// feeds it events and executes its effects; it holds no
-// presentation logic of its own. The pre-WS-3 end-of-scroll
-// LATCH (expansion with no collapse counterpart) is retired:
-// arrival at the end expands, departure collapses, symmetric.
-//
-// RW-135 (Direction A, owner's ruling Nov 7, 2026; research §7
-// + the same-day refinement): this view is the floating MINI
-// dock ONLY — inset, radius 16, translucent card material,
-// restored to the design of record. The synthesis form (an
-// always-present inline section + a floating jump chip) is
-// removed. The EXPANDED form is INTERIM: a full-width section
-// at the page footer in the page's section language
-// (`WearIveRunFooterSectionView` below), rendered by the host
-// while the machine is at full expression — pending the
-// owner's design/animation package for the final choreography.
-// Narration is a pure function of the recorded entry (§7.0);
-// the creation cue is the only pulse (§7.1); a changed settle
-// cross-fades the line quietly (§7.4).
+// RW-135 spec (Direction A′, APPROVED by Sol Hedaya Nov 7,
+// 2026 — DESIGN_AND_ANIMATION_SPEC.md is the document of
+// record): the Wear I've Run presence is TWO surfaces over
+// one recorded entry —
+// - the floating MINI dock (this file's WearIveRunMiniBarView):
+//   a true overlay, inset 12 / bottom 14, radius 16,
+//   translucent card material; at rest while a session entry
+//   exists, absent before one does (§1.3/§2.1);
+// - the EXPANDED footer section (WearIveRunFooterSectionView
+//   below): full-bleed ground surface at the page foot, ALWAYS
+//   in the layout while an entry exists (§2.2).
+// The scroll mediates between them: dock visibility is a pure
+// function of the footer's position (§3 handoff, computed in
+// WearIveRunMorph.handoffFade — no timers, no state machine
+// for the handoff). Tapping the dock glides the page to the
+// footer (§4.4); the footer's chevron-down glides back up.
+// Narration is a pure function of the recorded entry (§1.2);
+// there is no "Added" line (§9.1); the creation cue (§4.1)
+// and the update bounce (§4.3, Sol's Nov 7 ruling) are the
+// only pulses. The interim build's in-place expansion morph
+// and machine-gated footer are superseded by this spec; the
+// WearIveRunElementMachine type remains for its pure
+// transition tests and timing constants.
 
 enum WearIveRunState: Equatable {
     /// No entry for today yet — the bar does not render.
@@ -96,17 +84,22 @@ enum WearIveRunMiniBarModel {
                 dayLabel: WearIveRunNarration.plannedDayLabel(
                     for: entry, calendar: calendar, now: now))
         }
-        if wasUpdatedThisSession {
-            // RW-135 §7.2: the settled-today line names the
-            // entry's recorded PLACE ("Updated to {place}", the
-            // place in pine bold). This supersedes the GEN-5
-            // moment-payload form ON THE BAR: a moment-only
-            // change now reads as the place the entry holds —
-            // the entry still stores its C-7 update payload for
-            // the collection surfaces that render it.
-            return .updated(payload: .place(entry.placeDisplayName))
-        }
-        return .added(place: entry.placeDisplayName, moment: moment)
+        // RW-135 spec §9.1 (approved Nov 7, 2026): there is NO
+        // "Added" line on these surfaces. A creation
+        // (wasUpdatedThisSession == false) reads exactly like a
+        // later settle — "Updated to {place}" — and the creation
+        // moment is marked by the motion cue (§4.1), not by a
+        // wording. The `.added` case and its formatter branch
+        // are KEPT (stored-data decode in RW26CollectionModels
+        // and formatter-level unit tests rely on them); this
+        // derivation simply never produces it. §7.2's
+        // settled-today place form stands for both branches: a
+        // moment-only change reads as the place the entry
+        // holds — the entry still stores its C-7 update payload
+        // for the collection surfaces that render it.
+        _ = wasUpdatedThisSession
+        _ = moment
+        return .updated(payload: .place(entry.placeDisplayName))
     }
 }
 
@@ -747,9 +740,10 @@ enum WearIveRunMorph {
     /// The Reduced Motion crossfade's length (≤150 ms, §6).
     static let reducedMotionDurationSeconds: Double = 0.15
 
-    /// RW-135 §7.4: the narration cross-fade's length — opacity
-    /// only, ~200 ms, when a settle lands on a changed record.
-    static let narrationCrossfadeSeconds: Double = 0.2
+    /// RW-135 §7.4 / spec §4.3: the narration cross-fade's
+    /// length — opacity only, out 95 ms + in 115 ms ≈ 210 ms
+    /// total, when a settle lands on a changed record.
+    static let narrationCrossfadeSeconds: Double = 0.21
 
     /// The animation a driver runs, built from the pinned
     /// constants above — one animation of the one progress
@@ -815,6 +809,54 @@ enum WearIveRunMorph {
     static func expandedContentOffset(progress: Double) -> Double {
         4 * (1 - expandedContentOpacity(progress: progress))
     }
+
+    // MARK: RW-135 spec §3 / §4.4 — handoff + glide mathematics
+    //
+    // The handoff is a PURE function of the footer's position:
+    // no timers, no state machine. `a` is how far (pt) the
+    // footer's top edge sits ABOVE the scroll viewport's bottom
+    // edge (negative while the footer is still below the fold).
+
+    /// Smoothstep easing (0 → 1, zero slope at both ends).
+    static func smoothstep(_ x: Double) -> Double {
+        let t = min(1, max(0, x))
+        return t * t * (3 - 2 * t)
+    }
+
+    /// The dissolve window (spec §3, kept exactly per §11.2):
+    /// the dock dissolves across the 37 pt in which the
+    /// footer's top edge travels from 83 pt to 120 pt above
+    /// the viewport's bottom edge.
+    static let handoffWindowStart: Double = 83
+    static let handoffWindowWidth: Double = 37
+
+    /// Dock fade (0 = dock fully present, 1 = fully handed
+    /// off) from the footer's position. Under Reduce Motion
+    /// (§5) the dissolve becomes a step at the window's
+    /// midpoint (101.5 pt) with a single 160 ms crossfade,
+    /// which the dock view applies as an animation on this
+    /// value.
+    static func handoffFade(
+        footerTopAboveViewportBottom a: Double,
+        reduceMotion: Bool = false
+    ) -> Double {
+        if reduceMotion {
+            return a >= handoffWindowStart + handoffWindowWidth / 2 ? 1 : 0
+        }
+        return smoothstep((a - handoffWindowStart) / handoffWindowWidth)
+    }
+
+    /// Spec §4.4 glide duration: clamp(450 ms, 350 + 0.55 ×
+    /// distancePt, 950 ms) — critically damped feel, no
+    /// overshoot at the end.
+    static func glideDurationSeconds(distancePt: Double) -> Double {
+        min(0.95, max(0.45, 0.35 + 0.00055 * max(0, distancePt)))
+    }
+
+    /// Update-bounce peak (spec §4.3, Sol's Nov 7, 2026
+    /// ruling): ≈1.5% overshoot when the deferral gate
+    /// releases a changed line.
+    static let updateBounceScale: Double = 1.015
 
     /// The chevron's rotation: ONE glyph rotating 180° with
     /// progress — continuous, no icon swap. Under Reduced
@@ -903,12 +945,23 @@ struct WearIveRunMiniBarView: View {
     let entry: WearIveRunEntry?
     /// The feels-like, formatted in the user's unit.
     let formattedFeelsLike: String
-    /// Cue-worthy landing counter (creation / kit update only) —
-    /// a change is fed to the machine as a landing event.
+    /// Cue-worthy landing counter (creation only) — a change is
+    /// fed to the entrance logic as a creation event.
     let cueCount: Int
-    /// The parent scroll's end-of-scroll signal. BOTH edges are
-    /// fed to the machine: arrival expands, departure collapses.
-    let isAtEndOfScroll: Bool
+    /// RW-135 spec §4.3: the collection model's narration
+    /// version — bumped when the derived line changes. The
+    /// cross-fade itself is driven by `state`; this value is
+    /// bookkeeping for the surfaces' shared cue discipline.
+    var narrationVersion: Int = 0
+    /// RW-135 spec §3: the handoff fade (0 = dock fully
+    /// present, 1 = fully handed off to the footer), computed
+    /// by the host as a pure function of the footer's position
+    /// (`WearIveRunMorph.handoffFade`). Default 0 before the
+    /// host's first measurement.
+    var handoffFade: Double = 0
+    /// RW-135 spec §4.7: host-orchestrated exit progress
+    /// (0 = at rest, 1 = fully exited: faded + sunk 26 pt).
+    var exitProgress: Double = 0
     /// True while any sheet is presented over home (WS-5 owns the
     /// sheets; this view only consumes their presented state):
     /// the element dims WITH the home backdrop (D-11).
@@ -919,75 +972,44 @@ struct WearIveRunMiniBarView: View {
     /// gesture ends — no morph or fade runs concurrently with a
     /// scroll-handoff.
     var isScrollGestureActive: Bool = false
-    /// RW-135 (Direction A, interim expanded form): the machine's
-    /// full-expression state, mirrored to the host — the EXPANDED
-    /// form itself is the full-width footer section in the page
-    /// flow (owner's Nov 7 refinement), not a taller dock. The
-    /// dock reports; the host renders the footer.
-    var onFullExpressionChange: (Bool) -> Void = { _ in }
-    /// RW-135: a collapse requested by the footer section (its
-    /// own tap-again / drag-down): the host bumps this nonce and
-    /// the machine collapses through its one transition table.
-    var externalCollapseNonce: Int = 0
+    /// RW-135 spec §4.4: tapping the dock body or its expand
+    /// control is the JUMP — the host glides the page to its
+    /// end. There is no in-place expansion anymore (Direction
+    /// A′: the one expanded form is the footer section).
+    var onGlideToFooter: () -> Void = {}
     let onOpenCollection: () -> Void
     let onTrash: () -> Void
 
-    /// The ONE state holder for this element (WS-3).
-    @State private var machine = WearIveRunElementMachine()
-    /// Sensory-feedback triggers: incremented ONLY by the
-    /// machine's effects, so each haptic fires exactly once per
-    /// cause (§1.7) and never for a silent transition.
+    /// Sensory-feedback triggers: incremented ONLY by the cue /
+    /// bounce / glide / trash paths, so each haptic fires
+    /// exactly once per cause (§1.7).
     @State private var cueHapticNonce = 0
     @State private var trashHapticNonce = 0
-    /// The cue pulse's scale (1.00 → 1.03 → 1.00 over 900 ms).
+    @State private var glideHapticNonce = 0
+    /// The cue pulse's scale (1.00 → 1.018 → 1.00 over 900 ms).
     @State private var pulseScale: CGFloat = 1
     @State private var isPulsing = false
-    /// The cue's rise into place (12 pt → 0 as it enters CUE).
-    @State private var riseOffset: CGFloat = 0
-    /// Generation of the pending cue timer: bumped whenever the
-    /// timer is (re)started or cancelled, so a stale timer can
-    /// never fire into a state that has moved on.
-    @State private var cueTimerGeneration = 0
-    /// Guards the compose-time reconciliation so it runs once.
-    @State private var didReconcileInitialState = false
-    /// THE morph value (motion decision §2): 0 = MINI,
-    /// 1 = EXPANDED/CUE. Every visual property of the bar is a
-    /// pure function of this one value via `WearIveRunMorph`.
-    @State private var expansionProgress: Double = 0
+    /// The creation cue's pine ring (§4.1): blooms and decays
+    /// over 900 ms alongside the pulse scale.
+    @State private var ringScale: CGFloat = 1
+    @State private var ringOpacity: Double = 0
+    /// The update bounce's scale (§4.3): 1.00 → 1.015 → 1.00.
+    @State private var bounceScale: CGFloat = 1
+    /// The glide tap's press scale (§4.4): 0.97 over 120 ms.
+    @State private var pressScale: CGFloat = 1
+    /// Creation entrance (§4.1): 0 = risen-from position
+    /// (+160% of the dock's height, faded), 1 = at rest.
+    @State private var entranceProgress: Double = 1
+    @State private var didRunEntrance = false
     /// The rendered content's own measured height — used ONLY
-    /// by the trash collapse (its height shrinks with the fade,
-    /// §1.2). RW-86: this measurement never gates painting; the
-    /// bar renders at its natural height in every state, and the
-    /// value only scales a collapse already in flight.
-    @State private var contentHeight: Double = 0
-    /// Generation of the in-flight morph: bumped on every new
-    /// driver, so a superseded animation's completion can never
-    /// fire a stale settle, latch release, or trash.
-    @State private var morphGeneration = 0
-    /// The morph generation whose completion owes the cue's
-    /// pulse + soft haptic — they fire at the SETTLE, not at
-    /// the driver (decision §2 / guardrail §7.8). Nil when no
-    /// settle is owed; cancelled with the cue timer if the user
-    /// touches the element first.
-    @State private var pendingCueSettleGeneration: Int?
-    /// Scroll-latch (§5.3): the generation of an in-flight
-    /// scroll-driven transition. While it stands, the opposite
-    /// scroll edge is QUEUED, not started — one move per
-    /// threshold crossing, never a breathing card.
-    @State private var scrollLatchGeneration: Int?
-    @State private var queuedScrollEvent: WearIveRunElementEvent?
-    /// Trash collapse (§1.2, unchanged): 1 → 0 over 250 ms,
-    /// height shrinking while fading; the entry is deleted only
-    /// when the collapse completes, so the dock's space is
-    /// released in the same animation.
-    @State private var trashScale: Double = 1
-    /// Reduced Motion chevron: flipped at the crossfade
-    /// midpoint instead of rotating (§6).
-    @State private var reducedChevronFull = false
+    /// by the creation entrance's rise distance (RW-86: this
+    /// measurement never gates painting; the bar renders at its
+    /// natural height in every state).
+    @State private var dockHeight: Double = 0
     /// RW-135 §7.4/§7.5: the narration state the bar is actually
     /// SHOWING. The rendered line derives from this, not directly
     /// from `state`: when a settle changes the recorded line, the
-    /// shown state cross-fades (opacity only, ~200 ms) to the new
+    /// shown state cross-fades (opacity only, ≈210 ms) to the new
     /// one; a settle landing mid-scroll-gesture parks its new
     /// state in `pendingNarrationState` until the frame after
     /// deceleration ends. The shown state is still a pure
@@ -1002,42 +1024,48 @@ struct WearIveRunMiniBarView: View {
 
     var body: some View {
         if state != .preAdd {
-            morphBar
-                .scaleEffect(reduceMotion ? 1 : pulseScale)
-                .shadow(
-                    color: AppTheme.pinePayload.opacity(isPulsing && !reduceMotion ? 0.35 : 0),
-                    radius: 12
-                )
-                .offset(y: reduceMotion ? 0 : riseOffset)
-                // D-11: the element dims with the home backdrop while
-                // any sheet is up, and does not answer touches through
-                // the backdrop.
-                .opacity(WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet))
-                .allowsHitTesting(WearIveRunElementDimming.isInteractive(sheetPresented: isDimmedBySheet))
-                // §1.7: the cue's soft haptic and the trash's light
+            dockBar
+                // §3 handoff: opacity 1−fade, sink 12·fade,
+                // scale 1−0.02·fade — pure functions of the
+                // host-supplied fade. Under Reduce Motion the
+                // fade is a step and the view crossfades it
+                // once over 160 ms (§5).
+                .opacity(dockOpacity)
+                .offset(y: dockOffsetY)
+                .scaleEffect(dockScale)
+                .allowsHitTesting(
+                    handoffFade < 0.5 && exitProgress == 0
+                        && WearIveRunElementDimming.isInteractive(sheetPresented: isDimmedBySheet))
+                .accessibilityHidden(handoffFade >= 1)
+                .animation(
+                    reduceMotion ? .easeInOut(duration: 0.16) : nil,
+                    value: handoffFade)
+                // §1.7: the cue's soft haptic, the update
+                // bounce's soft haptic (same trigger), the
+                // glide's light haptic and the trash's light
                 // haptic are the ONLY sounds this surface makes.
-                // Expand/collapse and scrolling are silent.
                 .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
                 .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
+                .sensoryFeedback(.impact(weight: .light), trigger: glideHapticNonce)
                 .onAppear {
-                    reconcileInitialState()
                     if displayedState == nil {
                         displayedState = state
                         _ = narrationDeferral.offer(
                             line: WearIveRunNarration.line(for: state),
                             gestureActive: false)
                     }
+                    runEntranceIfNeeded()
                 }
                 .onChange(of: cueCount) { oldValue, newValue in
-                    guard newValue > oldValue else { return }
-                    // RW-135 §7.1: the counter now moves ONLY on
-                    // creation, and creation is the only cue — a
-                    // landing here is fed as a creation, always.
-                    // (Changed settles move `narrationVersion`,
-                    // which this view deliberately does not
-                    // consume: the line cross-fades via the
-                    // `state` change path below, §7.4.)
-                    send(.entryCreated)
+                    // A NEW creation while the dock stands (a
+                    // settle re-creating the entry after a
+                    // collection-side removal): replay the §4.1
+                    // entrance + cue. The ordinary creation is
+                    // handled at appear (the dock mounts with
+                    // the entry).
+                    guard newValue > oldValue, didRunEntrance else { return }
+                    didRunEntrance = false
+                    runEntranceIfNeeded()
                 }
                 .onChange(of: state) { _, newState in
                     // §7.4/§7.5: a changed recorded line passes
@@ -1064,125 +1092,92 @@ struct WearIveRunMiniBarView: View {
                         }
                     }
                 }
-                .onChange(of: machine.isFullExpression) { _, full in
-                    onFullExpressionChange(full)
-                }
-                .onChange(of: externalCollapseNonce) { _, _ in
-                    // The footer section's collapse request (§7.2
-                    // tap-again / drag-down, interim mapping):
-                    // collapse through the one machine.
-                    if machine.isFullExpression { send(.tapToggleControl) }
-                }
-                .onChange(of: isAtEndOfScroll) { _, atEnd in
-                    // BOTH edges — the symmetric rule that retires the
-                    // latch. In CUE and ABSENT these are machine
-                    // no-ops by table, so a scroll can never disturb
-                    // a cue.
-                    send(atEnd ? .scrolledToEnd : .scrolledAwayFromEnd)
-                }
-                .onChange(of: isDimmedBySheet) { _, dimmed in
-                    // §5.4: a sheet presenting mid-transition wins —
-                    // the morph finishes instantly to its target
-                    // state underneath the dim.
-                    if dimmed { finishMorphInstantly() }
-                }
         }
     }
 
-    // MARK: The morph bar (one view, one progress value)
+    /// Opacity composition: backdrop dim (D-11) × handoff
+    /// (1−fade) × exit (1−progress) × entrance fade.
+    private var dockOpacity: Double {
+        WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet)
+            * (1 - handoffFade) * (1 - exitProgress) * entranceProgress
+    }
+
+    /// Vertical offset: the creation rise (+160% of height →
+    /// 0), the handoff sink (+12·fade), the exit sink (+26).
+    /// Reduce Motion removes the rise and the exit sink (§5).
+    private var dockOffsetY: CGFloat {
+        let rise = reduceMotion ? 0 : CGFloat(1 - entranceProgress) * CGFloat(dockHeight) * 1.6
+        let exitSink = reduceMotion ? 0 : CGFloat(26 * exitProgress)
+        return rise + CGFloat(12 * handoffFade) + exitSink
+    }
+
+    /// Scale composition: cue pulse × update bounce × press ×
+    /// handoff (1 − 0.02·fade).
+    private var dockScale: CGFloat {
+        pulseScale * bounceScale * pressScale * CGFloat(1 - 0.02 * handoffFade)
+    }
+
+    // MARK: The dock bar (one row, natural height)
 
     /// The dock's single rendered form: ONE copy of the content,
-    /// rendered at its natural height in every state. The header
-    /// (wordmark + narration + controls) never moves or scales;
-    /// the narration line cross-fades on a changed settle (§7.4,
-    /// via the deferral gate). RW-135 (Direction A): the dock no
-    /// longer carries an expanded block — the machine's
-    /// `expansionProgress` still runs (it drives the toggle
-    /// chevron's rotation and the cue's settle bookkeeping), but
-    /// the EXPANDED content itself is the footer section in the
-    /// page flow, mirrored through `onFullExpressionChange`.
-    /// The background tint stands at the MINI opacity and the
-    /// corner radius at 16 (§7.6); the height is the content's
-    /// own.
-    ///
-    /// RW-86 (root cause, Nov 6, 2026): the pre-fix form measured
-    /// two hidden phantom copies of the content through
-    /// `onGeometryChange` and framed the bar at the interpolated
-    /// measured height, painting the visible copy at EXPANDED
-    /// natural height inside that frame, clipped. The MINI
-    /// endpoint was the fragile one: on device the slim bar
-    /// painted its background (material + sheet tint) with none
-    /// of its content — Sol's walkthroughs across builds: at
-    /// rest the slim bar is ALWAYS a solid white (light) / black
-    /// (dark) bar, while the expanded states, whose height the
-    /// content itself supplies, render fully. A surface whose
-    /// resting state depends on a self-measurement cycle is also
-    /// unrenderable off-device (the VQ harness could never
-    /// produce the bar: "it measures its own heights through
-    /// appear/layout cycles a static snapshot never runs").
-    /// The fix removes the measurement from the paint path
-    /// entirely: MINI is a plain header at natural height —
-    /// there is no frame, clip, or measured endpoint between
-    /// the content and the screen. The one remaining measurement
-    /// (of the real content) serves only the trash collapse's
-    /// height shrink, which never gates a resting state.
-    private var morphBar: some View {
-        let visible = machine.state != .absent || trashScale < 1
-        return headerRow
-        .opacity(visible ? trashScale : 0)
-        .onGeometryChange(for: Double.self) { proxy in
-            proxy.size.height
-        } action: { _, height in
-            if height > 0 { contentHeight = height }
-        }
-        .frame(height: visible
-            ? (trashScale < 1 ? CGFloat(contentHeight * trashScale) : nil)
-            : 0)
-        .background {
-            // RW-135 §7.6 (Direction A): the MINI material — the
-            // translucent card tint over the system material blur.
-            // The tint is the CARD hex pair (light #FDFBF6 at
-            // 85% / dark #2A251E at 82%): in dark mode the tint is
-            // the card hex, not the sheet hex (the pre-ruling bar
-            // tinted with AppTheme.sheet, whose dark side is
-            // #211D17). The dock is always MINI (§7.2's expanded
-            // form is the footer section), so the tint stands at
-            // the MINI opacity — the morph's tint ramp now belongs
-            // to the footer relationship, not to this layer.
-            // The material itself is never animated (decision
-            // §4 — no blur animation).
-            ZStack {
-                Rectangle().fill(.regularMaterial)
-                Rectangle().fill(
-                    (colorScheme == .dark
-                        ? Color(hex: AppTheme.cardDarkHex)
-                        : Color(hex: AppTheme.sheetLightHex)
-                    ).opacity(WearIveRunMorph.tintOpacity(
-                        progress: 0,
-                        isDark: colorScheme == .dark
-                    ))
-                )
+    /// rendered at its natural height in every state (RW-86:
+    /// no self-measurement in the paint path — the one
+    /// measurement below serves only the entrance's rise
+    /// distance). RW-135 Direction A′: the dock carries no
+    /// expanded block; the expanded form is the footer section.
+    private var dockBar: some View {
+        headerRow
+            .onGeometryChange(for: Double.self) { proxy in
+                proxy.size.height
+            } action: { _, height in
+                if height > 0 { dockHeight = height }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: expansionProgress)))
-        // §7.6: the soft shadow (0 offset-x, 6 offset-y, black
-        // 14%; SwiftUI's radius is half the CSS blur, so the
-        // design's 24 pt blur is radius 12 here).
-        .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
+            .background {
+                // §7.6 / spec §2.1: the MINI material — the
+                // translucent card tint over the system
+                // material blur (light #FDFBF6 at 85% / dark
+                // #2A251E at 82%). The material itself is never
+                // animated (decision §4 — no blur animation).
+                ZStack {
+                    Rectangle().fill(.regularMaterial)
+                    Rectangle().fill(
+                        (colorScheme == .dark
+                            ? Color(hex: AppTheme.cardDarkHex)
+                            : Color(hex: AppTheme.sheetLightHex)
+                        ).opacity(WearIveRunMorph.tintOpacity(
+                            progress: 0,
+                            isDark: colorScheme == .dark
+                        ))
+                    )
+                }
+            }
+            .overlay {
+                // §4.1: the creation cue's pine ring — a stroked
+                // rounded rect that blooms slightly and decays
+                // over 900 ms.
+                if isPulsing {
+                    RoundedRectangle(cornerRadius: WearIveRunMorph.miniCornerRadius)
+                        .stroke(AppTheme.pinePayload, lineWidth: 2)
+                        .scaleEffect(ringScale)
+                        .opacity(ringOpacity)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: 0)))
+            // §7.6: the soft shadow (0 offset-x, 6 offset-y, black
+            // 14%; SwiftUI's radius is half the CSS blur, so the
+            // design's 24 pt blur is radius 12 here).
+            .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
     }
 
-    /// The continuity anchor (decision §2): wordmark, narration,
-    /// and both controls — present in both states, never moving,
-    /// never scaling. RW-135 §7.2/§7.6 (Direction A): the MINI
-    /// bar is ONE row — the Great Vibes wordmark at 17 pt, the
-    /// one narration line at 12 pt, and the expand + delete
-    /// controls right-aligned, grayed until use (the frame-a
-    /// anatomy; the pre-ruling two-line stacked header was the
-    /// build-30 strip's anatomy). The narration renders from
-    /// `displayedState` — the recorded state the bar is showing
-    /// — so a changed settle cross-fades the line in place
-    /// (§7.4): the text is keyed by its line inside an opacity
-    /// transition, driven by the one 200 ms fade.
+    /// The continuity anchor: wordmark, narration, and both
+    /// controls — present in every state, never moving. RW-135
+    /// §7.2/§7.6 (Direction A): the MINI bar is ONE row — the
+    /// Great Vibes wordmark at 17 pt, the one narration line at
+    /// 12 pt, and the expand + delete controls right-aligned.
+    /// The narration renders from `displayedState` — the
+    /// recorded state the bar is showing — so a changed settle
+    /// cross-fades the line in place (§7.4): the text is keyed
+    /// by its line inside an opacity transition.
     private var headerRow: some View {
         HStack(spacing: 8) {
             wordmarkView
@@ -1203,15 +1198,24 @@ struct WearIveRunMiniBarView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .contentShape(Rectangle())
-        .onTapGesture { send(.tapMiniBarBody) }
+        .onTapGesture { handleGlideTap() }
     }
 
-    /// §7.4: apply a changed recorded line as an opacity-only
-    /// cross-fade (~200 ms) — no pulse, no haptic, no expansion,
-    /// and (via the parking in `onChange(of: state)`) never
-    /// concurrent with a scroll gesture (§7.5).
+    /// §4.3: apply a changed recorded line as an opacity-only
+    /// cross-fade (≈210 ms total) — and, per Sol's Nov 7, 2026
+    /// ruling (§11.1 resolved), the surface ALSO gives the
+    /// update bounce when the deferral gate releases the line.
+    /// The bounce plays here when the dock is not handed off
+    /// (fade < 1); handed off, the footer's header zone bounces
+    /// instead. Never concurrent with a scroll gesture (the
+    /// parking in `onChange(of: state)`), and never doubled
+    /// with the creation cue: this path runs only for a line
+    /// released AFTER the dock mounted with its first line.
     private func applyNarrationCrossfade(to newState: WearIveRunState) {
         guard displayedState != newState else { return }
+        if handoffFade < 1, exitProgress == 0 {
+            runUpdateBounce()
+        }
         if reduceMotion {
             displayedState = newState
             return
@@ -1226,40 +1230,37 @@ struct WearIveRunMiniBarView: View {
     /// bundled and `Font.greatVibes` resolves it).
     private var wordmarkView: some View {
         Text(WearIveRunMiniBarModel.wordmark)
-            // RW-135 §7.6: the wordmark in the bar is 17 pt (the
-            // in-flow section header size, 31 pt, is not used in
-            // the bar; the pre-ruling bar used 20 pt).
+            // RW-135 §7.6: the wordmark in the bar is 17 pt.
             .font(.greatVibes(size: 17))
             .foregroundColor(AppTheme.inkPrimary)
     }
 
-    /// Two tiny grayed controls at the right end: the toggle and
-    /// trash. The SAME two controls, with the same semantics, in
-    /// MINI, EXPANDED, and CUE (D-10). The toggle is ONE chevron
-    /// glyph that ROTATES 180° with the morph's progress
-    /// (decision §2) — no icon swap, no pop; under Reduced
-    /// Motion it swaps orientation at the crossfade midpoint.
-    /// Trash is present in both states, constant, unanimated.
+    /// Two tiny grayed controls at the right end (spec §9.2):
+    /// the expand control is the corners-out glyph
+    /// ("arrow.up.left.and.arrow.down.right"), NO rotation —
+    /// it performs the same glide as tapping the bar body
+    /// (§4.4); trash routes to the host's §4.7 exit
+    /// orchestration. The SAME two controls in every state.
     private var barControls: some View {
         HStack(spacing: 4) {
             Button {
-                send(.tapToggleControl)
+                handleGlideTap()
             } label: {
-                Image(systemName: "chevron.down")
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 14))
                     .foregroundColor(AppTheme.inkMuted)
-                    .rotationEffect(.degrees(WearIveRunMorph.chevronRotationDegrees(
-                        progress: expansionProgress,
-                        reduceMotion: reduceMotion,
-                        settledFullExpression: reducedChevronFull
-                    )))
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(machine.toggleIsExpand ? "Expand" : "Collapse")
+            .accessibilityLabel("Expand")
             Button {
-                send(.tapTrash)
+                // §4.7: light trash haptic at tap (existing);
+                // the host orchestrates the exit and fires the
+                // store removal when the longest exit completes
+                // — the dock does NOT hide itself first.
+                trashHapticNonce += 1
+                onTrash()
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
@@ -1276,9 +1277,7 @@ struct WearIveRunMiniBarView: View {
     /// ink, the payload in pine (RW-135 §7.6: the settled-today
     /// place in pine BOLD). Every case derives from the SHOWN
     /// recorded state and nothing else — §7.0: the RW-88
-    /// viewed-state override branch that stood here is removed
-    /// outright (its parameter is gone; the pure function and
-    /// its tests remain in the tree, uncalled by the bar).
+    /// viewed-state override branch is removed outright.
     private func narrationText(_ line: String, for shownState: WearIveRunState) -> Text {
         switch shownState {
         case .updated(let payload):
@@ -1286,6 +1285,8 @@ struct WearIveRunMiniBarView: View {
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
         case .added(let place, let moment):
             // The payload "{Place}, {Moment}" carries the pine.
+            // (Formatter-level case, kept per spec §9.1 — the
+            // derivation never produces it on these surfaces.)
             return Text("Added ").foregroundColor(AppTheme.inkSecondary)
                 + Text("\(place), \(moment.rendered)").foregroundColor(AppTheme.pinePayload)
         case .planned(let place, let dayLabel):
@@ -1299,227 +1300,87 @@ struct WearIveRunMiniBarView: View {
         }
     }
 
-    // MARK: Machine plumbing
+    // MARK: §4.4 — the glide tap
 
-    /// Compose-time reconciliation, once: an element composing
-    /// with a landing already counted presents that landing's cue;
-    /// an element composing over an entry that was already on disk
-    /// (cold start) starts at MINI, silently.
-    private func reconcileInitialState() {
-        guard !didReconcileInitialState else { return }
-        didReconcileInitialState = true
-        if machine.state == .absent {
-            send(cueCount > 0 ? .entryCreated : .entryAlreadyPresent)
-        }
-    }
-
-    /// Which driver a transition runs under (decision §3's
-    /// table), from the event and the state it lands in.
-    private func morphDriver(
-        for event: WearIveRunElementEvent,
-        landingIn newState: WearIveRunElementState
-    ) -> WearIveRunMorphDriver {
-        if reduceMotion { return .reducedMotion }
-        switch (event, newState) {
-        case (.entryCreated, .cue), (.userCausedUpdate, .cue):
-            return .cue
-        case (.scrolledToEnd, .expanded):
-            return .scroll
-        case (.tapMiniBarBody, .expanded), (.tapToggleControl, .expanded):
-            return .tap
-        default:
-            // cueTimedOut, the toggle/scroll collapses, rollover.
-            return .collapse
-        }
-    }
-
-    /// Feed one event to the machine and execute its effects
-    /// exactly once. Presentation transitions run the morph:
-    /// the machine decides the TARGET state; this function
-    /// animates the one progress value toward it under the
-    /// driver's spring.
-    private func send(_ event: WearIveRunElementEvent) {
-        // Scroll latch (§5.3): while a scroll-driven morph is
-        // in flight, the opposite edge queues — it may start
-        // only after the in-flight transition completes and
-        // the threshold has been crossed (the queued event IS
-        // that crossing).
-        if (event == .scrolledToEnd || event == .scrolledAwayFromEnd),
-           scrollLatchGeneration != nil {
-            queuedScrollEvent = event
+    /// Press (scale 0.97 over 120 ms) + one light haptic on
+    /// release, then the host glides the page to its end. The
+    /// handoff runs off the glide's own scroll position (§3) —
+    /// there is no separate dock animation.
+    private func handleGlideTap() {
+        guard handoffFade < 0.5, exitProgress == 0 else { return }
+        if reduceMotion {
+            glideHapticNonce += 1
+            onGlideToFooter()
             return
         }
-        let wasInCue = machine.state == .cue
-        let previousState = machine.state
-        let effects = machine.send(event)
-        let enteringCue = machine.state == .cue && !wasInCue
-        var deleteAfterCollapse = false
-        for effect in effects {
-            switch effect {
-            case .fireCuePulseAndSoftHaptic:
-                // NOT fired here: the pulse + soft haptic belong
-                // to the morph's SETTLE (decision §2). They are
-                // scheduled in `animateMorph` and fire when the
-                // progress first reaches its target — or never,
-                // if the user touches the element first (the
-                // touch's send cancels the pending settle below).
-                break
-            case .startCueTimer:
-                startCueTimer()
-            case .cancelCueTimer:
-                cueTimerGeneration += 1
-                pendingCueSettleGeneration = nil
-            case .deleteTodaysEntry:
-                deleteAfterCollapse = true
-            case .fireTrashHaptic:
-                trashHapticNonce += 1
-            }
-        }
-        if deleteAfterCollapse {
-            performTrashCollapse()
-            return
-        }
-        if machine.state != previousState {
-            // Any non-cue transition supersedes a pending cue
-            // settle (a touch during the cue cancels its pulse
-            // and haptic with its timer, decision §2).
-            if !enteringCue && machine.state != .cue {
-                pendingCueSettleGeneration = nil
-            }
-            animateMorph(
-                driver: morphDriver(for: event, landingIn: machine.state),
-                enteringCue: enteringCue,
-                scrollDriven: event == .scrolledToEnd || event == .scrolledAwayFromEnd
-            )
-        } else if enteringCue {
-            // Already at full expression re-cueing (timer
-            // restarted by the machine): the settle is now.
-            fireCueSettle()
+        withAnimation(.easeInOut(duration: 0.12)) {
+            pressScale = 0.97
+        } completion: {
+            glideHapticNonce += 1
+            withAnimation(.easeOut(duration: 0.15)) { pressScale = 1 }
+            onGlideToFooter()
         }
     }
 
-    /// Animate the ONE progress value to the machine state's
-    /// target under the driver's animation. Interruptible by
-    /// construction: a new driver bumps `morphGeneration` and
-    /// retargets from the CURRENT progress; the superseded
-    /// animation's completion is generation-guarded and does
-    /// nothing.
-    private func animateMorph(
-        driver: WearIveRunMorphDriver,
-        enteringCue: Bool,
-        scrollDriven: Bool
-    ) {
-        morphGeneration += 1
-        let generation = morphGeneration
-        let target: Double = machine.isFullExpression ? 1 : 0
-        if !scrollDriven {
-            // A non-scroll driver supersedes an in-flight scroll
-            // morph: its latch and any queued edge are stale —
-            // the user's newest intent owns the element now.
-            scrollLatchGeneration = nil
-            queuedScrollEvent = nil
+    // MARK: §4.1 — creation entrance + cue
+
+    /// The entrance runs ONLY on a genuine creation (cueCount
+    /// bumped by the machine's entryCreated path): a cold start
+    /// over an already-present entry (entryAlreadyPresent,
+    /// cueCount == 0) appears silently at rest. When the dock
+    /// is handed off at creation (fade ≥ 1), the pulse plays
+    /// on the footer's header zone instead — the dock simply
+    /// stands at rest, invisible.
+    private func runEntranceIfNeeded() {
+        guard !didRunEntrance else { return }
+        didRunEntrance = true
+        guard cueCount > 0 else {
+            entranceProgress = 1
+            return
         }
-        if scrollDriven { scrollLatchGeneration = generation }
-        if enteringCue {
-            pendingCueSettleGeneration = generation
-            // The cue's 12 pt rise folds into the same gesture
-            // (decision §2): the offset starts at 12 and the
-            // same animation carries it to 0.
-            if !reduceMotion { riseOffset = WearIveRunElementMachine.cueRisePoints }
+        guard handoffFade < 1 else {
+            entranceProgress = 1
+            return
         }
         if reduceMotion {
-            // §6: the chevron swaps at the crossfade midpoint.
-            let full = target == 1
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + WearIveRunMorph.reducedMotionDurationSeconds / 2
-            ) {
-                guard generation == morphGeneration else { return }
-                reducedChevronFull = full
+            // §5: fade in 220 ms, no pulse; haptic kept.
+            entranceProgress = 0
+            withAnimation(.easeInOut(duration: 0.22)) {
+                entranceProgress = 1
+            } completion: {
+                cueHapticNonce += 1
             }
-        } else {
-            reducedChevronFull = target == 1
-        }
-        let settle = {
-            guard generation == self.morphGeneration else { return }
-            if self.scrollLatchGeneration == generation {
-                self.scrollLatchGeneration = nil
-                if let queued = self.queuedScrollEvent {
-                    self.queuedScrollEvent = nil
-                    self.send(queued)
-                }
-            }
-            if self.pendingCueSettleGeneration == generation {
-                self.pendingCueSettleGeneration = nil
-                self.fireCueSettle()
-            }
-        }
-        if expansionProgress == target && riseOffset == 0 {
-            // No travel (e.g. EXPANDED → CUE re-presentation at
-            // full height): the settle is immediate.
-            settle()
             return
         }
-        withAnimation(WearIveRunMorph.animation(for: driver)) {
-            expansionProgress = target
-            riseOffset = 0
+        entranceProgress = 0
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+            entranceProgress = 1
         } completion: {
-            settle()
-        }
-    }
-
-    /// A sheet presenting mid-transition wins (§5.4): the morph
-    /// finishes instantly to its target underneath the dim —
-    /// nothing animates visibly behind a sheet. A pending cue
-    /// settle owed by the interrupted animation is honoured
-    /// (the settle has, by this act, been reached).
-    private func finishMorphInstantly() {
-        let target: Double = machine.isFullExpression ? 1 : 0
-        guard expansionProgress != target else { return }
-        morphGeneration += 1
-        scrollLatchGeneration = nil
-        queuedScrollEvent = nil
-        expansionProgress = target
-        riseOffset = 0
-        reducedChevronFull = target == 1
-        if pendingCueSettleGeneration != nil {
-            pendingCueSettleGeneration = nil
             fireCueSettle()
         }
     }
 
     /// The cue's settle moment: fire the ONE pulse and the ONE
     /// soft haptic (§1.7), together, exactly here — the first
-    /// frame the morph reaches full expression.
+    /// frame the entrance completes.
     private func fireCueSettle() {
         cueHapticNonce += 1
         runCuePulse()
     }
 
-    /// Trash (§1.2, unchanged by the motion decision): the
-    /// element collapses its height while fading over 250 ms;
-    /// the entry is deleted at the collapse's end, releasing
-    /// the dock's space in the same animation.
-    private func performTrashCollapse() {
-        morphGeneration += 1
-        let generation = morphGeneration
-        pendingCueSettleGeneration = nil
-        scrollLatchGeneration = nil
-        queuedScrollEvent = nil
-        withAnimation(.easeInOut(duration: WearIveRunElementMachine.trashCollapseSeconds)) {
-            trashScale = 0
-        } completion: {
-            guard generation == self.morphGeneration else { return }
-            self.onTrash()
-        }
-    }
-
-    /// The ONE cue pulse: scale 1.00 → 1.03 → 1.00, 900 ms total,
-    /// ease-in-out, exactly once — never a loop (§1.2). Disabled
-    /// under Reduce Motion (§1.0 rule 4); the state change and the
-    /// haptic still happen.
+    /// The ONE cue pulse: scale 1.00 → 1.018 → 1.00 with the
+    /// pine ring blooming and decaying, 900 ms total, exactly
+    /// once — never a loop (§4.1). Disabled under Reduce
+    /// Motion (§5); the haptic still happens.
     private func runCuePulse() {
         guard !reduceMotion else { return }
         isPulsing = true
+        ringScale = 1
+        ringOpacity = 0.9
+        withAnimation(.easeOut(duration: WearIveRunElementMachine.cuePulseDurationSeconds)) {
+            ringScale = 1.08
+            ringOpacity = 0
+        }
         let half = WearIveRunElementMachine.cuePulseDurationSeconds / 2
         withAnimation(.easeInOut(duration: half)) {
             pulseScale = WearIveRunElementMachine.cuePulseScale
@@ -1532,47 +1393,46 @@ struct WearIveRunMiniBarView: View {
         }
     }
 
-    /// (Re)start the cue's 3.0 s timer. The captured generation
-    /// invalidates this timer if anything restarts or cancels it
-    /// first; a timer that does fire sends `cueTimedOut`, which
-    /// the machine itself no-ops outside CUE.
-    private func startCueTimer() {
-        cueTimerGeneration += 1
-        let generation = cueTimerGeneration
-        Task { @MainActor in
-            try? await Task.sleep(
-                nanoseconds: UInt64(WearIveRunElementMachine.cueDurationSeconds * 1_000_000_000)
-            )
-            guard generation == cueTimerGeneration else { return }
-            send(.cueTimedOut)
+    // MARK: §4.3 — the update bounce
+
+    /// The update bounce: scale to ≈1.015 overshoot and back,
+    /// with ONE soft haptic at the settle. Reduce Motion
+    /// removes the bounce; the haptic is KEPT (§5).
+    private func runUpdateBounce() {
+        if reduceMotion {
+            cueHapticNonce += 1
+            return
+        }
+        withAnimation(.easeOut(duration: 0.16)) {
+            bounceScale = CGFloat(WearIveRunMorph.updateBounceScale)
+        } completion: {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                bounceScale = 1
+            } completion: {
+                cueHapticNonce += 1
+            }
         }
     }
 }
 
-// MARK: - RW-135 expanded form (INTERIM): the footer section
+// MARK: - RW-135 spec §2.2 — the footer section (Direction A′)
 //
-// The owner's refinement (Nov 7, 2026): the EXPANDED state is a
-// full-width section at the page footer — NOT a taller floating
-// card, and NOT the build-30 flat hard-edged full-bleed slab:
-// "full width" here is section width in the page's own language
-// (the sheet container's inset, the card fill + stroke, a 24 pt
-// card radius, section spacing), seated at the foot of the flow
-// where the prior lane's inline section stood. The host renders
-// this section only while the dock's machine is at full
-// expression (end-of-scroll, tap on the bar, or the creation
-// cue — §7.2), so it is the dock's expansion, not a separate
-// always-present section. Its content is §7.2's anatomy, from
-// the recorded entry only (§7.0): the narration row, then the
-// full entry row (recorded thumbnail + the entry line), and
-// tapping the entry row opens the collection sheet with the
-// session entry in its location group (§7.3 — the doorway).
-// Collapse (§7.2): the narration row is the tap-again surface,
-// and a drag down on the section collapses it; both route
-// through the host to the dock's one machine. The final
-// MINI ↔ footer choreography is the design package's to
-// specify; this interim form follows §7.5's principles (one
-// form at a time in the footer seat, opacity-only appearance,
-// no concurrent scroll-handoff animation).
+// The EXPANDED form: a full-bleed section IN THE FLOW, the last
+// thing on the page, present in the layout whenever a session
+// entry exists (§2.2 — its space is reserved even while the
+// user is at the top). Surface = the page ground (light
+// #F5F1E8 / dark #2A251E — AppTheme.cardOnSheet), top corners
+// 24 pt only (bottom square), a soft top shadow + 1 pt top
+// hairline, internal padding 20 / 16 / 32. Anatomy: Great
+// Vibes 31 pt header + chevron-down (the inverse glide, §4.4)
+// + delete controls; narration 15 pt; entry row (thumbnail
+// 56 pt, radius 14, entry line 14.5 pt); and the "Open the
+// collection ›" doorway (§4.6), tappable — as is the entry row.
+// The footer carries the same §4.3 discipline as the dock:
+// its line passes through the deferral gate and cross-fades,
+// its fields cross-fade in place (§4.5), and when the dock is
+// handed off the creation pulse / update bounce play on its
+// header zone (§4.1/§4.3).
 struct WearIveRunFooterSectionView: View {
     /// The recorded narration state (the same derivation the
     /// dock renders — one record, one line).
@@ -1581,91 +1441,362 @@ struct WearIveRunFooterSectionView: View {
     let entry: WearIveRunEntry
     /// The entry's feels-like, formatted in the user's unit.
     let formattedFeelsLike: String
+    /// §4.3 bookkeeping: the model's narration version.
+    var narrationVersion: Int = 0
+    /// Creation counter — the §4.1 grow/pulse gate (a genuine
+    /// creation only; cold start stands silent).
+    var cueCount: Int = 0
+    /// True while the dock is handed off (handoff fade ≥ 1):
+    /// the creation pulse and the update bounce play on THIS
+    /// surface's header zone instead of the dock's.
+    var presentsCues: Bool = false
+    /// §7.5: true while the host page's scroll gesture is live
+    /// — the footer's line defers its cross-fade identically.
+    var isScrollGestureActive: Bool = false
+    /// §4.1: the host's judgement that the footer is in or
+    /// near the viewport at creation — the 480 ms grow plays
+    /// only then; far off-screen it inserts silently.
+    var growOnAppear: Bool = false
+    /// §4.7 host-orchestrated exit: content opacity (fades
+    /// 160 ms first) and height fraction (then folds to 0
+    /// over 400 ms), driven by the host over a FROZEN snapshot
+    /// of this record.
+    var exitContentOpacity: Double = 1
+    var exitHeightFraction: Double = 1
     let onOpenCollection: () -> Void
-    let onCollapse: () -> Void
+    /// §4.4: the chevron-down inverse glide, hosted.
+    var onGlideUp: () -> Void = {}
+    /// §4.7: trash — the host orchestrates the exit.
+    var onTrash: () -> Void = {}
+
+    @State private var displayedState: WearIveRunState?
+    @State private var pendingNarrationState: WearIveRunState?
+    @State private var narrationDeferral = WearIveRunNarrationDeferral()
+    /// §4.5: the entry the footer is SHOWING — narration and
+    /// entry line flip together at the cross-fade's midpoint;
+    /// the thumbnail cross-fades when the hero image changes.
+    @State private var displayedEntry: WearIveRunEntry?
+    /// Header-zone cue/bounce (§4.1/§4.3 when handed off).
+    @State private var headerScale: CGFloat = 1
+    @State private var isPulsing = false
+    @State private var ringScale: CGFloat = 1
+    @State private var ringOpacity: Double = 0
+    @State private var cueHapticNonce = 0
+    @State private var trashHapticNonce = 0
+    /// §4.1 creation grow: 0 → 1 over 480 ms fold when in view.
+    @State private var growFraction: Double = 1
+    @State private var growContentOpacity: Double = 1
+    /// The footer's natural height, measured for the host's
+    /// scroll bookkeeping and this view's grow/exit height
+    /// folds — never in the dock's paint path (RW-86).
+    @State private var naturalHeight: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var shownEntry: WearIveRunEntry { displayedEntry ?? entry }
+    private var shownState: WearIveRunState { displayedState ?? state }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Narration row (§7.2): wordmark + the recorded line
-            // + the collapse control. Tapping the row is the
-            // tap-again collapse.
-            HStack(spacing: 8) {
-                Text(WearIveRunMiniBarModel.wordmark)
-                    .font(.greatVibes(size: 17))
-                    .foregroundColor(AppTheme.inkPrimary)
-                if let line = WearIveRunNarration.line(for: state) {
-                    footerNarrationText(line)
-                        .font(.system(size: 12))
-                        .lineLimit(2)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 14))
-                    .foregroundColor(AppTheme.inkMuted)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+            headerRow
+            // Narration (§2.2): 15 pt secondary, payload pine
+            // semibold — cross-fades in place via the deferral
+            // gate, exactly like the dock's (§4.3/§4.5).
+            if let line = WearIveRunNarration.line(for: shownState) {
+                footerNarrationText(line)
+                    .font(.system(size: 15))
+                    .lineLimit(3)
+                    .id(line)
+                    .transition(.opacity)
             }
-            .contentShape(Rectangle())
-            .onTapGesture { onCollapse() }
-
-            // The entry row (§7.2 anatomy, §7.3 doorway): the
-            // recorded thumbnail + the full entry line. Tapping
-            // it opens the collection sheet.
+            entryRow
+            // §4.6 / §2.2: the doorway, visible in the expanded
+            // form (Sol's Nov 4 requirement, W-1).
             Button(action: onOpenCollection) {
-                HStack(spacing: 12) {
-                    // The thumbnail renders ONLY once its image
-                    // has decoded — no placeholder graphic and no
-                    // broken-image frame ever paints (D-12).
-                    AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
-                        if case .success(let image) = phase {
-                            HeroPhoto(image: image, width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-                        } else {
-                            Color.clear
-                                .frame(width: 56, height: 56)
-                        }
-                    }
-                    // No line limit, by design (WS-4): the entry
-                    // line wraps whole rather than truncating.
-                    Text(WearIveRunNarration.expandedLine(
-                        for: entry,
-                        formattedFeelsLike: formattedFeelsLike
-                    ))
-                    .font(.appSecondary)
-                    .foregroundColor(AppTheme.inkSecondary)
-                    .multilineTextAlignment(.leading)
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
+                Text("Open the collection ›")
+                    .font(.system(size: 15.5, weight: .semibold))
+                    .foregroundColor(AppTheme.pinePayload)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Open the full Wear I've Run collection")
         }
-        .padding(16)
-        .background {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(AppTheme.cardFill)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(AppTheme.cardStroke, lineWidth: 1)
-                }
-        }
         .padding(.horizontal, 16)
-        // §7.2: drag down on the expanded form collapses it.
-        .gesture(
-            DragGesture(minimumDistance: 16)
-                .onEnded { value in
-                    if value.translation.height > 24 { onCollapse() }
-                }
-        )
+        .padding(.top, 20)
+        .padding(.bottom, 32)
+        .opacity(exitContentOpacity * growContentOpacity)
+        .onGeometryChange(for: Double.self) { proxy in
+            proxy.size.height
+        } action: { _, height in
+            if height > 0, exitHeightFraction >= 1, growFraction >= 1 {
+                naturalHeight = height
+            }
+        }
+        .frame(height: heightOverride)
+        .background {
+            // §2.2: full-bleed ground surface, top corners
+            // 24 pt, bottom square.
+            UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
+                topLeading: 24, topTrailing: 24
+            ))
+            .fill(AppTheme.cardOnSheet)
+        }
+        .overlay(alignment: .top) {
+            // §2.2: 1 pt top hairline at ink 4%.
+            Rectangle()
+                .fill(AppTheme.inkPrimary.opacity(0.04))
+                .frame(height: 1)
+                .padding(.horizontal, 24)
+        }
+        .clipShape(UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
+            topLeading: 24, topTrailing: 24
+        )))
+        // §2.2: the soft top shadow (0 / −10, 28 pt blur →
+        // radius 14, black 7%).
+        .shadow(color: Color.black.opacity(0.07), radius: 14, x: 0, y: -10)
+        // §4.5: a re-wrap height change follows over the
+        // 380 ms morph; Reduce Motion snaps it (§5).
+        .animation(
+            reduceMotion ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.38),
+            value: WearIveRunNarration.expandedLine(
+                for: shownEntry, formattedFeelsLike: formattedFeelsLike))
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
+        .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
         .accessibilityLabel("\(WearIveRunMiniBarModel.wordmark), expanded")
+        .onAppear {
+            if displayedState == nil {
+                displayedState = state
+                displayedEntry = entry
+                _ = narrationDeferral.offer(
+                    line: WearIveRunNarration.line(for: state),
+                    gestureActive: false)
+            }
+            runCreationGrowIfNeeded()
+        }
+        .onChange(of: state) { _, newState in
+            let released = narrationDeferral.offer(
+                line: WearIveRunNarration.line(for: newState),
+                gestureActive: isScrollGestureActive)
+            if released != nil {
+                applyFieldCrossfade(to: newState)
+            } else if isScrollGestureActive {
+                pendingNarrationState = newState
+            }
+        }
+        .onChange(of: entry) { _, newEntry in
+            // §4.5: a record change whose LINE is unchanged
+            // (hero/kit landing) still flips the entry row's
+            // fields in the same transaction.
+            if displayedState == state, displayedEntry != newEntry {
+                applyFieldCrossfade(to: state)
+            }
+        }
+        .onChange(of: isScrollGestureActive) { _, active in
+            if !active, narrationDeferral.gestureEnded() != nil,
+               let pending = pendingNarrationState {
+                pendingNarrationState = nil
+                DispatchQueue.main.async {
+                    applyFieldCrossfade(to: pending)
+                }
+            }
+        }
+    }
+
+    /// Grow/exit height: natural height × fractions while a
+    /// fold is in flight; unconstrained at rest.
+    private var heightOverride: CGFloat? {
+        guard naturalHeight > 0 else { return nil }
+        let fraction = growFraction * exitHeightFraction
+        return fraction < 1 ? CGFloat(naturalHeight * fraction) : nil
+    }
+
+    /// Header row (§2.2): Great Vibes 31 pt + chevron-down and
+    /// delete controls, ink, right-aligned. The header zone
+    /// carries the creation pulse / update bounce when the
+    /// dock is handed off (§4.1/§4.3).
+    private var headerRow: some View {
+        HStack(spacing: 8) {
+            Text(WearIveRunMiniBarModel.wordmark)
+                .font(.greatVibes(size: 31))
+                .foregroundColor(AppTheme.inkPrimary)
+            Spacer(minLength: 0)
+            Button {
+                onGlideUp()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkPrimary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Collapse")
+            Button {
+                // §4.7: light trash haptic at tap; the host
+                // orchestrates the exit over a frozen snapshot.
+                trashHapticNonce += 1
+                onTrash()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkPrimary)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove today's entry")
+        }
+        .scaleEffect(headerScale)
+        .overlay {
+            if isPulsing {
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(AppTheme.pinePayload, lineWidth: 2)
+                    .scaleEffect(ringScale)
+                    .opacity(ringOpacity)
+            }
+        }
+    }
+
+    /// The entry row (§2.2/§7.3 doorway): the recorded
+    /// thumbnail (56 pt, radius 14) + the full entry line at
+    /// 14.5 pt. Tapping it opens the collection sheet. The
+    /// thumbnail cross-fades when the record's hero image
+    /// changes (§4.5).
+    private var entryRow: some View {
+        Button(action: onOpenCollection) {
+            HStack(spacing: 12) {
+                // The thumbnail renders ONLY once its image
+                // has decoded — no placeholder graphic and no
+                // broken-image frame ever paints (D-12).
+                AsyncImage(url: URL(string: shownEntry.heroImageReference)) { phase in
+                    if case .success(let image) = phase {
+                        HeroPhoto(image: image, width: 56, height: 56)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    } else {
+                        Color.clear
+                            .frame(width: 56, height: 56)
+                    }
+                }
+                .id(shownEntry.heroImageReference)
+                .transition(.opacity)
+                // No line limit, by design (WS-4): the entry
+                // line wraps whole rather than truncating.
+                Text(WearIveRunNarration.expandedLine(
+                    for: shownEntry,
+                    formattedFeelsLike: formattedFeelsLike
+                ))
+                .font(.system(size: 14.5))
+                .foregroundColor(AppTheme.inkSecondary)
+                .multilineTextAlignment(.leading)
+                .id(WearIveRunNarration.expandedLine(
+                    for: shownEntry, formattedFeelsLike: formattedFeelsLike))
+                .transition(.opacity)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open the full Wear I've Run collection")
+    }
+
+    /// §4.3/§4.5: a released line flips the footer's fields —
+    /// narration and entry line together, thumbnail keyed by
+    /// hero reference — as an opacity cross-fade (≈210 ms),
+    /// plus the update bounce on the header zone when this
+    /// surface presents the cues (dock handed off).
+    private func applyFieldCrossfade(to newState: WearIveRunState) {
+        if presentsCues, exitHeightFraction >= 1 {
+            runHeaderBounce()
+        }
+        if reduceMotion {
+            displayedState = newState
+            displayedEntry = entry
+            return
+        }
+        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds)) {
+            displayedState = newState
+            displayedEntry = entry
+        }
+    }
+
+    /// §4.1 creation: if in/near the viewport, the footer
+    /// grows 0 → natural height over 480 ms fold with content
+    /// fading in across the second half, and — when the dock
+    /// is handed off — the pulse plays on the header zone at
+    /// the settle. Far off-screen (or a cold start), it simply
+    /// stands. Reduce Motion (§5): crossfade 220 ms, height
+    /// snaps, no pulse, haptic kept.
+    private func runCreationGrowIfNeeded() {
+        guard cueCount > 0, growOnAppear else { return }
+        if reduceMotion {
+            growContentOpacity = 0
+            withAnimation(.easeInOut(duration: 0.22)) {
+                growContentOpacity = 1
+            } completion: {
+                if presentsCues { cueHapticNonce += 1 }
+            }
+            return
+        }
+        growFraction = 0
+        growContentOpacity = 0
+        withAnimation(.timingCurve(0.65, 0, 0.35, 1, duration: 0.48)) {
+            growFraction = 1
+        }
+        withAnimation(.easeIn(duration: 0.24).delay(0.24)) {
+            growContentOpacity = 1
+        } completion: {
+            if presentsCues { fireHeaderCueSettle() }
+        }
+    }
+
+    /// The header-zone creation pulse (§4.1, handed-off
+    /// placement): scale 1.018 + inset pine ring, 900 ms, one
+    /// soft haptic at the settle.
+    private func fireHeaderCueSettle() {
+        cueHapticNonce += 1
+        guard !reduceMotion else { return }
+        isPulsing = true
+        ringScale = 1
+        ringOpacity = 0.9
+        withAnimation(.easeOut(duration: WearIveRunElementMachine.cuePulseDurationSeconds)) {
+            ringScale = 1.06
+            ringOpacity = 0
+        }
+        let half = WearIveRunElementMachine.cuePulseDurationSeconds / 2
+        withAnimation(.easeInOut(duration: half)) {
+            headerScale = WearIveRunElementMachine.cuePulseScale
+        } completion: {
+            withAnimation(.easeInOut(duration: half)) {
+                headerScale = 1
+            } completion: {
+                isPulsing = false
+            }
+        }
+    }
+
+    /// The header-zone update bounce (§4.3): ≈1.015 overshoot
+    /// + one soft haptic at the settle. Reduce Motion removes
+    /// the bounce; the haptic is kept (§5).
+    private func runHeaderBounce() {
+        if reduceMotion {
+            cueHapticNonce += 1
+            return
+        }
+        withAnimation(.easeOut(duration: 0.16)) {
+            headerScale = CGFloat(WearIveRunMorph.updateBounceScale)
+        } completion: {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                headerScale = 1
+            } completion: {
+                cueHapticNonce += 1
+            }
+        }
     }
 
     /// The footer's narration rich form — the same anatomy as
     /// the dock's (verb secondary, payload pine bold), rendered
     /// from the recorded state only (§7.0).
     private func footerNarrationText(_ line: String) -> Text {
-        switch state {
+        switch shownState {
         case .updated(let payload):
             return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)

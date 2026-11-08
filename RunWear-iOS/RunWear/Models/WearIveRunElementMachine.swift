@@ -111,7 +111,7 @@ enum WearIveRunElementEvent: Equatable {
 /// Side effects a transition asks the view to perform. The machine
 /// is pure; the view executes these exactly once per `send`.
 enum WearIveRunElementEffect: Equatable {
-    /// Fire the ONE cue pulse (900 ms ease-in-out, 1.00 → 1.03 →
+    /// Fire the ONE cue pulse (900 ms ease-in-out, 1.00 → 1.018 →
     /// 1.00, pine glow at low alpha) and the ONE soft haptic
     /// (§1.7: impact `.soft`) at the pulse's start.
     case fireCuePulseAndSoftHaptic
@@ -134,8 +134,10 @@ struct WearIveRunElementMachine: Equatable {
     static let cueDurationSeconds: Double = 3.0
     /// The cue pulse's total length: 900 ms, ease-in-out, once.
     static let cuePulseDurationSeconds: Double = 0.9
-    /// The pulse's peak scale (1.00 → 1.03 → 1.00).
-    static let cuePulseScale: Double = 1.03
+    /// The pulse's peak scale (1.00 → 1.018 → 1.00).
+    /// RW-135 spec §4.1 (approved Nov 7, 2026): the creation
+    /// cue's peak is 1.018 — supersedes the interim 1.03.
+    static let cuePulseScale: Double = 1.018
     /// The cue's rise into place, in points.
     static let cueRisePoints: Double = 12
     /// The trash collapse's length, in seconds (§1.2: the element

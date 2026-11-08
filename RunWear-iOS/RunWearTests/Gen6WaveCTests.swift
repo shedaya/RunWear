@@ -642,8 +642,10 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             session: "s1", place: "Miami, FL", feels: 90,
             items: ["Tank Top", "Shorts"],
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
+        // RW-135 spec §9.1 RE-PIN: the creation announcement is
+        // the "Updated to {place}" form — no "Added" line.
         XCTAssertEqual(announcements, [
-            "Added Overland Park, KS, Now",
+            "Updated to Overland Park, KS",
             "Updated to Miami, FL"
         ])
 
@@ -691,8 +693,10 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         settle(relaunched, entry(
             session: "s2", place: "New York, NY", feels: 72,
             items: ["Tee", "Shorts"]), announcements: &announcements)
+        // RW-135 spec §9.1 RE-PIN (as above): creation reads
+        // in the "Updated to {place}" form.
         XCTAssertEqual(announcements, [
-            "Added Overland Park, KS, Now",
+            "Updated to Overland Park, KS",
             "Updated to Miami, FL",
             "Updated to New York, NY"
         ])
@@ -710,21 +714,26 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         settle(first, entry(
             session: "s1", place: "Miami, FL", feels: 90,
             items: ["Tank Top"]), announcements: &announcements)
-        XCTAssertEqual(announcements, ["Added Miami, FL, Now"])
+        // RW-135 spec §9.1 RE-PIN: the creation line is the
+        // "Updated to {place}" form.
+        XCTAssertEqual(announcements, ["Updated to Miami, FL"])
 
         // Relaunch + automatic re-settle of the identical
         // state: silent restore; the bar's resting state is the
-        // Added form the entry already carried (presented via
+        // settled form the entry already carried (presented via
         // entryAlreadyPresent, at MINI — not re-announced).
         let relaunched = WearIveRunCollectionModel(store: store, sessionID: "s2")
         settle(relaunched, entry(
             session: "s2", place: "Miami, FL", feels: 90,
             items: ["Tank Top"]), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 0)
-        XCTAssertEqual(announcements, ["Added Miami, FL, Now"])
+        // RW-135 spec §9.1 RE-PIN (as above).
+        XCTAssertEqual(announcements, ["Updated to Miami, FL"])
         XCTAssertEqual(relaunched.entries.count, 2,
                        "RW-91: the restored session's save joins the prior session's — the collection accumulates")
-        XCTAssertEqual(state(of: relaunched), .added(place: "Miami, FL", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: the restored creation entry's
+        // bar state is the "Updated to {place}" form.
+        XCTAssertEqual(state(of: relaunched), .updated(payload: .place("Miami, FL")))
     }
 
     @MainActor
@@ -748,9 +757,11 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             session: "s2", place: "Overland Park, KS", feels: 48,
             items: ["Light Long Sleeve"]), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 1)
+        // RW-135 spec §9.1 RE-PIN: both creations read in the
+        // "Updated to {place}" form.
         XCTAssertEqual(announcements, [
-            "Added Miami, FL, Now",
-            "Added Overland Park, KS, Now"
+            "Updated to Miami, FL",
+            "Updated to Overland Park, KS"
         ])
         XCTAssertEqual(store.entries.count, 2, "the prior session's Miami entry is untouched history")
     }
@@ -1085,18 +1096,24 @@ final class Gen6FixWaveTests: XCTestCase {
                        "the measured mini endpoint (the blank-bar mechanism) is gone")
         XCTAssertFalse(bar.contains("morphContent(showsExpandedBlock: false"),
                        "no phantom mini measurer copy exists")
-        // RE-PINNED for RW-135 Direction A (Nov 7, 2026): the
-        // expanded block no longer lives inside the bar at all —
-        // the bar is MINI-only and REPORTS its full expression;
-        // the host mounts the single expanded copy (the footer
-        // section) only while the dock is at full expression.
-        // RW-86's discipline stands in the new shape: no second
-        // copy of the expanded content exists in any paint path.
-        XCTAssertTrue(bar.contains("onFullExpressionChange(full)"),
-                      "the bar reports its full expression — it mounts no expanded copy itself")
+        // RE-PINNED for RW-135 spec §2.2/§3 (Direction A′,
+        // approved Nov 7, 2026): the footer is ALWAYS in the
+        // layout while a session entry exists — the interim
+        // build's full-expression gating
+        // (onFullExpressionChange / wearFooterPresented) is
+        // removed, and the dock's visibility is the §3
+        // position-derived handoff fade. RW-86's discipline
+        // stands in the new shape: no second copy of the
+        // expanded content exists in any paint path — the bar
+        // is MINI-only and the footer is the single expanded
+        // copy, mounted from the session entry alone.
+        XCTAssertTrue(bar.contains("handoffFade"),
+                      "spec §3: the dock consumes the position-derived handoff fade")
+        XCTAssertFalse(bar.contains("onFullExpressionChange"),
+                       "spec §2.2: the full-expression gating is removed")
         let homeView = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(homeView.contains("if wearFooterPresented"),
-                      "the single expanded copy (the footer section) mounts only around the full expression")
+        XCTAssertTrue(homeView.contains("if let todays = wearExitInProgress ? wearExitEntry : liveEntry"),
+                      "spec §2.2: the single expanded copy (the footer section) mounts whenever a session entry exists")
     }
 
     // MARK: RW-89 / RW-92 / RW-95 / RW-101 — composition pins
@@ -1730,7 +1747,9 @@ final class Gen6SuccessorWaveTests: XCTestCase {
         let store = WearIveRunStore(defaults: defaults)
         let model = WearIveRunCollectionModel(store: store, sessionID: "s-rw110")
         model.recordSettled(successorEntry(session: "s-rw110", place: "New York, NY", items: ["Tee"]))
-        XCTAssertEqual(successorDockLine(of: model), "Added New York, NY, Now")
+        // RW-135 spec §9.1 RE-PIN: no "Added" line — a creation
+        // reads "Updated to {place}" from its first frame.
+        XCTAssertEqual(successorDockLine(of: model), "Updated to New York, NY")
         // Before the Miami settle lands, the viewed-place
         // override already names Miami.
         XCTAssertEqual(
@@ -2340,7 +2359,9 @@ extension Gen6FixWaveTests {
             WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
                 todaysEntry: model.sessionEntry(), moment: .now,
                 wasUpdatedThisSession: model.sessionEntry()?.wasUpdatedInSession ?? false)),
-            "Added New York, NY, Now")
+            "Updated to New York, NY")
+        // (RW-135 spec §9.1 RE-PIN: the creation line above is
+        // the "Updated to {place}" form — no "Added" line.)
         // The switch is being viewed; nothing has settled. The
         // recorded entry — and therefore the line — is unmoved.
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "New York, NY")
@@ -2435,7 +2456,9 @@ extension Gen6FixWaveTests {
         for progress in [0.0, 0.25, 0.5, 0.75, 1.0] {
             XCTAssertEqual(WearIveRunMorph.cornerRadius(progress: progress), 16, accuracy: 0.0001)
         }
-        XCTAssertEqual(WearIveRunMorph.narrationCrossfadeSeconds, 0.2, accuracy: 0.0001)
+        // RW-135 spec §4.3 RE-PIN: the narration crossfade is
+        // ≈210 ms total (out 95 + in 115).
+        XCTAssertEqual(WearIveRunMorph.narrationCrossfadeSeconds, 0.21, accuracy: 0.0001)
     }
 
     /// §7.4/§7.5 sequence: a changed settle's cross-fade parks
@@ -2465,10 +2488,15 @@ extension Gen6FixWaveTests {
     /// one-pulse rule.
     func testRW135_DirectionA_sourcePins() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains(".safeAreaInset(edge: .bottom)"),
-                      "the dock hosts in the bottom safe-area inset")
+        // RW-135 spec §3 RE-PIN (Direction A′, approved Nov 7,
+        // 2026): the dock is a true overlay on the root ZStack —
+        // the interim safeAreaInset hosting is superseded.
+        XCTAssertTrue(view.contains(".overlay(alignment: .bottom)"),
+                      "spec §3: the dock hosts as an overlay on the root ZStack")
+        XCTAssertFalse(view.contains(".safeAreaInset(edge: .bottom)"),
+                       "spec §3: the safe-area inset hosting is removed")
         XCTAssertTrue(view.contains("miniBarDock"),
-                      "the restored dock is what the inset hosts")
+                      "the restored dock is what the overlay hosts")
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
         XCTAssertTrue(bar.contains("struct WearIveRunFooterSectionView"),
                       "the interim expanded form is the footer section view")
@@ -2479,5 +2507,84 @@ extension Gen6FixWaveTests {
         let machine = try sourceFile("../RunWear/Models/WearIveRunElementMachine.swift")
         XCTAssertFalse(machine.contains("(.mini, .userCausedUpdate)"),
                        "§7.4: a changed settle is not a cue driver in the machine")
+    }
+
+    /// RW-135 spec §3 (Direction A′): the handoff fade is a
+    /// pure function of the footer's position — endpoints,
+    /// midpoint, and the hit-testing rule (hit-testable only
+    /// below fade 0.5).
+    func testRW135_HandoffFade_EndpointsMidpointAndHitRule() {
+        // Below the window (footer top < 83 pt above the
+        // viewport's bottom edge): the dock stands fully.
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: -40), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 0), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 83), 0, accuracy: 0.0001)
+        // Window midpoint (101.5 pt): smoothstep(0.5) == 0.5 —
+        // the exact point hit-testing turns off (fade < 0.5).
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 101.5), 0.5, accuracy: 0.0001)
+        XCTAssertTrue(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 100) < 0.5,
+                      "just inside the window the dock still takes hits")
+        XCTAssertFalse(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 103) < 0.5,
+                       "past the midpoint taps pass through (§3 hit rule)")
+        // At and past the window's end (120 pt): handed off.
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 120), 1, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 212), 1, accuracy: 0.0001)
+        // Monotonic across the window — position is the only
+        // input, so scrolling back up retraces the same frames.
+        var previous = -1.0
+        for a in stride(from: 83.0, through: 120.0, by: 3.7) {
+            let fade = WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: a)
+            XCTAssertGreaterThanOrEqual(fade, previous)
+            previous = fade
+        }
+        // Reduce Motion (§5): a step at the window's midpoint.
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 101.4, reduceMotion: true), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.handoffFade(footerTopAboveViewportBottom: 101.5, reduceMotion: true), 1, accuracy: 0.0001)
+        // Smoothstep's own endpoints.
+        XCTAssertEqual(WearIveRunMorph.smoothstep(-1), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.smoothstep(0), 0, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.smoothstep(0.5), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.smoothstep(1), 1, accuracy: 0.0001)
+        XCTAssertEqual(WearIveRunMorph.smoothstep(2), 1, accuracy: 0.0001)
+    }
+
+    /// RW-135 spec §4.4: the glide duration rule —
+    /// clamp(450 ms, 350 + 0.55 × distancePt, 950 ms).
+    func testRW135_GlideDuration_ClampRule() {
+        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 0), 0.45, accuracy: 0.0001,
+                       "zero distance still lands on the 450 ms floor")
+        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: -120), 0.45, accuracy: 0.0001,
+                       "negative distance clamps to the floor")
+        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 200), 0.46, accuracy: 0.0001,
+                       "350 + 0.55 × 200 = 460 ms")
+        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 1000), 0.9, accuracy: 0.0001,
+                       "350 + 0.55 × 1000 = 900 ms")
+        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 1090.9), 0.95, accuracy: 0.0001,
+                       "the linear rule reaches the cap at ≈1091 pt")
+        XCTAssertEqual(WearIveRunMorph.glideDurationSeconds(distancePt: 5000), 0.95, accuracy: 0.0001,
+                       "long pages cap at 950 ms")
+    }
+
+    /// RW-135 spec §9.2 glyphs + §4.1 cue peak, source pins:
+    /// dock = corners-out (no rotation), footer = chevron-down,
+    /// and the doorway element stands in the footer (§2.2).
+    func testRW135_GlyphsAndDoorway_sourcePins() throws {
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(bar.contains("\"arrow.up.left.and.arrow.down.right\""),
+                      "§9.2: the dock's expand control is the corners-out glyph")
+        XCTAssertTrue(bar.contains("\"chevron.down\""),
+                      "§9.2: the footer's inverse-jump control is chevron-down")
+        XCTAssertFalse(bar.contains(".rotationEffect"),
+                       "§9.2: no rotation is applied on the dock path (the morph's pure rotation function remains for its unit pins, unused by the views)")
+        XCTAssertTrue(bar.contains("Open the collection ›"),
+                      "§2.2: the footer carries the collection doorway element")
+        XCTAssertTrue(bar.contains("greatVibes(size: 31)"),
+                      "§2.2: the footer's wordmark is 31 pt")
+        XCTAssertTrue(bar.contains("cornerRadius: 14"),
+                      "§2.2: the entry thumbnail's radius is 14")
+        // §4.1: the creation cue peak as pinned on the machine.
+        XCTAssertEqual(WearIveRunElementMachine.cuePulseScale, 1.018, accuracy: 0.0001)
+        // §4.3: the update bounce peak (≈1.5% overshoot).
+        XCTAssertEqual(WearIveRunMorph.updateBounceScale, 1.015, accuracy: 0.0001)
     }
 }

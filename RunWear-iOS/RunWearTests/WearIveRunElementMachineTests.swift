@@ -151,7 +151,9 @@ final class WearIveRunElementMachineTests: XCTestCase {
     func testCueConstantsAreTheSpecValues() {
         XCTAssertEqual(WearIveRunElementMachine.cueDurationSeconds, 3.0)
         XCTAssertEqual(WearIveRunElementMachine.cuePulseDurationSeconds, 0.9)
-        XCTAssertEqual(WearIveRunElementMachine.cuePulseScale, 1.03)
+        // RW-135 spec §4.1 RE-PIN: the creation cue's peak
+        // scale is 1.018 (supersedes the interim 1.03).
+        XCTAssertEqual(WearIveRunElementMachine.cuePulseScale, 1.018)
         XCTAssertEqual(WearIveRunElementMachine.cueRisePoints, 12)
         XCTAssertEqual(WearIveRunElementMachine.trashCollapseSeconds, 0.25)
     }
@@ -438,8 +440,10 @@ final class WearIveRunElementMachineTests: XCTestCase {
                 todaysEntry: model.entries.first, moment: .now,
                 wasUpdatedThisSession: model.todaysEntryWasUpdated
             ),
-            .added(place: "New York", moment: .now),
-            "GEN-5 C-7: a kit-only settle leaves the creation narration standing"
+            // RW-135 spec §9.1 RE-PIN: the creation form is
+            // "Updated to {place}" — a kit-only settle leaves
+            // that standing narration untouched (GEN-5 C-7).
+            .updated(payload: .place("New York"))
         )
         // Trash deletes the entry the machine absented.
         model.removeToday(placeName: "New York", today: base.dayStart)
@@ -637,10 +641,12 @@ final class WearIveRunW15FixTests: XCTestCase {
             todaysEntry: model.todaysEntry(today: e.dayStart),
             moment: .now, wasUpdatedThisSession: model.todaysEntryWasUpdated
         )
-        XCTAssertEqual(state, .added(place: "Kansas City, MO", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: a creation's bar state is
+        // the "Updated to {place}" form from its first frame.
+        XCTAssertEqual(state, .updated(payload: .place("Kansas City, MO")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state),
-            "Added Kansas City, MO, Now"
+            "Updated to Kansas City, MO"
         )
     }
 
@@ -765,17 +771,24 @@ final class WearIveRunW15FixTests: XCTestCase {
 
     func testMorphViewWiring_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(view.contains("expansionProgress"),
-                      "the morph must be driven by the one progress value")
-        XCTAssertTrue(view.contains("WearIveRunMorph.animation(for: driver)"),
-                      "transitions must run the driver's pinned animation")
+        // RW-135 spec §3/§4.4 RE-PIN (Direction A′, approved
+        // Nov 7, 2026): the in-place expansion morph is
+        // superseded — the dock no longer expands; its
+        // visibility is the §3 handoff fade (a pure function of
+        // the footer's position) and its tap is the §4.4 glide.
+        // The pins below verify the new wiring at the same
+        // strength.
+        XCTAssertTrue(view.contains("WearIveRunMorph.handoffFade"),
+                      "spec §3: the handoff math lives in the pure morph functions")
+        XCTAssertTrue(view.contains("handoffFade"),
+                      "spec §3: the dock's visibility derives from the handoff fade")
         XCTAssertTrue(view.contains("WearIveRunMorph.tintOpacity"),
-                      "the tint layer's opacity — never the material's blur — is what animates")
+                      "the tint layer's opacity — never the material's blur — is what the material carries")
         XCTAssertFalse(view.contains(".bouncy"), "the bouncy preset overshoots past the cap")
         XCTAssertFalse(view.contains(".snappy"), "the snappy preset is not in the decision's table")
         // The cue's pulse/haptic fire at the settle, not the driver.
-        XCTAssertTrue(view.contains("pendingCueSettleGeneration"))
-        XCTAssertTrue(view.contains("fireCueSettle()"))
+        XCTAssertTrue(view.contains("fireCueSettle()"),
+                      "the creation cue still settles through the one fireCueSettle path")
         // The W-1 jump-in affordance is explicit on the expanded card.
         XCTAssertTrue(view.contains("Open the full Wear I've Run collection"))
     }
@@ -933,10 +946,12 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "Overland Park, KS", feels: 48,
             items: ["Light Long Sleeve", "Windbreaker"], day: d))
         XCTAssertEqual(model.cueCount, 1)
-        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: the first add's state is
+        // the "Updated to {place}" form.
+        XCTAssertEqual(state(of: model), .updated(payload: .place("Overland Park, KS")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
-            "Added Overland Park, KS, Now")
+            "Updated to Overland Park, KS")
 
         // Place + kit change: narration-from-diff — "Update to"
         // the place that changed, never a second "Added".
@@ -1010,7 +1025,8 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // Recorded, but no cue and no narration flip: an async
         // landing is not a driver.
         XCTAssertEqual(model.cueCount, 1)
-        XCTAssertEqual(state(of: model), .added(place: "Overland Park, KS", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: the standing creation form.
+        XCTAssertEqual(state(of: model), .updated(payload: .place("Overland Park, KS")))
     }
 
     // MARK: Pinned == chapter identity (X-5b)
@@ -1076,7 +1092,8 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         XCTAssertEqual(first.sessionEntry(), miami, "the prior session's entry is untouched")
         XCTAssertEqual(second.sessionEntry(), overlandPark)
         XCTAssertEqual(second.cueCount, 1, "the new session's first settle is a creation")
-        XCTAssertEqual(state(of: second), .added(place: "Overland Park, KS", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: the new session's creation form.
+        XCTAssertEqual(state(of: second), .updated(payload: .place("Overland Park, KS")))
     }
 
     // MARK: The dock presents the current session's entry
@@ -1100,10 +1117,11 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             store.todaysEntry(placeName: "New York, NY", today: d, calendar: utcCalendar),
             "the viewed place has no entry — the dock must not depend on it")
         // The narration names the SESSION ENTRY's place.
-        XCTAssertEqual(state(of: model), .added(place: "Kansas City, MO", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: the creation form.
+        XCTAssertEqual(state(of: model), .updated(payload: .place("Kansas City, MO")))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state(of: model)),
-            "Added Kansas City, MO, Now")
+            "Updated to Kansas City, MO")
     }
 
     @MainActor
@@ -1126,7 +1144,9 @@ final class WearIveRunSessionRuleTests: XCTestCase {
             session: "s1", place: "Miami, FL", feels: 91,
             items: ["Tank Top"], day: d))
         XCTAssertEqual(model.entries.count, 1)
-        XCTAssertEqual(state(of: model), .added(place: "Miami, FL", moment: .now))
+        // RW-135 spec §9.1 RE-PIN: a settle re-creating the
+        // entry after trash reads in the creation form.
+        XCTAssertEqual(state(of: model), .updated(payload: .place("Miami, FL")))
     }
 
     // MARK: Legacy rows — decoded, preserved, never adopted

@@ -464,7 +464,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         let miami = WearIveRunMiniBarView(
             state: .added(place: "Miami, FL", moment: .now),
             entry: collectionEntry(place: "Miami, FL"),
-            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeRender(miami, size: CGSize(width: 390, height: 110),
@@ -472,7 +472,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         let longPlace = WearIveRunMiniBarView(
             state: .updated(payload: .place("Truth or Consequences, New Mexico")),
             entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
-            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "57°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .environment(\.dynamicTypeSize, .accessibility5)
             .background(AppTheme.background)
@@ -615,7 +615,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         let miami = WearIveRunMiniBarView(
             state: .added(place: "Miami, FL", moment: .now),
             entry: collectionEntry(place: "Miami, FL"),
-            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeHostedRender(miami, size: CGSize(width: 390, height: 110),
@@ -623,7 +623,7 @@ final class Gen6VisualQAHarnessTests: XCTestCase {
         let longPlace = WearIveRunMiniBarView(
             state: .updated(payload: .place("Truth or Consequences, New Mexico")),
             entry: collectionEntry(place: "Truth or Consequences, New Mexico"),
-            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "57°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .environment(\.dynamicTypeSize, .accessibility5)
             .background(AppTheme.background)
@@ -858,7 +858,7 @@ extension Gen6VisualQAHarnessTests {
         let mini = WearIveRunMiniBarView(
             state: .added(place: "New York, NY", moment: .now),
             entry: entry,
-            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "57°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeHostedRender(mini, size: CGSize(width: 390, height: 110),
@@ -866,7 +866,7 @@ extension Gen6VisualQAHarnessTests {
         let miniDark = WearIveRunMiniBarView(
             state: .added(place: "New York, NY", moment: .now),
             entry: entry,
-            formattedFeelsLike: "57°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "57°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .preferredColorScheme(.dark)
             .background(AppTheme.background)
@@ -881,7 +881,7 @@ extension Gen6VisualQAHarnessTests {
         let updatedPlace = WearIveRunMiniBarView(
             state: .updated(payload: .place("Miami, FL")),
             entry: collectionEntry(place: "Miami, FL"),
-            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeHostedRender(updatedPlace, size: CGSize(width: 390, height: 110),
@@ -889,7 +889,7 @@ extension Gen6VisualQAHarnessTests {
         let planned = WearIveRunMiniBarView(
             state: .planned(place: "Miami, FL", dayLabel: "Tomorrow"),
             entry: collectionEntry(place: "Miami, FL"),
-            formattedFeelsLike: "82°", cueCount: 0, isAtEndOfScroll: false,
+            formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})
             .background(AppTheme.background)
         try writeHostedRender(planned, size: CGSize(width: 390, height: 110),
