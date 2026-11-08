@@ -1209,6 +1209,12 @@ fun LocationPickerSheet(
      */
     hasLocationPermission: Boolean = false,
     onUseCurrentLocation: () -> Unit = {},
+    /**
+     * RW-141: the explicit Current location request's lifecycle,
+     * owned by the ViewModel — the row shows its progress and its
+     * failure, and the request itself survives this sheet.
+     */
+    currentLocationRequest: CurrentLocationRequestState = CurrentLocationRequestState.Idle,
     /** RW-26 Section E: actually-selected places, most-recent-first. */
     recents: List<RecentLocation> = emptyList(),
     onRemoveRecent: (RecentLocation) -> Unit = {},
@@ -1380,11 +1386,16 @@ fun LocationPickerSheet(
                 currentRowStatus == LocationSheetState.CurrentLocationRowStatus.USING_GPS
             Surface(
                 onClick = {
-                    // §1.7 / §1.3 (WS-9 fix, P-2): choosing the
-                    // current location is a place selection too.
-                    haptic.performHapticFeedback(HapticSpec.SELECTION)
-                    focusManager.clearFocus()
-                    onUseCurrentLocation()
+                    // RW-141: a request already in flight is not
+                    // re-fired by repeat taps; its outcome lands
+                    // in this row (or applies the place) on its own.
+                    if (currentLocationRequest != CurrentLocationRequestState.Locating) {
+                        // §1.7 / §1.3 (WS-9 fix, P-2): choosing the
+                        // current location is a place selection too.
+                        haptic.performHapticFeedback(HapticSpec.SELECTION)
+                        focusManager.clearFocus()
+                        onUseCurrentLocation()
+                    }
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -1429,11 +1440,35 @@ fun LocationPickerSheet(
                                 )
                             }
                         }
+                        // RW-141: while a request is locating, or
+                        // when it failed, the subtitle is the
+                        // request's own account (the failure in the
+                        // theme's error colour) — never the quiet
+                        // permission line over a silent no-op.
+                        val requestSubtitle =
+                            LocationSheetState.currentLocationRequestSubtitle(
+                                currentLocationRequest
+                            )
                         Text(
-                            text = LocationSheetState.currentLocationRowSubtitle(currentRowStatus),
+                            text = requestSubtitle
+                                ?: LocationSheetState.currentLocationRowSubtitle(currentRowStatus),
                             fontSize = 12.sp,
-                            color = RunWearColors.TextSecondary
+                            color = if (currentLocationRequest is
+                                CurrentLocationRequestState.Failed
+                            ) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                RunWearColors.TextSecondary
+                            }
                         )
+                    }
+                    if (currentLocationRequest == CurrentLocationRequestState.Locating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = RunWearColors.PineAccent,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(4.dp))
                     }
                     if (isCurrentGpsPlace) {
                         Box(

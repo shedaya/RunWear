@@ -32,6 +32,8 @@ import com.runwear.app.feedback.FeedbackStore
 import com.runwear.app.feedback.RunWearEvents
 import com.runwear.app.feedback.TelemetryClient
 import com.runwear.app.makeitme.MakeItMeUpsellRules
+import com.runwear.app.ui.screens.CurrentLocationRequestState
+import com.runwear.app.ui.screens.LocationSheetState
 import com.runwear.app.makeitme.PersonalHeroRepository
 import com.runwear.app.makeitme.PersonalHeroService
 import com.runwear.app.widget.LaterTodayLine
@@ -110,6 +112,13 @@ data class MainUiState(
     val showLocationSetup: Boolean = false,
     val locationSource: String = "gps", // "gps" or "manual"
     val locationErrorReason: LocationErrorReason? = null,
+    /**
+     * RW-141: the explicit "Current location" request's lifecycle
+     * (Set Location sheet). Held here — not in the sheet — so the
+     * request survives the sheet closing and its outcome (applied
+     * place, or the failure message in the row) is never lost.
+     */
+    val currentLocationRequest: CurrentLocationRequestState = CurrentLocationRequestState.Idle,
     // Hero image from AI service
     val heroImageUrl: String? = null,
     /**
@@ -822,8 +831,30 @@ class MainViewModel @Inject constructor(
         }
         if (granted) {
             _uiState.update { it.copy(showLocationSetup = false) }
-            fetchCurrentLocation()
+            // RW-141: a grant that answers a pending "Current
+            // location" tap completes THAT request — explicitly,
+            // so its fix is adopted over a saved manual pick
+            // instead of being refused by the persistence guard.
+            val requestPending =
+                _uiState.value.currentLocationRequest == CurrentLocationRequestState.Locating
+            fetchCurrentLocation(explicitRequest = requestPending)
         } else {
+            // RW-141: a denial that answers a pending tap fails
+            // the request honestly — the sheet's row says so
+            // instead of spinning and closing silently.
+            if (_uiState.value.currentLocationRequest ==
+                CurrentLocationRequestState.Locating
+            ) {
+                _uiState.update {
+                    it.copy(
+                        currentLocationRequest = CurrentLocationRequestState.Failed(
+                            LocationSheetState.currentLocationFailureMessage(
+                                LocationErrorReason.PERMISSION_DENIED
+                            )
+                        )
+                    )
+                }
+            }
             // Permission denied - show location setup screen
             _uiState.update {
                 it.copy(
@@ -964,9 +995,58 @@ class MainViewModel @Inject constructor(
         private const val PERSONAL_POLL_INTERVAL_MS = 15_000L
     }
     
-    fun fetchCurrentLocation() {
+    /**
+     * @param explicitRequest RW-141: true when this fetch answers
+     * the user's own "Current location" tap (directly, or via the
+     * permission grant that tap asked for). An explicit fetch
+     * adopts its fix over a saved manual pick — the user just
+     * asked for their GPS place — and a failed explicit fetch is
+     * HONEST: it records the failure for the sheet's row and
+     * applies nothing, where the launch/foreground fetch keeps
+     * its silent saved-place fallback.
+     */
+    fun fetchCurrentLocation(explicitRequest: Boolean = false) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, showLocationSetup = false) }
+
+            if (explicitRequest) {
+                // RW-141: the resolution is a pure flow over the
+                // provider (CurrentLocationFlow) — it completes in
+                // this ViewModel scope whenever the fix completes,
+                // whether or not the sheet is still on screen.
+                when (val outcome = CurrentLocationFlow.resolve(
+                    lastKnown = {
+                        runCatching { locationProvider.getLastKnownLocation() }.getOrNull()
+                    },
+                    freshFix = { locationProvider.getCurrentLocationWithTimeout() }
+                )) {
+                    is CurrentLocationFlow.Outcome.ApplyFix -> {
+                        adoptGpsFix(
+                            outcome.location.latitude,
+                            outcome.location.longitude,
+                            explicitRequest = true
+                        )
+                        _uiState.update {
+                            it.copy(
+                                currentLocationRequest = CurrentLocationRequestState.Succeeded
+                            )
+                        }
+                    }
+                    is CurrentLocationFlow.Outcome.Failed -> {
+                        // Apply NOTHING: the place on screen and
+                        // the persisted record stay exactly as
+                        // they were; the row carries the message.
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                currentLocationRequest =
+                                    CurrentLocationRequestState.Failed(outcome.message)
+                            )
+                        }
+                    }
+                }
+                return@launch
+            }
 
             // Fast path: Fused's last-known fix resolves instantly when one
             // exists. Painting from it beats blocking the first screen on a
@@ -1025,15 +1105,28 @@ class MainViewModel @Inject constructor(
      * first content on every cold start. The name — and the saved-location
      * record, which carries it — lands whenever the geocode returns.
      */
-    private suspend fun adoptGpsFix(lat: Double, lon: Double) {
+    private suspend fun adoptGpsFix(
+        lat: Double,
+        lon: Double,
+        explicitRequest: Boolean = false
+    ) {
         // GEN-6 WAVE A (DA-07): a persisted MANUAL pick is
         // authoritative — GPS adoption is refused while one exists,
-        // no matter which entry point produced the fix (cold-start
-        // fast path, fresh fix, explicit fetch). Gen-5 let any GPS
-        // save overwrite the single shared saved-location slot, so
-        // the picked place (Miami) was gone by the next launch.
+        // no matter which UNSOLICITED entry point produced the fix
+        // (cold-start fast path, fresh fix, foreground
+        // revalidation). Gen-5 let any GPS save overwrite the
+        // single shared saved-location slot, so the picked place
+        // (Miami) was gone by the next launch.
+        // RW-141: an EXPLICIT request (the user's own "Current
+        // location" tap) is the one deliberate exception — the
+        // guard was never meant to refuse the user themselves,
+        // and refusing here is exactly what made the button a
+        // no-op (a good fix arrived and Seattle was re-applied).
         val saved = runCatching { preferencesRepository.getSavedLocation() }.getOrNull()
-        if (!ColdStartPolicy.gpsAdoptionAllowed(saved?.source, _uiState.value.locationSource)) {
+        if (!ColdStartPolicy.gpsAdoptionAllowed(
+                saved?.source, _uiState.value.locationSource, explicitRequest
+            )
+        ) {
             if (saved != null && saved.source == ColdStartPolicy.SOURCE_MANUAL) {
                 currentLat = saved.latitude
                 currentLon = saved.longitude
@@ -2347,6 +2440,10 @@ class MainViewModel @Inject constructor(
                 it.copy(
                     locationSource = "manual",
                     showLocationSetup = false,
+                    // RW-141: a place chosen another way supersedes
+                    // any Current-location request outcome still
+                    // showing in the sheet.
+                    currentLocationRequest = CurrentLocationRequestState.Idle,
                     hasLocationPermission = true // Bypass permission screen for manual location
                 )
             }
@@ -2378,6 +2475,10 @@ class MainViewModel @Inject constructor(
                 it.copy(
                     locationSource = "manual",
                     showLocationSetup = false,
+                    // RW-141: a place chosen another way supersedes
+                    // any Current-location request outcome still
+                    // showing in the sheet.
+                    currentLocationRequest = CurrentLocationRequestState.Idle,
                     hasLocationPermission = true // Bypass permission screen for manual location
                 )
             }
@@ -2389,24 +2490,74 @@ class MainViewModel @Inject constructor(
     }
 
     /**
-     * Called when user taps "Use Current Location" from setup screen.
-     * If permission was previously denied, MainActivity will re-request permission.
-     * If it was a timeout, we just retry GPS.
+     * RW-141: the user tapped "Current location" in the Set
+     * Location sheet. The request is registered in UI state FIRST
+     * (Locating), so its outcome survives the sheet: the fetch
+     * runs in viewModelScope, a fix that resolves after the sheet
+     * has been dismissed still applies, and a failure lands in
+     * the row as a plain-language message.
+     *
+     * With permission already granted the explicit fetch starts
+     * now. Without it, the request stays Locating while
+     * MainActivity runs the system permission prompt;
+     * [onPermissionResult] completes (or honestly fails) the
+     * pending request. We never request "allow all the time" —
+     * the system prompt asks for the standard one-time grant.
+     *
+     * Note what this deliberately does NOT do: it does not flip
+     * `locationSource` or touch the persisted record up front.
+     * The place changes only when a fix actually lands (the
+     * explicit adoption in [adoptGpsFix] then persists the GPS
+     * place, retiring the manual pick as the consequence of the
+     * user's own choice). A failed request leaves the manual
+     * place — on screen and on disk — exactly as it was.
      */
-    fun retryGPS() {
+    fun useCurrentLocation() {
         _uiState.update {
             it.copy(
                 showLocationSetup = false,
-                locationSource = "gps",
-                isLoading = true
+                currentLocationRequest = CurrentLocationRequestState.Locating
             )
         }
-        // Note: If permission denied, MainActivity handles re-requesting permission
-        // If permission was granted but timed out, we can retry directly
         if (locationProvider.hasLocationPermission()) {
-            fetchCurrentLocation()
+            fetchCurrentLocation(explicitRequest = true)
         }
-        // Otherwise MainActivity will request permission and call onPermissionResult
+        // Otherwise MainActivity requests permission and
+        // onPermissionResult resolves the pending request.
+    }
+
+    /**
+     * RW-141: the sheet has reacted to a finished request (it
+     * closed on success); clear the outcome so the next open
+     * starts quiet. A [CurrentLocationRequestState.Failed] is NOT
+     * cleared here — it stays until a new tap or another place
+     * selection supersedes it, so a failure that landed after
+     * the sheet was dismissed is still told on the next open.
+     */
+    fun acknowledgeCurrentLocationRequest() {
+        if (_uiState.value.currentLocationRequest ==
+            CurrentLocationRequestState.Succeeded
+        ) {
+            _uiState.update {
+                it.copy(currentLocationRequest = CurrentLocationRequestState.Idle)
+            }
+        }
+    }
+
+    /**
+     * Called when user taps "Use Current Location" from setup screen.
+     * If permission was previously denied, MainActivity will re-request permission.
+     * If it was a timeout, we just retry GPS.
+     *
+     * RW-141: this is the same explicit request as
+     * [useCurrentLocation] — it delegates so there is exactly one
+     * Current-location path. (Pre-fix it flipped the in-memory
+     * source to "gps" and fetched through the guarded seam,
+     * which refused the fix over any saved manual pick: the
+     * button did nothing.)
+     */
+    fun retryGPS() {
+        useCurrentLocation()
     }
 
     /**

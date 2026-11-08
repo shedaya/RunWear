@@ -1,5 +1,29 @@
 package com.runwear.app.ui.screens
 
+import com.runwear.shared.util.LocationErrorReason
+
+/**
+ * RW-141: the lifecycle of an EXPLICIT "Current location" request
+ * (the user tapped the row in the Set Location sheet), carried in
+ * the ViewModel's UI state so it survives the sheet itself — the
+ * sheet may close or be dismissed mid-flight without cancelling
+ * or losing the request, and a failure stays visible in the row
+ * instead of spinning and closing silently.
+ */
+sealed interface CurrentLocationRequestState {
+    /** No explicit request in flight and no outcome to show. */
+    data object Idle : CurrentLocationRequestState
+
+    /** The user tapped and a fix is being obtained. */
+    data object Locating : CurrentLocationRequestState
+
+    /** A fix landed and the GPS place was applied. */
+    data object Succeeded : CurrentLocationRequestState
+
+    /** No fix could be obtained; [message] is the row's plain-language account. */
+    data class Failed(val message: String) : CurrentLocationRequestState
+}
+
 /**
  * GEN-3 X-13 (carried W-13): the Set Location sheet's
  * permission-bearing rows, resolved from the ACTUAL location
@@ -56,6 +80,35 @@ object LocationSheetState {
         CurrentLocationRowStatus.PERMISSION_GRANTED -> "GPS location enabled"
         CurrentLocationRowStatus.PERMISSION_REQUIRED -> "Requires location permission"
     }
+
+    /**
+     * RW-141: the plain-language account of why an explicit
+     * Current location request produced no fix. This is what the
+     * row tells the user — a silent no-op is the defect being
+     * fixed, so every failure reason has a sentence.
+     */
+    fun currentLocationFailureMessage(reason: LocationErrorReason): String = when (reason) {
+        LocationErrorReason.PERMISSION_DENIED ->
+            "Location permission is off. Turn it on to use your current location."
+        LocationErrorReason.TIMEOUT ->
+            "We couldn't get a fix on your location. Try again in a moment."
+        LocationErrorReason.UNAVAILABLE ->
+            "Your current location isn't available right now. Try again in a moment."
+    }
+
+    /**
+     * RW-141: the row's subtitle while an explicit request has
+     * something to say — locating, or the failure message — or
+     * null when the request is quiet and the row falls back to
+     * its permission-status subtitle.
+     */
+    fun currentLocationRequestSubtitle(request: CurrentLocationRequestState): String? =
+        when (request) {
+            CurrentLocationRequestState.Locating -> "Finding your location…"
+            is CurrentLocationRequestState.Failed -> request.message
+            CurrentLocationRequestState.Idle,
+            CurrentLocationRequestState.Succeeded -> null
+        }
 
     /**
      * The place name the "Currently using:" pill carries, or null

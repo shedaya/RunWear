@@ -158,6 +158,8 @@ fun HeroMainScreen(
     onLocationSearch: (String) -> Unit,
     onLocationSelect: (Double, Double, String) -> Unit,
     onUseCurrentLocation: () -> Unit = {},
+    /** RW-141: the sheet reacted to a succeeded Current location request (it closed); let the owner clear the outcome. */
+    onCurrentLocationRequestHandled: () -> Unit = {},
     isUsingGPS: Boolean = false,
     /** GEN-3 X-13: the ACTUAL location-permission grant state, for the Set Location sheet's Current location row. */
     hasLocationPermission: Boolean = false,
@@ -2021,8 +2023,30 @@ fun HeroMainScreen(
     var lastRemovedRecent by remember { mutableStateOf<Pair<RecentLocation, Int>?>(null) }
 
     if (showLocationPicker) {
+        // RW-141: the sheet closes on a Current location request's
+        // SUCCESS — not blindly at tap time. A request this sheet
+        // session watched start (Locating) closes the sheet when
+        // it succeeds, and the outcome is acknowledged so the next
+        // open starts quiet. A success that landed while the sheet
+        // was dismissed is acknowledged WITHOUT closing (the place
+        // already applied in the ViewModel); a failure never
+        // closes the sheet — the row carries its message.
+        var pickerSawLocating by remember { mutableStateOf(false) }
+        LaunchedEffect(uiState.currentLocationRequest) {
+            when (uiState.currentLocationRequest) {
+                CurrentLocationRequestState.Locating -> pickerSawLocating = true
+                CurrentLocationRequestState.Succeeded -> {
+                    if (pickerSawLocating) {
+                        showLocationPicker = false
+                    }
+                    onCurrentLocationRequestHandled()
+                }
+                else -> Unit
+            }
+        }
         LocationPickerSheet(
             currentLocation = uiState.locationName,
+            currentLocationRequest = uiState.currentLocationRequest,
             onSearch = onLocationSearch,
             recents = recentLocations,
             onRemoveRecent = { recent ->
@@ -2060,8 +2084,10 @@ fun HeroMainScreen(
             isUsingGPS = isUsingGPS,
             hasLocationPermission = hasLocationPermission,
             onUseCurrentLocation = {
+                // RW-141: forward the tap only. The request lives
+                // in the ViewModel; the effect above closes this
+                // sheet when (and only when) it succeeds.
                 onUseCurrentLocation()
-                showLocationPicker = false
             }
         )
     }
