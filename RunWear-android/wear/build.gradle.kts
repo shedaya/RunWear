@@ -41,8 +41,8 @@ android {
         // 2026-11-05). The wear versionName tracks the phone versionName.
         // GEN-6: 10037 ↔ 1.2.22 / vc37. FOLLOWING BUILD 2026-11-06:
         // 10038 ↔ 1.2.23 / vc38.
-        versionCode = 10041
-        versionName = "1.2.26"
+        versionCode = 10042
+        versionName = "1.2.27"
     }
 
     buildTypes {

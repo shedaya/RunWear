@@ -643,19 +643,28 @@ fun HeroMainScreen(
     // .offset, px -> dp; the footer is the last item; when it is
     // not among visibleItemsInfo, a <= 0 -> fade 0; same via the
     // LazyGrid layoutInfo for the grid hosts).
-    val wirFooterFade by remember(listState, gridState, layout) {
+    // RW-140: the fade STATE is kept as a State (not only a
+    // delegated Float) because the dock's graphicsLayer reads it
+    // in the DRAW phase (see the dock overlay below) — that is
+    // what guarantees every intermediate fade value is drawn in
+    // the frame the list moves, instead of waiting on a
+    // recomposition that a fling can coalesce away (the vc41
+    // defect: the dissolve existed as a function but its
+    // intermediate values never reached the display).
+    val wirFooterFadeState = remember(listState, gridState, layout) {
         derivedStateOf {
-            val aDp = when (layout) {
+            when (layout) {
                 AdaptiveLayout.COMPACT -> {
                     val info = listState.layoutInfo
                     val footer = info.visibleItemsInfo.firstOrNull {
                         info.totalItemsCount > 0 &&
                             it.index == info.totalItemsCount - 1
                     }
-                    if (footer == null) 0f else {
-                        (info.viewportEndOffset - footer.offset) /
-                            wirDensity.density
-                    }
+                    WearIveRunDockPolicy.fadeFromLayoutPx(
+                        info.viewportEndOffset,
+                        footer?.offset,
+                        wirDensity.density
+                    )
                 }
                 else -> {
                     val info = gridState.layoutInfo
@@ -663,15 +672,16 @@ fun HeroMainScreen(
                         info.totalItemsCount > 0 &&
                             it.index == info.totalItemsCount - 1
                     }
-                    if (footer == null) 0f else {
-                        (info.viewportEndOffset - footer.offset.y) /
-                            wirDensity.density
-                    }
+                    WearIveRunDockPolicy.fadeFromLayoutPx(
+                        info.viewportEndOffset,
+                        footer?.offset?.y,
+                        wirDensity.density
+                    )
                 }
             }
-            WearIveRunDockPolicy.fade(aDp)
         }
     }
+    val wirFooterFade by wirFooterFadeState
     // Whether the footer item is among the active host's visible
     // items (its content is composed and on screen) — the delete
     // choreography branches on this (spec section 4.7).
@@ -1293,7 +1303,19 @@ fun HeroMainScreen(
                                     uiState = uiState,
                                     onFeedbackClick = { onOpenFeedback(com.runwear.app.feedback.FeedbackCategory.RECOMMENDATION_OFF) },
                                     wirFooterPresent = wirSurfacesPresent,
-                                    wirFooterContent = wirFooterContentGrid
+                                    // RW-140: the LIST host takes the
+                                    // plain footer content — this
+                                    // LazyColumn has NO horizontal
+                                    // content padding to break out
+                                    // of. (vc41 passed the GRID
+                                    // variant here; its breakout
+                                    // layout shifted the whole
+                                    // section left by pagePadding
+                                    // and cropped every footer
+                                    // element at the left edge on
+                                    // Sol's phone — his Nov 8, 2026
+                                    // recording.)
+                                    wirFooterContent = wirFooterContent
                                 )
                             }
                         }
@@ -1534,7 +1556,8 @@ fun HeroMainScreen(
                 // soft shadow. Driven CONTINUOUSLY by the handoff
                 // fade (spec section 3): graphicsLayer alpha /
                 // translationY / scale are pure functions of the
-                // footer's scroll position — no binary visibility,
+                // footer's scroll position, evaluated in the draw
+                // phase (RW-140) — no binary visibility,
                 // no AnimatedVisibility. Hit-testing is off at
                 // fade >= 0.5; at fade >= 1 the dock leaves the
                 // semantics tree. Reduce Motion (spec section 5):
@@ -1548,17 +1571,11 @@ fun HeroMainScreen(
                     val line = exitSnap?.line ?: wirShownLine
                     if (line != null) {
                         val fade = wirFooterFade
-                        val steppedOpacity by animateFloatAsState(
+                        val steppedOpacity = animateFloatAsState(
                             targetValue = if (fade < 0.5f) 1f else 0f,
                             animationSpec = tween(160),
                             label = "wirDockHandoffStep"
                         )
-                        val handoffAlpha = if (wirReduceMotion) {
-                            steppedOpacity
-                        } else {
-                            WearIveRunDockPolicy.dockOpacity(fade)
-                        }
-                        val exitP = wirDockExit.value
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
@@ -1570,15 +1587,40 @@ fun HeroMainScreen(
                                     }
                                 )
                                 .graphicsLayer {
+                                    // RW-140: the handoff transform
+                                    // is evaluated HERE, in the draw
+                                    // phase, reading the fade state
+                                    // directly — every scroll frame
+                                    // draws its own alpha / sink /
+                                    // scale in the same frame the
+                                    // list moves. (In vc41 these were
+                                    // composition locals captured by
+                                    // this block; a coalesced
+                                    // recomposition during a fling
+                                    // dropped the dissolve's
+                                    // intermediate values wholesale,
+                                    // and the dock and footer read as
+                                    // two distinct elements — Sol's
+                                    // Nov 8, 2026 device finding.)
+                                    val drawFade = wirFooterFadeState.value
+                                    val exitP = wirDockExit.value
+                                    val handoffAlpha = if (wirReduceMotion) {
+                                        steppedOpacity.value
+                                    } else {
+                                        WearIveRunDockPolicy
+                                            .dockOpacity(drawFade)
+                                    }
                                     alpha = handoffAlpha * (1f - exitP)
                                     translationY =
                                         ((if (wirReduceMotion) 0f
-                                        else WearIveRunDockPolicy.dockSinkDp(fade)) +
+                                        else WearIveRunDockPolicy
+                                            .dockSinkDp(drawFade)) +
                                             WearIveRunDockPolicy
                                                 .DELETE_DOCK_SINK_DP * exitP) *
                                             wirDensity.density
                                     val s = (if (wirReduceMotion) 1f
-                                    else WearIveRunDockPolicy.dockScale(fade))
+                                    else WearIveRunDockPolicy
+                                        .dockScale(drawFade))
                                     scaleX = s
                                     scaleY = s
                                 }

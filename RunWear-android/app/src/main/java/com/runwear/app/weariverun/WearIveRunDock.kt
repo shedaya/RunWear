@@ -124,6 +124,26 @@ object WearIveRunDockPolicy {
     fun fade(aDp: Float): Float =
         smoothstep(((aDp - HANDOFF_START_DP) / HANDOFF_WINDOW_DP).coerceIn(0f, 1f))
 
+    /**
+     * The handoff fade straight from lazy-host layout info
+     * (spec section 3): a = (viewportEndOffset − footerItem.offset)
+     * in px, converted at [density]. A footer item that is not
+     * among the visible items ([footerOffsetPx] null) has not
+     * arrived — a <= 0, fade 0. This is the single code path both
+     * hosts and the RW-140 proof harness derive the fade through.
+     */
+    fun fadeFromLayoutPx(
+        viewportEndOffsetPx: Int,
+        footerOffsetPx: Int?,
+        density: Float
+    ): Float = fade(
+        if (footerOffsetPx == null) {
+            0f
+        } else {
+            (viewportEndOffsetPx - footerOffsetPx) / density
+        }
+    )
+
     /** Dock opacity across the handoff: 1 - fade. */
     fun dockOpacity(fade: Float): Float = 1f - fade
 
@@ -248,6 +268,50 @@ private fun PineRing(progress: Float, radiusDp: Int, modifier: Modifier = Modifi
     )
 }
 
+/**
+ * RW-140: the narration tail's display form. In the plan form the
+ * tail is " · {day}" (" · Tuesday, Nov 10"); the day is ONE
+ * semantic unit, exactly like the place, so its internal spaces
+ * become NON-BREAKING in the display layer — the line breaker may
+ * break BEFORE "· {day}" (the section 4.3 ruled break) but can
+ * never split the day itself. (Sol's Nov 8, 2026 dark-mode
+ * recording: "Planned for Phoenix, AZ · Tuesday, Nov 10" wrapped
+ * as "…Tuesday, Nov" / "10" inside the dock, the split line
+ * colliding with the weather-statistics row.) Display-only: the
+ * model's text is untouched. Any other tail passes through.
+ */
+internal fun wirNarrationTailForDisplay(tail: String): String =
+    if (tail.startsWith(" · ")) {
+        " · " + tail.substring(3).replace(' ', '\u00A0')
+    } else {
+        tail
+    }
+
+/**
+ * The narration's annotated display text: the place payload in
+ * pine semibold, its city–region space non-breaking (RW-138/WT-2),
+ * and the plan form's day segment non-breaking (RW-140, see
+ * [wirNarrationTailForDisplay]).
+ */
+internal fun buildWirNarrationText(
+    narration: WearIveRunNarration
+): androidx.compose.ui.text.AnnotatedString = buildAnnotatedString {
+    append(narration.text.substring(0, narration.payloadStart))
+    withStyle(
+        SpanStyle(
+            color = RunWearColors.PineAccent,
+            fontWeight = FontWeight.SemiBold
+        )
+    ) {
+        append(narration.payload.replace(", ", ",\u00A0"))
+    }
+    append(
+        wirNarrationTailForDisplay(
+            narration.text.substring(narration.payloadEnd)
+        )
+    )
+}
+
 /** The narration line with its payload span in pine semibold. */
 @Composable
 private fun DockNarrationText(
@@ -256,26 +320,7 @@ private fun DockNarrationText(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE
 ) {
-    val annotated = buildAnnotatedString {
-        append(narration.text.substring(0, narration.payloadStart))
-        withStyle(
-            SpanStyle(
-                color = RunWearColors.PineAccent,
-                fontWeight = FontWeight.SemiBold
-            )
-        ) {
-            // RW-138/WT-2: the payload's city–region space is
-            // NON-BREAKING, so the line breaker can move the
-            // whole place to the next line but can never split
-            // it between city and region ("Boston," / "MA").
-            // Breaks fall only at the segment spaces around the
-            // payload — before the place, and before "· {day}" —
-            // the same break points iOS takes (spec section
-            // 4.3). Display-only: the model's text is untouched.
-            append(narration.payload.replace(", ", ",\u00A0"))
-        }
-        append(narration.text.substring(narration.payloadEnd))
-    }
+    val annotated = buildWirNarrationText(narration)
     Text(
         text = annotated,
         fontSize = fontSizeSp.sp,
