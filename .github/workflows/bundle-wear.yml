@@ -38,11 +38,11 @@ jobs:
           # the unsigned bundle via the package task and rename it
           # to the canonical bundle output name.
           ./gradlew :wear:packageReleaseBundle --stacktrace
-          find wear/build/outputs -name '*.aab' -print
+          find . -name '*.aab' -not -path './.git/*' -print
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: wear-release-aab
-          path: RunWear-android/wear/build/outputs/**/*.aab
+          path: RunWear-android/**/*.aab
           if-no-files-found: error
