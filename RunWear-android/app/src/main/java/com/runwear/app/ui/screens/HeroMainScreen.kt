@@ -405,6 +405,23 @@ fun HeroMainScreen(
     // or a kit change) — a re-recording with the same kit (a weather
     // refresh, a hero URL landing, a location re-render) updates the
     // entry's content silently and never moves the element.
+    //
+    // RW-142 (Nov 8, 2026): the effect OFFERS; the WRITE runs on the
+    // composition scope, not the effect's own lifetime. The pre-fix
+    // shape ran the suspend DataStore write as the effect body
+    // itself, so every key change (the churn that follows a commit —
+    // sheet exit, hero resolution, forecast derivation) cancelled
+    // the effect and could strand an admitted write before it
+    // landed; a confirmed pick, unlike Now, is never re-solved, so
+    // nothing re-offered it (owner device finding on vc41: a
+    // confirmed 3 p.m. pick moved the screen to the picked hour's
+    // solve while the entry kept the earlier selection). Launched
+    // on screenScope (cancelled only when the composition leaves),
+    // an admitted write survives every effect relaunch, and
+    // WearIveRunStore.recordSettled performs the edit under
+    // NonCancellable, so it always completes. Offers stay in launch
+    // order on the main dispatcher and DataStore serializes the
+    // edits, so the latest admitted solve is the final content.
     LaunchedEffect(
         uiState.outfit, uiState.weather, uiState.locationName,
         uiState.effectiveHeroUrl, uiState.isNowSelected, uiState.selectedDateTime
@@ -446,70 +463,73 @@ fun HeroMainScreen(
             val todaysForecast = uiState.hourlyForecast.filter {
                 it.dateTime.date.toJavaLocalDate() == uiState.selectedDateTime.toLocalDate()
             }
-            wearIveRunStore.recordSettled(
-                WearIveRunDayEntry(
-                    // GEN-3 (WS-C): stamped with THIS process
-                    // session's id and the settle instant — the
-                    // session key replaces the entry in place on
-                    // every later change within the session.
-                    sessionId = com.runwear.app.weariverun.WearIveRunSession.currentId(),
-                    settledAtMillis = System.currentTimeMillis(),
-                    // RW-FIXWAVE (future-days ruling): the entry is
-                    // dated by the VIEWED day. It was previously
-                    // stamped with the location's today even for a
-                    // confirmed future-day pick, so a tomorrow
-                    // settle masqueraded as today's entry (the
-                    // Android half of RW-132's mismatch). A place
-                    // switch while viewing another day now moves
-                    // the session entry to the new place under that
-                    // viewed day's date, through the same in-place
-                    // session upsert.
-                    date = uiState.selectedDateTime.toLocalDate(),
-                    // WS-4 (content seam): the entry's place is the
-                    // SIMPLE form from the place model, so the
-                    // collection, its chapter covers, and the narration
-                    // can never carry a raw geocode string. (WS-3:
-                    // this recording is content, not a state driver —
-                    // see the abolished-drivers note above.)
-                    place = uiState.simplePlace?.display
-                        ?: com.runwear.shared.domain.model.SimplePlace
-                            .fromRawDisplayString(uiState.locationName).display,
-                    // GEN-5: the entry's moment — null at Now, else
-                    // the confirmed moment's simple clock reading
-                    // ("9 p.m."), the C-7 time payload.
-                    momentLabel = if (uiState.isNowSelected) {
-                        null
-                    } else {
-                        com.runwear.app.weariverun.WearMomentLabel.of(
-                            uiState.selectedDateTime
-                        )
-                    },
-                    // GEN-5 (RW-28 item 11): the entry records the
-                    // RW-23 comfort-adjusted feels-like — the same
-                    // number the hero numeral shows for this moment
-                    // (B-3: the card kept the raw 78° while the
-                    // picked hour read 83°).
-                    feelsLikeF = weather.feelsLikeInFahrenheit +
-                        uiState.comfortPreference.tempAdjustment,
-                    conditionLabel = weather.weatherCode.description,
-                    isSnowing = weather.isSnowing,
-                    isRaining = weather.isRaining,
-                    items = outfit.allItems.map { it.displayName },
-                    heroRef = uiState.effectiveHeroUrl,
-                    // GEN-6 Wave B (RW-31): the share record's
-                    // canonical fields — the day's actual + wind
-                    // from the same weather frame, the day range
-                    // from the forecast rows above, and the kit's
-                    // garment keys in wearing order. faceAnchor
-                    // stays null: no generation metadata source
-                    // exists yet (the same honest gap as iOS).
-                    actualF = weather.temperatureInFahrenheit,
-                    windMph = weather.windSpeed,
-                    dayLowF = todaysForecast.minOfOrNull { it.temperatureInFahrenheit },
-                    dayHighF = todaysForecast.maxOfOrNull { it.temperatureInFahrenheit },
-                    itemKeys = outfit.allItems.map { it.key }
-                )
+            val entry = WearIveRunDayEntry(
+                // GEN-3 (WS-C): stamped with THIS process
+                // session's id and the settle instant — the
+                // session key replaces the entry in place on
+                // every later change within the session.
+                sessionId = com.runwear.app.weariverun.WearIveRunSession.currentId(),
+                settledAtMillis = System.currentTimeMillis(),
+                // RW-FIXWAVE (future-days ruling): the entry is
+                // dated by the VIEWED day. It was previously
+                // stamped with the location's today even for a
+                // confirmed future-day pick, so a tomorrow
+                // settle masqueraded as today's entry (the
+                // Android half of RW-132's mismatch). A place
+                // switch while viewing another day now moves
+                // the session entry to the new place under that
+                // viewed day's date, through the same in-place
+                // session upsert.
+                date = uiState.selectedDateTime.toLocalDate(),
+                // WS-4 (content seam): the entry's place is the
+                // SIMPLE form from the place model, so the
+                // collection, its chapter covers, and the narration
+                // can never carry a raw geocode string. (WS-3:
+                // this recording is content, not a state driver —
+                // see the abolished-drivers note above.)
+                place = uiState.simplePlace?.display
+                    ?: com.runwear.shared.domain.model.SimplePlace
+                        .fromRawDisplayString(uiState.locationName).display,
+                // GEN-5: the entry's moment — null at Now, else
+                // the confirmed moment's simple clock reading
+                // ("9 p.m."), the C-7 time payload.
+                momentLabel = if (uiState.isNowSelected) {
+                    null
+                } else {
+                    com.runwear.app.weariverun.WearMomentLabel.of(
+                        uiState.selectedDateTime
+                    )
+                },
+                // GEN-5 (RW-28 item 11): the entry records the
+                // RW-23 comfort-adjusted feels-like — the same
+                // number the hero numeral shows for this moment
+                // (B-3: the card kept the raw 78° while the
+                // picked hour read 83°).
+                feelsLikeF = weather.feelsLikeInFahrenheit +
+                    uiState.comfortPreference.tempAdjustment,
+                conditionLabel = weather.weatherCode.description,
+                isSnowing = weather.isSnowing,
+                isRaining = weather.isRaining,
+                items = outfit.allItems.map { it.displayName },
+                heroRef = uiState.effectiveHeroUrl,
+                // GEN-6 Wave B (RW-31): the share record's
+                // canonical fields — the day's actual + wind
+                // from the same weather frame, the day range
+                // from the forecast rows above, and the kit's
+                // garment keys in wearing order. faceAnchor
+                // stays null: no generation metadata source
+                // exists yet (the same honest gap as iOS).
+                actualF = weather.temperatureInFahrenheit,
+                windMph = weather.windSpeed,
+                dayLowF = todaysForecast.minOfOrNull { it.temperatureInFahrenheit },
+                dayHighF = todaysForecast.maxOfOrNull { it.temperatureInFahrenheit },
+                itemKeys = outfit.allItems.map { it.key }
             )
+            // RW-142: the write leaves the effect's lifetime here —
+            // see the note above the effect.
+            screenScope.launch {
+                wearIveRunStore.recordSettled(entry)
+            }
         }
     }
 
