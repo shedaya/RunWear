@@ -1,0 +1,41 @@
+name: RW-140 Wear Bundle (dispatch only)
+
+# Manual, dispatch-only: builds the standalone Wear release AAB on a
+# hosted runner and uploads it UNSIGNED as an artifact. Signing
+# happens locally with the upload keystore (jarsigner) — CI never
+# sees the keystore. Added by the RW-140 lane (2026-11-08): the
+# phone bundle-release.yml builds :app only, and this VM's Gradle
+# cache lock was held by a sibling lane, the same constraint that
+# workflow documents for :app.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Build wear release AAB (unsigned)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build wear release bundle
+        working-directory: RunWear-android
+        run: ./gradlew :wear:bundleRelease --stacktrace
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear-release-aab
+          path: RunWear-android/wear/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
