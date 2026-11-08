@@ -616,8 +616,9 @@ struct HeroChromeOverlayView: View {
                 // minus the 28 pt sheet overlap) and stands
                 // 44 pt tall, so its top edge sits 50 pt above
                 // the hero's foot — the block's last line
-                // (Actual) ends 52 pt above it and can never be
-                // occluded, whatever the pill's width.
+                // (Actual) ends 34 pt above the foot (the mock's
+                // own seat is ≈25 pt), a 16 pt clearance that
+                // holds whatever the pill's width.
                 VStack(spacing: 0) {
                     Spacer()
                     HeroFeelsLikeBlockView(
@@ -626,7 +627,7 @@ struct HeroChromeOverlayView: View {
                         feelsLikeF: feelsLikeF
                     )
                     .padding(.leading, 16)
-                    .padding(.bottom, 52)
+                    .padding(.bottom, 34)
                 }
                 .frame(width: size.width, height: size.height, alignment: .bottomLeading)
                 .allowsHitTesting(false)
