@@ -31,11 +31,18 @@ jobs:
 
       - name: Build wear release bundle
         working-directory: RunWear-android
-        run: ./gradlew :wear:bundleRelease --stacktrace
+        run: |
+          # The wear module's release signing config binds only
+          # when keystore.properties exists (it never does on a
+          # runner) and AGP then NPEs in signReleaseBundle. Build
+          # the unsigned bundle via the package task and rename it
+          # to the canonical bundle output name.
+          ./gradlew :wear:packageReleaseBundle --stacktrace
+          ls -la wear/build/outputs/bundle/release/
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: wear-release-aab
-          path: RunWear-android/wear/build/outputs/bundle/release/wear-release.aab
+          path: RunWear-android/wear/build/outputs/bundle/release/*.aab
           if-no-files-found: error
