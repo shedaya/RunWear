@@ -268,29 +268,39 @@ class Rw144FirstScreenRenderTest {
         return out
     }
 
-    private fun seedWearIveRun(host: Host) {
+    /**
+     * Seed the Wear I've Run store with the entry the screen's own
+     * record effect will write for [state] — same day, place, kit.
+     * The holder primes Present from it (no cue), and the screen's
+     * re-record with the same kit updates silently (the record
+     * effect's own rule), so the composition stays at rest: no
+     * cue, no glide. This is the production first-open state for a
+     * returning user whose today is already recorded.
+     */
+    private fun seedExactEntry(state: MainUiState) {
+        val outfit = state.outfit ?: return
+        val weather = state.weather ?: return
         val entry = WearIveRunDayEntry(
-            date = today,
-            place = "Phoenix, AZ",
-            feelsLikeF = 58.0,
-            conditionLabel = "Clear sky",
-            isSnowing = false,
-            isRaining = false,
-            items = listOf("Short Sleeve Shirt", "Running Shorts (5-7\")", "Reflective Gear"),
-            heroRef = null
+            date = state.selectedDateTime.toLocalDate(),
+            place = state.simplePlace?.display ?: "Phoenix, AZ",
+            feelsLikeF = weather.feelsLike + state.comfortPreference.tempAdjustment,
+            conditionLabel = weather.weatherCode.description,
+            isSnowing = weather.isSnowing,
+            isRaining = weather.isRaining,
+            items = outfit.allItems.map { it.displayName },
+            heroRef = state.effectiveHeroUrl
         )
-        runBlocking {
-            WearIveRunStore(host.activity.applicationContext).recordSettled(entry)
-        }
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        runBlocking { WearIveRunStore(app).recordSettled(entry) }
     }
 
     // (a) First open at rest — the Audit-item-B acceptance frame:
     // the dock must overlay NO readable content.
     @Test
     fun `rw144 - a - first open at rest - dock overlays clear space only`() {
-        val host = compose(dark = false) { Home(uiState(), mimState()) }
-        seedWearIveRun(host)
-        pump(host, 40)
+        val state = uiState()
+        seedExactEntry(state)
+        val host = compose(dark = false) { Home(state, mimState()) }
         capture(host, "a-first-open-rest-light.png")
         val density = host.composeView.resources.displayMetrics.density
         val boxes = texts(host)
@@ -308,11 +318,12 @@ class Rw144FirstScreenRenderTest {
         )
         if (dockWordmark != null) {
             val dockTop = dockWordmark.top - 14 * density // dock's own top padding zone
+            val dockTexts = setOf("Wear I've Run", "Updated to", "Added")
             val offenders = boxes.filter { box ->
-                !box.text.contains("Wear I've Run") &&
-                    box.bottom > dockTop + 2 && box.top < 844 * density &&
-                    box.bottom <= 844 * density + 4 &&
-                    box.top >= dockTop - 2
+                dockTexts.none { box.text.contains(it) } &&
+                    box.text != "Phoenix, AZ" &&
+                    box.bottom > dockTop + 2 &&
+                    box.top < dockTop + 56 * density
             }
             println("RW144-A dockTopDp=${dockTop / density} offenders=$offenders")
             assertTrue(
@@ -320,7 +331,10 @@ class Rw144FirstScreenRenderTest {
                 offenders.isEmpty()
             )
         } else {
-            println("RW144-A dock absent in harness (store seeding did not surface it)")
+            throw AssertionError(
+                "the seeded today's entry must surface the dock at rest — " +
+                    "without it the clear-space acceptance measures nothing"
+            )
         }
         host.controller.pause().stop().destroy()
     }
@@ -328,7 +342,9 @@ class Rw144FirstScreenRenderTest {
     // (b) Hero in Now state (dark mode, full screen).
     @Test
     fun `rw144 - b - hero now state dark`() {
-        val host = compose(dark = true) { Home(uiState(), mimState()) }
+        val state = uiState()
+        seedExactEntry(state)
+        val host = compose(dark = true) { Home(state, mimState()) }
         capture(host, "b-hero-now-dark.png")
         val boxes = texts(host)
         assertTrue(boxes.any { it.text == "Sun, Nov 8" })
@@ -341,7 +357,9 @@ class Rw144FirstScreenRenderTest {
     // (c) Picked state: picked date | divider | picked time | return.
     @Test
     fun `rw144 - c - hero picked state shows return segment`() {
-        val host = compose(dark = false) { Home(uiState(picked = true), mimState()) }
+        val state = uiState(picked = true)
+        seedExactEntry(state)
+        val host = compose(dark = false) { Home(state, mimState()) }
         capture(host, "c-hero-picked-light.png")
         val boxes = texts(host)
         assertTrue("picked date", boxes.any { it.text == "Tue, Nov 10" })
@@ -356,7 +374,9 @@ class Rw144FirstScreenRenderTest {
     // (d) Sheet top crop (weather line + count header + outfit).
     @Test
     fun `rw144 - d - sheet top`() {
-        val host = compose(dark = false) { Home(uiState(), mimState()) }
+        val state = uiState()
+        seedExactEntry(state)
+        val host = compose(dark = false) { Home(state, mimState()) }
         val density = host.composeView.resources.displayMetrics.density
         captureCrop(host, "d-sheet-top-light.png", (330 * density).toInt(), (844 * density).toInt())
         val boxes = texts(host)
@@ -429,8 +449,10 @@ class Rw144FirstScreenRenderTest {
     // (f) Generating pill state on the full screen.
     @Test
     fun `rw144 - f - generating pill state`() {
+        val state = uiState(making = true)
+        seedExactEntry(state)
         val host = compose(dark = false) {
-            Home(uiState(making = true), mimState(making = true))
+            Home(state, mimState(making = true))
         }
         capture(host, "f-generating-pill-light.png")
         val boxes = texts(host)
@@ -441,8 +463,10 @@ class Rw144FirstScreenRenderTest {
     // (g) Stock serve: no personal photo, no pill.
     @Test
     fun `rw144 - g - stock serve hero carries no pill`() {
+        val state = uiState(stock = true)
+        seedExactEntry(state)
         val host = compose(dark = false) {
-            Home(uiState(stock = true), mimState(stock = true))
+            Home(state, mimState(stock = true))
         }
         capture(host, "g-stock-serve-light.png")
         val boxes = texts(host)

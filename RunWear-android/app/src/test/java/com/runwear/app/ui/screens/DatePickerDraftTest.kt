@@ -88,14 +88,18 @@ class DatePickerDraftTest {
 
     @Test
     fun `headline renders a date segment wired to onDateClick - the entry exists`() {
+        // RW-144 (Nov 8, 2026): the date entry moved from the
+        // sheet's headline into the hero's date/time chip — the
+        // date segment of the ONE pill, wired to the same
+        // onDateClick (the Section E date picker).
         val source = File(
-            "src/main/java/com/runwear/app/ui/components/HeroSheet.kt"
+            "src/main/java/com/runwear/app/ui/components/HeroOverlay.kt"
         ).takeIf { it.exists() } ?: File(
-            "app/src/main/java/com/runwear/app/ui/components/HeroSheet.kt"
+            "app/src/main/java/com/runwear/app/ui/components/HeroOverlay.kt"
         )
-        val block = source.readText().substringAfter("fun HeroSheetBlock")
-        assertTrue(block.contains("onClick = { onDateClick() }"))
-        assertTrue(block.contains("dateSegmentText"))
+        val block = source.readText().substringAfter("fun HeroDateTimeChip")
+        assertTrue(block.contains("onClick = onDateClick"))
+        assertTrue(block.contains("HeroChipFormat.dateText"))
     }
 
     @Test

@@ -276,7 +276,7 @@ fun HeroPill(
                         color = if (content.kind == HeroPillKind.EXHAUSTED ||
                             content.kind == HeroPillKind.EXACT_FREE
                         ) {
-                            com.runwear.app.ui.theme.RunWearColors.PineAccent
+                            com.runwear.app.ui.theme.PineAccentOnDark
                         } else {
                             com.runwear.app.ui.theme.RunWearColors.TextPrimary
                         },
@@ -290,7 +290,7 @@ fun HeroPill(
                         text = content.upsellText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = com.runwear.app.ui.theme.RunWearColors.PineAccent,
+                        color = com.runwear.app.ui.theme.PineAccentOnDark,
                         modifier = Modifier.clickable { onAction() }
                     )
                 }

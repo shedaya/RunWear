@@ -53,15 +53,26 @@ class GeneratingStateOnPhotoPinTest {
         val hero = sourceFile(
             "app/src/main/java/com/runwear/app/ui/components/HeroSection.kt"
         ).readText()
-        val pillStart = hero.indexOf("if (heroPill != null)")
-        assertTrue("the pill render block exists", pillStart >= 0)
-        val pillBlock = hero.substring(pillStart, pillStart + 500)
-        assertTrue(pillBlock.contains("HeroPill("))
+        // RW-144 (Nov 8, 2026): the pill's seat moved OUT of
+        // HeroSection to the hero/sheet boundary in HeroMainScreen's
+        // stacked unit (the v8 frames' straddle). The settled rule
+        // this pin carries is unchanged: the pill renders from the
+        // pill policy alone, never gated on the photo layers, so
+        // the generating state shows over whatever photo is based.
+        val host = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/HeroMainScreen.kt"
+        ).readText()
+        val unitStart = host.indexOf("private fun HeroStackedUnit")
+        assertTrue("the stacked unit exists", unitStart >= 0)
+        val unit = host.substring(
+            unitStart, host.indexOf("\n}\n", unitStart) + 3
+        )
+        assertTrue("the pill renders in the stacked unit", unit.contains("HeroPill("))
         assertFalse(
             "the pill must render over whatever photo is based — " +
                 "gating it on the layers would hide the generating " +
                 "state exactly while the fallback photo is up",
-            pillBlock.contains("heroLayers")
+            unit.contains("heroLayers")
         )
         // And the scene base IS the fallback: the layer policy's
         // scene-change entry takes the fallback as its base input.

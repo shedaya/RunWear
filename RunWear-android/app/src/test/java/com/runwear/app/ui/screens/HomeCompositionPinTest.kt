@@ -120,12 +120,21 @@ class HomeCompositionPinTest {
 
     @Test
     fun `the stacked unit anchors the sheet to the bottom and the photo to the top`() {
+        // RW-144 (Nov 8, 2026): the unit is now a column — hero
+        // over sheet on one surface — with the Make It Me pill
+        // straddling the seam by its own measured half. The
+        // anchoring this pin carries: one unit, hero first, sheet
+        // directly under it, pill centered on the boundary.
         val body = functionBody(heroMainScreen(), "HeroStackedUnit")
-        assertTrue(body.contains(".align(Alignment.BottomStart)"))
-        assertTrue(body.contains(".align(Alignment.TopStart)"))
+        assertTrue(body.contains("HeroSectionContent("))
+        assertTrue(body.contains("HeroSheetContent("))
         assertTrue(
-            "the reservation comes from HeroStackedGeometry (hero + sheet - 28dp)",
-            body.contains("HeroStackedGeometry.unitHeight")
+            "the pill straddles the hero/sheet boundary, centered",
+            body.contains(".align(Alignment.TopCenter)")
+        )
+        assertTrue(
+            "the straddle is by the pill's measured height, not a fixed estimate",
+            body.contains("onSizeChanged")
         )
     }
 
@@ -152,7 +161,9 @@ class HomeCompositionPinTest {
     fun `the location pill is in the photo chrome, simple-formed, and wired to the picker`() {
         val section = heroSection()
         // The pill exists in HeroSection's top-controls row…
-        assertTrue(section.contains("GlassButton("))
+        // RW-144: the glass button became the design's chrome
+        // place pill (same seat, same wiring, new material).
+        assertTrue(section.contains("HeroPlacePill("))
         // …shows the SimplePlace form, normalized at the boundary…
         assertTrue(
             section.contains("SimplePlace") &&

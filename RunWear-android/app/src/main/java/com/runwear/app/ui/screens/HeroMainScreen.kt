@@ -2452,10 +2452,17 @@ private fun HeroStackedUnit(
 ) {
     val configuration = LocalConfiguration.current
     val heroHeight = heroPhotoHeight(configuration.screenHeightDp)
-    // The pill's half-height: its seat straddles the boundary, so
-    // the sheet's weather line clears its lower half by this much
-    // of extra top padding (the pill is ~38dp tall in every state).
-    val pillHalf = 19.dp
+    // The pill's half-height: its seat straddles the boundary by
+    // the pill's own MEASURED half. Pill states vary in height —
+    // the generating state stacks its upsell line under the main
+    // row — so a fixed estimate would let a tall pill cover the
+    // sheet's weather line (seen in the RW-144 walkthrough's
+    // generating frame) or leave a short pill floating off the
+    // seam. Measured, the seat and the sheet's clearance move
+    // together and the straddle is exact in every state.
+    var pillHeightPx by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val pillHalf = with(density) { (pillHeightPx / 2).toDp() }
     Box(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             HeroSectionContent(
@@ -2490,6 +2497,7 @@ private fun HeroStackedUnit(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = heroHeight - pillHalf)
+                    .onSizeChanged { pillHeightPx = it.height }
             )
         }
     }
