@@ -500,12 +500,20 @@ final class WearIveRunElementMachineTests: XCTestCase {
 
     func testViewIsDrivenByTheMachine_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(view.contains("WearIveRunElementMachine()"),
-                      "the view must hold the ONE machine")
-        XCTAssertTrue(view.contains("machine.send(event)"),
-                      "transitions must go through the machine's send")
-        // Both scroll edges are fed — the latch's one-way feed is gone.
-        XCTAssertTrue(view.contains(".scrolledToEnd : .scrolledAwayFromEnd"))
+        // RW-135 spec §3/§4.4 RE-PIN (Direction A′, approved
+        // Nov 7, 2026): the dock view no longer holds the
+        // presentation machine — the handoff is a pure function
+        // of the footer's position ("no timers, no state
+        // machine, nothing to desynchronise") and the tap is
+        // the §4.4 glide, not a machine expansion. The machine
+        // TYPE and its pure transition tests stand (this file);
+        // the view's drivers are the fade and the glide now.
+        XCTAssertTrue(view.contains("WearIveRunMorph.handoffFade"),
+                      "spec §3: the dock's visibility is driven by the pure handoff function")
+        XCTAssertTrue(view.contains("onGlideToFooter"),
+                      "spec §4.4: the dock's tap drives the host glide")
+        XCTAssertFalse(view.contains("machine.send"),
+                       "spec §3: no state machine drives the handoff")
         XCTAssertFalse(view.contains("endOfScrollCue"),
                        "the retired latch presentation must not reappear")
         // The cue haptic is the §1.7 SOFT impact on the machine's
@@ -515,20 +523,28 @@ final class WearIveRunElementMachineTests: XCTestCase {
         XCTAssertTrue(view.contains(".sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)"))
         XCTAssertFalse(view.contains("trigger: cueCount)"),
                        "haptics must fire from machine effects, not the raw counter")
-        // The cue timer's length comes from the machine's constant.
-        XCTAssertTrue(view.contains("WearIveRunElementMachine.cueDurationSeconds"))
+        // The cue pulse's length comes from the machine's
+        // constant (the §4.1 pulse replaced the cue timer's
+        // presentation role in the dock).
+        XCTAssertTrue(view.contains("WearIveRunElementMachine.cuePulseDurationSeconds"))
         // D-11 dimming is consumed in the view.
         XCTAssertTrue(view.contains("WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet)"))
     }
 
     func testExpandedThumbnailHasNoPlaceholder_sourcePin() throws {
-        // D-12: the expanded card's thumbnail renders only once
-        // decoded — the pre-WS-3 placeholder rectangle is gone
-        // from this file (the mini bar's material rectangles are
-        // fills of .regularMaterial / sheet, not cardOnSheet).
+        // D-12: the expanded form's thumbnail renders only once
+        // decoded — the pre-WS-3 placeholder rectangle is gone.
+        // RW-135 spec §2.2 RE-PIN: AppTheme.cardOnSheet now
+        // legitimately appears in this file as the FOOTER's
+        // ground surface (light #F5F1E8 / dark #2A251E) — the
+        // D-12 rule is about the thumbnail SLOT, pinned here at
+        // the slot itself: the undecodable branch paints
+        // Color.clear, never a filled tile.
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertFalse(view.contains("AppTheme.cardOnSheet"),
-                       "no placeholder tile may paint in the expanded thumbnail slot")
+        XCTAssertTrue(view.contains("fill(AppTheme.cardOnSheet)"),
+                      "spec §2.2: the footer's ground surface is the cardOnSheet token")
+        XCTAssertTrue(view.contains("Color.clear"),
+                      "D-12: the thumbnail slot's undecodable branch paints clear, not a tile")
         XCTAssertTrue(view.contains("if case .success(let image) = phase"),
                       "the thumbnail must be decode-gated")
     }
