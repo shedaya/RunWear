@@ -33,13 +33,11 @@ jobs:
         working-directory: RunWear-android
         run: ./gradlew :wear:bundleRelease --stacktrace
 
-      - name: Rename wear AAB (form-factor unambiguous)
         working-directory: RunWear-android
-        run: mv wear/build/outputs/bundle/release/wear-release.aab wear/build/outputs/bundle/release/runwear-wear-release.aab
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: wear-release-aab
-          path: RunWear-android/wear/build/outputs/bundle/release/runwear-wear-release.aab
+          path: RunWear-android/wear/build/outputs/bundle/release/wear-release.aab
           if-no-files-found: error
