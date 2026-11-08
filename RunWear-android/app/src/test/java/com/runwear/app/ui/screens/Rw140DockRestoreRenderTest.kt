@@ -636,16 +636,12 @@ class Rw140DockRestoreRenderTest {
                                     .height(heroH)
                                     .background(Color(0xFF9DB89A))
                             )
+                            // RW-144: the sheet block is the boxless
+                            // weather line now; it still carries the
+                            // "3 of 11" UV and "23%" humidity values
+                            // this measurement reads.
                             com.runwear.app.ui.components.HeroSheetBlock(
                                 weather = weather,
-                                locationName = "Phoenix, AZ",
-                                selectedDateTime = now,
-                                locationNow = now,
-                                isNowSelected = true,
-                                onDateClick = {},
-                                onTimeClick = {},
-                                onNowClick = {},
-                                overlapsPhoto = true,
                                 modifier = Modifier
                                     .align(Alignment.BottomStart)
                                     .fillMaxWidth()
@@ -692,11 +688,10 @@ class Rw140DockRestoreRenderTest {
         // them sits behind the translucent dock at rest.
         val uvBottom = bottomDpOf("3 of 11")
         val humidityBottom = bottomDpOf("23%")
-        val numeralBottom = bottomDpOf("58°")
         println(
             "RW140-REST dockTopDp=$dockTopDp " +
                 "uvBottomDp=$uvBottom humidityBottomDp=$humidityBottom " +
-                "numeralBottomDp=$numeralBottom viewportHDp=844"
+                "viewportHDp=844"
         )
         assertNotNull("UV value bounds", uvBottom)
         assertNotNull("humidity value bounds", humidityBottom)

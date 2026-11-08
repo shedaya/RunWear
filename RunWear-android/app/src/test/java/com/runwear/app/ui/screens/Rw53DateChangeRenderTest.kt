@@ -197,21 +197,25 @@ class Rw53DateChangeRenderTest {
         onDateClick: () -> Unit,
         onTimeClick: () -> Unit = {}
     ) {
-        HeroSheetBlock(
-            weather = weather,
-            locationName = "Kansas City",
-            selectedDateTime = selection,
-            locationNow = locationNow,
-            isNowSelected = false,
-            onDateClick = onDateClick,
-            onTimeClick = onTimeClick,
-            onNowClick = {},
-            onWeatherPillClick = {},
-            overlapsPhoto = false,
-            temperatureUnit = TemperatureUnit.FAHRENHEIT,
-            holdNumeral = false,
-            comfortPreference = ComfortPreference.NEUTRAL
-        )
+        // RW-144: the home date/time entry moved from the sheet
+        // headline to the HERO CHIP — the same two targets (date
+        // segment -> date picker, time segment -> hourly chart)
+        // in the chip's single-pill form. The feels-like block
+        // rides along so the weather assertions keep their surface.
+        androidx.compose.foundation.layout.Column {
+            com.runwear.app.ui.components.HeroDateTimeChip(
+                selectedDateTime = selection,
+                isNowSelected = false,
+                onDateClick = onDateClick,
+                onTimeClick = onTimeClick,
+                onNowClick = {}
+            )
+            com.runwear.app.ui.components.HeroFeelsLikeBlock(
+                weather = weather,
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                comfortPreference = ComfortPreference.NEUTRAL
+            )
+        }
     }
 
     @Test
@@ -222,8 +226,8 @@ class Rw53DateChangeRenderTest {
             HomeHeadline(startSelection, startWeather, onDateClick = { dateOpened = true })
         }
         capture(home, "RW-53-1-home-date-entry.png")
-        assertTrue(texts(home).any { it == "Tomorrow, " })
-        tap(home, "Tomorrow, ")
+        assertTrue(texts(home).any { it == "Fri, Nov 6" })
+        tap(home, "Fri, Nov 6")
         assertTrue("tapping the date segment must fire onDateClick", dateOpened)
         home.controller.pause().stop().destroy()
 
@@ -256,7 +260,7 @@ class Rw53DateChangeRenderTest {
             HomeHeadline(resolvedSelection, targetWeather, onDateClick = {})
         }
         capture(resolved, "RW-53-3-confirm-home-resolves-new-date.png")
-        assertTrue(texts(resolved).any { it == "Sat, Nov 7, " })
+        assertTrue(texts(resolved).any { it == "Sat, Nov 7" })
         assertTrue(texts(resolved).any { it.contains("39") })
         resolved.controller.pause().stop().destroy()
 
@@ -281,7 +285,7 @@ class Rw53DateChangeRenderTest {
             HomeHeadline(startSelection, startWeather, onDateClick = {})
         }
         capture(restored, "RW-53-4-cancel-prior-selection-restored.png")
-        assertTrue(texts(restored).any { it == "Tomorrow, " })
+        assertTrue(texts(restored).any { it == "Fri, Nov 6" })
         assertTrue(texts(restored).any { it.contains("47") })
         restored.controller.pause().stop().destroy()
     }

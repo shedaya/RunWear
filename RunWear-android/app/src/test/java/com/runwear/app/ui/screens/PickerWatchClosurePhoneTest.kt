@@ -201,23 +201,28 @@ class PickerWatchClosurePhoneTest {
     private fun HomeHeadline(
         selection: LocalDateTime,
         weather: WeatherConditions,
-        onDateClick: () -> Unit
+        onDateClick: () -> Unit,
+        onTimeClick: () -> Unit = {}
     ) {
-        HeroSheetBlock(
-            weather = weather,
-            locationName = "Kansas City",
-            selectedDateTime = selection,
-            locationNow = locationNow,
-            isNowSelected = false,
-            onDateClick = onDateClick,
-            onTimeClick = {},
-            onNowClick = {},
-            onWeatherPillClick = {},
-            overlapsPhoto = false,
-            temperatureUnit = TemperatureUnit.FAHRENHEIT,
-            holdNumeral = false,
-            comfortPreference = ComfortPreference.NEUTRAL
-        )
+        // RW-144: the home date/time entry moved from the sheet
+        // headline to the HERO CHIP — the same two targets (date
+        // segment -> date picker, time segment -> hourly chart)
+        // in the chip's single-pill form. The feels-like block
+        // rides along so the weather assertions keep their surface.
+        androidx.compose.foundation.layout.Column {
+            com.runwear.app.ui.components.HeroDateTimeChip(
+                selectedDateTime = selection,
+                isNowSelected = false,
+                onDateClick = onDateClick,
+                onTimeClick = onTimeClick,
+                onNowClick = {}
+            )
+            com.runwear.app.ui.components.HeroFeelsLikeBlock(
+                weather = weather,
+                temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                comfortPreference = ComfortPreference.NEUTRAL
+            )
+        }
     }
 
     @Test
@@ -225,7 +230,7 @@ class PickerWatchClosurePhoneTest {
         // Pre-change home: the start selection, 47° fixture.
         val home = compose { HomeHeadline(startSelection, startWeather, onDateClick = {}) }
         capture(home, "PW-A1-phone-home-pre-change-nov6-47.png")
-        assertTrue(texts(home).any { it == "Tomorrow, " })
+        assertTrue(texts(home).any { it == "Fri, Nov 6" })
         assertTrue(texts(home).any { it.contains("47") })
         home.controller.pause().stop().destroy()
 
@@ -258,7 +263,7 @@ class PickerWatchClosurePhoneTest {
         // Home re-solved to the committed selection: Nov 7, 39°.
         val resolved = compose { HomeHeadline(committedDateTime, targetWeather, onDateClick = {}) }
         capture(resolved, "PW-A3-phone-home-re-solved-nov7-39.png")
-        assertTrue(texts(resolved).any { it == "Sat, Nov 7, " })
+        assertTrue(texts(resolved).any { it == "Sat, Nov 7" })
         assertTrue(texts(resolved).any { it.contains("39") })
         resolved.controller.pause().stop().destroy()
     }

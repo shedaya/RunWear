@@ -60,6 +60,12 @@ class PalettePinsTest {
         assertEquals(Color(0xFF2A251E), DarkPalette.SurfaceElevated)
         assertEquals(Color(0xFFF5F1EA), DarkPalette.TextPrimary)
         assertEquals(Color(0xFFB8AEA0), DarkPalette.TextSecondary)
+        // RW-144 dark additions: descriptions #988E80, tiles #25201A,
+        // silhouettes cream at alpha 178, hairline cream at alpha 22.
+        assertEquals(Color(0xFF988E80), DarkPalette.TextDescription)
+        assertEquals(Color(0xFF25201A), DarkPalette.GarmentTile)
+        assertEquals(Color(0xB2F5F1EA), DarkPalette.Silhouette)
+        assertEquals(Color(0x16F5F1EA), DarkPalette.Hairline)
         // WS-8: the design's dark pine accent is the dark PineAccent;
         // the third muted tier (TextMuted #9C9484) is deleted.
         assertEquals(Color(0xFF5CC79F), DarkPalette.PineAccent)
@@ -72,8 +78,15 @@ class PalettePinsTest {
         assertEquals(Color(0xFFFDFBF6), LightPalette.Surface)
         assertEquals(Color(0xFFFDFBF6), LightPalette.SurfaceElevated)
         assertEquals(Color(0xFFFDFBF6), LightPalette.BgCard)
-        assertEquals(Color(0xFF17191C), LightPalette.TextPrimary)
-        assertEquals(Color(0xFF5F5B52), LightPalette.TextSecondary)
+        // RW-144 (Nov 8, 2026): the light ink warmed to the approved
+        // palette of record — warm brown #33291F, secondary #685D4F,
+        // descriptions #807363 (the RW-26 near-black set retired).
+        assertEquals(Color(0xFF33291F), LightPalette.TextPrimary)
+        assertEquals(Color(0xFF685D4F), LightPalette.TextSecondary)
+        assertEquals(Color(0xFF807363), LightPalette.TextDescription)
+        assertEquals(Color(0xFFF3EEE5), LightPalette.GarmentTile)
+        assertEquals(Color(0xA833291F), LightPalette.Silhouette)
+        assertEquals(Color(0x1A33291F), LightPalette.Hairline)
         // WS-8: light keeps the seed pine as its PineAccent.
         assertEquals(Color(0xFF175E4C), LightPalette.PineAccent)
         assertEquals(Color(0xFFFDFBF6), LightPalette.MiniBarContainer)

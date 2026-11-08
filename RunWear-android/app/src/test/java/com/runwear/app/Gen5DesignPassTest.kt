@@ -68,8 +68,8 @@ class Gen5DesignPassTest {
         // Light pair.
         assertTrue(theme.contains("0xFFF5F1E8")) // cream ground
         assertTrue(theme.contains("0xFFFDFBF6")) // sheet / cards
-        assertTrue(theme.contains("0xFF17191C")) // ink
-        assertTrue(theme.contains("0xFF5F5B52")) // secondary ink
+        assertTrue(theme.contains("0xFF33291F")) // RW-144 warm ink (was 0xFF17191C pre-RW-144)
+        assertTrue(theme.contains("0xFF685D4F")) // RW-144 secondary ink
         // Dark pair.
         assertTrue(theme.contains("0xFF16130F"))
         assertTrue(theme.contains("0xFF211D17"))

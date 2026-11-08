@@ -177,21 +177,18 @@ class Gen6VqRenderTest {
     private fun sheet(name: String, w: WeatherConditions, place: String, fontScale: Float) {
         val now = LocalDateTime.of(2026, 10, 30, 7, 35)
         hostAndShoot(name, fontScale) {
-            HeroSheetBlock(
-                weather = w,
-                locationName = place,
-                selectedDateTime = now,
-                locationNow = now,
-                isNowSelected = true,
-                onDateClick = {},
-                onTimeClick = {},
-                onNowClick = {},
-                onWeatherPillClick = {},
-                overlapsPhoto = false,
-                temperatureUnit = TemperatureUnit.FAHRENHEIT,
-                holdNumeral = false,
-                comfortPreference = ComfortPreference.NEUTRAL
-            )
+            androidx.compose.foundation.layout.Column {
+                // RW-144: the first-screen pair — feels-like block (hero) + weather line (sheet).
+                com.runwear.app.ui.components.HeroFeelsLikeBlock(
+                    weather = w,
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                    comfortPreference = ComfortPreference.NEUTRAL
+                )
+                HeroSheetBlock(
+                    weather = w,
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT
+                )
+            }
         }
     }
 
@@ -218,21 +215,18 @@ class Gen6VqRenderTest {
         val selection = LocalDateTime.of(2026, 10, 31, 19, 0)
         val now = LocalDateTime.of(2026, 10, 30, 7, 35)
         hostAndShoot(name, fontScale, dark = dark) {
-            HeroSheetBlock(
-                weather = w,
-                locationName = place,
-                selectedDateTime = selection,
-                locationNow = now,
-                isNowSelected = false,
-                onDateClick = {},
-                onTimeClick = {},
-                onNowClick = {},
-                onWeatherPillClick = {},
-                overlapsPhoto = false,
-                temperatureUnit = TemperatureUnit.FAHRENHEIT,
-                holdNumeral = false,
-                comfortPreference = ComfortPreference.NEUTRAL
-            )
+            androidx.compose.foundation.layout.Column {
+                // RW-144: the first-screen pair — feels-like block (hero) + weather line (sheet).
+                com.runwear.app.ui.components.HeroFeelsLikeBlock(
+                    weather = w,
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                    comfortPreference = ComfortPreference.NEUTRAL
+                )
+                HeroSheetBlock(
+                    weather = w,
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT
+                )
+            }
         }
     }
 
@@ -245,21 +239,17 @@ class Gen6VqRenderTest {
     @Test fun heroHot108DarkDefault() {
         val now = LocalDateTime.of(2026, 10, 30, 7, 35)
         hostAndShoot("hero-F-HOT108-dark-default", 1.0f, dark = true) {
-            HeroSheetBlock(
-                weather = weather(104.0, 108.0),
-                locationName = "Miami, Florida",
-                selectedDateTime = now,
-                locationNow = now,
-                isNowSelected = true,
-                onDateClick = {},
-                onTimeClick = {},
-                onNowClick = {},
-                onWeatherPillClick = {},
-                overlapsPhoto = false,
-                temperatureUnit = TemperatureUnit.FAHRENHEIT,
-                holdNumeral = false,
-                comfortPreference = ComfortPreference.NEUTRAL
-            )
+            androidx.compose.foundation.layout.Column {
+                com.runwear.app.ui.components.HeroFeelsLikeBlock(
+                    weather = weather(104.0, 108.0),
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT,
+                    comfortPreference = ComfortPreference.NEUTRAL
+                )
+                HeroSheetBlock(
+                    weather = weather(104.0, 108.0),
+                    temperatureUnit = TemperatureUnit.FAHRENHEIT
+                )
+            }
         }
     }
 

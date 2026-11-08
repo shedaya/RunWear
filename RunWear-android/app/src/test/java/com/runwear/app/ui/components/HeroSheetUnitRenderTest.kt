@@ -87,16 +87,11 @@ class HeroSheetUnitRenderTest {
         val now = LocalDateTime.of(2026, 11, 3, 7, 0)
         composeView.setContent {
             RunWearTheme(darkTheme = false) {
+                // RW-144: the sheet block is now the boxless
+                // weather line; the unit projection it exercises
+                // is the wind figure ("10 mph" <-> metric form).
                 HeroSheetBlock(
                     weather = weather,
-                    locationName = "New York, NY",
-                    selectedDateTime = now,
-                    locationNow = now,
-                    isNowSelected = true,
-                    onDateClick = {},
-                    onTimeClick = {},
-                    onNowClick = {},
-                    overlapsPhoto = false,
                     temperatureUnit = unit
                 )
             }
