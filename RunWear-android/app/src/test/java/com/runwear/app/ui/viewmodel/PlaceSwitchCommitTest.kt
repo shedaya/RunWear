@@ -195,6 +195,61 @@ class PlaceSwitchCommitTest {
         assertNull(kcState.copy(heroImageUrl = null, heroFallbackUrl = null).effectiveHeroUrl)
     }
 
+    // ── RW-146: the source commits WITH the place and weather ────
+    // Pre-fix the source was written on its own timeline (at tap
+    // time for manual picks, at fix time for GPS adoption, the
+    // geocoded name later still), so the sheet's surfaces — GPS
+    // row from the source, recents/footer from the name — could
+    // disagree, and the pill read the old name over new weather.
+
+    @Test
+    fun `rw146 a switch commits its source in the same state as place and weather`() {
+        val committed = kcState.copy(locationSource = "gps").withFetchedConditions(
+            weather = nyWeather,
+            outfit = outfit(nyWeather),
+            forecast = emptyList(),
+            pendingPlace = SimplePlace("New York", "NY"),
+            pendingSource = "manual",
+            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 9, 0),
+            nowSelected = true
+        )
+        assertEquals("New York, NY", committed.locationName)
+        assertEquals("manual", committed.locationSource)
+        assertSame(nyWeather, committed.weather)
+    }
+
+    @Test
+    fun `rw146 a gps adoption commits the gps source with its place`() {
+        val committed = kcState.copy(locationSource = "manual").withFetchedConditions(
+            weather = nyWeather,
+            outfit = outfit(nyWeather),
+            forecast = emptyList(),
+            pendingPlace = SimplePlace("New York", "NY"),
+            pendingSource = "gps",
+            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 9, 0),
+            nowSelected = true
+        )
+        assertEquals("New York, NY", committed.locationName)
+        assertEquals("gps", committed.locationSource)
+    }
+
+    @Test
+    fun `rw146 without a pending place the source carries over untouched`() {
+        val refreshed = kcState.copy(locationSource = "manual").withFetchedConditions(
+            weather = nyWeather,
+            outfit = outfit(nyWeather),
+            forecast = emptyList(),
+            pendingPlace = null,
+            pendingSource = "gps",
+            locationNowAnchor = LocalDateTime.of(2026, 11, 4, 9, 0),
+            nowSelected = true
+        )
+        // A stray pendingSource with no pending place moves
+        // nothing: name and source both stay with the old place.
+        assertEquals("Kansas City, MO", refreshed.locationName)
+        assertEquals("manual", refreshed.locationSource)
+    }
+
     @Test
     fun `an explicit selection keeps its moment and only re-anchors locationNow`() {
         val picked = LocalDateTime.of(2026, 11, 5, 7, 30)

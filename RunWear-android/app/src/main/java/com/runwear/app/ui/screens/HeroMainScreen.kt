@@ -1274,12 +1274,22 @@ fun HeroMainScreen(
                                     // RW-135 spec section 2.2: when
                                     // the footer is present it is the
                                     // page's foot — no sheet renders
-                                    // below it at max scroll, so the
-                                    // trailing bottom padding is 0
-                                    // (the footer's own 32dp bottom
-                                    // padding carries the clearance).
-                                    bottom = if (wirSurfacesPresent) 0.dp
-                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                    // below it at max scroll.
+                                    // RW-147: the trailing padding is
+                                    // the dock-clearance reserve
+                                    // (DockClearancePolicy) — at
+                                    // scroll end the footer's own
+                                    // content rests clear of the
+                                    // dock band; the handoff fade is
+                                    // unchanged.
+                                    bottom = if (wirSurfacesPresent) {
+                                        DockClearancePolicy.scrollEndReserveDp(
+                                            scaffoldContentPadding
+                                                .calculateBottomPadding().value
+                                        ).dp
+                                    } else {
+                                        60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                    }
                                 )
                             ) {
                                 item {
@@ -1403,8 +1413,14 @@ fun HeroMainScreen(
                                     // RW-135 spec section 2.2: as
                                     // the list host — no sheet below
                                     // the footer when it is present.
-                                    bottom = if (wirSurfacesPresent) 0.dp
-                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                    bottom = if (wirSurfacesPresent) {
+                                        DockClearancePolicy.scrollEndReserveDp(
+                                            scaffoldContentPadding
+                                                .calculateBottomPadding().value
+                                        ).dp
+                                    } else {
+                                        60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                    }
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1553,8 +1569,14 @@ fun HeroMainScreen(
                                         // RW-135 spec section 2.2:
                                         // no sheet below the footer
                                         // when it is present.
-                                        bottom = if (wirSurfacesPresent) 0.dp
-                                            else 60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                        bottom = if (wirSurfacesPresent) {
+                                            DockClearancePolicy.scrollEndReserveDp(
+                                                scaffoldContentPadding
+                                                    .calculateBottomPadding().value
+                                            ).dp
+                                        } else {
+                                            60.dp + scaffoldContentPadding.calculateBottomPadding()
+                                        }
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1651,6 +1673,26 @@ fun HeroMainScreen(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
+                                // RW-147: in the EXPANDED two-pane
+                                // layout the dock belongs to the
+                                // scrolling right pane only. The
+                                // full-width form floated it over
+                                // the hero pane's foot as well —
+                                // the straddle pill and the hero's
+                                // Actual line sat under the band at
+                                // rest, and the hero pane never
+                                // scrolls, so they could never be
+                                // scrolled clear (owner device
+                                // pass, Nov 9, 2026).
+                                .then(
+                                    if (layout == AdaptiveLayout.EXPANDED) {
+                                        Modifier.padding(
+                                            start = spec.heroPaneWidth ?: 400.dp
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                                 .then(
                                     if (fade >= 1f && exitSnap == null) {
                                         Modifier.clearAndSetSemantics {}
@@ -1747,7 +1789,15 @@ fun HeroMainScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 24.dp)
+                // RW-147: while the dock is present the snackbar
+                // rests above the dock's band, not beneath it.
+                .padding(
+                    bottom = if (wirSurfacesPresent) {
+                        (DockClearancePolicy.dockBandDp() + 8f).dp
+                    } else {
+                        24.dp
+                    }
+                )
         ) { data ->
             androidx.compose.material3.Snackbar(
                 snackbarData = data,

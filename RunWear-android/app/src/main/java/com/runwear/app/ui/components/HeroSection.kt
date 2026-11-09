@@ -75,8 +75,15 @@ val HeroSheetOverlap: Dp = 28.dp
  * geometry). Pre-RW-144 the photo took 75% and the sheet's content
  * lived on top of its foot; the redesign moves the feels-like
  * block onto the hero and opens the sheet below it.
+ *
+ * RW-145: the height is the composition system's solved value
+ * ([HeroComposition.heroHeightDp]) — still 0.44 × screen wherever
+ * that holds chrome + chip + the guaranteed gap + the block, and
+ * raised on shorter viewports (the folded phone) where 0.44 alone
+ * made the chip collide with the feels-like block.
  */
-fun heroPhotoHeight(screenHeightDp: Int): Dp = (screenHeightDp * 0.44).dp
+fun heroPhotoHeight(screenHeightDp: Int): Dp =
+    HeroComposition.heroHeightDp(screenHeightDp).dp
 
 /**
  * RW-25 scroll handoff: as the home list scrolls, the photo settles
@@ -731,11 +738,17 @@ fun HeroSection(
                     heroWidthPx.toFloat(), heroHeightPx.toFloat()
                 )).toDp().value
         }
+        // RW-145: the block's top edge in this hero — the chip's
+        // seat must keep the composition's guaranteed gap above it.
+        val heroBlockScale = HeroComposition.blockScale(heroHeight.value)
+        val heroBlockTopDp = heroHeight.value -
+            HeroComposition.blockFootprintDp(heroBlockScale)
         val chipTopDp = HeroChipPlacement.topDp(
-            chromeBottomDp = 96f,
+            chromeBottomDp = HeroComposition.CHROME_BOTTOM_DP,
             chipHeightDp = HeroChipGeometry.HEIGHT.value,
             headTopDp = chipHeadTopDp,
-            headBottomDp = chipHeadBottomDp
+            headBottomDp = chipHeadBottomDp,
+            blockTopDp = heroBlockTopDp
         )
         val chipScrimAlpha = 0.05f + (
             HeroLuminancePolicy.scrimPeakAlpha(chipLuminance) -
@@ -791,6 +804,7 @@ fun HeroSection(
                     weather = weather,
                     temperatureUnit = temperatureUnit,
                     comfortPreference = comfortPreference,
+                    blockScale = heroBlockScale,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(start = 16.dp, bottom = 16.dp, end = 16.dp)

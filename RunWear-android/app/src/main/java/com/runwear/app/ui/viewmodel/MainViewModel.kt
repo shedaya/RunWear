@@ -317,6 +317,12 @@ internal fun MainUiState.withFetchedConditions(
     pendingPlace: com.runwear.shared.domain.model.SimplePlace?,
     locationNowAnchor: LocalDateTime,
     nowSelected: Boolean,
+    /**
+     * RW-146: the source of [pendingPlace], committed with it —
+     * null (and ignored) when no place is pending, so a same-place
+     * refresh never moves the source either.
+     */
+    pendingSource: String? = null,
     heroFallbackUrl: String? = null,
     heroFallbackIsScaffold: Boolean = false,
     // RW-95: the fallback's own requested combination — on a place
@@ -336,6 +342,14 @@ internal fun MainUiState.withFetchedConditions(
         sunTimes = sunTimes ?: this.sunTimes,
         locationName = pendingPlace?.display ?: locationName,
         simplePlace = pendingPlace ?: simplePlace,
+        // RW-146: the source rides the same commit as the place
+        // and its weather — no surface can ever read a source that
+        // belongs to a different moment than the name beside it.
+        locationSource = if (pendingPlace != null) {
+            pendingSource ?: locationSource
+        } else {
+            locationSource
+        },
         locationNow = if (nowSelected) weatherNow else locationNowAnchor,
         selectedDateTime = if (nowSelected) weatherNow else selectedDateTime,
         // GEN-3 A-HERO (WS-A(1)): the fallback always tracks the
@@ -484,6 +498,36 @@ class MainViewModel @Inject constructor(
      */
     @Volatile
     private var pendingPlace: com.runwear.shared.domain.model.SimplePlace? = null
+
+    /**
+     * RW-146 (Nov 9, 2026): the SOURCE ("gps" / "manual") of
+     * [pendingPlace], committed in the SAME write as the place and
+     * its weather. Pre-fix the source was a second, independently
+     * timed write — the manual picks flipped it at tap time, GPS
+     * adoption flipped it at fix time, and the geocoded name landed
+     * whenever its round trip returned — so the Set Location
+     * sheet's three surfaces (GPS row, Recent Locations, footer),
+     * each deriving from a different field, could disagree with
+     * each other and with the place pill, which itself read the
+     * old name over the new place's weather for ~2 s on Sol's
+     * device. One pending (place, source) pair, one commit: every
+     * surface derives from the committed state, and the committed
+     * state is always self-consistent.
+     */
+    @Volatile
+    private var pendingSource: String? = null
+
+    /** The coordinates the currently displayed weather describes —
+     * recorded by fetchWeather's success commit. A geocoded GPS
+     * name may only be applied directly (outside a fetch commit)
+     * when its coordinates are exactly these: the name then
+     * describes the weather already on screen, so the write cannot
+     * pair a name with another place's conditions. */
+    @Volatile
+    private var committedLat: Double? = null
+
+    @Volatile
+    private var committedLon: Double? = null
 
     /** The widget's last-good store — the main screen seeds from it at startup. */
     private val lastGoodStore by lazy { WidgetLastGoodStore(appContext) }
@@ -896,7 +940,13 @@ class MainViewModel @Inject constructor(
             }
         }
         // Never override an explicit manual location choice.
+        // RW-146: a place switch in flight (pendingPlace set, its
+        // commit not yet landed) is also never overridden — the
+        // committed source still names the OLD place until the
+        // commit lands, and adopting over the pending target here
+        // would strand the user's pick.
         if (_uiState.value.locationSource == "manual") return
+        if (pendingPlace != null) return
         // Debounce: at most one background re-poll per 15 minutes.
         val nowMs = System.currentTimeMillis()
         if (!force && nowMs - lastGpsRefreshMs < GPS_REFRESH_DEBOUNCE_MS) return
@@ -929,22 +979,24 @@ class MainViewModel @Inject constructor(
                         // User moved significantly: adopt the fresh fix.
                         currentLat = newLat
                         currentLon = newLon
+                        // RW-146: the name + source enter state
+                        // only through commitGpsPlace (with the
+                        // fetch commit, or directly when the
+                        // displayed weather already describes
+                        // these coordinates) — never as a detached
+                        // write ahead of the weather.
                         weatherRepository.reverseGeocodePlace(newLat, newLon).fold(
                             onSuccess = { place ->
-                                _uiState.update {
-                                    it.copy(locationName = place.display, simplePlace = place, locationSource = "gps")
+                                if (commitGpsPlace(place, newLat, newLon)) {
+                                    preferencesRepository.saveGPSLocation(newLat, newLon, place.display)
                                 }
-                                preferencesRepository.saveGPSLocation(newLat, newLon, place.display)
                             },
                             onFailure = {
-                                _uiState.update {
-                                    it.copy(
-                                        locationName = "Your Location",
-                                        simplePlace = com.runwear.shared.domain.model.SimplePlace("Your Location"),
-                                        locationSource = "gps"
-                                    )
+                                val fallback =
+                                    com.runwear.shared.domain.model.SimplePlace("Your Location")
+                                if (commitGpsPlace(fallback, newLat, newLon)) {
+                                    preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
                                 }
-                                preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
                             }
                         )
                         resolveLocationZone()
@@ -1071,14 +1123,11 @@ class MainViewModel @Inject constructor(
                         currentLon = savedLocation.longitude
                         val savedPlace = com.runwear.shared.domain.model.SimplePlace
                             .fromRawDisplayString(savedLocation.name)
-                        _uiState.update {
-                            it.copy(
-                                locationName = savedPlace.display,
-                                simplePlace = savedPlace,
-                                locationSource = savedLocation.source,
-                                isLoading = true
-                            )
-                        }
+                        // RW-146: name + source are PENDING until
+                        // the fetch commits them with their weather.
+                        pendingPlace = savedPlace
+                        pendingSource = savedLocation.source
+                        _uiState.update { it.copy(isLoading = true) }
                         seedFromLastGood(savedLocation.latitude, savedLocation.longitude)
                         resolveLocationZone()
                         fetchWeather()
@@ -1098,12 +1147,64 @@ class MainViewModel @Inject constructor(
     }
     
     /**
+     * RW-146: the ONE way a GPS-derived place enters state.
+     * Returns true when the adoption is still the live target.
+     *
+     * The geocoded name and the "gps" source may only ever be
+     * written together with weather that describes the SAME
+     * coordinates:
+     *  - if the displayed weather already describes [lat]/[lon]
+     *    (this adoption's own fetch committed first), the name +
+     *    source apply directly — they describe the weather on
+     *    screen, so the write cannot mispair them;
+     *  - otherwise they become the pending pair, and fetchWeather's
+     *    success commit carries them in with the weather.
+     * A superseded adoption (a newer target owns currentLat/Lon)
+     * is dropped whole — name, source and the persisted record.
+     */
+    private fun commitGpsPlace(
+        place: com.runwear.shared.domain.model.SimplePlace,
+        lat: Double,
+        lon: Double
+    ): Boolean {
+        if (currentLat != lat || currentLon != lon) return false
+        val weatherOnScreenDescribesFix =
+            committedLat == lat && committedLon == lon &&
+                _uiState.value.weather != null
+        if (weatherOnScreenDescribesFix) {
+            _uiState.update {
+                it.copy(
+                    locationName = place.display,
+                    simplePlace = place,
+                    locationSource = "gps"
+                )
+            }
+            if (pendingSource == "gps") {
+                pendingPlace = null
+                pendingSource = null
+            }
+        } else {
+            pendingPlace = place
+            pendingSource = "gps"
+        }
+        return true
+    }
+
+    /**
      * Adopt a GPS fix (last-known or fresh) and load weather for it. The
      * friendly name is cosmetic, so reverse geocoding runs OFF the critical
      * path: it used to be awaited between the fix and the forecast, putting
      * a Nominatim round trip (seconds on a cold connection) in front of the
      * first content on every cold start. The name — and the saved-location
      * record, which carries it — lands whenever the geocode returns.
+     *
+     * RW-146: "lands whenever it returns" is now routed through
+     * [commitGpsPlace]: pre-fix the geocode callback wrote the name
+     * into state on its own timeline while this function had already
+     * flipped the source and started the weather fetch on theirs —
+     * three timelines, and the place pill read the old place's name
+     * over the new place's weather whenever the fetch won the race
+     * (Sol's Phoenix-over-New-York frame, Nov 9, 2026).
      */
     private suspend fun adoptGpsFix(
         lat: Double,
@@ -1132,14 +1233,11 @@ class MainViewModel @Inject constructor(
                 currentLon = saved.longitude
                 val savedPlace = com.runwear.shared.domain.model.SimplePlace
                     .fromRawDisplayString(saved.name)
-                _uiState.update {
-                    it.copy(
-                        locationName = savedPlace.display,
-                        simplePlace = savedPlace,
-                        locationSource = saved.source,
-                        isLoading = true
-                    )
-                }
+                // RW-146: re-apply as the pending pair, committed
+                // with its weather — not as detached writes.
+                pendingPlace = savedPlace
+                pendingSource = saved.source
+                _uiState.update { it.copy(isLoading = true) }
                 seedFromLastGood(saved.latitude, saved.longitude)
                 resolveLocationZone()
                 fetchWeather()
@@ -1148,26 +1246,28 @@ class MainViewModel @Inject constructor(
         }
         currentLat = lat
         currentLon = lon
-        _uiState.update { it.copy(locationSource = "gps") }
+        // RW-146: deliberately NO source write here. The source
+        // commits with the place and its weather (commitGpsPlace /
+        // the fetch commit) — until then every surface keeps
+        // describing the place actually on screen.
 
         viewModelScope.launch {
             weatherRepository.reverseGeocodePlace(lat, lon).fold(
                 onSuccess = { place ->
-                    _uiState.update {
-                        it.copy(locationName = place.display, simplePlace = place, locationSource = "gps")
+                    if (commitGpsPlace(place, lat, lon)) {
+                        // Save GPS location for next app launch —
+                        // only while this adoption is still the
+                        // live target, so a superseding manual
+                        // pick's record is never overwritten.
+                        preferencesRepository.saveGPSLocation(lat, lon, place.display)
                     }
-                    // Save GPS location for next app launch
-                    preferencesRepository.saveGPSLocation(lat, lon, place.display)
                 },
                 onFailure = {
-                    _uiState.update {
-                        it.copy(
-                            locationName = "Your Location",
-                            simplePlace = com.runwear.shared.domain.model.SimplePlace("Your Location"),
-                            locationSource = "gps"
-                        )
+                    val fallback =
+                        com.runwear.shared.domain.model.SimplePlace("Your Location")
+                    if (commitGpsPlace(fallback, lat, lon)) {
+                        preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
                     }
-                    preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
                 }
             )
         }
@@ -1284,6 +1384,13 @@ class MainViewModel @Inject constructor(
                     // in the same state write, so no rendered frame can pair
                     // the new place with the old place's weather.
                     val placeToCommit = pendingPlace
+                    val sourceToCommit = pendingSource
+                    // RW-146: this commit's weather describes
+                    // (lat, lon) — record it so a late geocode for
+                    // the same coordinates may apply its name
+                    // directly (see commitGpsPlace).
+                    committedLat = lat
+                    committedLon = lon
                     val fetchFallback = bundledFallbackFor(
                         weather, outfit,
                         _uiState.value.genderPreference,
@@ -1295,6 +1402,7 @@ class MainViewModel @Inject constructor(
                             outfit = outfit,
                             forecast = forecast,
                             pendingPlace = placeToCommit,
+                            pendingSource = sourceToCommit,
                             locationNowAnchor = now,
                             nowSelected = nowSelected,
                             heroFallbackUrl = fetchFallback.imageUrl,
@@ -1303,7 +1411,10 @@ class MainViewModel @Inject constructor(
                             sunTimes = sunTimes
                         )
                     }
-                    if (placeToCommit != null) pendingPlace = null
+                    if (placeToCommit != null) {
+                        pendingPlace = null
+                        pendingSource = null
+                    }
 
                     // GEN-5 (RW-28 Addendum 8, Defect 1): every
                     // forecast load re-derives the fill cells (and
@@ -2435,10 +2546,14 @@ class MainViewModel @Inject constructor(
             // lands — the name commits with the fetched conditions in
             // fetchWeather's success write, never before them.
             pendingPlace = place
+            // RW-146: the "manual" source is PENDING with the
+            // place — it commits with the place and its weather,
+            // so the sheet's surfaces never read a source from a
+            // different moment than the name beside it.
+            pendingSource = "manual"
 
             _uiState.update {
                 it.copy(
-                    locationSource = "manual",
                     showLocationSetup = false,
                     // RW-141: a place chosen another way supersedes
                     // any Current-location request outcome still
@@ -2470,10 +2585,14 @@ class MainViewModel @Inject constructor(
             // GEN-2 A2 (W-6): pending until its weather lands (see
             // selectLocation) — name, weather and frame commit together.
             pendingPlace = place
+            // RW-146: the "manual" source is PENDING with the
+            // place — it commits with the place and its weather,
+            // so the sheet's surfaces never read a source from a
+            // different moment than the name beside it.
+            pendingSource = "manual"
 
             _uiState.update {
                 it.copy(
-                    locationSource = "manual",
                     showLocationSetup = false,
                     // RW-141: a place chosen another way supersedes
                     // any Current-location request outcome still
@@ -2566,10 +2685,15 @@ class MainViewModel @Inject constructor(
     fun switchToGPS() {
         viewModelScope.launch {
             preferencesRepository.clearManualLocation()
-            _uiState.update { it.copy(locationSource = "gps") }
-            // Immediately re-poll GPS and adopt the fix unconditionally.
             lastGpsRefreshMs = 0L
-            onForegrounded(force = true)
+            // RW-146: this is the same explicit Current-location
+            // request as the sheet's row — one path, whose fix is
+            // adopted explicitly and whose place + source commit
+            // atomically with the weather. Pre-fix this flipped
+            // locationSource to "gps" up front, so for the whole
+            // adoption window the sheet's GPS row claimed CURRENT
+            // while the manual place was still on screen.
+            useCurrentLocation()
         }
     }
 

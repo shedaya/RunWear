@@ -262,7 +262,16 @@ fun HeroFeelsLikeBlock(
     weather: WeatherConditions,
     temperatureUnit: TemperatureUnit,
     comfortPreference: com.runwear.shared.domain.model.ComfortPreference,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * RW-145: the composition's block scale (HeroComposition
+     * .blockScale) — 1 on standard heroes; on short heroes the
+     * numeral eases toward 84sp so the whole composition (chrome,
+     * chip, guaranteed gap, block) fits the hero the viewport can
+     * afford. Only the numeral scales; the label and Actual line
+     * keep their sizes (they are the block's fixed parts).
+     */
+    blockScale: Float = 1f
 ) {
     val bracket = HeroSheetFormat.bracketFor(weather, comfortPreference)
     val bandColor = temperatureBracketColor(bracket)
@@ -280,8 +289,8 @@ fun HeroFeelsLikeBlock(
             Text(
                 text = numeral,
                 style = TextStyle(
-                    fontSize = 100.sp,
-                    lineHeight = 100.sp,
+                    fontSize = (100f * blockScale).sp,
+                    lineHeight = (100f * blockScale).sp,
                     fontWeight = FontWeight.Light,
                     fontFeatureSettings = "tnum",
                     shadow = Shadow(

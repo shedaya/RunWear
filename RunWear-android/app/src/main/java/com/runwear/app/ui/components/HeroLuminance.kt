@@ -128,12 +128,119 @@ object HeroBand {
 }
 
 /**
+ * RW-145 (Nov 9, 2026): the hero's vertical composition as ONE
+ * height-aware system. The RW-144 geometry fixed the hero at
+ * 0.44 × screen height and seated the date/time chip by the head
+ * band alone: on the shorter folded viewport (≈740dp) the crop's
+ * head band sits low, the chip's below-the-head fallback landed
+ * at headBottom + 8 — inside the feels-like block, whose footprint
+ * is absolute — so the pill sat BEHIND the FEELS LIKE label and
+ * the numeral's top on Sol's Fold8 (owner device pass, Nov 9).
+ * The harness never saw it: its fixture photo was a flat wash, so
+ * the placement rule never moved the pill off its preferred seat.
+ *
+ * The composition is now solved together, in this one pure place:
+ *  - the hero height is 0.44 × screen, but never so short that
+ *    chrome + chip + the guaranteed gap + the block cannot all
+ *    fit ([heroHeightDp]);
+ *  - the block scales gently on short heroes ([blockScale]) so
+ *    the standard composition fits more viewports un-grown;
+ *  - the chip's seat ([HeroChipPlacement.topDp]) must satisfy
+ *    BOTH the face-zone rule AND the block rule: its bottom edge
+ *    keeps [MIN_CHIP_BLOCK_GAP_DP] of clear air above the block's
+ *    top edge, on every viewport, in every fallback order.
+ * The approved v8 design governs throughout (pill high on the
+ * hero, clear air above the block) — this is the composition
+ * arithmetic that guarantees it, not a redesign.
+ */
+object HeroComposition {
+
+    /** Bottom edge of the top chrome row (status inset + place
+     * pill / gear row), the seat the chip hangs from. Matches the
+     * value HeroSection has always passed as chromeBottomDp. */
+    const val CHROME_BOTTOM_DP: Float = 96f
+
+    /** The guaranteed minimum clear air between the chip's bottom
+     * edge and the feels-like block's top edge — every viewport,
+     * every photo, every fallback. */
+    const val MIN_CHIP_BLOCK_GAP_DP: Float = 12f
+
+    /** The block's fixed (unscaled) parts: the FEELS LIKE label
+     * line, the Actual line and its top padding. */
+    const val BLOCK_FIXED_DP: Float = 39f
+
+    /** The block's bottom inset inside the hero (its padding). */
+    const val BLOCK_BOTTOM_INSET_DP: Float = 16f
+
+    /** The unscaled hero height the block's scale is normed to
+     * (0.44 × 844 — the RW-144 standard phone hero). */
+    const val REFERENCE_HERO_DP: Float = 371f
+
+    /** The numeral never shrinks past this fraction of 100sp —
+     * below it the hero GROWS instead (see [heroHeightDp]). */
+    const val MIN_BLOCK_SCALE: Float = 0.84f
+
+    /** The block's scale at [heroHeightDp]: 1 at and above the
+     * reference hero, easing to [MIN_BLOCK_SCALE] on short heroes. */
+    fun blockScale(heroHeightDp: Float): Float =
+        (heroHeightDp / REFERENCE_HERO_DP).coerceIn(MIN_BLOCK_SCALE, 1f)
+
+    /** The block's footprint (dp) at [scale]: fixed lines + the
+     * scaled numeral + the bottom inset. This is the top edge the
+     * chip must clear: blockTop = heroHeight − footprint. */
+    fun blockFootprintDp(scale: Float): Float =
+        BLOCK_BOTTOM_INSET_DP + BLOCK_FIXED_DP + 100f * scale
+
+    /** The hero's height for a screen of [screenHeightDp]: the
+     * RW-144 fraction, raised when the fraction alone cannot hold
+     * chrome + chip + gap + the (maximally scaled-down) block. */
+    fun heroHeightDp(screenHeightDp: Int): Float {
+        val fraction = screenHeightDp * 0.44f
+        // The tightest legal stack: chrome, an 8dp breath, the
+        // chip, the guaranteed gap, and the block at its minimum
+        // scale. If the fraction cannot hold it, the hero grows
+        // until it can (capped so a tiny window stays a window).
+        val needed = CHROME_BOTTOM_DP + 8f + 34f + MIN_CHIP_BLOCK_GAP_DP +
+            blockFootprintDp(MIN_BLOCK_SCALE)
+        return maxOf(fraction, minOf(needed, screenHeightDp * 0.60f))
+    }
+
+    /** The guaranteed gap the solved composition actually delivers
+     * at a viewport: chip bottom → block top, given the seat the
+     * placement rule chose. Always ≥ [MIN_CHIP_BLOCK_GAP_DP] when
+     * the hero came from [heroHeightDp] (pinned across the
+     * viewport × head-band matrix by the RW-145 tests). */
+    fun chipBlockGapDp(
+        chipTopDp: Float,
+        chipHeightDp: Float,
+        heroHeightDp: Float
+    ): Float =
+        (heroHeightDp - blockFootprintDp(blockScale(heroHeightDp))) -
+            (chipTopDp + chipHeightDp)
+}
+
+/**
  * RW-144: chip crop protection (RW-143 UX review item 3). The
  * date/time chip gets the same subject/face-zone protection the
  * wordmark zone has: its vertical seat is chosen so the chip never
  * intersects the runner's head band as displayed by the crop
  * geometry (HeroImageGeometry's audited band, top-anchored slice).
  * Pure dp arithmetic, unit-tested.
+ *
+ * RW-145: the seat must ALSO clear the feels-like block —
+ * [blockTopDp] is the block's top edge and no candidate seat may
+ * put the chip's bottom within [HeroComposition
+ * .MIN_CHIP_BLOCK_GAP_DP] of it. The pre-fix below-the-head
+ * fallback (headBottom + 8) is exactly the seat that collided on
+ * the folded viewport, so the fallback ORDER is now: preferred →
+ * above the head → below the head, each accepted only if it
+ * satisfies the block rule; when none does, the chip takes the
+ * highest seat that satisfies the block rule outright (directly
+ * above the block, gap-exact) — the block rule is the guarantee,
+ * the face rule yields only in that last resort (and cannot be
+ * reached when the hero height came from [HeroComposition
+ * .heroHeightDp], which sizes the hero so a face-clear seat
+ * always exists).
  */
 object HeroChipPlacement {
 
@@ -148,19 +255,35 @@ object HeroChipPlacement {
      * otherwise above the head (head top − chip − 8dp gap) when
      * that still clears the chrome row; otherwise directly below
      * the head band (+ 8dp gap). The chip NEVER lands across the
-     * face zone.
+     * face zone — subject to the RW-145 block rule below.
+     *
+     * RW-145: [blockTopDp] (the feels-like block's top edge) is a
+     * hard constraint on every candidate: chipBottom +
+     * [HeroComposition.MIN_CHIP_BLOCK_GAP_DP] ≤ blockTopDp.
      */
     fun topDp(
         chromeBottomDp: Float,
         chipHeightDp: Float,
         headTopDp: Float,
-        headBottomDp: Float
+        headBottomDp: Float,
+        blockTopDp: Float = Float.MAX_VALUE
     ): Float {
+        val maxChipBottom = blockTopDp - HeroComposition.MIN_CHIP_BLOCK_GAP_DP
+        fun clearsBlock(top: Float): Boolean = top + chipHeightDp <= maxChipBottom
         val preferred = preferredTopDp(chromeBottomDp)
         val chipBottom = preferred + chipHeightDp
-        if (chipBottom <= headTopDp || preferred >= headBottomDp) return preferred
+        if ((chipBottom <= headTopDp || preferred >= headBottomDp) && clearsBlock(preferred)) {
+            return preferred
+        }
         val above = headTopDp - chipHeightDp - 8f
-        if (above >= chromeBottomDp + 8f) return above
-        return headBottomDp + 8f
+        if (above >= chromeBottomDp + 8f && clearsBlock(above)) return above
+        val below = headBottomDp + 8f
+        if (clearsBlock(below)) return below
+        // Last resort: the highest seat that satisfies the block
+        // rule outright. Reached only when the caller's hero is
+        // shorter than HeroComposition guarantees — the block
+        // rule (readable content never collides) outranks the
+        // face-zone preference.
+        return (maxChipBottom - chipHeightDp).coerceAtLeast(chromeBottomDp + 4f)
     }
 }

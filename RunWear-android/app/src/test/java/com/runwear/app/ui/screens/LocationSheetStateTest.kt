@@ -122,6 +122,57 @@ class LocationSheetStateTest {
         assertTrue(sheets.contains("LocationSheetState.currentlyUsingName(currentLocation)"))
     }
 
+    // ── RW-146: one CURRENT derivation for every sheet surface ──
+
+    @Test
+    fun `rw146 recent is current - the committed manual place, simple form on both sides`() {
+        assertTrue(
+            LocationSheetState.recentIsCurrent("Phoenix, AZ", "Phoenix, AZ", isUsingGPS = false)
+        )
+        // A recent recorded with a raw geocode string still names
+        // the same simple place as the committed state.
+        assertTrue(
+            LocationSheetState.recentIsCurrent(
+                "Phoenix, Arizona, United States", "Phoenix, AZ", isUsingGPS = false
+            )
+        )
+        assertTrue(
+            LocationSheetState.recentIsCurrent(
+                "New York, New York", "New York, NY", isUsingGPS = false
+            )
+        )
+    }
+
+    @Test
+    fun `rw146 recent is never current while the gps place is in use`() {
+        // The GPS place's CURRENT claim belongs to the Current
+        // location row alone — even when a recent names the same
+        // city the GPS fix resolved to.
+        assertFalse(
+            LocationSheetState.recentIsCurrent("New York, NY", "New York, NY", isUsingGPS = true)
+        )
+    }
+
+    @Test
+    fun `rw146 recent is not current for a different place`() {
+        assertFalse(
+            LocationSheetState.recentIsCurrent("Phoenix, AZ", "New York, NY", isUsingGPS = false)
+        )
+        assertFalse(
+            LocationSheetState.recentIsCurrent("", "Phoenix, AZ", isUsingGPS = false)
+        )
+    }
+
+    @Test
+    fun `rw146 the sheet derives recent current through the one seam`() {
+        val sheets = sourceFile(
+            "app/src/main/java/com/runwear/app/ui/screens/BottomSheets.kt"
+        ).readText()
+        assertTrue(sheets.contains("LocationSheetState.recentIsCurrent("))
+        // The pre-fix raw-string comparison must not survive.
+        assertFalse(sheets.contains("recent.name == currentLocation"))
+    }
+
     @Test
     fun `callers pass the actual permission, queried from the view model`() {
         val mainActivity = sourceFile(

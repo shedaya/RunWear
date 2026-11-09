@@ -1553,7 +1553,12 @@ fun LocationPickerSheet(
                             color = RunWearColors.TextPrimary,
                             modifier = Modifier.weight(1f)
                         )
-                        if (recent.name == currentLocation && !isUsingGPS) {
+                        if (LocationSheetState.recentIsCurrent(
+                                recentName = recent.name,
+                                currentLocationName = currentLocation,
+                                isUsingGPS = isUsingGPS
+                            )
+                        ) {
                             Text(
                                 text = "CURRENT",
                                 fontSize = 11.sp,

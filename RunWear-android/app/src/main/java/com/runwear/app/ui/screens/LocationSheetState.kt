@@ -111,6 +111,34 @@ object LocationSheetState {
         }
 
     /**
+     * RW-146: whether a Recent Locations row is the CURRENT place.
+     * One derivation for the sheet's surfaces, from the committed
+     * state alone: the app is NOT on GPS (a GPS-current place is
+     * the Current location row's claim, never a recent's), and the
+     * recent's name and the committed place name agree as SIMPLE
+     * places — both sides are normalized through the place model,
+     * so a recent recorded with a raw geocode string ("Phoenix,
+     * Arizona, United States") and the committed simple form
+     * ("Phoenix, AZ") still agree, and two different simple places
+     * never do. Pre-fix the row compared raw strings against the
+     * live locationName while the GPS row and the footer derived
+     * from other fields on other timelines, so the surfaces could
+     * disagree about which place was current.
+     */
+    fun recentIsCurrent(
+        recentName: String,
+        currentLocationName: String,
+        isUsingGPS: Boolean
+    ): Boolean {
+        if (isUsingGPS) return false
+        val recent = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(recentName).display
+        val current = com.runwear.shared.domain.model.SimplePlace
+            .fromRawDisplayString(currentLocationName).display
+        return recent.isNotEmpty() && recent == current
+    }
+
+    /**
      * The place name the "Currently using:" pill carries, or null
      * when the pill must not render at all. The pill's pre-fix
      * layout stacked the label and the name on separate lines at
