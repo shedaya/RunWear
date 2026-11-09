@@ -1257,7 +1257,32 @@ fun HeroMainScreen(
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
                     state = pullToRefreshState,
-                    modifier = Modifier.fillMaxSize()
+                    // RW-147: while the dock is present, the scroll
+                    // area's layout ends at the dock band's top
+                    // edge — list content can never rest (or be
+                    // scrolled) underneath the dock, in any layout,
+                    // at any scroll position. The dock floats over
+                    // the page ground below the list instead. The
+                    // RW-135 handoff is untouched: its fade derives
+                    // from the lists' own layoutInfo, whose viewport
+                    // is now this bounded one, so the dissolve runs
+                    // exactly as specified as the footer rises
+                    // through the clear zone.
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (wirSurfacesPresent) {
+                                Modifier.padding(
+                                    bottom = (
+                                        DockClearancePolicy.dockBandDp() +
+                                            scaffoldContentPadding
+                                                .calculateBottomPadding().value
+                                        ).dp
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
                 ) {
                     when (layout) {
                         AdaptiveLayout.COMPACT -> {
@@ -1274,22 +1299,17 @@ fun HeroMainScreen(
                                     // RW-135 spec section 2.2: when
                                     // the footer is present it is the
                                     // page's foot — no sheet renders
-                                    // below it at max scroll.
-                                    // RW-147: the trailing padding is
-                                    // the dock-clearance reserve
-                                    // (DockClearancePolicy) — at
-                                    // scroll end the footer's own
-                                    // content rests clear of the
-                                    // dock band; the handoff fade is
-                                    // unchanged.
-                                    bottom = if (wirSurfacesPresent) {
-                                        DockClearancePolicy.scrollEndReserveDp(
-                                            scaffoldContentPadding
-                                                .calculateBottomPadding().value
-                                        ).dp
-                                    } else {
-                                        60.dp + scaffoldContentPadding.calculateBottomPadding()
-                                    }
+                                    // below it at max scroll, so the
+                                    // trailing bottom padding is 0
+                                    // (the footer's own 32dp bottom
+                                    // padding carries the clearance).
+                                    // RW-147: the dock clearance is
+                                    // carried by the scroll area's
+                                    // layout boundary (see the
+                                    // PullToRefreshBox below), not
+                                    // by trailing padding.
+                                    bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 )
                             ) {
                                 item {
@@ -1413,14 +1433,8 @@ fun HeroMainScreen(
                                     // RW-135 spec section 2.2: as
                                     // the list host — no sheet below
                                     // the footer when it is present.
-                                    bottom = if (wirSurfacesPresent) {
-                                        DockClearancePolicy.scrollEndReserveDp(
-                                            scaffoldContentPadding
-                                                .calculateBottomPadding().value
-                                        ).dp
-                                    } else {
-                                        60.dp + scaffoldContentPadding.calculateBottomPadding()
-                                    }
+                                    bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1569,14 +1583,8 @@ fun HeroMainScreen(
                                         // RW-135 spec section 2.2:
                                         // no sheet below the footer
                                         // when it is present.
-                                        bottom = if (wirSurfacesPresent) {
-                                            DockClearancePolicy.scrollEndReserveDp(
-                                                scaffoldContentPadding
-                                                    .calculateBottomPadding().value
-                                            ).dp
-                                        } else {
-                                            60.dp + scaffoldContentPadding.calculateBottomPadding()
-                                        }
+                                        bottom = if (wirSurfacesPresent) 0.dp
+                                        else 60.dp + scaffoldContentPadding.calculateBottomPadding()
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)

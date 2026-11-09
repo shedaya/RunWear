@@ -13,17 +13,22 @@ package com.runwear.app.ui.screens
  * window width, over BOTH panes — the Make It Me card's "Not now"
  * line and the hero pane's foot (owner device pass, Nov 9, 2026).
  *
- * The guarantee this policy carries: every scroll host reserves
- * [scrollEndReserveDp] of trailing space, so at scroll end the
- * last readable element rests entirely above the dock's band, and
- * any element the dock overlays mid-scroll can be scrolled clear
- * of it. The reserve is sized from the dock's own maximum height
- * (its wrap-and-grow narration form), its ruled bottom lift and a
- * clear margin — never from the content that happens to be last.
+ * The guarantee this policy carries, enforced as a LAYOUT
+ * BOUNDARY: while the dock is present, the scroll area's layout
+ * ends at the dock band's top edge (HeroMainScreen applies
+ * [dockBandDp] + the navigation inset as the scroll container's
+ * bottom padding). List content therefore can never rest — or be
+ * scrolled — underneath the dock, in any layout, at any scroll
+ * position; at scroll end the last element sits at the boundary,
+ * with the footer's own 32dp bottom padding as its clearance.
+ * The band is sized from the dock's own maximum height (its
+ * wrap-and-grow narration form) and its ruled bottom lift —
+ * never from the content that happens to be last.
  * The RW-135 dock↔footer handoff is untouched: the footer remains
- * the lists' last item and the handoff fade still hands the dock
- * off to it; the reserve simply guarantees the footer's own
- * content (and everything before it) can rest clear of the band.
+ * the lists' last item and the fade still derives from the lists'
+ * own layoutInfo — whose viewport is now the bounded one — so the
+ * dissolve runs exactly as specified while the footer rises
+ * through the clear zone the boundary creates.
  */
 object DockClearancePolicy {
 
