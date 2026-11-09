@@ -30,7 +30,7 @@ import kotlinx.datetime.LocalDateTime as KotlinLocalDateTime
 abstract class Rw145RenderTestBase : Rw144RenderTestBase() {
 
     protected val nov9: LocalDate = LocalDate.of(2026, 11, 9)
-    protected val nov9Now: LocalDateTime = LocalDateTime.of(2026, 11, 9, 7, 0)
+    protected val nov9Now: LocalDateTime = LocalDateTime.of(2026, 11, 9, 6, 0)
 
     /** Decode a bundled hero asset (shared module pool) to a PNG
      * file and return its file:// URL for Coil. */
@@ -52,7 +52,7 @@ abstract class Rw145RenderTestBase : Rw144RenderTestBase() {
 
     /** New York, Now, 41° COOL — Sol's device-pass conditions. */
     protected fun nyWeather() = WeatherConditions(
-        dateTime = KotlinLocalDateTime(2026, 11, 9, 7, 0),
+        dateTime = KotlinLocalDateTime(2026, 11, 9, 6, 0),
         temperature = 49.0,
         feelsLike = 41.0,
         humidity = 46,

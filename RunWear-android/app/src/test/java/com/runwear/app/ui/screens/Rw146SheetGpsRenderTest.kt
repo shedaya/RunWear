@@ -17,9 +17,10 @@ class Rw146SheetGpsRenderTest : Rw146SheetRenderTestBase() {
     @Test
     fun `rw146 sheet - new york gps - gps row current, recents and footer agree`() {
         val host = sheetHost(currentLocation = "New York, NY", usingGps = true)
-        capture(host, "rw146-b-sheet-newyork-gps.png")
+        val decor = sheetDecor(host)
+        captureSheet(decor, "rw146-b-sheet-newyork-gps.png")
         val density = host.composeView.resources.displayMetrics.density
-        val boxes = nodeBoxes(host)
+        val boxes = sheetBoxes(decor)
         println(
             "RW146-B texts: " + boxes.joinToString(" | ") {
                 "${it.text}@${(it.top / density).toInt()}..${(it.bottom / density).toInt()}"

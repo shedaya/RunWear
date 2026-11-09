@@ -17,9 +17,10 @@ class Rw146SheetPhoenixRenderTest : Rw146SheetRenderTestBase() {
     @Test
     fun `rw146 sheet - phoenix manual - all surfaces agree, gps row unmarked`() {
         val host = sheetHost(currentLocation = "Phoenix, AZ", usingGps = false)
-        capture(host, "rw146-a-sheet-phoenix-manual.png")
+        val decor = sheetDecor(host)
+        captureSheet(decor, "rw146-a-sheet-phoenix-manual.png")
         val density = host.composeView.resources.displayMetrics.density
-        val boxes = nodeBoxes(host)
+        val boxes = sheetBoxes(decor)
         println(
             "RW146-A texts: " + boxes.joinToString(" | ") {
                 "${it.text}@${(it.top / density).toInt()}..${(it.bottom / density).toInt()}"
