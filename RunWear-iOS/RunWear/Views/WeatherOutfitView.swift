@@ -1651,7 +1651,6 @@ struct WeatherOutfitView: View {
     /// The stacked layouts drive the chrome's fade/interactivity
     /// from the scroll handoff (WS-1 §1.1, above); the Duo pane
     /// takes it at rest.
-    @ViewBuilder
     /// The current Make It Me pill state's planning height
     /// (HeroPillMetrics) — the input the hero's one vertical
     /// layout guarantees the whole stack against, in every
@@ -1661,6 +1660,7 @@ struct WeatherOutfitView: View {
         HeroPillMetrics.height(for: heroPillState)
     }
 
+    @ViewBuilder
     private func heroSection(
         heightMode: HeroImageView.HeightMode = .containerFraction,
         chromeOpacity: Double = 1,
