@@ -601,8 +601,11 @@ final class StateTruthTests: XCTestCase {
         let numeralRow = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
         XCTAssertTrue(outfitView.contains("HeroChromeOverlayView("),
                       "home composes the hero chrome that carries the numeral (RW-144)")
-        XCTAssertTrue(outfitView.contains("formattedFeelsLike: viewModel.temperatureUnit.format("),
-                      "the block is fed the formatted feels-like value expression")
+        // RW-144 FIX (parent ruling, Nov 8, 2026): the feed is
+        // now the BARE-DEGREE format — the v8 frames' "58°" —
+        // superseding the unit-carrying feed this pin asserted.
+        XCTAssertTrue(outfitView.contains("formattedFeelsLike: viewModel.temperatureUnit.formatBareDegree("),
+                      "the block is fed the (bare-degree) formatted feels-like value expression")
 
         // The hero numeral and its modifier chain: a plain Text —
         // no gesture, no animation, no content transition.
