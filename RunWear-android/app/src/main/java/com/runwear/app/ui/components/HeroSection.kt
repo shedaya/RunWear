@@ -368,10 +368,28 @@ fun HeroSection(
      * The new scene's base is its own fallback, never the old photo.
      */
     heroSceneKey: String = "",
+    /**
+     * HERO REDESIGN (Nov 9, 2026): the weather line's tap door —
+     * the line itself now seats on the hero's foot (below).
+     */
+    onWeatherPillClick: (String) -> Unit = {},
+    /**
+     * HERO REDESIGN: the foot stack's reserve (dp above the
+     * hero's foot edge where the feels-like block's bottom
+     * sits) — the host measures the straddle pill and passes
+     * HeroComposition.footReserveDp(its half); the default is
+     * the no-pill reserve.
+     */
+    footReserveDp: Float = HeroComposition.DEFAULT_FOOT_RESERVE_DP,
+    /** EXPANDED only: the hero fills its pane — the pane's real
+     * height, measured by the host, overrides the fraction so
+     * the crop geometry and seats solve against the true box. */
+    heroHeightOverride: Dp? = null,
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
-    val heroHeight = heroPhotoHeight(configuration.screenHeightDp)
+    val heroHeight = heroHeightOverride
+        ?: heroPhotoHeight(configuration.screenHeightDp)
 
     // RW-16.27: the person layer the last composed hero belonged to;
     // the transition for THIS swap is decided against it before the
@@ -462,9 +480,7 @@ fun HeroSection(
                 val dm = context.resources.displayMetrics
                 val sliceShare = HeroImageGeometry.sliceHeightSourcePx(
                     dm.widthPixels.toFloat(),
-                    heroPhotoHeight(
-                        (dm.heightPixels / dm.density).toInt()
-                    ).value * dm.density
+                    heroHeight.value * dm.density
                 ) / HeroImageGeometry.SOURCE_HEIGHT_PX.toFloat()
                 topLuminance = HeroLuminancePolicy.sampleRegionLuminance(
                     bitmap, 0f, 0f, 1f, 0.30f * sliceShare
@@ -742,7 +758,7 @@ fun HeroSection(
         // seat must keep the composition's guaranteed gap above it.
         val heroBlockScale = HeroComposition.blockScale(heroHeight.value)
         val heroBlockTopDp = heroHeight.value -
-            HeroComposition.blockFootprintDp(heroBlockScale)
+            HeroComposition.blockFootprintDp(heroBlockScale, footReserveDp)
         val chipTopDp = HeroChipPlacement.topDp(
             chromeBottomDp = HeroComposition.CHROME_BOTTOM_DP,
             chipHeightDp = HeroChipGeometry.HEIGHT.value,
@@ -790,11 +806,19 @@ fun HeroSection(
         // straddles the hero/sheet boundary in the stacked unit
         // (HeroMainScreen), per the v8 frames.
         if (weather != null) {
+            // HERO REDESIGN (Nov 9, 2026): the foot stack as ONE
+            // composition — the luminance-driven scrim now spans
+            // the feels-like block AND the weather line beneath
+            // it (the foot sample region covers both), the block
+            // seats on the foot reserve, and the weather line
+            // rides the hero's foot above the straddle pill,
+            // exactly where the ruling's stack order puts it:
+            // block -> weather line -> straddle.
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .height(196.dp)
+                    .height((footReserveDp + 180f).dp)
             ) {
                 HeroFeelsLikeScrim(
                     peakAlpha = HeroLuminancePolicy.scrimPeakAlpha(footLuminance),
@@ -807,7 +831,41 @@ fun HeroSection(
                     blockScale = heroBlockScale,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 16.dp, bottom = 16.dp, end = 16.dp)
+                        .padding(
+                            start = 16.dp,
+                            bottom = footReserveDp.dp,
+                            end = 16.dp
+                        )
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(
+                        start = 20.dp, end = 20.dp,
+                        bottom = (
+                            footReserveDp -
+                                HeroComposition.BLOCK_WEATHER_GAP_DP -
+                                HeroComposition.WEATHER_ZONE_DP
+                            ).dp
+                    )
+                    .height(HeroComposition.WEATHER_ZONE_DP.dp)
+            ) {
+                WeatherLine(
+                    weather = weather,
+                    temperatureUnit = temperatureUnit,
+                    onClick = { onWeatherPillClick("condition") },
+                    onHero = true
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(
+                            com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.25f)
+                        )
                 )
             }
         }
@@ -822,7 +880,7 @@ fun HeroSection(
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 14.dp, bottom = 14.dp),
+                    .padding(end = 14.dp, bottom = (footReserveDp + 12f).dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

@@ -284,7 +284,18 @@ fun WeatherLine(
     weather: WeatherConditions?,
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
     onClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * HERO REDESIGN (Nov 9, 2026): the line's seat moved onto
+     * the hero's foot (it opened the sheet through RW-144).
+     * Same content, order and tap behaviour; over a photograph
+     * the ink switches to the hero's PhotoInk language (cream
+     * values/icons, softened labels, glyph shadows) — legibility
+     * is carried by the hero foot scrim beneath it, whose
+     * luminance drive covers this zone (HeroSection samples the
+     * foot region for it).
+     */
+    onHero: Boolean = false
 ) {
     if (weather == null) return
     val rows = HeroSheetFormat.weatherGridRows(weather, temperatureUnit)
@@ -294,6 +305,30 @@ fun WeatherLine(
         Icons.Outlined.Opacity,
         Icons.Outlined.WbSunny
     )
+    val valueColor = if (onHero) {
+        com.runwear.app.ui.theme.PhotoInk
+    } else {
+        RunWearColors.TextPrimary
+    }
+    val labelColor = if (onHero) {
+        com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.72f)
+    } else {
+        RunWearColors.TextSecondary
+    }
+    val iconTint = if (onHero) {
+        com.runwear.app.ui.theme.PhotoInk
+    } else {
+        RunWearColors.PineAccent
+    }
+    val inkShadow = if (onHero) {
+        androidx.compose.ui.graphics.Shadow(
+            color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f),
+            offset = androidx.compose.ui.geometry.Offset(0f, 1f),
+            blurRadius = 6f
+        )
+    } else {
+        null
+    }
     Surface(
         onClick = onClick,
         color = androidx.compose.ui.graphics.Color.Transparent,
@@ -306,7 +341,7 @@ fun WeatherLine(
                         Icon(
                             imageVector = icons[index],
                             contentDescription = null,
-                            tint = RunWearColors.PineAccent,
+                            tint = iconTint,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.size(6.dp))
@@ -316,9 +351,10 @@ fun WeatherLine(
                                 fontFamily = FontFamily.Default,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 17.sp,
-                                fontFeatureSettings = "tnum"
+                                fontFeatureSettings = "tnum",
+                                shadow = inkShadow
                             ),
-                            color = RunWearColors.TextPrimary,
+                            color = valueColor,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -329,9 +365,10 @@ fun WeatherLine(
                             fontFamily = FontFamily.Default,
                             fontWeight = FontWeight.Medium,
                             fontSize = 10.sp,
-                            letterSpacing = 1.sp
+                            letterSpacing = 1.sp,
+                            shadow = inkShadow
                         ),
-                        color = RunWearColors.TextSecondary,
+                        color = labelColor,
                         modifier = Modifier.padding(top = 3.dp),
                         maxLines = 1
                     )

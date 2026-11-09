@@ -169,8 +169,44 @@ object HeroComposition {
      * line, the Actual line and its top padding. */
     const val BLOCK_FIXED_DP: Float = 39f
 
-    /** The block's bottom inset inside the hero (its padding). */
+    /** The block's bottom inset inside the hero (its padding) —
+     * the RW-144 seat, retained for callers that compose the
+     * block alone. The composed foot stack now rides on
+     * [footReserveDp]. */
     const val BLOCK_BOTTOM_INSET_DP: Float = 16f
+
+    /** HERO REDESIGN (Sol's ruling, Nov 9, 2026 — the RW-145
+     * amendment): the weather line and the Make It Me straddle
+     * state moved ONTO the hero's foot, below the feels-like
+     * block. The foot stack, bottom-up: straddle pill (its top
+     * half inside the hero) → weather line → gap → block. Its
+     * zones: */
+    const val WEATHER_ZONE_DP: Float = 56f
+
+    /** Clear air between the weather line's top and the block's
+     * bottom edge. */
+    const val BLOCK_WEATHER_GAP_DP: Float = 10f
+
+    /** Clear air between the weather line's bottom edge and the
+     * straddle pill's top edge. */
+    const val WEATHER_STRADDLE_GAP_DP: Float = 8f
+
+    /** The straddle's typical half-height inside the hero, for
+     * the height solver (the render path measures the real pill
+     * and passes its own reserve). */
+    const val STRADDLE_HALF_TYPICAL_DP: Float = 26f
+
+    /** The foot reserve when no straddle pill exists (a stock
+     * serve): weather zone + gaps + a plain foot inset. */
+    const val DEFAULT_FOOT_RESERVE_DP: Float =
+        WEATHER_ZONE_DP + BLOCK_WEATHER_GAP_DP + BLOCK_BOTTOM_INSET_DP
+
+    /** The foot reserve (dp above the hero's foot edge where the
+     * feels-like block's bottom sits) for a straddle pill whose
+     * top half rises [straddleHalfDp] into the hero. */
+    fun footReserveDp(straddleHalfDp: Float): Float =
+        straddleHalfDp + WEATHER_STRADDLE_GAP_DP + WEATHER_ZONE_DP +
+            BLOCK_WEATHER_GAP_DP
 
     /** The unscaled hero height the block's scale is normed to
      * (0.44 × 844 — the RW-144 standard phone hero). */
@@ -185,37 +221,67 @@ object HeroComposition {
     fun blockScale(heroHeightDp: Float): Float =
         (heroHeightDp / REFERENCE_HERO_DP).coerceIn(MIN_BLOCK_SCALE, 1f)
 
-    /** The block's footprint (dp) at [scale]: fixed lines + the
-     * scaled numeral + the bottom inset. This is the top edge the
-     * chip must clear: blockTop = heroHeight − footprint. */
+    /** The block's footprint (dp) at [scale] with the default
+     * foot inset. Retained for the RW-144-era callers/tests. */
     fun blockFootprintDp(scale: Float): Float =
         BLOCK_BOTTOM_INSET_DP + BLOCK_FIXED_DP + 100f * scale
 
+    /** The block's footprint (dp) at [scale] over a foot stack
+     * reserving [footReserveDp]: the block's top edge is
+     * heroHeight − this. This is the top the chip must clear. */
+    fun blockFootprintDp(scale: Float, footReserveDp: Float): Float =
+        footReserveDp + BLOCK_FIXED_DP + 100f * scale
+
+    /** HERO REDESIGN fractions (Sol's ruling, Nov 9, 2026): the
+     * hero takes most of the first viewport — two-thirds to
+     * three-quarters — because every key surface now rides over
+     * it. Standard phones get 0.72: at 844dp the outfit header
+     * and the first item still land inside the first viewport
+     * below the 608dp hero. Short/folded viewports get 0.66: at
+     * 740dp the 488dp hero still leaves the header and first
+     * item visible above the dock's bounded band. EXPANDED does
+     * not use this function — its hero fills the pane (the
+     * outfit owns a separate pane). */
+    const val STANDARD_FRACTION: Float = 0.72f
+    const val SHORT_FRACTION: Float = 0.66f
+    const val STANDARD_MIN_HEIGHT_DP: Int = 800
+
     /** The hero's height for a screen of [screenHeightDp]: the
-     * RW-144 fraction, raised when the fraction alone cannot hold
-     * chrome + chip + gap + the (maximally scaled-down) block. */
+     * redesign fraction for the viewport's class, raised when
+     * the fraction alone cannot hold chrome + chip + gap + the
+     * full foot stack + the (maximally scaled-down) block. */
     fun heroHeightDp(screenHeightDp: Int): Float {
-        val fraction = screenHeightDp * 0.44f
+        val fraction = screenHeightDp *
+            if (screenHeightDp >= STANDARD_MIN_HEIGHT_DP) {
+                STANDARD_FRACTION
+            } else {
+                SHORT_FRACTION
+            }
         // The tightest legal stack: chrome, an 8dp breath, the
         // chip, the guaranteed gap, and the block at its minimum
-        // scale. If the fraction cannot hold it, the hero grows
-        // until it can (capped so a tiny window stays a window).
+        // scale over the typical foot stack. If the fraction
+        // cannot hold it, the hero grows until it can (capped so
+        // a tiny window stays a window).
         val needed = CHROME_BOTTOM_DP + 8f + 34f + MIN_CHIP_BLOCK_GAP_DP +
-            blockFootprintDp(MIN_BLOCK_SCALE)
-        return maxOf(fraction, minOf(needed, screenHeightDp * 0.60f))
+            blockFootprintDp(
+                MIN_BLOCK_SCALE, footReserveDp(STRADDLE_HALF_TYPICAL_DP)
+            )
+        return maxOf(fraction, minOf(needed, screenHeightDp * 0.80f))
     }
 
     /** The guaranteed gap the solved composition actually delivers
      * at a viewport: chip bottom → block top, given the seat the
-     * placement rule chose. Always ≥ [MIN_CHIP_BLOCK_GAP_DP] when
-     * the hero came from [heroHeightDp] (pinned across the
-     * viewport × head-band matrix by the RW-145 tests). */
+     * placement rule chose and the foot stack's reserve. Always
+     * ≥ [MIN_CHIP_BLOCK_GAP_DP] when the hero came from
+     * [heroHeightDp] (pinned across the viewport × head-band
+     * matrix by the RW-145 tests). */
     fun chipBlockGapDp(
         chipTopDp: Float,
         chipHeightDp: Float,
-        heroHeightDp: Float
+        heroHeightDp: Float,
+        footReserveDp: Float = footReserveDp(STRADDLE_HALF_TYPICAL_DP)
     ): Float =
-        (heroHeightDp - blockFootprintDp(blockScale(heroHeightDp))) -
+        (heroHeightDp - blockFootprintDp(blockScale(heroHeightDp), footReserveDp)) -
             (chipTopDp + chipHeightDp)
 }
 

@@ -25,27 +25,27 @@ class Rw145147PolicyTest {
 
     // ── RW-145: hero height ──────────────────────────────────────
 
+    // RW-150-era amendment (Sol's hero ruling, Nov 9, 2026):
+    // the fractions are the REDESIGN fractions — the hero takes
+    // most of the first viewport (0.72 standard / 0.66 short);
+    // the RW-144 0.44 pins are superseded by that ruling, by
+    // name. The solver's guarantee (below) is unchanged.
     @Test
-    fun `rw145 hero height - standard viewports keep the RW-144 fraction exactly`() {
-        // The RW-144 pins stand: nothing about the approved
-        // composition changes where the fraction already works.
-        assertEquals(371.04f, HeroComposition.heroHeightDp(844), 0.01f)
-        assertEquals(440f, HeroComposition.heroHeightDp(1000), 0.01f)
-        assertEquals(371.04f, heroPhotoHeight(844).value, 0.01f)
+    fun `rw145 hero height - redesign fractions per viewport class`() {
+        assertEquals(607.68f, HeroComposition.heroHeightDp(844), 0.01f)
+        assertEquals(720f, HeroComposition.heroHeightDp(1000), 0.01f)
+        assertEquals(607.68f, heroPhotoHeight(844).value, 0.01f)
+        // Folded Fold8 class (~740dp): the short fraction.
+        assertEquals(488.4f, HeroComposition.heroHeightDp(740), 0.01f)
+        // A 600dp window: 0.66 still holds the tightest stack.
+        assertEquals(396f, HeroComposition.heroHeightDp(600), 0.01f)
+        // A 500dp window: the fraction (330) cannot hold the
+        // stack, so the hero grows to exactly the needed stack.
+        assertEquals(373f, HeroComposition.heroHeightDp(500), 0.01f)
     }
 
     @Test
-    fun `rw145 hero height - folded viewport keeps the fraction, tiny windows grow to the needed stack`() {
-        // Folded Fold8 class (~740dp): 0.44 holds the stack, so
-        // the fraction stands — the fix there is the seat rule.
-        assertEquals(325.6f, HeroComposition.heroHeightDp(740), 0.01f)
-        // A 600dp window: 0.44 = 264 < the 289dp tightest legal
-        // stack, so the hero grows to exactly the stack.
-        assertEquals(289f, HeroComposition.heroHeightDp(600), 0.01f)
-    }
-
-    @Test
-    fun `rw145 block scale - full size at the reference hero, floored on short heroes`() {
+    fun `rw145 block scale and foot stack - footprint rides the reserve`() {
         assertEquals(1f, HeroComposition.blockScale(371f), 0.001f)
         assertEquals(1f, HeroComposition.blockScale(440f), 0.001f)
         assertEquals(
@@ -54,6 +54,17 @@ class Rw145147PolicyTest {
         )
         assertEquals(155f, HeroComposition.blockFootprintDp(1f), 0.01f)
         assertEquals(139f, HeroComposition.blockFootprintDp(0.84f), 0.01f)
+        // The foot stack: straddle half 26 -> reserve 100; the
+        // block's footprint over it at full scale is 239.
+        assertEquals(
+            100f, HeroComposition.footReserveDp(26f), 0.01f
+        )
+        assertEquals(
+            239f, HeroComposition.blockFootprintDp(1f, 100f), 0.01f
+        )
+        assertEquals(
+            82f, HeroComposition.DEFAULT_FOOT_RESERVE_DP, 0.01f
+        )
     }
 
     // ── RW-145: the guarantee across the viewport × width matrix ─
@@ -74,7 +85,12 @@ class Rw145147PolicyTest {
                             HeroImageGeometry.HEAD_BAND_TOP_FRACTION) *
                         HeroImageGeometry.SOURCE_HEIGHT_PX * scale / density
                     val blockTop = heroH -
-                        HeroComposition.blockFootprintDp(HeroComposition.blockScale(heroH))
+                        HeroComposition.blockFootprintDp(
+                            HeroComposition.blockScale(heroH),
+                            HeroComposition.footReserveDp(
+                                HeroComposition.STRADDLE_HALF_TYPICAL_DP
+                            )
+                        )
                     val top = HeroChipPlacement.topDp(
                         chromeBottomDp = HeroComposition.CHROME_BOTTOM_DP,
                         chipHeightDp = chipH,
@@ -102,7 +118,10 @@ class Rw145147PolicyTest {
     fun `rw145 folded case - the seat that collided on device now clears the block`() {
         // The device case: ~740dp folded viewport, 390dp wide.
         // Pre-fix the below-the-head fallback put the chip at
-        // headBottom + 8 ≈ 256dp, inside the block (top ≈ 183dp).
+        // headBottom + 8 ≈ 256dp, inside the block (top ≈ 183dp
+        // at the RW-144 hero height). At the redesign height the
+        // preferred seat (154dp) clears both the face and the
+        // block — the guarantee, not the fixture, is the point.
         val heroH = HeroComposition.heroHeightDp(740)
         val density = 2.625f
         val wPx = 390f * density
@@ -114,7 +133,12 @@ class Rw145147PolicyTest {
                 HeroImageGeometry.HEAD_BAND_TOP_FRACTION) *
             HeroImageGeometry.SOURCE_HEIGHT_PX * scale / density
         val blockTop = heroH -
-            HeroComposition.blockFootprintDp(HeroComposition.blockScale(heroH))
+            HeroComposition.blockFootprintDp(
+                HeroComposition.blockScale(heroH),
+                HeroComposition.footReserveDp(
+                    HeroComposition.STRADDLE_HALF_TYPICAL_DP
+                )
+            )
         val top = HeroChipPlacement.topDp(
             chromeBottomDp = HeroComposition.CHROME_BOTTOM_DP,
             chipHeightDp = HeroChipGeometry.HEIGHT.value,

@@ -1558,6 +1558,10 @@ fun HeroMainScreen(
                                         onDateClick = { showDatePicker = true },
                                         onTimeClick = { showTimePicker = true },
                                         onNowClick = onResetToNow,
+                                        // HERO REDESIGN: the weather
+                                        // line seats on the hero
+                                        // pane's foot (in HeroSection).
+                                        onWeatherPillClick = { type -> weatherDetailType = type },
                                         modifier = Modifier.fillMaxSize(),
                                         fillHeight = true,
                                         pillAtHeroFoot = true
@@ -1567,7 +1571,14 @@ fun HeroMainScreen(
                                     ) {
                                         com.runwear.app.makeitme.MakeItMeFailedLine(
                                             onRetry = onRetryPersonalLook,
-                                            modifier = Modifier.align(Alignment.BottomCenter)
+                                            // HERO REDESIGN: the pane's
+                                            // foot now carries the
+                                            // straddle pill + weather
+                                            // line stack — the failed
+                                            // line seats above it.
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .padding(bottom = 132.dp)
                                         )
                                     }
                                 }
@@ -1591,18 +1602,11 @@ fun HeroMainScreen(
                                     horizontalArrangement = Arrangement.spacedBy(spec.gridGap),
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
-                                    // RW-25: in the split layout the sheet
-                                    // block tops the right pane as its
-                                    // first full-span item — no overlap
-                                    // (the photo is the left pane).
-                                    item(span = { GridItemSpan(maxLineSpan) }) {
-                                        HeroSheetContent(
-                                            uiState = uiState,
-                                            contentVisible = contentVisible,
-                                            onWeatherPillClick = { type -> weatherDetailType = type },
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
+                                    // HERO REDESIGN (Nov 9, 2026):
+                                    // the right pane no longer opens
+                                    // with the sheet block — the
+                                    // weather line moved onto the
+                                    // hero pane's foot.
                                     // RW-101 (Sol, Nov 6, 2026):
                                     // the band tops the right pane,
                                     // directly under the hero unit
@@ -2378,7 +2382,14 @@ private fun HeroSectionContent(
     fillHeight: Boolean = false,
     /** EXPANDED only: the pill seats at the hero pane's foot
      * (there is no hero/sheet boundary inside the pane). */
-    pillAtHeroFoot: Boolean = false
+    pillAtHeroFoot: Boolean = false,
+    /** HERO REDESIGN (Nov 9, 2026): the weather line's tap door
+     * (the line seats on the hero's foot now, in HeroSection). */
+    onWeatherPillClick: (String) -> Unit = {},
+    /** HERO REDESIGN: the foot stack's reserve, measured by the
+     * stacked host from its straddle pill. Unused when
+     * [pillAtHeroFoot] (the reserve is measured locally there). */
+    footReserveDp: Float = com.runwear.app.ui.components.HeroComposition.DEFAULT_FOOT_RESERVE_DP
 ) {
     // WS-1 (D-01 mechanism, applied to the photo half): the caller's
     // modifier belongs to THIS root — the direct child of the
@@ -2389,7 +2400,30 @@ private fun HeroSectionContent(
         enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
         modifier = modifier
     ) {
-        Box(modifier = if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
+        // EXPANDED: the pane's measured height + the foot pill's
+        // measured height drive the hero's own composition (the
+        // crop geometry and the foot stack solve against the
+        // pane's true box, not the screen fraction).
+        var paneHeightDp by remember { mutableStateOf<Float?>(null) }
+        var footPillHeightPx by remember { mutableIntStateOf(0) }
+        val densityHere = LocalDensity.current
+        val effectiveReserve = if (pillAtHeroFoot) {
+            val pillDp = with(densityHere) { footPillHeightPx.toDp().value }
+            com.runwear.app.ui.components.HeroComposition.footReserveDp(pillDp) +
+                16f
+        } else {
+            footReserveDp
+        }
+        Box(
+            modifier = (if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth())
+                .onSizeChanged { size ->
+                    if (fillHeight) {
+                        paneHeightDp = with(densityHere) {
+                            size.height.toDp().value
+                        }
+                    }
+                }
+        ) {
             HeroSection(
                 weather = uiState.weather,
                 outfit = uiState.outfit,
@@ -2417,6 +2451,14 @@ private fun HeroSectionContent(
                 onNowClick = onNowClick,
                 temperatureUnit = uiState.temperatureUnit,
                 comfortPreference = uiState.comfortPreference,
+                // HERO REDESIGN: weather line on the hero's foot.
+                onWeatherPillClick = onWeatherPillClick,
+                footReserveDp = effectiveReserve,
+                heroHeightOverride = if (fillHeight) {
+                    paneHeightDp?.dp
+                } else {
+                    null
+                },
                 // RW-16.27: the flag chip shows for ANY hero photo — a
                 // personal photo most of all (its menu is the personal
                 // one) — and the refresh chip follows the ROTATION size
@@ -2444,6 +2486,7 @@ private fun HeroSectionContent(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 16.dp)
+                        .onSizeChanged { footPillHeightPx = it.height }
                 )
             }
         }
@@ -2451,45 +2494,20 @@ private fun HeroSectionContent(
 }
 
 /**
- * The home SHEET's opening block with the same entrance treatment
- * as the photo zone. RW-144: the block is the boxless weather line
- * over a hairline (HeroSheetBlock); the feels-like content it used
- * to carry lives on the hero now.
- */
-@Composable
-private fun HeroSheetContent(
-    uiState: MainUiState,
-    contentVisible: Boolean,
-    onWeatherPillClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    /** Clearance for the straddling Make It Me pill (stacked layouts). */
-    topPadding: Dp = 16.dp
-) {
-    // WS-1 (D-01): [modifier] stays on THIS root (the stacking
-    // unit's direct child) — see HeroStackedUnit.
-    AnimatedVisibility(
-        visible = contentVisible,
-        enter = fadeIn(tween(400, easing = FastOutSlowInEasing)),
-        modifier = modifier
-    ) {
-        HeroSheetBlock(
-            weather = uiState.weather,
-            onWeatherPillClick = onWeatherPillClick,
-            modifier = Modifier.fillMaxWidth(),
-            temperatureUnit = uiState.temperatureUnit,
-            topPadding = topPadding
-        )
-    }
-}
-
-/**
  * RW-144: the stacked layouts' first-screen unit — the hero
- * (≈44% of screen height) with the sheet opening DIRECTLY below
- * it on the same surface, and the Make It Me pill STRADDLING the
- * hero/sheet boundary (centered, half over the photo's foot,
- * half over the sheet), exactly as the v8 frames seat it. When no
- * pill state exists (a stock serve), the sheet opens at the
- * hero's foot with its plain inset — no gap is faked.
+ * with the sheet opening DIRECTLY below it on the same surface,
+ * and the Make It Me pill STRADDLING the hero/sheet boundary
+ * (centered, half over the photo's foot, half over the sheet),
+ * exactly as the v8 frames seat it. When no pill state exists
+ * (a stock serve), the sheet opens at the hero's foot with its
+ * plain inset — no gap is faked.
+ *
+ * HERO REDESIGN (Nov 9, 2026): the hero is now most of the
+ * first viewport (HeroComposition fractions) and the weather
+ * line seats on the hero's foot — the unit's sheet-opening
+ * block (HeroSheetContent / HeroSheetBlock) is retired from
+ * the home path; the unit is the hero plus the straddle
+ * clearance spacer.
  */
 @Composable
 private fun HeroStackedUnit(
@@ -2541,15 +2559,30 @@ private fun HeroStackedUnit(
                 onDateClick = onDateClick,
                 onTimeClick = onTimeClick,
                 onNowClick = onNowClick,
+                // HERO REDESIGN (Nov 9, 2026): the weather line
+                // seats on the hero's foot (inside HeroSection);
+                // the sheet no longer opens with it. The hero's
+                // foot reserve is this unit's measured straddle
+                // half, so block / weather line / pill compose
+                // as one stack with guaranteed gaps.
+                onWeatherPillClick = onWeatherPillClick,
+                footReserveDp = if (heroPill != null) {
+                    com.runwear.app.ui.components.HeroComposition
+                        .footReserveDp(pillHalf.value)
+                } else {
+                    com.runwear.app.ui.components.HeroComposition
+                        .DEFAULT_FOOT_RESERVE_DP
+                },
                 modifier = Modifier.fillMaxWidth()
             )
-            HeroSheetContent(
-                uiState = uiState,
-                contentVisible = contentVisible,
-                onWeatherPillClick = onWeatherPillClick,
-                modifier = Modifier.fillMaxWidth(),
-                topPadding = if (heroPill != null) pillHalf + 12.dp else 16.dp
-            )
+            // The straddle pill's lower half hangs below the
+            // hero; the sheet's first content (the outfit
+            // header) clears it by the same measured half + 12 —
+            // the clearance the sheet block's top padding used
+            // to carry, kept exact now that the block is gone.
+            if (heroPill != null) {
+                Spacer(Modifier.height(pillHalf + 12.dp))
+            }
         }
         if (heroPill != null) {
             com.runwear.app.ui.components.HeroPill(
