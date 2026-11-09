@@ -687,7 +687,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             "Updated to Overland Park, KS, Now",
             "Updated to Miami, FL, Now",
             "Updated to 7 p.m."
-        ], "a restore must not announce \u2014 no duplicate Added on relaunch")
+        ], "a restore must not announce — no duplicate Added on relaunch")
         XCTAssertEqual(relaunched.entries.count, 2,
                        "RW-91: saves accumulate — the prior session's save persists beside the restored session's (Sol's Nov 6, 2026 correction supersedes the gen-6 supersede rule)")
         XCTAssertEqual(relaunched.sessionEntry()?.sessionID, "s2")
