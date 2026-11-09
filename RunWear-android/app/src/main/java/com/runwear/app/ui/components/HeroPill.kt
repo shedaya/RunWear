@@ -273,10 +273,17 @@ fun HeroPill(
                         // 2026; the iOS half of this wave fixed its
                         // identical white rendering to the same accent).
                         // actionText exists only on those two kinds.
+                        // RW-144 FIX (parent ruling, Nov 8, 2026): the
+                        // accent is now the THEME's pine —
+                        // RunWearColors.PineAccent is #175E4C in light
+                        // mode and #5CC79F in dark, exactly the approved
+                        // v8 frames (frame A pine / frame B accent);
+                        // the flat PineAccentOnDark in both themes was
+                        // the deviation this corrects.
                         color = if (content.kind == HeroPillKind.EXHAUSTED ||
                             content.kind == HeroPillKind.EXACT_FREE
                         ) {
-                            com.runwear.app.ui.theme.PineAccentOnDark
+                            com.runwear.app.ui.theme.RunWearColors.PineAccent
                         } else {
                             com.runwear.app.ui.theme.RunWearColors.TextPrimary
                         },
@@ -290,7 +297,8 @@ fun HeroPill(
                         text = content.upsellText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
-                        color = com.runwear.app.ui.theme.PineAccentOnDark,
+                        // RW-144 FIX: theme pine, as on the CTA above.
+                        color = com.runwear.app.ui.theme.RunWearColors.PineAccent,
                         modifier = Modifier.clickable { onAction() }
                     )
                 }

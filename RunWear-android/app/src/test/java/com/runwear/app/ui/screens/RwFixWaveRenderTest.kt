@@ -94,7 +94,12 @@ import org.robolectric.annotation.GraphicsMode
  *  - RW-103 glance band: "Change" composes inside the band width
  *    with a 19:00 dot on a 0..22 span; capture is the visual proof.
  *  - Item 12 (RW-105 check): the EXACT_FREE pill's "Get unlimited"
- *    green censuses at the full PineAccentOnDark token.
+ *    green censuses at the full accent token. RE-PINNED by the
+ *    RW-144 fix lane (parent ruling, Nov 8, 2026): the token is now
+ *    the THEME's PineAccent — #175E4C in this light-palette host —
+ *    per the approved v8 frames (frame A pine / frame B the
+ *    #5CC79F accent); the earlier both-themes PineAccentOnDark was
+ *    the deviation corrected.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -601,11 +606,20 @@ class RwFixWaveRenderTest {
         val all = texts(host)
         assertTrue(all.any { it.contains("Get unlimited") })
         val bitmap = drawBitmap(host)
-        val green = censusColor(bitmap, PineAccentOnDark.toArgb(), tolerance = 4)
+        // RW-144 fix lane re-pin: this host runs the LIGHT palette,
+        // so the CTA censuses at LightPalette.PineAccent (#175E4C,
+        // the v8 frame A pine) — and the old both-themes accent
+        // must be absent from the pill.
+        val green = censusColor(bitmap, RunWearColors.PineAccent.toArgb(), tolerance = 4)
+        val oldAccent = censusColor(bitmap, PineAccentOnDark.toArgb(), tolerance = 4)
         bitmap.recycle()
         assertTrue(
-            "Get unlimited green at full token strength ($green px of exact PineAccentOnDark)",
+            "Get unlimited green at full token strength ($green px of exact theme PineAccent)",
             green > 150
+        )
+        assertTrue(
+            "No PineAccentOnDark left in the light pill ($oldAccent px)",
+            oldAccent == 0
         )
         host.controller.pause().stop().destroy()
     }
