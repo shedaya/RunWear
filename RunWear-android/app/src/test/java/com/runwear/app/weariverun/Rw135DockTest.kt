@@ -30,11 +30,15 @@ class Rw135DockTest {
 
     // -- section 7.2 forms ------------------------------------------
 
+    // RW-150 re-pin (Nov 9, 2026): RW-98 governs the content —
+    // a settled entry at Now names ", Now" (the RW-135 section
+    // 7.2 short form dropped the moment; see RW-150's class
+    // table in Rw150NarrationGrammarTest).
     @Test
     fun `settled today reads Updated to the place`() {
         val line = WearIveRunDockNarration.line(entry(), today)
-        assertEquals("Updated to Boston, MA", line.text)
-        assertEquals("Boston, MA", line.payload)
+        assertEquals("Updated to Boston, MA, Now", line.text)
+        assertEquals("Boston, MA, Now", line.payload)
     }
 
     @Test

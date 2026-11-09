@@ -358,10 +358,19 @@ object WearIveRunUpdateNarration {
         val simplePlace = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(next.place).display
         if (previous.place != next.place || previous.date != next.date) {
-            return WearIveRunNarrationPayload.Place(
-                simplePlace,
+            // RW-150: a place change landing on a PICKED moment
+            // today names that moment in the day-form slot
+            // ("Updated to Phoenix, AZ, 2 p.m.") — the day form
+            // "Now" would misstate the entry's moment. (On a
+            // future date the day form stands: the date is the
+            // fuller name there, and the displayed resting line
+            // names the reading in its tail.)
+            val dayForm = if (next.date == today && next.momentLabel != null) {
+                next.momentLabel
+            } else {
                 WearIveRunCollectionLogic.narrationDayForm(next.date, today)
-            )
+            }
+            return WearIveRunNarrationPayload.Place(simplePlace, dayForm)
         }
         if (previous.momentLabel != next.momentLabel) {
             return WearIveRunNarrationPayload.Moment(
@@ -418,11 +427,14 @@ object WearMomentLabel {
  * unsettled change never appears here, because this function can
  * only be called on the recorded entry.
  *
- * Forms (research section 7.2):
- * - settled, the location's today (or an older rest entry):
- *   "Updated to {place}" — the payload is the place alone;
- * - a future-day plan: "Planned for {place} · {day}" — a plan
- *   never wears the "Updated to" form.
+ * Forms (research section 7.2, content per RW-98 as reconciled
+ * by RW-150 — see [line]):
+ * - settled, the location's today: "Updated to {place},
+ *   {moment}" — the moment is "Now" or the picked reading;
+ * - an older rest entry: "Updated to {place}";
+ * - a future-day plan: "Planned for {place} · {day}" (plus
+ *   " · {reading}" when a time was picked) — a plan never
+ *   wears the "Updated to" form.
  */
 object WearIveRunDockNarration {
 
@@ -438,7 +450,36 @@ object WearIveRunDockNarration {
             )
         }
 
-    /** The one line, from the record alone. */
+    /**
+     * The one line, from the record alone.
+     *
+     * RW-150 (Nov 9, 2026 — Sol's device pass on the iOS build
+     * proved the shape; the Android audit found the same forms
+     * here): RW-98 (Nov 6, 2026) governs the line's CONTENT — it
+     * names the recorded state IN FULL, whichever dimension a
+     * change touched — while RW-135 governs its form (a pure
+     * function of the record; "Planned for" for future days).
+     * The RW-135 section 7.2 short forms dropped the moment
+     * entirely: a place change at Now read "Updated to {place}"
+     * (RW-98's ruled form is "Updated to {place}, Now"), a
+     * picked time today changed nothing in the line at all, and
+     * a future-day plan with a picked time named the day but
+     * never the time. The reconciliation built here:
+     * - today, at Now: "Updated to {place}, Now" (RW-98's
+     *   example, verbatim);
+     * - today, at a picked moment: "Updated to {place},
+     *   {reading}" — the entry's full state;
+     * - a future day: the plan form "Planned for {place} ·
+     *   {day}", and a picked time is named in the same tail —
+     *   "Planned for {place} · {day} · {reading}";
+     * - an older rest entry keeps the settled short form
+     *   (RW-98's classes cover today's and future states; the
+     *   past-entry form is not extended by invention).
+     * The moment segment rides INSIDE the payload span for the
+     * settled form (it is part of the named state, like the
+     * place form's ", {day}" in the update narration) and in
+     * the tail for the plan form (after the day unit).
+     */
     fun line(
         entry: WearIveRunDayEntry,
         today: java.time.LocalDate
@@ -447,11 +488,23 @@ object WearIveRunDockNarration {
             .fromRawDisplayString(entry.place).display
         return if (entry.date > today) {
             val prefix = "Planned for "
-            val suffix = " · " + dayLabel(entry.date, today)
+            var suffix = " · " + dayLabel(entry.date, today)
+            if (entry.momentLabel != null) {
+                suffix += " · " + entry.momentLabel
+            }
             WearIveRunNarration(
                 text = prefix + place + suffix,
                 payloadStart = prefix.length,
                 payloadEnd = prefix.length + place.length
+            )
+        } else if (entry.date == today) {
+            val prefix = "Updated to "
+            val payload = place + ", " +
+                (entry.momentLabel ?: "Now")
+            WearIveRunNarration(
+                text = prefix + payload,
+                payloadStart = prefix.length,
+                payloadEnd = prefix.length + payload.length
             )
         } else {
             val prefix = "Updated to "
@@ -477,6 +530,12 @@ object WearIveRunDockNarration {
             .fromRawDisplayString(entry.place).display
         val sb = StringBuilder()
         sb.append(place).append(" · ").append(dayLabel(entry.date, today))
+        // RW-150: the footer's detail line agrees with its own
+        // header (and the dock): a picked moment is named here
+        // too, in the same tail position.
+        if (entry.momentLabel != null) {
+            sb.append(" · ").append(entry.momentLabel)
+        }
         sb.append(" — ").append(unit.formatTemperature(entry.feelsLikeF))
         sb.append(" feels like")
         val items = entry.items.filter { it.isNotBlank() }

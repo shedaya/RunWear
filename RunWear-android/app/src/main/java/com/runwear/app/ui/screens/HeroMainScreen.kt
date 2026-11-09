@@ -1383,6 +1383,7 @@ fun HeroMainScreen(
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
+                                            freeGenerationsUsed = makeItMeState.freeGenerationsUsed,
                                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                                         )
                                     }
@@ -1502,6 +1503,7 @@ fun HeroMainScreen(
                                         com.runwear.app.makeitme.MakeItMeUpsellCard(
                                             onSubscribeClick = { showMakeItMePaywall = true },
                                             onDismiss = onDismissMakeItMeUpsell,
+                                            freeGenerationsUsed = makeItMeState.freeGenerationsUsed,
                                             modifier = Modifier.padding(vertical = 8.dp)
                                         )
                                     }
@@ -1629,6 +1631,7 @@ fun HeroMainScreen(
                                             com.runwear.app.makeitme.MakeItMeUpsellCard(
                                                 onSubscribeClick = { showMakeItMePaywall = true },
                                                 onDismiss = onDismissMakeItMeUpsell,
+                                            freeGenerationsUsed = makeItMeState.freeGenerationsUsed,
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
                                         }

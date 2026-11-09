@@ -256,7 +256,15 @@ object MakeItMeStrings {
     // U — Upsell and subscription sheet (spec §5)
     const val U1A_EYEBROW = "MAKE IT ME"
     const val U1B_HEADLINE = "This outfit isn't you — yet."
-    const val U1C_BODY = "You've seen yourself in 5 outfits. This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app."
+    // RW-147-era counter unification (Sol's ruling, Nov 9, 2026):
+    // this line previously hardcoded "5 outfits" — a stale residue
+    // of the old allowance — while the pill, the Settings meter
+    // and the paywall meter all read the ONE counter (free looks
+    // used, of FREE_ALLOWANCE = 10, RW-128). The card now takes
+    // the same counter as every other surface; the sentence
+    // structure is unchanged, only its number's source is.
+    fun u1cBody(freeGenerationsUsed: Int): String =
+        "You've seen yourself in ${FreeLooksMeter.displayedUsed(freeGenerationsUsed)} outfits. This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app."
     const val U1D_PRIMARY = "See myself in every outfit"
     const val U1E_NOT_NOW = "Not now"
     // RW-26 frame 22: the paywall's title is the "Make It Me" SCRIPT

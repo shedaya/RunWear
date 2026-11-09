@@ -1496,7 +1496,10 @@ fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
 fun MakeItMeUpsellCard(
     onSubscribeClick: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** The ONE free-looks counter (the same MakeItMeUiState field
+     * the hero pill reads) — the card's body line counts from it. */
+    freeGenerationsUsed: Int = 0
 ) {
     Column(
         modifier = modifier
@@ -1526,7 +1529,7 @@ fun MakeItMeUpsellCard(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = MakeItMeStrings.U1C_BODY,
+            text = MakeItMeStrings.u1cBody(freeGenerationsUsed),
             fontSize = 13.sp,
             lineHeight = 19.sp,
             color = RunWearColors.TextSecondary
