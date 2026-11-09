@@ -1,14 +1,31 @@
 // Supabase Edge Function: start-personal-fill (RW-14, 2026-10-31;
 // RW-16.30 launch-set extension + convergence amendment, 2026-11-02)
+// RW-151 amendment (v15): the fill no longer intersects the
+// caller-named cells with this function's canonical launch table.
+// The engine's outfit for a real forecast frame legitimately
+// differs from the table's representative-frame outfit for the
+// same (weather, bracket, daypart) — frame inputs the table's
+// frames fix (wind, comfort adjustment, measured rain) move the
+// prescription — so the intersection silently dropped exactly the
+// cells the client most needed filled (RW-151 diagnosis,
+// 2026-11-09: 12 of the owner's 44 banked cells exist only because
+// the on-demand path accepted them as named). Named cells now
+// enqueue AS NAMED, subject to the same validation
+// request-personal-generation applies: the combination id must
+// parse, and outfit_items must hash to the id's signature. The
+// canonical table below is RETAINED for one purpose only: the
+// scaffold guarantee (see SCAFFOLD CELLS).
 //
 // Subscriber fill under the CONVERGENCE model (Sol's architecture
 // amendment, 2026-11-02 ~19:31 EST, restoring his original
 // scaffolding design): the per-user bank is NOT pre-generated in
-// full. This function enqueues ONLY the forecast-imminent cells —
+// full. This function enqueues the forecast-imminent cells —
 // the combination_ids the client names from its 7-day forecast in
-// the request body ("priority_cells"), intersected with the launch
-// cell set (weather x bracket x daypart minus the unreachable
-// WARM/HOT SNOW cells = 88 cells) — in the client's forecast order.
+// the request body ("priority_cells") — AS NAMED (RW-151: the
+// pre-v15 canonical-88 intersection silently dropped named cells
+// whose engine outfit differs from the table's representative
+// outfit; see the version note above), in the client's forecast
+// order.
 // Every other cell converges on first open: get-personal-hero
 // serves the user's own same-prescription photo as a scaffold and
 // queues the exact photo in the background; once generated it is
@@ -27,6 +44,43 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+// RW-151: caller-named cell validation — the same vocabulary and
+// rules request-personal-generation applies to its request action,
+// so the fill path accepts exactly the cells the on-demand path
+// accepts, and no others. outfitHash is that function's exported
+// hash verbatim (the engine's String.hashCode mirror).
+const GENDERS = ['MALE', 'FEMALE', 'UNISEX']
+const WEATHERS = ['CLEAR', 'CLOUDY', 'RAIN', 'SNOW']
+const TEMP_BRACKETS = ['FREEZING', 'COLD', 'COOL', 'MILD', 'WARM', 'HOT']
+const TIMES_OF_DAY = ['DAWN', 'MIDDAY', 'DUSK', 'NIGHT']
+
+function outfitHash(itemKeys: string[]): string {
+  const joined = [...itemKeys].sort().join('-')
+  let h = 0
+  for (let i = 0; i < joined.length; i++) {
+    h = (Math.imul(h, 31) + joined.charCodeAt(i)) | 0
+  }
+  return (h >>> 0).toString(16).slice(-8).padStart(8, '0')
+}
+
+type NamedCell = {
+  gender: string, weather: string, tempBracket: string,
+  timeOfDay: string, signature: string, combinationId: string
+}
+
+function parseCombinationId(raw: unknown): NamedCell | null {
+  if (typeof raw !== 'string') return null
+  const parts = raw.split('_')
+  if (parts.length !== 5) return null
+  const [gender, weather, tempBracket, timeOfDay, signature] = parts
+  if (!GENDERS.includes(gender)) return null
+  if (!WEATHERS.includes(weather)) return null
+  if (!TEMP_BRACKETS.includes(tempBracket)) return null
+  if (!TIMES_OF_DAY.includes(timeOfDay)) return null
+  if (!/^[0-9a-f]{8}$/.test(signature)) return null
+  return { gender, weather, tempBracket, timeOfDay, signature, combinationId: raw }
+}
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -53,8 +107,14 @@ function isCoreCell(c: { weather: string, bracket: string, time: string }): bool
   return false
 }
 
-// Canonical fill cells — DERIVED FROM ENGINE v4.3 (RW-16.23; launch
-// set extended RW-16.30), never hand-mirrored. Each cell's items are
+// Canonical SCAFFOLD cells — DERIVED FROM ENGINE v4.3 (RW-16.23;
+// launch set extended RW-16.30), never hand-mirrored. RW-151:
+// since v15 this table no longer gates the caller-named fill. Its
+// one remaining job is the scaffold guarantee the client composes
+// into every fill request: the 20 core-matrix cells are a subset
+// of this table at these exact outfits, so they resolve here and
+// keep filling at the core's established priority (isCoreCell)
+// behind the forecast cells. Each cell's items are
 // the exact allItems output of
 // GetOutfitRecommendationUseCase.recommendFrames at the cell's
 // representative frame:
@@ -173,15 +233,6 @@ const CANONICAL_CELLS: Array<{ weather: string, bracket: string, time: string, i
 ]
 // END GENERATED CANONICAL CELLS
 
-function outfitHash(itemKeys: string[]): string {
-  const joined = [...itemKeys].sort().join('-')
-  let h = 0
-  for (let i = 0; i < joined.length; i++) {
-    h = (Math.imul(h, 31) + joined.charCodeAt(i)) | 0
-  }
-  return (h >>> 0).toString(16).slice(-8).padStart(8, '0')
-}
-
 function matrixCells(gender: string): Array<Record<string, unknown>> {
   return CANONICAL_CELLS.map(c => {
     const signature = outfitHash(c.items)
@@ -258,25 +309,77 @@ serve(async (req) => {
 
     // CONVERGENCE (Sol's architecture amendment, 2026-11-02 ~19:31
     // EST): the bank is NOT pre-generated in full. This fill enqueues
-    // ONLY the forecast-imminent cells the client names from its
-    // 7-day forecast, in the client's order; every other cell
-    // converges on first open via get-personal-hero's scaffold +
-    // background exact generation. Unknown ids are ignored (the set
-    // intersection below), so a stale client cannot inject cells.
-    const forecastOrder = Array.isArray(body.priority_cells)
-      ? (body.priority_cells as unknown[]).filter(
-          (x): x is string => typeof x === 'string')
-      : []
-
+    // the forecast-imminent cells the client names from its 7-day
+    // forecast, in the client's order; every other cell converges
+    // on first open via get-personal-hero's scaffold + background
+    // exact generation.
+    //
+    // RW-151 (v15): named cells resolve AS NAMED — there is no
+    // canonical-table intersection. A named cell arriving WITH its
+    // outfit items (the "id|ITEM,ITEM,..." form) is validated the
+    // way request-personal-generation validates its request action:
+    // the id must parse, and the items must hash to the id's
+    // signature; only then can the worker fulfil it (the garment
+    // gate judges the generated photo against the JOB's item list,
+    // so a fill job must carry the outfit its id names). A named
+    // cell arriving BARE (no items) resolves against the canonical
+    // table exactly as v14 did — the client's composed core-matrix
+    // cells arrive bare and are table cells at the table's outfits
+    // by construction — and a bare id the table does not know is
+    // ignored: its outfit cannot be known, and the cell still
+    // converges on first open via the on-demand path, which carries
+    // its items with it. Ids that fail to parse, and accompanied
+    // ids whose items do not hash to the signature, are ignored —
+    // a stale or hostile client still cannot inject cells.
     const cells = matrixCells(profile.gender as string)
     const cellByCombination = new Map(
-      cells.map(c => [c.combination_id as string, c]))
+      cells.filter((c, idx) => cells.findIndex(x => x.combination_id === c.combination_id) === idx)
+        .map(c => [c.combination_id as string, c]))
     const epoch = (profile.photo_epoch as number | undefined) ?? 0
 
-    const wanted = forecastOrder
-      .map(id => cellByCombination.get(id))
-      .filter((c): c is NonNullable<typeof c> => c !== undefined)
-    const wantedIds = wanted.map(c => c.combination_id as string)
+    type WantedCell = {
+      combination_id: string, gender: string, weather: string,
+      temp_bracket: string, time_of_day: string,
+      outfit_signature: string, outfit_items: string[], core: boolean
+    }
+    const wanted: WantedCell[] = []
+    const seenNamed = new Set<string>()
+    const rawNamed = Array.isArray(body.priority_cells)
+      ? (body.priority_cells as unknown[])
+      : []
+    for (const rawEntry of rawNamed) {
+      if (typeof rawEntry !== 'string') continue
+      const sep = rawEntry.indexOf('|')
+      const idPart = sep >= 0 ? rawEntry.slice(0, sep) : rawEntry
+      if (seenNamed.has(idPart)) continue
+      const parsed = parseCombinationId(idPart)
+      if (!parsed) continue
+      if (parsed.gender !== (profile.gender as string)) continue
+      seenNamed.add(idPart)
+      if (sep >= 0) {
+        const items = rawEntry.slice(sep + 1).split(',')
+          .map(s => s.trim()).filter(s => s.length > 0)
+        if (items.length === 0) continue
+        if (outfitHash(items) !== parsed.signature) continue
+        wanted.push({
+          combination_id: parsed.combinationId,
+          gender: parsed.gender, weather: parsed.weather,
+          temp_bracket: parsed.tempBracket,
+          time_of_day: parsed.timeOfDay,
+          outfit_signature: parsed.signature,
+          outfit_items: items,
+          core: isCoreCell({
+            weather: parsed.weather, bracket: parsed.tempBracket,
+            time: parsed.timeOfDay
+          })
+        })
+      } else {
+        const tableCell = cellByCombination.get(idPart)
+        if (!tableCell) continue
+        wanted.push(tableCell as unknown as WantedCell)
+      }
+    }
+    const wantedIds = wanted.map(c => c.combination_id)
 
     const { data: existingHeroes } = await sb
       .from('personal_heroes')
@@ -304,7 +407,7 @@ serve(async (req) => {
     // fill enqueued it at forecast priority), promote it in place
     // to the current-cell class instead of leaving it in line.
     let currentCellPromoted = false
-    const headId = wanted.length > 0 ? (wanted[0].combination_id as string) : null
+    const headId = wanted.length > 0 ? wanted[0].combination_id : null
     if (headId && !haveHero.has(headId)) {
       const existing = activeJobByCell.get(headId)
       if (
@@ -330,7 +433,7 @@ serve(async (req) => {
     let enqueuedCurrentCell = false
     for (let idx = 0; idx < wanted.length; idx++) {
       const c = wanted[idx]
-      const combinationId = c.combination_id as string
+      const combinationId = c.combination_id
       if (haveHero.has(combinationId) || haveJob.has(combinationId)) continue
       const { core: _core, ...cell } = c
       const isCurrentCell = idx === 0
