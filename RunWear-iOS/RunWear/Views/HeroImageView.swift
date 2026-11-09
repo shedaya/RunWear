@@ -89,6 +89,12 @@ struct HeroImageView: View {
     }
     var heightMode: HeightMode = .containerFraction
 
+    /// RW-145/RW-147: an explicit hero height, when the host's
+    /// height-aware policy (HeroHeightPolicy) has chosen one —
+    /// it wins over `heightMode`'s derivation. Nil everywhere
+    /// the policy does not run (every non-Home surface).
+    var heroHeightOverride: CGFloat? = nil
+
     /// The floating glass pills (location / share / settings) are
     /// chrome, and chrome belongs to the container: when Home sits
     /// in a NavigationStack the location is the nav title and
@@ -118,7 +124,12 @@ struct HeroImageView: View {
 
     var body: some View {
         Group {
-            if heightMode == .fill {
+            if let heroHeightOverride {
+                // RW-145/RW-147: the host policy's explicit
+                // height (Home's stacked layouts).
+                heroContent
+                    .frame(height: heroHeightOverride)
+            } else if heightMode == .fill {
                 // Pane layouts frame the hero themselves; the
                 // GeometryReader fills what the parent proposes.
                 heroContent

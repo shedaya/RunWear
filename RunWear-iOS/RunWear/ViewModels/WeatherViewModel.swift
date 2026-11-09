@@ -245,6 +245,23 @@ class WeatherViewModel: ObservableObject {
     // Location source tracking
     @Published var isUsingGPS: Bool = true
 
+    /// RW-146 (owner device pass, Nov 9, 2026 — location state
+    /// has no single truth): the DISPLAYED location truth — the
+    /// place and source the COMMITTED weather on screen actually
+    /// belongs to. `isUsingGPS` above is the SELECTION (it flips
+    /// the instant a switch is tapped); these two values flip
+    /// only at a fetch COMMIT, in the same state write as the
+    /// weather they label (see fetchWeather /
+    /// commitDisplayedPlace), so no surface can ever name one
+    /// place over another place's weather, and the location
+    /// sheet's CURRENT marking — which reads these values at
+    /// every host — states what the app is actually showing,
+    /// never what a tap has merely requested. Before the first
+    /// commit they carry the launch state (the restored manual
+    /// place, or the GPS non-place label).
+    @Published private(set) var displayedPlaceName: String = "Current Location"
+    @Published private(set) var displayedSourceIsGPS: Bool = true
+
     // Settings with persistence
     @Published var genderPreference: GenderPreference {
         didSet {
@@ -362,6 +379,12 @@ class WeatherViewModel: ObservableObject {
             self.currentLocation = location
             self.restoredManualLocation = location
         }
+        // RW-146: the displayed truth starts as the launch state
+        // itself — the restored manual place in manual mode, the
+        // pending selection's label in GPS mode — and from here
+        // moves only at fetch commits.
+        self.displayedSourceIsGPS = self.isUsingGPS
+        self.displayedPlaceName = self.placeDisplayName
     }
 
     // MARK: - Public Methods
@@ -372,6 +395,12 @@ class WeatherViewModel: ObservableObject {
         isLoading = true
         errorMessage = nil
         currentLocation = location
+        // RW-146: the source and pending place THIS fetch is
+        // for, captured at issue time — the commit below labels
+        // the weather with the fetch's own source, never with
+        // whatever selection a later tap may have moved to.
+        let fetchSourceIsGPS = isUsingGPS
+        let pendingManualPlace = simplePlace
 
         do {
             let weather = try await weatherService.fetchWeather(
@@ -380,6 +409,26 @@ class WeatherViewModel: ObservableObject {
             )
             // S6-28: a superseded fetch commits nothing.
             guard epoch == fetchEpoch else { return }
+
+            // RW-146: the fetch's place is resolved into a
+            // LOCAL first (the pre-fix code committed the
+            // weather here and let the reverse geocode update
+            // the place name afterwards — so for the whole
+            // geocode the screen carried the NEW place's
+            // conditions under the OLD place's name on the GPS
+            // path, and the reverse order on the manual path,
+            // whose name flips synchronously at selection).
+            let geocodedPlace = await geocodePlace(for: location)
+            guard epoch == fetchEpoch else { return }
+
+            // The ONE commit: the displayed place + source and
+            // the weather they label land in the same write,
+            // before any snapshot / recommendation / hero
+            // derives from them.
+            commitDisplayedPlace(
+                sourceIsGPS: fetchSourceIsGPS,
+                geocodedPlace: geocodedPlace,
+                pendingManualPlace: pendingManualPlace)
             weatherData = weather
 
             // Fix wave 2026-11-07 (RW-123/RW-125, review §5.2
@@ -401,8 +450,6 @@ class WeatherViewModel: ObservableObject {
             // ONE engine-call assembly (see makeRecommendation).
             updateSelectedWeatherSnapshot()
             makeRecommendation()
-
-            await reverseGeocode(location: location)
 
             // Load hero image
             await loadHeroImage()
@@ -1820,39 +1867,47 @@ class WeatherViewModel: ObservableObject {
         await loadHeroImage()
     }
 
-    private func reverseGeocode(location: CLLocation) async {
+    /// RW-146: resolve a location's place into a value — the
+    /// WS-4 derivation (city + abbreviated region, derived ONCE
+    /// from the placemark's components; no surface ever sees the
+    /// placemark, and no raw concatenation of its fields reaches
+    /// a rendered line) — WITHOUT touching state. The caller
+    /// (fetchWeather) commits the result atomically with the
+    /// weather it labels; the pre-fix form wrote `simplePlace` /
+    /// `locationName` directly, after the weather had already
+    /// committed, which is the RW-146 split.
+    private func geocodePlace(for location: CLLocation) async -> SimplePlace? {
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
-            if let placemark = placemarks.first {
-                // WS-4: the SimplePlace is derived ONCE, here, at
-                // geocode time — city + abbreviated region from
-                // the placemark's components. No surface ever
-                // sees the placemark, and no raw concatenation of
-                // its fields reaches a rendered line. (The
-                // pre-WS-4 code joined locality + administrativeArea
-                // verbatim, which is how "New York, New York"
-                // reached the header on Android; iOS happened to
-                // receive abbreviated regions from CLGeocoder for
-                // US places, which is luck, not a model.)
-                if let place = SimplePlace(
-                    city: placemark.locality,
-                    region: placemark.administrativeArea
-                ) {
-                    simplePlace = place
-                    locationName = place.displayName
-                } else {
-                    simplePlace = nil
-                    locationName = "Current Location"
-                }
-            }
+            guard let placemark = placemarks.first else { return nil }
+            return SimplePlace(
+                city: placemark.locality,
+                region: placemark.administrativeArea
+            )
         } catch {
+            return nil
+        }
+    }
+
+    /// RW-146: the displayed-truth commit — the ONLY writer of
+    /// the displayed place/source after launch. A geocoded place
+    /// wins; on the manual path a failed geocode keeps the
+    /// pending manual place the user actually picked (never a
+    /// "Current Location" relabel of a chosen place); on the GPS
+    /// path a failed geocode leaves the non-place label. The
+    /// widget record re-persists here (the first persist happens
+    /// inside makeRecommendation, before the geocode lands — the
+    /// GEN-5 Addendum 7 rule this commit preserves).
+    func commitDisplayedPlace(sourceIsGPS: Bool, geocodedPlace: SimplePlace?, pendingManualPlace: SimplePlace?) {
+        if let place = geocodedPlace ?? (sourceIsGPS ? nil : pendingManualPlace) {
+            simplePlace = place
+            locationName = place.displayName
+        } else {
             simplePlace = nil
             locationName = "Current Location"
         }
-        // GEN-5 (Addendum 7): the place name has now resolved —
-        // re-persist the widget record so it never carries the
-        // loading placeholder (the first persist happens inside
-        // makeRecommendation, before the geocode lands).
+        displayedPlaceName = placeDisplayName
+        displayedSourceIsGPS = sourceIsGPS
         persistWidgetLastGoodIfNow()
     }
 

@@ -9,9 +9,37 @@ import CoreLocation
 // native swipe → Remove; browse/search results below. First run:
 // the recents section is absent and a quiet hint card sits where
 // the list will live.
+/// RW-146: the sheet's CURRENT marking has ONE derivation.
+/// Every host passes the view model's DISPLAYED truth (the
+/// place/source the committed weather belongs to) as
+/// `isUsingGPS` + `currentPlaceName`, and both marking surfaces
+/// — the GPS row and the Recent Locations rows — derive from
+/// those two values through this helper, so they can never
+/// disagree: exactly one surface is marked, the one the app is
+/// actually showing. (The pre-fix sheet marked the GPS row from
+/// the SELECTION flag — which flips at tap time, before any fix
+/// commits — and marked recents not at all, so the manual place
+/// in use was unmarked anywhere in the sheet.)
+enum LocationSheetMarking {
+    static func gpsRowIsCurrent(displayedSourceIsGPS: Bool) -> Bool {
+        displayedSourceIsGPS
+    }
+
+    static func recentIsCurrent(recentName: String, displayedSourceIsGPS: Bool, displayedPlaceName: String?) -> Bool {
+        !displayedSourceIsGPS && displayedPlaceName != nil && recentName == displayedPlaceName
+    }
+}
+
 struct LocationPickerSheet: View {
     @Binding var isPresented: Bool
+    /// RW-146: despite the legacy name, hosts pass the DISPLAYED
+    /// source truth (`displayedSourceIsGPS`) — the marking must
+    /// state what the app is showing, not what was last tapped.
     var isUsingGPS: Bool
+    /// RW-146: the displayed place's name when the displayed
+    /// source is a manual place (nil on GPS) — the Recent
+    /// Locations row carrying this name is the marked one.
+    var currentPlaceName: String? = nil
     var onUseCurrentLocation: () -> Void
     var onSelectLocation: (CLLocationCoordinate2D, String) -> Void
 
@@ -147,6 +175,22 @@ struct LocationPickerSheet: View {
                                         .font(.appSecondary)
                                         .foregroundColor(AppTheme.inkPrimary)
                                     Spacer()
+                                    // RW-146: the manual place in
+                                    // use is marked HERE, with the
+                                    // GPS row's own badge, from the
+                                    // same displayed truth — the two
+                                    // surfaces agree by construction.
+                                    if LocationSheetMarking.recentIsCurrent(
+                                        recentName: recent.name,
+                                        displayedSourceIsGPS: isUsingGPS,
+                                        displayedPlaceName: currentPlaceName) {
+                                        Text("CURRENT")
+                                            .font(.appEyebrow)
+                                            .foregroundColor(AppTheme.pinePayload)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(Capsule().fill(AppTheme.primaryColor.opacity(0.15)))
+                                    }
                                     Image(systemName: "chevron.right")
                                         .font(.appFootnote.weight(.semibold))
                                         .foregroundColor(AppTheme.inkMuted)

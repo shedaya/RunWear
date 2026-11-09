@@ -244,6 +244,171 @@ enum HeroChipPlacement {
     }
 }
 
+// MARK: - RW-145 vertical layout (height-aware hero composition)
+//
+// RW-145 (owner device pass, Nov 9, 2026 — the Android folded-
+// portrait collision, audited onto iOS): the RW-144 composition
+// seated the chip at a FIXED fraction of the hero (0.46) and the
+// feels-like block at a FIXED 44 pt above the hero's foot, while
+// the hero itself is a fixed fraction (0.45) of the screen. The
+// block's height is absolute (≈128 pt at the 72 pt numeral), so
+// the chip↔block gap is 0.54 × heroHeight − 204 pt: ≈ +3 pt of
+// VISUAL air at the 852 pt fixture (the hit frames already
+// overlap), negative below ≈840 pt of screen height, −42 pt on
+// an iPhone SE (667 pt), and total in a short Duo pane. The
+// face-zone shift in HeroChipPlacement never engages at the
+// default seat (0.46 sits below the zone's 0.30 foot by
+// construction) and its clamp references a 0.58 block opening
+// that short heroes do not have — the collision class was
+// invisible to the RW-144 gate because its fixture was one tall
+// height and its photo had no subject.
+//
+// The fix is a single height-aware layout function — the same
+// behavioural contract as the Android lane (a guaranteed minimum
+// clear gap between the chip and the feels-like block at every
+// height), expressed natively: given the hero's actual height,
+// the layout picks the LARGEST numeral size (never above the
+// Dynamic-Type-requested size, never below 44 pt) for which a
+// chip seat exists that (a) clears the top chrome, (b) clears
+// the face zone, and (c) leaves at least `minimumGap` of clear
+// air between the chip's VISUAL bottom edge and the block's top
+// edge; the chip then sits at the higher of the v8 default seat
+// and that feasible seat's ceiling. The block's seat (its bottom
+// padding) is an input: 44 pt in the stacked layouts (the
+// straddle-pill clearance, unchanged) and 12 pt in the Duo pane
+// (no straddle exists there — the pill stands in-flow in the
+// secondary column).
+enum HeroVerticalLayout {
+    /// The guaranteed minimum clear gap, chip visual bottom →
+    /// feels-like block top, at every hero height.
+    static let minimumGap: CGFloat = 12
+    /// The chip's hit frame is 44 pt tall; its visual pill is
+    /// 28 pt, centered — the visual edges sit 8 pt inside the
+    /// hit frame's top and 36 pt from its top at the bottom.
+    static let chipVisualTopInset: CGFloat = 8
+    static let chipVisualBottomFromHitTop: CGFloat = 36
+    /// The chip's hit top never goes above this line: the top
+    /// chrome row occupies the hero's top 42 pt (10 top padding
+    /// + 32 height); 50 leaves 8 pt of air under it.
+    static let minimumChipHitTop: CGFloat = 50
+    /// The numeral never shrinks below this size. (At the
+    /// shortest heroes the layout reaches this floor: a 36 pt
+    /// numeral on a 242 pt hero is the same ≈0.15–0.19 of hero
+    /// height the 72 pt numeral is of the standard hero.)
+    static let minimumNumeralSize: CGFloat = 36
+
+    /// The feels-like block's height for a numeral size, from
+    /// the real font line heights of its three lines (label
+    /// 11 semibold / numeral / Actual 15) + the VStack's two
+    /// 2 pt spacings + a 3 pt safety margin.
+    static func blockHeight(numeralSize: CGFloat) -> CGFloat {
+        let label = UIFont.systemFont(ofSize: 11, weight: .semibold).lineHeight
+        let numeral = UIFont.systemFont(ofSize: numeralSize, weight: .semibold).lineHeight
+        let actual = UIFont.systemFont(ofSize: 15, weight: .regular).lineHeight
+        return label + 2 + numeral + 2 + actual + 3
+    }
+
+    struct Layout: Equatable {
+        let numeralSize: CGFloat
+        let chipHitTop: CGFloat
+        let blockTop: CGFloat
+        var chipVisualBottom: CGFloat { chipHitTop + chipVisualBottomFromHitTop }
+        var gap: CGFloat { blockTop - chipVisualBottom }
+    }
+
+    static func layout(heroHeight: CGFloat, requestedNumeralSize: CGFloat, bottomPadding: CGFloat) -> Layout {
+        // The face zone's foot (0.30 of the hero) in hit-frame
+        // coordinates: the chip's VISUAL top must clear it by
+        // 2 pt, and the visual top sits 8 pt below the hit top.
+        let faceBottom = heroHeight * 0.30
+        let minHitTop = max(minimumChipHitTop, faceBottom + 2 - chipVisualTopInset)
+        let defaultTop = heroHeight * HeroChipPlacement.defaultTopFraction
+        var size = max(minimumNumeralSize, requestedNumeralSize)
+        while true {
+            let blockTop = heroHeight - bottomPadding - blockHeight(numeralSize: size)
+            let latestTop = blockTop - minimumGap - chipVisualBottomFromHitTop
+            if latestTop >= minHitTop {
+                return Layout(numeralSize: size,
+                              chipHitTop: min(defaultTop, latestTop),
+                              blockTop: blockTop)
+            }
+            if size <= minimumNumeralSize {
+                // No feasible seat even at the floor size (a
+                // hero under ≈210 pt): keep the face/top-chrome
+                // clearance and take the largest gap available.
+                return Layout(numeralSize: size, chipHitTop: minHitTop, blockTop: blockTop)
+            }
+            size -= 4
+        }
+    }
+}
+
+// MARK: - RW-147 hero height policy (stacked layouts)
+//
+// The stacked hero's height is height-aware for the DOCK system
+// as well (see DockResidence in WearIveRunMiniBar.swift): the
+// hero is the standard 0.45 of the viewport UNLESS the sheet
+// stack that follows it (weather line → outfit → glance band)
+// would carry readable content into the dock's rest band, in
+// which case the hero gives up exactly the height needed to
+// keep the stack's required bottom clear of the band — down to
+// a floor that preserves the RW-145 hero composition. Where
+// even the floor cannot clear the FULL stack (the glance band
+// on the shortest viewports, the convergence band at mid
+// heights), the policy clears the OUTFIT stack (Sol's RW-147
+// evidence: the third outfit row) and the glance band is
+// protected by the scroll system's bottom clearance instead —
+// it can always be scrolled fully clear of the dock, and the
+// footer handoff is untouched.
+enum HeroHeightPolicy {
+    /// The shortest hero that still composes per RW-145.
+    static let minimumHeroHeight: CGFloat = 242
+    /// Clear air required between the stack's bottom and the
+    /// dock's top edge at rest.
+    static let restClearance: CGFloat = 12
+    // Sheet-stack heights, measured from the sheet's top edge
+    // (the production paddings + component heights):
+    /// 36 top pad (straddle clearance) + ≈33 weather line +
+    /// 16 hairline gap + 1 hairline.
+    static let weatherStack: CGFloat = 86
+    /// 16 top pad + the convergence band's ≈96 when present.
+    static func bandStack(bandPresent: Bool) -> CGFloat { bandPresent ? 112 : 16 }
+    /// 24 top pad + ≈22 count header + 16 spacing + three rows
+    /// (3 × 56 tile + 2 × 16 spacing = 200).
+    static let outfitStack: CGFloat = 262
+    /// 24 top pad + the glance band's ≈114 (62 chart + 8 +
+    /// ≈18 label row + 26 padding).
+    static let glanceStack: CGFloat = 138
+
+    static func outfitBottomFromSheetTop(bandPresent: Bool) -> CGFloat {
+        weatherStack + bandStack(bandPresent: bandPresent) + outfitStack
+    }
+
+    /// The hero height for a stacked layout in a viewport of
+    /// `viewportHeight`. `bandPresent` is the convergence band's
+    /// presence; `glancePresent` the day-chart band's.
+    static func height(viewportHeight: CGFloat, bandPresent: Bool, glancePresent: Bool) -> CGFloat {
+        let standard = viewportHeight * AppTheme.heroHeightRatio
+        // The dock's band top sits at viewportHeight − 70 (the
+        // 56 pt dock + its 14 pt bottom inset, DockResidence);
+        // the stack's required bottom must rest at or above
+        // bandTop − restClearance. Screen Y of the stack bottom
+        // = heroHeight − sheetOverlap + stackFromSheetTop.
+        let ceiling = viewportHeight - 70 - restClearance + HomeHandoffGeometry.sheetOverlap
+        let outfit = outfitBottomFromSheetTop(bandPresent: bandPresent)
+        let full = outfit + (glancePresent ? glanceStack : 0)
+        let fullTarget = ceiling - full
+        if fullTarget >= minimumHeroHeight { return min(standard, fullTarget) }
+        let outfitTarget = ceiling - outfit
+        if outfitTarget >= minimumHeroHeight { return min(standard, outfitTarget) }
+        // Even the outfit stack cannot clear at the floor hero:
+        // keep the taller of the standard hero and the floor —
+        // the RW-145 composition is preserved and the scroll
+        // clearance carries the rest (see the header note).
+        return max(standard, minimumHeroHeight)
+    }
+}
+
 // MARK: Chrome tokens
 
 /// The hero chrome's shared tokens (notes-v8): warm-black fills,
@@ -459,7 +624,11 @@ struct HeroFeelsLikeBlockView: View {
     let formattedActual: String
     let feelsLikeF: Double
 
-    @ScaledMetric(relativeTo: .largeTitle) private var numeralSize: CGFloat = 72
+    /// RW-145: the numeral size is CHOSEN by HeroVerticalLayout
+    /// (the overlay's height-aware composition), not owned here —
+    /// on short heroes the layout shrinks the numeral so the
+    /// chip↔block gap guarantee can hold (see HeroVerticalLayout).
+    var numeralSize: CGFloat = 72
 
     private var bandColor: Color { HeroBandPalette.color(feelsLikeF: feelsLikeF) }
 
@@ -535,9 +704,25 @@ struct HeroChromeOverlayView: View {
     let onTimeTapped: () -> Void
     let onNowTapped: () -> Void
 
+    /// RW-145: the feels-like block's bottom padding — 44 pt in
+    /// the stacked layouts (the straddle-pill clearance of
+    /// record), 12 pt in the Duo pane, which has no straddle.
+    var feelsBlockBottomPadding: CGFloat = 44
+
+    @ScaledMetric(relativeTo: .largeTitle) private var requestedNumeralSize: CGFloat = 72
+
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
+            // RW-145: the height-aware vertical layout — the
+            // chip seat and the numeral size are chosen from
+            // THIS hero's actual height so the chip↔block gap
+            // guarantee holds at every height (see
+            // HeroVerticalLayout).
+            let vLayout = HeroVerticalLayout.layout(
+                heroHeight: size.height,
+                requestedNumeralSize: requestedNumeralSize,
+                bottomPadding: feelsBlockBottomPadding)
             let band = HeroBandPalette.color(feelsLikeF: feelsLikeF)
             let footPeak = HeroScrimMath.peakAlpha(forLuminance: footLuminance)
             ZStack(alignment: .topLeading) {
@@ -607,26 +792,32 @@ struct HeroChromeOverlayView: View {
                     onNowTapped: onNowTapped
                 )
                 .padding(.leading, 16)
-                .offset(y: HeroChipPlacement.chipTop(frameSize: size, chipHeight: HeroChipGeometry.hitHeight))
+                .offset(y: vLayout.chipHitTop)
 
                 // Feels-like block, seated in the scrim zone at
-                // the hero's foot. Its bottom edge clears the
-                // straddle pill by construction (the pill seat
-                // is measured from frame A — see
-                // WeatherOutfitView.sheetStraddlePill): the
-                // pill's top edge sits 37 pt above the hero's
-                // foot, and the block's last line (Actual) ends
-                // 44 pt above it — a 7 pt clearance, the frames'
-                // own ≈6 pt, holding whatever the pill's width.
+                // the hero's foot. In the stacked layouts its
+                // bottom edge clears the straddle pill by
+                // construction (the pill seat is measured from
+                // frame A — see WeatherOutfitView
+                // .sheetStraddlePill): the pill's top edge sits
+                // 37 pt above the hero's foot, and the block's
+                // last line (Actual) ends 44 pt above it — a
+                // 7 pt clearance, the frames' own ≈6 pt,
+                // holding whatever the pill's width. RW-145:
+                // the numeral size is the layout's chosen size,
+                // and the chip above is seated by the same
+                // layout with a guaranteed gap (see
+                // HeroVerticalLayout).
                 VStack(spacing: 0) {
                     Spacer()
                     HeroFeelsLikeBlockView(
                         formattedFeelsLike: formattedFeelsLike,
                         formattedActual: formattedActual,
-                        feelsLikeF: feelsLikeF
+                        feelsLikeF: feelsLikeF,
+                        numeralSize: vLayout.numeralSize
                     )
                     .padding(.leading, 16)
-                    .padding(.bottom, 44)
+                    .padding(.bottom, feelsBlockBottomPadding)
                 }
                 .frame(width: size.width, height: size.height, alignment: .bottomLeading)
                 .allowsHitTesting(false)

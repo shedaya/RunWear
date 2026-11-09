@@ -226,7 +226,9 @@ struct WeatherOutfitView: View {
             // place pill (one tap straight to the picker — the
             // Y-16 rule, preserved at its new seat).
             .toolbar(.hidden, for: .navigationBar)
-            .navigationTitle(viewModel.placeDisplayName)
+            // RW-146: the title names the DISPLAYED place — the place
+            // the committed weather belongs to.
+            .navigationTitle(viewModel.displayedPlaceName)
             // The design record's date-as-subtitle needs
             // navigationSubtitle, which the current iOS SDK marks
             // unavailable on iPhone (it is a newer-platform API
@@ -277,7 +279,7 @@ struct WeatherOutfitView: View {
                 TimePickerSheet(
                     chart: viewModel.dayChart,
                     dateLabel: navDateString,
-                    placeName: viewModel.placeDisplayName,
+                    placeName: viewModel.displayedPlaceName,
                     unit: viewModel.temperatureUnit,
                     initialHour: timePickerInitialHour,
                     openedInNowState: viewModel.isNowSelection,
@@ -365,7 +367,10 @@ struct WeatherOutfitView: View {
             .sheet(isPresented: $showLocationPicker) {
                 LocationPickerSheet(
                     isPresented: $showLocationPicker,
-                    isUsingGPS: viewModel.isUsingGPS,
+                    // RW-146: the DISPLAYED truth (see the view
+                    // model's displayedPlaceName/displayedSourceIsGPS).
+                    isUsingGPS: viewModel.displayedSourceIsGPS,
+                    currentPlaceName: viewModel.displayedSourceIsGPS ? nil : viewModel.displayedPlaceName,
                     onUseCurrentLocation: {
                         onUseCurrentLocation()
                     },
@@ -625,7 +630,7 @@ struct WeatherOutfitView: View {
                 DuoSplitArrangement {
                     ScrollView {
                         VStack(spacing: 16) {
-                            heroSection(heightMode: .fill)
+                            heroSection(heightMode: .fill, feelsBlockBottomPadding: 12)
                                 .frame(height: geo.size.height * 0.62)
                         }
                         .padding(.bottom, 24)
@@ -696,7 +701,11 @@ struct WeatherOutfitView: View {
                                 wearIveRunFooterSection
                                     .padding(.top, 34)
                             }
-                            .padding(.bottom, 16)
+                            // RW-147: the scroll-end clearance
+                            // (DockResidence) — the column's
+                            // content can rest fully clear of the
+                            // full-width dock band.
+                            .padding(.bottom, DockResidence.scrollEndClearance)
                         }
                         .scrollPosition($wearScrollPosition)
                         .onScrollPhaseChange { _, phase in
@@ -708,7 +717,7 @@ struct WeatherOutfitView: View {
                             wearContentHeight = metrics.contentHeight
                             wearVisibleHeight = metrics.visibleHeight
                             wearContentOffsetY = metrics.offsetY
-                            wearFooterTopContentY = metrics.contentHeight - 16 - wearFooterHeight
+                            wearFooterTopContentY = DockResidence.footerTopContentY(contentHeight: metrics.contentHeight, footerHeight: wearFooterHeight)
                         }
                         .onGeometryChange(for: CGRect.self) { proxy in
                             proxy.frame(in: .global)
@@ -722,7 +731,10 @@ struct WeatherOutfitView: View {
             } else if horizontalSizeClass == .regular {
                 ScrollView {
                     VStack(spacing: 0) {
-                        heroWithScrollHandoff
+                        heroWithScrollHandoff(heroHeight: HeroHeightPolicy.height(
+                            viewportHeight: geo.size.height,
+                            bandPresent: personalStore.convergenceBand != nil,
+                            glancePresent: viewModel.dayChart != nil))
                         sheetContainer {
                             outfitGridSection
                                 .padding(.top, 24)
@@ -753,7 +765,7 @@ struct WeatherOutfitView: View {
                     wearContentHeight = metrics.contentHeight
                     wearVisibleHeight = metrics.visibleHeight
                     wearContentOffsetY = metrics.offsetY
-                    wearFooterTopContentY = metrics.contentHeight - wearFooterHeight
+                    wearFooterTopContentY = DockResidence.footerTopContentY(contentHeight: metrics.contentHeight, footerHeight: wearFooterHeight)
                 }
                 .onGeometryChange(for: CGRect.self) { proxy in
                     proxy.frame(in: .global)
@@ -764,7 +776,10 @@ struct WeatherOutfitView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        heroWithScrollHandoff
+                        heroWithScrollHandoff(heroHeight: HeroHeightPolicy.height(
+                            viewportHeight: geo.size.height,
+                            bandPresent: personalStore.convergenceBand != nil,
+                            glancePresent: viewModel.dayChart != nil))
                         sheetContainer {
                             outfitSection
                                 .padding(.top, 24)
@@ -797,7 +812,7 @@ struct WeatherOutfitView: View {
                     wearContentHeight = metrics.contentHeight
                     wearVisibleHeight = metrics.visibleHeight
                     wearContentOffsetY = metrics.offsetY
-                    wearFooterTopContentY = metrics.contentHeight - wearFooterHeight
+                    wearFooterTopContentY = DockResidence.footerTopContentY(contentHeight: metrics.contentHeight, footerHeight: wearFooterHeight)
                 }
                 .onGeometryChange(for: CGRect.self) { proxy in
                     proxy.frame(in: .global)
@@ -821,11 +836,12 @@ struct WeatherOutfitView: View {
     /// spec's fallback drives the same end state from scroll
     /// geometry instead. Reduce Motion removes the transform
     /// entirely (the state still updates; nothing animates/scales).
-    private var heroWithScrollHandoff: some View {
+    private func heroWithScrollHandoff(heroHeight: CGFloat) -> some View {
         let progress = reduceMotion ? 0 : heroScrollProgress
         return heroSection(
             chromeOpacity: HomeHandoffGeometry.chromeOpacity(progress: progress),
-            chromeInteractive: HomeHandoffGeometry.chromeIsInteractive(progress: progress)
+            chromeInteractive: HomeHandoffGeometry.chromeIsInteractive(progress: progress),
+            explicitHeight: heroHeight
         )
             // WS-1 (§1.1): the photo-zone chrome fades 1 → 0
             // across the FIRST 40% of the handoff and is
@@ -927,6 +943,14 @@ struct WeatherOutfitView: View {
             // remains declined and untouched.
             wearIveRunFooterSection
                 .padding(.top, 34)
+            // RW-147: the scroll-end clearance (DockResidence) —
+            // present exactly while a session entry (and so the
+            // dock) exists, so at scroll end the footer rests
+            // fully clear above the dock's band.
+            if collectionModel.sessionEntry() != nil || wearExitInProgress {
+                Color.clear
+                    .frame(height: DockResidence.scrollEndClearance)
+            }
         }
         .background {
             UnevenRoundedRectangle(cornerRadii: RectangleCornerRadii(
@@ -1599,7 +1623,9 @@ struct WeatherOutfitView: View {
     /// when the numbers on show belong to.
     private var weatherContextLines: [String] {
         [
-            viewModel.placeDisplayName,
+            // RW-146: the context names the displayed place, as
+            // every place-bearing surface now does.
+            viewModel.displayedPlaceName,
             navDateString,
             "\(viewModel.temperatureUnit.format(viewModel.currentTemperature)) · Feels like \(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))",
             // RW-109: this line stands beside the same displayed
@@ -1659,11 +1685,13 @@ struct WeatherOutfitView: View {
     private func heroSection(
         heightMode: HeroImageView.HeightMode = .containerFraction,
         chromeOpacity: Double = 1,
-        chromeInteractive: Bool = true
+        chromeInteractive: Bool = true,
+        explicitHeight: CGFloat? = nil,
+        feelsBlockBottomPadding: CGFloat = 44
     ) -> some View {
-        heroPhotoSection(heightMode: heightMode)
+        heroPhotoSection(heightMode: heightMode, explicitHeight: explicitHeight)
             .overlay {
-                heroChrome
+                heroChrome(feelsBlockBottomPadding: feelsBlockBottomPadding)
                     .opacity(chromeOpacity)
                     .allowsHitTesting(chromeInteractive)
             }
@@ -1672,9 +1700,11 @@ struct WeatherOutfitView: View {
 
     /// The RW-144 hero chrome, fed by the current selection and
     /// the photo's measured luminances.
-    private var heroChrome: some View {
+    private func heroChrome(feelsBlockBottomPadding: CGFloat = 44) -> some View {
         HeroChromeOverlayView(
-            placeName: HomeHeaderCopy.placeSegment(place: viewModel.placeDisplayName),
+            // RW-146: the place pill names the DISPLAYED place —
+            // the place the conditions beside it belong to.
+            placeName: HomeHeaderCopy.placeSegment(place: viewModel.displayedPlaceName),
             dateText: chipDateString,
             timeText: isViewingNow ? "Now" : heroHourString,
             isNow: isViewingNow,
@@ -1692,7 +1722,8 @@ struct WeatherOutfitView: View {
             onSettingsTapped: { showSettings = true },
             onDateTapped: { showDatePicker = true },
             onTimeTapped: { showTimePicker = true },
-            onNowTapped: { viewModel.resetToNow() }
+            onNowTapped: { viewModel.resetToNow() },
+            feelsBlockBottomPadding: feelsBlockBottomPadding
         )
     }
 
@@ -1706,7 +1737,7 @@ struct WeatherOutfitView: View {
     }
 
     @ViewBuilder
-    private func heroPhotoSection(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
+    private func heroPhotoSection(heightMode: HeroImageView.HeightMode = .containerFraction, explicitHeight: CGFloat? = nil) -> some View {
         // GEN-3 (WS-A(1) + WS-B) SUPERSEDES the WS-1 §1.1 skeleton
         // gate below it in history: the bundled fallback is a FINAL
         // truthful serve, not a "for now" paint — the view model
@@ -1722,12 +1753,12 @@ struct WeatherOutfitView: View {
         // very first resolution, before any fallback has been
         // committed for this place at all.
         if !viewModel.heroBelongsToDisplayedPlace {
-            heroSkeleton(heightMode: heightMode)
+            heroSkeleton(heightMode: heightMode, explicitHeight: explicitHeight)
         } else if viewModel.heroImageUrl == nil
             && viewModel.fallbackImageUrl == nil {
-            heroSkeleton(heightMode: heightMode)
+            heroSkeleton(heightMode: heightMode, explicitHeight: explicitHeight)
         } else {
-            heroImageView(heightMode: heightMode)
+            heroImageView(heightMode: heightMode, explicitHeight: explicitHeight)
                 // Fix wave 2026-11-07 (RW-133): tapping the
                 // hero opens the stored photograph fitted
                 // full-screen (see HeroPhotoViewer).
@@ -1741,14 +1772,16 @@ struct WeatherOutfitView: View {
     /// so the sheet composes against identical geometry and
     /// nothing moves when the photo lands.
     @ViewBuilder
-    private func heroSkeleton(heightMode: HeroImageView.HeightMode) -> some View {
+    private func heroSkeleton(heightMode: HeroImageView.HeightMode, explicitHeight: CGFloat? = nil) -> some View {
         let block = Rectangle()
             .fill(AppTheme.cardOnSheet)
             .overlay {
                 ProgressView()
                     .tint(AppTheme.inkSecondary)
             }
-        if heightMode == .fill {
+        if let explicitHeight {
+            block.frame(height: explicitHeight)
+        } else if heightMode == .fill {
             block.frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             block.containerRelativeFrame(.vertical) { length, _ in
@@ -1757,9 +1790,9 @@ struct WeatherOutfitView: View {
         }
     }
 
-    private func heroImageView(heightMode: HeroImageView.HeightMode = .containerFraction) -> some View {
+    private func heroImageView(heightMode: HeroImageView.HeightMode = .containerFraction, explicitHeight: CGFloat? = nil) -> some View {
         HeroImageView(
-            locationName: viewModel.placeDisplayName,
+            locationName: viewModel.displayedPlaceName,
             // Hero contract (Android/PWA): headline = raw feels-like,
             // sub-line = raw actual. (Was: headline = actual,
             // sub-line = comfort-adjusted feels-like.)
@@ -1813,6 +1846,7 @@ struct WeatherOutfitView: View {
                 }
             },
             heightMode: heightMode,
+            heroHeightOverride: explicitHeight,
             // The navigation container carries the chrome now:
             // location is the title, Settings/Share are toolbar
             // items — no floating pills on the hero.

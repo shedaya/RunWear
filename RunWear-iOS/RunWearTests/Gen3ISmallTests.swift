@@ -219,21 +219,31 @@ final class Gen3ISmallTests: XCTestCase {
     // MARK: - X-13: the Current location row reads actual state
 
     func testCurrentLocationRow_everyCallSitePassesTheActualState_sourcePin() throws {
+        // RW-146 RE-PIN (Nov 9, 2026): the feed this pin asserted
+        // — the SELECTION flag `isUsingGPS` — is exactly the
+        // RW-146 defect's mechanism (the flag flips at tap time,
+        // before any fix commits, so the badge could claim GPS
+        // while the app still showed the manual place). Every
+        // host now passes the DISPLAYED truth
+        // (`displayedSourceIsGPS`): the X-13 rule — the badge
+        // reads the view model's actual state, never a constant —
+        // stands, with "actual state" now meaning the committed
+        // displayed state. The parameter's name is unchanged.
         let content = try sourceFile("../RunWear/Views/ContentView.swift")
-        XCTAssertTrue(content.contains("isUsingGPS: viewModel.isUsingGPS"),
-                      "the gate sheet passes the view model's actual state")
+        XCTAssertTrue(content.contains("isUsingGPS: viewModel.displayedSourceIsGPS"),
+                      "the gate sheet passes the view model's displayed state (RW-146)")
         XCTAssertFalse(content.contains("isUsingGPS: false"),
                        "no hardcoded mode constant at the gate call site")
 
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
-        XCTAssertTrue(onboarding.contains("isUsingGPS: previewVM.isUsingGPS"),
-                      "the onboarding sheet passes the preview view model's actual state")
+        XCTAssertTrue(onboarding.contains("isUsingGPS: previewVM.displayedSourceIsGPS"),
+                      "the onboarding sheet passes the preview view model's displayed state (RW-146)")
         XCTAssertFalse(onboarding.contains("isUsingGPS: false"),
                        "no hardcoded mode constant at the onboarding call site")
 
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains("isUsingGPS: viewModel.isUsingGPS"),
-                      "the home sheet passes the view model's actual state")
+        XCTAssertTrue(home.contains("isUsingGPS: viewModel.displayedSourceIsGPS"),
+                      "the home sheet passes the view model's displayed state (RW-146)")
     }
 
     func testCurrentLocationRow_carriesNoPermissionClaim_sourcePin() throws {

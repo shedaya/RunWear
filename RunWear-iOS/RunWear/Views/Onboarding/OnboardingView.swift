@@ -588,7 +588,9 @@ private struct FirstLookView: View {
                 // model is in GPS mode by default (its GPS
                 // pipeline guards on `previewVM.isUsingGPS`), so
                 // the row misreported the active selection.
-                isUsingGPS: previewVM.isUsingGPS,
+                // RW-146: the DISPLAYED truth, as at every host.
+                isUsingGPS: previewVM.displayedSourceIsGPS,
+                currentPlaceName: previewVM.displayedSourceIsGPS ? nil : previewVM.displayedPlaceName,
                 onUseCurrentLocation: {
                     previewVM.switchToGPS()
                     locationService.requestPermission()

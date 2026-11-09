@@ -90,7 +90,11 @@ struct ContentView: View {
                 // per-sheet constant — this gate sheet hardcoded
                 // `false`, so the row's state followed the sheet
                 // host instead of the selection in use.
-                isUsingGPS: viewModel.isUsingGPS,
+                // RW-146: the marking reads the DISPLAYED truth
+                // (superseding the X-13 feed of the selection
+                // flag): what the app is actually showing.
+                isUsingGPS: viewModel.displayedSourceIsGPS,
+                currentPlaceName: viewModel.displayedSourceIsGPS ? nil : viewModel.displayedPlaceName,
                 onUseCurrentLocation: {
                     viewModel.switchToGPS()
                     locationService.requestPermission()

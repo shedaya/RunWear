@@ -26,6 +26,62 @@ import SwiftUI
 // WearIveRunElementMachine type remains for its pure
 // transition tests and timing constants.
 
+// MARK: - RW-147 dock residence (one system: rest band + scroll clearance)
+//
+// RW-147 (owner device pass, Nov 9, 2026 — the dock over
+// readable content at rest, on Android in every viewport): the
+// iOS audit found the same family in the new geometry. The dock
+// is a bottom-anchored overlay (inset 12, bottom 14, §2.1) and
+// the scroll system carried NO bottom clearance at all — the
+// stacked layouts' content ended flush at the footer (bottom
+// padding 0) and the Duo column's at 16 pt — so (a) at first
+// open, whatever sheet content happened to fall in the dock's
+// rest band (viewport bottom − 70 pt for the 56 pt dock) was
+// ghosted behind it: the outfit stack's third row at short
+// heights and whenever the convergence band stands, the glance
+// band's label row at the standard height (the RW-144 lane's
+// own §10 flag); and (b) content could never be scrolled fully
+// clear of the band except through the footer's handoff. The
+// residence and the scroll-end padding are therefore specified
+// together, here:
+// - the hero height policy (HeroHeightPolicy, FirstScreenHero)
+//   keeps the first-open stack's required bottom clear of the
+//   rest band wherever the viewport's geometry allows it;
+// - every Home scroll view carries `scrollEndClearance` of
+//   bottom padding BELOW the footer, so at scroll end the whole
+//   page — footer included — rests clear above the band, and
+//   every element can be scrolled fully out from under the dock;
+// - the RW-135 §3 handoff is untouched: the fade stays a pure
+//   function of the footer's measured position, and the host's
+//   footer-top bookkeeping derives from this one constant.
+enum DockResidence {
+    /// The dock's bottom inset (§2.1: 14 pt above the bottom edge).
+    static let bottomInset: CGFloat = 14
+    /// The dock's side insets (§2.1: 12 pt).
+    static let horizontalInset: CGFloat = 12
+    /// The single-line dock's measured height (RW-144 gate).
+    static let measuredDockHeight: CGFloat = 56
+    /// Bottom clearance carried below the footer in every Home
+    /// scroll view: the dock's height + its bottom inset + 10 pt
+    /// of margin, sized up for the wrapped-narration dock forms
+    /// (RW-138's wrap-and-grow can stand taller than 56 pt).
+    static let scrollEndClearance: CGFloat = 80
+
+    /// The dock band's top edge in a viewport of `viewportHeight`
+    /// for a dock of `dockHeight`.
+    static func dockTop(viewportHeight: CGFloat, dockHeight: CGFloat) -> CGFloat {
+        viewportHeight - bottomInset - dockHeight
+    }
+
+    /// The footer's top edge in content coordinates (the host's
+    /// §4.4 glide bookkeeping): content height minus the scroll-
+    /// end clearance minus the footer's measured height — one
+    /// formula for the stacked and Duo layouts alike.
+    static func footerTopContentY(contentHeight: Double, footerHeight: Double) -> Double {
+        contentHeight - Double(scrollEndClearance) - footerHeight
+    }
+}
+
 enum WearIveRunState: Equatable {
     /// No entry for today yet — the bar does not render.
     case preAdd
