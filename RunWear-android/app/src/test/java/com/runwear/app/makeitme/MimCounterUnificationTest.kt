@@ -37,7 +37,11 @@ class MimCounterUnificationTest {
 
     @Test
     fun `every reporting surface states the same used count of the same 10`() {
-        for (used in listOf(0, 1, 3, 7, 10)) {
+        // The Settings line's exhausted form is "All 10 free
+        // looks used" (its own settled wording for used >= the
+        // allowance) — the agreement pinned here is the NUMBER
+        // and its source, not one shared sentence shape.
+        for (used in listOf(0, 1, 3, 7)) {
             assertEquals(
                 "$used of 10 looks", MakeItMeStrings.heroPillLookCount(used)
             )
@@ -58,17 +62,35 @@ class MimCounterUnificationTest {
             "10 of 10 used", MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT
         )
         assertEquals(
-            "All 10 free looks used", MakeItMeStrings.s4FreeUsed(11)
+            "All 10 free looks used", MakeItMeStrings.s4FreeUsed(10)
+        )
+        assertTrue(
+            MakeItMeStrings.u2MeterLine(10).startsWith("10 of 10 used")
+        )
+        assertTrue(
+            MakeItMeStrings.u1cBody(10)
+                .startsWith("You've seen yourself in 10 outfits.")
         )
     }
 
     @Test
     fun `the card body is a function of the counter - the hardcoded 5 is gone`() {
         val strings = source("com/runwear/app/makeitme/MakeItMeStrings.kt")
+        // Comments carry the design history (an old mock's
+        // "N of 5 looks" among it) — the pin governs user-visible
+        // STRING LITERALS, so comments are stripped before the
+        // scan. (Verified: no string literal in this file
+        // contains a comment marker.)
+        val literalsOnly = strings
+            .replace(Regex("/\\*[\\s\\S]*?\\*/"), " ")
+            .lines()
+            .filterNot { it.trimStart().startsWith("//") }
+            .joinToString("\n")
         assertFalse(
             "no user-visible string may hardcode the old allowance story",
-            strings.contains("in 5 outfits") || strings.contains("of 5 looks") ||
-                strings.contains("of 5 free")
+            literalsOnly.contains("in 5 outfits") ||
+                literalsOnly.contains("of 5 looks") ||
+                literalsOnly.contains("of 5 free")
         )
         assertTrue(strings.contains("fun u1cBody(freeGenerationsUsed: Int)"))
         val screens = source("com/runwear/app/makeitme/MakeItMeScreens.kt")

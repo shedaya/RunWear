@@ -140,7 +140,8 @@ class WearIveRunUpdateNarrationTest {
         )
         val present = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.CUE, present.kind)
-        assertEquals("Updated to Kansas City, MO", present.narration.text)
+        // RW-150 re-pin: the resting line names the moment.
+        assertEquals("Updated to Kansas City, MO, Now", present.narration.text)
         assertEquals(2, holder.cueSequence.value)
         // A weather-only re-delivery afterwards announces nothing new.
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
@@ -155,12 +156,18 @@ class WearIveRunUpdateNarrationTest {
         )
         val after = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.MINI, after.kind)
-        assertEquals("Updated to Kansas City, MO", after.narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", after.narration.text)
         assertEquals(2, holder.cueSequence.value)
     }
 
     @Test
-    fun `the holder cues on a confirmed hour change and the line stays the place form`() {
+    // RW-150 (Nov 9, 2026) supersedes this test's original
+    // doctrine in its name: the cue still fires on the confirmed
+    // hour change exactly as before (RW-142 behaviour, cue count
+    // below), but the presented line no longer "stays the place
+    // form" — per RW-98's full-naming rule it names the new
+    // moment, which is the defect RW-150 filed.
+    fun `the holder cues on a confirmed hour change and the line names the new moment`() {
         val holder = WearIveRunBarStateHolder()
         holder.onEntriesChanged(listOf(entry(listOf("Light Long Sleeve"))), today)
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
@@ -169,7 +176,7 @@ class WearIveRunUpdateNarrationTest {
         )
         val present = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.CUE, present.kind)
-        assertEquals("Updated to Kansas City, MO", present.narration.text)
+        assertEquals("Updated to Kansas City, MO, 9 p.m.", present.narration.text)
         assertEquals(2, holder.cueSequence.value)
     }
 
@@ -182,7 +189,7 @@ class WearIveRunUpdateNarrationTest {
         holder.primeRestore(listOf(entry(listOf("Light Long Sleeve"))), today)
         val present = holder.state.value as WearIveRunBarState.Present
         assertEquals(WearIveRunElementKind.MINI, present.kind)
-        assertEquals("Updated to Kansas City, MO", present.narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", present.narration.text)
         assertEquals(0, holder.cueSequence.value)
     }
 
@@ -208,7 +215,7 @@ class WearIveRunUpdateNarrationTest {
             today
         )
         val present = holder.state.value as WearIveRunBarState.Present
-        assertEquals("Updated to Kansas City, MO", present.narration.text)
+        assertEquals("Updated to Kansas City, MO, Now", present.narration.text)
         assertFalse(present.narration.text.contains("Ear Warmer"))
         // The payload type itself: a kit-only change resolves to a
         // Place payload, never a string the kit could fill.

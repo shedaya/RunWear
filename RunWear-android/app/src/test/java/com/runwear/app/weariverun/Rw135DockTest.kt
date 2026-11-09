@@ -162,7 +162,8 @@ class Rw135DockTest {
         )
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
         var state = holder.state.value as WearIveRunBarState.Present
-        assertEquals("Updated to New York, NY", state.narration.text)
+        // RW-150 re-pin: the resting line names the moment (", Now").
+        assertEquals("Updated to New York, NY, Now", state.narration.text)
 
         // Identical re-delivery (a settle that changed nothing the
         // record holds): the line is unchanged and no cue re-fires.
@@ -171,7 +172,7 @@ class Rw135DockTest {
             listOf(entry(place = "New York, NY")), today
         )
         state = holder.state.value as WearIveRunBarState.Present
-        assertEquals("Updated to New York, NY", state.narration.text)
+        assertEquals("Updated to New York, NY, Now", state.narration.text)
         assertEquals(cueBefore, holder.cueSequence.value)
 
         // The place switch LANDS in the record: now, and only now,
@@ -180,7 +181,7 @@ class Rw135DockTest {
             listOf(entry(place = "Boston, Massachusetts")), today
         )
         state = holder.state.value as WearIveRunBarState.Present
-        assertEquals("Updated to Boston, MA", state.narration.text)
+        assertEquals("Updated to Boston, MA, Now", state.narration.text)
         assertEquals(
             "Boston, Massachusetts",
             holder.currentEntryFlow.value?.place
@@ -211,7 +212,7 @@ class Rw135DockTest {
             listOf(entry(date = today.plusDays(1))), today.plusDays(1)
         )
         state = holder.state.value as WearIveRunBarState.Present
-        assertEquals("Updated to Boston, MA", state.narration.text)
+        assertEquals("Updated to Boston, MA, Now", state.narration.text)
     }
 
     // -- section 7.8 check 5 (record half): absence ------------------

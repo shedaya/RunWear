@@ -105,7 +105,10 @@ class WearIveRunAbsentStateTest {
         // WS-4 (D-08): creation narration is the design's pattern —
         // simple place + the narration day form "Now".
         val created = (holder.state.value as WearIveRunBarState.Cue).narration
-        assertEquals("Updated to New York", created.text)
+        // RW-150 re-pin: the presented line names the moment in
+        // full — the WS-4 pattern this test's own comment states
+        // ("simple place + the narration day form Now").
+        assertEquals("Updated to New York, Now", created.text)
         // Same settled version re-delivered: no second cue, no move.
         holder.onEntriesChanged(listOf(entry), today)
         assertEquals(1, holder.cueSequence.value)
@@ -121,7 +124,7 @@ class WearIveRunAbsentStateTest {
         val narration = (holder.state.value as WearIveRunBarState.Cue).narration
         // GEN-5 (C-7): the update payload names the changed
         // dimension — the place reading — never the garment.
-        assertEquals("Updated to New York", narration.text)
-        assertEquals("New York", narration.payload)
+        assertEquals("Updated to New York, Now", narration.text)
+        assertEquals("New York, Now", narration.payload)
     }
 }

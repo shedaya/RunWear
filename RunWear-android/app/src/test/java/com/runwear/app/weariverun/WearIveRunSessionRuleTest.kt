@@ -204,7 +204,8 @@ class WearIveRunSessionRuleTest {
             listOf(entry(place = "Overland Park, KS", settledAt = 1L)), today
         )
         narrations += present(holder).narration.text
-        assertEquals("Updated to Overland Park, KS", narrations.last())
+        // RW-150 re-pin: the resting line names the moment.
+        assertEquals("Updated to Overland Park, KS, Now", narrations.last())
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
 
         // Place change, kit unchanged: an UPDATE (X-4), and the
@@ -216,7 +217,7 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Updated to New York, NY", narrations.last())
+        assertEquals("Updated to New York, NY, Now", narrations.last())
         assertEquals("New York, NY", present(holder).entry.place)
         holder.onEvent(WearIveRunElementEvent.CUE_TIMEOUT)
 
@@ -234,12 +235,13 @@ class WearIveRunSessionRuleTest {
             today
         )
         narrations += present(holder).narration.text
-        assertEquals("Updated to Miami, FL", narrations.last())
+        assertEquals("Updated to Miami, FL, Now", narrations.last())
         assertEquals("Miami, FL", present(holder).entry.place)
         assertEquals(90.0, present(holder).entry.feelsLikeF!!, 0.001)
 
         // RW-135: the ruled line has no "Added" form — creation and
-        // updates alike read "Updated to {place}" (section 7.2);
+        // updates alike read "Updated to {place}, {moment}" since
+        // RW-150 (the section 7.2 short form dropped the moment);
         // the one-entry discipline is pinned by the cue count
         // below and the entry assertions above.
         assertEquals(0, narrations.count { it.startsWith("Added ") })
@@ -281,7 +283,7 @@ class WearIveRunSessionRuleTest {
         first.onEntriesChanged(
             listOf(entry(sessionId = "session-1", settledAt = 1L)), today
         )
-        assertEquals("Updated to Overland Park, KS", present(first).narration.text)
+        assertEquals("Updated to Overland Park, KS, Now", present(first).narration.text)
 
         // Process death -> new session -> new holder. The store now
         // holds both sessions' entries; the new holder presents the
@@ -294,7 +296,7 @@ class WearIveRunSessionRuleTest {
             ),
             today
         )
-        assertEquals("Updated to Miami, FL", present(newHolder).narration.text)
+        assertEquals("Updated to Miami, FL, Now", present(newHolder).narration.text)
         assertEquals("session-2", newHolder.currentEntry()?.sessionId)
     }
 

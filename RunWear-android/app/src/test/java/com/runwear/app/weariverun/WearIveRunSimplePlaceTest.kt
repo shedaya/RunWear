@@ -49,8 +49,9 @@ class WearIveRunSimplePlaceTest {
     fun `creation narration is Updated to the simple place - from a raw geocode input`() {
         val holder = holderWith(entry(place = "New York, New York"))
         val narration = mini(holder).narration
-        assertEquals("Updated to New York, NY", narration.text)
-        assertEquals("New York, NY", narration.payload)
+        // RW-150 re-pin: the line names the moment (", Now").
+        assertEquals("Updated to New York, NY, Now", narration.text)
+        assertEquals("New York, NY, Now", narration.payload)
         assertFalse(narration.text.contains("New York, New York"))
         assertFalse(narration.text.contains("Today"))
         // The bar entry itself carries the simple place, not the raw string.
@@ -62,11 +63,11 @@ class WearIveRunSimplePlaceTest {
     fun `creation narration with a long place name and multi-word region stays simple`() {
         val holder = holderWith(entry(place = "Truth or Consequences, New Mexico"))
         assertEquals(
-            "Updated to Truth or Consequences, NM",
+            "Updated to Truth or Consequences, NM, Now",
             mini(holder).narration.text
         )
         val nc = holderWith(entry(place = "Winston-Salem, North Carolina"))
-        assertEquals("Updated to Winston-Salem, NC", mini(nc).narration.text)
+        assertEquals("Updated to Winston-Salem, NC, Now", mini(nc).narration.text)
     }
 
     @Test
@@ -84,8 +85,8 @@ class WearIveRunSimplePlaceTest {
         // gen-4 device build rendered as a garment narration), so
         // there is nothing garment-shaped left to assert on the
         // entry; the narration assertions below are the contract.
-        assertEquals("Updated to New York, NY", narration.text)
-        assertEquals("New York, NY", narration.payload)
+        assertEquals("Updated to New York, NY, Now", narration.text)
+        assertEquals("New York, NY, Now", narration.payload)
         assertFalse(narration.text.contains("Thermal Tights"))
         assertFalse(narration.text.contains("Today"))
     }
@@ -97,7 +98,7 @@ class WearIveRunSimplePlaceTest {
             listOf(entry(place = "Aspen, Colorado", items = emptyList(), feels = 30.0)),
             today
         )
-        assertEquals("Updated to Aspen, CO", mini(holder).narration.text)
+        assertEquals("Updated to Aspen, CO, Now", mini(holder).narration.text)
     }
 
     @Test
@@ -111,6 +112,9 @@ class WearIveRunSimplePlaceTest {
         assertEquals("Today", WearIveRunCollectionLogic.dayForm(today, today))
 
         val holder = holderWith(entry(place = "Aspen, Colorado", date = LocalDate.of(2026, 11, 1)))
+        // NOT re-pinned by RW-150: an older entry keeps the
+        // settled short form (RW-98's classes cover today's and
+        // future states; the past-entry form is not extended).
         assertEquals("Updated to Aspen, CO", mini(holder).narration.text)
     }
 
@@ -148,7 +152,10 @@ class WearIveRunSimplePlaceTest {
         // mid-phrase at a comma.
         val holder = holderWith(entry(place = "Truth or Consequences, New Mexico"))
         val text = mini(holder).narration.text
-        assertTrue(text.length <= "Added ".length + "Truth or Consequences, NM, Now".length)
+        // RW-150 re-pin: the D-09 bound's content already named
+        // the ", Now" form; its prefix literal catches up to the
+        // "Updated to" verb the line has carried since RW-135.
+        assertTrue(text.length <= "Updated to ".length + "Truth or Consequences, NM, Now".length)
         assertFalse(text.endsWith(","))
     }
 

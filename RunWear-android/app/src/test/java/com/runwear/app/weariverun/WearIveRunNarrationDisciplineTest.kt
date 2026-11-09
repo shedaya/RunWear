@@ -67,21 +67,24 @@ class WearIveRunNarrationDisciplineTest {
 
         holder.onEntriesChanged(listOf(iredell), today)
         assertEquals(1, holder.cueSequence.value)
-        assertEquals("Updated to Iredell County, NC", present(holder).narration.text)
+        // RW-150 re-pin: the resting line names the moment.
+        assertEquals("Updated to Iredell County, NC, Now", present(holder).narration.text)
 
         holder.onEntriesChanged(listOf(iredellAt7pm), today)
         assertEquals(2, holder.cueSequence.value)
-        assertEquals("Updated to Iredell County, NC", present(holder).narration.text)
+        // RW-150: the time-only change moves the line — the
+        // recorded scenario's time-change class, named in full.
+        assertEquals("Updated to Iredell County, NC, 7 p.m.", present(holder).narration.text)
 
         holder.onEntriesChanged(listOf(miami), today)
         assertEquals(3, holder.cueSequence.value)
-        assertEquals("Updated to Miami, FL", present(holder).narration.text)
+        assertEquals("Updated to Miami, FL, Now", present(holder).narration.text)
 
         // Identical re-delivery (a re-subscription emission of the
         // same state) fires nothing.
         holder.onEntriesChanged(listOf(miami), today)
         assertEquals(3, holder.cueSequence.value)
-        assertEquals("Updated to Miami, FL", present(holder).narration.text)
+        assertEquals("Updated to Miami, FL, Now", present(holder).narration.text)
 
         // ── RELAUNCH: a fresh holder restores the same persisted
         // collection. No cue, no new announcement — the element
@@ -123,7 +126,7 @@ class WearIveRunNarrationDisciplineTest {
 
         val state = present(holder)
         // The bar names Miami…
-        assertEquals("Updated to Miami, FL", state.narration.text)
+        assertEquals("Updated to Miami, FL, Now", state.narration.text)
         // …and the card content in the SAME emitted state is the
         // Miami solve the narration names — never the outgoing
         // entry's 85° / 3-item solve wearing the new name.
