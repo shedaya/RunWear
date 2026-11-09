@@ -76,29 +76,29 @@ class HomeCompositionPinTest {
         throw AssertionError("unreachable")
     }
 
+    // RW-145 REDESIGN re-pin (Nov 9, 2026): HeroSheetContent is
+    // retired — the weather line moved onto the hero (Sol's
+    // ruling), so the D-01 discipline for the sheet block has no
+    // surface left on the home path. What this pin now carries:
+    // the weather line's seat IS the hero (HeroSection renders
+    // WeatherLine), and no sheet-opening block remains in
+    // HeroMainScreen. The D-01 discipline itself survives on
+    // HeroSectionContent (next pin).
     @Test
-    fun `the sheet content root carries the caller modifier - D-01 cannot return`() {
-        val body = functionBody(heroMainScreen(), "HeroSheetContent")
-        // The AnimatedVisibility (direct child of the stacking Box)
-        // receives the modifier…
-        val visibilityAt = body.indexOf("AnimatedVisibility(")
-        val blockAt = body.indexOf("HeroSheetBlock(")
-        assertTrue(visibilityAt in 0 until blockAt)
-        val visibilityArgs = body.substring(visibilityAt, blockAt)
-        assertTrue(
-            "AnimatedVisibility must carry modifier = modifier",
-            visibilityArgs.contains("modifier = modifier")
-        )
-        // …and the inner block receives a plain fill, never the
-        // caller's alignment-bearing modifier.
-        val blockArgs = body.substring(blockAt)
-        assertTrue(
-            "HeroSheetBlock must be sized with Modifier.fillMaxWidth()",
-            blockArgs.contains("modifier = Modifier.fillMaxWidth()")
+    fun `the weather line seats on the hero - the sheet block is retired from home`() {
+        val host = heroMainScreen()
+        assertFalse(
+            "HeroSheetContent must not return to the home path",
+            host.contains("HeroSheetContent(")
         )
         assertFalse(
-            "the caller modifier must NOT be forwarded to HeroSheetBlock (that was D-01)",
-            blockArgs.contains("modifier = modifier")
+            "HeroSheetBlock must not return to the home path",
+            host.contains("HeroSheetBlock(")
+        )
+        val section = heroSection()
+        assertTrue(
+            "the weather line renders inside HeroSection (the hero's foot stack)",
+            section.contains("WeatherLine(") && section.contains("onHero = true")
         )
     }
 
@@ -127,7 +127,13 @@ class HomeCompositionPinTest {
         // directly under it, pill centered on the boundary.
         val body = functionBody(heroMainScreen(), "HeroStackedUnit")
         assertTrue(body.contains("HeroSectionContent("))
-        assertTrue(body.contains("HeroSheetContent("))
+        // RW-145 REDESIGN re-pin (Nov 9, 2026): the unit's second
+        // element is the straddle clearance spacer, not the sheet
+        // block (the weather line is on the hero now).
+        assertTrue(
+            "the straddle clearance is a measured spacer under the hero",
+            body.contains("Spacer(Modifier.height(pillHalf + 12.dp))")
+        )
         assertTrue(
             "the pill straddles the hero/sheet boundary, centered",
             body.contains(".align(Alignment.TopCenter)")
@@ -146,10 +152,13 @@ class HomeCompositionPinTest {
             activity.contains("scaffoldContentPadding = innerPadding")
         )
         val host = heroMainScreen()
-        // Exactly the three scroll containers (COMPACT list, MEDIUM
-        // grid, EXPANDED grid) consume the bottom inset, each once.
+        // The three scroll containers (COMPACT list, MEDIUM grid,
+        // EXPANDED grid) consume the bottom inset, each once —
+        // plus, since RW-147 (Nov 9, 2026), the scroll area's
+        // layout boundary consumes it once to end the scroll
+        // area above the dock band (the dock clearance system).
         assertEquals(
-            3,
+            4,
             host.split("scaffoldContentPadding.calculateBottomPadding()").size - 1
         )
         // The root never pads itself with the inset (the photo zone

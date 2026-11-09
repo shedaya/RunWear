@@ -90,8 +90,13 @@ class Rw144DesignPolicyTest {
 
     @Test
     fun `rw144 hero geometry - photo is 44 percent of screen height`() {
-        assertEquals(371.dpValue(), heroPhotoHeight(844).value, 1.0f)
-        assertEquals(0.44f, heroPhotoHeight(1000).value / 1000f, 0.01f)
+        // RW-145 REDESIGN re-pin (Sol's hero ruling, Nov 9, 2026):
+        // the 0.44 fraction is superseded — the hero takes most
+        // of the first viewport (0.72 at standard heights; see
+        // HeroComposition). The pin now carries the redesign
+        // fraction so the geometry it guards stays exact.
+        assertEquals(608.dpValue(), heroPhotoHeight(844).value, 1.0f)
+        assertEquals(0.72f, heroPhotoHeight(1000).value / 1000f, 0.01f)
     }
 
     private fun Int.dpValue(): Float = this.toFloat()
