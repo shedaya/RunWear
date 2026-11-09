@@ -716,7 +716,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // RW-135 spec §9.1 RE-PIN (as above): creation reads
         // in the "Updated to {place}" form.
         XCTAssertEqual(announcements, [
-            "Updated to Overland Park, KS",
+            "Updated to Overland Park, KS, Now",
             "Updated to Miami, FL, Now",
             "Updated to 7 p.m.",
             "Updated to New York, NY, Now"
