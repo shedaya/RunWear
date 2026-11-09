@@ -62,6 +62,7 @@
 		W14402000000000000000004 /* FirstScreenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000002 /* FirstScreenSheet.swift */; };
 		W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000004 /* RW144FirstScreenTests.swift */; };
 		W14502000000000000000005 /* RW145147FixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14501000000000000000004 /* RW145147FixTests.swift */; };
+		W14502000000000000000006 /* LocationPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000017 /* LocationPickerSheet.swift */; };
 		W14402000000000000000010 /* garment_tiles_light in Resources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000003 /* garment_tiles_light */; };
 		D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
 		D10002000000000000000002 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
@@ -1122,6 +1123,7 @@
 				W14402000000000000000004 /* FirstScreenSheet.swift in Sources */,
 				W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */,
 				W14502000000000000000005 /* RW145147FixTests.swift in Sources */,
+				W14502000000000000000006 /* LocationPickerSheet.swift in Sources */,
 				C10002000000000000000026 /* WatchOutfitView.swift in Sources */,
 				C10002000000000000000027 /* WatchViewModel.swift in Sources */,
 				C10002000000000000000028 /* WatchSettingsView.swift in Sources */,
