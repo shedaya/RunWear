@@ -1678,8 +1678,12 @@ struct WeatherOutfitView: View {
             dateText: chipDateString,
             timeText: isViewingNow ? "Now" : heroHourString,
             isNow: isViewingNow,
-            formattedFeelsLike: viewModel.temperatureUnit.format(viewModel.currentFeelsLike),
-            formattedActual: viewModel.temperatureUnit.format(viewModel.currentTemperature),
+            // RW-144 (parent ruling, Nov 8, 2026): the hero
+            // numeral + Actual line are the bare degree ("58°" /
+            // "Actual 60°"), per the approved v8 frames — the
+            // unit letter belongs to every other surface only.
+            formattedFeelsLike: viewModel.temperatureUnit.formatBareDegree(viewModel.currentFeelsLike),
+            formattedActual: viewModel.temperatureUnit.formatBareDegree(viewModel.currentTemperature),
             feelsLikeF: viewModel.currentFeelsLike,
             topLuminance: heroLuminance.topLuminance,
             chipLuminance: heroLuminance.chipLuminance,

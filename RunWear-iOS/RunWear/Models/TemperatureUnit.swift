@@ -60,6 +60,23 @@ enum TemperatureUnit: String, Codable, CaseIterable {
         "\(Int(round(value)))\(symbol)"
     }
 
+    /// RW-144 (parent ruling, Nov 8, 2026): the FIRST SCREEN's
+    /// hero feels-like numeral and "Actual" line carry the BARE
+    /// degree — "58°" / "Actual 60°", no unit letter — exactly as
+    /// the approved v8 design frames show and as Android's
+    /// settled HeroSheetFormat renders. The value still converts
+    /// to the user's unit; only the letter is dropped, and ONLY
+    /// for those two first-screen readings — every other surface
+    /// keeps `format`'s one-unit story.
+    func formatBareDegree(_ value: Double) -> String {
+        "\(Int(round(value)))°"
+    }
+
+    /// `formatBareDegree` fed from a Fahrenheit reading.
+    func formatBareDegreeFromFahrenheit(_ fahrenheit: Double) -> String {
+        formatBareDegree(convert(fromFahrenheit: fahrenheit))
+    }
+
     /// Formats temperature from Fahrenheit with unit symbol
     /// - Parameter fahrenheit: Temperature in Fahrenheit
     /// - Returns: Formatted string in this unit

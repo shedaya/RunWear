@@ -103,6 +103,20 @@ final class RW144FirstScreenTests: XCTestCase {
         XCTAssertEqual(AppTheme.heroHeightRatio, 0.45, accuracy: 0.001)
     }
 
+    // MARK: - Hero numeral unit (RW-144 fix lane)
+
+    func testHeroNumeralIsTheBareDegree() {
+        // Parent ruling (Nov 8, 2026): the RW-144 first screen's
+        // numeral + Actual read "58°" / "60°" — the approved v8
+        // frames' bare degree, matching Android. The value still
+        // converts; the letter is dropped here only — `format`
+        // keeps "58°F" for every other surface.
+        XCTAssertEqual(TemperatureUnit.fahrenheit.formatBareDegree(58), "58°")
+        XCTAssertEqual(TemperatureUnit.fahrenheit.formatBareDegreeFromFahrenheit(60), "60°")
+        XCTAssertEqual(TemperatureUnit.celsius.formatBareDegreeFromFahrenheit(58), "14°")
+        XCTAssertEqual(TemperatureUnit.fahrenheit.format(58), "58°F")
+    }
+
     // MARK: - Light-tile seam
 
     func testLightTileSeamResolvesBundledTreatmentLFiles() throws {
@@ -229,8 +243,8 @@ final class RW144FirstScreenTests: XCTestCase {
                 dateText: isNow ? "Sun, Nov 8" : "Tue, Nov 10",
                 timeText: isNow ? "Now" : "3:00 PM",
                 isNow: isNow,
-                formattedFeelsLike: "58°F",
-                formattedActual: "60°F",
+                formattedFeelsLike: "58°",
+                formattedActual: "60°",
                 feelsLikeF: 58,
                 topLuminance: top, chipLuminance: chip, footLuminance: foot,
                 onPlaceTapped: {}, onSettingsTapped: {},
