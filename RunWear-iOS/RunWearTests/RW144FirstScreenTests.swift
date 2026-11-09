@@ -248,7 +248,17 @@ final class RW144FirstScreenTests: XCTestCase {
                 feelsLikeF: 58,
                 topLuminance: top, chipLuminance: chip, footLuminance: foot,
                 onPlaceTapped: {}, onSettingsTapped: {},
-                onDateTapped: {}, onTimeTapped: {}, onNowTapped: {}
+                onDateTapped: {}, onTimeTapped: {}, onNowTapped: {},
+                // Ruling 2 conformance (Nov 9, 2026): the overlay
+                // now carries the weather line and the pill's
+                // planning seat — the harness passes the same
+                // fixture weather the sheet composition below it
+                // uses, and the pill state's own planning height.
+                windMph: 0, rainPercent: 0, humidityPercent: 60, uvIndex: 0,
+                weatherLuminance: HeroLuminanceSampler.meanLuminance(
+                    of: photo, region: HeroLuminanceSampler.weatherRegion),
+                pillHeight: HeroPillMetrics.height(for: pill),
+                pillBottomOffset: HeroVerticalLayout.straddleDip
             )
         }
         .frame(width: 393, height: 383)
