@@ -157,9 +157,11 @@ class HomeCompositionPinTest {
         // plus, since RW-147 (Nov 9, 2026), the scroll area's
         // layout boundary consumes it once to end the scroll
         // area above the dock band (the dock clearance system).
+        // Counted on the bare call so line breaks in the call
+        // sites cannot hide a consumption.
         assertEquals(
             4,
-            host.split("scaffoldContentPadding.calculateBottomPadding()").size - 1
+            host.split("calculateBottomPadding()").size - 1
         )
         // The root never pads itself with the inset (the photo zone
         // is full-bleed behind the status bar by design).
