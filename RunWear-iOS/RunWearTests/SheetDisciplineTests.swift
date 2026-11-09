@@ -52,17 +52,20 @@ final class SheetDisciplineTests: XCTestCase {
 
     func testHomeSheetsRestAtNamedDetents_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        // 10 sheets: Settings, Date, Time, Shop, WeatherDetail,
+        // 9 sheets: Settings, Date, Time, WeatherDetail,
         // Location, Collection, Feedback, (GEN-3 WS-A(2)) the
         // hero pill's Premium paywall, and (GEN-6 RW-61) the
         // looks library — the failed cell's "See all your looks"
         // door, resting at .large like the other scrolling
-        // surfaces.
-        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 7,
-                       "Settings, Shop, WeatherDetail, Collection, Feedback, the pill paywall and the looks library rest at .large only")
+        // surfaces. RW-145/147 pass (Nov 9, 2026) RE-PIN: the
+        // outfit header's Shop sheet left the home view with
+        // its button (Nov 9, 2026 ruling), so the counts drop
+        // by one each: 6 .large-only, 9 drag indicators.
+        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 6,
+                       "Settings, WeatherDetail, Collection, Feedback, the pill paywall and the looks library rest at .large only")
         XCTAssertEqual(occurrences(view, ".presentationDetents([.medium, .large])"), 3,
                        "only Date, Time and Location keep a medium detent")
-        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 10,
+        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 9,
                        "every home sheet names its detents and shows the drag indicator")
     }
 
@@ -180,7 +183,11 @@ final class SheetDisciplineTests: XCTestCase {
         // WS-3's element dims from this seam; WS-5 changes detents
         // only and must not narrow it.
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        for state in ["showSettings", "showDatePicker", "showTimePicker", "showShop",
+        // RW-145/147 pass (Nov 9, 2026) RE-PIN: "showShop"
+        // left the seam with the outfit header's Shop button
+        // (Nov 9, 2026 ruling — the header is the count line
+        // alone); the ShopModal type remains for item taps.
+        for state in ["showSettings", "showDatePicker", "showTimePicker",
                       "showLocationPicker", "selectedWeatherDetail != nil",
                       "showCollection", "showFeedbackSheet"] {
             XCTAssertTrue(view.contains(state), "the dim seam must keep covering \(state)")

@@ -108,15 +108,20 @@ final class RW25NextGenHomeTests: XCTestCase {
             heroImageReference: "hero"
         )
         // RW-135 spec §9.1 RE-PIN: the derivation's creation
-        // form is "Updated to {place}" (the .added state case
+        // form is an "Updated to" line (the .added state case
         // itself was removed in the RW-138 pass — the form is
         // unrepresentable, not merely unemitted).
+        // RW-150 (Nov 9, 2026) RE-PIN: RW-98 governs the line's
+        // CONTENT — the settled state names place AND moment,
+        // so a Now entry derives .placeAtMoment, not the
+        // place-only payload (the lane's RW-150 class pins
+        // cover the moment-bearing classes end to end).
         XCTAssertEqual(
             WearIveRunMiniBarModel.state(
                 todaysEntry: entry, moment: .now,
                 wasUpdatedThisSession: false
             ),
-            .updated(payload: .place("New York"))
+            .updated(payload: .placeAtMoment("New York", .now))
         )
         // GEN-5 (RW-28, C-7) SUPERSEDES the WS-4 garment payload:
         // an entry carrying no stored update payload narrates
@@ -129,7 +134,7 @@ final class RW25NextGenHomeTests: XCTestCase {
                 todaysEntry: entry, moment: .now,
                 wasUpdatedThisSession: true
             ),
-            .updated(payload: .place("New York"))
+            .updated(payload: .placeAtMoment("New York", .now))
         )
     }
 

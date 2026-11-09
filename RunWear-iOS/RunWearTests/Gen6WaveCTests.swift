@@ -677,7 +677,17 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             items: ["Tank Top", "Shorts"],
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 0, "a restore must not cue")
-        XCTAssertEqual(announcements.count, 2, "no duplicate Added on relaunch")
+        // RW-145/147 pass (Nov 9, 2026) RE-PIN: the former
+        // "announcements.count == 2" check here was dead code
+        // once RW-150's third announcement (the moment settle)
+        // exists \u2014 the count is already 3 before the restore.
+        // The live statement of the same no-duplicate rule: the
+        // restore added NOTHING to the announcement sequence.
+        XCTAssertEqual(announcements, [
+            "Updated to Overland Park, KS, Now",
+            "Updated to Miami, FL, Now",
+            "Updated to 7 p.m."
+        ], "a restore must not announce \u2014 no duplicate Added on relaunch")
         XCTAssertEqual(relaunched.entries.count, 2,
                        "RW-91: saves accumulate — the prior session's save persists beside the restored session's (Sol's Nov 6, 2026 correction supersedes the gen-6 supersede rule)")
         XCTAssertEqual(relaunched.sessionEntry()?.sessionID, "s2")

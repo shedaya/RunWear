@@ -477,7 +477,12 @@ final class Gen4DayChartTests: XCTestCase {
         // opens with the boxless weather line; the detailed
         // weather block stands below the glance band.
         XCTAssertTrue(view.contains("HeroChromeOverlayView("), "the moment lives on the hero chip (RW-144)")
-        XCTAssertTrue(view.contains("BoxlessWeatherLineView("), "the sheet opens with the boxless weather line (RW-144)")
+        // RW-145/147 pass (Nov 9, 2026) RE-PIN: under the
+        // hero-proportion redesign the boxless weather line
+        // moved from the sheet onto the hero itself (it now
+        // renders inside FirstScreenHero); the home view no
+        // longer hosts it directly.
+        XCTAssertFalse(view.contains("BoxlessWeatherLineView("), "the weather line rides the hero, not the sheet (Nov 9, 2026 redesign)")
         XCTAssertTrue(view.contains("DetailedWeatherBlockView("), "the complete detailed block stands below the fold (RW-144)")
         XCTAssertTrue(view.contains("DayChartBandView("), "the glance band below the outfit")
         XCTAssertTrue(view.contains("applyTimePickerCommit"), "Confirm lands through the one apply path")

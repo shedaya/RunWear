@@ -316,8 +316,16 @@ final class WS6PipelinesTests: XCTestCase {
         let chrome = codeOnly(try sourceFile("../RunWear/Views/FirstScreenHero.swift"))
         XCTAssertTrue(chrome.contains("Image(systemName: \"gearshape.fill\")"))
         XCTAssertTrue(chrome.contains(".accessibilityLabel(\"Settings\")"))
-        XCTAssertTrue(view.contains("Image(systemName: \"cart\")"))
-        XCTAssertTrue(view.contains(".accessibilityLabel(\"Shop\")"))
+        // RW-145/147 pass (Nov 9, 2026) RE-PIN: the Nov 9
+        // ruling removed the outfit header's "Shop" button
+        // (count line alone, matching the v8 frame and Android
+        // RW-144) — the cart and its label left the home view
+        // with it. The gear assertions above stand: Settings
+        // still rides the hero's gear circle.
+        XCTAssertFalse(view.contains("Image(systemName: \"cart\")"),
+                       "the outfit header's Shop button is removed (Nov 9, 2026 ruling)")
+        XCTAssertFalse(view.contains(".accessibilityLabel(\"Shop\")"),
+                       "no Shop action remains on the home view (Nov 9, 2026 ruling)")
     }
 
     func testCollectionShareIsUntouched_sourcePin() throws {
