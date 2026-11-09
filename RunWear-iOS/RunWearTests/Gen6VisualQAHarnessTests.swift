@@ -906,7 +906,7 @@ extension Gen6VisualQAHarnessTests {
         try writeHostedRender(updatedPlace, size: CGSize(width: 390, height: 110),
                               name: "FIX-RW135-ios-minibar-updated-place.png")
         let planned = WearIveRunMiniBarView(
-            state: .planned(place: "Miami, FL", dayLabel: "Tomorrow"),
+            state: .planned(place: "Miami, FL", dayLabel: "Tomorrow", moment: .now),
             entry: collectionEntry(place: "Miami, FL"),
             formattedFeelsLike: "82°", cueCount: 0,
             onOpenCollection: {}, onTrash: {})

@@ -18,14 +18,36 @@ import SwiftUI
 
 // MARK: - Boxless weather line
 
-/// The sheet's opening line: four stats — WIND (mph), RAIN (%),
-/// HUMIDITY (%), UV ("0 of 11" form) — icon + value above the
-/// small label, no card anywhere.
+/// Four stats — WIND (mph), RAIN (%), HUMIDITY (%), UV
+/// ("0 of 11" form) — icon + value above the small label, no
+/// card anywhere. RW-144 seated it as the sheet's opening
+/// line; Ruling 2 (Nov 9, 2026) moved it OVER the hero (the
+/// `.hero` style: the hero chrome's cream ink over the foot
+/// scrim, in place of the sheet's ink/pine pair) — content,
+/// order and values unchanged, only the seat and its ink.
 struct BoxlessWeatherLineView: View {
+    enum Style {
+        /// On the sheet's ground (the original RW-144 form).
+        case sheet
+        /// Over the hero photograph (Ruling 2).
+        case hero
+    }
+
     let windMph: Double
     let rainPercent: Int
     let humidityPercent: Int
     let uvIndex: Double
+    var style: Style = .sheet
+
+    private var iconColor: Color {
+        style == .hero ? HeroChrome.cream : AppTheme.pinePayload
+    }
+    private var valueColor: Color {
+        style == .hero ? HeroChrome.cream : AppTheme.inkPrimary
+    }
+    private var labelColor: Color {
+        style == .hero ? HeroChrome.cream.opacity(0.72) : AppTheme.inkSecondary
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -44,17 +66,17 @@ struct BoxlessWeatherLineView: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppTheme.pinePayload)
+                    .foregroundColor(iconColor)
                 Text(value)
                     .font(.system(size: 15, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundColor(AppTheme.inkPrimary)
+                    .foregroundColor(valueColor)
                     .lineLimit(1)
             }
             Text(label)
                 .font(.system(size: 10, weight: .semibold))
                 .tracking(0.7)
-                .foregroundColor(AppTheme.inkSecondary)
+                .foregroundColor(labelColor)
         }
     }
 }

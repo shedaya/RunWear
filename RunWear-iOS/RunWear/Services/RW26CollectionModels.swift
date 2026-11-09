@@ -140,11 +140,24 @@ enum MomentReading: Equatable, Hashable {
 enum NarrationPayload: Equatable, Hashable {
     case place(String)
     case moment(MomentReading)
+    /// RW-150 (Nov 9, 2026): the FULL settled state — the place
+    /// AND its moment, rendered "{place}, {moment}" ("New York,
+    /// NY, Now" / "Miami, FL, 7 p.m."). RW-98's grammar names
+    /// the new state in full; the gen-5 place-only payload could
+    /// not express the moment half, which is how the settled
+    /// line came to drop ", Now" and every picked time. This
+    /// case is SYNTHESIZED at render time by the narration
+    /// state builder from the recorded entry — it is never the
+    /// stored update payload (the record-time diff payload
+    /// stays .place / .moment, exactly as C-7 defined it), so
+    /// the persisted string forms are unchanged.
+    case placeAtMoment(String, MomentReading)
 
     var rendered: String {
         switch self {
         case .place(let name): return name
         case .moment(let reading): return reading.rendered
+        case .placeAtMoment(let name, let reading): return "\(name), \(reading.rendered)"
         }
     }
 }

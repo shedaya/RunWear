@@ -253,7 +253,12 @@ final class HomeCompositionTests: XCTestCase {
                       "the hero zone must skeleton-gate on the unresolved serve")
         XCTAssertTrue(view.contains("viewModel.fallbackImageUrl == nil"),
                       "the gate must cover the pre-commit window (no fallback committed yet)")
-        XCTAssertTrue(view.contains("heroSkeleton(heightMode: heightMode)"))
+        // RW-147 RE-PIN (Nov 9, 2026): the call gained the
+        // explicit-height argument when the hero height policy
+        // was threaded through heroSection — the skeleton GATE
+        // this pin protects (the three conditions above) is
+        // unchanged.
+        XCTAssertTrue(view.contains("heroSkeleton(heightMode: heightMode, explicitHeight: explicitHeight)"))
     }
 
     func testFirstPaintIsTheDesignedSkeleton_sourcePin() throws {

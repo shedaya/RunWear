@@ -634,12 +634,12 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         var announcements: [String] = []
 
         // Session 1, live flow: add place A, move to place B,
-        // then a moment update. RW-135 RE-PIN: the moment update
-        // is recorded, but under §7.2 the bar's settled-today
-        // line names the PLACE — the line does not change, so
-        // there is no third announcement (the pre-ruling
-        // "Updated to 7 p.m." form is superseded on the bar;
-        // the entry still stores its moment payload).
+        // then a moment update. RW-150 RE-PIN (supersedes the
+        // RW-135 §7.2 pin this scenario carried): RW-98 governs
+        // the line's CONTENT — it names whichever condition
+        // changed, in full. Creations read "Updated to {place},
+        // Now"; the moment settle's line changes to "Updated to
+        // 7 p.m.", so it announces as a third announcement.
         let first = WearIveRunCollectionModel(store: store, sessionID: "s1")
         settle(first, entry(
             session: "s1", place: "Overland Park, KS", feels: 48,
@@ -654,8 +654,9 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // RW-135 spec §9.1 RE-PIN: the creation announcement is
         // the "Updated to {place}" form — no "Added" line.
         XCTAssertEqual(announcements, [
-            "Updated to Overland Park, KS",
-            "Updated to Miami, FL"
+            "Updated to Overland Park, KS, Now",
+            "Updated to Miami, FL, Now",
+            "Updated to 7 p.m."
         ])
 
         // RELAUNCH: a new process over the same persisted
@@ -686,7 +687,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // entry is the PLACE form — the entry's stored moment
         // payload is preserved on the record (asserted in the
         // store-level pins), but the bar names the place.
-        XCTAssertEqual(state(of: relaunched), .updated(payload: .place("Miami, FL")))
+        XCTAssertEqual(state(of: relaunched), .updated(payload: .moment(.clock(hour12: 7, isPM: true))))
 
         // A weather-only re-settle after the restore is silent,
         // as it is in-session.
@@ -694,7 +695,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             session: "s2", place: "Miami, FL", feels: 92,
             items: ["Tank Top", "Shorts"],
             moment: .clock(hour12: 7, isPM: true)), announcements: &announcements)
-        XCTAssertEqual(announcements.count, 2)
+        XCTAssertEqual(announcements.count, 3)
 
         // A REAL change after the restore still announces —
         // once, and as an Update (the session already has an
@@ -706,8 +707,9 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // in the "Updated to {place}" form.
         XCTAssertEqual(announcements, [
             "Updated to Overland Park, KS",
-            "Updated to Miami, FL",
-            "Updated to New York, NY"
+            "Updated to Miami, FL, Now",
+            "Updated to 7 p.m.",
+            "Updated to New York, NY, Now"
         ])
         XCTAssertEqual(relaunched.entries.count, 2,
                        "RW-91: s1's save + s2's one in-place entry — two saves, one per session")
@@ -725,7 +727,7 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             items: ["Tank Top"]), announcements: &announcements)
         // RW-135 spec §9.1 RE-PIN: the creation line is the
         // "Updated to {place}" form.
-        XCTAssertEqual(announcements, ["Updated to Miami, FL"])
+        XCTAssertEqual(announcements, ["Updated to Miami, FL, Now"])
 
         // Relaunch + automatic re-settle of the identical
         // state: silent restore; the bar's resting state is the
@@ -737,12 +739,12 @@ final class Gen6WaveCDA09Tests: XCTestCase {
             items: ["Tank Top"]), announcements: &announcements)
         XCTAssertEqual(relaunched.cueCount, 0)
         // RW-135 spec §9.1 RE-PIN (as above).
-        XCTAssertEqual(announcements, ["Updated to Miami, FL"])
+        XCTAssertEqual(announcements, ["Updated to Miami, FL, Now"])
         XCTAssertEqual(relaunched.entries.count, 2,
                        "RW-91: the restored session's save joins the prior session's — the collection accumulates")
         // RW-135 spec §9.1 RE-PIN: the restored creation entry's
         // bar state is the "Updated to {place}" form.
-        XCTAssertEqual(state(of: relaunched), .updated(payload: .place("Miami, FL")))
+        XCTAssertEqual(state(of: relaunched), .updated(payload: .placeAtMoment("Miami, FL", .now)))
     }
 
     @MainActor
@@ -769,8 +771,8 @@ final class Gen6WaveCDA09Tests: XCTestCase {
         // RW-135 spec §9.1 RE-PIN: both creations read in the
         // "Updated to {place}" form.
         XCTAssertEqual(announcements, [
-            "Updated to Miami, FL",
-            "Updated to Overland Park, KS"
+            "Updated to Miami, FL, Now",
+            "Updated to Overland Park, KS, Now"
         ])
         XCTAssertEqual(store.entries.count, 2, "the prior session's Miami entry is untouched history")
     }
@@ -840,8 +842,8 @@ final class Gen6WaveCDA09Tests: XCTestCase {
 
         // The bar announces THIS selection…
         let barState = state(of: model)
-        XCTAssertEqual(barState, .updated(payload: .place("Miami, FL")))
-        XCTAssertEqual(WearIveRunNarration.line(for: barState), "Updated to Miami, FL")
+        XCTAssertEqual(barState, .updated(payload: .placeAtMoment("Miami, FL", .now)))
+        XCTAssertEqual(WearIveRunNarration.line(for: barState), "Updated to Miami, FL, Now")
 
         // …and the expanded card renders THIS selection — same
         // place, same feels-like, same items, from the same
@@ -1775,7 +1777,7 @@ final class Gen6SuccessorWaveTests: XCTestCase {
         model.recordSettled(successorEntry(session: "s-rw110", place: "New York, NY", items: ["Tee"]))
         // RW-135 spec §9.1 RE-PIN: no "Added" line — a creation
         // reads "Updated to {place}" from its first frame.
-        XCTAssertEqual(successorDockLine(of: model), "Updated to New York, NY")
+        XCTAssertEqual(successorDockLine(of: model), "Updated to New York, NY, Now")
         // Before the Miami settle lands, the viewed-place
         // override already names Miami.
         XCTAssertEqual(
@@ -1791,7 +1793,7 @@ final class Gen6SuccessorWaveTests: XCTestCase {
         // bar's own narration names Miami in full.
         model.recordSettled(successorEntry(session: "s-rw110", place: "Miami, FL", items: ["Tank"]))
         XCTAssertEqual(model.sessionEntry()?.placeDisplayName, "Miami, FL")
-        XCTAssertEqual(successorDockLine(of: model), "Updated to Miami, FL")
+        XCTAssertEqual(successorDockLine(of: model), "Updated to Miami, FL, Now")
     }
 
     // MARK: RW-112 / RW-116 — the settle records the landed look
@@ -1972,8 +1974,11 @@ extension Gen6FixWaveTests {
         // suite's standing pattern), so its ONE allowance
         // constant is pinned against the source of record.
         let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
-        XCTAssertTrue(store.contains("static let freeAllowance = 10"),
-                      "RW-128: the iOS free allowance is 10, in the one constant")
+        XCTAssertTrue(store.contains("static let freeAllowance = FreeLooksAllowance.value"),
+                      "RW-128/RW-148: the store's allowance forwards the one shared constant")
+        let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
+        XCTAssertTrue(models.contains("static let value = 10"),
+                      "RW-148: the shared allowance constant itself is 10")
         XCTAssertTrue(OnboardingCopy.freeLooksPromise.contains("10"),
                       "the onboarding promise follows the allowance")
     }
@@ -2385,7 +2390,7 @@ extension Gen6FixWaveTests {
             WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
                 todaysEntry: model.sessionEntry(), moment: .now,
                 wasUpdatedThisSession: model.sessionEntry()?.wasUpdatedInSession ?? false)),
-            "Updated to New York, NY")
+            "Updated to New York, NY, Now")
         // (RW-135 spec §9.1 RE-PIN: the creation line above is
         // the "Updated to {place}" form — no "Added" line.)
         // The switch is being viewed; nothing has settled. The
@@ -2398,7 +2403,7 @@ extension Gen6FixWaveTests {
             WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
                 todaysEntry: model.sessionEntry(), moment: .now,
                 wasUpdatedThisSession: model.sessionEntry()?.wasUpdatedInSession ?? false)),
-            "Updated to Miami, FL")
+            "Updated to Miami, FL, Now")
         // §7.1/§7.4: exactly one cue in the whole sequence (the
         // creation); the switch moved only the narration version.
         XCTAssertEqual(model.cueCount, 1)
@@ -2417,7 +2422,7 @@ extension Gen6FixWaveTests {
         let plannedState = WearIveRunMiniBarModel.state(
             todaysEntry: planned, moment: .now, wasUpdatedThisSession: false,
             now: now, calendar: calendar)
-        XCTAssertEqual(plannedState, .planned(place: "Los Angeles, CA", dayLabel: "Tomorrow"))
+        XCTAssertEqual(plannedState, .planned(place: "Los Angeles, CA", dayLabel: "Tomorrow", moment: .now))
         XCTAssertEqual(WearIveRunNarration.line(for: plannedState),
                        "Planned for Los Angeles, CA · Tomorrow")
         // A plan further out names its weekday (Nov 10, 2026 is
@@ -2435,13 +2440,16 @@ extension Gen6FixWaveTests {
             WearIveRunNarration.line(for: WearIveRunMiniBarModel.state(
                 todaysEntry: backToday, moment: .now, wasUpdatedThisSession: true,
                 now: now, calendar: calendar)),
-            "Updated to Los Angeles, CA")
+            "Updated to Los Angeles, CA, Now")
     }
 
-    /// §7.2: the settled-today form names the entry's PLACE even
-    /// when the entry's stored update payload is a moment (the
-    /// GEN-5 moment form is superseded on the bar).
-    func testRW135_SettledTodayNamesThePlace_NotTheMomentPayload() {
+    /// RW-150 RE-PIN (supersedes this test's RW-135 §7.2 form,
+    /// under which the settled-today line named the place even
+    /// for a moment change): RW-98 governs content — when ONLY
+    /// the moment changed, the line names the new moment in
+    /// full ("Updated to 7 p.m."); place-naming applies when
+    /// the place changed or the entry was created.
+    func testRW150_SettledTodayNamesTheChangedMoment_WhenOnlyTheMomentChanged() {
         let entry = rw135Entry(
             dayStart: utcDay(2026, 11, 7), place: "Miami, FL",
             wasUpdated: true, payload: .moment(.clock(hour12: 7, isPM: true)))
@@ -2449,8 +2457,8 @@ extension Gen6FixWaveTests {
             todaysEntry: entry, moment: entry.momentReading,
             wasUpdatedThisSession: true,
             now: utcDay(2026, 11, 7), calendar: Calendar(identifier: .gregorian))
-        XCTAssertEqual(state, .updated(payload: .place("Miami, FL")))
-        XCTAssertEqual(WearIveRunNarration.line(for: state), "Updated to Miami, FL")
+        XCTAssertEqual(state, .updated(payload: .moment(.clock(hour12: 7, isPM: true))))
+        XCTAssertEqual(WearIveRunNarration.line(for: state), "Updated to 7 p.m.")
     }
 
     /// §7.2 expanded anatomy: the entry line's day form comes

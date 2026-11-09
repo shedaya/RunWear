@@ -61,7 +61,7 @@ enum OnboardingCopy {
 
     /// The free-looks promise. By A1 it lives ONLY on frame 28's
     /// own screen — never on the setup form, never on the fork.
-    /// Frame 34's meter ("look 1 of your 5 free looks") is
+    /// Frame 34's meter ("look 1 of your 10 free looks") is
     /// accounting copy, not this promise, and is not governed here.
     /// GEN-3 ROUND 2 (Sol, Nov 4): Sol's final point-2 copy (the
     /// name-led phrase below) supersedes the promise's welcome

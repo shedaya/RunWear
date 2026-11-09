@@ -115,7 +115,27 @@ enum ShareMomentResolver {
         switch momentReading {
         case .clock(let hour12, let isPM):
             let time = "\(hour12):00 \(isPM ? "PM" : "AM")"
-            return ("today, \(time)", "Today, \(time)", false)
+            // RW-150 (Nov 9, 2026): a picked hour now records
+            // the clock reading on future days too (it stamped
+            // a daypart before), so the day word must come from
+            // the entry's own day — the pre-fix seat said
+            // "today" for every clock reading, which a tomorrow
+            // entry would have made false.
+            if calendar.isDate(dayStart, inSameDayAs: now) {
+                return ("today, \(time)", "Today, \(time)", false)
+            }
+            let tomorrow = calendar.date(
+                byAdding: .day, value: 1,
+                to: calendar.startOfDay(for: now)) ?? now
+            if calendar.isDate(dayStart, inSameDayAs: tomorrow) {
+                return ("tomorrow, \(time)", "Tomorrow, \(time)", false)
+            }
+            let weekday = DateFormatter()
+            weekday.calendar = calendar
+            weekday.locale = Locale(identifier: "en_US_POSIX")
+            weekday.dateFormat = "EEEE"
+            let dayWord = weekday.string(from: dayStart)
+            return ("\(dayWord.lowercased()), \(time)", "\(dayWord), \(time)", false)
         case .daypart(let dayWord, let part):
             if dayWord == "Tomorrow" {
                 return ("tomorrow \(part.rawValue)", "Tomorrow \(part.rawValue)", false)

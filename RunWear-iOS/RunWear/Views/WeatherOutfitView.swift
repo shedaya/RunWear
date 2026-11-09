@@ -34,7 +34,6 @@ struct WeatherOutfitView: View {
     @State private var showSettings = false
     @State private var showDatePicker = false
     @State private var showTimePicker = false
-    @State private var showShop = false
     @State private var showLocationPicker = false
     @State private var selectedWeatherDetail: WeatherDetailType?
 
@@ -334,16 +333,6 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showShop) {
-                ShopModal(
-                    items: recommendation.allItems,
-                    genderPreference: viewModel.genderPreference,
-                    weatherCode: viewModel.selectedWeatherSnapshot?.weatherCode ?? weather.currentWeather.weathercode,
-                    isPresented: $showShop
-                )
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
             // Item-based, not isPresented + if-let: in the old
             // two-state form the sheet could evaluate its content
             // before the selection landed and present an empty
@@ -629,11 +618,32 @@ struct WeatherOutfitView: View {
             if horizontalSizeClass == .regular && geo.size.width > geo.size.height {
                 DuoSplitArrangement {
                     ScrollView {
-                        VStack(spacing: 16) {
-                            heroSection(heightMode: .fill, feelsBlockBottomPadding: 12)
-                                .frame(height: geo.size.height * 0.62)
+                        VStack(spacing: 0) {
+                            // Ruling 2 (Nov 9, 2026): the Duo
+                            // hero fills its pane — the
+                            // photograph stands edge to edge in
+                            // its dedicated column (it stood at
+                            // 0.62 of the pane height in RW-144,
+                            // over dead theme background). The
+                            // Make It Me straddle state rides
+                            // the pane's foot, fully on the pane
+                            // (no boundary to straddle), seated
+                            // by the same HeroVerticalLayout
+                            // that seats the weather line above
+                            // it (pillBottomOffset −12).
+                            heroSection(heightMode: .fill, pillBottomOffset: -HeroVerticalLayout.duoPillBottomInset)
+                                .frame(height: geo.size.height)
+                                .overlay(alignment: .bottom) {
+                                    if heroPillState != .hidden {
+                                        HeroPillView(
+                                            pillState: heroPillState,
+                                            seat: .straddle,
+                                            onPillGetUnlimited: { showHeroPillPaywall = true }
+                                        )
+                                        .padding(.bottom, HeroVerticalLayout.duoPillBottomInset)
+                                    }
+                                }
                         }
-                        .padding(.bottom, 24)
                     }
                     .onScrollPhaseChange { _, phase in
                         isScrollGestureActive = phase != .idle
@@ -642,38 +652,24 @@ struct WeatherOutfitView: View {
                     VStack(spacing: 0) {
                         ScrollView {
                             VStack(spacing: 0) {
-                                // RW-144 Duo: the same sheet order
-                                // as the stacked layouts, flat on
-                                // the theme background — the boxless
-                                // weather line opens the column (the
-                                // feels-like block is on the hero
-                                // pane), then the band, the outfit,
-                                // the glance band, and the detailed
-                                // weather block. The Make It Me
-                                // pill stands at the column's head
-                                // (the split layout has no boundary
-                                // to straddle).
-                                sheetStraddlePill
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                    .padding(.top, 20)
-                                sheetWeatherLine
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 20)
-                                Rectangle()
-                                    .fill(AppTheme.sheetHairline)
-                                    .frame(height: 1)
-                                    .padding(.horizontal, 16)
-                                    .padding(.top, 16)
+                                // Ruling 2 (Nov 9, 2026): the
+                                // column carries the same order
+                                // as the stacked sheet minus the
+                                // elements that moved onto the
+                                // hero pane — the weather line
+                                // and the Make It Me pill ride
+                                // the pane now (the pill at its
+                                // foot), so the column opens
+                                // with the band, then the outfit,
+                                // the glance band, and the
+                                // detailed weather block.
                                 // RW-101 (Sol, Nov 6, 2026): the
                                 // elevated band seat, Duo layout —
                                 // directly under the hero, above
                                 // the outfit, as in the stacked
-                                // sheet (RW-144 keeps the seat;
-                                // the weather line and hairline
-                                // now precede it per the v8 sheet
-                                // order).
+                                // sheet.
                                 homeBandSection
-                                    .padding(.top, 16)
+                                    .padding(.top, 20)
                                 if viewModel.selectedTimeOutsideForecast {
                                     outsideForecastNotice
                                         .padding(.top, 16)
@@ -731,10 +727,8 @@ struct WeatherOutfitView: View {
             } else if horizontalSizeClass == .regular {
                 ScrollView {
                     VStack(spacing: 0) {
-                        heroWithScrollHandoff(heroHeight: HeroHeightPolicy.height(
-                            viewportHeight: geo.size.height,
-                            bandPresent: personalStore.convergenceBand != nil,
-                            glancePresent: viewModel.dayChart != nil))
+                        heroWithScrollHandoff(heroHeight: HeroHeightPolicy.stackedHeight(
+                            viewportHeight: geo.size.height))
                         sheetContainer {
                             outfitGridSection
                                 .padding(.top, 24)
@@ -776,10 +770,8 @@ struct WeatherOutfitView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
-                        heroWithScrollHandoff(heroHeight: HeroHeightPolicy.height(
-                            viewportHeight: geo.size.height,
-                            bandPresent: personalStore.convergenceBand != nil,
-                            glancePresent: viewModel.dayChart != nil))
+                        heroWithScrollHandoff(heroHeight: HeroHeightPolicy.stackedHeight(
+                            viewportHeight: geo.size.height))
                         sheetContainer {
                             outfitSection
                                 .padding(.top, 24)
@@ -886,25 +878,24 @@ struct WeatherOutfitView: View {
     /// header down through the outfit and personal sections.
     private func sheetContainer<Content: View>(@ViewBuilder outfit: () -> Content) -> some View {
         VStack(spacing: 0) {
-            // RW-144 sheet order (v8 frames): the BOXLESS
-            // weather line opens the sheet (the feels-like block
-            // lives on the hero now — the old sheet header's
-            // numeral/figures/Actual line moved there), then the
-            // hairline, then the outfit. The straddle pill (see
-            // the overlay below) seats on this container's top
-            // edge, so the weather line's top padding clears its
-            // lower half.
-            sheetWeatherLine
-                .padding(.horizontal, 16)
-                .padding(.top, 36)
-            Rectangle()
-                .fill(AppTheme.sheetHairline)
-                .frame(height: 1)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
+            // Ruling 2 (Nov 9, 2026) sheet order: the boxless
+            // weather line — the RW-144 sheet's opening element
+            // — moved onto the hero with the rest of the key
+            // information, and its hairline went with it. The
+            // sheet now opens with the straddle reserve, then
+            // the band, then the outfit. The reserve is the
+            // straddle pill's clearance zone: while a pill
+            // renders, the sheet's first content starts below
+            // the pill's dip with a 12 pt gap (the guarantee
+            // HeroVerticalLayout composes); without a pill it
+            // is the standard head space.
+            Color.clear
+                .frame(height: heroPillState != .hidden
+                       ? HeroVerticalLayout.sheetTopReserveWithPill
+                       : HeroVerticalLayout.sheetTopReserveNoPill)
             // RW-101 (Sol, Nov 6, 2026): the "Making your looks"
-            // band — wording unchanged; RW-144 seats it directly
-            // under the weather line, the sheet's first band, so
+            // band — wording unchanged; it seats directly
+            // under the hero now, the sheet's first band, so
             // a Premium subscriber knows what's going on.
             homeBandSection
                 .padding(.top, 16)
@@ -979,17 +970,21 @@ struct WeatherOutfitView: View {
     /// the settled pill state is not hidden (a scaffold serve
     /// stays silent — HeroPill.resolve returns .hidden).
     ///
-    /// Seat (measured from frame A at full resolution): the
-    /// pill's centre sits ON the hero's foot line — 13 pt BELOW
-    /// the sheet's top edge (the sheet overlaps the hero by the
-    /// settled 28 pt; the pill centre is at foot − 15). With
-    /// the pill's 44 pt height its top edge is at foot − 37,
-    /// and the feels-like block's last line ends at foot − 44:
-    /// a 7 pt clearance, the frames' own ≈6 pt. (Centering the
-    /// pill on the sheet's top edge instead puts its top edge
-    /// at foot − 50 — HIGHER than the frames' seat — and the
-    /// Actual line, ending at foot − 44, would slip 6 pt
-    /// behind it wherever they overlap horizontally.)
+    /// Seat (Ruling 2, Nov 9, 2026 — replaces the RW-144
+    /// frame-A seat): the pill's BOTTOM sits 14 pt below the
+    /// hero's foot line (HeroVerticalLayout.straddleDip), in
+    /// the sheet's reserved top space, whatever the pill
+    /// state's height — the offset is a function of the
+    /// state's planning height, computed by the same layout
+    /// that seats the weather line above the pill on the hero.
+    /// The RW-144 seat anchored the pill's TOP (−9 from the
+    /// sheet's edge) at a fixed 44 pt height assumption, so
+    /// the two-line generating pill grew DOWNWARD over the
+    /// sheet's opening weather line — the build-33 device
+    /// defect (wind value cut, UV figure half-covered). A
+    /// bottom-anchored seat makes that class impossible: a
+    /// taller pill grows UP, into the hero space the layout
+    /// reserved for it.
     @ViewBuilder private var sheetStraddlePill: some View {
         if heroPillState != .hidden {
             HeroPillView(
@@ -997,21 +992,9 @@ struct WeatherOutfitView: View {
                 seat: .straddle,
                 onPillGetUnlimited: { showHeroPillPaywall = true }
             )
-            .offset(y: -9)
+            .offset(y: HeroVerticalLayout.pillOffsetFromSheetTop(
+                pillHeight: currentPillHeight))
         }
-    }
-
-    /// RW-144: the sheet's opening weather line — the four
-    /// boxless stats (WIND / RAIN / HUMIDITY / UV) for the
-    /// selected moment, from the same snapshot the retired
-    /// numeral row's figures read.
-    private var sheetWeatherLine: some View {
-        BoxlessWeatherLineView(
-            windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
-            rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
-            humidityPercent: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
-            uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0
-        )
     }
 
     /// RW-144: the complete detailed weather block below the
@@ -1029,7 +1012,9 @@ struct WeatherOutfitView: View {
     // location line + numeral row + Actual line) is REMOVED —
     // its content moved to the hero (feels-like block, place
     // pill, date/time chip) and its weather figures became the
-    // sheet's opening boxless line (sheetWeatherLine, above).
+    // sheet's opening boxless line. Ruling 2 (Nov 9, 2026):
+    // that boxless line has itself moved onto the hero (see
+    // heroChrome) — the sheet now opens with the band/outfit.
     // HomeHeroNumeralRow remains in the tree as the RW-67
     // render-proven numeral composition; Home no longer
     // composes it.
@@ -1090,30 +1075,29 @@ struct WeatherOutfitView: View {
 
     /// GEN-5 (RW-28, C-7): the entry's moment as a simple human
     /// reading for the Wear I've Run narration — "Now" at now,
-    /// a clock reading ("9 p.m.") for a picked hour today,
-    /// "Tomorrow evening"-family readings beyond. Never a stamp.
+    /// a clock reading ("9 p.m.") for a picked hour. Never a
+    /// stamp.
     ///
     /// GEN-5 (Addendum 8): the reading is CONSTRUCTED as the
-    /// structural MomentReading — and the beyond-tomorrow case
-    /// now renders as a weekday daypart ("Friday evening")
-    /// where the gen-5 first pass fell back to the sheet's
-    /// stamped form ("Nov 7 9:00 PM"), which C-7 forbids in
-    /// narrations.
+    /// structural MomentReading.
+    ///
+    /// RW-150 (Nov 9, 2026): a picked hour now records the
+    /// CLOCK reading on EVERY day, not just today. The pre-fix
+    /// construction stamped future-day picks as dayparts
+    /// ("Tomorrow afternoon" for a 2:00 PM pick) — the exact
+    /// picked time never reached the entry, so no narration
+    /// built from the entry (§7.0: narration is a pure function
+    /// of the record) could ever name it, and RW-98's rule —
+    /// a time/date change names the date and time in full —
+    /// was unmeetable. The entry's dayStart carries the day;
+    /// the reading now carries the time. Daypart readings
+    /// survive only as legacy decodes (entries recorded by
+    /// earlier builds), and every consumer still renders them.
     private var entryMomentReading: MomentReading {
         if isViewingNow { return .now }
-        let calendar = Calendar.current
         let hour = viewModel.selectedHour
-        if calendar.isDateInToday(viewModel.selectedDate) {
-            let display = hour % 12 == 0 ? 12 : hour % 12
-            return .clock(hour12: display, isPM: hour >= 12)
-        }
-        let part = MomentReading.DayPart.forHour(hour)
-        if calendar.isDateInTomorrow(viewModel.selectedDate) {
-            return .daypart(dayWord: "Tomorrow", part: part)
-        }
-        let weekday = DateFormatter()
-        weekday.dateFormat = "EEEE"
-        return .daypart(dayWord: weekday.string(from: viewModel.selectedDate), part: part)
+        let display = hour % 12 == 0 ? 12 : hour % 12
+        return .clock(hour12: display, isPM: hour >= 12)
     }
 
     private var heroHourString: String {
@@ -1137,7 +1121,7 @@ struct WeatherOutfitView: View {
     /// whether any of its sheets is presented, and the element —
     /// which belongs to home's layer — dims with the backdrop.
     private var anyHomeSheetPresented: Bool {
-        showSettings || showDatePicker || showTimePicker || showShop
+        showSettings || showDatePicker || showTimePicker
             || showLocationPicker || selectedWeatherDetail != nil
             || showCollection || showFeedbackSheet
             // GEN-6 (RW-61): the looks library is a home sheet too.
@@ -1541,12 +1525,17 @@ struct WeatherOutfitView: View {
     /// Portrait-regular outfit: the same cards in a two-column grid.
     private var outfitGridSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Ruling (Nov 9, 2026 device pass): the outfit
+            // header is the count line ALONE — the "Shop"
+            // button the iOS RW-144 lane carried here (from
+            // the retired navigation bar) is removed, matching
+            // the v8 frame and the Android RW-144 build. Item
+            // taps still open the item shop flow, unchanged.
             HStack {
                 Text("\(recommendation.allItems.count) items for your run")
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
-                shopEntryButton
             }
             .padding(.horizontal, 16)
 
@@ -1564,25 +1553,6 @@ struct WeatherOutfitView: View {
             }
             .padding(.horizontal, 16)
         }
-    }
-
-    /// RW-144: the Shop entry — it lived in the navigation bar's
-    /// trailing group until the bar was hidden; it stands in the
-    /// outfit header now so the surface is not dropped.
-    private var shopEntryButton: some View {
-        Button {
-            showShop = true
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "cart")
-                    .font(.appFootnote.weight(.semibold))
-                Text("Shop")
-                    .font(.appSecondary.weight(.semibold))
-            }
-            .foregroundColor(AppTheme.pinePayload)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Shop")
     }
 
     /// The settled metric details the detail sheet tabs between
@@ -1682,25 +1652,37 @@ struct WeatherOutfitView: View {
     /// from the scroll handoff (WS-1 §1.1, above); the Duo pane
     /// takes it at rest.
     @ViewBuilder
+    /// The current Make It Me pill state's planning height
+    /// (HeroPillMetrics) — the input the hero's one vertical
+    /// layout guarantees the whole stack against, in every
+    /// pill state (Ruling 2 / the build-33 weather-line
+    /// defect: the two-line generating pill is the tall one).
+    private var currentPillHeight: CGFloat {
+        HeroPillMetrics.height(for: heroPillState)
+    }
+
     private func heroSection(
         heightMode: HeroImageView.HeightMode = .containerFraction,
         chromeOpacity: Double = 1,
         chromeInteractive: Bool = true,
         explicitHeight: CGFloat? = nil,
-        feelsBlockBottomPadding: CGFloat = 44
+        pillBottomOffset: CGFloat = HeroVerticalLayout.straddleDip
     ) -> some View {
         heroPhotoSection(heightMode: heightMode, explicitHeight: explicitHeight)
             .overlay {
-                heroChrome(feelsBlockBottomPadding: feelsBlockBottomPadding)
+                heroChrome(pillBottomOffset: pillBottomOffset)
                     .opacity(chromeOpacity)
                     .allowsHitTesting(chromeInteractive)
             }
             .clipped()
     }
 
-    /// The RW-144 hero chrome, fed by the current selection and
-    /// the photo's measured luminances.
-    private func heroChrome(feelsBlockBottomPadding: CGFloat = 44) -> some View {
+    /// The hero chrome, fed by the current selection and the
+    /// photo's measured luminances. Ruling 2 (Nov 9, 2026):
+    /// the boxless weather line rides over the hero too — fed
+    /// from the same snapshot the sheet's opening line read
+    /// in RW-144 (sheetWeatherLine's source expressions).
+    private func heroChrome(pillBottomOffset: CGFloat = HeroVerticalLayout.straddleDip) -> some View {
         HeroChromeOverlayView(
             // RW-146: the place pill names the DISPLAYED place —
             // the place the conditions beside it belong to.
@@ -1723,7 +1705,13 @@ struct WeatherOutfitView: View {
             onDateTapped: { showDatePicker = true },
             onTimeTapped: { showTimePicker = true },
             onNowTapped: { viewModel.resetToNow() },
-            feelsBlockBottomPadding: feelsBlockBottomPadding
+            windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
+            rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
+            humidityPercent: viewModel.selectedWeatherSnapshot?.humidity ?? 50,
+            uvIndex: viewModel.selectedWeatherSnapshot?.uvIndex ?? 0,
+            weatherLuminance: heroLuminance.weatherLuminance,
+            pillHeight: currentPillHeight,
+            pillBottomOffset: pillBottomOffset
         )
     }
 
@@ -1969,20 +1957,17 @@ struct WeatherOutfitView: View {
 
     private var outfitSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Section header — Shop lives in the toolbar now
-            // (design record §5.2); the teal pill is gone.
-            // GEN-5 (RW-29 FA-55): the header is the settled
-            // count line ("N items for your run", Android's
-            // form), not the generic "Recommended Outfit" —
-            // both layouts carry it.
+            // Section header — the settled count line alone
+            // ("N items for your run", Android's form), not the
+            // generic "Recommended Outfit" (GEN-5, RW-29 FA-55)
+            // and, since the Nov 9, 2026 ruling, no "Shop"
+            // button beside it (see outfitGridSection).
             HStack {
                 Text("\(recommendation.allItems.count) items for your run")
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
 
                 Spacer()
-
-                shopEntryButton
             }
             .padding(.horizontal, 16)
 

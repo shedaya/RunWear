@@ -668,7 +668,13 @@ extension PersonalHeroAPIError {
            let name = body.error {
             switch name {
             case "allowance_exhausted":
-                return .allowanceExhausted(freeGenerationsUsed: body.freeGenerationsUsed ?? 5)
+                // RW-148 (counter unification, Nov 9, 2026): a
+                // body that omits the count falls back to the ONE
+                // allowance — never an invented number. (The
+                // pre-fix fallback was a hardcoded 5 from the
+                // pre-RW-128 allowance, written straight into
+                // the shared counter by the store's catch.)
+                return .allowanceExhausted(freeGenerationsUsed: body.freeGenerationsUsed ?? FreeLooksAllowance.value)
             case "consent_required": return .consentRequired
             case "references_required": return .referencesRequired
             case "attestations_required": return .attestationsRequired
@@ -1024,14 +1030,44 @@ struct PersonalCellCache {
 // composes its line from that value through this one seam. The
 // store re-reads the profile when a look lands (awaitHero), which
 // is the moment the server's charge exists to be read.
+/// RW-148 (Sol's counter-unification ruling, Nov 9, 2026): the
+/// free Make It Me allowance — ONE definition for the whole
+/// client, matching the server cap (10 since RW-128, live
+/// Nov 7, 2026). It lives in this model-layer file because this
+/// file compiles into BOTH the app and unit-test targets while
+/// PersonalHeroStore is app-only; `PersonalHeroStore.freeAllowance`
+/// FORWARDS to this value, so the store's name and this one are
+/// two names for the same number, and every count surface —
+/// straddle pill, the "This outfit isn't you — yet" card,
+/// Settings, the paywall, the first-look meter, the error
+/// mapping — reads it. No surface may carry its own number.
+enum FreeLooksAllowance {
+    static let value = 10
+}
+
 enum FreeLooksMeter {
     /// Settings' state line (frame 37's meter), composed from the
     /// shared counter. `allowance` renders as the bare number the
-    /// deck uses; at the shipped allowance of 5 these are exactly
-    /// the strings Settings has always carried.
+    /// deck uses; at the shipped allowance
+    /// (FreeLooksAllowance.value) these are exactly the strings
+    /// Settings carries.
     static func settingsLine(used: Int, allowance: Int) -> String {
         if used >= allowance { return "All \(allowance) free looks used" }
         return "\(used) of \(allowance) free looks used"
+    }
+
+    /// RW-148: the "This outfit isn't you — yet" card's body
+    /// line, composed from the SAME shared counter the pill
+    /// reads (the store's `freeGenerationsUsed`). The card's
+    /// sentence structure is the settled one; only its number
+    /// was wrong — it rendered a hardcoded "5 outfits" from the
+    /// pre-RW-128 code while the pill beside it read the true
+    /// counter. The whole sentence lives in this seam so the
+    /// card is a pure render of it and the unification pin can
+    /// assert it end to end.
+    static func upsellBodyLine(used: Int) -> String {
+        let noun = used == 1 ? "outfit" : "outfits"
+        return "You've seen yourself in \(used) \(noun). This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app."
     }
 
     /// The paywall's free bar line, composed from the same counter
@@ -1077,7 +1113,7 @@ enum FreeLooksMeter {
     /// already delivered (and counted in `used`) is counted
     /// AGAIN by the raw union, and bank/other in-flight work can
     /// push the raw pair past the allowance — composing the
-    /// impossible "2 of 5 used · 4 being made" across the
+    /// impossible "9 of 10 used · 4 being made" across the
     /// Settings block. On the free meter the pair must NEVER
     /// exceed the allowance: used + capped ≤ allowance, always.
     static func cappedInFlightCount(
@@ -1140,7 +1176,7 @@ enum FreeLooksMeter {
 //  (c) freeLook — the exact personal photo IS displayed, free
 //      tier: the script mark + the look count from the ONE
 //      shared counter (FreeLooksMeter's source), in the mock's
-//      "N of 5 looks" form, + "Get unlimited", which opens the
+//      "N of 10 looks" form, + "Get unlimited", which opens the
 //      Premium paywall. Like the W-16/W-18 meter, the count
 //      waits for the counter to confirm the delivery (used > 0)
 //      rather than printing an unverified number.
@@ -1191,7 +1227,7 @@ enum HeroPill {
     static let getInstantlyLabel = "Get it instantly next time"
 
     /// The exhausted pill's honest count, in the free pill's
-    /// count family: "5 of 5 looks used".
+    /// count family: "10 of 10 looks used".
     static func exhaustedCountLabel(used: Int, allowance: Int) -> String {
         "\(min(used, allowance)) of \(allowance) looks used"
     }
@@ -1201,7 +1237,7 @@ enum HeroPill {
     static let scriptMarkText = "Make It Me"
 
     /// The count half of the free-look pill, in the approved
-    /// mock's "1 of 5 looks" form, clamped to the allowance like
+    /// mock's "1 of 10 looks" form, clamped to the allowance like
     /// the W-18 meter.
     static func freeLookCountLabel(used: Int, allowance: Int) -> String {
         "\(min(used, allowance)) of \(allowance) looks"

@@ -449,7 +449,7 @@ final class FirstLookHonestyTests: XCTestCase {
                 lookState: state,
                 personalPhotoDisplayed: false,
                 freeGenerationsUsed: 0,
-                freeAllowance: 5,
+                freeAllowance: PersonalHeroStoreAllowance.value,
                 isSubscribed: false
             )
             XCTAssertEqual(p.phase, .making)
@@ -469,7 +469,7 @@ final class FirstLookHonestyTests: XCTestCase {
             lookState: .failed(reason: .error),
             personalPhotoDisplayed: false,
             freeGenerationsUsed: 0,
-            freeAllowance: 5,
+            freeAllowance: PersonalHeroStoreAllowance.value,
             isSubscribed: false
         )
         XCTAssertEqual(p.phase, .failed)
@@ -500,7 +500,7 @@ final class FirstLookHonestyTests: XCTestCase {
         // Settings' surface (frame 37's meter).
         XCTAssertEqual(
             FreeLooksMeter.settingsLine(used: used, allowance: PersonalHeroStoreAllowance.value),
-            "1 of 5 free looks used",
+            "1 of 10 free looks used",
             "after a delivered first look Settings must count it (W-18's shipped defect read 0)"
         )
 
@@ -518,7 +518,7 @@ final class FirstLookHonestyTests: XCTestCase {
         XCTAssertEqual(p.caption, "You're in the photo now.")
         XCTAssertEqual(
             p.meterLine,
-            "That was look 1 of your 5 free looks — 4 remain, whenever you want them.",
+            "That was look 1 of your 10 free looks — 9 remain, whenever you want them.",
             "frame 34's meter is the SAME count Settings shows: look 1 spent, 4 remain"
         )
         XCTAssertTrue(p.showsPremiumBand, "the soft ask may show once the look exists")
@@ -537,7 +537,7 @@ final class FirstLookHonestyTests: XCTestCase {
             personalPhotoDisplayed: true,
             personalImageLoaded: true,
             freeGenerationsUsed: 0,
-            freeAllowance: 5,
+            freeAllowance: PersonalHeroStoreAllowance.value,
             isSubscribed: false
         )
         XCTAssertEqual(p.phase, .ready)
@@ -548,13 +548,13 @@ final class FirstLookHonestyTests: XCTestCase {
     func testReadyPhaseMeterCountsDownFromTheSharedCounter() {
         let last = FirstLookPresentation.resolve(
             lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
-            freeGenerationsUsed: 5, freeAllowance: 5, isSubscribed: false)
-        XCTAssertEqual(last.meterLine, "That was look 5 of your 5 free looks.")
-        XCTAssertEqual(FreeLooksMeter.settingsLine(used: 5, allowance: 5), "All 5 free looks used")
+            freeGenerationsUsed: 10, freeAllowance: PersonalHeroStoreAllowance.value, isSubscribed: false)
+        XCTAssertEqual(last.meterLine, "That was look 10 of your 10 free looks.")
+        XCTAssertEqual(FreeLooksMeter.settingsLine(used: 10, allowance: 10), "All 10 free looks used")
 
         let subscribed = FirstLookPresentation.resolve(
             lookState: .ready, personalPhotoDisplayed: true, personalImageLoaded: true,
-            freeGenerationsUsed: 3, freeAllowance: 5, isSubscribed: true)
+            freeGenerationsUsed: 3, freeAllowance: PersonalHeroStoreAllowance.value, isSubscribed: true)
         XCTAssertNil(subscribed.meterLine, "a subscribed user has no free-look accounting to state")
     }
 
@@ -571,18 +571,18 @@ final class FirstLookHonestyTests: XCTestCase {
             personalPhotoDisplayed: true,
             personalImageLoaded: true,
             freeGenerationsUsed: 2,
-            freeAllowance: 5,
+            freeAllowance: PersonalHeroStoreAllowance.value,
             isSubscribed: false
         )
         XCTAssertEqual(p.phase, .ready)
-        XCTAssertEqual(p.meterLine, "That was look 2 of your 5 free looks — 3 remain, whenever you want them.")
+        XCTAssertEqual(p.meterLine, "That was look 2 of your 10 free looks — 8 remain, whenever you want them.")
     }
 
     // MARK: - W-16/W-17/W-18 · wiring pins
 
     func testFrame34HasNoHardcodedDebitLine_sourcePin() throws {
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
-        XCTAssertFalse(onboarding.contains("That was look 1 of your 5 free looks"),
+        XCTAssertFalse(onboarding.contains("That was look 1 of your 10 free looks"),
                        "the hardcoded debit line is the W-18 defect — frame 34 composes its meter from the shared counter")
         XCTAssertTrue(onboarding.contains("FirstLookPresentation.resolve("),
                       "frame 34 resolves its state through the presentation model")
@@ -620,7 +620,7 @@ final class FirstLookHonestyTests: XCTestCase {
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertTrue(section.contains("FreeLooksMeter.settingsLine(used: store.freeGenerationsUsed"),
                       "Settings composes its meter from the shared counter through the one seam")
-        XCTAssertFalse(section.contains("of 5 free looks used\""),
+        XCTAssertFalse(section.contains("of 10 free looks used\""),
                        "Settings no longer spells its own meter arithmetic inline")
         XCTAssertTrue(section.contains("await store.refreshProfile()"),
                       "opening Settings re-reads the server profile, so a delivered look is counted in-session")
@@ -633,11 +633,14 @@ final class FirstLookHonestyTests: XCTestCase {
     }
 }
 
-/// The shipped free allowance, named once for these tests (the
-/// store itself is not compiled into the test target; its value
-/// is pinned against the server limit by the backend contract).
+/// The shipped free allowance, named once for these tests.
+/// RW-148 RE-PIN: this used to be a hand-mirrored literal (5 —
+/// the stale RW-139 residue); the allowance's definition now
+/// lives in the dual-target model layer (`FreeLooksAllowance`,
+/// value 10 per RW-128), so this seam reads the SAME constant
+/// the app reads and cannot drift from it.
 private enum PersonalHeroStoreAllowance {
-    static let value = 5
+    static let value = FreeLooksAllowance.value
 }
 
 /// GEN-3 · I-SETTINGS lane — X-9 (Settings in-flight truthfulness),
@@ -702,7 +705,7 @@ final class Gen3SettingsTruthTests: XCTestCase {
         // delivery, so the meter must not pre-debit either.
         XCTAssertEqual(
             FreeLooksMeter.settingsLine(used: used, allowance: PersonalHeroStoreAllowance.value),
-            "0 of 5 free looks used"
+            "0 of 10 free looks used"
         )
         // …and the block carries the pending line alongside it, so
         // the two can never be read as "nothing is happening".
@@ -712,7 +715,7 @@ final class Gen3SettingsTruthTests: XCTestCase {
         // the pending line is gone — block and flow agree again.
         XCTAssertEqual(
             FreeLooksMeter.settingsLine(used: 1, allowance: PersonalHeroStoreAllowance.value),
-            "1 of 5 free looks used"
+            "1 of 10 free looks used"
         )
         XCTAssertNil(FreeLooksMeter.settingsPendingLine(inFlight: 0))
     }

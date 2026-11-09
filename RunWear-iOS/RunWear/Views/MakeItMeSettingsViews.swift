@@ -1013,7 +1013,13 @@ struct MakeItMeUpsellCard: View {
             Text("This outfit isn't you — yet.")
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(AppTheme.inkPrimary)
-            Text("You've seen yourself in 5 outfits. This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app.")
+            // RW-148 (Nov 9, 2026): the seen-count is the ONE
+            // shared counter (the store's freeGenerationsUsed —
+            // the same value the straddle pill reads), composed
+            // through the FreeLooksMeter seam. The pre-fix line
+            // was a hardcoded "5 outfits" from the pre-RW-128
+            // code, diverging from the pill's true count.
+            Text(FreeLooksMeter.upsellBodyLine(used: store.freeGenerationsUsed))
                 .font(.system(size: 15))
                 .foregroundColor(AppTheme.inkSecondary)
             Button {

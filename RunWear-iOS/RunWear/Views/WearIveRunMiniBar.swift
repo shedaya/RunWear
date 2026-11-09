@@ -96,7 +96,14 @@ enum WearIveRunState: Equatable {
     /// {day}"), never the "Updated to" form, which describes
     /// today's settled mirror. Both fields derive from the
     /// entry's own record (its place, its day) — §7.0.
-    case planned(place: String, dayLabel: String)
+    /// RW-150 (Nov 9, 2026): the entry's recorded MOMENT rides
+    /// along — a future-day entry settled at a picked time must
+    /// name that time (RW-98's full-naming rule governs the
+    /// content; §7.2's form governs the rendering). Before this
+    /// the state carried no moment at all, so a 2:00 PM pick
+    /// narrated as "Planned for {place} · Tomorrow" with the
+    /// time nowhere in the line.
+    case planned(place: String, dayLabel: String, moment: MomentReading)
 }
 
 enum WearIveRunMiniBarModel {
@@ -132,7 +139,8 @@ enum WearIveRunMiniBarModel {
             return .planned(
                 place: entry.placeDisplayName,
                 dayLabel: WearIveRunNarration.plannedDayLabel(
-                    for: entry, calendar: calendar, now: now))
+                    for: entry, calendar: calendar, now: now),
+                moment: entry.momentReading)
         }
         // RW-135 spec §9.1 (approved Nov 7, 2026): there is NO
         // "Added" line on these surfaces. A creation
@@ -153,7 +161,37 @@ enum WearIveRunMiniBarModel {
         // for the collection surfaces that render it.
         _ = wasUpdatedThisSession
         _ = moment
-        return .updated(payload: .place(entry.placeDisplayName))
+        // RW-150 (Nov 9, 2026) — the settled-today grammar,
+        // reconciled: RW-98 (Sol, Nov 6) governs CONTENT — the
+        // line catches whichever condition changed and names
+        // the new state IN FULL; RW-135 §1.4/§7.2 governs FORM
+        // (the Updated/Planned distinction, the wrap, the pure
+        // function of the recorded entry). The pre-fix builder
+        // discarded both the entry's recorded moment and its
+        // C-7 update payload and always rendered the bare
+        // place — so the line read "Updated to New York, NY"
+        // at Now (the ", Now" segment missing) and never
+        // named a picked time at all (Sol's recording, build
+        // 33). The composition, from the entry alone:
+        //   · a TIME-only settle (the record-time payload is a
+        //     clock moment) names the moment, per Sol's own
+        //     example: "Updated to 7 p.m."
+        //   · every other settle (creation, a place change, a
+        //     return to Now) names the full state — place AND
+        //     moment: "Updated to Miami, FL, Now" (Sol's
+        //     example), "Updated to Miami, FL, 7 p.m." for a
+        //     place settled at a picked hour.
+        // §1.4's "settled-today names the place, not the
+        // moment" is superseded on the moment segment by
+        // RW-98/RW-150; its forms stand. Flagged in the lane
+        // report as the one genuine spec tension in this item.
+        if let payload = entry.updatePayload,
+           case .moment(let reading) = payload,
+           case .clock = reading {
+            return .updated(payload: .moment(reading))
+        }
+        return .updated(payload: .placeAtMoment(
+            entry.placeDisplayName, entry.momentReading))
     }
 }
 
@@ -173,8 +211,30 @@ enum WearIveRunNarration {
             return nil
         case .updated(let payload):
             return "Updated to \(payload.rendered)"
-        case .planned(let place, let dayLabel):
-            return "Planned for \(place) · \(dayLabel)"
+        case .planned(let place, let dayLabel, let moment):
+            return "Planned for \(place)\(plannedSuffix(dayLabel: dayLabel, moment: moment))"
+        }
+    }
+
+    /// RW-150: the planned line's suffix after "Planned for
+    /// {place}" — the day segment and, when the entry was
+    /// settled at a picked time, the time segment (RW-98: the
+    /// picked time is named in full). A clock reading appends
+    /// " · {time}" to the day word ("· Tomorrow · 2 p.m."); a
+    /// legacy daypart reading already carries its own day word,
+    /// so it stands alone ("· Tomorrow afternoon") rather than
+    /// naming the day twice; a Now reading on a future day has
+    /// no time to name and the day word stands alone. The rich
+    /// text builders compose from this same suffix, so the
+    /// plain line and the styled line can never diverge.
+    static func plannedSuffix(dayLabel: String, moment: MomentReading) -> String {
+        switch moment {
+        case .clock:
+            return " · \(dayLabel) · \(moment.rendered)"
+        case .daypart:
+            return " · \(moment.rendered)"
+        case .now:
+            return " · \(dayLabel)"
         }
     }
 
@@ -1345,7 +1405,7 @@ struct WearIveRunMiniBarView: View {
     @ViewBuilder
     private func dockNarration(_ line: String, for shownState: WearIveRunState) -> some View {
         switch shownState {
-        case .planned(let place, let dayLabel):
+        case .planned(let place, let dayLabel, let moment):
             ViewThatFits(in: .horizontal) {
                 narrationText(line, for: shownState)
                     .font(.system(size: 12))
@@ -1354,7 +1414,13 @@ struct WearIveRunMiniBarView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     plannedNarrationHead(place: place)
                         .font(.system(size: 12))
-                    Text("· \(dayLabel)")
+                    // RW-150: the stacked candidate's second
+                    // line carries the same suffix as the
+                    // one-line form (day + picked time) — the
+                    // shared plannedSuffix, minus its leading
+                    // space (it opens its own line here).
+                    Text(String(WearIveRunNarration.plannedSuffix(
+                        dayLabel: dayLabel, moment: moment).dropFirst()))
                         .font(.system(size: 12))
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -1381,14 +1447,25 @@ struct WearIveRunMiniBarView: View {
     private func narrationText(_ line: String, for shownState: WearIveRunState) -> Text {
         switch shownState {
         case .updated(let payload):
+            // RW-150: the full-state payload styles like the
+            // settled-today form always did — the PLACE in pine
+            // bold; its moment segment rides in secondary ink
+            // (the moment is context, the place is the payload).
+            if case .placeAtMoment(let place, let moment) = payload {
+                return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                    + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+                    + Text(", \(moment.rendered)").foregroundColor(AppTheme.inkSecondary)
+            }
             return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
-        case .planned(let place, let dayLabel):
+        case .planned(let place, let dayLabel, let moment):
             // §7.2: "Planned for {place} · {day}" — the place in
-            // pine bold, the day word in secondary ink.
+            // pine bold, the day word in secondary ink. RW-150:
+            // the suffix (day + any picked time) comes from the
+            // one shared composition the plain line uses.
             return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
                 + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
-                + Text(" · \(dayLabel)").foregroundColor(AppTheme.inkSecondary)
+                + Text(WearIveRunNarration.plannedSuffix(dayLabel: dayLabel, moment: moment)).foregroundColor(AppTheme.inkSecondary)
         case .preAdd:
             return Text(line).foregroundColor(AppTheme.inkSecondary)
         }
@@ -1896,12 +1973,21 @@ struct WearIveRunFooterSectionView: View {
     private func footerNarrationText(_ line: String) -> Text {
         switch shownState {
         case .updated(let payload):
+            // RW-150: same anatomy as the dock's — the place in
+            // pine bold, its moment segment in secondary ink —
+            // composed from the same recorded state (§7.0), so
+            // dock and footer agree in every change class.
+            if case .placeAtMoment(let place, let moment) = payload {
+                return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                    + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+                    + Text(", \(moment.rendered)").foregroundColor(AppTheme.inkSecondary)
+            }
             return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
-        case .planned(let place, let dayLabel):
+        case .planned(let place, let dayLabel, let moment):
             return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
                 + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
-                + Text(" · \(dayLabel)").foregroundColor(AppTheme.inkSecondary)
+                + Text(WearIveRunNarration.plannedSuffix(dayLabel: dayLabel, moment: moment)).foregroundColor(AppTheme.inkSecondary)
         case .preAdd:
             return Text(line).foregroundColor(AppTheme.inkSecondary)
         }

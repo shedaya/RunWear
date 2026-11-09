@@ -125,8 +125,18 @@ enum HeroLuminanceSampler {
     /// feels-like foot zone (the scrim patch spans the foot's
     /// left ~73% in the frames; the sampler measures that part).
     static let topRegion = CGRect(x: 0, y: 0, width: 1, height: 0.18)
-    static let chipRegion = CGRect(x: 0, y: 0.36, width: 0.62, height: 0.18)
+    // Ruling 2: the chip's seat now ranges over more of the
+    // taller hero (≈0.29–0.57 of its height across classes) —
+    // the measured band widened to cover every seat the
+    // layout can choose.
+    static let chipRegion = CGRect(x: 0, y: 0.28, width: 0.62, height: 0.30)
     static let footRegion = CGRect(x: 0, y: 0.58, width: 0.73, height: 0.42)
+    /// Ruling 2: the weather line's band — the line spans the
+    /// hero's full width just above its foot (its seat ranges
+    /// ≈0.80–0.97 of the hero across classes and pill states),
+    /// so its legibility gets its own measured zone and the
+    /// foot scrim's peak answers to it as well.
+    static let weatherRegion = CGRect(x: 0, y: 0.80, width: 1, height: 0.19)
 
     static func meanLuminance(of image: UIImage, region: CGRect) -> Double {
         guard let cg = image.cgImage, cg.width > 0, cg.height > 0 else { return 0.5 }
@@ -173,6 +183,8 @@ final class HeroLuminanceModel: ObservableObject {
     @Published private(set) var topLuminance: Double = 0.5
     @Published private(set) var chipLuminance: Double = 0.5
     @Published private(set) var footLuminance: Double = 0.5
+    /// Ruling 2: the weather line band's measured luminance.
+    @Published private(set) var weatherLuminance: Double = 0.5
 
     private var measuredIdentity: String?
     private var loadTask: Task<Void, Never>?
@@ -194,9 +206,11 @@ final class HeroLuminanceModel: ObservableObject {
             let top = HeroLuminanceSampler.meanLuminance(of: image, region: HeroLuminanceSampler.topRegion)
             let chip = HeroLuminanceSampler.meanLuminance(of: image, region: HeroLuminanceSampler.chipRegion)
             let foot = HeroLuminanceSampler.meanLuminance(of: image, region: HeroLuminanceSampler.footRegion)
+            let weather = HeroLuminanceSampler.meanLuminance(of: image, region: HeroLuminanceSampler.weatherRegion)
             self?.topLuminance = top
             self?.chipLuminance = chip
             self?.footLuminance = foot
+            self?.weatherLuminance = weather
         }
     }
 }
@@ -244,44 +258,91 @@ enum HeroChipPlacement {
     }
 }
 
-// MARK: - RW-145 vertical layout (height-aware hero composition)
+// MARK: - Hero pill metrics (Ruling 2, Nov 9, 2026)
 //
-// RW-145 (owner device pass, Nov 9, 2026 — the Android folded-
-// portrait collision, audited onto iOS): the RW-144 composition
-// seated the chip at a FIXED fraction of the hero (0.46) and the
-// feels-like block at a FIXED 44 pt above the hero's foot, while
-// the hero itself is a fixed fraction (0.45) of the screen. The
-// block's height is absolute (≈128 pt at the 72 pt numeral), so
-// the chip↔block gap is 0.54 × heroHeight − 204 pt: ≈ +3 pt of
-// VISUAL air at the 852 pt fixture (the hit frames already
-// overlap), negative below ≈840 pt of screen height, −42 pt on
-// an iPhone SE (667 pt), and total in a short Duo pane. The
-// face-zone shift in HeroChipPlacement never engages at the
-// default seat (0.46 sits below the zone's 0.30 foot by
-// construction) and its clamp references a 0.58 block opening
-// that short heroes do not have — the collision class was
-// invisible to the RW-144 gate because its fixture was one tall
-// height and its photo had no subject.
+// The straddle pill's height by state — the input the hero's
+// vertical layout guarantees against. The single-line states
+// (making, free look, Premium, exhausted) render one row inside
+// the straddle seat's 10 pt vertical padding (≈40 pt actual);
+// the two-line generating form (script row + the green upsell
+// line, HeroPillView's makingWithUpsell) renders ≈58 pt. The
+// planning values carry margin over both, so the guarantee —
+// no pill state can cover the weather line (the build-33 device
+// defect: the two-line pill's top-anchored seat grew DOWN over
+// the sheet's opening line, cutting the wind value and the UV
+// figure) — holds for the real view, not just the model.
+enum HeroPillMetrics {
+    static let singleLineHeight: CGFloat = 44
+    static let twoLineHeight: CGFloat = 62
+
+    /// The planning height for a pill state; 0 when the state
+    /// renders no pill (the layout then seats the weather line
+    /// against the hero's foot directly).
+    static func height(for state: HeroPillState) -> CGFloat {
+        switch state {
+        case .hidden: return 0
+        case .makingWithUpsell: return twoLineHeight
+        case .making, .freeLook, .exhausted, .premium: return singleLineHeight
+        }
+    }
+}
+
+// MARK: - Hero vertical layout (RW-145 + Ruling 2, Nov 9, 2026)
 //
-// The fix is a single height-aware layout function — the same
-// behavioural contract as the Android lane (a guaranteed minimum
-// clear gap between the chip and the feels-like block at every
-// height), expressed natively: given the hero's actual height,
-// the layout picks the LARGEST numeral size (never above the
-// Dynamic-Type-requested size, never below 44 pt) for which a
-// chip seat exists that (a) clears the top chrome, (b) clears
-// the face zone, and (c) leaves at least `minimumGap` of clear
-// air between the chip's VISUAL bottom edge and the block's top
-// edge; the chip then sits at the higher of the v8 default seat
-// and that feasible seat's ceiling. The block's seat (its bottom
-// padding) is an input: 44 pt in the stacked layouts (the
-// straddle-pill clearance, unchanged) and 12 pt in the Duo pane
-// (no straddle exists there — the pill stands in-flow in the
-// secondary column).
+// RW-145 (owner device pass, Nov 9, 2026): the RW-144
+// composition seated the chip at a FIXED fraction of the hero
+// (0.46) and the feels-like block at a FIXED 44 pt above the
+// hero's foot, while the hero itself was a fixed fraction
+// (0.45) of the screen and the block's height is absolute
+// (≈128 pt at the 72 pt numeral). The chip↔block gap was
+// therefore 0.54 × heroHeight − 204 pt: ≈ +3 pt of VISUAL air
+// at the 852 pt fixture (the hit frames already overlapped),
+// negative below ≈840 pt of screen height, −42 pt on an
+// iPhone SE (667 pt), and total in a short Duo pane — and
+// Sol's iOS device pass (build 33) reproduced it verbatim:
+// the date/time pill sitting ON the FEELS LIKE label, the
+// label's letters showing through the pill.
+//
+// RULING 2 (Sol, Nov 9, 2026) rebuilds the hero around the
+// finding "between the proportions and the overlays, the hero
+// is totally irrelevant now": the photograph takes MOST of
+// the initial screen (HeroHeightPolicy: 0.70 of a standard
+// viewport, 0.66 of a short one, the full Duo pane), and ALL
+// key information rides OVER it — place pill, wordmark, gear,
+// date/time pill, feels-like block, the boxless weather line,
+// and the Make It Me straddle state (the last two moved onto
+// the hero from the sheet; their content, order and behaviour
+// are unchanged, only their seats).
+//
+// The collision class is now impossible BY CONSTRUCTION: the
+// hero's internal vertical stack — chrome → date/time pill →
+// feels-like block → weather line → straddle pill — is
+// composed by this ONE function from the hero's actual
+// height, chained upward from the foot with guaranteed clear
+// gaps at every joint:
+//   · straddle pill top = hero foot + pillBottomOffset − pill
+//     height (the offset is the caller's seat: +14 stacked,
+//     where the pill dips into the sheet's reserved top space;
+//     −12 in the Duo pane, where it sits fully on the pane);
+//   · weather line bottom = pill top − 10 (or hero foot − 12
+//     when no pill renders);
+//   · feels-like block bottom = weather line top − 12;
+//   · the numeral takes the LARGEST size (never above the
+//     Dynamic-Type-requested size, never below 36 pt) for
+//     which the chip still seats with (a) its hit top clear
+//     of the top chrome, (b) its VISUAL top clear of the face
+//     zone, and (c) ≥ 12 pt of clear air between the chip's
+//     VISUAL bottom and the block's top.
 enum HeroVerticalLayout {
     /// The guaranteed minimum clear gap, chip visual bottom →
-    /// feels-like block top, at every hero height.
+    /// feels-like block top, at every hero height (RW-145).
     static let minimumGap: CGFloat = 12
+    /// Guaranteed clear gaps at the foot chain's joints.
+    static let blockWeatherGap: CGFloat = 12
+    static let weatherPillGap: CGFloat = 10
+    /// The boxless weather line's height (value row + 3 pt +
+    /// label row, from BoxlessWeatherLineView's metrics).
+    static let weatherLineHeight: CGFloat = 34
     /// The chip's hit frame is 44 pt tall; its visual pill is
     /// 28 pt, centered — the visual edges sit 8 pt inside the
     /// hit frame's top and 36 pt from its top at the bottom.
@@ -291,11 +352,37 @@ enum HeroVerticalLayout {
     /// chrome row occupies the hero's top 42 pt (10 top padding
     /// + 32 height); 50 leaves 8 pt of air under it.
     static let minimumChipHitTop: CGFloat = 50
-    /// The numeral never shrinks below this size. (At the
-    /// shortest heroes the layout reaches this floor: a 36 pt
-    /// numeral on a 242 pt hero is the same ≈0.15–0.19 of hero
-    /// height the 72 pt numeral is of the standard hero.)
+    /// The numeral never shrinks below this size.
     static let minimumNumeralSize: CGFloat = 36
+    /// The straddle pill dips this far below the hero's foot
+    /// line in the stacked layouts; its dip lives in the
+    /// sheet's reserved top space (sheetTopReserve).
+    static let straddleDip: CGFloat = 14
+    /// In the Duo pane the pill sits fully on the pane, this
+    /// far above the pane's foot — no boundary to straddle.
+    static let duoPillBottomInset: CGFloat = 12
+
+    /// The sheet's top reserve (measured from the sheet's top
+    /// edge) while a straddle pill renders: the pill's dip +
+    /// the 28 pt hero/sheet overlap + a 12 pt clear gap, so
+    /// the sheet's first content can never sit under the pill
+    /// in any pill state (the build-33 weather-line defect,
+    /// discharged structurally now that the line lives on the
+    /// hero — the reserve protects the outfit/band seats).
+    static var sheetTopReserveWithPill: CGFloat {
+        straddleDip + HomeHandoffGeometry.sheetOverlap + 12
+    }
+    /// The sheet's top reserve when no pill renders.
+    static let sheetTopReserveNoPill: CGFloat = 20
+
+    /// The straddle pill's top edge relative to the SHEET's
+    /// top edge in the stacked layouts (the sheet container's
+    /// overlay seats the pill by this offset): the pill bottom
+    /// sits at hero foot + straddleDip, and the sheet's top
+    /// edge sits 28 pt above the foot.
+    static func pillOffsetFromSheetTop(pillHeight: CGFloat) -> CGFloat {
+        straddleDip + HomeHandoffGeometry.sheetOverlap - pillHeight
+    }
 
     /// The feels-like block's height for a numeral size, from
     /// the real font line heights of its three lines (label
@@ -312,11 +399,34 @@ enum HeroVerticalLayout {
         let numeralSize: CGFloat
         let chipHitTop: CGFloat
         let blockTop: CGFloat
+        let weatherTop: CGFloat
+        /// The pill's top edge in hero coordinates; nil when
+        /// no pill renders.
+        let pillTop: CGFloat?
         var chipVisualBottom: CGFloat { chipHitTop + chipVisualBottomFromHitTop }
         var gap: CGFloat { blockTop - chipVisualBottom }
+        var weatherBottom: CGFloat { weatherTop + weatherLineHeight }
+        var blockBottom: CGFloat { blockTop + blockHeight(numeralSize: numeralSize) }
     }
 
-    static func layout(heroHeight: CGFloat, requestedNumeralSize: CGFloat, bottomPadding: CGFloat) -> Layout {
+    /// Compose the hero's vertical stack for a hero of
+    /// `heroHeight`. `pillHeight` is the current pill state's
+    /// planning height (HeroPillMetrics; 0 = no pill) and
+    /// `pillBottomOffset` the pill bottom's seat relative to
+    /// the hero's foot (+straddleDip stacked, −duoPillBottomInset
+    /// in the Duo pane; ignored when pillHeight is 0).
+    static func layout(
+        heroHeight: CGFloat,
+        requestedNumeralSize: CGFloat,
+        pillHeight: CGFloat,
+        pillBottomOffset: CGFloat
+    ) -> Layout {
+        let pillTop: CGFloat? = pillHeight > 0
+            ? heroHeight + pillBottomOffset - pillHeight
+            : nil
+        let weatherBottom = pillTop.map { $0 - weatherPillGap } ?? (heroHeight - 12)
+        let weatherTop = weatherBottom - weatherLineHeight
+        let blockBottomLimit = weatherTop - blockWeatherGap
         // The face zone's foot (0.30 of the hero) in hit-frame
         // coordinates: the chip's VISUAL top must clear it by
         // 2 pt, and the visual top sits 8 pt below the hit top.
@@ -325,87 +435,117 @@ enum HeroVerticalLayout {
         let defaultTop = heroHeight * HeroChipPlacement.defaultTopFraction
         var size = max(minimumNumeralSize, requestedNumeralSize)
         while true {
-            let blockTop = heroHeight - bottomPadding - blockHeight(numeralSize: size)
+            let blockTop = blockBottomLimit - blockHeight(numeralSize: size)
             let latestTop = blockTop - minimumGap - chipVisualBottomFromHitTop
             if latestTop >= minHitTop {
                 return Layout(numeralSize: size,
                               chipHitTop: min(defaultTop, latestTop),
-                              blockTop: blockTop)
+                              blockTop: blockTop,
+                              weatherTop: weatherTop,
+                              pillTop: pillTop)
             }
             if size <= minimumNumeralSize {
                 // No feasible seat even at the floor size (a
-                // hero under ≈210 pt): keep the face/top-chrome
-                // clearance and take the largest gap available.
-                return Layout(numeralSize: size, chipHitTop: minHitTop, blockTop: blockTop)
+                // hero under ≈330 pt — a short landscape):
+                // keep the face/top-chrome clearance and take
+                // the largest gap available.
+                return Layout(numeralSize: size,
+                              chipHitTop: minHitTop,
+                              blockTop: blockTop,
+                              weatherTop: weatherTop,
+                              pillTop: pillTop)
             }
             size -= 4
         }
     }
 }
 
-// MARK: - RW-147 hero height policy (stacked layouts)
+// MARK: - Hero height policy (Ruling 2, Nov 9, 2026)
 //
-// The stacked hero's height is height-aware for the DOCK system
-// as well (see DockResidence in WearIveRunMiniBar.swift): the
-// hero is the standard 0.45 of the viewport UNLESS the sheet
-// stack that follows it (weather line → outfit → glance band)
-// would carry readable content into the dock's rest band, in
-// which case the hero gives up exactly the height needed to
-// keep the stack's required bottom clear of the band — down to
-// a floor that preserves the RW-145 hero composition. Where
-// even the floor cannot clear the FULL stack (the glance band
-// on the shortest viewports, the convergence band at mid
-// heights), the policy clears the OUTFIT stack (Sol's RW-147
-// evidence: the third outfit row) and the glance band is
-// protected by the scroll system's bottom clearance instead —
-// it can always be scrolled fully clear of the dock, and the
-// footer handoff is untouched.
+// Sol's ruling: "If we're overlaying all key info then hero
+// can take most of the main initial screen." The stacked
+// hero's height is a PROPORTION of the viewport, by class:
+//   · standard portrait (viewport ≥ 800 pt): 0.70 — at
+//     852 pt the hero is 596 pt; the sheet's top edge rests
+//     at 568, and with the straddle reserve the outfit header
+//     (646) and first item (684–740) sit fully clear of the
+//     dock band (top 782); even with the convergence band
+//     present the header's bottom edge (780) holds the dock's
+//     top edge, the first item at the viewport's immediate
+//     edge below it.
+//   · short portrait (viewport < 800 pt — SE/folded class):
+//     0.66 — at 667 pt the hero is 440 pt; header (490) and
+//     first item (528–584) clear the dock band (top 597) in
+//     the no-band case, the band case putting the header at
+//     the immediate edge.
+//   · Duo: the hero fills its pane (the pane is a dedicated
+//     column; the photograph stands edge to edge in it).
+// The fractions sit inside the mandated two-thirds to
+// three-quarters region. The RW-147 dock contract is NOT
+// served by shrinking the hero anymore (that was the
+// superseded first fix pass's mechanism): it is served by
+// the sheet's straddle reserve at the top, the scroll-end
+// clearance at the bottom (DockResidence, unchanged), and
+// the fact that under these proportions the glance band —
+// the build-33 RW-147 instance — is below the fold at
+// initial rest and can always be scrolled fully clear.
 enum HeroHeightPolicy {
-    /// The shortest hero that still composes per RW-145.
-    static let minimumHeroHeight: CGFloat = 242
-    /// Clear air required between the stack's bottom and the
-    /// dock's top edge at rest.
-    static let restClearance: CGFloat = 12
-    // Sheet-stack heights, measured from the sheet's top edge
-    // (the production paddings + component heights):
-    /// 36 top pad (straddle clearance) + ≈33 weather line +
-    /// 16 hairline gap + 1 hairline.
-    static let weatherStack: CGFloat = 86
-    /// 16 top pad + the convergence band's ≈96 when present.
-    static func bandStack(bandPresent: Bool) -> CGFloat { bandPresent ? 112 : 16 }
-    /// 24 top pad + ≈22 count header + 16 spacing + three rows
-    /// (3 × 56 tile + 2 × 16 spacing = 200).
-    static let outfitStack: CGFloat = 262
-    /// 24 top pad + the glance band's ≈114 (62 chart + 8 +
-    /// ≈18 label row + 26 padding).
-    static let glanceStack: CGFloat = 138
+    /// Standard portrait proportion (viewport ≥ 800 pt).
+    static let standardRatio: CGFloat = 0.70
+    /// Short portrait proportion (viewport < 800 pt).
+    static let shortRatio: CGFloat = 0.66
+    /// The viewport height dividing the two portrait classes.
+    static let shortClassCeiling: CGFloat = 800
 
-    static func outfitBottomFromSheetTop(bandPresent: Bool) -> CGFloat {
-        weatherStack + bandStack(bandPresent: bandPresent) + outfitStack
+    /// The stacked hero's height for a viewport of
+    /// `viewportHeight`.
+    static func stackedHeight(viewportHeight: CGFloat) -> CGFloat {
+        let ratio = viewportHeight >= shortClassCeiling ? standardRatio : shortRatio
+        return viewportHeight * ratio
     }
 
-    /// The hero height for a stacked layout in a viewport of
-    /// `viewportHeight`. `bandPresent` is the convergence band's
-    /// presence; `glancePresent` the day-chart band's.
-    static func height(viewportHeight: CGFloat, bandPresent: Bool, glancePresent: Bool) -> CGFloat {
-        let standard = viewportHeight * AppTheme.heroHeightRatio
-        // The dock's band top sits at viewportHeight − 70 (the
-        // 56 pt dock + its 14 pt bottom inset, DockResidence);
-        // the stack's required bottom must rest at or above
-        // bandTop − restClearance. Screen Y of the stack bottom
-        // = heroHeight − sheetOverlap + stackFromSheetTop.
-        let ceiling = viewportHeight - 70 - restClearance + HomeHandoffGeometry.sheetOverlap
-        let outfit = outfitBottomFromSheetTop(bandPresent: bandPresent)
-        let full = outfit + (glancePresent ? glanceStack : 0)
-        let fullTarget = ceiling - full
-        if fullTarget >= minimumHeroHeight { return min(standard, fullTarget) }
-        let outfitTarget = ceiling - outfit
-        if outfitTarget >= minimumHeroHeight { return min(standard, outfitTarget) }
-        // Even the outfit stack cannot clear at the floor hero:
-        // keep the taller of the standard hero and the floor —
-        // the RW-145 composition is preserved and the scroll
-        // clearance carries the rest (see the header note).
-        return max(standard, minimumHeroHeight)
+    // The sheet-stack geometry the at-rest proofs compose
+    // with (measured from the sheet's top edge, production
+    // paddings + component heights):
+    /// The outfit header's height ("3 items for your run").
+    static let outfitHeaderHeight: CGFloat = 22
+    /// The outfit section's top padding (call-site constant).
+    static let outfitTopPadding: CGFloat = 24
+    /// Header → first row gap.
+    static let headerRowGap: CGFloat = 16
+    /// One outfit row (56 pt tile, the row's full height).
+    static let outfitRowHeight: CGFloat = 56
+    /// 16 top pad + the convergence band's ≈96 when present.
+    static func bandStack(bandPresent: Bool) -> CGFloat { bandPresent ? 112 : 0 }
+
+    /// Screen Y of the outfit header's top edge at rest, in a
+    /// stacked layout: hero foot − the 28 pt overlap + the
+    /// sheet's top reserve + the band's stack (when present)
+    /// + the outfit section's top padding.
+    static func outfitHeaderTop(
+        viewportHeight: CGFloat,
+        pillVisible: Bool,
+        bandPresent: Bool
+    ) -> CGFloat {
+        stackedHeight(viewportHeight: viewportHeight)
+            - HomeHandoffGeometry.sheetOverlap
+            + (pillVisible ? HeroVerticalLayout.sheetTopReserveWithPill
+                           : HeroVerticalLayout.sheetTopReserveNoPill)
+            + bandStack(bandPresent: bandPresent)
+            + outfitTopPadding
+    }
+
+    /// Screen Y of the first outfit row's bottom edge at rest.
+    static func firstRowBottom(
+        viewportHeight: CGFloat,
+        pillVisible: Bool,
+        bandPresent: Bool
+    ) -> CGFloat {
+        outfitHeaderTop(
+            viewportHeight: viewportHeight,
+            pillVisible: pillVisible,
+            bandPresent: bandPresent)
+            + outfitHeaderHeight + headerRowGap + outfitRowHeight
     }
 }
 
@@ -704,27 +844,43 @@ struct HeroChromeOverlayView: View {
     let onTimeTapped: () -> Void
     let onNowTapped: () -> Void
 
-    /// RW-145: the feels-like block's bottom padding — 44 pt in
-    /// the stacked layouts (the straddle-pill clearance of
-    /// record), 12 pt in the Duo pane, which has no straddle.
-    var feelsBlockBottomPadding: CGFloat = 44
+    // Ruling 2 (Nov 9, 2026): the boxless weather line rides
+    // OVER the hero now (it opened the sheet in RW-144) — the
+    // same four stats from the same snapshot, seated by the
+    // hero's one vertical layout above the straddle pill.
+    let windMph: Double
+    let rainPercent: Int
+    let humidityPercent: Int
+    let uvIndex: Double
+    /// The weather band's measured luminance (its scrim peak
+    /// answers to the brighter of the foot and weather zones).
+    let weatherLuminance: Double
+    /// The current Make It Me pill state's planning height
+    /// (HeroPillMetrics; 0 = no pill) and its bottom's seat
+    /// relative to the hero's foot (+straddleDip stacked,
+    /// −duoPillBottomInset in the Duo pane).
+    let pillHeight: CGFloat
+    let pillBottomOffset: CGFloat
 
     @ScaledMetric(relativeTo: .largeTitle) private var requestedNumeralSize: CGFloat = 72
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            // RW-145: the height-aware vertical layout — the
-            // chip seat and the numeral size are chosen from
-            // THIS hero's actual height so the chip↔block gap
-            // guarantee holds at every height (see
-            // HeroVerticalLayout).
+            // Ruling 2 / RW-145: the ONE height-aware vertical
+            // layout — chrome → chip → feels-like block →
+            // weather line → straddle pill, chained from the
+            // foot with guaranteed clear gaps (see
+            // HeroVerticalLayout). Every seat below is an
+            // output of this single composition.
             let vLayout = HeroVerticalLayout.layout(
                 heroHeight: size.height,
                 requestedNumeralSize: requestedNumeralSize,
-                bottomPadding: feelsBlockBottomPadding)
+                pillHeight: pillHeight,
+                pillBottomOffset: pillBottomOffset)
             let band = HeroBandPalette.color(feelsLikeF: feelsLikeF)
-            let footPeak = HeroScrimMath.peakAlpha(forLuminance: footLuminance)
+            let footPeak = HeroScrimMath.peakAlpha(
+                forLuminance: max(footLuminance, weatherLuminance))
             ZStack(alignment: .topLeading) {
                 // Band-tinted wash over the photo (notes-v6):
                 // band colour α0.15 top → 0.05 mid → 0 at the
@@ -753,19 +909,23 @@ struct HeroChromeOverlayView: View {
                 )
                 .allowsHitTesting(false)
 
-                // Feels-like scrim zone at the hero's foot
-                // (notes-v6 profile; peak is the luminance-driven
-                // value, the mock's 0.73 its floor).
+                // Foot scrim zone (notes-v6 profile; peak is
+                // the luminance-driven value, the mock's 0.73
+                // its floor). Ruling 2: the zone now spans from
+                // above the feels-like block's top to the hero's
+                // foot at FULL width — the weather line it also
+                // carries spans the full width, where the
+                // RW-144 block-only patch spanned the left 85%.
+                // Its peak answers to the brighter of the foot
+                // and weather zones' measured luminances.
                 VStack(spacing: 0) {
                     Spacer()
-                    HStack(spacing: 0) {
-                        LinearGradient(
-                            stops: HeroScrimMath.scrimStops(peak: footPeak, ink: HeroChrome.footScrimInk),
-                            startPoint: .top, endPoint: .bottom
-                        )
-                        .frame(width: size.width * 0.85, height: size.height * 0.46)
-                        Spacer(minLength: 0)
-                    }
+                    LinearGradient(
+                        stops: HeroScrimMath.scrimStops(peak: footPeak, ink: HeroChrome.footScrimInk),
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(width: size.width,
+                           height: size.height - vLayout.blockTop + 24)
                     .blur(radius: 13) // the feathered edge (26 mock-pt Gaussian ≈ 13 pt)
                 }
                 .allowsHitTesting(false)
@@ -780,8 +940,8 @@ struct HeroChromeOverlayView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
 
-                // Date/time chip — its seat is face-zone
-                // protected (HeroChipPlacement).
+                // Date/time chip — seated by the layout (face-
+                // zone clear, guaranteed gap to the block).
                 HeroDateTimeChipView(
                     dateText: dateText,
                     timeText: timeText,
@@ -794,32 +954,32 @@ struct HeroChromeOverlayView: View {
                 .padding(.leading, 16)
                 .offset(y: vLayout.chipHitTop)
 
-                // Feels-like block, seated in the scrim zone at
-                // the hero's foot. In the stacked layouts its
-                // bottom edge clears the straddle pill by
-                // construction (the pill seat is measured from
-                // frame A — see WeatherOutfitView
-                // .sheetStraddlePill): the pill's top edge sits
-                // 37 pt above the hero's foot, and the block's
-                // last line (Actual) ends 44 pt above it — a
-                // 7 pt clearance, the frames' own ≈6 pt,
-                // holding whatever the pill's width. RW-145:
-                // the numeral size is the layout's chosen size,
-                // and the chip above is seated by the same
-                // layout with a guaranteed gap (see
-                // HeroVerticalLayout).
-                VStack(spacing: 0) {
-                    Spacer()
-                    HeroFeelsLikeBlockView(
-                        formattedFeelsLike: formattedFeelsLike,
-                        formattedActual: formattedActual,
-                        feelsLikeF: feelsLikeF,
-                        numeralSize: vLayout.numeralSize
-                    )
-                    .padding(.leading, 16)
-                    .padding(.bottom, feelsBlockBottomPadding)
-                }
-                .frame(width: size.width, height: size.height, alignment: .bottomLeading)
+                // Feels-like block — its top edge is the
+                // layout's blockTop; the numeral size is the
+                // layout's chosen size.
+                HeroFeelsLikeBlockView(
+                    formattedFeelsLike: formattedFeelsLike,
+                    formattedActual: formattedActual,
+                    feelsLikeF: feelsLikeF,
+                    numeralSize: vLayout.numeralSize
+                )
+                .padding(.leading, 16)
+                .offset(y: vLayout.blockTop)
+                .allowsHitTesting(false)
+
+                // The boxless weather line over the photo —
+                // seated by the layout between the block and
+                // the straddle pill, over the foot scrim, in
+                // the hero's cream chrome ink.
+                BoxlessWeatherLineView(
+                    windMph: windMph,
+                    rainPercent: rainPercent,
+                    humidityPercent: humidityPercent,
+                    uvIndex: uvIndex,
+                    style: .hero
+                )
+                .padding(.horizontal, 16)
+                .offset(y: vLayout.weatherTop)
                 .allowsHitTesting(false)
             }
             .frame(width: size.width, height: size.height)

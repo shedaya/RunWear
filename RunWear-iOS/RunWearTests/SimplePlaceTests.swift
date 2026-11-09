@@ -155,10 +155,10 @@ final class SimplePlaceTests: XCTestCase {
                 moment: .now,
                 wasUpdatedThisSession: false)
             XCTAssertEqual(
-                state, .updated(payload: .place(fixture.simple)), fixture.raw)
+                state, .updated(payload: .placeAtMoment(fixture.simple, .now)), fixture.raw)
             XCTAssertEqual(
                 WearIveRunNarration.line(for: state),
-                "Updated to \(fixture.simple)", fixture.raw)
+                "Updated to \(fixture.simple), Now", fixture.raw)
         }
     }
 
@@ -173,7 +173,7 @@ final class SimplePlaceTests: XCTestCase {
             moment: .now,
             wasUpdatedThisSession: false)
         let line = WearIveRunNarration.line(for: state) ?? ""
-        XCTAssertEqual(line, "Updated to New York, NY", line)
+        XCTAssertEqual(line, "Updated to New York, NY, Now", line)
         XCTAssertFalse(line.contains("Today"), line)
     }
 
@@ -196,10 +196,10 @@ final class SimplePlaceTests: XCTestCase {
         XCTAssertEqual(moved.narrationPayload, .place("Miami, FL"))
         let state = WearIveRunMiniBarModel.state(
             todaysEntry: moved, moment: .now, wasUpdatedThisSession: true)
-        XCTAssertEqual(state, .updated(payload: .place("Miami, FL")))
+        XCTAssertEqual(state, .updated(payload: .placeAtMoment("Miami, FL", .now)))
         XCTAssertEqual(
             WearIveRunNarration.line(for: state),
-            "Updated to Miami, FL")
+            "Updated to Miami, FL, Now")
         let line = WearIveRunNarration.line(for: state) ?? ""
         XCTAssertFalse(line.contains("items"), line)
         XCTAssertFalse(line.contains("Tank"), line)
@@ -218,8 +218,8 @@ final class SimplePlaceTests: XCTestCase {
         let line = WearIveRunNarration.line(for: state) ?? ""
         // RW-135 spec §9.1 RE-PIN: the line is the place form —
         // verb + city, region, and no moment segment.
-        XCTAssertEqual(line, "Updated to Rancho Santa Margarita, CA")
-        XCTAssertEqual(line.components(separatedBy: ",").count, 2,
+        XCTAssertEqual(line, "Updated to Rancho Santa Margarita, CA, Now")
+        XCTAssertEqual(line.components(separatedBy: ",").count, 3,
                        "verb + city, region — no raw third component: \(line)")
     }
 

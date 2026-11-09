@@ -27,9 +27,13 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
 
     /// RW-128 (fix wave 2026-11-07): the free allowance is 10,
     /// moved as ONE aligned change with the server gates and
-    /// Android — this constant is the single iOS source every
-    /// count surface reads (pill, meters, subscription line).
-    static let freeAllowance = 10
+    /// Android. RW-148 (Nov 9, 2026): the DEFINITION lives in
+    /// the model layer (FreeLooksAllowance) because that layer
+    /// compiles into both targets while this store is app-only;
+    /// this constant FORWARDS to it — one number, two names,
+    /// every count surface reading it (pill, meters, card,
+    /// subscription line, error mapping).
+    static let freeAllowance = FreeLooksAllowance.value
 
     @Published private(set) var mode: Mode = .stock
     @Published private(set) var freeGenerationsUsed = 0
