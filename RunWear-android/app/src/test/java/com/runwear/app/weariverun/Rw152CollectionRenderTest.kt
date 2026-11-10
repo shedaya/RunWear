@@ -275,17 +275,10 @@ class Rw152CollectionRenderTest {
         val stage = stage {
             WearIveRunCollectionScreen(
                 entries = fixtureEntries(),
-                today = fixtureToday,
+                today = today,
                 onDismiss = {},
                 onDeleteEntry = {},
-                heroImage = { entry ->
-                    when (entry.id) {
-                        "miami-old" -> solidBitmap(android.graphics.Color.RED)
-                        "ny-past" -> solidBitmap(android.graphics.Color.GREEN)
-                        "ny-today" -> solidBitmap(android.graphics.Color.BLUE)
-                        else -> null
-                    }
-                }
+                onDeletePlace = {}
             )
         }
         stage.settle()
