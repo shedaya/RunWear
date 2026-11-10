@@ -137,7 +137,7 @@ class Rw152UnitTest {
 
     @Test
     fun `cover is the newest entry with a loadable reference`() {
-        val chapters = WearIveRunCollection.chapters(
+        val chapters = WearIveRunCollectionLogic.chapters(
             listOf(
                 entry("Miami, FL", "newest-no-photo", 3000, null),
                 entry(
@@ -154,7 +154,7 @@ class Rw152UnitTest {
 
     @Test
     fun `cover falls back to the newest entry when none has a photo`() {
-        val chapters = WearIveRunCollection.chapters(
+        val chapters = WearIveRunCollectionLogic.chapters(
             listOf(
                 entry("Miami, FL", "a", 1000, null),
                 entry("Miami, FL", "b", 2000, null)
@@ -165,7 +165,7 @@ class Rw152UnitTest {
 
     @Test
     fun `an expired signed URL still counts as a loadable reference for cover selection`() {
-        val chapters = WearIveRunCollection.chapters(
+        val chapters = WearIveRunCollectionLogic.chapters(
             listOf(
                 entry("Miami, FL", "newest-no-photo", 3000, null),
                 entry("Miami, FL", "older-signed", 2000, signed)
