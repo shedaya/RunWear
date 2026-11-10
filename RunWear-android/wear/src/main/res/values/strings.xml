@@ -6,7 +6,7 @@
          (values byte-identical to the shipped literals). -->
     <string name="wear_feels_like_label">Feels like</string>
     <string name="wear_swipe_for_items">Swipe for %1$d items →</string>
-    <string name="wear_couldnt_load">Couldn't load weather</string>
+    <string name="wear_couldnt_load">Couldn\'t load weather</string>
     <string name="wear_grant">Grant</string>
     <string name="wear_loading">Loading...</string>
     <string name="wear_location_needed">Location needed</string>
