@@ -788,9 +788,14 @@ internal fun deriveBankCoverage(
  * TRUE is the server's — request-identity-adoption re-verifies
  * against RevenueCat before re-keying anything.
  */
-internal fun parseAdoptionAvailable(body: JsonObject): String? =
-    body["adoption_available"]?.jsonPrimitive?.contentOrNull
-        ?.trim()?.takeIf { it.isNotEmpty() }
+internal fun parseAdoptionAvailable(body: JsonObject): String? {
+    // Only a STRING primitive is a uid hint — a numeric/boolean
+    // value must not coerce into one (contentOrNull would happily
+    // stringify it).
+    val primitive = body["adoption_available"]?.jsonPrimitive
+    if (primitive == null || !primitive.isString) return null
+    return primitive.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
+}
 
 /**
  * GEN-5 (RW-28 Addendum 8, Defect 1): the start-personal-fill
