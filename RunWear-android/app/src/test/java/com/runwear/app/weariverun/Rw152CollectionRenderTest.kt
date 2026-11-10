@@ -258,14 +258,27 @@ class Rw152CollectionRenderTest {
             stage.texts(r).contains("Delete the Miami, FL cover entry")
         } ?: throw AssertionError("collection window with the cover trash not found")
         stage.clickDescription(coverRoot, "Delete the Miami, FL cover entry")
-        stage.settle()
         // The confirmation lives in its own Dialog window — find
-        // the window root carrying its title.
-        val dialogView = stage.windowViews().firstOrNull { v ->
-            containsComposeRoot(v) &&
-                stage.texts(stage.mergedRoot(v))
-                    .any { it.contains("Delete this entry?") }
-        } ?: throw AssertionError("confirmation dialog window not found")
+        // the window root carrying its title. The window can take
+        // several pumps to attach under a loaded runner, so the
+        // search retries across bounded settle rounds (the
+        // dialog's existence is the assertion, not its timing).
+        var dialogView: View? = null
+        repeat(8) {
+            if (dialogView == null) {
+                stage.settle(10)
+                dialogView = stage.windowViews().firstOrNull { v ->
+                    containsComposeRoot(v) &&
+                        stage.texts(stage.mergedRoot(v))
+                            .any { it.contains("Delete this entry?") }
+                }
+            }
+        }
+        dialogView ?: throw AssertionError(
+            "confirmation dialog window not found; windows=" +
+                stage.windowViews().size + " texts=" +
+                stage.composeRoots().flatMap { stage.texts(it) }
+        )
         val dRoot = stage.mergedRoot(dialogView)
         val dTexts = stage.texts(dRoot)
         println("RW152-DIALOG texts: $dTexts")
