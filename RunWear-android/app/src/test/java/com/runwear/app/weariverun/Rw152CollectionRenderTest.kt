@@ -125,6 +125,23 @@ class Rw152CollectionRenderTest {
         /** All window roots (the collection screen hosts its own
          * Dialog window; its content does not live in the
          * activity's ComposeView). */
+        /** Measure/layout every window view (Dialog windows
+         * included) — a freshly attached dialog window gets no
+         * traversal from the activity's settle loop, and an
+         * unlaid-out ComposeView never composes its content. */
+        fun settleWindows() {
+            val w = composeView.resources.displayMetrics.widthPixels
+            val h = composeView.resources.displayMetrics.heightPixels
+            val wSpec = View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY)
+            val hSpec = View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY)
+            windowViews().forEach { v ->
+                runCatching {
+                    v.measure(wSpec, hSpec)
+                    v.layout(0, 0, w, h)
+                }
+            }
+        }
+
         fun windowViews(): List<View> {
             val wm = shadowOf(activity.windowManager)
                 as ShadowWindowManagerImpl
@@ -267,6 +284,7 @@ class Rw152CollectionRenderTest {
         repeat(8) {
             if (dialogView == null) {
                 stage.settle(10)
+                stage.settleWindows()
                 dialogView = stage.windowViews().firstOrNull { v ->
                     containsComposeRoot(v) &&
                         stage.texts(stage.mergedRoot(v))
