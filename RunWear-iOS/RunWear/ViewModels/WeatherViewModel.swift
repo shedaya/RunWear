@@ -706,15 +706,25 @@ class WeatherViewModel: ObservableObject {
                 outfit: outfit
             ))
         }
-        let forecastCells = ForecastPriorityCells.ids(genderPreference: genderPreference, frames: frames)
+        // RW-151 §5: the forecast cells carry their frames'
+        // already-computed outfits (threaded, never recomputed)
+        // so the wire form can ACCOMPANY them — the live
+        // start-personal-fill v15 contract that makes a
+        // forecast-derived cell fillable.
+        let forecastNamed = ForecastPriorityCells.cells(genderPreference: genderPreference, frames: frames)
         // The composed fill set: forecast first (queued ahead),
         // then the canonical core matrix — the scaffold
         // substrate — behind it.
+        let coreCells = CoreMatrixCells.ids(genderPreference: genderPreference)
         let named = FillSetComposition.named(
-            forecastCells: forecastCells,
-            coreCells: CoreMatrixCells.ids(genderPreference: genderPreference)
+            forecastCells: forecastNamed.map(\.combinationId),
+            coreCells: coreCells
         )
-        personalStore?.updateForecastPriorityCells(named)
+        let wire = FillSetComposition.wireCells(
+            forecastCells: forecastNamed,
+            coreCells: coreCells
+        )
+        personalStore?.updateForecastFill(targetCells: named, wireCells: wire)
     }
 
     // MARK: - Widget last-good (GEN-5, Addendum 7)

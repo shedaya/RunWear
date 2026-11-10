@@ -149,6 +149,13 @@ protocol PersonalHeroResolving: AnyObject {
     /// resolver re-sends the fill when the named set changes
     /// under a live subscription.
     func updateForecastPriorityCells(_ cells: [String])
+    /// RW-151 §5: the composed fill set WITH its wire form —
+    /// the target ids (the coverage denominator of record) and
+    /// the wire cells actually sent to start-personal-fill v15
+    /// (forecast cells accompanied "id|ITEM,ITEM,...", core
+    /// cells bare). The production publish path calls this; the
+    /// bare-ids method above remains for lightweight conformers.
+    func updateForecastFill(targetCells: [String], wireCells: [String])
 }
 
 extension PersonalHeroResolving {
@@ -165,6 +172,7 @@ extension PersonalHeroResolving {
     func lookState(for combination: PersonalCombination) -> PersonalLookState { .none }
     func serveIsScaffold(for combination: PersonalCombination) -> Bool { false }
     func updateForecastPriorityCells(_ cells: [String]) {}
+    func updateForecastFill(targetCells: [String], wireCells: [String]) {}
 }
 
 // MARK: - Backend DTOs
@@ -379,19 +387,19 @@ enum PersonalLookState: Equatable {
 /// the state is honest and usable, never a silently stranded
 /// MAKING.
 ///
-/// INTERACTION with the 30-minute bank stall line
-/// (ConvergenceBand.stallThreshold, PersonalHeroModels.swift's
-/// ConvergenceBand): the two clocks govern DIFFERENT scopes and
-/// neither replaces the other. The stall line watches the whole
-/// Premium BANK's ready count (coverage advancing or not, over
-/// 30 min) and only changes the convergence band's copy. This
-/// poll watches ONE cell's look state. The poll cap (20 min)
-/// expires BEFORE the stall threshold, so a single first photo
-/// still MAKING at its cap resolves to the quiet pool serve
-/// while the bank — if it is also not advancing — goes on to
-/// declare itself stalled in the band at 30 min. The stall line
-/// itself is a named parity exception awaiting the owner's
-/// ruling and is NOT changed by this wave.
+/// INTERACTION with the bank convergence band: the two clocks
+/// govern DIFFERENT scopes and neither replaces the other. The
+/// band watches the whole Premium BANK's coverage; this poll
+/// watches ONE cell's look state. The poll cap (20 min) expires
+/// first, so a single first photo still MAKING at its cap
+/// resolves to the quiet pool serve while the bank's own state
+/// carries in the band.
+/// RW-151 (J4, Nov 9, 2026): the former 30-minute stall line
+/// this note used to describe is RETIRED — a bank that stops
+/// advancing with nothing in flight now RE-ISSUES its fill
+/// under the reconcile rule (FillReconcile below) instead of
+/// presenting a stalled line. The band's settled heading and
+/// in-progress line are unchanged.
 enum HeroPollPolicy {
     /// The generous cap: 20 minutes of total poll time
     /// (≥ the 15-minute floor the wave brief sets).
@@ -1414,11 +1422,29 @@ enum ForkHeroSpec {
 struct BankCoverage: Equatable {
     let ready: Int
     let total: Int
+    /// RW-151 §5: target cells whose generation jobs settled
+    /// FAILED (RW-126's failed-settle, preserved) — terminal,
+    /// so they are neither ready nor outstanding.
+    let failed: Int
 
-    /// Every named target cell is banked — the only state in
-    /// which a readiness claim about the bank is true.
+    init(ready: Int, total: Int, failed: Int = 0) {
+        self.ready = ready
+        self.total = total
+        self.failed = failed
+    }
+
+    /// Cells still owed: total − ready − failed∩Target (the
+    /// failed set is intersected with the target at derivation,
+    /// so `failed` here is already the in-target count). Never
+    /// negative, and never rendered as a number anywhere — the
+    /// band shows the fraction only.
+    var outstanding: Int { max(0, total - ready - failed) }
+
+    /// Every named target cell is banked or terminally failed —
+    /// the only state in which a readiness claim about the bank
+    /// is true.
     var isComplete: Bool {
-        total > 0 && ready >= total
+        total > 0 && outstanding == 0
     }
 }
 
@@ -1451,11 +1477,29 @@ enum SubscribedReadiness {
 /// named yet — without a named set there is no honest fraction
 /// and the band stays hidden. Pure, so the band's counts are
 /// unit-pinned without a network.
-func deriveBankCoverage(heroCells: Set<String>, targetCells: Set<String>) -> BankCoverage? {
-    guard !targetCells.isEmpty else { return nil }
+/// RW-151 §5 (Nov 9, 2026): the denominator is the FILLABLE
+/// set — total = |Target ∩ Fillable|. Cells the server cannot
+/// fill by construction (a bare off-table id) no longer hold
+/// the bank open forever: under the accompanied wire format
+/// every forecast cell is fillable (its items ride along) and
+/// every core cell is fillable (canonical table), so Fillable
+/// is the whole named set in practice — but the arithmetic
+/// takes the set explicitly so an unfillable id can never wedge
+/// the denominator. `failedCells` is the terminal-FAILED job
+/// set (RW-126 failed-settle preserved): a failed target cell
+/// is settled, not outstanding. The defaulted parameters keep
+/// the pre-RW-151 two-argument call exact (fillable = target,
+/// failed = ∅).
+func deriveBankCoverage(heroCells: Set<String>, targetCells: Set<String>,
+                        fillableCells: Set<String>? = nil,
+                        failedCells: Set<String> = []) -> BankCoverage? {
+    let fillable = fillableCells ?? targetCells
+    let total = targetCells.intersection(fillable).count
+    guard total > 0 else { return nil }
     return BankCoverage(
         ready: heroCells.intersection(targetCells).count,
-        total: targetCells.count
+        total: total,
+        failed: failedCells.intersection(targetCells).count
     )
 }
 
@@ -1478,10 +1522,35 @@ struct ForecastCellFrame {
     let outfit: OutfitRecommendation
 }
 
+/// RW-151 §5: one named forecast cell WITH the outfit items of
+/// the frame that produced it — the frame's already-computed
+/// outfit recommendation, threaded through
+/// PersonalCombination.make (never recomputed). On the wire a
+/// forecast cell is ACCOMPANIED: "id|ITEM,ITEM,..." — the live
+/// start-personal-fill v15 contract validates the items against
+/// the cell's outfit signature, which is what makes a
+/// forecast-derived cell fillable at all.
+struct NamedFillCell: Equatable {
+    let combinationId: String
+    /// Clothing KEYS in outfit order (PersonalCombination's
+    /// outfitItems — the same values the outfit hash signs).
+    let outfitItems: [String]
+
+    /// The accompanied wire form: "id|ITEM,ITEM,...".
+    var wireForm: String {
+        "\(combinationId)|\(outfitItems.joined(separator: ","))"
+    }
+}
+
 enum ForecastPriorityCells {
-    static func ids(genderPreference: GenderPreference, frames: [ForecastCellFrame]) -> [String] {
+    /// The cluster representatives WITH their outfits (RW-151
+    /// §5) — the selection rule is unchanged from `ids`: ONE
+    /// REPRESENTATIVE FRAME PER (DAY, DAYPART) CLUSTER, first
+    /// forecast hour of each cluster, forecast order, deduped
+    /// by cell id.
+    static func cells(genderPreference: GenderPreference, frames: [ForecastCellFrame]) -> [NamedFillCell] {
         var seen = Set<String>()
-        var ids: [String] = []
+        var cells: [NamedFillCell] = []
         var lastCluster: String? = nil
         for frame in frames {
             // The night daypart forms two clusters per calendar
@@ -1498,10 +1567,16 @@ enum ForecastPriorityCells {
                 outfit: frame.outfit
             )
             if seen.insert(combination.combinationId).inserted {
-                ids.append(combination.combinationId)
+                cells.append(NamedFillCell(
+                    combinationId: combination.combinationId,
+                    outfitItems: combination.outfitItems))
             }
         }
-        return ids
+        return cells
+    }
+
+    static func ids(genderPreference: GenderPreference, frames: [ForecastCellFrame]) -> [String] {
+        cells(genderPreference: genderPreference, frames: frames).map(\.combinationId)
     }
 }
 
@@ -1519,6 +1594,44 @@ enum FillSetComposition {
             out.append(id)
         }
         return out
+    }
+
+    /// RW-151 §5: the WIRE form of the fill set, identical to
+    /// Android's — forecast-derived cells ACCOMPANIED
+    /// ("id|ITEM,ITEM,..."), core cells BARE (the server
+    /// resolves them through the canonical table), forecast
+    /// first, deduped by cell id (an accompanied forecast cell
+    /// wins over a bare core naming of the same id).
+    static func wireCells(forecastCells: [NamedFillCell], coreCells: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for cell in forecastCells where seen.insert(cell.combinationId).inserted {
+            out.append(cell.wireForm)
+        }
+        for id in coreCells where seen.insert(id).inserted {
+            out.append(id)
+        }
+        return out
+    }
+
+    /// The cell id a wire entry names (the part before "|").
+    static func cellID(ofWireEntry entry: String) -> String {
+        String(entry.split(separator: "|", maxSplits: 1).first ?? "")
+    }
+}
+
+/// RW-151 §5 reconcile rule (owner ruling J4): after any fill
+/// response or coverage read — outstanding > 0 AND no
+/// non-terminal job AND no fill outstanding → re-issue the fill
+/// ONCE for the fillable remainder. This is what replaces the
+/// retired stall trigger: a bank with work still owed and
+/// nothing in flight does not present a stalled line, it asks
+/// again. `generationActive` is the store's latest server read;
+/// nil (no read yet) never re-issues — the rule acts on the
+/// server's word, not on a guess.
+enum FillReconcile {
+    static func shouldReissue(outstanding: Int, generationActive: Bool?, fillOutstanding: Bool) -> Bool {
+        outstanding > 0 && generationActive == false && !fillOutstanding
     }
 }
 
@@ -1551,23 +1664,13 @@ enum ConvergenceBand {
     static let heading = "Making your looks"
     static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
 
-    /// GEN-5 (Addendum 8, bank non-convergence): the STALLED
-    /// line. Sol's device sat at ~90% for three hours after
-    /// subscribing while the band presented as ordinary
-    /// in-progress — a bank that has stopped advancing must say
-    /// so, in the band itself. The fraction stays the REAL
-    /// banked fraction (ready ÷ total from the server's cell
-    /// sets — audited: there is no time-based or estimated
-    /// progress anywhere in this rule); only the line changes.
-    /// Lane-authored copy (no settled stalled line exists in
-    /// the design record), written to the honesty rules: it
-    /// names the delay, and it claims only what is true — the
-    /// looks already banked ARE the ones being served.
-    static let stalledLine = "This is taking longer than usual. Your ready looks are already in your outfits — the rest are still being made."
-
-    /// How long coverage may fail to advance before the bank
-    /// reads as stalled (the store's tracker applies it).
-    static let stallThreshold: TimeInterval = 30 * 60
+    // RW-151 (owner ruling J4, Nov 9, 2026): the STALLED line
+    // and its 30-minute trigger (the former `stalledLine` /
+    // `stallThreshold` / BankStallTracker) are RETIRED. A bank
+    // that stops advancing with nothing in flight now re-issues
+    // its fill under the reconcile rule (FillReconcile) instead
+    // of presenting a stalled state. The settled heading and
+    // in-progress line above are byte-identical to before.
 
     /// The premium-context input is a plain Bool, deliberately:
     /// this model file is compiled into BOTH the app and the
@@ -1586,44 +1689,18 @@ enum ConvergenceBand {
     /// activity that does not exist. Nil (no job read yet) keeps
     /// the pre-fix arithmetic-only behaviour for callers that
     /// have not folded a job read.
-    static func content(isSubscribed: Bool, coverage: BankCoverage?, stalled: Bool = false, generationActive: Bool? = nil) -> ConvergenceBandContent? {
+    /// RW-151 §5: the arithmetic gate is OUTSTANDING — a bank
+    /// whose remaining target cells all settled FAILED
+    /// (RW-126's failed-settle) is complete, not in progress.
+    static func content(isSubscribed: Bool, coverage: BankCoverage?, generationActive: Bool? = nil) -> ConvergenceBandContent? {
         guard isSubscribed, let coverage else { return nil }
         if generationActive == false { return nil }
-        guard coverage.total > 0, coverage.ready < coverage.total else { return nil }
+        guard coverage.total > 0, coverage.outstanding > 0 else { return nil }
         return ConvergenceBandContent(
             heading: heading,
-            line: stalled ? stalledLine : line,
+            line: line,
             fraction: Double(coverage.ready) / Double(coverage.total)
         )
-    }
-}
-
-/// GEN-5 (Addendum 8): the stall tracker — pure, so the rule is
-/// pinned in the model layer. It watches the REAL ready count:
-/// every observation that ADVANCES it resets the clock; when
-/// the count has not advanced for `ConvergenceBand.stallThreshold`
-/// while the bank is still incomplete, the bank reads as
-/// stalled. A completed bank is never stalled, and the first
-/// observation of a bank starts its clock (a bank is not born
-/// stalled).
-struct BankStallTracker: Equatable {
-    private var lastReady: Int?
-    private var lastAdvanceAt: Date?
-
-    mutating func observe(_ coverage: BankCoverage, now: Date) {
-        if let lastReady, coverage.ready > lastReady {
-            self.lastReady = coverage.ready
-            lastAdvanceAt = now
-        } else if lastReady == nil {
-            lastReady = coverage.ready
-            lastAdvanceAt = now
-        }
-    }
-
-    func isStalled(_ coverage: BankCoverage, now: Date) -> Bool {
-        guard coverage.total > 0, coverage.ready < coverage.total,
-              let lastAdvanceAt else { return false }
-        return now.timeIntervalSince(lastAdvanceAt) >= ConvergenceBand.stallThreshold
     }
 }
 

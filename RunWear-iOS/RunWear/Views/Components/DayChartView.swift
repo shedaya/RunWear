@@ -316,7 +316,13 @@ struct DayChartBandView: View {
                         Text("›").fontWeight(.bold)
                     }
                     .font(.system(size: 15.5, weight: .bold))
-                    .foregroundColor(AppTheme.pinePayload)
+                    // RW-152 remainders (Nov 10, 2026): the
+                    // payload-pine read low-contrast against the
+                    // chart's descending line in the expanded
+                    // glance-band frame — the control takes the
+                    // settled PRIMARY INK treatment, the same ink
+                    // the band's own text reads in.
+                    .foregroundColor(AppTheme.inkPrimary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Change the hour")

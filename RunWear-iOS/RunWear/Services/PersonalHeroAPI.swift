@@ -157,6 +157,23 @@ actor PersonalHeroAPI {
         return rows.contains { nonTerminal.contains($0.status) }
     }
 
+    /// RW-151 §5: the caller's terminally-FAILED generation-job
+    /// cells — the failed set the coverage arithmetic subtracts
+    /// from outstanding (RW-126's failed-settle, preserved: a
+    /// failed cell is settled, never silently outstanding
+    /// forever). Owner-read, same table as the job-state fold.
+    /// Nil when no read landed.
+    func fetchFailedCells() async -> Set<String>? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_generation_jobs?select=combination_id,status&user_id=eq.\(session.userId)"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable { let combinationId: String; let status: String
+            enum CodingKeys: String, CodingKey { case combinationId = "combination_id"; case status } }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        let failed: Set<String> = ["FAILED", "failed"]
+        return Set(rows.filter { failed.contains($0.status) }.map { $0.combinationId })
+    }
+
     /// RW-16.12 Lane B backstop: ask the server to reconcile this
     /// user's entitlement against RevenueCat. The client asserts
     /// NOTHING — it sends an empty body under the user's own JWT;
@@ -334,3 +351,38 @@ actor PersonalHeroAPI {
 // RW-16: the "Your photos" loader's seam is exactly this client's
 // path list + per-path signing.
 extension PersonalHeroAPI: ReferencePhotoFetching {}
+
+// MARK: - RW-152 §3: the resolver's async half
+
+/// The ONE entry → loadable-URL resolution every Wear I've Run
+/// surface loads through (chapter banner, entry cards, TODAY
+/// pin, day view, viewer, poster, expanded panel). The pure
+/// classification lives in HeroRefResolver (RW26CollectionModels);
+/// this is its signing half: a stored storage path re-signs
+/// through the client's existing signing path
+/// (`signedReferenceURL`, the same one reference photos use),
+/// cached for most of the signed hour so a collection scroll
+/// does not re-sign per card. A relaunch more than an hour after
+/// settle resolves the same photo again — the durable path, not
+/// the dead display URL, is what gets signed.
+@MainActor
+enum HeroRefRuntime {
+    private static var signedCache: [String: (url: String, expiresAt: Date)] = [:]
+
+    /// The loadable URL string for an entry, or nil when the
+    /// entry is honestly empty (or signing failed — the surface
+    /// then renders its placeholder, never a substitute photo).
+    static func loadableURLString(for entry: WearIveRunEntry) async -> String? {
+        if let stable = HeroRefResolver.stableDisplayReference(for: entry) {
+            return stable
+        }
+        guard let path = HeroRefResolver.storagePath(for: entry) else { return nil }
+        if let hit = signedCache[path], hit.expiresAt > Date() {
+            return hit.url
+        }
+        guard let url = try? await PersonalHeroAPI.shared.signedReferenceURL(path: path),
+              let signed = url else { return nil }
+        signedCache[path] = (signed.absoluteString, Date().addingTimeInterval(50 * 60))
+        return signed.absoluteString
+    }
+}

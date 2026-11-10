@@ -216,7 +216,6 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             // value in place.
             if let coverage = await readCoverage() {
                 bankCoverage = coverage
-                stallTracker.observe(coverage, now: Date())
             }
             // RW-126 (fix wave): the job-state fold rides the
             // same refresh — a profile refresh that finds every
@@ -228,6 +227,10 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             mode = .stock
         }
         syncCoveragePolling()
+        // RW-151 §5: the reconcile rule rides every coverage
+        // read — this refresh just folded the coverage and the
+        // job state it acts on.
+        reconcileFillIfNeeded()
     }
 
     /// Fix wave 2026-11-07 (review §1 Seam A / §5.4): THE
@@ -266,21 +269,17 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// the band never renders for them; Android suppresses it
     /// for trial users the same way.
     var convergenceBand: ConvergenceBandContent? {
-        // GEN-5 (Addendum 8): a bank whose real ready count has
-        // not advanced for the stall threshold renders the
-        // band's stalled line — never ordinary in-progress
-        // forever.
+        // RW-151 (J4): the stall input is retired — a bank with
+        // work outstanding and nothing in flight re-issues its
+        // fill under the reconcile rule below instead of
+        // presenting a stalled line. The band's settled heading
+        // and line are unchanged.
         ConvergenceBand.content(
             isSubscribed: mode == .subscribed && !billing.isInTrial,
             coverage: bankCoverage,
-            stalled: bankCoverage.map { stallTracker.isStalled($0, now: Date()) } ?? false,
             generationActive: bankGenerationActive
         )
     }
-
-    /// GEN-5 (Addendum 8): the bank stall tracker (pure rule in
-    /// the model layer; the store feeds it every coverage read).
-    private var stallTracker = BankStallTracker()
 
     // MARK: - Bank coverage polling (GEN-5, RW-29 EX-15)
     //
@@ -322,11 +321,14 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
                     if Task.isCancelled || !self.bandConditionHolds { break }
                     if let coverage = await self.readCoverage() {
                         self.bankCoverage = coverage
-                        self.stallTracker.observe(coverage, now: Date())
                     }
                     if let active = await self.api.fetchGenerationActive() {
                         self.bankGenerationActive = active
                     }
+                    // RW-151 §5: the reconcile rule also rides
+                    // the poll — a bank that went quiet mid-poll
+                    // re-issues from here too.
+                    self.reconcileFillIfNeeded()
                 }
                 self.coveragePollTask = nil
             }
@@ -760,10 +762,39 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// forecast load lands.
     private static let namedFillCellsKey = "rw.gen5.namedFillCells"
     private(set) var namedFillCells: [String] = (UserDefaults.standard.stringArray(forKey: PersonalHeroStore.namedFillCellsKey) ?? [])
+    /// RW-151 §5: the WIRE form of the named set — forecast
+    /// cells accompanied ("id|ITEM,ITEM,..."), core cells bare —
+    /// persisted alongside the target ids so a relaunch sends
+    /// the same fillable set before the next forecast lands.
+    private static let namedFillWireCellsKey = "rw.rw151.namedFillWireCells"
+    private(set) var namedFillWireCells: [String] = (UserDefaults.standard.stringArray(forKey: PersonalHeroStore.namedFillWireCellsKey) ?? [])
     /// The set the last successful fill call named — a forecast
     /// refresh re-sends the fill only when the set changed (the
-    /// function is designed to make re-calling harmless).
+    /// function is designed to make re-calling harmless). Since
+    /// RW-151 this compares the WIRE form: the send dedupe is
+    /// extended to the accompanied entries.
     private var lastSentFillCells: [String] = []
+    /// RW-151 §5: a fill send (including its entitlement
+    /// retries) is in flight — one input of the reconcile rule.
+    private var fillSendInFlight = false
+    /// RW-151 §5: the wire-set key the reconcile rule last
+    /// re-issued for — the rule fires ONCE per derivation.
+    private var lastReconcileWireKey: String?
+
+    /// The fillable set (RW-151 §5): every named cell is
+    /// fillable under the amended contract — forecast cells
+    /// because their items ride along accompanied, core cells
+    /// because the server resolves them through the canonical
+    /// table. Stated explicitly so the coverage derivation
+    /// takes the set the design names.
+    private var fillableFillCells: Set<String> { Set(namedFillCells) }
+
+    /// The wire set a fill sends: the persisted wire form when
+    /// the current publish path has composed one, the bare
+    /// target ids otherwise (pre-RW-151 persisted state).
+    private var currentWireCells: [String] {
+        namedFillWireCells.isEmpty ? namedFillCells : namedFillWireCells
+    }
 
     /// PersonalHeroResolving: receive the composed fill set.
     /// While subscribed, a CHANGED set re-kicks the fill
@@ -771,13 +802,29 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// forecast — is a designed fill trigger); the
     /// subscription-grant kick reads whatever set is current.
     func updateForecastPriorityCells(_ cells: [String]) {
-        guard cells != namedFillCells else {
+        updateForecastFill(targetCells: cells, wireCells: cells)
+    }
+
+    /// RW-151 §5: receive the composed fill set WITH its wire
+    /// form. A changed target re-bases the denominator; a
+    /// changed wire form alone still re-sends (the fillable set
+    /// moved even when the ids did not).
+    func updateForecastFill(targetCells: [String], wireCells: [String]) {
+        let targetChanged = targetCells != namedFillCells
+        let wireChanged = wireCells != namedFillWireCells
+        guard targetChanged || wireChanged else {
             // Same set: still the denominator of record.
             return
         }
-        namedFillCells = cells
-        UserDefaults.standard.set(cells, forKey: Self.namedFillCellsKey)
-        if mode == .subscribed, !cells.isEmpty {
+        if targetChanged {
+            namedFillCells = targetCells
+            UserDefaults.standard.set(targetCells, forKey: Self.namedFillCellsKey)
+        }
+        if wireChanged {
+            namedFillWireCells = wireCells
+            UserDefaults.standard.set(wireCells, forKey: Self.namedFillWireCellsKey)
+        }
+        if mode == .subscribed, !targetCells.isEmpty {
             kickFillWithRetry()
         }
         // The denominator may have moved under a standing bank —
@@ -790,9 +837,39 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// contract. Nil when either read is unavailable or no target
     /// has been named — the band then stays hidden rather than
     /// showing a fraction against the wrong whole.
+    /// RW-151 §5: the derivation now also takes the fillable set
+    /// and the terminal-FAILED job set, so the denominator is
+    /// |Target ∩ Fillable| and a failed-settle cell is settled,
+    /// not outstanding forever.
     private func readCoverage() async -> BankCoverage? {
         guard let banked = await api.fetchBankedCells() else { return nil }
-        return deriveBankCoverage(heroCells: banked, targetCells: Set(namedFillCells))
+        let failed = await api.fetchFailedCells() ?? []
+        return deriveBankCoverage(
+            heroCells: banked,
+            targetCells: Set(namedFillCells),
+            fillableCells: fillableFillCells,
+            failedCells: failed
+        )
+    }
+
+    /// RW-151 §5 reconcile (owner ruling J4): after a fill
+    /// response or a coverage read — outstanding > 0 AND no
+    /// non-terminal job AND no fill outstanding → re-issue the
+    /// fill ONCE for the fillable remainder. The once is per
+    /// wire-set derivation: the key is recorded before the
+    /// re-issue, so a bank that fails terminally again settles
+    /// through the failed set instead of looping sends.
+    private func reconcileFillIfNeeded() {
+        guard mode == .subscribed, !currentWireCells.isEmpty else { return }
+        guard FillReconcile.shouldReissue(
+            outstanding: bankCoverage?.outstanding ?? 0,
+            generationActive: bankGenerationActive,
+            fillOutstanding: fillSendInFlight
+        ) else { return }
+        let wireKey = currentWireCells.joined(separator: "\n")
+        guard wireKey != lastReconcileWireKey else { return }
+        lastReconcileWireKey = wireKey
+        kickFillWithRetry()
     }
 
     /// On entitlement, ask the server to pre-generate the matrix.
@@ -801,14 +878,19 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// not_entitled answer retries with patience instead of failing.
     private func kickFillWithRetry() {
         fillTask?.cancel()
+        fillSendInFlight = true
         fillTask = Task { [weak self] in
             guard let self else { return }
+            defer { self.fillSendInFlight = false }
             for attempt in 0..<6 {
                 do {
                     // Defect 1: name the composed fill set — an
                     // unnamed call enqueues nothing at all under
                     // the deployed convergence contract.
-                    let cells = self.namedFillCells
+                    // RW-151 §5: send the WIRE form — forecast
+                    // cells accompanied, core cells bare (the
+                    // start-personal-fill v15 contract).
+                    let cells = self.currentWireCells
                     _ = try await self.api.startPersonalFill(priorityCells: cells)
                     self.lastSentFillCells = cells
                     // GEN-5 (RW-29 EX-15): the fill starting is

@@ -217,6 +217,15 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
     let itemKeys: [String]
     /// Reference to the day's hero image (remote URL or asset name).
     let heroImageReference: String
+    /// RW-152 §3: the hero's DURABLE identity, persisted alongside
+    /// the display URL — the storage-object path for personal
+    /// heroes (whose display URL is a signed URL with a ONE-HOUR
+    /// TTL, so a relaunch after the hour finds the display URL
+    /// dead), the stable URL itself for pool/curated heroes.
+    /// Legacy payloads carry no key: decoding derives it from
+    /// the display reference (a signed URL reduces to its path),
+    /// which is the expired-signed-URL recovery.
+    let heroDurableReference: String
     /// The owning app session's identity (GEN-3 session rule).
     /// Empty ONLY for legacy entries decoded from pre-session
     /// payloads; every entry recorded since carries the session
@@ -284,6 +293,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         itemNames: [String],
         itemKeys: [String],
         heroImageReference: String,
+        heroDurableReference: String? = nil,
         sessionID: String = "",
         wasUpdatedInSession: Bool = false,
         momentReading: MomentReading = .now,
@@ -302,6 +312,11 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         self.itemNames = itemNames
         self.itemKeys = itemKeys
         self.heroImageReference = heroImageReference
+        // RW-152 §3: an explicitly stamped durable identity wins;
+        // otherwise it derives from the display reference at the
+        // same moment (signed URL → path, stable URL → itself).
+        self.heroDurableReference = heroDurableReference
+            ?? HeroRefResolver.durableReference(forDisplayReference: heroImageReference)
         self.sessionID = sessionID
         self.wasUpdatedInSession = wasUpdatedInSession
         self.momentReading = momentReading
@@ -329,6 +344,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
             feelsLikeF: feelsLikeF, actualF: actualF, condition: condition,
             itemNames: itemNames, itemKeys: itemKeys,
             heroImageReference: heroImageReference,
+            heroDurableReference: heroDurableReference,
             sessionID: sessionID, wasUpdatedInSession: wasUpdated,
             momentReading: momentReading, updatePayload: payload,
             lastSavedAt: lastSavedAt,
@@ -339,7 +355,7 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case dayStart, placeName, feelsLikeF, actualF, condition
-        case itemNames, itemKeys, heroImageReference, sessionID
+        case itemNames, itemKeys, heroImageReference, heroDurableReference, sessionID
         case wasUpdatedInSession
         case momentReading, updatePayload, lastSavedAt
         case windMph, dayLowF, dayHighF, faceAnchor
@@ -361,6 +377,12 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         itemNames = try container.decode([String].self, forKey: .itemNames)
         itemKeys = try container.decode([String].self, forKey: .itemKeys)
         heroImageReference = try container.decode(String.self, forKey: .heroImageReference)
+        // RW-152 §3: payloads written before the durable field
+        // derive it from the display reference — a legacy signed
+        // URL reduces to its storage path, which is exactly the
+        // recovery a relaunch past the signed hour needs.
+        heroDurableReference = try container.decodeIfPresent(String.self, forKey: .heroDurableReference)
+            ?? HeroRefResolver.durableReference(forDisplayReference: heroImageReference)
         sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID) ?? ""
         wasUpdatedInSession = try container.decodeIfPresent(Bool.self, forKey: .wasUpdatedInSession) ?? false
         // GEN-5 (Addendum 8): persisted readings are strings;
@@ -552,8 +574,17 @@ struct WearIveRunChapter: Equatable {
     /// Stays newest-first; days within a stay newest-first.
     let stays: [WearIveRunStay]
 
-    /// The cover is the most recent card.
-    var cover: WearIveRunEntry { entries.first! }
+    /// RW-153 (Nov 9, 2026): the cover is the NEWEST ENTRY WITH A
+    /// LOADABLE REFERENCE — not `entries.first` unconditionally.
+    /// New York's newest entry settled with an EMPTY reference
+    /// while older entries carried good photos, and the place
+    /// card rendered an empty banner (Sol's RW-153 screenshot).
+    /// The newest entry (honest placeholder) is the fallback
+    /// only when NO entry in the chapter has a reference. Counts,
+    /// spans, and ranges still recompute from the full set.
+    var cover: WearIveRunEntry {
+        entries.first(where: { HeroRefResolver.hasLoadableReference($0) }) ?? entries.first!
+    }
     /// Distinct calendar days in the chapter (session rule: a
     /// chapter's entries are SESSIONS, and two sessions can share
     /// a day — the summary's "days" counts days, not sessions).
@@ -687,8 +718,11 @@ enum WearIveRunCollection {
 
     /// Chapters for a filter: entries are filtered FIRST, then
     /// grouped — covers, counts, spans, and ranges all recompute
-    /// from the admitted entries. Chapters order by their cover's
-    /// recency (newest cover first); empty chapters never appear.
+    /// from the admitted entries. Chapters order by their NEWEST
+    /// ENTRY's recency (RW-153: no longer the cover's — the cover
+    /// may now be an older entry carrying the loadable photo, and
+    /// chapter order must still follow the chapter's latest
+    /// activity); empty chapters never appear.
     static func chapters(
         from entries: [WearIveRunEntry],
         filter: WearIveRunWeatherFilter,
@@ -708,7 +742,7 @@ enum WearIveRunCollection {
                 stays: stays(from: sorted, calendar: calendar)
             )
         }
-        chapters.sort { $0.cover.dayStart > $1.cover.dayStart }
+        chapters.sort { $0.entries.first!.dayStart > $1.entries.first!.dayStart }
         return chapters
     }
 
@@ -819,6 +853,12 @@ enum WearIveRunDateFormatting {
         formatter("MMM d", calendar: calendar).string(from: date)
     }
 
+    /// "Nov 9, 2026" — the full date the RW-152 §4 (J1) past-entry
+    /// delete confirmation NAMES alongside the place.
+    static func fullDayLabel(_ date: Date, calendar: Calendar = .current) -> String {
+        formatter("MMM d, yyyy", calendar: calendar).string(from: date)
+    }
+
     static func monthLabel(year: Int, month: Int, calendar: Calendar = .current) -> String {
         var comps = DateComponents()
         comps.year = year
@@ -826,6 +866,128 @@ enum WearIveRunDateFormatting {
         comps.day = 1
         guard let date = calendar.date(from: comps) else { return "\(month)/\(year)" }
         return formatter("MMMM yyyy", calendar: calendar).string(from: date)
+    }
+}
+
+// MARK: - RW-152 §3 / RW-153: durable hero references + the one resolver
+
+/// RW-152 §3 (parity with the Android design): an entry persists
+/// the hero's DURABLE identity alongside the display URL — the
+/// storage path for personal heroes (whose display URL is a
+/// signed URL with a ONE-HOUR TTL), the stable URL itself for
+/// pool/curated heroes. ONE resolver turns a stored reference
+/// into a loadable URL at render:
+///
+///   * stable URLs pass through unchanged;
+///   * storage paths re-sign through the client's existing
+///     signing path (the async half lives with the API client —
+///     this enum is the pure classification/extraction half);
+///   * expired signed URLs recover by path extraction + re-sign;
+///   * empty stays honestly empty (the placeholder, never a
+///     substituted photo).
+enum HeroRefResolver {
+
+    /// The Supabase storage bucket personal heroes live in; the
+    /// signing path addresses objects inside it by bare path.
+    static let personalHeroesBucket = "personal-heroes"
+
+    /// True when the entry carries any reference at all. This is
+    /// the RW-153 "loadable reference" test for cover selection:
+    /// a settled entry whose reference is empty cannot be the
+    /// cover while an older entry carries one.
+    static func hasLoadableReference(_ entry: WearIveRunEntry) -> Bool {
+        !entry.heroDurableReference.trimmingCharacters(in: .whitespaces).isEmpty
+            || !entry.heroImageReference.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The durable identity for a display reference: a signed
+    /// storage URL reduces to its object path; anything else
+    /// (stable URL, file URL, asset reference) IS its own
+    /// durable identity.
+    static func durableReference(forDisplayReference display: String) -> String {
+        if let path = storagePath(from: display) { return path }
+        return display
+    }
+
+    /// The storage-object path inside the personal-heroes bucket
+    /// for a reference, when the reference denotes one: a signed
+    /// or public storage URL (path extracted, query stripped —
+    /// this is the expired-signed-URL recovery), or a bare path
+    /// persisted by a newer client. Nil for stable remote URLs,
+    /// file URLs, and non-path references.
+    static func storagePath(from reference: String) -> String? {
+        let trimmed = reference.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        for marker in ["/object/sign/\(personalHeroesBucket)/",
+                       "/object/public/\(personalHeroesBucket)/"] {
+            if let range = trimmed.range(of: marker) {
+                let tail = trimmed[range.upperBound...]
+                let path = tail.split(separator: "?").first.map(String.init) ?? ""
+                return path.isEmpty ? nil : (path.removingPercentEncoding ?? path)
+            }
+        }
+        // A bare persisted path: no scheme, path-shaped.
+        if !trimmed.contains("://"), trimmed.contains("/"),
+           !trimmed.contains(" ") {
+            return trimmed.hasPrefix("\(personalHeroesBucket)/")
+                ? String(trimmed.dropFirst(personalHeroesBucket.count + 1))
+                : trimmed
+        }
+        return nil
+    }
+
+    /// The entry's storage path, when it has one — the durable
+    /// reference first, the display URL as the recovery source.
+    static func storagePath(for entry: WearIveRunEntry) -> String? {
+        storagePath(from: entry.heroDurableReference)
+            ?? storagePath(from: entry.heroImageReference)
+    }
+
+    /// The reference a surface may load SYNCHRONOUSLY: a stable
+    /// URL passes through (durable first, then the display URL);
+    /// a storage path returns nil here — it must be re-signed
+    /// through the async half. Empty stays nil (honest empty).
+    static func stableDisplayReference(for entry: WearIveRunEntry) -> String? {
+        for candidate in [entry.heroDurableReference, entry.heroImageReference] {
+            let trimmed = candidate.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            if trimmed.contains("://"), storagePath(from: trimmed) == nil {
+                return trimmed
+            }
+            if !trimmed.contains("://"), storagePath(from: trimmed) == nil,
+               !trimmed.contains("/") {
+                return trimmed
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - RW-152 §4 (J1): the past-entry delete confirmation rule
+
+/// RW-152 §4 + owner ruling J1 (Nov 9, 2026): deleting a PAST
+/// Wear I've Run entry requires a confirmation NAMING the place
+/// and the date, with copy stating plainly that entries live
+/// only on this device and deletion cannot be undone; TODAY's
+/// entry stays one-tap (settling and correcting today's look is
+/// the session's own flow).
+enum WearIveRunDeletePolicy {
+
+    static func requiresConfirmation(for entry: WearIveRunEntry,
+                                     now: Date = Date(),
+                                     calendar: Calendar = .current) -> Bool {
+        calendar.startOfDay(for: entry.dayStart) < calendar.startOfDay(for: now)
+    }
+
+    static func confirmationTitle(for entry: WearIveRunEntry) -> String {
+        "Delete this entry?"
+    }
+
+    static func confirmationMessage(for entry: WearIveRunEntry,
+                                    calendar: Calendar = .current) -> String {
+        "Delete the \(entry.placeDisplayName) entry from "
+            + "\(WearIveRunDateFormatting.fullDayLabel(entry.dayStart, calendar: calendar))? "
+            + "Entries live only on this device, and deletion cannot be undone."
     }
 }
 
