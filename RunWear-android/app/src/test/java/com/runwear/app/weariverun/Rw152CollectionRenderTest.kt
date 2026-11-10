@@ -67,6 +67,10 @@ class Rw152CollectionRenderTest {
             photoFile(0xFF2050C8.toInt(), "ny")
         ),
         entry(
+            LocalDate.of(2026, 11, 8), "New York, NY", "ny-past",
+            2_000, photoFile(0xFF20C860.toInt(), "nypast")
+        ),
+        entry(
             LocalDate.of(2026, 11, 2), "Miami, FL", "miami-new-nophoto",
             4_000, null
         ),

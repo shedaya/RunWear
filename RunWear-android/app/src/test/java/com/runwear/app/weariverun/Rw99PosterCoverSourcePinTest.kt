@@ -55,7 +55,7 @@ class Rw99PosterCoverSourcePinTest {
         )
         assertTrue(
             "the thumbnail resolves through HeroRefResolver",
-            src.contains("HeroRefResolver.resolveDisplay")
+            src.contains("rememberResolvedHeroUrl")
         )
         assertTrue(
             "the photo keeps the settled top-centre poster framing",
