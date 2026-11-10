@@ -325,7 +325,8 @@ enum AppStrings {
     static var onbTempSub: String { raw("onb_temp_sub") }
     static func outfitHeaderItems(_ p1: Int) -> String { fmt("outfit_header_items", [p1]) }
     static func outfitItemsForRun(_ n: Int) -> String { plural("outfit_items_for_run", n) }
-    static func outfitOutfits(_ n: Int) -> String { plural("outfit_outfits", n) }
+    static var outfitOutfitOne: String { raw("outfit_outfit_one") }
+    static var outfitOutfitOther: String { raw("outfit_outfit_other") }
     static var payAnnual: String { raw("pay_annual") }
     static func payAnnualRow(_ p1: String) -> String { fmt("pay_annual_row", [p1]) }
     static func payConfirmAnnual(_ p1: String) -> String { fmt("pay_confirm_annual", [p1]) }
@@ -665,4 +666,5 @@ enum AppStrings {
     static func wirWordmarkExpanded(_ p1: String) -> String { fmt("wir_wordmark_expanded", [p1]) }
     static func wirWordmarkLine(_ p1: String, _ p2: String) -> String { fmt("wir_wordmark_line", [p1, p2]) }
     static func wirYearCount(_ p1: Int) -> String { fmt("wir_year_count", [p1]) }
+    static func outfitOutfits(_ n: Int) -> String { raw(n == 1 ? "outfit_outfit_one" : "outfit_outfit_other") }
 }

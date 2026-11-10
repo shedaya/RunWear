@@ -5295,43 +5295,36 @@
         }
       }
     },
-    "outfit_outfits": {
+    "outfit_outfit_one": {
       "extractionState": "manual",
       "localizations": {
         "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "outfit"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "outfits"
-                }
-              }
-            }
+          "stringUnit": {
+            "state": "translated",
+            "value": "outfit"
           }
         },
         "es": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "conjunto"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "conjuntos"
-                }
-              }
-            }
+          "stringUnit": {
+            "state": "translated",
+            "value": "conjunto"
+          }
+        }
+      }
+    },
+    "outfit_outfit_other": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "outfits"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "conjuntos"
           }
         }
       }

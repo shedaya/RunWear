@@ -320,7 +320,8 @@ enum AppEnglish {
     static var onbTempSub: String { "How do you measure the weather?" }
     static func outfitHeaderItems(_ p1: Int) -> String { String(format: "%1$d items for your run", arguments: [p1]) }
     static func outfitItemsForRun(_ n: Int) -> String { String(format: n == 1 ? "%1$d item for your run" : "%1$d items for your run", n) }
-    static func outfitOutfits(_ n: Int) -> String { String(format: n == 1 ? "outfit" : "outfits", n) }
+    static var outfitOutfitOne: String { "outfit" }
+    static var outfitOutfitOther: String { "outfits" }
     static var payAnnual: String { "Annual" }
     static func payAnnualRow(_ p1: String) -> String { String(format: "%1$@/yr", arguments: [p1]) }
     static func payConfirmAnnual(_ p1: String) -> String { String(format: "Get Premium — Annual, %1$@/yr", arguments: [p1]) }
@@ -660,4 +661,5 @@ enum AppEnglish {
     static func wirWordmarkExpanded(_ p1: String) -> String { String(format: "%1$@, expanded", arguments: [p1]) }
     static func wirWordmarkLine(_ p1: String, _ p2: String) -> String { String(format: "%1$@. %2$@", arguments: [p1, p2]) }
     static func wirYearCount(_ p1: Int) -> String { String(format: "%1$d days", arguments: [p1]) }
+    static func outfitOutfits(_ n: Int) -> String { n == 1 ? "outfit" : "outfits" }
 }
