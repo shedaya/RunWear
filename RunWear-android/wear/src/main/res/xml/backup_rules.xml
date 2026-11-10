@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RW-137 S4b (DESIGN §4.9): legacy Auto Backup rules (the
+  android:fullBackupContent form, for APIs below 31) — the same
+  single exclusion as data_extraction_rules.xml: the
+  runwear_preferences session DataStore never rides a backup.
+  Everything else stays backup-eligible.
+-->
+<full-backup-content>
+    <exclude domain="file" path="datastore/runwear_preferences.preferences_pb" />
+</full-backup-content>

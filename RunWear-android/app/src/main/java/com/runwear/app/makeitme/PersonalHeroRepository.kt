@@ -95,8 +95,18 @@ class PersonalHeroRepository @Inject constructor(
      *     the caller's state against RevenueCat and flips the
      *     `entitled` flag (kicking the matrix fill on a grant) without
      *     trusting anything the client claims;
-     *  3. if the reconcile call completed, re-read the profile so the
-     *     local mirror reflects any transition.
+     *  3. RW-137 (DESIGN §4.4 trigger 2): if the reconcile response
+     *     reports `adoption_available` — RevenueCat proof links this
+     *     restored, entitled identity to a prior uid — ask the
+     *     server to execute the adoption (request-identity-adoption
+     *     re-verifies the proof server-side; the reported uid is a
+     *     lookup hint only, and a stale/wrong hint degrades to a
+     *     silent no-op). Adoption is AUTOMATIC: a standing Premium
+     *     property of the restored subscription, no opt-in, no new
+     *     user-facing flow — the refreshed profile + bank below ARE
+     *     the restored state, rendered by the existing surfaces;
+     *  4. if the reconcile call completed, re-read the profile so the
+     *     local mirror reflects any transition (and any adoption).
      * Silent and idempotent: no session, a failed link, or a failed
      * reconcile leaves local state exactly as it was.
      */
@@ -104,7 +114,19 @@ class PersonalHeroRepository @Inject constructor(
         if (!service.ensureSession()) return
         val uid = service.currentUserId() ?: return
         runCatching { billing.logIn(uid) }
-        if (service.reconcileEntitlement()) refreshFromServer()
+        val outcome = service.reconcileEntitlement()
+        if (!outcome.completed) return
+        val source = IdentityAdoptionPolicy.sourceToAdopt(
+            outcome.adoptionAvailable, uid
+        )
+        if (source != null) {
+            // The result is deliberately not surfaced: a confirmed
+            // adoption and a server-side no-op both end at the same
+            // refresh, which renders whatever identity state the
+            // server now holds for this uid.
+            runCatching { service.requestIdentityAdoption(source) }
+        }
+        refreshFromServer()
     }
 
     /** Re-read the profile + reference count from the server. */
@@ -582,6 +604,24 @@ class PersonalHeroRepository @Inject constructor(
         // unreachable (personalization is off) and they hold only
         // expired signed URLs. The requested-set sweep above covers the
         // generated ones.
+        // RW-137 S4c (DESIGN §4.8 closure item 3): the deleted
+        // identity must not silently re-authenticate OR quietly
+        // re-derive its state on this phone. The session keys go
+        // (access / refresh / user id — clearSession), so the next
+        // bootstrap mints a genuinely fresh anonymous session; and
+        // the identity-scoped fill state goes with it — the
+        // persisted coverage target would otherwise be restored by
+        // the next refresh and re-applied to the NEW uid, and the
+        // in-memory fill picture (target / fillable / wire /
+        // reconciled sets, reference paths, engagement set, selfie
+        // epoch inputs) all described the deleted identity.
+        preferencesRepository.remove(KEY_FILL_TARGET_CELLS)
+        fillTargetCells = emptySet()
+        fillableCells = emptySet()
+        fillWireCells = emptyList()
+        lastReconciledWireCells = emptyList()
+        lastReferencePaths = null
+        engagementEnsured.clear()
         service.clearSession()
         _state.value = PersonalState(forkDecided = _state.value.forkDecided, synced = true)
     }

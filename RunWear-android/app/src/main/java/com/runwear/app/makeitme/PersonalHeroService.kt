@@ -37,9 +37,15 @@ import javax.inject.Singleton
  * the verified JWT and accepts no user id from the caller.
  *
  * Identity: RunWear has no account system (spec J6 — per-user identity
- * is keyed to the install), so the client obtains an anonymous Supabase
- * Auth session and persists it in the app's DataStore. The anonymous
- * user is a real auth.users row: RLS owner policies apply unchanged.
+ * is keyed to the install for free users; keyed to the subscription
+ * for Premium, RW-137 DESIGN §6), so the client obtains an anonymous
+ * Supabase Auth session and persists it in the app's DataStore. The
+ * anonymous user is a real auth.users row: RLS owner policies apply
+ * unchanged. A Premium restore can re-key a prior identity's data
+ * into the restored session's uid — server-side, on RevenueCat proof
+ * only (see [reconcileEntitlement] / [requestIdentityAdoption]); the
+ * client never claims an identity, it only passes the server's own
+ * reported source back as a lookup hint.
  *
  * Anonymous sign-ins are ENABLED on the project (verified 2026-10-31:
  * Sol's device runs a live anonymous session on this path). If a
@@ -54,7 +60,7 @@ import javax.inject.Singleton
  * app's critical path — untouched.
  */
 @Singleton
-class PersonalHeroService @Inject constructor(
+open class PersonalHeroService @Inject constructor(
     private val preferencesRepository: PreferencesRepository
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -102,14 +108,14 @@ class PersonalHeroService @Inject constructor(
         preferencesRepository.setString(KEY_USER_ID, session.userId)
     }
 
-    suspend fun clearSession() {
+    open suspend fun clearSession() {
         preferencesRepository.remove(KEY_ACCESS_TOKEN)
         preferencesRepository.remove(KEY_REFRESH_TOKEN)
         preferencesRepository.remove(KEY_USER_ID)
     }
 
     /** The current session's user id, if a session exists (no network). */
-    suspend fun currentUserId(): String? = storedSession()?.userId
+    open suspend fun currentUserId(): String? = storedSession()?.userId
 
     /**
      * Ensure a usable session: reuse a non-expired token, refresh an
@@ -118,7 +124,7 @@ class PersonalHeroService @Inject constructor(
      * sign-ins disabled server-side) — callers treat false as "personal
      * layer unavailable".
      */
-    suspend fun ensureSession(): Boolean = session() != null
+    open suspend fun ensureSession(): Boolean = session() != null
 
     private suspend fun session(): Session? = sessionMutex.withLock {
         val existing = storedSession()
@@ -392,11 +398,51 @@ class PersonalHeroService @Inject constructor(
      * completed; the caller re-reads the profile afterwards to
      * mirror any change.
      */
-    suspend fun reconcileEntitlement(): Boolean =
+    /**
+     * RW-137 (DESIGN §4.4 trigger 2): what one reconcile call
+     * established. [completed] is the pre-RW-137 Boolean contract
+     * (the call completed and the caller should re-read the
+     * profile). [adoptionAvailable] is the server-reported source
+     * uid whose personal layer RevenueCat proof links to this
+     * caller — null when the response carries no adoption hint
+     * (including every pre-RW-137 server payload: the field is
+     * additive and absent means no adoption).
+     */
+    data class ReconcileOutcome(
+        val completed: Boolean,
+        val adoptionAvailable: String? = null
+    )
+
+    open suspend fun reconcileEntitlement(): ReconcileOutcome {
         // GEN-5 (RW-28 Addendum 8, Item 4a): name this client's
         // platform so the function's RevenueCat lookup queries the
         // matching storefront view instead of a hard-coded one.
-        callFunction("reconcile-personal-entitlement", "{\"platform\":\"android\"}") is FunctionResult.Ok
+        val result = callFunction(
+            "reconcile-personal-entitlement", "{\"platform\":\"android\"}"
+        )
+        val body = (result as? FunctionResult.Ok)?.body
+            ?: return ReconcileOutcome(completed = false)
+        return ReconcileOutcome(
+            completed = true,
+            adoptionAvailable = parseAdoptionAvailable(body)
+        )
+    }
+
+    /**
+     * RW-137 (DESIGN §4.4 trigger 2): ask the server to execute the
+     * adoption the reconcile response reported. [sourceUserId] is a
+     * LOOKUP HINT only — request-identity-adoption re-verifies the
+     * RevenueCat record server-side before re-keying anything, so a
+     * stale or wrong hint degrades to a silent no-op server-side.
+     * Every failure here is likewise a silent no-op for the caller:
+     * adoption is a standing Premium property, never a user-facing
+     * flow, and there is no error state to render. True only when
+     * the endpoint confirmed the adoption executed.
+     */
+    open suspend fun requestIdentityAdoption(sourceUserId: String): Boolean {
+        val body = """{"source_user_id":"$sourceUserId"}"""
+        return callFunction("request-identity-adoption", body) is FunctionResult.Ok
+    }
 
     data class DeleteOutcome(val storageRemoved: Int, val totalRowsRemoved: Int)
 
@@ -426,7 +472,7 @@ class PersonalHeroService @Inject constructor(
      * the data is gone but the account is not, and the user's retry
      * completes it.
      */
-    suspend fun deleteMyData(): DataDeleteOutcome? {
+    open suspend fun deleteMyData(): DataDeleteOutcome? {
         val result = callFunction("delete-my-data", "{}")
         val body = (result as? FunctionResult.Ok)?.body ?: return null
         if (body["account_deleted"]?.jsonPrimitive?.booleanOrNull != true) return null
@@ -448,7 +494,7 @@ class PersonalHeroService @Inject constructor(
         val gender: String
     )
 
-    suspend fun fetchProfile(): ProfileSnapshot? {
+    open suspend fun fetchProfile(): ProfileSnapshot? {
         val session = session() ?: return null
         return runCatching {
             val response = http.get(
@@ -603,7 +649,7 @@ class PersonalHeroService @Inject constructor(
     }
 
     /** The caller's registered reference-photo storage paths, in order. */
-    suspend fun fetchReferencePaths(): List<String> {
+    open suspend fun fetchReferencePaths(): List<String> {
         val session = session() ?: return emptyList()
         return runCatching {
             val response = http.get(
@@ -728,6 +774,20 @@ internal fun deriveBankCoverage(
         // PersonalHeroRepository) so the window is one read long.
         PersonalHeroService.BankCoverage(ready = 0, total = 0, failed = 0)
     }
+
+/**
+ * RW-137 (DESIGN §4.4 trigger 2): the reconcile response's
+ * adoption hint — `adoption_available` as a nullable string field
+ * (additive: absent, null, non-string, or blank all mean "no
+ * adoption reported"). Pure, so the client half of the reconcile
+ * contract is unit-pinned without a network. Whether the hint is
+ * acted on is [IdentityAdoptionPolicy]'s decision; whether it is
+ * TRUE is the server's — request-identity-adoption re-verifies
+ * against RevenueCat before re-keying anything.
+ */
+internal fun parseAdoptionAvailable(body: JsonObject): String? =
+    body["adoption_available"]?.jsonPrimitive?.contentOrNull
+        ?.trim()?.takeIf { it.isNotEmpty() }
 
 /**
  * GEN-5 (RW-28 Addendum 8, Defect 1): the start-personal-fill

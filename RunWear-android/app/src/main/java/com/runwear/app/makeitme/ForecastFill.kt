@@ -164,6 +164,26 @@ object FillReconcilePolicy {
 }
 
 /**
+ * RW-137 (DESIGN §4.1/§4.4): the client half of identity
+ * adoption. Adoption is AUTOMATIC — a standing Premium property
+ * of a restored subscription, with no opt-in toggle anywhere in
+ * the UI or schema (Sol's ruling, Nov 7, 2026). The reconcile
+ * response's `adoption_available` hint is acted on exactly when
+ * it names a source DIFFERENT from the caller's own uid: a hint
+ * naming the caller itself, or no hint at all, is a no-op (the
+ * data already lives under the caller's identity). The hint is
+ * never trusted — request-identity-adoption re-verifies the
+ * RevenueCat proof server-side — so acting on a stale hint is
+ * safe by construction. Pure, so the rule is unit-pinned.
+ */
+object IdentityAdoptionPolicy {
+    fun sourceToAdopt(reportedSource: String?, currentUserId: String?): String? {
+        val source = reportedSource?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return source.takeIf { it != currentUserId }
+    }
+}
+
+/**
  * GEN-5 (RW-28 Addendum 8, second follow-up): the 20-cell
  * canonical CORE MATRIX — the scaffold substrate. Every
  * temperature bracket (FREEZING, COLD, COOL, MILD, WARM, HOT) at
