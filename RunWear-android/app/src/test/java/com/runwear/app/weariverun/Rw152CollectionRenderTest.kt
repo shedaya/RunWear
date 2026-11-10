@@ -274,7 +274,20 @@ class Rw152CollectionRenderTest {
         val coverRoot = stage.composeRoots().firstOrNull { r ->
             stage.texts(r).contains("Delete the Miami, FL cover entry")
         } ?: throw AssertionError("collection window with the cover trash not found")
-        stage.clickDescription(coverRoot, "Delete the Miami, FL cover entry")
+        // Click the DEEPEST node carrying the description: the
+        // cover card's merged semantics node also carries the
+        // trash's description (and the card's own chapter-open
+        // click) and precedes the button in tree order — the
+        // button is the last/deepest match.
+        val matches = stage.nodes(coverRoot).filter {
+            it.config.contains(SemanticsProperties.ContentDescription) &&
+                it.config[SemanticsProperties.ContentDescription]
+                    .any { d -> d == "Delete the Miami, FL cover entry" } &&
+                it.config.contains(SemanticsActions.OnClick)
+        }
+        assertTrue("cover trash nodes present", matches.isNotEmpty())
+        matches.last().config[SemanticsActions.OnClick].action?.invoke()
+            ?: throw AssertionError("cover trash OnClick missing")
         // The confirmation lives in its own Dialog window — find
         // the window root carrying its title. The window can take
         // several pumps to attach under a loaded runner, so the
