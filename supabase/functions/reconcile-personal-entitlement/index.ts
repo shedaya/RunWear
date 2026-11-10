@@ -46,11 +46,23 @@
 // - On true->false (RC positively shows no active entitlement), the
 //   flag is cleared with the same source. An RC outage or malformed
 //   response NEVER clears a flag: no usable record, no change.
-// - Android caveat, inherited from the webhook: until the Android
-//   client calls Purchases.logIn(supabaseUid), Android purchases live
-//   under RC's anonymous id and cannot be found by Supabase uid here
-//   either. iOS configures Purchases with the Supabase uid and maps
-//   directly.
+// - Android note (corrected RW-137, 2026-11-10; DESIGN §1.2): the
+//   shipped Android client DOES call Purchases.logIn(supabaseUid) at
+//   bootstrap/purchase sync, so Android purchases record under the
+//   Supabase uid and reconcile directly. (The RW-14-era caveat that
+//   Android never called logIn is stale.)
+//
+// RW-137 extension (DESIGN §4.4.2): the subscriber payload this
+// function already fetches can expose a P2 adoption proof — the
+// caller's previous identity named in the record's `aliases` and/or
+// `original_app_user_id`. When the caller's entitlement is ACTIVE and
+// such a source exists as an auth user, the response carries
+// `adoption_available: <source_uid>` and `adoption_via` naming the
+// shape that exposed it. The server does NOT adopt on this call: the
+// client follows up with request-identity-adoption, which re-verifies
+// the record server-side before executing. RC's v1 payload shape for
+// aliases was an open verification (DESIGN §9.2), so extraction is
+// coded defensively against BOTH shapes and logs which one was seen.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -61,7 +73,10 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const ENTITLEMENT_ID = 'make_it_me'
 const SOURCE = 'entitlement-reconciliation'
-const RC_API = 'https://api.revenuecat.com/v1'
+// REVENUECAT_API_BASE exists so tests can point the subscriber reads
+// at a fixture server; production leaves it unset (real RC API).
+const RC_API = Deno.env.get('REVENUECAT_API_BASE') ?? 'https://api.revenuecat.com/v1'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const RC_KEYS = [
   Deno.env.get('REVENUECAT_PUBLIC_KEY_IOS'),
@@ -118,8 +133,34 @@ export function entitlementFromSubscriber(subscriber: unknown): RcEntitlementSta
   return { state: 'active', productId, expiresDate: expires, isSandbox }
 }
 
-async function fetchRcState(userId: string, platform: string): Promise<RcEntitlementState> {
+// RW-137: the adoption source (P2 proof, DESIGN §4.1/§4.4.2) a
+// subscriber record exposes for `callerUid`: the first UUID-shaped id
+// other than the caller named by original_app_user_id, else by the
+// aliases array. Coded against BOTH shapes because which one the v1
+// payload carries was an open verification (DESIGN §9.2); the caller
+// logs which shape was seen. Pure — unit-testable without a network.
+export function adoptionSourceFromSubscriber(
+  subscriber: unknown, callerUid: string,
+): { source: string | null; via: 'original_app_user_id' | 'aliases' | null } {
+  const sub = (subscriber as Record<string, unknown> | null)?.subscriber as
+    | Record<string, unknown> | undefined
+  if (!sub || typeof sub !== 'object') return { source: null, via: null }
+  const original = sub.original_app_user_id
+  if (typeof original === 'string' && UUID_RE.test(original) && original !== callerUid) {
+    return { source: original, via: 'original_app_user_id' }
+  }
+  const aliases = Array.isArray(sub.aliases) ? sub.aliases : []
+  for (const raw of aliases) {
+    if (typeof raw === 'string' && UUID_RE.test(raw) && raw !== callerUid) {
+      return { source: raw, via: 'aliases' }
+    }
+  }
+  return { source: null, via: null }
+}
+
+async function fetchRcState(userId: string, platform: string): Promise<RcEntitlementState & { subscriber: unknown }> {
   let sawInactive = false
+  let lastSubscriber: unknown = null
   for (const key of RC_KEYS) {
     try {
       const resp = await fetch(`${RC_API}/subscribers/${encodeURIComponent(userId)}`, {
@@ -130,14 +171,16 @@ async function fetchRcState(userId: string, platform: string): Promise<RcEntitle
         headers: { 'Authorization': `Bearer ${key}`, 'X-Platform': platform },
       })
       if (!resp.ok) continue
-      const state = entitlementFromSubscriber(await resp.json())
-      if (state.state === 'active') return state
+      const payload = await resp.json()
+      lastSubscriber = payload
+      const state = entitlementFromSubscriber(payload)
+      if (state.state === 'active') return { ...state, subscriber: payload }
       if (state.state === 'inactive') sawInactive = true
     } catch { /* try the next key / fall through to unknown */ }
   }
   return sawInactive
-    ? { state: 'inactive', productId: null, expiresDate: null, isSandbox: null }
-    : { state: 'unknown', productId: null, expiresDate: null, isSandbox: null }
+    ? { state: 'inactive', productId: null, expiresDate: null, isSandbox: null, subscriber: lastSubscriber }
+    : { state: 'unknown', productId: null, expiresDate: null, isSandbox: null, subscriber: null }
 }
 
 // Same service-credential detection as start-personal-fill: exact
@@ -217,6 +260,25 @@ serve(async (req: Request) => {
   }
   const target = rc.state === 'active'
 
+  // RW-137 (DESIGN §4.4.2): surface a P2 adoption source from the
+  // subscriber record already fetched — but only alongside an ACTIVE
+  // entitlement, and only when the source is a real auth user. No
+  // adoption runs here; the client calls request-identity-adoption,
+  // which re-verifies this same record before executing.
+  let adoptionAvailable: string | null = null
+  let adoptionVia: string | null = null
+  if (target && rc.subscriber) {
+    const found = adoptionSourceFromSubscriber(rc.subscriber, userId)
+    if (found.source) {
+      const { data: srcUser } = await admin.auth.admin.getUserById(found.source)
+      if (srcUser?.user) {
+        adoptionAvailable = found.source
+        adoptionVia = found.via
+        console.log(`[reconcile-personal-entitlement] adoption source for user ${userId} seen via ${found.via}: ${found.source}`)
+      }
+    }
+  }
+
   const { data: profile } = await admin
     .from('personal_profiles')
     .select('entitled')
@@ -229,6 +291,7 @@ serve(async (req: Request) => {
       ok: true, applied: false, reason: 'state_unchanged',
       user_id: userId, entitled: current,
       rc_product_id: rc.productId, rc_expires_date: rc.expiresDate, rc_is_sandbox: rc.isSandbox,
+      adoption_available: adoptionAvailable, adoption_via: adoptionVia,
     })
   }
 
@@ -268,6 +331,7 @@ serve(async (req: Request) => {
   return jsonResponse({
     ok: true, applied: true, user_id: userId, entitled: target,
     rc_product_id: rc.productId, rc_expires_date: rc.expiresDate, rc_is_sandbox: rc.isSandbox,
+    adoption_available: adoptionAvailable, adoption_via: adoptionVia,
     fill,
   })
 })

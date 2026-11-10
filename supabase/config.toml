@@ -42,3 +42,14 @@ enabled = true
 # Callers are the app's own user JWTs (self-reconciliation) and the
 # service role (operator use) — both are real Supabase credentials,
 # so gateway JWT verification stays ON, like start-personal-fill.
+
+[functions.delete-my-data]
+enabled = true
+# The full erasure path (RW-16.30, RW-137 closure): callers are the
+# app's own user JWTs; the caller's uid comes from the verified JWT.
+
+[functions.request-identity-adoption]
+enabled = true
+# RW-137 P2 adoption endpoint: authenticated callers only (the
+# caller's JWT is the destination identity); RC proof is re-verified
+# server-side inside the function.
