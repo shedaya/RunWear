@@ -34,35 +34,45 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  * This scenario lives in its OWN class — the repo's harness rule
  * (one scenario per class; Rw144RenderTestBase: "fresh
  * Robolectric sandbox per class", and the build forks per test
- * class). It originally shared Rw152CollectionRenderTest with
- * the thumbnails scenario, as that class's SECOND activity
- * instance in a reused sandbox, and there its composition's
- * frame work intermittently never landed at all: gate runs
- * 307/317/318 failed at "collection dialog not shown" (and,
- * locally, one step later at "confirmation dialog not shown")
- * while the sibling thumbnails scenario — the FIRST activity
- * instance — passed in the same runs, and the frame-proven
- * dialog (frames-android/rw152-delete-confirmation.png) shows
- * the product behaviour is correct. Local reproduction pinned
- * the mechanism: at the failure point no dialog window is
- * attached, the foreground scheduler and the main looper are
- * both EMPTY and idle, and neither
- * flushForegroundThreadScheduler nor idleFor(10s) revives the
- * pending composition — the frame callback is lost, not queued.
- * Standalone (first activity instance) the scenario's steps
- * land; in second position they race. First position in a
- * fresh sandbox is the fix, not a longer wait.
+ * class) — and runs in PAUSED looper mode. Both choices are the
+ * gate-closure fix for its long flake (runs 305–321), diagnosed
+ * locally end-to-end:
+ *
+ * The scenario originally shared Rw152CollectionRenderTest
+ * with the thumbnails scenario under LEGACY looper mode, and
+ * intermittently failed at "collection dialog not shown"
+ * (gate runs 307/317/318/320) or, one step later, at
+ * "confirmation dialog not shown" (run 321), while the product
+ * behaviour is frame-proven
+ * (frames-android/rw152-delete-confirmation.png). The failure
+ * is the harness's frame delivery, not the product:
+ *  - At the failure point no dialog window is attached, the
+ *    foreground scheduler and the main looper are both EMPTY
+ *    and idle, and neither flushForegroundThreadScheduler nor
+ *    idleFor(10s) revives the pending work — under LEGACY the
+ *    Compose frame callback (posted via the legacy
+ *    choreographer's real-time Handler path) is LOST, not
+ *    queued, so longer bounded waits cannot fix it.
+ *  - The click itself is sound: a snapshot apply-observer
+ *    recorded the click's state write applying (1 object), a
+ *    fresh-node re-click changed nothing, and a test-owned
+ *    probe state flipped after the click never recomposed
+ *    either — after its first frame, the composition simply
+ *    receives no further frame ticks under LEGACY.
+ * Under PAUSED, frames are driven by the virtual scheduler
+ * clock (ShadowPausedChoreographer): this harness's settle
+ * advances that clock in bulk every round, so the frame ticks
+ * that apply recompositions — the collection Dialog's show()
+ * effect and the post-click AlertDialog alike — land
+ * deterministically. (CollectionBackScenarioTest's documented
+ * PAUSED-mode race was in its own in-suite context; this class
+ * runs alone in its fork, and every read here is a bounded
+ * wait over the bulk-advance settle.)
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-// LEGACY looper mode, per the repo's established Dialog-window
-// pattern (CollectionBackScenarioTest): under PAUSED mode the
-// Dialog window's posted frame callbacks — the ones that
-// recompose after a click inside the collection Dialog — do
-// not reliably run in the full suite; LEGACY executes posted
-// work as it is posted, as a device does.
 @org.robolectric.annotation.LooperMode(
-    org.robolectric.annotation.LooperMode.Mode.LEGACY
+    org.robolectric.annotation.LooperMode.Mode.PAUSED
 )
 @Config(application = Application::class, sdk = [35], qualifiers = "w390dp-h844dp-xhdpi")
 class Rw152DeleteConfirmationRenderTest {
