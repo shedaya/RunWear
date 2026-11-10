@@ -925,7 +925,7 @@ fun ShareStudioSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     StudioThumbnailChoice(
-                        label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_morning_poster),
+                        label = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_card_morning_poster),
                         render = posterRender,
                         rendering = posterRendering,
                         failed = posterRenderFailed,
@@ -1017,7 +1017,7 @@ fun ShareStudioSheet(
                     ShareRenderProgressPill(
                         label = "Rendering ${
                             if (kind == ShareArtifactKind.MORNING_POSTER) {
-                                androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_morning_poster)
+                                androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_card_morning_poster)
                             } else {
                                 androidx.compose.ui.res.stringResource(com.runwear.app.R.string.share_kit_card)
                             }

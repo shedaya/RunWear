@@ -315,7 +315,7 @@ Every run, remembered — run, weather or not. #RunAnyWear · @runwear.ai</strin
     <string name="share_disclosure">As an Amazon Associate, RunWear earns from qualifying purchases.</string>
     <string name="share_this_day">Share this day</string>
     <string name="share_choose_card">Choose the card for %1$s — %2$s.</string>
-    <string name="share_morning_poster">Morning Poster</string>
+    <string name="share_card_morning_poster">Morning Poster</string>
     <string name="share_kit_card">Kit Card</string>
     <string name="share_rendering">Rendering previews…</string>
     <string name="share_couldnt_share">Couldn\'t share this card — try again.</string>
