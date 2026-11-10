@@ -237,8 +237,8 @@ final class LocalizationCatalogParityTests: XCTestCase {
         XCTAssertEqual(AppStrings.detailPercent(37), AppEnglish.detailPercent(37))
         XCTAssertEqual(AppStrings.a11yHumidity(41), AppEnglish.a11yHumidity(41))
         XCTAssertEqual(AppStrings.windValue(9), AppEnglish.windValue(9))
-        XCTAssertEqual(AppStrings.chartReadout("3 PM", 41),
-                       AppEnglish.chartReadout("3 PM", 41))
+        XCTAssertEqual(AppStrings.chartReadout("3 PM", "41°"),
+                       AppEnglish.chartReadout("3 PM", "41°"))
         XCTAssertEqual(
             AppStrings.shareCaptionShort("New York, NY", "this morning", 41, "the call", "Tee"),
             AppEnglish.shareCaptionShort("New York, NY", "this morning", 41, "the call", "Tee"))
