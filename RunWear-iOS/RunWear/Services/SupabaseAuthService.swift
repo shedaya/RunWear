@@ -3,9 +3,15 @@ import Security
 
 // MARK: - Supabase Auth session for RW-14
 //
-// RunWear has no accounts; the app's Supabase identity is an
-// ANONYMOUS Auth user (auth.users row), created on first use and
-// persisted in the Keychain across launches. The RW-14 backend
+// RunWear has no accounts and no login; the app's Supabase
+// identity is an ANONYMOUS Auth user (auth.users row), created
+// on first use and persisted in the Keychain across launches.
+// RW-137 posture (DESIGN §6): the identity is keyed to the
+// install for free users; keyed to the subscription for
+// Premium — a restored subscription's personal layer is
+// re-keyed server-side onto the current install's uid on
+// RevenueCat proof (DESIGN §4.4), so durability follows the
+// subscription automatically, never a toggle. The RW-14 backend
 // derives the user from the verified JWT on every call — no function
 // accepts a user id from the client — so every personal-hero call
 // needs this session's access token.
@@ -36,6 +42,26 @@ actor SupabaseAuthService {
 
     private let baseURL = "https://ebicqznlcjbqcukjfzcf.supabase.co"
     private let anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImViaWNxem5sY2picWN1a2pmemNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1NDA5MzgsImV4cCI6MjA4NTExNjkzOH0.0Zl7DF4y6riHWzNEDqMwtYZerbFVXAlpFGbeJ3S1Bg4"
+
+    /// The persisted session's Keychain coordinates (DESIGN
+    /// §1.1). Published on the service — not buried in the store
+    /// below — so the deletion-closure tests assert against the
+    /// auth service's own seam.
+    static let keychainService = "com.uptimeventures.runwear.supabase"
+    static let keychainAccount = "personal-hero-session"
+
+    /// RW-137 test seam: when set, replaces URLSession as the
+    /// auth transport (returns body + HTTP status), so tests
+    /// drive the real session code against mocked auth responses
+    /// (fixtures only — no production contact). Production never
+    /// sets it. Internal, not public: the seam exists for the
+    /// test target's dual membership of this file.
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, Int)
+    private var transportOverride: Transport?
+
+    func installTransportOverride(_ transport: Transport?) {
+        transportOverride = transport
+    }
 
     private var cached: Session?
 
@@ -72,9 +98,13 @@ actor SupabaseAuthService {
         return created
     }
 
-    /// Forget the local session (used when the server session is
-    /// rejected). The server-side data lifecycle is delete-my-photos'
-    /// job, not this one's.
+    /// Forget the local session: the in-memory cache AND the
+    /// Keychain item. Used when the server session is rejected,
+    /// and as the client half of the RW-137 deletion closure
+    /// (DESIGN §4.8.3): when delete-my-data completes, this
+    /// discard is what stops the deleted identity from quietly
+    /// re-authenticating — the next ensureSession() mints a
+    /// genuinely fresh anonymous user.
     func clearLocalSession() {
         cached = nil
         KeychainStore.clear()
@@ -137,6 +167,9 @@ actor SupabaseAuthService {
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if let transportOverride {
+            return try await transportOverride(request)
+        }
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw AuthError.server("invalid response") }
         return (data, http.statusCode)
@@ -146,8 +179,8 @@ actor SupabaseAuthService {
 // MARK: - Keychain persistence for the session
 
 private enum KeychainStore {
-    private static let service = "com.uptimeventures.runwear.supabase"
-    private static let account = "personal-hero-session"
+    private static let service = SupabaseAuthService.keychainService
+    private static let account = SupabaseAuthService.keychainAccount
 
     static func save(_ session: SupabaseAuthService.Session) {
         guard let data = try? JSONEncoder().encode(session) else { return }

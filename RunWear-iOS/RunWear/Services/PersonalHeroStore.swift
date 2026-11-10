@@ -193,7 +193,11 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
             // profile read, so a purchase the webhook never
             // delivered is already reflected in the state this
             // bootstrap renders. The server verifies; we only ask.
-            await api.reconcileEntitlement()
+            // RW-137 (DESIGN §4.4): the same reconcile carries the
+            // adoption check — a restored subscription's prior
+            // identity is re-keyed onto this one before the
+            // profile read renders it.
+            await reconcileWithAdoption()
             await refreshProfile()
             if billing.isSubscribed {
                 kickFillWithRetry()
@@ -203,6 +207,47 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         } catch {
             // Offline / transient: stay stock; opt-in retries on tap.
         }
+    }
+
+    // MARK: - RW-137 identity adoption (DESIGN §4.4)
+
+    /// The reconcile every sync point runs (bootstrap, entitlement
+    /// change, Restore Purchases): ask the server to reconcile the
+    /// entitlement (the RW-16.12 backstop), and when its response
+    /// reports a RevenueCat-proven prior identity
+    /// (`adoption_available`), request the adoption and fold the
+    /// restored profile + bank into the rendered state.
+    ///
+    /// Adoption is AUTOMATIC — a standing Premium property of a
+    /// restored subscription (Sol, Nov 7, 2026); there is no
+    /// opt-in toggle anywhere in the UI or schema, and no new
+    /// user-facing flow: the restored state renders through the
+    /// EXISTING surfaces (the profile read drives the mode; the
+    /// bank read drives the Your Looks library and the
+    /// convergence band). The endpoint re-verifies the proof
+    /// server-side, so a hint it cannot verify degrades to a
+    /// silent no-op and the next reconcile asks again.
+    func reconcileWithAdoption() async {
+        let response = await api.reconcileEntitlement()
+        guard let source = IdentityAdoptionPolicy.sourceToAdopt(
+            response: response,
+            currentUserId: await api.currentUserId()
+        ) else { return }
+        await api.requestIdentityAdoption(sourceUserId: source)
+        await refreshProfile()
+        await refreshBankLibrary()
+    }
+
+    /// Restore Purchases (the paywall/Settings route, DESIGN
+    /// §4.4.3): the store restore runs first, then the same
+    /// reconcile + adoption sync bootstrap runs — a restore that
+    /// lands a prior identity's subscription brings its looks
+    /// back in the same pass.
+    func restorePurchases() async {
+        await billing.restore()
+        await reconcileWithAdoption()
+        await refreshProfile()
+        await refreshBankLibrary()
     }
 
     func refreshProfile() async {
@@ -346,8 +391,9 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
         // server to reconcile (Lane B backstop) and re-reads the
         // profile it may have just moved — this is the path a fresh
         // purchase takes when the webhook hasn't landed.
+        // RW-137: the reconcile carries the adoption check too.
         Task {
-            await api.reconcileEntitlement()
+            await reconcileWithAdoption()
             await refreshProfile()
         }
         if active {
@@ -723,10 +769,21 @@ final class PersonalHeroStore: ObservableObject, PersonalHeroResolving {
     /// local session is forgotten — the account it belonged to no
     /// longer exists server-side, so the next session is a fresh
     /// anonymous account, exactly like a first launch.
+    ///
+    /// RW-137 S4c (DESIGN §4.8.3) — the client half of the
+    /// deletion closure: discarding the Keychain session item
+    /// (via clearLocalSession) is what stops the deleted
+    /// identity from quietly re-authenticating, and the
+    /// in-memory identity state resets with it — the bootstrap
+    /// one-shot is re-armed, so the next bootstrap mints a
+    /// genuinely fresh anonymous session instead of standing
+    /// down on a bootstrap that produced the deleted uid.
     func deleteAllData() async throws {
         try await api.deleteMyData()
         resetToStock()
         await SupabaseAuthService.shared.clearLocalSession()
+        bootstrapped = false
+        authUnavailable = false
     }
 
     private func resetToStock() {

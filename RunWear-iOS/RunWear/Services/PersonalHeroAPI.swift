@@ -18,6 +18,26 @@ actor PersonalHeroAPI {
 
     private let auth = SupabaseAuthService.shared
 
+    /// RW-137 test seam: when set, replaces URLSession as the
+    /// transport for every request this client makes, so tests
+    /// drive the real client code against mocked backend
+    /// responses (fixtures only — no production contact).
+    /// Production never sets it. Internal, not public: the seam
+    /// exists for the test target's dual membership of this file.
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    private var transportOverride: Transport?
+
+    func installTransportOverride(_ transport: Transport?) {
+        transportOverride = transport
+    }
+
+    private func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        if let transportOverride {
+            return try await transportOverride(request)
+        }
+        return try await URLSession.shared.data(for: request)
+    }
+
     private init() {}
 
     /// The current session's user id, if a session exists.
@@ -53,7 +73,7 @@ actor PersonalHeroAPI {
         request.addValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         request.addValue("true", forHTTPHeaderField: "x-upsert")
         request.httpBody = jpegData
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse else {
             throw PersonalHeroAPIError.server(message: "invalid response")
         }
@@ -183,8 +203,33 @@ actor PersonalHeroAPI {
     /// idempotent: any failure (offline, no session yet) is
     /// swallowed — the next bootstrap or entitlement change asks
     /// again.
-    func reconcileEntitlement() async {
-        _ = try? await functionPost("reconcile-personal-entitlement", body: [:])
+    ///
+    /// RW-137 (DESIGN §4.4.2): the call now RETURNS its decoded
+    /// response — the caller (PersonalHeroStore) reads
+    /// `adoption_available` off it and requests the identity
+    /// adoption when RevenueCat proof links this entitled
+    /// identity to a prior uid. Nil on any failure, exactly as
+    /// silent as before.
+    @discardableResult
+    func reconcileEntitlement() async -> ReconcileEntitlementResponse? {
+        guard let data = try? await functionPost("reconcile-personal-entitlement", body: [:]) else {
+            return nil
+        }
+        return ReconcileEntitlementResponse.decode(from: data)
+    }
+
+    /// RW-137 (DESIGN §4.4.2/§4.4.3): ask the server to re-key
+    /// the hinted source identity's personal layer into the
+    /// caller's. The endpoint re-verifies the RevenueCat proof
+    /// server-side — the client's hint is never trusted — so
+    /// every failure here is swallowed: a wrong or stale hint is
+    /// a silent no-op by design, and the next reconcile asks
+    /// again.
+    func requestIdentityAdoption(sourceUserId: String) async {
+        _ = try? await functionPost(
+            "request-identity-adoption",
+            body: PersonalHeroRequests.identityAdoptionBody(sourceUserId: sourceUserId)
+        )
     }
 
     /// Subscriber matrix fill. The server gates this on its OWN
@@ -277,7 +322,7 @@ actor PersonalHeroAPI {
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["expiresIn": 3600])
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return nil }
         struct SignResponse: Decodable { let signedURL: String }
         guard let decoded = try? JSONDecoder().decode(SignResponse.self, from: data) else { return nil }
@@ -307,7 +352,7 @@ actor PersonalHeroAPI {
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse else {
             throw PersonalHeroAPIError.server(message: "invalid response")
         }
@@ -329,7 +374,7 @@ actor PersonalHeroAPI {
         request.httpMethod = "GET"
         request.addValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
         request.addValue(anonKey, forHTTPHeaderField: "apikey")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         guard let http = response as? HTTPURLResponse else {
             throw PersonalHeroAPIError.server(message: "invalid response")
         }

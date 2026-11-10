@@ -549,6 +549,53 @@ struct PersonalProfileRow: Decodable {
     }
 }
 
+/// RW-137 (DESIGN §4.4.2): reconcile-personal-entitlement's
+/// response. The entitlement itself stays server-side truth the
+/// client never asserts; the ONE field the client acts on is
+/// `adoption_available` — the source uid RevenueCat proof links
+/// to the caller's entitled identity, present only when a prior
+/// identity's personal layer can be adopted into this one.
+/// Additive and optional by contract: an absent field is the
+/// pre-RW-137 response and means "no adoption", never an error.
+struct ReconcileEntitlementResponse: Decodable {
+    let adoptionAvailable: String?
+
+    enum CodingKeys: String, CodingKey {
+        case adoptionAvailable = "adoption_available"
+    }
+
+    /// Decode tolerantly: a malformed body reads as "no
+    /// adoption" — reconcile is a silent backstop and its
+    /// failure mode is doing nothing.
+    static func decode(from data: Data) -> ReconcileEntitlementResponse? {
+        try? JSONDecoder().decode(ReconcileEntitlementResponse.self, from: data)
+    }
+}
+
+/// RW-137 (DESIGN §4.1/§4.4): the client's adoption decision —
+/// pure, so the rule is testable without the network. Adoption
+/// is AUTOMATIC: a standing Premium property of a restored
+/// subscription (Sol, Nov 7, 2026) — there is no opt-in toggle
+/// anywhere in the UI or schema. When reconcile reports a
+/// source, the client requests the adoption and renders the
+/// restored state. The server re-verifies the RevenueCat proof
+/// before executing, so this policy is a trigger, not a trust
+/// decision — its only jobs are to fire on a well-formed hint
+/// and never on a self-adoption (source == caller), which the
+/// server would refuse anyway.
+enum IdentityAdoptionPolicy {
+    static func sourceToAdopt(
+        response: ReconcileEntitlementResponse?,
+        currentUserId: String?
+    ) -> String? {
+        guard let raw = response?.adoptionAvailable else { return nil }
+        let source = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty else { return nil }
+        guard source != currentUserId else { return nil }
+        return source
+    }
+}
+
 // MARK: - Request bodies (the wire contract, pinned by test)
 //
 // These builders are the single source of the request-personal-
@@ -578,6 +625,17 @@ enum PersonalHeroRequests {
             "action": "flag_hero",
             "hero_id": heroId,
             "reason": reason
+        ]
+    }
+
+    /// RW-137 (DESIGN §4.4.2): request-identity-adoption — the
+    /// source uid travels as a LOOKUP HINT only. The endpoint
+    /// re-verifies the RevenueCat alias/transfer proof
+    /// server-side before re-keying anything; a stale or wrong
+    /// hint degrades to a silent no-op, never an error state.
+    static func identityAdoptionBody(sourceUserId: String) -> [String: Any] {
+        [
+            "source_user_id": sourceUserId
         ]
     }
 }
