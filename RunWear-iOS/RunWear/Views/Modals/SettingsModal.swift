@@ -382,12 +382,12 @@ struct SettingsModal: View {
         // GEN-5 (RW-29 FA-20): frame 39's settled heading is
         // "Delete my photos?" (the buttons already carry the
         // matching "Delete my photos" / "Keep my photos").
-        case .confirmDelete: return AppStrings.settingsDeletePhotosTitle
-        case .deletedConfirmation: return AppStrings.settingsDeletePhotosDone
-        case .deleteFailed: return AppStrings.settingsDeletePhotosFailed
-        case .confirmDeleteData: return AppStrings.settingsDeleteDataTitle
-        case .dataDeletedConfirmation: return AppStrings.settingsDeleteDataDone
-        case .deleteDataFailed: return AppStrings.settingsDeleteDataFailed
+        case .confirmDelete: return LocalizedStringKey(AppStrings.settingsDeletePhotosTitle)
+        case .deletedConfirmation: return LocalizedStringKey(AppStrings.settingsDeletePhotosDone)
+        case .deleteFailed: return LocalizedStringKey(AppStrings.settingsDeletePhotosFailed)
+        case .confirmDeleteData: return LocalizedStringKey(AppStrings.settingsDeleteDataTitle)
+        case .dataDeletedConfirmation: return LocalizedStringKey(AppStrings.settingsDeleteDataDone)
+        case .deleteDataFailed: return LocalizedStringKey(AppStrings.settingsDeleteDataFailed)
         case .commitFailed(let failure): return LocalizedStringKey(failure.line)
         case nil: return ""
         }
