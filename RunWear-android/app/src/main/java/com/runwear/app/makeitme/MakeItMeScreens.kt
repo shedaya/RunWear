@@ -1,5 +1,8 @@
 package com.runwear.app.makeitme
 
+import com.runwear.engine.MR
+import dev.icerock.moko.resources.compose.stringResource
+
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -322,7 +325,7 @@ fun MakeItMeForkScreen(
         )
         Spacer(Modifier.height(8.dp))
 Text(
-                text = MakeItMeStrings.F1_HEADLINE,
+                text = stringResource(MR.strings.mim_f1_headline),
                 fontFamily = FontFamily.Default,
                 fontSize = 30.sp,
                 letterSpacing = 0.5.sp,
@@ -330,7 +333,7 @@ Text(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = MakeItMeStrings.F2_LEAD,
+                text = stringResource(MR.strings.mim_f2_lead),
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 color = RunWearColors.TextSecondary
@@ -353,9 +356,9 @@ Text(
 
             // Option A — customize
             ForkOptionCard(
-                title = MakeItMeStrings.F3_OPTION_A_TITLE,
-                body = MakeItMeStrings.F4_OPTION_A_BODY,
-                buttonText = MakeItMeStrings.F5_OPTION_A_BUTTON,
+                title = stringResource(MR.strings.mim_f3_option_a_title),
+                body = stringResource(MR.strings.mim_f4_option_a_body),
+                buttonText = stringResource(MR.strings.mim_f5_option_a_button),
                 primary = true,
                 onClick = onUseMyPhotos
             )
@@ -364,16 +367,16 @@ Text(
 
             // Option B — stock (a complete, respected end-state)
             ForkOptionCard(
-                title = MakeItMeStrings.F6_OPTION_B_TITLE,
-                body = MakeItMeStrings.F7_OPTION_B_BODY,
-                buttonText = MakeItMeStrings.F8_OPTION_B_BUTTON,
+                title = stringResource(MR.strings.mim_f6_option_b_title),
+                body = stringResource(MR.strings.mim_f7_option_b_body),
+                buttonText = stringResource(MR.strings.mim_f8_option_b_button),
                 primary = false,
                 onClick = onUseStandardPhotos
             )
 
             Spacer(Modifier.height(16.dp))
             Text(
-                text = MakeItMeStrings.F9_FOOTER,
+                text = stringResource(MR.strings.mim_f9_footer),
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary
             )
@@ -724,7 +727,7 @@ internal fun MakeItMeUploadFlow(
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = MakeItMeStrings.C1A_CONSENT_TITLE,
+                    text = stringResource(MR.strings.mim_c1a_consent_title),
                     fontFamily = FontFamily.Default,
                     fontSize = 28.sp,
                     letterSpacing = 0.5.sp,
@@ -732,7 +735,7 @@ internal fun MakeItMeUploadFlow(
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    text = MakeItMeStrings.C1B_CONSENT_BODY,
+                    text = stringResource(MR.strings.mim_c1b_consent_body),
                     fontSize = 14.sp,
                     lineHeight = 21.sp,
                     color = RunWearColors.TextSecondary
@@ -747,7 +750,7 @@ internal fun MakeItMeUploadFlow(
                     Checkbox(checked = attested, onCheckedChange = { attested = it })
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = MakeItMeStrings.C1C_ATTESTATION,
+                        text = stringResource(MR.strings.mim_c1c_attestation),
                         fontSize = 14.sp,
                         color = RunWearColors.TextPrimary
                     )
@@ -766,7 +769,7 @@ internal fun MakeItMeUploadFlow(
                             if (ok) {
                                 step = UploadStep.PHOTOS
                             } else {
-                                errorText = MakeItMeStrings.TRANSPORT_ERROR
+                                errorText = stringResource(MR.strings.mim_transport_error)
                             }
                         }
                     },
@@ -790,7 +793,7 @@ internal fun MakeItMeUploadFlow(
                         Spacer(Modifier.width(10.dp))
                     }
                     Text(
-                        MakeItMeStrings.C1D_CONTINUE,
+                        stringResource(MR.strings.mim_c1d_continue),
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp
                     )
@@ -800,7 +803,7 @@ internal fun MakeItMeUploadFlow(
                     onClick = onExitAsStock,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(MakeItMeStrings.C1E_NOT_NOW, color = RunWearColors.TextSecondary)
+                    Text(stringResource(MR.strings.mim_c1e_not_now), color = RunWearColors.TextSecondary)
                 }
               }
             }
@@ -808,7 +811,7 @@ internal fun MakeItMeUploadFlow(
             UploadStep.PHOTOS, UploadStep.SUBMITTING -> {
               Column {
                 Text(
-                    text = MakeItMeStrings.C2A_CAPTURE_TITLE,
+                    text = stringResource(MR.strings.mim_c2a_capture_title),
                     fontFamily = FontFamily.Default,
                     fontSize = 28.sp,
                     letterSpacing = 0.5.sp,
@@ -816,7 +819,7 @@ internal fun MakeItMeUploadFlow(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = MakeItMeStrings.C2B_CAPTURE_GUIDANCE,
+                    text = stringResource(MR.strings.mim_c2b_capture_guidance),
                     fontSize = 13.sp,
                     lineHeight = 19.sp,
                     color = RunWearColors.TextSecondary
@@ -862,7 +865,7 @@ internal fun MakeItMeUploadFlow(
                 if (replace) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = MakeItMeStrings.S7_REPLACE_NOTE,
+                        text = stringResource(MR.strings.mim_s7_replace_note),
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
                         color = RunWearColors.TextSecondary
@@ -905,17 +908,17 @@ internal fun MakeItMeUploadFlow(
                         // never the Material baseline.
                         containerColor = RunWearColors.BgCard,
                         onDismissRequest = { showSourceChoice = false },
-                        title = { Text(MakeItMeStrings.C2E_SOURCE_DIALOG_TITLE) },
+                        title = { Text(stringResource(MR.strings.mim_c2e_source_dialog_title)) },
                         text = {
                             Column {
                                 TextButton(onClick = {
                                     showSourceChoice = false
                                     chooseSource(PhotoIntakePolicy.Source.CAMERA)
-                                }) { Text(MakeItMeStrings.C2F_TAKE_PHOTO) }
+                                }) { Text(stringResource(MR.strings.mim_c2f_take_photo)) }
                                 TextButton(onClick = {
                                     showSourceChoice = false
                                     chooseSource(PhotoIntakePolicy.Source.LIBRARY)
-                                }) { Text(MakeItMeStrings.C2G_CHOOSE_FROM_LIBRARY) }
+                                }) { Text(stringResource(MR.strings.mim_c2g_choose_from_library)) }
                             }
                         },
                         confirmButton = {},
@@ -948,7 +951,7 @@ internal fun MakeItMeUploadFlow(
                                 step = UploadStep.SAVED
                             } else {
                                 step = UploadStep.PHOTOS
-                                errorText = MakeItMeStrings.TRANSPORT_ERROR
+                                errorText = stringResource(MR.strings.mim_transport_error)
                             }
                         }
                     },
@@ -971,13 +974,13 @@ internal fun MakeItMeUploadFlow(
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
-                            if (replace) MakeItMeStrings.C2C_CONFIRM_SAVE else MakeItMeStrings.C2C_CONFIRM_FIRST_LOOK,
+                            if (replace) stringResource(MR.strings.mim_c2c_confirm_save) else stringResource(MR.strings.mim_c2c_confirm_first_look),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp
                         )
                     } else {
                         Text(
-                            if (replace) MakeItMeStrings.C2C_CONFIRM_SAVE else MakeItMeStrings.C2C_CONFIRM_FIRST_LOOK,
+                            if (replace) stringResource(MR.strings.mim_c2c_confirm_save) else stringResource(MR.strings.mim_c2c_confirm_first_look),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp
                         )
@@ -1002,7 +1005,7 @@ internal fun MakeItMeUploadFlow(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = MakeItMeStrings.C2J_SAVE_CONFIRMED,
+                        text = stringResource(MR.strings.mim_c2j_save_confirmed),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = RunWearColors.TextPrimary
@@ -1046,7 +1049,7 @@ private fun PickedPhotoRow(picked: PickedPhoto, onRemove: () -> Unit) {
                         // RW-26: the upload door's retake prompt
                         // (C3F) — camera offered first, same checks.
                         Text(
-                            text = MakeItMeStrings.C3F_RETAKE_UPLOAD,
+                            text = stringResource(MR.strings.mim_c3f_retake_upload),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             color = RunWearColors.TextSecondary,
@@ -1113,7 +1116,7 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = MakeItMeStrings.S15_PHOTO_LOADING,
+                    text = stringResource(MR.strings.mim_s15_photo_loading),
                     fontSize = 11.sp,
                     color = RunWearColors.TextSecondary
                 )
@@ -1134,14 +1137,14 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = MakeItMeStrings.S16_PHOTO_LOAD_FAILED,
+                    text = stringResource(MR.strings.mim_s16_photo_load_failed),
                     fontSize = 11.sp,
                     lineHeight = 14.sp,
                     textAlign = TextAlign.Center,
                     color = RunWearColors.TextSecondary
                 )
                 Text(
-                    text = MakeItMeStrings.S17_PHOTO_RETRY,
+                    text = stringResource(MR.strings.mim_s17_photo_retry),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = RunWearColors.TextPrimary
@@ -1162,13 +1165,13 @@ private fun ReferencePhotoTile(url: String, onRetry: () -> Unit) {
 private fun PhotosLoadError(onRetry: () -> Unit) {
     Column {
         Text(
-            text = MakeItMeStrings.S18_PHOTOS_LOAD_FAILED,
+            text = stringResource(MR.strings.mim_s18_photos_load_failed),
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.error
         )
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = onRetry) {
-            Text(MakeItMeStrings.S19_TRY_AGAIN)
+            Text(stringResource(MR.strings.mim_s19_try_again))
         }
     }
 }
@@ -1281,7 +1284,7 @@ internal fun MakeItMePhotosScreen(
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = MakeItMeStrings.S6_PHOTOS_ROW,
+            text = stringResource(MR.strings.mim_s6_photos_row),
             fontFamily = FontFamily.Default,
             fontSize = 28.sp,
             letterSpacing = 0.5.sp,
@@ -1296,7 +1299,7 @@ internal fun MakeItMePhotosScreen(
                 CircularProgressIndicator(color = RunWearColors.PineAccent)
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = MakeItMeStrings.S15_PHOTO_LOADING,
+                    text = stringResource(MR.strings.mim_s15_photo_loading),
                     fontSize = 13.sp,
                     color = RunWearColors.TextSecondary
                 )
@@ -1314,13 +1317,13 @@ internal fun MakeItMePhotosScreen(
             // GEN-5 (item 21): the settled current-photo block —
             // its heading and arrival line above the photo itself.
             Text(
-                text = MakeItMeStrings.S30_YOUR_CURRENT_PHOTO,
+                text = stringResource(MR.strings.mim_s30_your_current_photo),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = RunWearColors.TextPrimary
             )
             Text(
-                text = MakeItMeStrings.S31_CURRENT_PHOTO_LINE,
+                text = stringResource(MR.strings.mim_s31_current_photo_line),
                 fontSize = 13.sp,
                 color = RunWearColors.TextSecondary,
                 modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
@@ -1339,7 +1342,7 @@ internal fun MakeItMePhotosScreen(
             }
             Spacer(Modifier.height(12.dp))
             Text(
-                text = MakeItMeStrings.S7_REPLACE_NOTE,
+                text = stringResource(MR.strings.mim_s7_replace_note),
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 color = RunWearColors.TextSecondary
@@ -1348,13 +1351,13 @@ internal fun MakeItMePhotosScreen(
             // Frame 38: the epoch, headed in the settled words,
             // with the rule in plain words beneath it.
             Text(
-                text = MakeItMeStrings.S32_EPOCH_HEADING,
+                text = stringResource(MR.strings.mim_s32_epoch_heading),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = RunWearColors.TextPrimary
             )
             Text(
-                text = MakeItMeStrings.S20_EPOCH_RULE,
+                text = stringResource(MR.strings.mim_s20_epoch_rule),
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 color = RunWearColors.TextSecondary,
@@ -1377,7 +1380,7 @@ internal fun MakeItMePhotosScreen(
             colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
         ) {
             Text(
-                MakeItMeStrings.S33_RETAKE_SELFIE,
+                stringResource(MR.strings.mim_s33_retake_selfie),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp
             )
@@ -1391,7 +1394,7 @@ internal fun MakeItMePhotosScreen(
             shape = RoundedCornerShape(16.dp)
         ) {
             Text(
-                MakeItMeStrings.S34_CHOOSE_DIFFERENT_PHOTO,
+                stringResource(MR.strings.mim_s34_choose_different_photo),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 15.sp
             )
@@ -1399,7 +1402,7 @@ internal fun MakeItMePhotosScreen(
         if (onDeletePhotosClick != null) {
             Spacer(Modifier.height(18.dp))
             MakeItMeSettingsRow(
-                title = MakeItMeStrings.S10_DELETE_ROW,
+                title = stringResource(MR.strings.mim_s10_delete_row),
                 sub = null,
                 destructive = true,
                 onClick = onDeletePhotosClick
@@ -1438,13 +1441,13 @@ fun MakeItMeProgressLine(modifier: Modifier = Modifier) {
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
-                text = MakeItMeStrings.G1_PROGRESS,
+                text = stringResource(MR.strings.mim_g1_progress),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = RunWearColors.TextPrimary
             )
             Text(
-                text = MakeItMeStrings.G2_PROGRESS_SUB,
+                text = stringResource(MR.strings.mim_g2_progress_sub),
                 fontSize = 11.sp,
                 color = RunWearColors.TextSecondary
             )
@@ -1470,7 +1473,7 @@ fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = MakeItMeStrings.G5_LOOK_FAILED,
+            text = stringResource(MR.strings.mim_g5_look_failed),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = RunWearColors.TextPrimary,
@@ -1479,7 +1482,7 @@ fun MakeItMeFailedLine(onRetry: () -> Unit, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(10.dp))
         TextButton(onClick = onRetry) {
             Text(
-                text = MakeItMeStrings.G6_RETRY,
+                text = stringResource(MR.strings.mim_g6_retry),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -1514,14 +1517,14 @@ fun MakeItMeUpsellCard(
         // title instance in the app is script (DA-22 class); the
         // sans caps eyebrow (U1A_EYEBROW) is retired here.
         Text(
-            text = MakeItMeStrings.U2A_SHEET_TITLE,
+            text = stringResource(MR.strings.mim_u2a_sheet_title),
             fontFamily = GreatVibesFontFamily,
             fontSize = 26.sp,
             color = RunWearColors.TextPrimary
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = MakeItMeStrings.U1B_HEADLINE,
+            text = stringResource(MR.strings.mim_u1b_headline),
             fontFamily = FontFamily.Default,
             fontSize = 24.sp,
             letterSpacing = 0.5.sp,
@@ -1544,7 +1547,7 @@ fun MakeItMeUpsellCard(
             colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
         ) {
             Text(
-                MakeItMeStrings.U1D_PRIMARY,
+                stringResource(MR.strings.mim_u1d_primary),
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 14.sp
             )
@@ -1553,7 +1556,7 @@ fun MakeItMeUpsellCard(
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(MakeItMeStrings.U1E_NOT_NOW, color = RunWearColors.TextSecondary)
+            Text(stringResource(MR.strings.mim_u1e_not_now), color = RunWearColors.TextSecondary)
         }
     }
 }
@@ -1643,7 +1646,7 @@ fun MakeItMePaywallSheet(
         ) {
             // Frame 22: the "Make It Me" script title (third wordmark).
             Text(
-                text = MakeItMeStrings.U2A_SHEET_TITLE,
+                text = stringResource(MR.strings.mim_u2a_sheet_title),
                 fontFamily = GreatVibesFontFamily,
                 fontSize = 34.sp,
                 color = RunWearColors.TextPrimary
@@ -1652,7 +1655,7 @@ fun MakeItMePaywallSheet(
 
             // Free bar + the real meter ("2 of 5 used" pattern).
             Text(
-                text = MakeItMeStrings.U2D_FREE_BAR,
+                text = stringResource(MR.strings.mim_u2d_free_bar, MakeItMeUpsellRules.FREE_ALLOWANCE),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = RunWearColors.TextSecondary
@@ -1667,13 +1670,13 @@ fun MakeItMePaywallSheet(
 
             // How Premium works — convergence copy (frame 22 verbatim).
             Text(
-                text = MakeItMeStrings.U2E_HOW_PREMIUM_WORKS,
+                text = stringResource(MR.strings.mim_u2e_how_premium_works),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = RunWearColors.TextPrimary
             )
             Text(
-                text = MakeItMeStrings.U2F_HOW_PREMIUM_WORKS_BODY,
+                text = stringResource(MR.strings.mim_u2f_how_premium_works_body),
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 color = RunWearColors.TextSecondary,
@@ -1708,7 +1711,7 @@ fun MakeItMePaywallSheet(
                 } ?: false
                 if (bankReady) {
                     Text(
-                        text = MakeItMeStrings.S5_STATE_C_SUB,
+                        text = stringResource(MR.strings.mim_s5_state_c_sub),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 21.sp,
@@ -1716,14 +1719,14 @@ fun MakeItMePaywallSheet(
                     )
                 } else {
                     Text(
-                        text = MakeItMeStrings.S28_SUBSCRIBED_STATE,
+                        text = stringResource(MR.strings.mim_s28_subscribed_state),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 21.sp,
                         color = RunWearColors.TextPrimary
                     )
                     Text(
-                        text = MakeItMeStrings.BAND_MAKING_LINE,
+                        text = stringResource(MR.strings.mim_band_making_line),
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
                         color = RunWearColors.TextSecondary,
@@ -1765,19 +1768,19 @@ fun MakeItMePaywallSheet(
                 Row(modifier = Modifier.padding(16.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = MakeItMeStrings.U2G_CARD_TITLE,
+                        text = stringResource(MR.strings.mim_u2g_card_title),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = RunWearColors.TextPrimary
                     )
                     Text(
-                        text = MakeItMeStrings.U2H_CARD_LINE,
+                        text = stringResource(MR.strings.mim_u2h_card_line),
                         fontSize = 14.sp,
                         color = RunWearColors.TextSecondary,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                     Text(
-                        text = annual?.label ?: MakeItMeStrings.U2B_ANNUAL,
+                        text = annual?.label ?: stringResource(MR.strings.mim_u2b_annual),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = RunWearColors.TextPrimary,
@@ -1823,7 +1826,7 @@ fun MakeItMePaywallSheet(
             // card; both plans are explicit, equally selectable
             // options and the selection visibly registers.
             PlanOptionRow(
-                label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY,
+                label = monthly?.label ?: stringResource(MR.strings.mim_u2b_monthly),
                 enabled = monthly != null && !purchasing,
                 selected = !annualSelected,
                 onClick = { annualSelected = false }
@@ -1844,12 +1847,12 @@ fun MakeItMePaywallSheet(
                 Text(
                     if (annualSelected) {
                         MakeItMeStrings.planCtaLabel(
-                            MakeItMeStrings.U2B_ANNUAL,
+                            stringResource(MR.strings.mim_u2b_annual),
                             annual?.formatted?.takeIf { it.isNotEmpty() }?.let { "$it/yr" }
                         )
                     } else {
                         MakeItMeStrings.planCtaLabel(
-                            MakeItMeStrings.U2B_MONTHLY,
+                            stringResource(MR.strings.mim_u2b_monthly),
                             monthly?.formatted?.takeIf { it.isNotEmpty() }?.let { "$it/month" }
                         )
                     },
@@ -1887,7 +1890,7 @@ fun MakeItMePaywallSheet(
                 // U2C text alone now — the per-run line moved up
                 // under the annual price, and the store named is
                 // the one this build is sold through.
-                text = MakeItMeStrings.U2C_FINE_PRINT,
+                text = stringResource(MR.strings.mim_u2c_fine_print),
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
                 color = RunWearColors.TextSecondary
@@ -2055,9 +2058,9 @@ object MakeItMeSettingsPresentation {
         if (!makeItMeEnabled) {
             // Flag OFF: the plain not-started row (frame 36) — the
             // section exists, the feature's doors stay shut.
-            listOf(MakeItMeStrings.S2_STATE_A_ROW)
+            listOf(stringResource(MR.strings.mim_s2_state_a_row))
         } else when (mode) {
-            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S2_STATE_A_ROW)
+            MakeItMeMode.STOCK -> listOf(stringResource(MR.strings.mim_s2_state_a_row))
             // Gen-3 WS-D: status group (not a row title — composed
             // from FreeLooksMeter), then Your photos, then the
             // Premium offer card. GEN-5 (RW-28 item 25): the
@@ -2065,14 +2068,14 @@ object MakeItMeSettingsPresentation {
             // quarantined Danger zone at the end of Settings —
             // see dangerZoneRowTitles.
             MakeItMeMode.FREE -> listOf(
-                MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
-                MakeItMeStrings.U2G_CARD_TITLE
+                stringResource(MR.strings.mim_s6_photos_row),
+                stringResource(MR.strings.mim_s35_number_of_photos),
+                stringResource(MR.strings.mim_u2g_card_title)
             )
             MakeItMeMode.SUBSCRIBED -> listOf(
-                MakeItMeStrings.S6_PHOTOS_ROW,
-                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
-                MakeItMeStrings.U2G_CARD_TITLE
+                stringResource(MR.strings.mim_s6_photos_row),
+                stringResource(MR.strings.mim_s35_number_of_photos),
+                stringResource(MR.strings.mim_u2g_card_title)
             )
         }
 
@@ -2085,10 +2088,10 @@ object MakeItMeSettingsPresentation {
      */
     fun dangerZoneRowTitles(mode: MakeItMeMode): List<String> =
         when (mode) {
-            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S20_DELETE_DATA_ROW)
+            MakeItMeMode.STOCK -> listOf(stringResource(MR.strings.mim_s20_delete_data_row))
             MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> listOf(
-                MakeItMeStrings.S10_DELETE_ROW,
-                MakeItMeStrings.S20_DELETE_DATA_ROW
+                stringResource(MR.strings.mim_s10_delete_row),
+                stringResource(MR.strings.mim_s20_delete_data_row)
             )
         }
 }
@@ -2158,7 +2161,7 @@ fun MakeItMeSettingsSection(
         // It Me SCRIPT wordmark — the same Great Vibes mark that
         // leads every hero pill state — not a plain text label.
         Text(
-            text = MakeItMeStrings.S1_SECTION_HEADER,
+            text = stringResource(MR.strings.mim_s1_section_header),
             fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
             fontSize = 30.sp,
             color = RunWearColors.TextPrimary
@@ -2178,8 +2181,8 @@ fun MakeItMeSettingsSection(
         // hosted inside it — silently vanished from the sheet.
         if (!MakeItMeAvailability.ENABLED) {
             MakeItMeSettingsRow(
-                title = MakeItMeStrings.S2_STATE_A_ROW,
-                sub = MakeItMeStrings.S2_STATE_A_SUB,
+                title = stringResource(MR.strings.mim_s2_state_a_row),
+                sub = stringResource(MR.strings.mim_s2_state_a_sub),
                 onClick = onOptInClick
             )
             return@Column
@@ -2188,8 +2191,8 @@ fun MakeItMeSettingsSection(
         when (state.mode) {
             MakeItMeMode.STOCK -> {
                 MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S2_STATE_A_ROW,
-                    sub = MakeItMeStrings.S2_STATE_A_SUB,
+                    title = stringResource(MR.strings.mim_s2_state_a_row),
+                    sub = stringResource(MR.strings.mim_s2_state_a_sub),
                     onClick = onOptInClick
                 )
             }
@@ -2251,8 +2254,8 @@ fun MakeItMeSettingsSection(
                 // ── Your photos group (WS-D group 3). RW-57: the
                 // row carries the user's selfie thumbnail.
                 MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S6_PHOTOS_ROW,
-                    sub = MakeItMeStrings.S6_PHOTOS_SUB,
+                    title = stringResource(MR.strings.mim_s6_photos_row),
+                    sub = stringResource(MR.strings.mim_s6_photos_sub),
                     onClick = onPhotosClick,
                     thumbnailUrl = referenceThumbnailUrl
                 )
@@ -2263,7 +2266,7 @@ fun MakeItMeSettingsSection(
                 // row. Not a door: the number is settled; changing
                 // the photos themselves happens in Your photos.
                 MakeItMeSettingsRow(
-                    title = MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
+                    title = stringResource(MR.strings.mim_s35_number_of_photos),
                     sub = null,
                     onClick = {},
                     trailingValue = MakeItMeStrings.PHOTO_INTAKE_CAP.toString()
@@ -2310,7 +2313,7 @@ fun MakeItMeSettingsSection(
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Text(
-                            MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                            stringResource(MR.strings.mim_s9_manage_subscription),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
                         )
@@ -2356,8 +2359,8 @@ fun MakeItMeSettingsSection(
                         Spacer(Modifier.height(12.dp))
                         PlanOptionRow(
                             label = card.priceLine?.let {
-                                "${MakeItMeStrings.U2B_ANNUAL} — $it"
-                            } ?: MakeItMeStrings.U2B_ANNUAL,
+                                "${stringResource(MR.strings.mim_u2b_annual)} — $it"
+                            } ?: stringResource(MR.strings.mim_u2b_annual),
                             enabled = !settingsPurchasing,
                             selected = settingsAnnualSelected,
                             onClick = { settingsAnnualSelected = true },
@@ -2365,7 +2368,7 @@ fun MakeItMeSettingsSection(
                         )
                         Spacer(Modifier.height(8.dp))
                         PlanOptionRow(
-                            label = card.monthlyLine ?: MakeItMeStrings.U2B_MONTHLY,
+                            label = card.monthlyLine ?: stringResource(MR.strings.mim_u2b_monthly),
                             enabled = !settingsPurchasing,
                             selected = !settingsAnnualSelected,
                             onClick = { settingsAnnualSelected = false },
@@ -2414,12 +2417,12 @@ fun MakeItMeSettingsSection(
                             Text(
                                 if (settingsAnnualSelected) {
                                     MakeItMeStrings.planCtaLabel(
-                                        MakeItMeStrings.U2B_ANNUAL,
+                                        stringResource(MR.strings.mim_u2b_annual),
                                         card.priceLine
                                     )
                                 } else {
                                     MakeItMeStrings.planCtaLabel(
-                                        MakeItMeStrings.U2B_MONTHLY,
+                                        stringResource(MR.strings.mim_u2b_monthly),
                                         offerMonthlyFormatted?.let { "$it/month" }
                                     )
                                 },
@@ -2467,7 +2470,7 @@ fun MakeItMeSettingsSection(
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Text(
-                            MakeItMeStrings.S9_MANAGE_SUBSCRIPTION,
+                            stringResource(MR.strings.mim_s9_manage_subscription),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
                         )
@@ -2504,14 +2507,14 @@ fun DeleteMyDataSettingsRow(
     Column {
         if (dataDeletedNotice) {
             Text(
-                text = MakeItMeStrings.S25_POST_DELETE_DATA,
+                text = stringResource(MR.strings.mim_s25_post_delete_data),
                 fontSize = 13.sp,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 10.dp)
             )
         }
         MakeItMeSettingsRow(
-            title = MakeItMeStrings.S20_DELETE_DATA_ROW,
+            title = stringResource(MR.strings.mim_s20_delete_data_row),
             sub = null,
             destructive = true,
             onClick = { showDeleteDataDialog = true }
@@ -2556,7 +2559,7 @@ fun DangerZoneSettingsSection(
 
     Column {
         Text(
-            text = MakeItMeStrings.S29_DANGER_ZONE_HEADING,
+            text = stringResource(MR.strings.mim_s29_danger_zone_heading),
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             color = RunWearColors.TextPrimary
@@ -2564,7 +2567,7 @@ fun DangerZoneSettingsSection(
         Spacer(Modifier.height(10.dp))
         if (photosDeletedNotice && state.mode == MakeItMeMode.STOCK) {
             Text(
-                text = MakeItMeStrings.S14_POST_DELETE,
+                text = stringResource(MR.strings.mim_s14_post_delete),
                 fontSize = 13.sp,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 10.dp)
@@ -2572,7 +2575,7 @@ fun DangerZoneSettingsSection(
         }
         if (holdsPhotos) {
             MakeItMeSettingsRow(
-                title = MakeItMeStrings.S10_DELETE_ROW,
+                title = stringResource(MR.strings.mim_s10_delete_row),
                 sub = null,
                 destructive = true,
                 onClick = { showDeletePhotosDialog = true }
@@ -2680,14 +2683,14 @@ fun MakeItMeDeleteDialog(
     AlertDialog(
         containerColor = RunWearColors.BgCard,
         onDismissRequest = { if (!deleting) onDismiss() },
-        title = { Text(MakeItMeStrings.S11_DELETE_CONFIRM_TITLE) },
+        title = { Text(stringResource(MR.strings.mim_s11_delete_confirm_title)) },
         text = {
             Column {
-                Text(MakeItMeStrings.S12_DELETE_CONFIRM_BODY)
+                Text(stringResource(MR.strings.mim_s12_delete_confirm_body))
                 if (failed) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = MakeItMeStrings.TRANSPORT_ERROR,
+                        text = stringResource(MR.strings.mim_transport_error),
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -2706,14 +2709,14 @@ fun MakeItMeDeleteDialog(
                 }
             ) {
                 Text(
-                    MakeItMeStrings.S13_DELETE_CONFIRM,
+                    stringResource(MR.strings.mim_s13_delete_confirm),
                     color = MaterialTheme.colorScheme.error
                 )
             }
         },
         dismissButton = {
             TextButton(enabled = !deleting, onClick = onDismiss) {
-                Text(MakeItMeStrings.S13_KEEP)
+                Text(stringResource(MR.strings.mim_s13_keep))
             }
         }
     )
@@ -2905,7 +2908,7 @@ fun FirstLookMoment(
             when (state) {
                 FirstLookState.READY -> {
                     Text(
-                        text = MakeItMeStrings.FIRST_LOOK_HEADLINE,
+                        text = stringResource(MR.strings.mim_first_look_headline),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 25.sp,
@@ -2921,7 +2924,7 @@ fun FirstLookMoment(
                 }
                 FirstLookState.MAKING -> {
                     Text(
-                        text = MakeItMeStrings.G1_PROGRESS,
+                        text = stringResource(MR.strings.mim_g1_progress),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 25.sp,
@@ -2929,7 +2932,7 @@ fun FirstLookMoment(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = MakeItMeStrings.G2_PROGRESS_SUB,
+                        text = stringResource(MR.strings.mim_g2_progress_sub),
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
                         color = RunWearColors.TextSecondary
@@ -2937,7 +2940,7 @@ fun FirstLookMoment(
                 }
                 FirstLookState.FAILED -> {
                     Text(
-                        text = MakeItMeStrings.G5_LOOK_FAILED,
+                        text = stringResource(MR.strings.mim_g5_look_failed),
                         fontSize = 19.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 25.sp,
@@ -2945,7 +2948,7 @@ fun FirstLookMoment(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = MakeItMeStrings.FIRST_LOOK_FAILED_SUB,
+                        text = stringResource(MR.strings.mim_first_look_failed_sub),
                         fontSize = 13.sp,
                         lineHeight = 19.sp,
                         color = RunWearColors.TextSecondary
@@ -2964,7 +2967,7 @@ fun FirstLookMoment(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Text(
-                            MakeItMeStrings.G6_RETRY,
+                            stringResource(MR.strings.mim_g6_retry),
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 15.sp
                         )
@@ -3004,7 +3007,7 @@ fun FirstLookMoment(
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                 ) {
                     Text(
-                        text = MakeItMeStrings.FIRST_LOOK_BAND_HEADER,
+                        text = stringResource(MR.strings.mim_first_look_band_header),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.2.sp,
@@ -3012,7 +3015,7 @@ fun FirstLookMoment(
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = MakeItMeStrings.FIRST_LOOK_BAND_READINESS,
+                        text = stringResource(MR.strings.mim_first_look_band_readiness),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 20.sp,
@@ -3020,7 +3023,7 @@ fun FirstLookMoment(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = MakeItMeStrings.FIRST_LOOK_BAND_NO_CAP,
+                        text = stringResource(MR.strings.mim_first_look_band_no_cap),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 20.sp,
@@ -3039,7 +3042,7 @@ fun FirstLookMoment(
                 colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary)
             ) {
                 Text(
-                    MakeItMeStrings.FIRST_LOOK_PRIMARY,
+                    stringResource(MR.strings.mim_first_look_primary),
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 16.sp
                 )
@@ -3054,7 +3057,7 @@ fun FirstLookMoment(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        MakeItMeStrings.FIRST_LOOK_SECOND_DOOR,
+                        stringResource(MR.strings.mim_first_look_second_door),
                         color = RunWearColors.TextSecondary
                     )
                 }
@@ -3148,14 +3151,14 @@ fun MakeItMeDeleteDataDialog(
     AlertDialog(
         containerColor = RunWearColors.BgCard,
         onDismissRequest = { if (!deleting) onDismiss() },
-        title = { Text(MakeItMeStrings.S21_DELETE_DATA_CONFIRM_TITLE) },
+        title = { Text(stringResource(MR.strings.mim_s21_delete_data_confirm_title)) },
         text = {
             Column {
-                Text(MakeItMeStrings.S22_DELETE_DATA_CONFIRM_BODY)
+                Text(stringResource(MR.strings.mim_s22_delete_data_confirm_body))
                 if (failed) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = MakeItMeStrings.TRANSPORT_ERROR,
+                        text = stringResource(MR.strings.mim_transport_error),
                         color = MaterialTheme.colorScheme.error
                     )
                 }
@@ -3174,14 +3177,14 @@ fun MakeItMeDeleteDataDialog(
                 }
             ) {
                 Text(
-                    MakeItMeStrings.S23_DELETE_DATA_CONFIRM,
+                    stringResource(MR.strings.mim_s23_delete_data_confirm),
                     color = MaterialTheme.colorScheme.error
                 )
             }
         },
         dismissButton = {
             TextButton(enabled = !deleting, onClick = onDismiss) {
-                Text(MakeItMeStrings.S24_DELETE_DATA_KEEP)
+                Text(stringResource(MR.strings.mim_s24_delete_data_keep))
             }
         }
     )

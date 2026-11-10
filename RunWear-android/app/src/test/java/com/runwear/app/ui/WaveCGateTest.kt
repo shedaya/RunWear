@@ -264,7 +264,7 @@ class WaveCGateTest {
         val card = screens.substringAfter("fun MakeItMeUpsellCard")
             .substringBefore("fun MakeItMePaywallSheet")
         assertTrue(card.contains("GreatVibesFontFamily"))
-        assertTrue(card.contains("MakeItMeStrings.U2A_SHEET_TITLE"))
+        assertTrue(card.contains("MR.strings.mim_u2a_sheet_title"))
     }
 
     // ── RW-57: selfie thumbnail in the Your photos row ───────────

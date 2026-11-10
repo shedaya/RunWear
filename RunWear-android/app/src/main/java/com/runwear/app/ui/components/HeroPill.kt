@@ -1,5 +1,8 @@
 package com.runwear.app.ui.components
 
+import com.runwear.engine.MR
+import dev.icerock.moko.resources.compose.stringResource
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.draw.shadow
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.makeitme.MakeItMeMode
 import com.runwear.app.makeitme.MakeItMeStrings
+import com.runwear.app.makeitme.MakeItMeUpsellRules
 import com.runwear.app.makeitme.PersonalLookStatus
 import com.runwear.app.makeitme.PersonalServeKind
 
@@ -103,11 +107,11 @@ object HeroPillPolicy {
             // generating state stays clean.
             return HeroPillContent(
                 kind = HeroPillKind.MAKING,
-                text = MakeItMeStrings.HERO_PILL_MAKING,
+                text = stringResource(MR.strings.mim_hero_pill_making),
                 showSpinner = true,
                 showScriptMark = true,
                 upsellText = if (mode == MakeItMeMode.FREE) {
-                    MakeItMeStrings.HERO_PILL_MAKING_UPSELL
+                    stringResource(MR.strings.mim_hero_pill_making_upsell)
                 } else {
                     null
                 }
@@ -124,8 +128,8 @@ object HeroPillPolicy {
         ) {
             return HeroPillContent(
                 kind = HeroPillKind.EXHAUSTED,
-                text = MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT,
-                actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED,
+                text = stringResource(MR.strings.mim_hero_pill_exhausted_count, MakeItMeUpsellRules.FREE_ALLOWANCE),
+                actionText = stringResource(MR.strings.mim_hero_pill_get_unlimited),
                 showScriptMark = true,
                 wholePillAction = true
             )
@@ -146,7 +150,7 @@ object HeroPillPolicy {
                 // (d) Subscribed: script mark + Premium status + lock glyph.
                 MakeItMeMode.SUBSCRIBED -> HeroPillContent(
                     kind = HeroPillKind.PREMIUM,
-                    text = MakeItMeStrings.HERO_PILL_PREMIUM,
+                    text = stringResource(MR.strings.mim_hero_pill_premium),
                     showScriptMark = true,
                     showLock = true
                 )
@@ -154,7 +158,7 @@ object HeroPillPolicy {
                 MakeItMeMode.FREE -> HeroPillContent(
                     kind = HeroPillKind.EXACT_FREE,
                     text = MakeItMeStrings.heroPillLookCount(freeGenerationsUsed),
-                    actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED,
+                    actionText = stringResource(MR.strings.mim_hero_pill_get_unlimited),
                     showScriptMark = true
                 )
                 MakeItMeMode.STOCK -> null
@@ -235,7 +239,7 @@ fun HeroPill(
                 }
                 if (content.showScriptMark) {
                     Text(
-                        text = MakeItMeStrings.HERO_PILL_SCRIPT_MARK,
+                        text = stringResource(MR.strings.mim_hero_pill_script_mark),
                         fontFamily = com.runwear.app.ui.theme.GreatVibesFontFamily,
                         fontSize = 19.sp,
                         color = com.runwear.app.ui.theme.RunWearColors.TextPrimary

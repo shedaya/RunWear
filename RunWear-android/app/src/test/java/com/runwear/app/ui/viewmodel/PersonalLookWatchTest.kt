@@ -238,6 +238,6 @@ class PersonalLookWatchTest {
         assertEquals("Try again", MakeItMeStrings.G6_RETRY)
         // And the failed status renders it in the Home hero region.
         val screens = mainSource("com/runwear/app/makeitme/MakeItMeScreens.kt")
-        assertTrue(screens.contains("text = MakeItMeStrings.G5_LOOK_FAILED"))
+        assertTrue(screens.contains("text = stringResource(MR.strings.mim_g5_look_failed)"))
     }
 }

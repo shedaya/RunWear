@@ -1,5 +1,8 @@
 package com.runwear.app.makeitme
 
+import com.runwear.engine.MR
+import dev.icerock.moko.resources.compose.stringResource
+
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -523,7 +526,7 @@ fun GuidedSelfieCapture(
             if (capturedUri != null && !passed) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = MakeItMeStrings.C3E_RETAKE_GUIDED,
+                    text = stringResource(MR.strings.mim_c3e_retake_guided),
                     fontSize = 13.sp,
                     color = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.65f)
                 )

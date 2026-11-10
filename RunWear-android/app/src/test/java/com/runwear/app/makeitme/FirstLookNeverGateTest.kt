@@ -68,17 +68,17 @@ class FirstLookNeverGateTest {
         // The primary door: a real Button on onSeeOutfit carrying
         // FIRST_LOOK_PRIMARY, present in the composition as-is.
         assertTrue(moment.contains("onClick = onSeeOutfit"))
-        assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_PRIMARY"))
+        assertTrue(moment.contains("MR.strings.mim_first_look_primary"))
         // It is NOT inside the Premium-band gate (that gate wraps
         // only the second door): the gate's region holds
         // FIRST_LOOK_SECOND_DOOR and never FIRST_LOOK_PRIMARY.
         val gateRegion = moment.substringAfter("if (FirstLookPresentation.showsPremiumBand(state))")
-        assertTrue(gateRegion.contains("MakeItMeStrings.FIRST_LOOK_SECOND_DOOR"))
-        assertFalse(gateRegion.contains("MakeItMeStrings.FIRST_LOOK_PRIMARY"))
+        assertTrue(gateRegion.contains("MR.strings.mim_first_look_second_door"))
+        assertFalse(gateRegion.contains("MR.strings.mim_first_look_primary"))
         // Nor is it inside the band's settle animation (the button
         // never waits for the reveal): the Button sits after the
         // AnimatedVisibility block, at column level.
-        val buttonAt = moment.indexOf("MakeItMeStrings.FIRST_LOOK_PRIMARY")
+        val buttonAt = moment.indexOf("MR.strings.mim_first_look_primary")
         val bandAt = moment.indexOf("AnimatedVisibility(")
         assertTrue(bandAt in 0 until buttonAt)
         // Back takes the same door — never a trap.
@@ -131,6 +131,6 @@ class FirstLookNeverGateTest {
         assertTrue(FirstLookPresentation.showsPremiumBand(FirstLookState.READY))
         assertFalse(FirstLookPresentation.showsPremiumBand(FirstLookState.MAKING))
         assertFalse(FirstLookPresentation.showsPremiumBand(FirstLookState.FAILED))
-        assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_SECOND_DOOR"))
+        assertTrue(moment.contains("MR.strings.mim_first_look_second_door"))
     }
 }

@@ -3,6 +3,13 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.library)
+    alias(libs.plugins.moko.resources.plugin)
+}
+
+// LOC-1 WP-3 pilot: moko-resources live in :engine (the KMP module both
+// platforms consume). Base resources: src/commonMain/moko-resources/base/.
+multiplatformResources {
+    resourcesPackage.set("com.runwear.engine")
 }
 
 /**
@@ -64,6 +71,9 @@ kotlin {
             // the models are platform-neutral). `api`: :shared and the app
             // modules convert at their edges against it.
             api(libs.kotlinx.datetime)
+            // LOC-1 WP-3: localized copy resources (MR) + Compose accessor.
+            api(libs.moko.resources)
+            api(libs.moko.resources.compose)
         }
     }
 }

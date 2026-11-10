@@ -119,7 +119,7 @@ class Gen5FurtherAuditTest {
         // string constant, gated on real bank coverage — the gen-5
         // hard-coded literal this pin used to require is the defect
         // and must NOT come back.
-        assertTrue(screens.contains("MakeItMeStrings.S5_STATE_C_SUB"))
+        assertTrue(screens.contains("MR.strings.mim_s5_state_c_sub"))
         assertFalse(
             screens.contains(
                 "You're subscribed — your photo is ready before you open the app."
@@ -215,7 +215,7 @@ class Gen5FurtherAuditTest {
         // pitch line at all — only the manage door stands here.
         assertFalse(subscribedBranch.contains("BorderStroke"))
         assertFalse(subscribedBranch.contains("card.benefitLine"))
-        assertTrue(subscribedBranch.contains("MakeItMeStrings.S9_MANAGE_SUBSCRIPTION"))
+        assertTrue(subscribedBranch.contains("MR.strings.mim_s9_manage_subscription"))
     }
 
     // ── Cream map: tokens and the worst offenders ─────────────────

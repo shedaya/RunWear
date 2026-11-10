@@ -236,7 +236,7 @@ class OnboardingSequenceTest {
         )
         // And the fork surface renders the deck lead (the pin is on
         // the rendered slot, not just the string's existence).
-        assertTrue(makeItMeScreens().contains("MakeItMeStrings.F2_LEAD"))
+        assertTrue(makeItMeScreens().contains("MR.strings.mim_f2_lead"))
     }
 
     @Test
@@ -322,7 +322,7 @@ class OnboardingSequenceTest {
             flow, "UploadStep.CONSENT ->", "UploadStep.PHOTOS, UploadStep.SUBMITTING ->"
         )
         assertTrue(consentBranch.contains("enabled = attested && !working"))
-        assertTrue(consentBranch.contains("MakeItMeStrings.C1C_ATTESTATION"))
+        assertTrue(consentBranch.contains("MR.strings.mim_c1c_attestation"))
     }
 
     @Test
@@ -376,7 +376,7 @@ class OnboardingSequenceTest {
         val bandSettleAt = moment.lastIndexOf("bandSettled = true")
         assertTrue(hapticDelayAt in 0 until hapticCallAt)
         assertTrue(hapticCallAt in 0 until bandSettleAt)
-        assertTrue(moment.contains("MakeItMeStrings.FIRST_LOOK_BAND_READINESS"))
+        assertTrue(moment.contains("MR.strings.mim_first_look_band_readiness"))
         // GEN-5 (FA-6): the moment composes its count line from
         // the shared meter via firstLookCountLine.
         assertTrue(moment.contains("MakeItMeStrings.firstLookCountLine("))

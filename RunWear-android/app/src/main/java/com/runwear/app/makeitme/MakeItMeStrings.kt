@@ -8,6 +8,20 @@ package com.runwear.app.makeitme
  * caption) are deliberately ABSENT — they are not in the build until Sol
  * approves them.
  */
+/**
+ * LOC-1 WP-3 PILOT (2026-11-09): this deck is now DUAL-SOURCED.
+ * The canonical, localizable values live in moko resources in :engine
+ * (`engine/src/commonMain/moko-resources/base/strings.xml`, keys `mim_*`),
+ * byte-identical to the constants below — proven by
+ * `MimResourceParityTest` and the WP-3 extract/verify script. Compose
+ * surfaces read the resources directly (`stringResource(MR.strings.…)`).
+ * This object remains the synchronous facade for the non-Compose policy
+ * layer (PersonalHeroPolicies/Service) until that layer moves to
+ * StringDesc; any copy change must land in BOTH places or the parity
+ * test fails the gate. CONSENT_VERSION is an internal wire contract —
+ * it is in the resources only for inventory completeness and must NEVER
+ * be localized or resolved from a locale.
+ */
 object MakeItMeStrings {
 
     // F — Onboarding fork (spec §2.2)
