@@ -288,6 +288,20 @@ class Rw152CollectionRenderTest {
         assertTrue("cover trash nodes present", matches.isNotEmpty())
         matches.last().config[SemanticsActions.OnClick].action?.invoke()
             ?: throw AssertionError("cover trash OnClick missing")
+        stage.settle(10)
+        // Diagnostics (read from the suite's system-out): what did
+        // the click actually do — dialog, chapter detail, or
+        // nothing?
+        stage.composeRoots().forEachIndexed { i, r ->
+            println(
+                "RW152-DIAG after click root$i: " +
+                    stage.texts(r).joinToString(" | ")
+            )
+        }
+        println(
+            "RW152-DIAG windows after click: " +
+                stage.windowViews().map { it.javaClass.simpleName }
+        )
         // The confirmation lives in its own Dialog window — find
         // the window root carrying its title. The window can take
         // several pumps to attach under a loaded runner, so the
