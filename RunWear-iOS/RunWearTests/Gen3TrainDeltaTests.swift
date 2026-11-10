@@ -77,7 +77,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let pickerSheet = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
         // GEN-5 (RW-28 item 31): the field's prompt is the
         // settled "Search a place".
-        XCTAssertTrue(pickerSheet.contains("TextField(\"Search a place\""),
+        XCTAssertTrue(pickerSheet.contains("TextField(AppStrings.searchPlacePlaceholder"),
                       "the picker carries its search field")
         XCTAssertTrue(pickerSheet.contains("\"Current location\""),
                       "the picker carries its current-location row")
@@ -240,7 +240,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         // The slider control itself carries the shipped end
         // labels over five stops.
         let controls = try sourceFile("../RunWear/Views/Components/PreferenceControls.swift")
-        XCTAssertTrue(controls.contains("Text(\"Runs Cold\")") && controls.contains("Text(\"Runs Warm\")"),
+        XCTAssertTrue(controls.contains("Text(AppStrings.onbBodySliderMin)") && controls.contains("Text(AppStrings.onbBodySliderMax)"),
                       "the slider's end labels are the shipped Runs Cold / Runs Warm")
         XCTAssertTrue(controls.contains("in: 0...4, step: 1"),
                       "the slider is five stops")
@@ -515,7 +515,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
 
     func testFinishedCTAReadsUpgradeToPremium_sourcePin() throws {
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
-        XCTAssertTrue(onboarding.contains("Text(\"Upgrade to Premium\")"),
+        XCTAssertTrue(onboarding.contains("Text(AppStrings.mimFirstLookUpgrade)"),
                       "the first-look finished surface's CTA is 'Upgrade to Premium'")
         XCTAssertFalse(onboarding.contains("Text(\"See Premium\")"),
                        "'See Premium' is gone from the first-look surface")

@@ -130,7 +130,7 @@ final class Gen2I3OnboardingTests: XCTestCase {
                       "the pending state renders inside the step")
         XCTAssertTrue(step.contains("ProgressView()"),
                       "the pending state carries a spinner")
-        XCTAssertTrue(step.contains("\"Finding your location…\""),
+        XCTAssertTrue(step.contains("AppStrings.onbLocationFinding"),
                       "the pending state carries copy")
         XCTAssertTrue(step.contains(".disabled(locationPermissionPending)"),
                       "the doors stay rendered (disabled) while the ask resolves — chrome intact")
@@ -147,7 +147,7 @@ final class Gen2I3OnboardingTests: XCTestCase {
         // rendering is the W-19 stripped state.
         XCTAssertFalse(onboarding.contains("Button(\"Use My Location\") {"),
                        "the bare text-button form of the fallback door is gone")
-        XCTAssertTrue(onboarding.contains("Text(\"Finding your location…\")"),
+        XCTAssertTrue(onboarding.contains("Text(AppStrings.onbLocationFinding)"),
                       "the fallback carries the same spinner copy treatment")
     }
 

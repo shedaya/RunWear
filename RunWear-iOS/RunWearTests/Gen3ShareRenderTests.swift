@@ -257,7 +257,7 @@ final class Gen3ShareRenderTests: XCTestCase {
                       "the sheet's working state is the labeled copy")
         XCTAssertTrue(collection.contains("ShareCardImagePrep.downscaledForPoster"),
                       "the poster hero is downscaled before the render")
-        XCTAssertTrue(collection.contains("Button(\"Close\")"),
+        XCTAssertTrue(collection.contains("Button(AppStrings.actionClose)"),
                       "the waiting and failure states carry an explicit way back — the census path had no cancel at all")
         XCTAssertTrue(collection.contains("@Environment(\\.dismiss)"),
                       "the Close affordance dismisses the share sheet itself")

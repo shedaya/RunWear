@@ -806,7 +806,7 @@ final class WearIveRunW15FixTests: XCTestCase {
         XCTAssertTrue(view.contains("fireCueSettle()"),
                       "the creation cue still settles through the one fireCueSettle path")
         // The W-1 jump-in affordance is explicit on the expanded card.
-        XCTAssertTrue(view.contains("Open the full Wear I've Run collection"))
+        XCTAssertTrue(view.contains("AppEnglish.wirOpenCollectionFull"))
     }
 }
 

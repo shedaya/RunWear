@@ -472,11 +472,11 @@ final class Gen5FidelityTests: XCTestCase {
         // as the design's "✓ That's exactly what we need" with
         // no emoji-class character in copy (WS-10 census).
         XCTAssertTrue(flow.contains("Image(systemName: \"checkmark\")"))
-        XCTAssertTrue(flow.contains("Text(\"That's exactly what we need\")"))
+        XCTAssertTrue(flow.contains("Text(AppStrings.captureExact)"), "WP-R3: settled check line via the catalog")
         XCTAssertTrue(flow.contains("maxPhotos = 1"))
         let capture = try sourceFile("../RunWear/Views/GuidedSelfieCaptureView.swift")
         XCTAssertTrue(capture.contains("Image(systemName: \"checkmark\")"))
-        XCTAssertTrue(capture.contains("Text(\"That's exactly what we need\")"))
+        XCTAssertTrue(capture.contains("Text(AppStrings.captureExact)"), "WP-R3: settled check line via the catalog")
     }
 
     func testSettingsSource_DangerZoneAndVerbatimLines() throws {
@@ -485,25 +485,25 @@ final class Gen5FidelityTests: XCTestCase {
         // this file — one quarantined section in SettingsModal
         // carries both destructive rows now.
         XCTAssertFalse(settings.contains("Text(\"Danger zone\")"))
-        XCTAssertTrue(settings.contains("Subscribed · Your photo is ready before you open the app."))
+        XCTAssertTrue(settings.contains("AppStrings.mimsetSubscribedReady"))
         XCTAssertTrue(settings.contains("settingsMonthlyLabel"))
         XCTAssertTrue(settings.contains("perRunLine"))
-        XCTAssertTrue(settings.contains("Your current photo"))
-        XCTAssertTrue(settings.contains("A new photo starts a new set"))
-        XCTAssertTrue(settings.contains("Retake Selfie"))
-        XCTAssertTrue(settings.contains("Choose a Different Photo"))
+        XCTAssertTrue(settings.contains("AppStrings.mimsetCurrentPhoto"))
+        XCTAssertTrue(settings.contains("AppStrings.mimsetNewPhotoHead"))
+        XCTAssertTrue(settings.contains("AppStrings.mimsetRetake"))
+        XCTAssertTrue(settings.contains("AppStrings.mimsetDifferentPhoto"))
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
         // GEN-5 supersession (cream design pass): the modal's
         // headers render through the .ssec helper, same words.
-        XCTAssertTrue(modal.contains("settingsSectionHeader(\"Danger zone\")"))
-        XCTAssertTrue(modal.contains("Text(\"Delete my photos\")"))
-        XCTAssertTrue(modal.contains("Text(\"Delete my data\")"))
+        XCTAssertTrue(modal.contains("settingsSectionHeader(AppStrings.settingsDangerZone)"))
+        XCTAssertTrue(modal.contains("Text(AppStrings.settingsDeletePhotos)"))
+        XCTAssertTrue(modal.contains("Text(AppStrings.settingsDeleteData)"))
     }
 
     func testLocationSource_SettledSearchField() throws {
         let picker = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
-        XCTAssertTrue(picker.contains("TextField(\"Search a place\""))
-        XCTAssertTrue(picker.contains("Your recent places will wait here"))
+        XCTAssertTrue(picker.contains("TextField(AppStrings.searchPlacePlaceholder"), "WP-R3: settled placeholder via the catalog")
+        XCTAssertTrue(picker.contains("AppStrings.locRecentEmptyBody"), "WP-R3: the hint body (which opens with the settled sentence) via the catalog")
     }
 
     func testBandSource_SelectedHourOnTheAxis() throws {
@@ -1026,8 +1026,8 @@ final class Gen5FidelityTests: XCTestCase {
 
     func testCollectionEmptyState_IsFrame10Verbatim_FA16() throws {
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
-        XCTAssertTrue(collection.contains("Your scrapbook starts with today's run."))
-        XCTAssertTrue(collection.contains("Each day's outfit is saved here automatically — one card per day, in the places you've run. Nothing is backfilled. It begins the first time today's outfit is generated."))
+        XCTAssertTrue(collection.contains("Text(AppStrings.wirEmptyLine)"), "WP-R3: frame-10 title via the catalog (value byte-identical)")
+        XCTAssertTrue(collection.contains("Text(AppStrings.collectionEmptyBody)"), "WP-R3: frame-10 body via the catalog (value byte-identical)")
         XCTAssertFalse(collection.contains("Nothing here yet"),
                        "the invented session-framed empty state is gone")
     }

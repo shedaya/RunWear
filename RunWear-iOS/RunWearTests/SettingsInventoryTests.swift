@@ -152,16 +152,16 @@ final class SettingsInventoryTests: XCTestCase {
         // one danger zone; the Make It Me composition hosts
         // neither and has no destructive group of its own.
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(settings.contains("Text(\"Delete my data\")"),
+        XCTAssertTrue(settings.contains("Text(AppStrings.settingsDeleteData)"),
                       "Delete my data must be Settings' own section row")
-        XCTAssertTrue(settings.contains("Text(\"Delete my photos\")"),
+        XCTAssertTrue(settings.contains("Text(AppStrings.settingsDeletePhotos)"),
                       "Delete my photos joins the same danger zone")
         XCTAssertTrue(settings.contains("makeItMePresentation.alert = .confirmDeleteData"),
                       "its confirmation rides the surface's single alert slot")
         XCTAssertTrue(settings.contains("makeItMePresentation.alert = .confirmDelete"),
                       "the photos delete rides the same alert slot")
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
-        XCTAssertFalse(section.contains("Text(\"Delete my data\")"),
+        XCTAssertFalse(section.contains("Text(AppStrings.settingsDeleteData)"),
                        "the Make It Me section must not host Delete my data (the D-14 coupling)")
         XCTAssertFalse(section.contains("confirmDeleteData"),
                        "the Make It Me section must not own the data-delete alert")
@@ -173,8 +173,8 @@ final class SettingsInventoryTests: XCTestCase {
 
     func testAboutCarriesTheRealStoreVersion_sourcePin() throws {
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(settings.contains("LabeledContent(\"Version\", value: appVersion)"))
-        XCTAssertTrue(settings.contains("return \"\\(short) (\\(build))\""),
+        XCTAssertTrue(settings.contains("LabeledContent(AppStrings.settingsVersion, value: appVersion)"))
+        XCTAssertTrue(settings.contains("return AppStrings.settingsVersionFormat(short, build)"),
                       "the About value is the store version in \"name (build)\" form")
     }
 
@@ -236,9 +236,9 @@ final class SettingsInventoryTests: XCTestCase {
     /// there is nothing to deselect to.
     func testRW81WatchSettingsFitIsTwoToggleButtons_sourcePin() throws {
         let watch = try sourceFile("../RunWearWatch/WatchSettingsView.swift")
-        XCTAssertTrue(watch.contains("label: \"Men's\""),
+        XCTAssertTrue(watch.contains("label: AppStrings.fitOptionMens"),
                       "RW-81: the watch fit section carries the Men's button")
-        XCTAssertTrue(watch.contains("label: \"Women's\""),
+        XCTAssertTrue(watch.contains("label: AppStrings.fitOptionWomens"),
                       "RW-81: the watch fit section carries the Women's button")
         XCTAssertFalse(watch.contains("No preference"),
                        "RW-81: no third fit choice exists on the watch either")
@@ -271,7 +271,7 @@ final class SettingsInventoryTests: XCTestCase {
                       "the card's confirm button names the selected plan and its price (RW-100)")
         XCTAssertTrue(section.contains("MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: billing.annualPriceString)"),
                       "the card's price is the fetched product's price — parameterized, never hardcoded")
-        XCTAssertTrue(section.contains("Made ahead, without limit — every outfit is ready when you open the app."),
+        XCTAssertTrue(section.contains("AppStrings.mimsetMadeAhead"),
                       "the settled two-benefit copy stands on the card")
         // GEN-6 ASSEMBLY reconciliation: the absence assertion is
         // scoped to the SETTINGS section — the paywall sheet later in

@@ -565,7 +565,7 @@ final class Gen6WaveBShareTests: XCTestCase {
 
     func testKitCard_sourcePins_perTileShop_disclosure_noPrices_noCardLevelCTA() throws {
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
-        XCTAssertTrue(collection.contains("Text(\"Shop ›\")"),
+        XCTAssertTrue(collection.contains("Text(AppStrings.actionShopArrow)"),
                       "Shop › attaches per tile, printed on the raster")
         XCTAssertFalse(collection.contains("Shop this kit"),
                        "the gen-5 card-level CTA is retired — links are per tile")
@@ -583,7 +583,7 @@ final class Gen6WaveBShareTests: XCTestCase {
 
     func testStudioAndPayload_sourcePins() throws {
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
-        XCTAssertTrue(collection.contains("Text(\"Share this day\")"),
+        XCTAssertTrue(collection.contains("Text(AppStrings.collectionShareDay)"),
                       "the chapter page's one full-width Studio row")
         XCTAssertTrue(collection.contains("ShareStudioView("),
                       "the Studio is the share door")

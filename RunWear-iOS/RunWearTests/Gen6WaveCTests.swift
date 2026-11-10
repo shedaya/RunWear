@@ -90,7 +90,7 @@ final class Gen6WaveCTests: XCTestCase {
         // the caption renders from it exactly as before.
         XCTAssertTrue(sheet.contains("DayChartBeyondForecast.caption(for: activeChart)"),
                       "the time picker must render the beyond-forecast caption for a partial day")
-        XCTAssertTrue(sheet.contains("Forecast isn't available for this day yet."),
+        XCTAssertTrue(sheet.contains("AppStrings.sheetForecastUnavailableDay"),
                       "the wholly-empty day keeps its own naming")
     }
 
@@ -151,7 +151,7 @@ final class Gen6WaveCTests: XCTestCase {
                        "no sans caps MAKE IT ME title instance may remain")
         let upsellStart = try XCTUnwrap(settings.range(of: "struct MakeItMeUpsellCard"))
         let upsell = String(settings[upsellStart.lowerBound...])
-        XCTAssertTrue(upsell.contains("Text(\"Make It Me\")"), "the upsell card carries the script title")
+        XCTAssertTrue(upsell.contains("Text(AppStrings.mimScriptMark)"), "the upsell card carries the script title")
         XCTAssertTrue(upsell.contains(".greatVibes(size: 25)"), "the upsell title is set in the script")
     }
 
@@ -170,11 +170,11 @@ final class Gen6WaveCTests: XCTestCase {
 
     func testRW51FailureRowCarriesBothSettledDoors_sourcePin() throws {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
-        XCTAssertTrue(flow.contains("Text(\"Take the guided selfie\")"),
+        XCTAssertTrue(flow.contains("Text(AppStrings.flowGuidedSelfie)"),
                       "the guided door carries its settled label")
         XCTAssertFalse(flow.contains("Retake with the guided camera"),
                        "the old guided-door label must not return")
-        XCTAssertTrue(flow.contains("Text(\"Choose a different photo\")"),
+        XCTAssertTrue(flow.contains("Text(AppStrings.flowDifferentPhoto)"),
                       "the failure row gains the labelled library door")
     }
 
@@ -190,13 +190,13 @@ final class Gen6WaveCTests: XCTestCase {
         let scriptIdx = try XCTUnwrap(fork.range(of: "Text(\"Make It Me\")")).lowerBound
         let lineIdx = try XCTUnwrap(fork.range(of: "See yourself in every outfit.")).lowerBound
         XCTAssertTrue(scriptIdx < lineIdx, "the script title heads the fork")
-        XCTAssertEqual(fork.components(separatedBy: "Text(\"Make It Me\")").count - 1, 1,
+        XCTAssertEqual(fork.components(separatedBy: "Text(AppStrings.mimScriptMark)").count - 1, 1,
                        "the script sits in the title seat only, not inside a card")
         // Settled doors.
-        XCTAssertTrue(fork.contains("Text(\"Make it me\")"))
-        XCTAssertTrue(fork.contains("Text(\"Use my photos\")"))
-        XCTAssertTrue(fork.contains("Text(\"Standard photos\")"))
-        XCTAssertTrue(fork.contains("Text(\"Use standard photos\")"))
+        XCTAssertTrue(fork.contains("Text(AppStrings.flowMakeItMeCta)"))
+        XCTAssertTrue(fork.contains("Text(AppStrings.flowUseMyPhotos)"))
+        XCTAssertTrue(fork.contains("Text(AppStrings.flowStandardPhotos)"))
+        XCTAssertTrue(fork.contains("Text(AppStrings.flowUseStandard)"))
         XCTAssertFalse(fork.contains("Use the standard photos"),
                        "DA-24: the old stock-card heading must not return")
         // The two unlisted card description lines are gone.
@@ -210,13 +210,13 @@ final class Gen6WaveCTests: XCTestCase {
         // Continue exists on the fork. The honesty line stands,
         // now as the fork's closing line. (The full RW-78 wiring
         // pins live in Gen6RW78RW79Tests.)
-        XCTAssertTrue(fork.contains("Either way, your recommendations don't change"))
+        XCTAssertTrue(fork.contains("AppStrings.flowEitherWay"))
         XCTAssertFalse(fork.contains("Text(\"Continue\")"),
                        "RW-78: the select-then-commit Continue must not return")
         XCTAssertFalse(fork.contains("selectedDoor"),
                        "RW-78: the fork carries no selection state")
         // Fork lines themselves unchanged.
-        XCTAssertTrue(fork.contains("Your recommendations, with you in the photo."))
+        XCTAssertTrue(fork.contains("AppStrings.flowRecommendationsYou"))
     }
 
     // MARK: - DA-23: dead code stays deleted
@@ -247,7 +247,7 @@ final class Gen6WaveCTests: XCTestCase {
         XCTAssertEqual(SettingsInventory.sections.last, .dangerZone)
         XCTAssertEqual(SettingsInventory.sections.filter { $0 == .dangerZone }.count, 1)
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertEqual(modal.components(separatedBy: "settingsSectionHeader(\"Danger zone\")").count - 1, 1,
+        XCTAssertEqual(modal.components(separatedBy: "settingsSectionHeader(AppStrings.settingsDangerZone)").count - 1, 1,
                        "exactly one Danger zone section renders in Settings")
         let section = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertFalse(section.contains("destructiveSection"),
@@ -288,11 +288,11 @@ final class Gen6WaveCTests: XCTestCase {
 
     func testRW59BundleCarriesVersionDeviceAndSettings() throws {
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(modal.contains("\"Device\": \"\\(UIDevice.current.model)"),
+        XCTAssertTrue(modal.contains("AppStrings.settingsDiagDevice: AppStrings.settingsDiagDeviceFormat(UIDevice.current.model"),
                       "the bundle carries the device, as disclosed")
-        XCTAssertTrue(modal.contains("\"Settings\": \"Fit: \\(fit) · Units: \\(unit) · Body temperature: \\(comfort)\""),
+        XCTAssertTrue(modal.contains("AppStrings.settingsDiagSettings: AppStrings.settingsDiagSettingsFormat(fit, unit, comfort)"),
                       "the bundle carries the user's settings, as disclosed")
-        XCTAssertTrue(modal.contains("Nothing else — no health data, no location, no photos."),
+        XCTAssertTrue(modal.contains("AppStrings.settingsFeedbackDisclosure"),
                       "the disclosure states the never-sent substance before Send")
         XCTAssertFalse(modal.contains("no location beyond what you type"),
                        "the weaker old phrasing must not return")
@@ -300,12 +300,12 @@ final class Gen6WaveCTests: XCTestCase {
 
     func testRW59CasingPins_sourcePins() throws {
         let modal = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(modal.contains("Label(\"Send feedback\", systemImage: \"envelope\")"))
-        XCTAssertTrue(modal.contains(".navigationTitle(\"Send feedback\")"))
+        XCTAssertTrue(modal.contains("Label(AppStrings.settingsSendFeedback, systemImage: \"envelope\")"))
+        XCTAssertTrue(modal.contains(".navigationTitle(AppStrings.viewSendFeedback)"))
         XCTAssertFalse(modal.contains("\"Send Feedback\""))
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains("Button(\"Send feedback\")"))
-        XCTAssertTrue(home.contains("Button(\"Not now\", role: .cancel)"))
+        XCTAssertTrue(home.contains("Button(AppStrings.viewSendFeedback)"))
+        XCTAssertTrue(home.contains("Button(AppStrings.viewNotNow, role: .cancel)"))
         XCTAssertFalse(home.contains("Button(\"Not Now\""))
     }
 
@@ -316,7 +316,7 @@ final class Gen6WaveCTests: XCTestCase {
         let start = try XCTUnwrap(supporting.range(of: "struct LoadingView"))
         let end = try XCTUnwrap(supporting.range(of: "struct LocationPermissionView"))
         let loading = String(supporting[start.lowerBound..<end.lowerBound])
-        XCTAssertTrue(loading.contains("Text(\"Getting your first recommendation…\")"),
+        XCTAssertTrue(loading.contains("Text(AppStrings.loadingFirstRecommendation)"),
                       "the home skeleton carries the settled line (frame 46)")
         // The line must render as text: it is composed outside
         // the redacted skeleton subtree.
@@ -357,13 +357,13 @@ final class Gen6WaveCTests: XCTestCase {
     func testRW61LibrarySurfaceAndEntry_sourcePins() throws {
         let settings = try sourceFile("../RunWear/Views/MakeItMeSettingsViews.swift")
         XCTAssertTrue(settings.contains("struct YourLooksLibraryView"), "the library surface exists")
-        XCTAssertTrue(settings.contains(".navigationTitle(\"Your looks\")"), "under its settled title")
-        XCTAssertTrue(settings.contains("Button(\"Why am I seeing a stock photo?\")"),
+        XCTAssertTrue(settings.contains(".navigationTitle(AppStrings.looksTitle)"), "under its settled title")
+        XCTAssertTrue(settings.contains("Button(AppStrings.looksWhyDoor)"),
                       "the failed cell carries the explanation door")
         XCTAssertTrue(settings.contains("Text(PersonalServePolicy.failedExplanation)"),
                       "the door speaks the policy constant itself, not a rewrite")
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(home.contains("Button(\"See all your looks\")"),
+        XCTAssertTrue(home.contains("Button(AppStrings.viewSeeAllLooks)"),
                       "one tap away from the failed cell's home line")
         XCTAssertFalse(home.contains("stock photo for now"),
                        "the failed label is never badged on home — it lives in the library")
@@ -386,17 +386,17 @@ final class Gen6WaveCTests: XCTestCase {
         // they appear in pickerLayout as well as the sidebar.
         XCTAssertGreaterThanOrEqual(sheet.components(separatedBy: "ForEach(contextLines, id: \\.self)").count - 1, 2,
                                     "context lines render in both layouts")
-        XCTAssertTrue(sheet.contains("Text(\"Running Tip\")"), "the Running tip line stands")
+        XCTAssertTrue(sheet.contains("Text(AppStrings.weatherRunningTip)"), "the Running tip line stands")
     }
 
     // MARK: - RW-64: shop doors + disclosure
 
     func testRW64ShopSheetDoorsAndDisclosure_sourcePins() throws {
         let shop = try sourceFile("../RunWear/Views/Modals/ShopModal.swift")
-        XCTAssertTrue(shop.contains("Text(\"Shop ›\")"), "the settled per-row door")
-        XCTAssertTrue(shop.contains("These links open Amazon."), "disclosure: links open Amazon")
-        XCTAssertTrue(shop.contains("RunWear may earn a commission"), "disclosure: commission")
-        XCTAssertTrue(shop.contains("It never changes the outfit we recommend."),
+        XCTAssertTrue(shop.contains("Text(AppStrings.actionShopArrow)"), "the settled per-row door")
+        XCTAssertTrue(shop.contains("AppStrings.shopDisclosure"), "disclosure: links open Amazon")
+        XCTAssertTrue(shop.contains("AppStrings.shopDisclosure"), "disclosure: commission")
+        XCTAssertTrue(shop.contains("AppStrings.shopDisclosure"),
                       "disclosure: the commission never changes the recommendation")
         XCTAssertFalse(shop.contains("we may earn a small commission"),
                        "the old partial disclosure must not return")
@@ -498,7 +498,7 @@ final class Gen6WaveCTests: XCTestCase {
         let time = try sourceFile("../RunWear/Views/Modals/TimePickerSheet.swift")
         XCTAssertTrue(time.contains("showDateSheet = true"), "the context line's date segment opens the day sheet")
         XCTAssertTrue(time.contains("DatePickerSheet("), "the sibling day sheet is presented from the picker")
-        XCTAssertTrue(time.contains("accessibilityLabel(\"Choose a day: \\(activeDateLabel)\")"))
+        XCTAssertTrue(time.contains("accessibilityLabel(AppStrings.a11yChooseDay(activeDateLabel))"))
         let home = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertTrue(home.contains("dateSelection: $viewModel.selectedDate"),
                       "home feeds the picker the selection binding — the date is pickable from home")
@@ -514,9 +514,9 @@ final class Gen6WaveCTests: XCTestCase {
         let date = try sourceFile("../RunWear/Views/Modals/DatePickerSheet.swift")
         XCTAssertTrue(date.contains("selectedDate = draft.commit()"), "Confirm is the one write")
         XCTAssertFalse(date.contains("selectedDate = date"), "no live write on tap remains")
-        XCTAssertTrue(date.contains("Text(\"Choose a Day\")"), "frame 42's sheet name")
-        XCTAssertTrue(date.contains("Button(\"Cancel\")"), "Cancel stands in the sheet")
-        XCTAssertTrue(date.contains("Button(\"Confirm\")"), "Confirm stands in the sheet")
+        XCTAssertTrue(date.contains("Text(AppStrings.sheetChooseDay)"), "frame 42's sheet name")
+        XCTAssertTrue(date.contains("Button(AppStrings.actionCancel)"), "Cancel stands in the sheet")
+        XCTAssertTrue(date.contains("Button(AppStrings.actionConfirm)"), "Confirm stands in the sheet")
     }
 }
 
@@ -1097,7 +1097,7 @@ final class Gen6FixWaveTests: XCTestCase {
 
     func testRW83_TemperatureConsequenceLineStandsInSettings_sourcePin() throws {
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(settings.contains("Used for today's outfit, the hourly chart, and your watch."),
+        XCTAssertTrue(settings.contains("AppStrings.settingsTempUnitNote"),
                       "the settled DS §6/§13 consequence line renders under the Temperature Unit row")
     }
 
@@ -1857,7 +1857,7 @@ final class Gen6SuccessorWaveTests: XCTestCase {
         XCTAssertEqual(WearIveRunEmptyDockView.emptyLine, "Your scrapbook starts with today's run.",
                        "the designed empty state's head line, verbatim (collection surface)")
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
-        XCTAssertTrue(collection.contains("Your scrapbook starts with today's run."),
+        XCTAssertTrue(collection.contains("AppStrings.wirEmptyLine"),
                       "the collection's empty state carries the settled copy")
         // The model state for no entry is still .preAdd — the
         // dock's branch reads it; the bar itself is unchanged.
@@ -2620,7 +2620,7 @@ extension Gen6FixWaveTests {
                       "§9.2: the footer's inverse-jump control is chevron-down")
         XCTAssertFalse(bar.contains(".rotationEffect"),
                        "§9.2: no rotation is applied on the dock path (the morph's pure rotation function remains for its unit pins, unused by the views)")
-        XCTAssertTrue(bar.contains("Open the collection ›"),
+        XCTAssertTrue(bar.contains("AppEnglish.wirOpenCollection"),
                       "§2.2: the footer carries the collection doorway element")
         XCTAssertTrue(bar.contains("greatVibes(size: 31)"),
                       "§2.2: the footer's wordmark is 31 pt")

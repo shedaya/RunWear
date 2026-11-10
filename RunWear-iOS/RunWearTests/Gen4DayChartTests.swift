@@ -460,9 +460,9 @@ final class Gen4DayChartTests: XCTestCase {
         XCTAssertTrue(sheet.contains("DayChartView("), "the chart replaces the grid")
         // GEN-5 supersession (FA-57): the settled instruction
         // line is the day-chart research form.
-        XCTAssertTrue(sheet.contains("Every hour can be chosen — the handle snaps hour to hour."), "the one instruction line")
-        XCTAssertTrue(sheet.contains("\"Confirm\""))
-        XCTAssertTrue(sheet.contains("\"Cancel\""))
+        XCTAssertTrue(sheet.contains("AppStrings.sheetTimeNote"), "the one instruction line")
+        XCTAssertTrue(sheet.contains("AppStrings.actionConfirm"))
+        XCTAssertTrue(sheet.contains("AppStrings.actionCancel"))
         XCTAssertTrue(sheet.contains("TimePickerDraft"), "the draft owns the selection until Confirm")
         XCTAssertFalse(sheet.contains("LazyVGrid"), "the hour tiles are retired")
         XCTAssertFalse(sheet.contains("TimeButton"), "the hour tiles are retired")

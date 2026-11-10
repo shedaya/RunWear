@@ -161,10 +161,13 @@ final class Gen5WidgetTests: XCTestCase {
         let source = try widgetSource()
         XCTAssertTrue(source.contains(".supportedFamilies([.systemSmall, .systemMedium, .systemLarge])"),
                       "Small, Medium, and Large — each composed for its size")
-        XCTAssertTrue(source.contains(".configurationDisplayName(\"Running Outfit\")"),
+        XCTAssertTrue(source.contains(".configurationDisplayName(AppStrings.widgetName)"),
                       "the widget carries Android's name")
         XCTAssertTrue(source.contains("containerBackground(AppTheme.background, for: .widget)"),
                       "the cream ground is the widget's ground in both appearances")
+        let catalog = try sourceFile("../RunWearWidget/Localizable.xcstrings")
+        XCTAssertTrue(catalog.contains("\"widget_name\"") && catalog.contains("Running Outfit"),
+                      "WP-R3: the name itself lives in the widget catalog, byte-identical")
     }
 
     func testEveryFamilyRendersTheFreshnessLabel() throws {

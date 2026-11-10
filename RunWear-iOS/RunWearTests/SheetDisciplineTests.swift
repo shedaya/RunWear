@@ -247,12 +247,12 @@ final class SheetDisciplineTests: XCTestCase {
 
     func testDismissalPathsReturnToTheOpeningSurface_sourcePin() throws {
         let settings = try sourceFile("../RunWear/Views/Modals/SettingsModal.swift")
-        XCTAssertTrue(settings.contains("Button(\"Done\") { isPresented = false }"),
+        XCTAssertTrue(settings.contains("Button(AppStrings.actionDone) { isPresented = false }"),
                       "Settings' Done returns to home")
         XCTAssertEqual(occurrences(settings, "makeItMePresentation.dismissSheet()"), 4,
                        "both Make It Me flows exit through the host's dismissal (finish + cancel, opt-in + replace)")
         let location = try sourceFile("../RunWear/Views/Modals/LocationPickerSheet.swift")
-        XCTAssertTrue(location.contains("Button(\"Done\") { close() }"),
+        XCTAssertTrue(location.contains("Button(AppStrings.actionDone) { close() }"),
                       "Location's Done returns to its opening surface")
         XCTAssertTrue(location.contains("isPresented = false"),
                       "Location dismissal is state-driven — it cannot exit the app")

@@ -315,7 +315,7 @@ final class WS6PipelinesTests: XCTestCase {
         // Both survive; neither carries a share action.
         let chrome = codeOnly(try sourceFile("../RunWear/Views/FirstScreenHero.swift"))
         XCTAssertTrue(chrome.contains("Image(systemName: \"gearshape.fill\")"))
-        XCTAssertTrue(chrome.contains(".accessibilityLabel(\"Settings\")"))
+        XCTAssertTrue(chrome.contains(".accessibilityLabel(AppStrings.a11ySettings)"))
         // RW-145/147 pass (Nov 9, 2026) RE-PIN: the Nov 9
         // ruling removed the outfit header's "Shop" button
         // (count line alone, matching the v8 frame and Android
@@ -344,7 +344,7 @@ final class WS6PipelinesTests: XCTestCase {
         // concatenated onto the caption text.
         XCTAssertTrue(collection.contains("UIActivityViewController"),
                       "the collection's designed share must remain — via the activity controller")
-        XCTAssertTrue(collection.contains("Text(\"#RunAnyWear\")"),
+        XCTAssertTrue(collection.contains("Text(AppStrings.collectionHashtag)"),
                       "the collection artifacts keep the hashtag lockup")
         XCTAssertTrue(collection.contains("ShareActivityItemSource"),
                       "the payload's text half is the caption item source")

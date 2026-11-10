@@ -250,7 +250,7 @@ final class Gen6WaveATests: XCTestCase {
                        "no seconds promise of any kind in these surfaces")
         // (c) The settled string stands, and BOTH seats gate it
         // on coverage through the one helper.
-        XCTAssertTrue(settings.contains("Subscribed · Your photo is ready before you open the app."),
+        XCTAssertTrue(settings.contains("AppStrings.mimsetSubscribedReady"),
                       "the settled §13 string stands verbatim")
         XCTAssertEqual(settings.components(separatedBy: "SubscribedReadiness.mayClaim(coverage: store.bankCoverage)").count - 1, 2,
                        "both readiness seats (Settings status, paywall sheet) gate on bank coverage")

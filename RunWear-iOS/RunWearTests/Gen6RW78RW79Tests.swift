@@ -68,10 +68,10 @@ final class Gen6RW78RW79Tests: XCTestCase {
                        "the fork has no separate commit button")
         // The RW-52 frame-32 surface the ruling did NOT touch:
         // script title, settled door headings, honesty line.
-        XCTAssertTrue(fork.contains("Text(\"Make It Me\")"))
-        XCTAssertTrue(fork.contains("Text(\"Make it me\")"))
-        XCTAssertTrue(fork.contains("Text(\"Standard photos\")"))
-        XCTAssertTrue(fork.contains("Either way, your recommendations don't change — only the photo does."))
+        XCTAssertTrue(fork.contains("Text(AppStrings.mimScriptMark)"))
+        XCTAssertTrue(fork.contains("Text(AppStrings.flowMakeItMeCta)"))
+        XCTAssertTrue(fork.contains("Text(AppStrings.flowStandardPhotos)"))
+        XCTAssertTrue(fork.contains("AppStrings.flowEitherWay"))
     }
 
     // MARK: - RW-79 · the re-arm rule (pure behaviour)
@@ -199,9 +199,9 @@ final class Gen6RW78RW79Tests: XCTestCase {
         // Sol's verbatim wording (Nov 1, 2026) — the line the
         // revalidation exists to surface promptly; this lane
         // must not have drifted it by a character.
-        XCTAssertTrue(models.contains("static let lookFailed = \"Your look couldn't be made from these photos — tap to try again.\""),
+        XCTAssertTrue(models.contains("static let lookFailed = AppStrings.mimLookFailed"),
                       "the settled failed line stands verbatim")
-        XCTAssertTrue(models.contains("static let lookRetry = \"Try again\""),
+        XCTAssertTrue(models.contains("static let lookRetry = AppStrings.mimLookRetry"),
                       "the settled retry label stands verbatim")
     }
 }

@@ -215,7 +215,7 @@ final class WS10CopyTests: XCTestCase {
                       "the opt-in flow OPENS on consent (frame 33) — capture follows it")
         XCTAssertTrue(flow.contains("case .consent:"),
                       "consent is a step of the flow in its own right")
-        XCTAssertTrue(flow.contains("These photos are of me, and I am 18 or older."),
+        XCTAssertTrue(flow.contains("AppStrings.flowAttestation"),
                       "the frame-33 attestation, verbatim")
         XCTAssertTrue(flow.contains("step = .capture"),
                       "accepting consent advances to capture — nothing else gates it")
@@ -346,7 +346,7 @@ final class WS10CopyTests: XCTestCase {
         let end = try XCTUnwrap(onboarding.range(of: "private func startFirstLookReveal"))
         let moment = String(onboarding[start.lowerBound..<end.lowerBound])
 
-        XCTAssertTrue(moment.contains("Text(\"Make It Me\")"),
+        XCTAssertTrue(moment.contains("Text(AppStrings.mimScriptMark)"),
                       "the moment carries its designed script header (WS-9: it was missing)")
         XCTAssertTrue(moment.contains(".greatVibes(size: 34)"),
                       "the script header at Android's 34 pt Great Vibes")
@@ -384,7 +384,7 @@ final class WS10CopyTests: XCTestCase {
 
     func testForkBodyIsFrame32sSubHeadline_sourcePin() throws {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
-        XCTAssertTrue(flow.contains("Text(\"Your recommendations, with you in the photo.\")"),
+        XCTAssertTrue(flow.contains("Text(AppStrings.flowRecommendationsYou)"),
                       "the fork's body paragraph is frame 32's sub-headline, verbatim")
         XCTAssertFalse(flow.contains("That's a model in your outfit photo"),
                        "the RW-14 deck lead is retired from the fork (WS-9)")
@@ -771,7 +771,7 @@ final class Gen3SettingsTruthTests: XCTestCase {
     /// by the tree scan above.
     func testConsentCopyUsesTheWordmarkCasing_sourcePin() throws {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
-        XCTAssertTrue(flow.contains("Settings → Make It Me → Delete my photos"),
+        XCTAssertTrue(flow.contains("AppStrings.flowConsentDelete"),
                       "Y-12: the consent copy names the section with the wordmark casing")
         // GEN-6 (RW-52): the fork sentence this pin's second half
         // covered ("You can switch to Make It Me any time in
