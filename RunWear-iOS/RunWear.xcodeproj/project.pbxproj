@@ -62,6 +62,7 @@
 		W14402000000000000000004 /* FirstScreenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000002 /* FirstScreenSheet.swift */; };
 		W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000004 /* RW144FirstScreenTests.swift */; };
 		W14502000000000000000005 /* RW145147FixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W14501000000000000000004 /* RW145147FixTests.swift */; };
+		W15202000000000000000005 /* RWNextBuildTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = W15201000000000000000004 /* RWNextBuildTests.swift */; };
 		W14502000000000000000006 /* LocationPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000017 /* LocationPickerSheet.swift */; };
 		W14402000000000000000010 /* garment_tiles_light in Resources */ = {isa = PBXBuildFile; fileRef = W14401000000000000000003 /* garment_tiles_light */; };
 		D10002000000000000000001 /* WearIveRunMiniBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10001000000000000000001 /* WearIveRunMiniBar.swift */; };
@@ -368,6 +369,7 @@
 		W14401000000000000000002 /* FirstScreenSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstScreenSheet.swift; sourceTree = "<group>"; };
 		W14401000000000000000004 /* RW144FirstScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW144FirstScreenTests.swift; sourceTree = "<group>"; };
 		W14501000000000000000004 /* RW145147FixTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW145147FixTests.swift; sourceTree = "<group>"; };
+		W15201000000000000000004 /* RWNextBuildTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RWNextBuildTests.swift; sourceTree = "<group>"; };
 		W14401000000000000000003 /* garment_tiles_light */ = {isa = PBXFileReference; lastKnownFileType = folder; path = garment_tiles_light; sourceTree = "<group>"; };
 		D10001000000000000000001 /* WearIveRunMiniBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WearIveRunMiniBar.swift; sourceTree = "<group>"; };
 		C10001000000000000000031 /* RW25NextGenHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RW25NextGenHomeTests.swift; sourceTree = "<group>"; };
@@ -751,6 +753,7 @@
 				VQ1000000000000000000001 /* Gen6VisualQAHarnessTests.swift */,
 				W14401000000000000000004 /* RW144FirstScreenTests.swift */,
 				W14501000000000000000004 /* RW145147FixTests.swift */,
+				W15201000000000000000004 /* RWNextBuildTests.swift */,
 				G42001000000000000000001 /* Gen4BundledReplenishmentTests.swift */,
 				L10001000000000000000002 /* WearIveRunElementMachineTests.swift */,
 				W50001000000000000000002 /* SettingsInventoryTests.swift */,
@@ -1123,6 +1126,7 @@
 				W14402000000000000000004 /* FirstScreenSheet.swift in Sources */,
 				W14402000000000000000005 /* RW144FirstScreenTests.swift in Sources */,
 				W14502000000000000000005 /* RW145147FixTests.swift in Sources */,
+				W15202000000000000000005 /* RWNextBuildTests.swift in Sources */,
 				W14502000000000000000006 /* LocationPickerSheet.swift in Sources */,
 				C10002000000000000000026 /* WatchOutfitView.swift in Sources */,
 				C10002000000000000000027 /* WatchViewModel.swift in Sources */,

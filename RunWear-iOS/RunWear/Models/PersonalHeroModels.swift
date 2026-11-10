@@ -1664,9 +1664,8 @@ enum ConvergenceBand {
     static let heading = "Making your looks"
     static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
 
-    // RW-151 (owner ruling J4, Nov 9, 2026): the STALLED line
-    // and its 30-minute trigger (the former `stalledLine` /
-    // `stallThreshold` / BankStallTracker) are RETIRED. A bank
+    // RW-151 (owner ruling J4, Nov 9, 2026): the former
+    // stalled line and its 30-minute trigger are RETIRED. A bank
     // that stops advancing with nothing in flight now re-issues
     // its fill under the reconcile rule (FillReconcile) instead
     // of presenting a stalled state. The settled heading and

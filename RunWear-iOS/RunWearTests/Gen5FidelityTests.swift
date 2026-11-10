@@ -199,8 +199,11 @@ final class Gen5FidelityTests: XCTestCase {
         // not a trap.
         XCTAssertTrue(collection.contains("case .success(let image)"))
         XCTAssertTrue(collection.contains("HeroPhoto(image: image"))
-        // The poster pipeline guards the reference before loading.
-        XCTAssertTrue(collection.contains("guard let url = URL(string: entry.heroImageReference)"))
+        // RE-PINNED for RW-152 §3 (Nov 9, 2026): the poster
+        // pipeline no longer dereferences the stored display URL
+        // directly (its signed hour may be long past) — it guards
+        // the ONE resolver's loadable URL for the entry.
+        XCTAssertTrue(collection.contains("HeroRefRuntime.loadableURLString(for: entry)"))
         // No force-unwrapped photo access anywhere in the file.
         XCTAssertFalse(collection.contains("heroImageReference!"))
         XCTAssertFalse(collection.contains("URL(string: entry.heroImageReference)!"))
@@ -818,12 +821,22 @@ final class Gen5FidelityTests: XCTestCase {
         let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
         XCTAssertTrue(vm.contains("publishForecastPriorityCells()"),
                       "every forecast load publishes its cells")
-        XCTAssertTrue(vm.contains("ForecastPriorityCells.ids(genderPreference: genderPreference"),
-                      "the derivation runs over the loaded 7-day forecast")
+        // RE-PINNED for RW-151 §5 (Nov 9, 2026): the derivation
+        // now takes the cluster cells WITH their outfits
+        // (ForecastPriorityCells.cells) so the wire form can
+        // accompany them; the ids-only derivation it replaced
+        // could not carry the items start-personal-fill v15
+        // validates.
+        XCTAssertTrue(vm.contains("ForecastPriorityCells.cells(genderPreference: genderPreference"),
+                      "the derivation runs over the loaded 7-day forecast, outfits threaded")
         XCTAssertTrue(vm.contains("CoreMatrixCells.ids(genderPreference: genderPreference"),
                       "the composed set includes the canonical core matrix")
         XCTAssertTrue(vm.contains("FillSetComposition.named("),
                       "forecast cells lead and the substrate fills behind them")
+        XCTAssertTrue(vm.contains("FillSetComposition.wireCells("),
+                      "RW-151 §5: the wire form is composed at the same site (accompanied forecast, bare core)")
+        XCTAssertTrue(vm.contains("updateForecastFill(targetCells: named, wireCells: wire)"),
+                      "RW-151 §5: the store receives the target ids WITH the wire form")
         XCTAssertTrue(store.contains("if mode == .subscribed { kickFillWithRetry() }"),
                       "selfie-epoch changes (opt-in and replace) re-name the fill")
     }
@@ -876,30 +889,51 @@ final class Gen5FidelityTests: XCTestCase {
                           "the serve lookup happens before any generation-request decision")
     }
 
+    // RE-PINNED for RW-151 (owner ruling J4, Nov 9, 2026): the
+    // stalled line and its tracker are RETIRED — a bank with
+    // work outstanding and nothing in flight re-issues its fill
+    // (FillReconcile) instead of presenting a stalled state.
+    // What this pin now proves at the same strength: the band's
+    // line is ALWAYS the settled in-progress line while work is
+    // outstanding, and a bank whose remainder all settled FAILED
+    // (RW-126 failed-settle) reads COMPLETE — no band.
     func testBandStalledLine_ReplacesTheInProgressLineOnly() {
         let coverage = BankCoverage(ready: 43, total: 48)
-        let stalled = ConvergenceBand.content(isSubscribed: true, coverage: coverage, stalled: true)
-        XCTAssertEqual(stalled?.line, ConvergenceBand.stalledLine)
-        XCTAssertEqual(stalled?.fraction, 43.0 / 48.0,
-                       "the fraction stays the real banked fraction in the stalled state")
-        XCTAssertEqual(stalled?.heading, "Making your looks")
+        let content = ConvergenceBand.content(isSubscribed: true, coverage: coverage)
+        XCTAssertEqual(content?.line, ConvergenceBand.line)
+        XCTAssertEqual(content?.fraction, 43.0 / 48.0,
+                       "the fraction stays the real banked fraction")
+        XCTAssertEqual(content?.heading, "Making your looks")
+        // The failed remainder settles the bank (outstanding 0):
+        let settled = BankCoverage(ready: 43, total: 48, failed: 5)
+        XCTAssertEqual(settled.outstanding, 0)
+        XCTAssertNil(ConvergenceBand.content(isSubscribed: true, coverage: settled),
+                     "a bank whose remaining cells all failed terminally is complete, not stalled")
     }
 
+    // RE-PINNED for RW-151 (owner ruling J4, Nov 9, 2026): the
+    // BankStallTracker this test drove is retired with the stall
+    // trigger it fed. The behaviour that replaces it — the
+    // reconcile rule — is pinned here at the same strength:
+    // re-issue exactly when work is outstanding, the server
+    // proves nothing is in flight, and no fill send is
+    // outstanding; never on an unread job state.
     func testBankStallTracker_AdvancementResetsTheClock() {
-        var tracker = BankStallTracker()
-        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
-        let partial = BankCoverage(ready: 10, total: 48)
-        tracker.observe(partial, now: t0)
-        XCTAssertFalse(tracker.isStalled(partial, now: t0.addingTimeInterval(29 * 60)))
-        XCTAssertTrue(tracker.isStalled(partial, now: t0.addingTimeInterval(31 * 60)),
-                      "no advancement for the threshold reads as stalled")
-        // Advancement restarts the clock:
-        let advanced = BankCoverage(ready: 11, total: 48)
-        tracker.observe(advanced, now: t0.addingTimeInterval(31 * 60))
-        XCTAssertFalse(tracker.isStalled(advanced, now: t0.addingTimeInterval(59 * 60)))
-        // A completed bank is never stalled:
-        let complete = BankCoverage(ready: 48, total: 48)
-        XCTAssertFalse(tracker.isStalled(complete, now: t0.addingTimeInterval(999 * 60)))
+        XCTAssertTrue(FillReconcile.shouldReissue(
+            outstanding: 5, generationActive: false, fillOutstanding: false),
+            "owed work + quiet server + no send in flight → re-issue")
+        XCTAssertFalse(FillReconcile.shouldReissue(
+            outstanding: 0, generationActive: false, fillOutstanding: false),
+            "nothing outstanding → nothing to re-issue")
+        XCTAssertFalse(FillReconcile.shouldReissue(
+            outstanding: 5, generationActive: true, fillOutstanding: false),
+            "generation in flight → the fill is already working")
+        XCTAssertFalse(FillReconcile.shouldReissue(
+            outstanding: 5, generationActive: false, fillOutstanding: true),
+            "a fill send is outstanding → never double-send")
+        XCTAssertFalse(FillReconcile.shouldReissue(
+            outstanding: 5, generationActive: nil, fillOutstanding: false),
+            "no job read yet → the rule acts on the server's word, not a guess")
     }
 
     // MARK: - RW-29 batch pins

@@ -218,8 +218,13 @@ final class RW145147FixTests: XCTestCase {
     func testRW147DockResidenceArithmetic() {
         XCTAssertEqual(DockResidence.dockTop(viewportHeight: 852, dockHeight: 56), 782, accuracy: 0.5)
         XCTAssertEqual(DockResidence.dockTop(viewportHeight: 834, dockHeight: 56), 764, accuracy: 0.5)
-        XCTAssertEqual(DockResidence.footerTopContentY(contentHeight: 2000, footerHeight: 200),
-                       2000 - DockResidence.scrollEndClearance - 200, accuracy: 0.5)
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026): the
+        // footerTopContentY assertion that stood here pinned
+        // the host's glide bookkeeping for the in-flow footer —
+        // the footer and its bookkeeping are removed, and the
+        // expanded panel is the overlay dock's own state, so
+        // there is no footer-top arithmetic left to pin. The
+        // RW-147 invariant below is untouched.
         // The scroll-end clearance is UNCHANGED by this pass:
         // it is what carries the glance band (and every other
         // sheet element) fully clear of the dock at scroll end,

@@ -521,12 +521,29 @@ final class Gen6WaveATests: XCTestCase {
     }
 
     func testStallLine_IsUntouchedNamedParityException_sourcePin() throws {
-        // The 30-minute bank stall line (PersonalHeroModels.swift's
-        // ConvergenceBand) is a named parity exception awaiting
-        // the owner's ruling — this wave must NOT remove or
-        // retime it while aligning the poll budget.
-        XCTAssertEqual(ConvergenceBand.stallThreshold, 30 * 60)
+        // RE-PINNED for RW-151 (owner ruling J4, Nov 9, 2026):
+        // the ruling this pin was holding for HAS LANDED — the
+        // 30-minute stall line and its trigger are retired, and
+        // the reconcile rule (FillReconcile) replaces them: a
+        // quiet bank with work outstanding re-issues its fill
+        // instead of presenting a stalled line. The settled band
+        // heading and in-progress line must remain
+        // byte-identical, and the store must carry the rule.
         let models = try sourceFile("../RunWear/Models/PersonalHeroModels.swift")
-        XCTAssertTrue(models.contains("static let stallThreshold: TimeInterval = 30 * 60"))
+        XCTAssertFalse(models.contains("stallThreshold"),
+                       "RW-151/J4: the stall threshold is retired")
+        XCTAssertFalse(models.contains("stalledLine"),
+                       "RW-151/J4: the stalled line is retired")
+        XCTAssertFalse(models.contains("BankStallTracker"),
+                       "RW-151/J4: the stall tracker is retired")
+        XCTAssertTrue(models.contains("static let heading = \"Making your looks\""),
+                      "the settled heading is byte-identical")
+        XCTAssertTrue(models.contains("static let line = \"We're generating your outfits across all running conditions, so it will be ready when you need it.\""),
+                      "the settled in-progress line is byte-identical")
+        XCTAssertTrue(models.contains("enum FillReconcile"),
+                      "RW-151 §5: the reconcile rule stands in the model layer")
+        let store = try sourceFile("../RunWear/Services/PersonalHeroStore.swift")
+        XCTAssertTrue(store.contains("FillReconcile.shouldReissue"),
+                      "RW-151 §5: the store applies the reconcile rule after its reads")
     }
 }

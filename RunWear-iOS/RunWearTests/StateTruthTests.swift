@@ -302,9 +302,13 @@ final class StateTruthTests: XCTestCase {
         // update payload encodes only when present) alongside
         // the canonical-frame fields — and still NO unit field,
         // which is this pin's actual subject.
+        // RE-PINNED for RW-152 §3 (Nov 9, 2026): the set gains
+        // "heroDurableReference" — the hero's durable identity
+        // persisted alongside the display URL (the RW-152/RW-153
+        // thumbnail fix). The no-unit subject is unchanged.
         XCTAssertEqual(
             Set(object.keys),
-            ["dayStart", "placeName", "feelsLikeF", "actualF", "condition", "itemNames", "itemKeys", "heroImageReference", "sessionID", "wasUpdatedInSession", "momentReading", "lastSavedAt"]
+            ["dayStart", "placeName", "feelsLikeF", "actualF", "condition", "itemNames", "itemKeys", "heroImageReference", "heroDurableReference", "sessionID", "wasUpdatedInSession", "momentReading", "lastSavedAt"]
         )
         let json = String(decoding: data, as: UTF8.self).lowercased()
         XCTAssertFalse(json.contains("fahrenheit") || json.contains("celsius") || json.contains("unit"))

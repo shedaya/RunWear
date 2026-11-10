@@ -500,18 +500,21 @@ final class WearIveRunElementMachineTests: XCTestCase {
 
     func testViewIsDrivenByTheMachine_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        // RW-135 spec §3/§4.4 RE-PIN (Direction A′, approved
-        // Nov 7, 2026): the dock view no longer holds the
-        // presentation machine — the handoff is a pure function
-        // of the footer's position ("no timers, no state
-        // machine, nothing to desynchronise") and the tap is
-        // the §4.4 glide, not a machine expansion. The machine
-        // TYPE and its pure transition tests stand (this file);
-        // the view's drivers are the fade and the glide now.
-        XCTAssertTrue(view.contains("WearIveRunMorph.handoffFade"),
-                      "spec §3: the dock's visibility is driven by the pure handoff function")
-        XCTAssertTrue(view.contains("onGlideToFooter"),
-                      "spec §4.4: the dock's tap drives the host glide")
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
+        // RW-135 §3/§4.4 re-pin that stood here): the handoff
+        // fade and the page glide are REMOVED with the two-
+        // surface split — the view's driver is now the one
+        // `expansionProgress` the overlay container owns, and
+        // the dock's tap is the in-place expansion (onExpand).
+        // The machine TYPE and its pure transition tests stand
+        // (this file); RW-86's no-machine-in-the-view discipline
+        // is unchanged.
+        XCTAssertTrue(view.contains("expansionProgress"),
+                      "RW-152 §1: the surface's two states are driven by the one expansion progress")
+        XCTAssertTrue(view.contains("onExpand"),
+                      "RW-152 §1: the dock's tap summons the expanded state in place")
+        XCTAssertFalse(view.contains("handoffFade"),
+                       "RW-152 §1: the scroll-position handoff is removed")
         XCTAssertFalse(view.contains("machine.send"),
                        "spec §3: no state machine drives the handoff")
         XCTAssertFalse(view.contains("endOfScrollCue"),
@@ -534,15 +537,18 @@ final class WearIveRunElementMachineTests: XCTestCase {
     func testExpandedThumbnailHasNoPlaceholder_sourcePin() throws {
         // D-12: the expanded form's thumbnail renders only once
         // decoded — the pre-WS-3 placeholder rectangle is gone.
-        // RW-135 spec §2.2 RE-PIN: AppTheme.cardOnSheet now
-        // legitimately appears in this file as the FOOTER's
-        // ground surface (light #F5F1E8 / dark #2A251E) — the
-        // D-12 rule is about the thumbnail SLOT, pinned here at
-        // the slot itself: the undecodable branch paints
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
+        // RW-135 §2.2 re-pin that stood here): the expanded
+        // panel's ground is no longer the cardOnSheet footer
+        // surface — it is the DOCK's own material (regularMaterial
+        // + sheet tint at the expanded tintOpacity, progress 1),
+        // because the panel is the dock surface's other state.
+        // The D-12 rule is about the thumbnail SLOT, pinned here
+        // at the slot itself: the undecodable branch paints
         // Color.clear, never a filled tile.
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        XCTAssertTrue(view.contains("fill(AppTheme.cardOnSheet)"),
-                      "spec §2.2: the footer's ground surface is the cardOnSheet token")
+        XCTAssertTrue(view.contains("struct WearIveRunExpandedPanelView"),
+                      "RW-152 §1: the expanded form is the overlay panel")
         XCTAssertTrue(view.contains("Color.clear"),
                       "D-12: the thumbnail slot's undecodable branch paints clear, not a tile")
         XCTAssertTrue(view.contains("if case .success(let image) = phase"),
@@ -787,17 +793,21 @@ final class WearIveRunW15FixTests: XCTestCase {
 
     func testMorphViewWiring_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
-        // RW-135 spec §3/§4.4 RE-PIN (Direction A′, approved
-        // Nov 7, 2026): the in-place expansion morph is
-        // superseded — the dock no longer expands; its
-        // visibility is the §3 handoff fade (a pure function of
-        // the footer's position) and its tap is the §4.4 glide.
-        // The pins below verify the new wiring at the same
-        // strength.
-        XCTAssertTrue(view.contains("WearIveRunMorph.handoffFade"),
-                      "spec §3: the handoff math lives in the pure morph functions")
-        XCTAssertTrue(view.contains("handoffFade"),
-                      "spec §3: the dock's visibility derives from the handoff fade")
+        // RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
+        // RW-135 §3/§4.4 re-pin that stood here): the in-place
+        // expansion morph is RESTORED as the one surface's state
+        // change — the overlay container drives the morph's
+        // height interpolation and expanded-content dissolve
+        // from the one expansionProgress; the handoff fade that
+        // replaced it under Direction A′ is removed with the
+        // footer it served. The pins below verify the restored
+        // wiring at the same strength.
+        XCTAssertTrue(view.contains("WearIveRunMorph.height("),
+                      "RW-152 §1: the container's height is the morph's interpolation of the two measured states")
+        XCTAssertTrue(view.contains("WearIveRunMorph.expandedContentOpacity"),
+                      "RW-152 §1: the expanded content cross-fades through the morph's dissolve window")
+        XCTAssertFalse(view.contains("handoffFade"),
+                       "RW-152 §1: the scroll-position handoff is removed")
         XCTAssertTrue(view.contains("WearIveRunMorph.tintOpacity"),
                       "the tint layer's opacity — never the material's blur — is what the material carries")
         XCTAssertFalse(view.contains(".bouncy"), "the bouncy preset overshoots past the cap")
@@ -1346,6 +1356,12 @@ final class WearIveRunSessionRuleTests: XCTestCase {
                       "the entry must stamp the served hero identity at settle time")
         // And the collection renders the recorded reference
         // verbatim — it re-resolves nothing at open time.
+        // (RW-152 §3 note, Nov 9, 2026: the collection still
+        // never re-resolves WHICH photo an entry carries — the
+        // recorded reference is the identity of record; the
+        // resolver only re-signs that same photo's storage path
+        // at render, which is a load of the recorded reference,
+        // not a re-resolution.)
         XCTAssertTrue(collection.contains("entry.heroImageReference"))
         XCTAssertFalse(collection.contains("FallbackImageProvider"),
                        "the collection must never re-resolve a chapter's photo")
