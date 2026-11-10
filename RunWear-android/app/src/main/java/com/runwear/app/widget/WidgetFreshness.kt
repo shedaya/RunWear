@@ -55,7 +55,7 @@ object WidgetFreshness {
     fun updatedLabel(savedAtLocal: LocalDateTime, savedAtEpochMs: Long, nowEpochMs: Long): String {
         val age = ageMs(savedAtEpochMs, nowEpochMs)
         return if (age < LARGE_AGE_FORM_MS) {
-            com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(com.runwear.app.i18n.LocaleFormats.timeShort(savedAtLocal))
+            com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(com.runwear.shared.i18n.LocaleFormats.timeShort(savedAtLocal))
         } else {
             com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(ageWords(age))
         }
@@ -79,7 +79,7 @@ object WidgetFreshness {
         return if (isStale(savedAtEpochMs, nowEpochMs)) {
             com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs)))
         } else {
-            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(com.runwear.app.i18n.LocaleFormats.timeShort(savedAtLocal))
+            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(com.runwear.shared.i18n.LocaleFormats.timeShort(savedAtLocal))
         }
     }
 

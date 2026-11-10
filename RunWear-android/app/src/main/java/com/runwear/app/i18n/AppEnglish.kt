@@ -41,8 +41,8 @@ object AppEnglish {
     const val ONB_TEMP_OPTION_CELSIUS = "Celsius"
     const val ONB_FIT_OPTION_MENS = "Men's"
     const val ONB_FIT_OPTION_WOMENS = "Women's"
-    const val ONB_BODY_SLIDER_MIN = "Runs Cold"
-    const val ONB_BODY_SLIDER_MAX = "Runs Warm"
+    const val ONB_BODY_SLIDER_MIN_LABEL = "Runs Cold"
+    const val ONB_BODY_SLIDER_MAX_LABEL = "Runs Warm"
     const val ONB_SETUP_CTA = "Continue"
     const val ONB_LOCATION_STEP_LABEL = "Step 2 of 2"
     const val ONB_LOCATION_TITLE = "One more thing — where are you running?"
@@ -247,8 +247,8 @@ object AppEnglish {
 object AppStringsPure {
     fun onbTempOptionFahrenheit(): String = AppEnglish.ONB_TEMP_OPTION_FAHRENHEIT
     fun onbTempOptionCelsius(): String = AppEnglish.ONB_TEMP_OPTION_CELSIUS
-    fun onbBodySliderMin(): String = AppEnglish.ONB_BODY_SLIDER_MIN
-    fun onbBodySliderMax(): String = AppEnglish.ONB_BODY_SLIDER_MAX
+    fun onbBodySliderMin(): String = AppEnglish.ONB_BODY_SLIDER_MIN_LABEL
+    fun onbBodySliderMax(): String = AppEnglish.ONB_BODY_SLIDER_MAX_LABEL
     fun dayToday(): String = AppEnglish.DAY_TODAY
     fun dayTomorrow(): String = AppEnglish.DAY_TOMORROW
     fun locGpsEnabled(): String = AppEnglish.LOC_GPS_ENABLED

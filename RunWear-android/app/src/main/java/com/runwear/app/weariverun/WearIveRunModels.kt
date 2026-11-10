@@ -332,7 +332,7 @@ object WearIveRunUpdateNarration {
         if (entry.date == today) {
             null
         } else {
-            com.runwear.app.i18n.LocaleFormats.dateFullMonthDay(entry.date)
+            com.runwear.shared.i18n.LocaleFormats.dateFullMonthDay(entry.date)
         }
 
     /**
@@ -436,7 +436,7 @@ object WearIveRunDockNarration {
         when (date) {
             today -> com.runwear.app.i18n.AppEnglish.WIR_DAY_TODAY
             today.plusDays(1) -> com.runwear.app.i18n.AppEnglish.WIR_DAY_TOMORROW
-            else -> com.runwear.app.i18n.LocaleFormats.dateFullWeekdayMonthDay(date)
+            else -> com.runwear.shared.i18n.LocaleFormats.dateFullWeekdayMonthDay(date)
         }
 
     /**

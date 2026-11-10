@@ -70,7 +70,7 @@ object LaterTodayLine {
     ): String? {
         val clauses = outfitDeltaClauses(current, later)
         if (clauses.isEmpty()) return null
-        val parts = mutableListOf(com.runwear.app.i18n.AppEnglish.WIDGET_BY_LINE.format(com.runwear.app.i18n.LocaleFormats.timeHour(targetTime), clauses.joinToString(" · ")))
+        val parts = mutableListOf(com.runwear.app.i18n.AppEnglish.WIDGET_BY_LINE.format(com.runwear.shared.i18n.LocaleFormats.timeHour(targetTime), clauses.joinToString(" · ")))
         if (laterWeather.precipitationProbability >= RAIN_MENTION_THRESHOLD) {
             parts += "rain ${laterWeather.precipitationProbability}%"
         }

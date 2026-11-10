@@ -1,5 +1,7 @@
 package com.runwear.app.i18n
 
+import com.runwear.shared.i18n.LocaleFormats
+
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.Locale

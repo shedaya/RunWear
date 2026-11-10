@@ -26,5 +26,5 @@ object TimePickerHours {
     // LOC-1 WP-R2: locale formatter (device locale; en-US identical).
     /** Grid cell label, e.g. "6 AM", "12 PM", "12 AM". */
     fun label(hour: Int): String =
-        com.runwear.app.i18n.LocaleFormats.timeHour(java.time.LocalDateTime.of(java.time.LocalDate.now(), LocalTime.of(hour, 0)))
+        com.runwear.shared.i18n.LocaleFormats.timeHour(java.time.LocalDateTime.of(java.time.LocalDate.now(), LocalTime.of(hour, 0)))
 }

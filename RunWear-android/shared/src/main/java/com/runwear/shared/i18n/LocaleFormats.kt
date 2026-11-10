@@ -1,4 +1,4 @@
-package com.runwear.app.i18n
+package com.runwear.shared.i18n
 
 import java.time.LocalDate
 import java.time.LocalDateTime

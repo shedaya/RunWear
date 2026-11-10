@@ -775,5 +775,5 @@ private fun StepperButton(
 private fun dayLabel(date: LocalDate, today: LocalDate): String = when {
     date == today -> com.runwear.app.i18n.AppStringsPure.dayToday()
     date == today.plusDays(1) -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
-    else -> com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(date)
+    else -> com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(date)
 }

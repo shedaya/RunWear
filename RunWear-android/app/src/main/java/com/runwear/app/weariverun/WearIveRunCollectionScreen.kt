@@ -456,17 +456,22 @@ internal fun ChapterCover(
             // make plain WHICH day it shares — the gen-4 bare icon
             // read as sharing the chapter while silently selecting
             // its most recent day. The door now names that day.
+            // LOC-1 WP-R2: the share-door labels resolve HERE, in
+            // composition — stringResource cannot run inside the
+            // semantics DSL block below (not a @Composable context).
+            val shareDayLabel = chapter.cover?.let {
+                androidx.compose.ui.res.stringResource(
+                    com.runwear.app.R.string.collection_share_day,
+                    WearIveRunCollectionLogic.spanLabel(it.date, it.date),
+                    chapter.place
+                )
+            }
+            val shareLabel = androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_share)
             TextButton(
                 onClick = { chapter.cover?.let { onShare(it) } },
                 enabled = chapter.cover != null,
                 modifier = Modifier.semantics {
-                    contentDescription = chapter.cover?.let {
-                        androidx.compose.ui.res.stringResource(
-                            com.runwear.app.R.string.collection_share_day,
-                            WearIveRunCollectionLogic.spanLabel(it.date, it.date),
-                            chapter.place
-                        )
-                    } ?: androidx.compose.ui.res.stringResource(com.runwear.app.R.string.collection_share)
+                    contentDescription = shareDayLabel ?: shareLabel
                 }
             ) {
                 Icon(
@@ -752,7 +757,7 @@ internal fun DayCard(
 }
 
 internal fun dayTitle(entry: WearIveRunDayEntry, today: LocalDate): String {
-    val dow = com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(entry.date)
+    val dow = com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(entry.date)
     return if (entry.date == today) com.runwear.app.i18n.AppEnglish.COLLECTION_DAY_TITLE_TODAY.format(dow) else dow
 }
 

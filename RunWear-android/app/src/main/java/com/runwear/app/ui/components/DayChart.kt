@@ -33,6 +33,7 @@ import com.runwear.shared.domain.model.TempBracket
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.usecase.GetOutfitRecommendationUseCase
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Locale
 import kotlinx.datetime.toJavaLocalDateTime
@@ -260,11 +261,11 @@ object DayChartFormat {
     // LOC-1 WP-R2: locale formatters (device locale; en-US identical).
     /** "6 PM" — the sheet readout's hour segment. */
     fun hourLabel(hour: Int): String =
-        com.runwear.app.i18n.LocaleFormats.timeHour(LocalDateTime.of(LocalDate.now(), LocalTime.of(hour, 0)))
+        com.runwear.shared.i18n.LocaleFormats.timeHour(LocalDateTime.of(LocalDate.now(), LocalTime.of(hour, 0)))
 
     /** "6:00 PM" — the glance band's axis row. */
     fun axisLabel(hour: Int): String =
-        com.runwear.app.i18n.LocaleFormats.timeShort(LocalDateTime.of(LocalDate.now(), LocalTime.of(hour, 0)))
+        com.runwear.shared.i18n.LocaleFormats.timeShort(LocalDateTime.of(LocalDate.now(), LocalTime.of(hour, 0)))
 
     /** The sheet readout: hour + feels-like ONLY, e.g. "6 PM · 47°". */
     fun readout(hour: Int, feelsLikeF: Double, unit: TemperatureUnit): String =

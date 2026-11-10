@@ -38,6 +38,7 @@ object AppStrings {
     @Composable fun removeFromCard(): String = stringResource(R.string.action_remove_from_card)
     @Composable fun shopArrow(): String = stringResource(R.string.action_shop_arrow)
     @Composable fun searchPlace(): String = stringResource(R.string.search_place_placeholder)
+    @Composable fun feedbackIntro(): String = stringResource(R.string.feedback_intro)
     @Composable fun feedbackBodyPlaceholder(): String = stringResource(R.string.feedback_body_placeholder)
     @Composable fun feedbackEmailLabel(): String = stringResource(R.string.feedback_email_label)
     @Composable fun feedbackEmailPlaceholder(): String = stringResource(R.string.feedback_email_placeholder)

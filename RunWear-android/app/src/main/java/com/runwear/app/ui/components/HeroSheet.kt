@@ -116,19 +116,19 @@ object HeroSheetFormat {
         when {
             selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> com.runwear.app.i18n.AppStringsPure.dayToday()
             selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
-            else -> com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)
+            else -> com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)
         }
 
     /** The headline moment's TIME segment text ("7:00 AM"). */
     fun timeSegmentText(selectedDateTime: LocalDateTime): String =
-        com.runwear.app.i18n.LocaleFormats.timeShort(selectedDateTime)
+        com.runwear.shared.i18n.LocaleFormats.timeShort(selectedDateTime)
 
     fun momentLabel(selectedDateTime: LocalDateTime, locationNow: LocalDateTime): String {
-        val timeText = com.runwear.app.i18n.LocaleFormats.timeShort(selectedDateTime)
+        val timeText = com.runwear.shared.i18n.LocaleFormats.timeShort(selectedDateTime)
         return when {
             selectedDateTime.toLocalDate() == locationNow.toLocalDate() -> timeText
             selectedDateTime.toLocalDate() == locationNow.toLocalDate().plusDays(1) -> "${com.runwear.app.i18n.AppStringsPure.dayTomorrow()}, $timeText"
-            else -> "${com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)}, $timeText"
+            else -> "${com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)}, $timeText"
         }
     }
 

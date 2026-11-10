@@ -52,11 +52,11 @@ object HeroChipFormat {
 
     // LOC-1 WP-R2: locale formatters (device locale; en-US identical).
     fun dateText(selectedDateTime: LocalDateTime): String =
-        com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)
+        com.runwear.shared.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)
 
     /** "Now" in the Now state; the picked clock time otherwise. */
     fun timeText(selectedDateTime: LocalDateTime, isNowSelected: Boolean): String =
-        if (isNowSelected) com.runwear.app.i18n.AppEnglish.WIR_NOW else com.runwear.app.i18n.LocaleFormats.timeShort(selectedDateTime)
+        if (isNowSelected) com.runwear.app.i18n.AppEnglish.WIR_NOW else com.runwear.shared.i18n.LocaleFormats.timeShort(selectedDateTime)
 
     /** The return segment exists ONLY while the selection differs from Now. */
     fun showNowReturn(isNowSelected: Boolean): Boolean = !isNowSelected

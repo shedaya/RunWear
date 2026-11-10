@@ -463,7 +463,7 @@ internal fun HeroWeatherPage(
             ) {
                 val isToday = weather.dateTime.toJavaLocalDateTime().toLocalDate() == LocalDate.now()
                 Text(
-                    text = if (isToday) androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_day_today) else com.runwear.app.i18n.LocaleFormats.dateWeekday(weather.dateTime.toJavaLocalDateTime().toLocalDate()),
+                    text = if (isToday) androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_day_today) else com.runwear.shared.i18n.LocaleFormats.dateWeekday(weather.dateTime.toJavaLocalDateTime().toLocalDate()),
                     style = MaterialTheme.typography.labelMedium,
                     color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center
