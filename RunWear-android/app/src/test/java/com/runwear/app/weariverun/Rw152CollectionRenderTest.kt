@@ -286,10 +286,17 @@ class Rw152CollectionRenderTest {
         // (CollectionBackScenarioTest): drive the collection
         // through its own Dialog handle, and treat semantics
         // publishing as a bounded frame-timing wait.
-        val collectionDialog = org.robolectric.shadows.ShadowDialog
-            .getLatestDialog()
+        var collectionDialog: android.app.Dialog? = null
+        repeat(30) {
+            if (collectionDialog == null) {
+                stage.settle(5)
+                collectionDialog = org.robolectric.shadows.ShadowDialog
+                    .getLatestDialog()
+            }
+        }
+        val collection = collectionDialog
             ?: throw AssertionError("collection dialog not shown")
-        assertTrue(collectionDialog.isShowing)
+        assertTrue(collection.isShowing)
 
         fun dialogRoot(dialog: android.app.Dialog): SemanticsNode {
             val decor = dialog.window!!.decorView
@@ -308,7 +315,7 @@ class Rw152CollectionRenderTest {
         }
 
         fun findTrashNode(): SemanticsNode? =
-            stage.nodes(dialogRoot(collectionDialog)).firstOrNull {
+            stage.nodes(dialogRoot(collection)).firstOrNull {
                 it.config.contains(SemanticsProperties.ContentDescription) &&
                     it.config[SemanticsProperties.ContentDescription]
                         .any { d -> d == "Delete the Miami, FL cover entry" }
@@ -346,7 +353,7 @@ class Rw152CollectionRenderTest {
                 stage.settle(5)
                 val latest = org.robolectric.shadows.ShadowDialog
                     .getLatestDialog()
-                if (latest != null && latest !== collectionDialog) {
+                if (latest != null && latest !== collection) {
                     alertDialog = latest
                 }
             }
