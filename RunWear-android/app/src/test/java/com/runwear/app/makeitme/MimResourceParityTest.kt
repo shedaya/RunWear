@@ -65,6 +65,7 @@ class MimResourceParityTest {
         var checked = 0
         for (field in MakeItMeStrings::class.java.declaredFields) {
             if (field.type != String::class.java || !Modifier.isStatic(field.modifiers)) continue
+            field.isAccessible = true
             val key = "mim_" + field.name.lowercase()
             val expected = field.get(null) as String
             assertTrue("resource missing for ${field.name} ($key)", res.containsKey(key))

@@ -66,14 +66,14 @@ class PaywallMonthlyRowTest {
         val annualCardAt = sheet.indexOf("RunWearColors.PaywallTint")
         val monthlyRowAt = sheet.indexOf("PlanOptionRow(")
         val ctaAt = sheet.indexOf("buy(if (annualSelected) annual else monthly)")
-        val finePrintAt = sheet.indexOf("MakeItMeStrings.U2C_FINE_PRINT")
+        val finePrintAt = sheet.indexOf("MR.strings.mim_u2c_fine_print")
         assertTrue("annual card present", annualCardAt >= 0)
         assertTrue("monthly row under the annual card", monthlyRowAt > annualCardAt)
         assertTrue("the one CTA sits below both plans", ctaAt > monthlyRowAt)
         assertTrue("fine print below the monthly row", finePrintAt > monthlyRowAt)
         // The row is fed from the fetched offering; tapping it
         // SELECTS monthly (FA-9) — it does not purchase.
-        assertTrue(sheet.contains("label = monthly?.label ?: MakeItMeStrings.U2B_MONTHLY"))
+        assertTrue(sheet.contains("label = monthly?.label ?: stringResource(MR.strings.mim_u2b_monthly)"))
         assertTrue(sheet.contains("enabled = monthly != null && !purchasing"))
         assertTrue(sheet.contains("onClick = { annualSelected = false }"))
         assertFalse(sheet.contains("onClick = { buy(monthly) }"))
@@ -85,7 +85,7 @@ class PaywallMonthlyRowTest {
         // Annual selected by default; the sheet's only primary
         // Button sits below both plans and buys the selected one.
         assertTrue(sheet.contains("annualSelected by remember { mutableStateOf(true) }"))
-        assertTrue(sheet.contains("text = annual?.label ?: MakeItMeStrings.U2B_ANNUAL"))
+        assertTrue(sheet.contains("text = annual?.label ?: stringResource(MR.strings.mim_u2b_annual)"))
         assertTrue(sheet.contains("buy(if (annualSelected) annual else monthly)"))
         assertTrue(
             sheet.contains(
@@ -148,7 +148,7 @@ class PaywallMonthlyRowTest {
         // GEN-5 (item 29): the per-run line left the fine print
         // and sits under the price inside the Premium card.
         val sheet = paywallSheet()
-        val priceAt = sheet.indexOf("annual?.label ?: MakeItMeStrings.U2B_ANNUAL")
+        val priceAt = sheet.indexOf("annual?.label ?: stringResource(MR.strings.mim_u2b_annual)")
         val perRunAt = sheet.indexOf("MakeItMeStrings.perRunLine")
         val ctaAt = sheet.indexOf("buy(if (annualSelected) annual else monthly)")
         assertTrue("price present", priceAt >= 0)

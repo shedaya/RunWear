@@ -127,7 +127,7 @@ class FirstLookNeverGateTest {
         // (showsPremiumBand) — the finished surface.
         val moment = momentRegion()
         // Exactly one consumer in the screens file: this door.
-        assertEquals(1, screens().split("FIRST_LOOK_SECOND_DOOR").size - 1)
+        assertEquals(1, screens().split("mim_first_look_second_door").size - 1)
         assertTrue(FirstLookPresentation.showsPremiumBand(FirstLookState.READY))
         assertFalse(FirstLookPresentation.showsPremiumBand(FirstLookState.MAKING))
         assertFalse(FirstLookPresentation.showsPremiumBand(FirstLookState.FAILED))
