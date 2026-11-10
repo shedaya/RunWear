@@ -77,3 +77,42 @@ object DockClearancePolicy {
     ): Boolean =
         elementBottomDp <= viewportDp - navigationBarDp - dockBandDp()
 }
+
+/**
+ * RW-152 §2 (Nov 10, 2026): the expanded Wear I've Run panel's
+ * sizing rule — "fill it or shrink it".
+ *
+ * The panel's height IS its content's height (≈240–300dp at
+ * natural narration wrap): there is no minimum beyond the mini
+ * dock it grows from and no empty ground inside it. The one cap:
+ * the panel may never cover the hero's top chrome zone (wordmark
+ * + place pill + status area), so its height is at most the
+ * viewport height minus that zone. When the cap binds (large
+ * accessibility text, an unusually long wrapped narration), the
+ * panel's entry region scrolls internally — the panel itself
+ * never grows past the cap.
+ *
+ * Pure, so the gate assertion — rendered panel height equals
+ * measured content height (within animation tolerance) at every
+ * viewport class — is pinned at this level.
+ */
+object WirOverlayPanelPolicy {
+
+    /** The top chrome zone the panel may never cover: status
+     * area + wordmark + place pill, with air. */
+    const val TOP_CHROME_DP: Float = 120f
+
+    /** The most height the panel may take in a viewport. */
+    fun maxPanelHeightDp(viewportDp: Float): Float =
+        (viewportDp - TOP_CHROME_DP).coerceAtLeast(0f)
+
+    /** The panel's rendered height for a measured content height:
+     * the content height itself, capped. */
+    fun panelHeightDp(contentDp: Float, viewportDp: Float): Float =
+        minOf(contentDp, maxPanelHeightDp(viewportDp))
+
+    /** Whether the cap binds for this content (the internal
+     * entry-region scroll's engagement rule). */
+    fun capBinds(contentDp: Float, viewportDp: Float): Boolean =
+        contentDp > maxPanelHeightDp(viewportDp)
+}

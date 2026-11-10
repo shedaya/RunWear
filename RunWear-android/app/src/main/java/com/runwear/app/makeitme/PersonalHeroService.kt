@@ -497,13 +497,25 @@ class PersonalHeroService @Inject constructor(
          * finished, and the band must retire instead of announcing
          * generation that no longer exists.
          */
-        val failed: Int = 0
+        val failed: Int = 0,
+        /**
+         * RW-151 client (Nov 10, 2026): whether the account holds
+         * any NON-TERMINAL generation job (QUEUED / PROCESSING) as
+         * of this read — the reconcile rule's in-flight input. A
+         * band that shows outstanding work while this is false and
+         * no fill is outstanding must re-issue the fill once
+         * instead of presenting "making" with nothing in flight.
+         */
+        val hasNonTerminalJob: Boolean = false
     ) {
         /** Target cells neither delivered nor terminally failed. */
         val outstanding: Int get() = (total - ready - failed).coerceAtLeast(0)
     }
 
-    suspend fun fetchBankCoverage(targetCells: Set<String>): BankCoverage? {
+    suspend fun fetchBankCoverage(
+        targetCells: Set<String>,
+        fillableCells: Set<String> = emptySet()
+    ): BankCoverage? {
         val session = session() ?: return null
         suspend fun cells(table: String): Set<String>? = runCatching {
             val response = http.get(
@@ -544,7 +556,16 @@ class PersonalHeroService @Inject constructor(
             .filter { it.second == "FAILED" }
             .map { it.first }
             .toSet() - heroCells
-        return deriveBankCoverage(heroCells, jobCells, targetCells, failedCells)
+        // RW-151 client: QUEUED / PROCESSING are the non-terminal
+        // states (COMPLETED / FAILED are terminal) — the reconcile
+        // rule reads in-flight truth from this same jobs read.
+        val hasNonTerminalJob = jobStatuses.any {
+            it.second == "QUEUED" || it.second == "PROCESSING"
+        }
+        return deriveBankCoverage(
+            heroCells, jobCells, targetCells, failedCells,
+            fillableCells, hasNonTerminalJob
+        )
     }
 
     /**
@@ -667,15 +688,31 @@ internal fun deriveBankCoverage(
     heroCells: Set<String>,
     jobCells: Set<String>,
     targetCells: Set<String> = emptySet(),
-    failedCells: Set<String> = emptySet()
+    failedCells: Set<String> = emptySet(),
+    /**
+     * RW-151 client (Nov 10, 2026; DESIGN.md §5): the FILLABLE set.
+     * Empty (the default, for callers that predate the amendment)
+     * means every target cell is treated as fillable — the
+     * pre-amendment denominator. When supplied, the denominator is
+     * |Target ∩ Fillable| only: a cell the fill contract cannot
+     * enqueue can never again hold the band open.
+     */
+    fillableCells: Set<String> = emptySet(),
+    hasNonTerminalJob: Boolean = false
 ): PersonalHeroService.BankCoverage =
     if (targetCells.isNotEmpty()) {
+        val denominator = if (fillableCells.isEmpty()) {
+            targetCells
+        } else {
+            targetCells intersect fillableCells
+        }
         PersonalHeroService.BankCoverage(
             ready = heroCells.count { it in targetCells },
-            total = targetCells.size,
+            total = denominator.size,
             // RW-126: terminally failed target cells (recorded,
             // no hero) are settled — they never hold the band open.
-            failed = failedCells.count { it in targetCells }
+            failed = failedCells.count { it in targetCells },
+            hasNonTerminalJob = hasNonTerminalJob
         )
     } else {
         // RW-FIXWAVE (architecture review §2 row 19): NO engaged-

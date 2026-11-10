@@ -652,7 +652,11 @@ fun ShareStudioSheet(
     entry: WearIveRunDayEntry,
     gender: GenderPreference,
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** RW-152 §3 (Nov 10, 2026): the HeroRefResolver re-sign seam —
+     * the poster composition loads the RESOLVED hero, never a
+     * stored (possibly expired) display URL. */
+    heroResign: (suspend (String) -> String?)? = null
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -683,11 +687,15 @@ fun ShareStudioSheet(
     var shareFailed by remember { mutableStateOf(false) }
 
     // — Hero input —
+    // RW-152 §3: through the resolver — a personal hero's stored
+    // signed URL is re-signed by path before the poster loads it.
+    val resolvedHeroRef = rememberResolvedHeroUrl(entry, heroResign)
     var heroState by remember(entry) { mutableStateOf<HeroLoadState>(HeroLoadState.Loading) }
-    LaunchedEffect(entry) {
+    LaunchedEffect(entry, resolvedHeroRef) {
         heroState = when {
-            entry.heroRef.isNullOrBlank() -> HeroLoadState.NoPhoto
-            else -> ShareExportRenderer.loadHeroBitmap(context, entry.heroRef)
+            !HeroRefResolver.hasLoadableReference(entry) -> HeroLoadState.NoPhoto
+            resolvedHeroRef == null -> HeroLoadState.Loading
+            else -> ShareExportRenderer.loadHeroBitmap(context, resolvedHeroRef)
                 ?.let { HeroLoadState.Loaded(it) } ?: HeroLoadState.Failed
         }
     }

@@ -138,9 +138,34 @@ class PersonalHeroRepository @Inject constructor(
         // GEN-3 (convergence band): the coverage read rides the same
         // refresh; a failed read leaves the previous value in place.
         val coverage = if (profile.personalizationOn) {
-            service.fetchBankCoverage(fillTargetCells) ?: _state.value.bankCoverage
+            service.fetchBankCoverage(fillTargetCells, fillableCells)
+                ?: _state.value.bankCoverage
         } else {
             _state.value.bankCoverage
+        }
+        // RW-151 client (Nov 10, 2026; DESIGN.md §5 reconcile rule):
+        // after this coverage read, if fillable work is outstanding
+        // and NOTHING is in flight — no non-terminal job, no fill
+        // request outstanding — re-issue the fill ONCE for the
+        // fillable remainder. The once-guard is the wire cell set
+        // itself: a set already reconciled is not re-issued until a
+        // new forecast derivation names a different set, so no loop
+        // can form within a derivation. A re-issued fill that still
+        // leaves outstanding work with no jobs is closed by RW-126
+        // (terminally failed cells count as settled), never by an
+        // indefinite "making".
+        if (profile.entitled && profile.personalizationOn &&
+            coverage != null && fillWireCells.isNotEmpty() &&
+            fillWireCells != lastReconciledWireCells &&
+            FillReconcilePolicy.shouldReissue(
+                outstanding = coverage.outstanding,
+                hasNonTerminalJob = coverage.hasNonTerminalJob,
+                fillOutstanding = false
+            )
+        ) {
+            if (service.startPersonalFill(fillWireCells)) {
+                lastReconciledWireCells = fillWireCells
+            }
         }
         _state.value = _state.value.copy(
             personalizationOn = profile.personalizationOn,
@@ -450,8 +475,41 @@ class PersonalHeroRepository @Inject constructor(
     var fillTargetCells: Set<String> = emptySet()
         private set
 
+    /**
+     * RW-151 client: the FILLABLE subset of the target (DESIGN.md
+     * §5) — accompanied forecast cells plus canonical core cells.
+     * The coverage denominator is |Target ∩ Fillable|.
+     */
+    @Volatile
+    var fillableCells: Set<String> = emptySet()
+        private set
+
+    /** RW-151 client: the composed WIRE entries (accompanied
+     * forecast cells, bare core cells) — what a reconcile re-issue
+     * re-sends, and its once-per-derivation guard. */
+    @Volatile
+    var fillWireCells: List<String> = emptyList()
+        private set
+
+    private var lastReconciledWireCells: List<String> = emptyList()
+
     fun noteFillTarget(cells: List<String>) {
         fillTargetCells = cells.toSet()
+    }
+
+    /**
+     * RW-151 client: note one derivation's full fill picture — the
+     * wire entries actually sent, the target ids they name, and
+     * the fillable subset of that target.
+     */
+    fun noteFillDerivation(
+        wireCells: List<String>,
+        targetIds: Set<String>,
+        fillableIds: Set<String>
+    ) {
+        fillWireCells = wireCells
+        fillTargetCells = targetIds
+        fillableCells = fillableIds
     }
 
     /** Subscriber forecast fill (server refuses non-entitled users). */

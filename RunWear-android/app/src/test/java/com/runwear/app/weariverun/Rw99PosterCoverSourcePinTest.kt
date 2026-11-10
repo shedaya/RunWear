@@ -1,21 +1,28 @@
 package com.runwear.app.weariverun
 
 import java.io.File
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * RW-99 source pin (Android fix wave, Nov 6, 2026).
+ * RE-PINNED (RW-152 §3, Nov 10, 2026 — supersedes the RW-99 pin
+ * below in full): collection covers no longer compose the poster
+ * at all. The RW-99 structure (a 360×450 poster canvas held at
+ * natural size and scaled into the slot) is retired for
+ * collection surfaces: covers and stay cards load the entry's
+ * photo DIRECTLY through the loader, resolved through
+ * HeroRefResolver, at display size. The 360×450 MorningPoster
+ * composition remains only for share/export.
  *
- * The collection cover's scaled render cannot be pixel-proved
- * in the Robolectric harness (its manual draw does not apply
- * graphicsLayer scale/clip — probe-verified), so the fix's
- * structure is pinned at source level, the same pattern as the
- * repo's other source pins: PosterCover MUST compose the
- * poster canvas at its natural 360×450 via required-size
- * modifiers (which ignore the slot's coercive constraints —
- * the original defect) and scale it into the slot through the
- * graphics layer from the slot's own width.
+ * Original RW-99 pin (Nov 6, 2026): the collection cover's scaled
+ * render could not be pixel-proved in the Robolectric harness,
+ * so the fix's structure was pinned at source level: PosterCover
+ * composed the poster canvas at its natural 360×450 via
+ * required-size modifiers and scaled it into the slot through
+ * the graphics layer. RW-152 §3's measured verdict (design of
+ * record §3) is that this indirection is also why covers read
+ * blank in the shipped build; the direct loader replaces it.
  */
 class Rw99PosterCoverSourcePinTest {
 
@@ -28,34 +35,31 @@ class Rw99PosterCoverSourcePinTest {
     }
 
     @Test
-    fun `poster cover holds the canvas at natural size and scales it into the slot`() {
+    fun `collection covers load directly through the resolver - no poster composition`() {
         val src = source()
-        val coverStart = src.indexOf("private fun PosterCover")
-        assertTrue("PosterCover exists", coverStart >= 0)
-        val cover = src.substring(coverStart, src.indexOf("\n@Composable", coverStart + 10).takeIf { it > 0 } ?: src.length)
-        assertTrue(
-            "canvas held at natural width against the slot",
-            cover.contains("requiredWidth(360.dp)")
+        assertFalse(
+            "the poster-composition cover is retired (RW-152 §3)",
+            src.contains("fun PosterCover")
+        )
+        assertFalse(
+            "no scaled-canvas trick remains on collection surfaces",
+            src.contains("requiredWidth(360.dp)")
         )
         assertTrue(
-            "canvas held at natural height against the slot",
-            cover.contains("requiredHeight(450.dp)")
+            "the thumbnail loads through the collection loader",
+            src.contains("fun CollectionThumbnail")
         )
         assertTrue(
-            "scale derives from the slot width over the canvas width",
-            cover.contains("maxWidth.value / 360f")
+            "the loader requests at display size x2",
+            src.contains("displayPx * 2")
         )
         assertTrue(
-            "the layer scales from the top-left origin",
-            cover.contains("TransformOrigin(0f, 0f)")
+            "the thumbnail resolves through HeroRefResolver",
+            src.contains("HeroRefResolver.resolveDisplay")
         )
         assertTrue(
-            "the slot clips the scaled render",
-            cover.contains("clipToBounds()")
-        )
-        assertTrue(
-            "the hero loads through the display loader",
-            cover.contains("rememberHeroBitmap(entry.heroRef)")
+            "the photo keeps the settled top-centre poster framing",
+            src.contains("Alignment.TopCenter")
         )
     }
 }

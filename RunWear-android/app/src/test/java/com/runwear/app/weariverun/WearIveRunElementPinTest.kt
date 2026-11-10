@@ -79,7 +79,14 @@ class WearIveRunElementPinTest {
             // moved into WearIveRunDockPolicy.fadeFromLayoutPx —
             // the single code path the host derives the fade
             // through (the literal it wraps is fade() itself).
-            host.contains("WearIveRunDockPolicy.fadeFromLayoutPx(") &&
+            // RE-PINNED (RW-152 §1, Nov 10, 2026 — supersedes
+            // RW-135/RW-140 for this element): the layout-position
+            // handoff is RETIRED; the dock and the expanded panel
+            // are two states of ONE composable morphing in this
+            // overlay, so the pin now asserts the morph's presence
+            // in the same bottom-aligned residence instead of the
+            // fade derivation.
+            host.contains("\"wirDockSurfaceMorph\"") &&
                 host.contains(".align(Alignment.BottomCenter)")
         )
         assertTrue(
@@ -90,10 +97,17 @@ class WearIveRunElementPinTest {
             "the in-flow MiniBar is retired as the Home presence",
             host.contains("WearIveRunMiniBar(")
         )
+        // RE-PINNED (RW-152 §1, Nov 10, 2026 — supersedes the
+        // RW-135 in-flow footer): the expanded form is the footer
+        // section rendered as the OVERLAY's expanded state; the
+        // in-flow "wir-footer" item is removed, not relocated.
         assertTrue(
-            "the expanded form is the footer section in the flow",
-            host.contains("WearIveRunFooterSection(") &&
-                host.contains("\"wir-footer\"")
+            "the expanded form is the footer section, in the overlay",
+            host.contains("WearIveRunFooterSection(")
+        )
+        assertFalse(
+            "the in-flow wir-footer item is retired (RW-152 §1)",
+            host.contains("\"wir-footer\"")
         )
     }
 

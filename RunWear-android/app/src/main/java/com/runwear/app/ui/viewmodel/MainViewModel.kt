@@ -1815,12 +1815,18 @@ class MainViewModel @Inject constructor(
                 weatherRepository.parseWeatherForDateTime(response, entry.dateTime)
             }.getOrNull() ?: continue
             val frameOutfit = getOutfitRecommendation.execute(frameWeather, comfort)
-            val (combinationId, _) = personalCombinationFor(frameWeather, frameOutfit)
+            // RW-151 client (Nov 10, 2026): the items are NO LONGER
+            // discarded — a forecast cell is fillable only when it
+            // travels accompanied by the outfit the engine just
+            // prescribed for it (start-personal-fill v15 validates
+            // the items against the id's signature hash).
+            val (combinationId, outfitItems) =
+                personalCombinationFor(frameWeather, frameOutfit)
             frames += com.runwear.app.makeitme.FillFrame(
-                entryJava.toLocalDate(), daypart, combinationId
+                entryJava.toLocalDate(), daypart, combinationId, outfitItems
             )
         }
-        val forecastCells = com.runwear.app.makeitme.ForecastFillCells.select(frames)
+        val forecastCells = com.runwear.app.makeitme.ForecastFillCells.selectCells(frames)
         // GEN-5 (Addendum 8, second follow-up): the owed set is
         // the forecast cells PLUS the 20-cell canonical core
         // matrix (the scaffold substrate) — forecast first, so
@@ -1831,12 +1837,27 @@ class MainViewModel @Inject constructor(
         val coreCells = com.runwear.app.makeitme.CoreMatrixCells.ids(
             getOutfitRecommendation, _uiState.value.genderPreference
         )
-        val cells = com.runwear.app.makeitme.ForecastFillCells.compose(coreCells, forecastCells)
+        // RW-151 client: the composed WIRE set — forecast cells
+        // accompanied, core cells bare, forecast first, deduped by
+        // id. lastForecastFillCells carries the wire form, so
+        // sendForecastFillIfNeeded's cell-set dedupe key is the
+        // accompanied form (no re-send loop within a derivation).
+        val cells = com.runwear.app.makeitme.ForecastFillCells.composeWire(
+            coreCells, forecastCells
+        )
         lastResponse = response
         lastForecastList = forecast
         lastDerivationNow = now
         lastForecastFillCells = cells
-        personalHeroRepository.noteFillTarget(cells)
+        personalHeroRepository.noteFillDerivation(
+            wireCells = cells,
+            targetIds = cells.map {
+                com.runwear.app.makeitme.ForecastFillCells.cellIdOf(it)
+            }.toSet(),
+            fillableIds = com.runwear.app.makeitme.ForecastFillCells.fillableIds(
+                cells, coreCells
+            )
+        )
         sendForecastFillIfNeeded()
     }
 

@@ -504,6 +504,15 @@ fun DayChartGlanceBand(
             )
             // "Change ›" at the band's own foot — the band's only
             // action, opening the Choose-a-Time sheet.
+            // RW-152 remainder (Nov 10, 2026): the control sits on
+            // an OPAQUE card-ground pill — the settled ink
+            // treatment for this surface. As bare pine text it
+            // rendered low-contrast wherever the chart's
+            // descending line crossed behind it (coordinator
+            // observation, RW-145-147 pass §10); the opaque ground
+            // makes the contrast independent of the line's
+            // position, and the text keeps the pine ink every
+            // other doorway on the sheet uses.
             Text(
                 text = "Change ›",
                 fontSize = 12.sp,
@@ -512,8 +521,13 @@ fun DayChartGlanceBand(
                 softWrap = false,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .padding(end = 6.dp, bottom = 4.dp)
+                    .background(
+                        RunWearColors.BgCard,
+                        RoundedCornerShape(999.dp)
+                    )
                     .clickable { onChangeClick() }
-                    .padding(start = 8.dp, end = 12.dp, top = 6.dp, bottom = 6.dp)
+                    .padding(start = 10.dp, end = 10.dp, top = 4.dp, bottom = 4.dp)
             )
         }
         // WT-6 (parity with iOS): the day's low/high live BELOW

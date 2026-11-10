@@ -202,6 +202,14 @@ class MakeItMeViewModel @Inject constructor(
         }
     }
 
+    /**
+     * RW-152 §3 (Nov 10, 2026): re-sign one personal-heroes Storage
+     * path for display — the HeroRefResolver's render-time seam for
+     * the collection surfaces hosted beside this view model.
+     */
+    suspend fun signedHeroUrlForPath(path: String): String? =
+        service.signedUrlFor(path)
+
     fun loadReferenceUrls(onResult: (List<String>) -> Unit) {
         viewModelScope.launch {
             val paths = service.fetchReferencePaths()

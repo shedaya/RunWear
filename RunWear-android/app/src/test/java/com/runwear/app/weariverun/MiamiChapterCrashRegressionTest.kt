@@ -107,7 +107,16 @@ class MiamiChapterCrashRegressionTest : WearElementHarness() {
     )
 
     @Test
-    fun `miami shape - two same-date session entries form ONE stay and the cover is the thumbnail-less entry`() {
+    fun `miami shape - two same-date session entries form ONE stay and the cover is the newest entry with a loadable photo`() {
+        // RE-PINNED (RW-152 §3 + §4, Nov 10, 2026 — supersedes the
+        // RW-136-era cover rule): the cover is the newest entry
+        // WITH a loadable reference (here session-miami-1), not
+        // the newest entry overall — the cover carries the delete
+        // affordance now (J2: its trash deletes the cover entry),
+        // so it must be a real photo-bearing entry when one
+        // exists. The RW-136 no-substitution rule stands in
+        // spirit: the cover IS that entry, photo and identity
+        // together — never another entry's photo on this entry.
         val chapters = WearIveRunCollectionLogic.chapters(solEntries())
         val miami = chapters.first { it.place == "Miami, FL" }
         // Pre-fix this read 2 stays with the same start date — the
@@ -118,7 +127,8 @@ class MiamiChapterCrashRegressionTest : WearElementHarness() {
         // the very line in Sol's recording).
         assertEquals(1, miami.dayCount)
         assertEquals(2, miami.days.size)
-        assertNull(miami.cover?.heroRef)
+        assertEquals("session-miami-1", miami.cover?.sessionId)
+        assertEquals("https://example.invalid/miami-1.jpg", miami.cover?.heroRef)
         val kc = chapters.first { it.place == "Kansas City, MO" }
         assertEquals(2, kc.stayCount)
     }
@@ -177,8 +187,23 @@ class MiamiChapterCrashRegressionTest : WearElementHarness() {
 
     @Test
     fun `a thumbnail-less chapter cover renders its placeholder slot without crashing`() {
-        val chapters = WearIveRunCollectionLogic.chapters(solEntries())
+        // RE-PINNED fixture (RW-152 §3, Nov 10, 2026): under the
+        // cover-selection rule the recorded Miami chapter's cover
+        // now HAS a photo, so the honest-empty-slot case is
+        // exercised on a chapter whose entries ALL lack a loadable
+        // reference — the cover falls back to the newest entry and
+        // its slot renders the placeholder treatment.
+        val chapters = WearIveRunCollectionLogic.chapters(
+            listOf(
+                entry(
+                    today, "Miami, FL", 78.0,
+                    listOf("Tank Top / Singlet"),
+                    "session-miami-x", null, 3_000L
+                )
+            )
+        )
         val miami = chapters.first { it.place == "Miami, FL" }
+        assertEquals("session-miami-x", miami.cover?.sessionId)
         val r = render("gen5-miami-cover", dark = false) {
             ChapterCover(chapter = miami, onClick = {})
         }
