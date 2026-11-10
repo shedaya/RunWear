@@ -445,6 +445,24 @@ final class RWNextBuildTests: XCTestCase {
                        "the low-contrast pine treatment is retired on this control")
     }
 
+    // MARK: - RW-152 §2: the entry region is not greedy
+
+    func testRW152_EntryRegionStandsAtTheRowsOwnHeight_SourcePin() throws {
+        // The expanded frame of the first gate round caught the
+        // panel's ScrollView inflating to whatever height it
+        // was offered (a bare ScrollView is greedy) — which in
+        // production would also feed the morph a false expanded
+        // endpoint. The region stands at the row's measured
+        // height, capped by the policy budget.
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(bar.contains("entryRowHeight = height"),
+                      "the entry region's height is the row's own measured height")
+        XCTAssertTrue(bar.contains("WearIveRunOverlayPolicy.entryRegionMaxHeight"),
+                      "the region is capped by the §2 budget")
+        XCTAssertFalse(bar.contains(".frame(maxHeight: WearIveRunOverlayPolicy.entryRegionMaxHeight"),
+                       "the greedy max-height form is retired")
+    }
+
     // MARK: - Render frames (ImageRenderer)
 
     private func artefactsDirectory() -> URL {

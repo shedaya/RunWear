@@ -1647,6 +1647,10 @@ struct WearIveRunExpandedPanelView: View {
     /// the thumbnail cross-fades when the hero image changes.
     @State private var displayedEntry: WearIveRunEntry?
     @State private var trashHapticNonce = 0
+    /// RW-152 §2: the entry row's measured height — the entry
+    /// region's standing height (before the cap). Seeded at
+    /// the row's floor (the 56 pt thumbnail cell).
+    @State private var entryRowHeight: CGFloat = 56
     /// RW-152 §3: the entry's resolved hero URL when its
     /// reference is a storage path (re-signed by the injected
     /// resolver). Stable references render directly.
@@ -1682,15 +1686,27 @@ struct WearIveRunExpandedPanelView: View {
                     .transition(.opacity)
             }
             // RW-152 §2: the entry region scrolls internally
-            // ONLY when the viewport cap binds (its max height
-            // is the cap minus the fixed chrome); header,
-            // narration, and the doorway below are always
-            // fully visible.
+            // ONLY when the viewport cap binds. The ScrollView
+            // stands at the ROW's own measured height, capped
+            // at the region budget — a bare ScrollView is
+            // greedy and would inflate the panel to whatever
+            // height it is offered (and feed the morph a false
+            // endpoint); the row's height is independent of the
+            // scroll frame, so the measurement cannot loop.
+            // Header, narration, and the doorway below are
+            // always fully visible.
             ScrollView(.vertical, showsIndicators: false) {
                 entryRow
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { _, height in
+                        if height > 0 { entryRowHeight = height }
+                    }
             }
-            .frame(maxHeight: WearIveRunOverlayPolicy.entryRegionMaxHeight(
-                viewportHeight: viewportHeight))
+            .frame(height: min(
+                entryRowHeight,
+                WearIveRunOverlayPolicy.entryRegionMaxHeight(
+                    viewportHeight: viewportHeight)))
             // §4.6: the doorway, visible in the expanded form
             // (Sol's Nov 4 requirement, W-1).
             Button(action: onOpenCollection) {
