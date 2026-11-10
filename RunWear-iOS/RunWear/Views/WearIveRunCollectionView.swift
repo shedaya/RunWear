@@ -6,8 +6,9 @@ import Vision
 // MARK: - "Wear I've Run" Collection (RW-26, checklist §C; notes §8-K)
 //
 // Chapters BY LOCATION (within a location, the entries are
-// sessions — GEN-3). Cover = most recent card + day count +
-// date span + feels-like range, all computed. Multi-stay chapters
+// sessions — GEN-3). Cover = the newest entry WITH a loadable
+// hero reference (RW-153) + day count + date span + feels-like
+// range, all computed. Multi-stay chapters
 // count stays and name the last stay — never a false-contiguity
 // span. Hometown-scale chapters group by year → month rows. The
 // weather filter lives at the collection level AND inside
@@ -24,6 +25,21 @@ struct WearIveRunCollectionView: View {
     let genderPreference: GenderPreference
 
     @State private var filter: WearIveRunWeatherFilter = .all
+    /// RW-152 §4 (J1): the past entry awaiting its delete
+    /// confirmation — the confirmation names its place and date
+    /// (WearIveRunDeletePolicy). Today's entry never lands
+    /// here: it deletes in one tap.
+    @State private var pendingDelete: WearIveRunEntry?
+
+    /// RW-152 §4 (J1): route a delete request — a PAST entry
+    /// asks first (confirmation), today's entry deletes at once.
+    private func requestDelete(_ entry: WearIveRunEntry) {
+        if WearIveRunDeletePolicy.requiresConfirmation(for: entry) {
+            pendingDelete = entry
+        } else {
+            model.removeEntry(id: entry.id)
+        }
+    }
 
     /// The pinned entry (GEN-3 session rule): the CURRENT
     /// session's entry — the same entry the home dock presents.
@@ -85,8 +101,14 @@ struct WearIveRunCollectionView: View {
                                 Spacer()
                                 // RW-122 (iOS half): the pinned
                                 // entry deletes from here too.
+                                // RW-152 §4 (J1): routed through
+                                // the delete policy — the pinned
+                                // entry is the session's (today's,
+                                // or a future plan), so it stays
+                                // one-tap; the confirmation path
+                                // stands if that ever changes.
                                 Button {
-                                    model.removeEntry(id: today.id)
+                                    requestDelete(today)
                                 } label: {
                                     Image(systemName: "trash")
                                         .font(.appFootnote.weight(.semibold))
@@ -99,7 +121,8 @@ struct WearIveRunCollectionView: View {
                                 WearIveRunDayView(
                                     entry: today,
                                     formatTemperature: formatTemperature,
-                                    genderPreference: genderPreference
+                                    genderPreference: genderPreference,
+                                    onDelete: { model.removeEntry(id: today.id) }
                                 )
                             } label: {
                                 entryCard(today)
@@ -109,17 +132,39 @@ struct WearIveRunCollectionView: View {
                     }
 
                     ForEach(chapters, id: \.placeName) { chapter in
-                        NavigationLink {
-                            WearIveRunChapterView(
-                                model: model,
-                                placeName: chapter.placeName,
-                                formatTemperature: formatTemperature,
-                                genderPreference: genderPreference
-                            )
-                        } label: {
-                            chapterCover(chapter)
+                        // RW-152 §4: the chapter cover carries
+                        // its own trash, bound to the cover's
+                        // REPRESENTATIVE entry only (ruling J2 —
+                        // never the whole place group; whole-place
+                        // removal stays in the chapter view). It
+                        // sits OUTSIDE the navigation link so the
+                        // tap can never be read as navigation.
+                        ZStack(alignment: .topTrailing) {
+                            NavigationLink {
+                                WearIveRunChapterView(
+                                    model: model,
+                                    placeName: chapter.placeName,
+                                    formatTemperature: formatTemperature,
+                                    genderPreference: genderPreference
+                                )
+                            } label: {
+                                chapterCover(chapter)
+                            }
+                            .buttonStyle(.plain)
+                            Button {
+                                requestDelete(chapter.cover)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.appFootnote.weight(.semibold))
+                                    .foregroundColor(AppTheme.inkPrimary)
+                                    .frame(width: 32, height: 32)
+                                    .background(Circle().fill(AppTheme.sheet.opacity(0.92)))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 23)
+                            .padding(.trailing, 23)
+                            .accessibilityLabel("Delete the cover entry for \(chapter.placeName)")
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -131,6 +176,10 @@ struct WearIveRunCollectionView: View {
         // header (design-spec §8.2; Android's header is the
         // script alone). Build 25 printed the name twice.
         .navigationBarTitleDisplayMode(.inline)
+        // RW-152 §4 (J1): the past-entry delete confirmation.
+        .modifier(WearIveRunDeleteConfirmation(
+            pending: $pendingDelete,
+            onConfirm: { model.removeEntry(id: $0.id) }))
     }
 
     private var filterRow: some View {
@@ -220,14 +269,36 @@ struct WearIveRunCollectionView: View {
 
     @ViewBuilder
     private func entryImage(_ entry: WearIveRunEntry) -> some View {
-        // GEN-5 (RW-28 sharing fix + addendum 2): a missing or
-        // unresolved reference renders the designed treatment — a
-        // card-fill placeholder with the photo glyph — never a
-        // blank, never a crash; a resolved photo renders through
-        // HeroPhoto's TOP-anchored crop, so a thumbnail can never
-        // present the runner headless the way a center fill did.
+        // RW-152 §3: every collection surface loads through the
+        // ONE resolver (ResolvedHeroImage) — the chapter banner
+        // and the entry cards alike.
+        ResolvedHeroImage(entry: entry)
+    }
+}
+
+/// RW-152 §3: an entry's hero, loaded through the one resolver.
+/// A stable reference (pool/curated URL, asset reference) passes
+/// through synchronously; a storage path (personal hero) is
+/// re-signed through HeroRefRuntime — the client's existing
+/// signing path — so the photo that settled shows again on a
+/// relaunch past the signed URL's one-hour life. An entry with
+/// no loadable reference renders the designed treatment — a
+/// card-fill placeholder with the photo glyph (GEN-5, RW-28) —
+/// never a substituted photo, never a crash; a resolved photo
+/// renders through HeroPhoto's TOP-anchored crop, so a
+/// thumbnail can never present the runner headless the way a
+/// center fill did.
+struct ResolvedHeroImage: View {
+    let entry: WearIveRunEntry
+    @State private var resolvedURLString: String?
+
+    private var urlString: String? {
+        HeroRefResolver.stableDisplayReference(for: entry) ?? resolvedURLString
+    }
+
+    var body: some View {
         GeometryReader { geo in
-            AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
+            AsyncImage(url: urlString.flatMap { URL(string: $0) }) { phase in
                 switch phase {
                 case .success(let image):
                     HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
@@ -239,6 +310,40 @@ struct WearIveRunCollectionView: View {
                     }
                 }
             }
+        }
+        .task(id: entry.id) {
+            if HeroRefResolver.stableDisplayReference(for: entry) == nil {
+                resolvedURLString = await HeroRefRuntime.loadableURLString(for: entry)
+            }
+        }
+    }
+}
+
+/// RW-152 §4 (J1): the past-entry delete confirmation, shared
+/// by every collection surface. The title and message come
+/// from WearIveRunDeletePolicy — the confirmation NAMES the
+/// place and the date and states plainly that entries live
+/// only on this device and deletion cannot be undone.
+struct WearIveRunDeleteConfirmation: ViewModifier {
+    @Binding var pending: WearIveRunEntry?
+    let onConfirm: (WearIveRunEntry) -> Void
+
+    func body(content: Content) -> some View {
+        content.alert(
+            pending.map { WearIveRunDeletePolicy.confirmationTitle(for: $0) }
+                ?? "Delete this entry?",
+            isPresented: Binding(
+                get: { pending != nil },
+                set: { if !$0 { pending = nil } }),
+            presenting: pending
+        ) { entry in
+            Button("Delete", role: .destructive) {
+                onConfirm(entry)
+                pending = nil
+            }
+            Button("Cancel", role: .cancel) { pending = nil }
+        } message: { entry in
+            Text(WearIveRunDeletePolicy.confirmationMessage(for: entry))
         }
     }
 }
@@ -252,6 +357,20 @@ struct WearIveRunChapterView: View {
     let genderPreference: GenderPreference
 
     @State private var filter: WearIveRunWeatherFilter = .all
+    /// RW-152 §4 (J1): the past entry awaiting its delete
+    /// confirmation on this surface.
+    @State private var pendingDelete: WearIveRunEntry?
+
+    /// RW-152 §4 (J1): route a per-entry delete — a PAST entry
+    /// asks first (the confirmation names place and date);
+    /// today's entry deletes in one tap.
+    private func requestDelete(_ entry: WearIveRunEntry) {
+        if WearIveRunDeletePolicy.requiresConfirmation(for: entry) {
+            pendingDelete = entry
+        } else {
+            model.removeEntry(id: entry.id)
+        }
+    }
 
     /// The chapter recomputed under THIS view's filter — summaries,
     /// stays, and groups all derive from the admitted entries.
@@ -317,6 +436,10 @@ struct WearIveRunChapterView: View {
         .background(AppTheme.background.ignoresSafeArea())
         .navigationTitle(placeName)
         .navigationBarTitleDisplayMode(.inline)
+        // RW-152 §4 (J1): the past-entry delete confirmation.
+        .modifier(WearIveRunDeleteConfirmation(
+            pending: $pendingDelete,
+            onConfirm: { model.removeEntry(id: $0.id) }))
     }
 
     private var filterRow: some View {
@@ -382,7 +505,8 @@ struct WearIveRunChapterView: View {
                         WearIveRunDayView(
                             entry: entry,
                             formatTemperature: formatTemperature,
-                            genderPreference: genderPreference
+                            genderPreference: genderPreference,
+                            onDelete: { model.removeEntry(id: entry.id) }
                         )
                     } label: {
                         HStack(spacing: 12) {
@@ -406,9 +530,11 @@ struct WearIveRunChapterView: View {
                     // Fix wave 2026-11-07 (RW-122, iOS half):
                     // per-entry delete in the collection — the
                     // row's own trash, beside (never inside) the
-                    // navigation target.
+                    // navigation target. RW-152 §4 (J1): routed
+                    // through the delete policy — past entries
+                    // confirm first, today's deletes in one tap.
                     Button {
-                        model.removeEntry(id: entry.id)
+                        requestDelete(entry)
                     } label: {
                         Image(systemName: "trash")
                             .font(.appFootnote.weight(.semibold))
@@ -429,6 +555,22 @@ struct WearIveRunDayView: View {
     let entry: WearIveRunEntry
     let formatTemperature: (Double) -> String
     let genderPreference: GenderPreference
+    /// RW-152 §4: the day view's own delete affordance — the
+    /// host (collection / chapter) binds it to
+    /// `WearIveRunCollection.removing(id:)` for this entry.
+    /// Nil in seats that only present the day (no delete).
+    var onDelete: (() -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    /// RW-152 §4 (J1): this (past) entry awaiting its delete
+    /// confirmation.
+    @State private var pendingDelete: WearIveRunEntry?
+    /// RW-152 §3: the entry's hero URL, resolved through the
+    /// one resolver (a storage path re-signs on appearance).
+    @State private var resolvedHeroURL: String?
+    private var heroURLString: String? {
+        resolvedHeroURL ?? HeroRefResolver.stableDisplayReference(for: entry)
+    }
 
     /// GEN-6 (RW-31 Wave B): sharing opens ONE Share Studio —
     /// the chapter page's two plain text buttons and the
@@ -516,7 +658,7 @@ struct WearIveRunDayView: View {
                 // hero surface — the bare centre fill here was the
                 // one hero-class surface still centre-cropping.
                 GeometryReader { geo in
-                    AsyncImage(url: URL(string: entry.heroImageReference)) { phase in
+                    AsyncImage(url: heroURLString.flatMap { URL(string: $0) }) { phase in
                         switch phase {
                         case .success(let image):
                             HeroPhoto(image: image, width: geo.size.width, height: geo.size.height)
@@ -533,7 +675,7 @@ struct WearIveRunDayView: View {
                 .onTapGesture { showPhotoViewer = true }
                 .fullScreenCover(isPresented: $showPhotoViewer) {
                     HeroPhotoViewer(
-                        imageURL: entry.heroImageReference,
+                        imageURL: heroURLString,
                         caption: entry.itemNames.joined(separator: " · ")
                     )
                 }
@@ -580,6 +722,30 @@ struct WearIveRunDayView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 8)
+
+                // RW-152 §4: the day view's own trash — every
+                // entry card carries the affordance. J1: a PAST
+                // entry confirms first (the confirmation names
+                // the place and the date); today's entry deletes
+                // in one tap. Either way the view dismisses —
+                // the entry it presented is gone.
+                if let onDelete {
+                    Button(role: .destructive) {
+                        if WearIveRunDeletePolicy.requiresConfirmation(for: entry) {
+                            pendingDelete = entry
+                        } else {
+                            onDelete()
+                            dismiss()
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "trash")
+                            Text("Delete this entry")
+                        }
+                        .font(.appSecondary.weight(.semibold))
+                    }
+                    .padding(.top, 4)
+                }
             }
             .padding(16)
         }
@@ -618,6 +784,17 @@ struct WearIveRunDayView: View {
         // renders at most once per (entry, format) key.
         .task { await MainActor.run { requestPoster() } }
         .task { await MainActor.run { requestKit() } }
+        // RW-152 §3: resolve the hero through the one resolver
+        // (a personal hero's storage path re-signs here).
+        .task { resolvedHeroURL = await HeroRefRuntime.loadableURLString(for: entry) }
+        // RW-152 §4 (J1): the past-entry delete confirmation —
+        // confirming deletes and leaves the day view.
+        .modifier(WearIveRunDeleteConfirmation(
+            pending: $pendingDelete,
+            onConfirm: { _ in
+                onDelete?()
+                dismiss()
+            }))
     }
 
     // MARK: Render requests (slot-deduped, keyed by format)
@@ -741,7 +918,11 @@ struct WearIveRunDayView: View {
     /// else on-device Vision face detection, else the default
     /// upper-middle composition point (never the centre).
     private func loadHeroBase() async -> (image: UIImage, anchor: ShareFaceAnchor)? {
-        guard let url = URL(string: entry.heroImageReference),
+        // RW-152 §3: the poster pipeline loads through the one
+        // resolver too — the stored display URL's signed hour
+        // may be long past; the durable reference re-signs.
+        guard let urlString = await HeroRefRuntime.loadableURLString(for: entry),
+              let url = URL(string: urlString),
               let (data, _) = try? await Self.heroFetchSession.data(from: url),
               let image = UIImage(data: data) else { return nil }
         let downscaled = await Task.detached(priority: .userInitiated) {
