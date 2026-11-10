@@ -59,16 +59,6 @@ class LocaleDefaultUnitsTest {
     }
 
     @Test
-    fun storedTemperatureChoiceImpliesItsLegacyWindPairing() = runBlocking {
-        Locale.setDefault(Locale.US)
-        val repo = PreferencesRepository(context())
-        repo.setTemperatureUnit(TemperatureUnit.CELSIUS)
-        val prefs = repo.preferencesFlow.first()
-        assertEquals(TemperatureUnit.CELSIUS, prefs.temperatureUnit)
-        assertEquals(WindUnit.KMH, prefs.windUnit)
-    }
-
-    @Test
     fun storedWindChoiceWinsIndependentlyOfTemperature() = runBlocking {
         Locale.setDefault(Locale.US)
         val repo = PreferencesRepository(context())

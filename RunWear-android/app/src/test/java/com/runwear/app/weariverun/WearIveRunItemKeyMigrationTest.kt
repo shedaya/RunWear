@@ -90,14 +90,43 @@ class WearIveRunItemKeyMigrationTest {
 
     @Test
     fun misalignedStoredKeysAreReplacedByDerivation() {
-        // Defensive: a stale/short key list never survives decode —
-        // consumers require positional alignment with items.
+        // Defensive: a stale/short key list never survives decode
+        // when every name is a catalog name — consumers require
+        // positional alignment with items.
         val json = """
             [{"date":"2026-11-06","place":"Miami, FL","feelsLikeF":78.0,"condition":"Clear","snowing":false,"raining":false,"items":["Visor","Sunglasses"],"itemKeys":["VISOR"]}]
         """.trimIndent()
         val entry = WearIveRunStore.decode(json).single()
         assertEquals(listOf("VISOR", "SUNGLASSES"), entry.itemKeys)
         assertTrue(WearIveRunItemKeyMigration.keysAlign(entry.items, entry.itemKeys))
+    }
+
+    @Test
+    fun entryWithOffCatalogNamesIsPreservedExactly() {
+        // The refined contract (run-293 adjudication): derivation
+        // happens only when it is TOTAL. An entry whose names are
+        // not all catalog display names keeps its stored bytes —
+        // including a generic key list written by another writer —
+        // because a partial derivation would break the positional
+        // agreement between items and keys.
+        val genericKeys = """
+            [{"date":"2026-11-05","place":"Kansas City, MO","feelsLikeF":57.0,"condition":"Clear sky","snowing":false,"raining":false,"items":["Short-sleeve shirt","Running shorts"],"itemKeys":["SHORT_SLEEVE_SHIRT","RUNNING_SHORTS"]}]
+        """.trimIndent()
+        val entry = WearIveRunStore.decode(genericKeys).single()
+        assertEquals(listOf("SHORT_SLEEVE_SHIRT", "RUNNING_SHORTS"), entry.itemKeys)
+        assertEquals(listOf("Short-sleeve shirt", "Running shorts"), entry.items)
+
+        val noKeys = """
+            [{"date":"2026-11-05","place":"Kansas City, MO","feelsLikeF":57.0,"condition":"Clear sky","snowing":false,"raining":false,"items":["Shorts"]}]
+        """.trimIndent()
+        val legacy = WearIveRunStore.decode(noKeys).single()
+        assertTrue(legacy.itemKeys.isEmpty())
+        assertFalse(WearIveRunItemKeyMigration.canDeriveCompletely(listOf("Shorts")))
+        assertTrue(
+            WearIveRunItemKeyMigration.canDeriveCompletely(
+                listOf("Thermal Long Sleeve", "Visor")
+            )
+        )
     }
 
     @Test

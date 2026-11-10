@@ -29,6 +29,17 @@ class WaveCGateTest {
         return f.readText()
     }
 
+    // LOC-1 WP-R2: settled copy now lives in Android resources; a
+    // source pin on an extracted string asserts the sheet REFERENCES
+    // its resource, and the sentence itself is asserted against the
+    // resource file (the resolved value — AppResourcesParityTest
+    // pins the same values against the AppEnglish mirror).
+    private fun appStringsXml(): String {
+        val f = File("src/main/res/values/strings.xml").takeIf { it.exists() }
+            ?: File("app/src/main/res/values/strings.xml")
+        return f.readText()
+    }
+
     // ── RW-52 → RW-78: fork doors navigate directly ─────────────
     // The RW-52 select-then-commit pin that stood here ("fork
     // carries the settled Continue door": doors select into
@@ -103,11 +114,14 @@ class WaveCGateTest {
     @Test
     fun `location search shows a searching state tied to the query`() {
         val sheets = mainSource("com/runwear/app/ui/screens/BottomSheets.kt")
-        assertTrue(sheets.contains("Searching for "))
+        // WP-R2 re-pin: the searching line is the loc_searching
+        // resource, resolved through its accessor at the site.
+        assertTrue(sheets.contains("AppStrings.locSearching("))
+        assertTrue(appStringsXml().contains("Searching for"))
         // RW-55: results render below Current location / recents —
         // the results block's source position follows the recents'.
         val resultsIdx = sheets.indexOf("RW-55 + DA-24")
-        val recentsIdx = sheets.indexOf("text = \"RECENT LOCATIONS\"")
+        val recentsIdx = sheets.indexOf("AppStrings.locRecentsTitle()")
         assertTrue("results block must follow the recents section", resultsIdx > recentsIdx)
     }
 
@@ -116,13 +130,18 @@ class WaveCGateTest {
     @Test
     fun `location hint carries the no-save assurance`() {
         val sheets = mainSource("com/runwear/app/ui/screens/BottomSheets.kt")
+        // WP-R2 re-pin: the hint is the loc_recents_hint resource;
+        // the sheet references it and the resource carries both
+        // settled sentences verbatim.
+        assertTrue(sheets.contains("AppStrings.locRecentsHint()"))
+        val hint = appStringsXml()
         assertTrue(
-            sheets.contains(
+            hint.contains(
                 "Nothing is saved until you choose a place."
             )
         )
         assertTrue(
-            sheets.contains(
+            hint.contains(
                 "Your recent places will wait here — Pick a place once and it joins a short list — home, the office, trip cities — so jumping back takes one tap."
             )
         )
@@ -135,7 +154,10 @@ class WaveCGateTest {
         val sheets = mainSource("com/runwear/app/ui/screens/BottomSheets.kt")
         assertTrue(sheets.contains("SettingsSectionId.RATE_RUNWEAR"))
         assertTrue(sheets.contains("\"Rate RunWear\""))
-        assertTrue(sheets.contains("Match your device, or always light or dark."))
+        // WP-R2 re-pin: the Appearance line is the
+        // settings_appearance_sub resource via its accessor.
+        assertTrue(sheets.contains("AppStrings.settingsAppearanceSub()"))
+        assertTrue(appStringsXml().contains("Match your device, or always light or dark."))
     }
 
     // ── DA-19: Settings body temperature is the slider form ─────
@@ -166,7 +188,9 @@ class WaveCGateTest {
     @Test
     fun `shop sheet door is Shop and disclosure carries the outfit clause`() {
         val sheets = mainSource("com/runwear/app/ui/screens/BottomSheets.kt")
-        assertTrue(sheets.contains("text = \"Shop ›\""))
+        // WP-R2 re-pin: the door is the shop_row_door resource.
+        assertTrue(sheets.contains("AppStrings.shopRowDoor()"))
+        assertTrue(appStringsXml().contains("Shop ›"))
         assertFalse(sheets.contains("text = \"Shop on Amazon\""))
         assertTrue(
             sheets.contains("It never changes the outfit RunWear recommends.")

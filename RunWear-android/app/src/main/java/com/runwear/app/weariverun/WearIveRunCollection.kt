@@ -498,18 +498,23 @@ object WearIveRunRecordPolicy {
  * - an entry whose stored keys already align with its names
  *   (same size, and every stored key is the catalog key for the
  *   name at that position) decodes UNCHANGED;
- * - any other entry derives its keys positionally from its
- *   names; a name with no catalog entry maps to ITSELF (the
- *   share layer's standing treatment of unknown names — visible
- *   as its own tile, never linked to a catalog item);
+ * - an entry whose names are ALL catalog display names derives
+ *   its keys positionally — this is every entry the shipped build
+ *   ever wrote, since its writers build `items` from the catalog;
+ * - an entry carrying ANY off-catalog name is preserved EXACTLY:
+ *   derivation there would be partial, and a partial key list puts
+ *   items and keys out of positional agreement — worse than none.
+ *   (Single-name lookup still maps an unknown name to itself for
+ *   the share layer's tile treatment; that is a READ treatment,
+ *   never a persisted rewrite.)
  * - the entry's `items` (names) are NEVER rewritten — the
  *   migration enriches keys only, so every rendered surface keeps
  *   reading exactly the names the shipped build wrote.
  *
  * Because encode writes itemKeys whenever they are non-empty,
  * the first write after this lands persists the derived keys for
- * every legacy entry: the migration is lazy, total, and needs no
- * schema version bump or one-shot pass.
+ * every derivable legacy entry: the migration is lazy and needs
+ * no schema version bump or one-shot pass.
  */
 object WearIveRunItemKeyMigration {
 
@@ -530,11 +535,31 @@ object WearIveRunItemKeyMigration {
         storedKeys.size == items.size &&
             items.indices.all { storedKeys[it] == keyFor(items[it]) }
 
-    /** The entry with its keys derived when they do not align. */
+    /**
+     * True when EVERY persisted name is a catalog display name, so
+     * derivation is total. An entry carrying off-catalog names (drifted
+     * or hand-authored records) cannot be derived completely, and a
+     * partial derivation would put items and keys out of positional
+     * agreement — worse than no derivation.
+     */
+    fun canDeriveCompletely(items: List<String>): Boolean =
+        items.all { it in keyByDisplayName }
+
+    /**
+     * The entry with its keys derived — but ONLY when derivation is
+     * due AND total:
+     *  - keys already aligned → unchanged;
+     *  - every name is a catalog name → derived (this is every entry
+     *    the shipped build ever wrote: its items come from the
+     *    catalog by construction);
+     *  - otherwise → the stored bytes are preserved exactly. The
+     *    migration never rewrites what it cannot fully account for.
+     */
     fun migrate(entry: WearIveRunDayEntry): WearIveRunDayEntry =
-        if (keysAlign(entry.items, entry.itemKeys)) {
-            entry
-        } else {
-            entry.copy(itemKeys = deriveKeys(entry.items))
+        when {
+            keysAlign(entry.items, entry.itemKeys) -> entry
+            canDeriveCompletely(entry.items) ->
+                entry.copy(itemKeys = deriveKeys(entry.items))
+            else -> entry
         }
 }

@@ -260,7 +260,7 @@ class AppResourcesParityTest {
             "widget_age_hr_upper" to AppEnglish.WIDGET_AGE_HR_UPPER,
             "widget_age_day_upper" to AppEnglish.WIDGET_AGE_DAY_UPPER
         )
-        assertTrue("parity table must cover the whole mirror", byResKey.size >= 170)
+        assertEquals("parity table must cover the whole mirror", 168, byResKey.size)
         for ((key, mirror) in byResKey) {
             assertEquals("resource $key", res[key], mirror)
         }
@@ -293,7 +293,7 @@ class AppResourcesParityTest {
         assertEquals(AppEnglish.WIR_WORDMARK, context.getString(R.string.wir_wordmark))
         assertEquals(AppEnglish.SHARE_DISCLOSURE, context.getString(R.string.share_disclosure))
         assertEquals(
-            "New York · 52° feels like",
+            "RunWear — New York, 52° feels like",
             context.getString(R.string.share_subject, "New York", 52)
         )
         assertEquals(

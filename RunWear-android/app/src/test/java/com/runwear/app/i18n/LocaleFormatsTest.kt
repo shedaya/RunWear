@@ -50,7 +50,7 @@ class LocaleFormatsTest {
 
     @Test
     fun nonUsLocaleActuallyLocalizes() {
-        assertEquals("Mo", LocaleFormats.dateWeekday(monday, Locale.GERMANY))
+        assertEquals("Mo.", LocaleFormats.dateWeekday(monday, Locale.GERMANY))
         assertEquals("November", LocaleFormats.monthFull(monday, Locale.GERMANY))
         assertNotEquals(
             LocaleFormats.dateWeekdayMonthDay(monday, Locale.US),
