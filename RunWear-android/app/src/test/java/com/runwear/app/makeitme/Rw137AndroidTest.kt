@@ -17,6 +17,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 
+private typealias ReconcileOutcome = PersonalHeroService.ReconcileOutcome
+
 /**
  * RW-137 Android client (Nov 10, 2026; DESIGN.md §4.4/§4.8/§4.9,
  * §7 S4 + S4b + S4c client half):
