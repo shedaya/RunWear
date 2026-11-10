@@ -127,6 +127,18 @@ class Rw152CollectionRenderTest {
             return wm.views.toList()
         }
 
+        fun containsComposeRoot(view: View): Boolean {
+            if (view is androidx.compose.ui.platform.ViewRootForTest) {
+                return true
+            }
+            if (view is android.view.ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    if (containsComposeRoot(view.getChildAt(i))) return true
+                }
+            }
+            return false
+        }
+
         fun composeRoots(): List<SemanticsNode> =
             windowViews().mapNotNull { v ->
                 if (containsComposeRoot(v)) mergedRoot(v) else null
