@@ -467,6 +467,7 @@ final class RWNextBuildTests: XCTestCase {
         return Set(bytes).count > 2
     }
 
+    @MainActor
     private func writeRender<Content: View>(
         _ content: Content, size: CGSize, name: String
     ) throws {
@@ -497,6 +498,7 @@ final class RWNextBuildTests: XCTestCase {
     /// The overlay at REST (mini state) — and, by construction,
     /// the DISMISSED state: dismissal returns the surface to
     /// exactly this composition and the page never moved.
+    @MainActor
     func testRW152Frame_OverlayRest_StandardAndShort() throws {
         for (size, suffix) in [(CGSize(width: 393, height: 852), "standard"),
                                (CGSize(width: 375, height: 667), "short")] {
@@ -525,6 +527,7 @@ final class RWNextBuildTests: XCTestCase {
 
     /// The EXPANDED panel state (the morph's target state),
     /// standard + short portrait viewports.
+    @MainActor
     func testRW152Frame_ExpandedPanel_StandardAndShort() throws {
         for (viewport, suffix) in [(852.0, "standard"), (667.0, "short")] {
             let entry = frameEntry(hero: "")
