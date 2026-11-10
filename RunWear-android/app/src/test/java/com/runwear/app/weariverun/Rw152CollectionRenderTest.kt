@@ -284,20 +284,27 @@ class Rw152CollectionRenderTest {
         val coverRoot = stage.composeRoots().firstOrNull { r ->
             stage.texts(r).contains("Delete the Miami, FL cover entry")
         } ?: throw AssertionError("collection window with the cover trash not found")
-        // Click the DEEPEST node carrying the description: the
-        // cover card's merged semantics node also carries the
-        // trash's description (and the card's own chapter-open
-        // click) and precedes the button in tree order — the
-        // button is the last/deepest match.
-        val matches = stage.nodes(coverRoot).filter {
+        // Click through the description's own node: the trash's
+        // description sits on the button's icon node in the
+        // unmerged tree, while the OnClick lives on the button —
+        // climb from the description node to the nearest
+        // clickable ancestor and invoke that.
+        val descNode = stage.nodes(coverRoot).firstOrNull {
             it.config.contains(SemanticsProperties.ContentDescription) &&
                 it.config[SemanticsProperties.ContentDescription]
-                    .any { d -> d == "Delete the Miami, FL cover entry" } &&
-                it.config.contains(SemanticsActions.OnClick)
+                    .any { d -> d == "Delete the Miami, FL cover entry" }
+        } ?: throw AssertionError("cover trash description node not found")
+        var climber: SemanticsNode? = descNode
+        var clickAction: (() -> Boolean)? = null
+        while (climber != null && clickAction == null) {
+            if (climber.config.contains(SemanticsActions.OnClick)) {
+                clickAction = climber.config[SemanticsActions.OnClick].action
+            }
+            climber = climber.parent
         }
-        assertTrue("cover trash nodes present", matches.isNotEmpty())
-        matches.last().config[SemanticsActions.OnClick].action?.invoke()
-            ?: throw AssertionError("cover trash OnClick missing")
+        val action = clickAction
+            ?: throw AssertionError("no clickable ancestor for the cover trash")
+        println("RW152-DIAG click handled: " + action.invoke())
         stage.settle(10)
         // Diagnostics (read from the suite's system-out): what did
         // the click actually do — dialog, chapter detail, or
