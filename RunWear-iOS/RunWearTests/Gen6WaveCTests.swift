@@ -187,8 +187,8 @@ final class Gen6WaveCTests: XCTestCase {
         let fork = String(flow[start.lowerBound..<end.lowerBound])
         // The script is the fork's TITLE: it appears before the
         // fork's first line, and only once in the fork.
-        let scriptIdx = try XCTUnwrap(fork.range(of: "Text(\"Make It Me\")")).lowerBound
-        let lineIdx = try XCTUnwrap(fork.range(of: "See yourself in every outfit.")).lowerBound
+        let scriptIdx = try XCTUnwrap(fork.range(of: "Text(AppStrings.mimScriptMark)")).lowerBound
+        let lineIdx = try XCTUnwrap(fork.range(of: "Text(AppStrings.flowSeeYourself)")).lowerBound
         XCTAssertTrue(scriptIdx < lineIdx, "the script title heads the fork")
         XCTAssertEqual(fork.components(separatedBy: "Text(AppStrings.mimScriptMark)").count - 1, 1,
                        "the script sits in the title seat only, not inside a card")
@@ -320,7 +320,7 @@ final class Gen6WaveCTests: XCTestCase {
                       "the home skeleton carries the settled line (frame 46)")
         // The line must render as text: it is composed outside
         // the redacted skeleton subtree.
-        let textIdx = try XCTUnwrap(loading.range(of: "Getting your first recommendation…")).lowerBound
+        let textIdx = try XCTUnwrap(loading.range(of: "Text(AppStrings.loadingFirstRecommendation)")).lowerBound
         let redactedIdx = try XCTUnwrap(loading.range(of: ".redacted(reason: .placeholder)")).lowerBound
         XCTAssertTrue(textIdx < redactedIdx || loading.contains("private var skeleton"),
                       "the line is not swallowed by the placeholder redaction")

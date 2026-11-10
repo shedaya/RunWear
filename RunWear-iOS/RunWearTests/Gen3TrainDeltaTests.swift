@@ -148,7 +148,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
         let momentIdx = try XCTUnwrap(onboarding.range(of: "private var firstLookMomentView"))
         let moment = onboarding[momentIdx.lowerBound...]
-        let doorIdx = try XCTUnwrap(moment.range(of: "Text(\"See My Outfit\")"))
+        let doorIdx = try XCTUnwrap(moment.range(of: "Text(AppStrings.mimFirstLookSeeOutfit)"))
         // The door's button opens directly on onComplete and is
         // not wrapped in any phase condition: the characters
         // immediately before it are the ruling's own comment and
@@ -160,7 +160,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
                        "the way forward is never disabled")
         // …and the premium door (which IS phase-gated) is a
         // different button, after it.
-        let premiumIdx = try XCTUnwrap(moment.range(of: "Text(\"Upgrade to Premium\")"))
+        let premiumIdx = try XCTUnwrap(moment.range(of: "Text(AppStrings.mimFirstLookUpgrade)"))
         XCTAssertTrue(doorIdx.lowerBound < premiumIdx.lowerBound)
     }
 
@@ -354,7 +354,7 @@ final class Gen3TrainDeltaTests: XCTestCase {
         let statusSlice = String(section[statusStart...])
         let gate = try XCTUnwrap(statusSlice.range(of: "if store.mode == .subscribed, let band = settingsConvergenceBand")?.lowerBound)
         let seat = try XCTUnwrap(statusSlice.range(of: "ConvergenceBandView(content: band)")?.lowerBound)
-        let readiness = try XCTUnwrap(statusSlice.range(of: "Subscribed · Your photo is ready before you open the app.")?.lowerBound)
+        let readiness = try XCTUnwrap(statusSlice.range(of: "AppStrings.mimsetSubscribedReady")?.lowerBound)
         XCTAssertTrue(gate < seat && seat < readiness,
                       "the band renders in place of the status block; the readiness line lives in the else branch and cannot co-render while generating")
         // And the offer group no longer carries a second seat.

@@ -510,12 +510,12 @@ final class Gen6WaveATests: XCTestCase {
         let flow = try sourceFile("../RunWear/Views/MakeItMeFlowViews.swift")
         let consentStart = try XCTUnwrap(flow.range(of: "private var consentStep")?.lowerBound)
         let consent = String(flow[consentStart...])
-        let closing = try XCTUnwrap(consent.range(of: "Nothing else is done with them.")?.lowerBound)
+        let closing = try XCTUnwrap(consent.range(of: "AppStrings.flowConsentNothingElse")?.lowerBound)
         // The closing sentence comes AFTER the delete-anytime
         // paragraph and BEFORE the attestation — it closes the
         // BODY, it is not a stray line elsewhere in the flow.
-        let deleteLine = try XCTUnwrap(consent.range(of: "You can delete your photos")?.lowerBound)
-        let attestation = try XCTUnwrap(consent.range(of: "These photos are of me")?.lowerBound)
+        let deleteLine = try XCTUnwrap(consent.range(of: "AppStrings.flowConsentDelete")?.lowerBound)
+        let attestation = try XCTUnwrap(consent.range(of: "AppStrings.flowAttestation")?.lowerBound)
         XCTAssertTrue(deleteLine < closing && closing < attestation,
                       "the closing sentence is the consent body's last line")
     }

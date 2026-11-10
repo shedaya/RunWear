@@ -156,9 +156,15 @@ final class WS10CopyTests: XCTestCase {
         // other surface (setup form, fork) stands untouched.
         let lines = try appCodeLines()
         let hits = lines.filter { $0.text.contains(OnboardingCopy.freeLooksPromise) }
-        XCTAssertEqual(hits.count, 1,
-                       "the promise must be spelled out exactly once — found: \(hits)")
-        XCTAssertEqual(hits.first?.file, "OnboardingSequence.swift")
+        // WP-R3: the promise's one canonical spelling now lives in
+        // the Localizable catalog; in Swift code it appears only in
+        // the two generated facades (AppEnglish's pinned literal and
+        // AppStrings' English fallback table), both generated from
+        // that single catalog entry.
+        XCTAssertEqual(hits.count, 2,
+                       "the promise must be spelled out only in the generated twin facades — found: \(hits)")
+        XCTAssertTrue(hits.allSatisfy { $0.file == "AppStrings.swift" || $0.file == "AppEnglish.swift" },
+                      "the promise's only code homes are the generated facades")
 
         let onboarding = try sourceFile("../RunWear/Views/Onboarding/OnboardingView.swift")
         XCTAssertEqual(occurrences(onboarding, "OnboardingCopy.freeLooksPromise"), 0,
@@ -365,7 +371,7 @@ final class WS10CopyTests: XCTestCase {
         func position(of needle: String) throws -> String.Index {
             try XCTUnwrap(moment.range(of: needle), "\(needle) missing from the moment").lowerBound
         }
-        let script = try position(of: "Text(\"Make It Me\")")
+        let script = try position(of: "Text(AppStrings.mimScriptMark)")
         let heading = try position(of: "MakeItMeCopy.firstLookHeading(")
         let weather = try position(of: "MakeItMeCopy.firstLookWeatherLine(")
         // GEN-2 I2 (W-16/W-17): the photo slot is now the moment's
@@ -376,7 +382,7 @@ final class WS10CopyTests: XCTestCase {
         // band → primary door.
         let photo = try position(of: "firstLookPhotoCard")
         let bandHeader = try position(of: "MakeItMeCopy.firstLookBandHeader")
-        let door = try position(of: "Text(\"See My Outfit\")")
+        let door = try position(of: "Text(AppStrings.mimFirstLookSeeOutfit)")
         XCTAssertTrue(script < heading && heading < weather && weather < photo
                       && photo < bandHeader && bandHeader < door,
                       "frame 34's element order must match the design/Android composition")
@@ -754,8 +760,16 @@ final class Gen3SettingsTruthTests: XCTestCase {
         where ["swift", "plist"].contains(url.pathExtension) {
             guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
             for line in text.components(separatedBy: "\n") where line.contains("Make it me") {
-                let isTheSettledDoor = url.lastPathComponent == "MakeItMeFlowViews.swift"
-                    && line.contains("Text(\"Make it me\")")
+                // WP-R3: the settled door's string now lives in the
+                // catalog; its only code homes are the door's facade
+                // call and the two generated facades (the pinned
+                // literal + the English fallback table).
+                let isTheSettledDoor = (url.lastPathComponent == "MakeItMeFlowViews.swift"
+                    && line.contains("Text(AppStrings.flowMakeItMeCta)"))
+                    || (url.lastPathComponent == "AppEnglish.swift"
+                        && line.contains("flowMakeItMeCta"))
+                    || (url.lastPathComponent == "AppStrings.swift"
+                        && line.contains("flow_make_it_me_cta"))
                 if !isTheSettledDoor {
                     offenders.append("\(url.lastPathComponent): \(line.trimmingCharacters(in: .whitespaces))")
                 }
