@@ -1566,7 +1566,6 @@ fun HeroMainScreen(
                             // its foot. Dismissal: chevron, Back
                             // (BackHandler above), or a glide-up
                             // on the panel.
-                            val wirViewportMaxHeight = maxHeight
                             AnimatedContent(
                                 targetState = wirExpanded,
                                 transitionSpec = {
@@ -1603,7 +1602,10 @@ fun HeroMainScreen(
                                             .heightIn(
                                                 max = WirOverlayPanelPolicy
                                                     .maxPanelHeightDp(
-                                                        wirViewportMaxHeight.value
+                                                        LocalConfiguration
+                                                            .current
+                                                            .screenHeightDp
+                                                            .toFloat()
                                                     ).dp
                                             )
                                             .verticalScroll(
