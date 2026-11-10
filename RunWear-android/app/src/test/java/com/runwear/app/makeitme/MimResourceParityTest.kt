@@ -136,7 +136,11 @@ class MimResourceParityTest {
         )
         assertEquals(MakeItMeStrings.firstLookHeading("New York"), String.format(res.getValue("mim_first_look_heading_place"), "New York"))
         assertEquals(MakeItMeStrings.firstLookHeading(null), res.getValue("mim_first_look_heading_today"))
-        assertEquals(MakeItMeStrings.firstLookCountLine(1), String.format(res.getValue("mim_first_look_count_line_other"), 1, allowance, allowance - 1))
+        assertEquals(MakeItMeStrings.firstLookCountLine(1), String.format(res.getValue("mim_first_look_count_line"), 1, allowance, allowance - 1))
         assertEquals(MakeItMeStrings.FIRST_LOOK_COUNT_LINE, MakeItMeStrings.firstLookCountLine(1))
+        assertEquals(
+            MakeItMeStrings.FIRST_LOOK_COUNT_LINE,
+            String.format(res.getValue("mim_first_look_count_line"), 1, allowance, allowance - 1)
+        )
     }
 }

@@ -218,8 +218,7 @@
     <string name="mim_plan_cta_label">%1$s — %2$s, %3$s</string>
     <string name="mim_per_run_line">only about %1$d¢ per run</string>
     <string name="mim_per_run_basis">%1$s a year, at 4–5 runs a week.</string>
-    <string name="mim_first_look_count_line_other">That was look %1$d of your %2$d free looks — %3$d remain, whenever you want them.</string>
-    <string name="mim_first_look_count_line_one">That was look %1$d of your %2$d free looks — 1 remains, whenever you want it.</string>
+    <string name="mim_first_look_count_line">That was look %1$d of your %2$d free looks — %3$d remain, whenever you want them.</string>
     <string name="mim_first_look_heading_today">Your first look · Today</string>
     <string name="mim_first_look_heading_place">Your first look · Today, %1$s</string>
 </resources>
