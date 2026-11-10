@@ -1,7 +1,12 @@
 package com.runwear.shared.domain.model
 
 import com.runwear.engine.MR
+import dev.icerock.moko.resources.StringResource
 import dev.icerock.moko.resources.desc.StringDesc
+import dev.icerock.moko.resources.desc.desc
+
+/** moko 0.24 shape: a [StringResource] becomes a [StringDesc] via [desc]. */
+private fun res(resource: StringResource): StringDesc = resource.desc()
 
 /**
  * LOC-1 WP-3 — the catalog split, DISPLAY representation.
@@ -30,7 +35,7 @@ import dev.icerock.moko.resources.desc.StringDesc
  * on, and new UI should read display copy from here.
  */
 val ClothingItem.displayNameDesc: StringDesc
-    get() = StringDesc.Resource(
+    get() = res(
         when (this) {
             ClothingItem.TANK_TOP -> MR.strings.clothing_tank_top_name
             ClothingItem.SHORT_SLEEVE -> MR.strings.clothing_short_sleeve_name
@@ -66,7 +71,7 @@ val ClothingItem.displayNameDesc: StringDesc
     )
 
 val ClothingItem.descriptionDesc: StringDesc
-    get() = StringDesc.Resource(
+    get() = res(
         when (this) {
             ClothingItem.TANK_TOP -> MR.strings.clothing_tank_top_desc
             ClothingItem.SHORT_SLEEVE -> MR.strings.clothing_short_sleeve_desc
@@ -102,7 +107,7 @@ val ClothingItem.descriptionDesc: StringDesc
     )
 
 val WeatherCode.descriptionDesc: StringDesc
-    get() = StringDesc.Resource(
+    get() = res(
         when (this) {
             WeatherCode.CLEAR_SKY -> MR.strings.weather_clear_sky_desc
             WeatherCode.MAINLY_CLEAR -> MR.strings.weather_mainly_clear_desc
@@ -137,7 +142,7 @@ val WeatherCode.descriptionDesc: StringDesc
     )
 
 val ComfortPreference.labelDesc: StringDesc
-    get() = StringDesc.Resource(
+    get() = res(
         when (this) {
             ComfortPreference.RUNS_VERY_COLD -> MR.strings.comfort_runs_very_cold_label
             ComfortPreference.RUNS_COLD -> MR.strings.comfort_runs_cold_label
