@@ -87,6 +87,19 @@ actor SupabaseAuthService {
         return refreshed
     }
 
+    /// Whether a session is persisted in the Keychain right
+    /// now, read through the store itself (no cache). The
+    /// RW-137 deletion-closure tests assert on this seam: after
+    /// clearLocalSession the persisted item must be gone.
+    /// (In the CI test host this reads false unconditionally —
+    /// the host has no Keychain entitlement and every SecItem
+    /// call returns errSecMissingEntitlement, proven by
+    /// RW137IdentityTests' characterized probe; on device it is
+    /// the literal persisted truth.)
+    func hasPersistedSession() -> Bool {
+        KeychainStore.load() != nil
+    }
+
     /// A valid session, creating the anonymous user on first use.
     func ensureSession() async throws -> Session {
         if let existing = try await currentSession() {

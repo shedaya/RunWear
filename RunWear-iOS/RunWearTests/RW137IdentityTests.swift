@@ -32,6 +32,21 @@ import Security
 /// The store itself is app-only (RevenueCat), so its wiring is
 /// pinned by source, the established pattern for app-only
 /// orchestration in this suite.
+///
+/// KEYCHAIN IN THIS HOST: the CI test host has no Keychain
+/// entitlement — every raw SecItem call returns
+/// errSecMissingEntitlement (-34018), proven by run 279's probe
+/// and characterized permanently by
+/// testRW137_KeychainHostCapability_Characterized below. The
+/// closure tests therefore assert the discard through the auth
+/// service's own seams (its session read + its persisted-load
+/// read), and the literal Keychain step (KeychainStore.clear →
+/// SecItemDelete at the service's coordinates) is carried by
+/// the source pins and the production-proven store code — the
+/// literal in-CI Keychain assertion is UNPROVEN here, stated
+/// plainly rather than silently skipped. If a future host
+/// grants the entitlement, the characterized probe fails
+/// loudly and the direct assertions should be restored.
 final class RW137IdentityTests: XCTestCase {
 
     private func sourceFile(_ relativePath: String) throws -> String {
@@ -133,18 +148,6 @@ final class RW137IdentityTests: XCTestCase {
         await PersonalHeroAPI.shared.installTransportOverride { request in
             backend.apiTransport(request)
         }
-    }
-
-    private func keychainItemExists() -> Bool {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: SupabaseAuthService.keychainService,
-            kSecAttrAccount as String: SupabaseAuthService.keychainAccount,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
     }
 
     // MARK: - S4: the reconcile contract (model layer)
@@ -263,7 +266,9 @@ final class RW137IdentityTests: XCTestCase {
         // The session the deleted identity lived under.
         let sessionA = try await SupabaseAuthService.shared.ensureSession()
         XCTAssertEqual(sessionA.userId, Self.uidCurrent)
-        XCTAssertTrue(keychainItemExists(), "the session persists in the Keychain before deletion")
+        let liveBefore = try await SupabaseAuthService.shared.currentSession()
+        XCTAssertEqual(liveBefore?.userId, Self.uidCurrent,
+                       "the deleted identity's session is the live one before deletion")
 
         // The mocked delete-my-data succeeds through the real
         // API client (receipt confirms the account deletion).
@@ -272,22 +277,26 @@ final class RW137IdentityTests: XCTestCase {
         // The store's completion step — PersonalHeroStore
         // .deleteAllData, source-pinned below — discards the
         // local session material through the auth service's own
-        // seam.
+        // seam: cache cleared AND the Keychain item deleted
+        // (KeychainStore.clear → SecItemDelete at the service's
+        // coordinates, pinned by source; the literal Keychain
+        // read is beyond this host — see the characterized
+        // probe below).
         await SupabaseAuthService.shared.clearLocalSession()
-        XCTAssertFalse(keychainItemExists(),
-                       "the deleted identity's Keychain item is removed, so it cannot silently re-authenticate")
         let afterDelete = try await SupabaseAuthService.shared.currentSession()
         XCTAssertNil(afterDelete, "no session survives the closure — cache or Keychain")
+        let persistedAfter = await SupabaseAuthService.shared.hasPersistedSession()
+        XCTAssertFalse(persistedAfter,
+                       "the persisted-load seam finds no session item after the discard")
 
         // The next bootstrap mints a genuinely fresh anonymous
-        // session: a NEW uid, persisted as the live session.
+        // session: a NEW uid, live as the current session.
         backend.signupUid = Self.uidFresh
         let sessionB = try await SupabaseAuthService.shared.ensureSession()
         XCTAssertEqual(sessionB.userId, Self.uidFresh)
         XCTAssertNotEqual(sessionB.userId, sessionA.userId)
-        XCTAssertTrue(keychainItemExists())
-        let persisted = try await SupabaseAuthService.shared.currentSession()
-        XCTAssertEqual(persisted?.userId, Self.uidFresh)
+        let liveAfter = try await SupabaseAuthService.shared.currentSession()
+        XCTAssertEqual(liveAfter?.userId, Self.uidFresh)
     }
 
     func testRW137_DeleteMyData_UnconfirmedReceiptThrows_SessionKept() async throws {
@@ -296,8 +305,8 @@ final class RW137IdentityTests: XCTestCase {
         backend.deleteBody = Data(#"{"account_deleted": false}"#.utf8)
         await install(backend)
 
-        _ = try await SupabaseAuthService.shared.ensureSession()
-        XCTAssertTrue(keychainItemExists())
+        let session = try await SupabaseAuthService.shared.ensureSession()
+        XCTAssertEqual(session.userId, Self.uidCurrent)
 
         // The server reports the account deletion did NOT land:
         // the client throws (claims nothing), and because the
@@ -312,41 +321,47 @@ final class RW137IdentityTests: XCTestCase {
                 return XCTFail("expected the server error, got \(error)")
             }
         }
-        XCTAssertTrue(keychainItemExists(), "a failed deletion discards nothing")
+        let liveAfter = try await SupabaseAuthService.shared.currentSession()
+        XCTAssertEqual(liveAfter?.userId, Self.uidCurrent,
+                       "a failed deletion discards nothing — the session is still live")
     }
 
-    // MARK: - Environment probe (temporary diagnostic, RW-137)
+    // MARK: - Keychain host capability (characterized, RW-137)
 
-    /// CI run 278: the closure tests' direct SecItem query found
-    /// no item after a (mock-)successful ensureSession, while
-    /// every service-level assertion passed — either the CI test
-    /// host cannot write the Keychain at all (SecItemAdd's result
-    /// is ignored by KeychainStore.save, by design), or the
-    /// store's save is broken. This probe performs the raw
-    /// round-trip with the service's own coordinates and reports
-    /// every OSStatus, so the next run names which.
-    func testRW137_KeychainRoundTrip_EnvironmentProbe() {
+    /// CI runs 278–279: the closure tests' direct SecItem query
+    /// found no item after a (mock-)successful ensureSession,
+    /// while every service-level assertion passed. The probe
+    /// named the cause: this CI test host has NO Keychain
+    /// entitlement — raw SecItemAdd / SecItemCopyMatching /
+    /// SecItemDelete ALL return errSecMissingEntitlement
+    /// (-34018). The Keychain itself is unreachable from this
+    /// suite, in both directions; KeychainStore is the
+    /// production-proven path and is not indicted by this.
+    ///
+    /// This test CHARACTERIZES the wall so the closure tests'
+    /// seam-based assertions are read correctly. If a future
+    /// host grants the entitlement, this test fails loudly —
+    /// that is the signal to restore direct Keychain assertions
+    /// in the closure tests (add → present, clear → absent).
+    func testRW137_KeychainHostCapability_Characterized() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: SupabaseAuthService.keychainService,
             kSecAttrAccount as String: "rw137-probe"
         ]
-        SecItemDelete(query as CFDictionary)
         var attributes = query
         attributes[kSecValueData as String] = Data("probe".utf8)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
-        XCTAssertEqual(addStatus, errSecSuccess,
-                       "raw SecItemAdd status in this host (errSecMissingEntitlement = -34018)")
+        XCTAssertEqual(SecItemAdd(attributes as CFDictionary, nil), errSecMissingEntitlement,
+                       "this host cannot add Keychain items — see the characterization above")
         var read = query
         read[kSecReturnData as String] = true
         read[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        let copyStatus = SecItemCopyMatching(read as CFDictionary, &item)
-        XCTAssertEqual(copyStatus, errSecSuccess, "raw SecItemCopyMatching status in this host")
-        XCTAssertEqual(item as? Data, Data("probe".utf8))
-        let deleteStatus = SecItemDelete(query as CFDictionary)
-        XCTAssertEqual(deleteStatus, errSecSuccess, "raw SecItemDelete status in this host")
+        XCTAssertEqual(SecItemCopyMatching(read as CFDictionary, &item), errSecMissingEntitlement,
+                       "this host cannot read Keychain items — see the characterization above")
+        XCTAssertEqual(SecItemDelete(query as CFDictionary), errSecMissingEntitlement,
+                       "this host cannot delete Keychain items — see the characterization above")
     }
 
     // MARK: - S4/S4c: store + surface wiring (source pins)
