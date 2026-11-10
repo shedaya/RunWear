@@ -448,19 +448,51 @@ final class RWNextBuildTests: XCTestCase {
     // MARK: - RW-152 §2: the entry region is not greedy
 
     func testRW152_EntryRegionStandsAtTheRowsOwnHeight_SourcePin() throws {
-        // The expanded frame of the first gate round caught the
-        // panel's ScrollView inflating to whatever height it
-        // was offered (a bare ScrollView is greedy) — which in
-        // production would also feed the morph a false expanded
-        // endpoint. The region stands at the row's measured
-        // height, capped by the policy budget.
+        // The expanded frames of the first gate rounds caught
+        // two greed traps in the panel: a bare ScrollView
+        // inflating to the offered height, and a root
+        // `frame(maxHeight:)` making the panel height-flexible
+        // (expanding + centering its content, and feeding the
+        // morph a false endpoint). The panel is content-sized
+        // by construction: the chrome block and the row are
+        // measured (both independent of the region's frame),
+        // the region's height is COMPUTED from the policy, and
+        // a ScrollView exists only in the cap-binding branch.
         let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
         XCTAssertTrue(bar.contains("entryRowHeight = height"),
-                      "the entry region's height is the row's own measured height")
-        XCTAssertTrue(bar.contains("WearIveRunOverlayPolicy.entryRegionMaxHeight"),
-                      "the region is capped by the §2 budget")
-        XCTAssertFalse(bar.contains(".frame(maxHeight: WearIveRunOverlayPolicy.entryRegionMaxHeight"),
-                       "the greedy max-height form is retired")
+                      "the row's height is measured on the row itself")
+        XCTAssertTrue(bar.contains("chromeHeight = height"),
+                      "the chrome block's height is measured on the block itself")
+        XCTAssertTrue(bar.contains("WearIveRunOverlayPolicy.entryRegionHeight("),
+                      "the region's height is the policy's computed budget")
+        XCTAssertTrue(bar.contains("if entryRowHeight > regionBudget"),
+                      "the ScrollView exists only when the cap binds")
+        XCTAssertFalse(bar.contains(".frame(maxHeight: WearIveRunOverlayPolicy.expandedCap"),
+                       "no root max-height frame makes the panel flexible")
+    }
+
+    func testRW152_EntryRegionHeightArithmetic() {
+        // Row stands whole whenever it fits the cap.
+        XCTAssertEqual(WearIveRunOverlayPolicy.entryRegionHeight(
+            cap: 736, chromeHeight: 76, rowHeight: 56), 56, accuracy: 0.5)
+        // A wrapped row at the short cap still stands whole.
+        XCTAssertEqual(WearIveRunOverlayPolicy.entryRegionHeight(
+            cap: 551, chromeHeight: 76, rowHeight: 120), 120, accuracy: 0.5)
+        // The cap binds: budget = cap − chrome − doorway
+        // allowance, and the region scrolls at that height.
+        XCTAssertEqual(WearIveRunOverlayPolicy.entryRegionHeight(
+            cap: 274, chromeHeight: 76, rowHeight: 120), 120, accuracy: 0.5)
+        XCTAssertEqual(WearIveRunOverlayPolicy.entryRegionHeight(
+            cap: 274, chromeHeight: 160, rowHeight: 120), 56, accuracy: 0.5,
+            "extreme chrome at a landscape cap: the region floors at the thumbnail cell and scrolls")
+        // Panel total under the binding case never exceeds
+        // the cap: chrome + region + allowance == cap.
+        let chrome: CGFloat = 160
+        let region = WearIveRunOverlayPolicy.entryRegionHeight(
+            cap: 274, chromeHeight: chrome, rowHeight: 120)
+        XCTAssertLessThanOrEqual(
+            chrome + region + WearIveRunOverlayPolicy.doorwayAllowance, 274 + 56,
+            "the doorway stays inside the cap (the 56 floor can exceed it only when chrome alone nearly fills the cap)")
     }
 
     // MARK: - Render frames (ImageRenderer)

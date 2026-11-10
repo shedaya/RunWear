@@ -1574,6 +1574,24 @@ enum WearIveRunOverlayPolicy {
         max(56, expandedCap(viewportHeight: viewportHeight) - nonEntryChromeHeight)
     }
 
+    /// The fixed allowance below the chrome block: spacing
+    /// 12 (chrome → region) + spacing 12 (region → doorway) +
+    /// doorway 24 + bottom padding 20.
+    static let doorwayAllowance: CGFloat = 68
+
+    /// The entry region's standing height in the real panel,
+    /// where the chrome block (header + narration) is MEASURED:
+    /// the row's own height, unless the cap binds — then the
+    /// cap minus the measured chrome and the doorway
+    /// allowance, floored at the 56 pt thumbnail cell. This is
+    /// what makes the cap a hard bound with the doorway
+    /// always visible (§2), at any text scale.
+    static func entryRegionHeight(
+        cap: CGFloat, chromeHeight: CGFloat, rowHeight: CGFloat
+    ) -> CGFloat {
+        min(rowHeight, max(56, cap - chromeHeight - doorwayAllowance))
+    }
+
     /// The panel's intrinsic content height from its anatomy:
     /// header 44 + narration lines (20 pt at 15 pt type, scaled)
     /// + the entry row (56 pt thumbnail, or wrapped entry text
@@ -1651,6 +1669,12 @@ struct WearIveRunExpandedPanelView: View {
     /// region's standing height (before the cap). Seeded at
     /// the row's floor (the 56 pt thumbnail cell).
     @State private var entryRowHeight: CGFloat = 56
+    /// RW-152 §2: the chrome block's measured height (header +
+    /// narration at the live text scale) — the entry region's
+    /// budget is computed against it, so the cap binds
+    /// honestly at any scale. Seeded at the default-type
+    /// anatomy (44 header + 12 spacing + 20 narration).
+    @State private var chromeHeight: CGFloat = 76
     /// RW-152 §3: the entry's resolved hero URL when its
     /// reference is a storage path (re-signed by the injected
     /// resolver). Stable references render directly.
@@ -1660,6 +1684,46 @@ struct WearIveRunExpandedPanelView: View {
 
     private var shownEntry: WearIveRunEntry { displayedEntry ?? entry }
     private var shownState: WearIveRunState { displayedState ?? state }
+
+    /// RW-152 §2: the entry region's budget — the cap minus
+    /// the measured chrome and the doorway allowance, against
+    /// the row's own height (the policy's arithmetic).
+    private var regionBudget: CGFloat {
+        WearIveRunOverlayPolicy.entryRegionHeight(
+            cap: WearIveRunOverlayPolicy.expandedCap(
+                viewportHeight: viewportHeight),
+            chromeHeight: chromeHeight,
+            rowHeight: entryRowHeight)
+    }
+
+    /// The entry region: the row at its natural height, or —
+    /// only when the cap binds — the row inside a ScrollView
+    /// standing at exactly the budget. (In the binding case
+    /// the harness renderer cannot paint the scroll content;
+    /// the standing case is the portrait norm.)
+    @ViewBuilder private var entryRegion: some View {
+        if entryRowHeight > regionBudget {
+            ScrollView(.vertical, showsIndicators: false) {
+                measuredEntryRow
+            }
+            .frame(height: regionBudget)
+        } else {
+            measuredEntryRow
+        }
+    }
+
+    /// The entry row with its height capture (the height is a
+    /// property of the row's content at the panel's width —
+    /// independent of the region's frame, so the capture
+    /// cannot feed back into the thing it measures).
+    private var measuredEntryRow: some View {
+        entryRow
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { _, height in
+                if height > 0 { entryRowHeight = height }
+            }
+    }
 
     /// The thumbnail's loadable reference: a stable reference
     /// passes through the resolver synchronously; a storage
@@ -1671,42 +1735,39 @@ struct WearIveRunExpandedPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            headerRow
-            // Narration (§2.2 anatomy): 15 pt secondary, payload
-            // pine semibold — cross-fades in place via the
-            // deferral gate, exactly like the dock's (§4.3/§4.5).
-            if let line = WearIveRunNarration.line(for: shownState) {
-                // RW-138 (spec §4.3): no line cap here either —
-                // the panel narration wraps whole and the
-                // panel's height follows. Truncating the payload
-                // is never acceptable on either state.
-                panelNarrationText(line)
-                    .font(.system(size: 15))
-                    .id(line)
-                    .transition(.opacity)
+            // The chrome block (header + narration), measured:
+            // its real height at the live text scale is what
+            // the entry region's budget is computed against.
+            VStack(alignment: .leading, spacing: 12) {
+                headerRow
+                // Narration (§2.2 anatomy): 15 pt secondary, payload
+                // pine semibold — cross-fades in place via the
+                // deferral gate, exactly like the dock's (§4.3/§4.5).
+                if let line = WearIveRunNarration.line(for: shownState) {
+                    // RW-138 (spec §4.3): no line cap here either —
+                    // the panel narration wraps whole and the
+                    // panel's height follows. Truncating the payload
+                    // is never acceptable on either state.
+                    panelNarrationText(line)
+                        .font(.system(size: 15))
+                        .id(line)
+                        .transition(.opacity)
+                }
             }
-            // RW-152 §2: the entry region scrolls internally
-            // ONLY when the viewport cap binds. The ScrollView
-            // stands at the ROW's own measured height, capped
-            // at the region budget — a bare ScrollView is
-            // greedy and would inflate the panel to whatever
-            // height it is offered (and feed the morph a false
-            // endpoint); the row's height is independent of the
-            // scroll frame, so the measurement cannot loop.
-            // Header, narration, and the doorway below are
-            // always fully visible.
-            ScrollView(.vertical, showsIndicators: false) {
-                entryRow
-                    .onGeometryChange(for: CGFloat.self) { proxy in
-                        proxy.size.height
-                    } action: { _, height in
-                        if height > 0 { entryRowHeight = height }
-                    }
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { _, height in
+                if height > 0 { chromeHeight = height }
             }
-            .frame(height: min(
-                entryRowHeight,
-                WearIveRunOverlayPolicy.entryRegionMaxHeight(
-                    viewportHeight: viewportHeight)))
+            // RW-152 §2: the entry region — the panel's only
+            // flexible element. It stands at the row's own
+            // height; only when the cap binds (region budget
+            // below the row's height) does it scroll internally.
+            // A bare ScrollView here is greedy and would
+            // inflate the panel to whatever height it is
+            // offered, feeding the morph a false endpoint —
+            // the region's height is computed, never proposed.
+            entryRegion
             // §4.6: the doorway, visible in the expanded form
             // (Sol's Nov 4 requirement, W-1).
             Button(action: onOpenCollection) {
@@ -1722,8 +1783,12 @@ struct WearIveRunExpandedPanelView: View {
         .padding(.top, 20)
         .padding(.bottom, 20)
         .opacity(exitContentOpacity)
-        .frame(maxHeight: WearIveRunOverlayPolicy.expandedCap(
-            viewportHeight: viewportHeight))
+        // NO root height frame: the panel is content-sized by
+        // construction — the cap binds through the entry
+        // region's computed budget alone. (A root
+        // `frame(maxHeight:)` made the panel height-flexible:
+        // it expanded to any offered height and centered its
+        // content — caught by this lane's expanded frames.)
         .background {
             // The dock's own material, at the EXPANDED state's
             // settled opacity (BackgroundPolicy: opaque sheet
