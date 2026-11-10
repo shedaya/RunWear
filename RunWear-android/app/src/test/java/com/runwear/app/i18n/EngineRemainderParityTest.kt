@@ -31,7 +31,16 @@ class EngineRemainderParityTest {
             ?: throw AssertionError("engine $name not found from ${File("").absolutePath}")
     }
 
-    private fun unescape(v: String): String {
+    private fun unescape(raw: String): String {
+        // AAPT quote-layer: a value wrapped in double quotes keeps
+        // its significant edge whitespace; strip one quote layer
+        // before resolving backslash escapes (mirrors the runtime).
+        val v =
+            if (raw.length >= 2 && raw.first() == '"' && raw.last() == '"') {
+                raw.substring(1, raw.length - 1)
+            } else {
+                raw
+            }
         val out = StringBuilder()
         var i = 0
         while (i < v.length) {
