@@ -107,7 +107,7 @@ class MimResourceParityTest {
     @Test
     fun exhaustedCountResourceFormatsToTheFacadeValue() {
         val resource = resources().getValue("mim_hero_pill_exhausted_count")
-        assertEquals("%1$d of %1$d used", resource)
+        assertEquals("%1\$d of %1\$d used", resource)
         assertEquals(
             MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT,
             String.format(
