@@ -16,37 +16,37 @@
 // Identity mapping (verified against the client code, 2026-10-31):
 // - iOS configures Purchases with appUserID = the Supabase user id, so
 //   app_user_id IS the auth.users id.
-// - Android currently configures Purchases with NO app user id and never
-//   calls logIn, so its purchases arrive under RC's anonymous id
-//   ($RCAnonymousID:...). Such events are mapped when any of the event's
-//   aliases / original_app_user_id is a known Supabase user id (the
-//   state after a future logIn merge); otherwise they are accepted with
-//   200 and logged as unmapped so RC does not retry-storm, and the gap
-//   stays visible in personal_webhook_events. The permanent fix is one
-//   client line (Android: Purchases.logIn(supabaseUid) once its
-//   anonymous Supabase session exists) — out of this function's scope,
-//   named in the follow-up report.
-//
-// GEN-5 REVIEW NOTE (RW-28 Addendum 8, Item 4b, Nov 5, 2026): the
-// paragraph above is STALE about the client — the shipped Android
-// client does call Purchases.logIn(supabaseUid) (BillingManager
-// via PersonalHeroRepository.syncBillingIdentity, on session
-// start and on entitlement changes), so Android events are
-// mappable. The Nov 5 diagnosis found personal_webhook_events has
-// had NO entries for any user since Nov 2: this handler records
-// every authenticated event BEFORE processing, so total silence
-// means deliveries are not reaching it (or are failing its auth
-// check, which answers 401 before any insert). No code path in
-// this function produces that silence; the remaining suspects
-// are deployment-side — the RC dashboard webhook target and the
-// REVENUECAT_WEBHOOK_AUTH_KEY secret matching it — which live
-// outside this repository and are named as remaining work in the
-// gen-5 report.
+// - Android configures Purchases anonymously but links identity via
+//   Purchases.logIn(supabaseUid) as soon as its anonymous Supabase
+//   session exists (PersonalHeroRepository step 1; the merge then
+//   arrives here as a TRANSFER event — handled below). Purchases made
+//   BEFORE the link still arrive under RC's anonymous id
+//   ($RCAnonymousID:...); such events are mapped when any of the
+//   event's aliases / original_app_user_id is a known Supabase user
+//   id; otherwise they are accepted with 200 and logged as unmapped
+//   so RC does not retry-storm, and the gap stays visible in
+//   personal_webhook_events. (This paragraph corrects the RW-14-era
+//   note that Android never called logIn — stale since the identity
+//   link landed; corrected RW-16.30, 2026-11-02.)
 //
 // Event mapping (entitlement make_it_me; products rw_makeitme_monthly /
 // rw_makeitme_annual on both stores, Play ids carry the :monthly /
 // :annual base-plan suffix in RC):
 //   INITIAL_PURCHASE, RENEWAL, PRODUCT_CHANGE, UNCANCELLATION -> grant
+//   TRANSFER (RW-16.30) -> grant to the transferred_to user (identity
+//                          merge after the client's Purchases.logIn)
+//   TRANSFER (RW-137)   -> ALSO the P1 adoption proof: each UUID-shaped
+//                          transferred_from source is adopted into the
+//                          destination via adopt_personal_identity
+//                          (DESIGN §4.2/§4.4.1 of the RW-137 design of
+//                          record). The pair is recorded in
+//                          personal_identity_adoptions by the RPC
+//                          itself; storage copies run between the
+//                          RPC's two phases; the source's objects are
+//                          deleted only after the row merge commits.
+//                          Adoption never fails the webhook: any error
+//                          leaves the adoption row resumable and is
+//                          reported in the response's `adoption` field.
 //   EXPIRATION                                                -> clear
 //   CANCELLATION  -> no-op (access runs to expiration; EXPIRATION clears)
 //   BILLING_ISSUE -> no-op (RC keeps the entitlement during grace)
@@ -83,7 +83,7 @@ const ATTACHED_PRODUCTS = new Set([
   'rw_makeitme_monthly:monthly',
   'rw_makeitme_annual:annual',
 ])
-const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION'])
+const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'TRANSFER'])
 const CLEAR_TYPES = new Set(['EXPIRATION'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -105,6 +105,71 @@ function concernsEntitlement(event: Record<string, unknown>): boolean {
   if (Array.isArray(ids)) return ids.includes(ENTITLEMENT_ID)
   if (typeof event.entitlement_id === 'string') return event.entitlement_id === ENTITLEMENT_ID
   return typeof event.product_id === 'string' && ATTACHED_PRODUCTS.has(event.product_id)
+}
+
+// ---------------------------------------------------------------------
+// RW-137 adoption orchestrator (shared shape with
+// request-identity-adoption; edge functions here are single-file, so
+// the loop is duplicated deliberately rather than imported).
+// Runs adopt_personal_identity's two phases: the RPC returns a storage
+// copy plan first (state 'started'); the copies happen here, outside
+// the DB transaction (DESIGN §4.2.3); a second RPC call completes the
+// row merge; only then are the source's objects deleted. Any failure
+// leaves the adoption resumable and is reported, never thrown.
+// ---------------------------------------------------------------------
+// deno-lint-ignore no-explicit-any
+async function runIdentityAdoption(admin: any, source: string, destination: string,
+    proof: Record<string, unknown>): Promise<Record<string, unknown>> {
+  try {
+    const call = async () => {
+      const { data, error } = await admin.rpc('adopt_personal_identity', {
+        p_source: source, p_destination: destination, p_proof: proof,
+      })
+      if (error) throw new Error(error.message)
+      return data as Record<string, unknown>
+    }
+    let result = await call()
+    if (result.state === 'started' && Array.isArray(result.copies)) {
+      for (const c of result.copies as { from: string; to: string }[]) {
+        const { error } = await admin.storage.from('personal-heroes').copy(c.from, c.to)
+        if (error) {
+          // A copy that failed because the destination object already
+          // exists (an earlier partial run) is complete, not failed.
+          const dir = c.to.slice(0, c.to.lastIndexOf('/'))
+          const name = c.to.slice(c.to.lastIndexOf('/') + 1)
+          const { data: listing } = await admin.storage.from('personal-heroes').list(dir)
+          const present = (listing ?? []).some((o: { name: string }) => o.name === name)
+          if (!present) {
+            return { ok: false, reason: 'storage_copy_failed', detail: error.message, from: c.from }
+          }
+        }
+      }
+      result = await call()
+    }
+    if (result.state === 'done' && Array.isArray(result.source_cleanup_paths)) {
+      const paths = result.source_cleanup_paths as string[]
+      for (let i = 0; i < paths.length; i += 100) {
+        await admin.storage.from('personal-heroes').remove(paths.slice(i, i + 100))
+      }
+      // Aftermath (DESIGN §4.2.5): kick the fill for the destination;
+      // coverage is computed from the merged bank, so only genuinely
+      // missing cells generate. Best-effort, like the grant kick.
+      try {
+        await fetch(`${SUPABASE_URL}/functions/v1/start-personal-fill`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          },
+          body: JSON.stringify({ user_id: destination }),
+        })
+      } catch { /* the client's own kick is the trigger of record */ }
+    }
+    return result
+  } catch (e) {
+    return { ok: false, reason: 'adoption_error', detail: String(e) }
+  }
 }
 
 serve(async (req: Request) => {
@@ -157,8 +222,17 @@ serve(async (req: Request) => {
   }
 
   // Identity mapping: first candidate id that is a real Supabase user.
+  // RW-16.30: a TRANSFER event (the entitlement moved — the shape a
+  // RevenueCat identity merge takes after the client calls logIn)
+  // names its destination in transferred_to; those ids lead the
+  // candidate order so the grant lands on the receiving user, never
+  // the anonymous source.
   const candidates: string[] = []
-  for (const raw of [event.app_user_id, event.original_app_user_id, ...(Array.isArray(event.aliases) ? event.aliases : [])]) {
+  const rawCandidates: unknown[] = type === 'TRANSFER' && Array.isArray(event.transferred_to)
+    ? [...(event.transferred_to as unknown[]), event.app_user_id, event.original_app_user_id,
+       ...(Array.isArray(event.aliases) ? event.aliases : [])]
+    : [event.app_user_id, event.original_app_user_id, ...(Array.isArray(event.aliases) ? event.aliases : [])]
+  for (const raw of rawCandidates) {
     if (typeof raw === 'string' && UUID_RE.test(raw) && !candidates.includes(raw)) candidates.push(raw)
   }
   let userId: string | null = null
@@ -179,9 +253,36 @@ serve(async (req: Request) => {
     .maybeSingle()
   const current = profile?.entitled === true
 
+  // RW-137: on a TRANSFER, the entitlement outcome above stands as
+  // before; adoption of each transferred_from source into this
+  // destination runs on top of it (P1 proof, DESIGN §4.4.1). Pairs are
+  // UUID-shaped, deduplicated, and never the destination itself; the
+  // RPC re-checks existence, entitlement, prior adoption and the
+  // deletion tombstone inside its own transaction.
+  const adoptTransferredPairs = async (): Promise<unknown> => {
+    if (type !== 'TRANSFER') return undefined
+    const sources: string[] = []
+    for (const raw of (Array.isArray(event.transferred_from) ? event.transferred_from : [])) {
+      if (typeof raw === 'string' && UUID_RE.test(raw) && raw !== userId && !sources.includes(raw)) {
+        sources.push(raw)
+      }
+    }
+    const outcomes: Record<string, unknown>[] = []
+    for (const source of sources) {
+      outcomes.push({
+        source,
+        ...(await runIdentityAdoption(admin, source, userId, {
+          type: 'transfer_event', rc_event_id: eventId,
+        })),
+      })
+    }
+    return outcomes
+  }
+
   if (current === target) {
     await record(userId, false, target ? 'already_entitled' : 'already_not_entitled')
-    return jsonResponse({ ok: true, applied: false, reason: 'state_unchanged', user_id: userId, entitled: current })
+    const adoption = await adoptTransferredPairs()
+    return jsonResponse({ ok: true, applied: false, reason: 'state_unchanged', user_id: userId, entitled: current, ...(adoption !== undefined ? { adoption } : {}) })
   }
 
   const { error: setError } = await admin.rpc('set_personal_entitlement', {
@@ -195,11 +296,6 @@ serve(async (req: Request) => {
 
   let fill: unknown = null
   if (target) {
-    // GEN-5 (RW-28 Addendum 8, Defect 1): as in the reconciliation
-    // kick, this call names no forecast cells and enqueues
-    // nothing under the deployed convergence contract — the
-    // client's own priority_cells call is the fill trigger of
-    // record. Kept, harmless, for the repo contract.
     try {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/start-personal-fill`, {
         method: 'POST',
@@ -216,5 +312,6 @@ serve(async (req: Request) => {
     }
   }
 
-  return jsonResponse({ ok: true, applied: true, user_id: userId, entitled: target, fill })
+  const adoption = await adoptTransferredPairs()
+  return jsonResponse({ ok: true, applied: true, user_id: userId, entitled: target, fill, ...(adoption !== undefined ? { adoption } : {}) })
 })
