@@ -174,10 +174,9 @@ class Rw152CollectionRenderTest {
             WearIveRunCollectionScreen(
                 entries = fixtureEntries(),
                 today = today,
-                onBack = {},
+                onDismiss = {},
                 onDeleteEntry = {},
-                onDeletePlace = {},
-                onShareEntry = {}
+                onDeletePlace = {}
             )
         }
         stage.capture("rw152-collection-thumbnails.png")
@@ -209,10 +208,9 @@ class Rw152CollectionRenderTest {
             WearIveRunCollectionScreen(
                 entries = fixtureEntries(),
                 today = today,
-                onBack = {},
+                onDismiss = {},
                 onDeleteEntry = {},
-                onDeletePlace = {},
-                onShareEntry = {}
+                onDeletePlace = {}
             )
         }
         stage.clickDescription(

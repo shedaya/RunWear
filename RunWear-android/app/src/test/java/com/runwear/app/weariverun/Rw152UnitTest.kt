@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.runwear.app.ui.screens.WirOverlayPanelPolicy
 import java.time.LocalDate
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -109,7 +110,7 @@ class Rw152UnitTest {
                 settledAtMillis = 42L
             )
             store.recordSettled(entry)
-            val read = store.entries().single {
+            val read = store.entriesFlow.first().single {
                 it.sessionId == "rw152-roundtrip"
             }
             assertEquals(path, read.heroDurableRef)
