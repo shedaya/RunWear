@@ -315,6 +315,40 @@ final class RW137IdentityTests: XCTestCase {
         XCTAssertTrue(keychainItemExists(), "a failed deletion discards nothing")
     }
 
+    // MARK: - Environment probe (temporary diagnostic, RW-137)
+
+    /// CI run 278: the closure tests' direct SecItem query found
+    /// no item after a (mock-)successful ensureSession, while
+    /// every service-level assertion passed — either the CI test
+    /// host cannot write the Keychain at all (SecItemAdd's result
+    /// is ignored by KeychainStore.save, by design), or the
+    /// store's save is broken. This probe performs the raw
+    /// round-trip with the service's own coordinates and reports
+    /// every OSStatus, so the next run names which.
+    func testRW137_KeychainRoundTrip_EnvironmentProbe() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: SupabaseAuthService.keychainService,
+            kSecAttrAccount as String: "rw137-probe"
+        ]
+        SecItemDelete(query as CFDictionary)
+        var attributes = query
+        attributes[kSecValueData as String] = Data("probe".utf8)
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let addStatus = SecItemAdd(attributes as CFDictionary, nil)
+        XCTAssertEqual(addStatus, errSecSuccess,
+                       "raw SecItemAdd status in this host (errSecMissingEntitlement = -34018)")
+        var read = query
+        read[kSecReturnData as String] = true
+        read[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let copyStatus = SecItemCopyMatching(read as CFDictionary, &item)
+        XCTAssertEqual(copyStatus, errSecSuccess, "raw SecItemCopyMatching status in this host")
+        XCTAssertEqual(item as? Data, Data("probe".utf8))
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        XCTAssertEqual(deleteStatus, errSecSuccess, "raw SecItemDelete status in this host")
+    }
+
     // MARK: - S4/S4c: store + surface wiring (source pins)
 
     func testRW137_StoreSyncPointsRunTheAdoptionHook_SourcePin() throws {

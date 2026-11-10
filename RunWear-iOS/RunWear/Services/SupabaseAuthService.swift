@@ -6,9 +6,9 @@ import Security
 // RunWear has no accounts and no login; the app's Supabase
 // identity is an ANONYMOUS Auth user (auth.users row), created
 // on first use and persisted in the Keychain across launches.
-// RW-137 posture (DESIGN §6): the identity is keyed to the
-// install for free users; keyed to the subscription for
-// Premium — a restored subscription's personal layer is
+// RW-137 posture (DESIGN §6): the identity is
+// keyed to the install for free users; keyed to the subscription for Premium
+// — a restored subscription's personal layer is
 // re-keyed server-side onto the current install's uid on
 // RevenueCat proof (DESIGN §4.4), so durability follows the
 // subscription automatically, never a toggle. The RW-14 backend
