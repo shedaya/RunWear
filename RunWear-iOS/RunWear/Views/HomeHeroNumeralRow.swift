@@ -67,7 +67,7 @@ struct HomeHeroNumeralRow: View {
                     Circle()
                         .fill(AppTheme.temperatureColor(for: bracket))
                         .frame(width: 8, height: 8)
-                    Text(bracket.displayRange)
+                    Text(bracket.rawValue)
                         .font(.appEyebrow)
                         .foregroundColor(AppTheme.inkPrimary)
                 }
