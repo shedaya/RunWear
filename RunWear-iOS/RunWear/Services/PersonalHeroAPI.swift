@@ -380,8 +380,8 @@ enum HeroRefRuntime {
         if let hit = signedCache[path], hit.expiresAt > Date() {
             return hit.url
         }
-        guard let url = try? await PersonalHeroAPI.shared.signedReferenceURL(path: path),
-              let signed = url else { return nil }
+        guard let signed = try? await PersonalHeroAPI.shared.signedReferenceURL(path: path)
+        else { return nil }
         signedCache[path] = (signed.absoluteString, Date().addingTimeInterval(50 * 60))
         return signed.absoluteString
     }
