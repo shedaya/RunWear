@@ -1970,21 +1970,42 @@ struct WearIveRunOverlayView: View {
     /// The panel stays mounted for the whole morph (and while
     /// expanded); it unmounts only when a collapse completes.
     @State private var panelMounted = false
-    /// The two states' measured content heights — the morph's
-    /// interpolation inputs (WearIveRunMorph.height's contract:
-    /// measured, never hardcoded in the view).
-    @State private var miniHeight: Double = Double(DockResidence.measuredDockHeight)
+    /// The surface's REST height, captured by the CONTAINER
+    /// while the panel is unmounted (at rest the container IS
+    /// the mini dock, intrinsically sized — no frame is ever
+    /// applied). It seeds the morph's mini endpoint and the
+    /// exit fold. The capture lives on the container, is
+    /// guarded to the pure rest state (panel unmounted, no
+    /// exit folding — so a morph or fold in flight cannot feed
+    /// it), and is only read once a morph or exit is already
+    /// running. RW-86 discipline, kept in the new shape: the
+    /// mini bar is never SIZED by any measurement (its own
+    /// dockHeight capture serves only its entrance rise) — the
+    /// blank-bar mechanism was a measured height driving the
+    /// bar's own frame, and no frame here is driven by the
+    /// height of the thing it frames at rest.
+    /// Seeded with the settled single-line dock height.
+    @State private var restHeight: Double = Double(DockResidence.measuredDockHeight)
+    /// The panel's measured content height (RW-152 §2's gate:
+    /// rendered panel height == measured content height) — the
+    /// morph's expanded endpoint.
     @State private var panelHeight: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The container's height: the morph interpolation, folded
-    /// by the exit progress while an exit runs.
+    /// The container's height WHILE a morph or exit is running:
+    /// the morph interpolation, folded by the exit progress. At
+    /// rest (panel unmounted, no exit) no height is applied at
+    /// all — the surface stands at its intrinsic mini height.
     private var containerHeight: Double {
-        let expanded = panelHeight > 0 ? panelHeight : miniHeight
+        let expanded = panelHeight > 0 ? panelHeight : restHeight
         let base = WearIveRunMorph.height(
-            mini: miniHeight, expanded: expanded, progress: expansionProgress)
+            mini: restHeight, expanded: expanded, progress: expansionProgress)
         return exitProgress > 0 ? base * (1 - exitProgress) : base
     }
+
+    /// Whether an explicit height governs the surface right
+    /// now (a morph is mounted, or an exit is folding).
+    private var heightIsDriven: Bool { panelMounted || exitProgress > 0 }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -2004,11 +2025,6 @@ struct WearIveRunOverlayView: View {
             .opacity(1 - expansionProgress)
             .allowsHitTesting(expansionProgress == 0 && exitProgress == 0)
             .accessibilityHidden(expansionProgress > 0)
-            .onGeometryChange(for: Double.self) { proxy in
-                proxy.size.height
-            } action: { _, height in
-                if height > 0 { miniHeight = height }
-            }
 
             if panelMounted {
                 WearIveRunExpandedPanelView(
@@ -2036,8 +2052,21 @@ struct WearIveRunOverlayView: View {
                 }
             }
         }
-        .frame(height: containerHeight)
+        .frame(height: heightIsDriven ? containerHeight : nil)
         .clippedIfMorphing(expansionProgress > 0 || exitProgress > 0)
+        .onGeometryChange(for: Double.self) { proxy in
+            proxy.size.height
+        } action: { _, height in
+            // Rest capture ONLY: while the panel is unmounted
+            // and no exit is folding, the container's size is
+            // the mini dock's intrinsic height. Once a morph
+            // mounts the panel (or an exit starts folding) the
+            // explicit height governs and the capture must not
+            // chase it.
+            if !panelMounted, exitProgress == 0, height > 0 {
+                restHeight = height
+            }
+        }
     }
 
     /// Summon the expanded state: the tap driver spring runs

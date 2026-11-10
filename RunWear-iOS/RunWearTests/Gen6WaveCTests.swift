@@ -1117,6 +1117,27 @@ final class Gen6FixWaveTests: XCTestCase {
                        "the measured mini endpoint (the blank-bar mechanism) is gone")
         XCTAssertFalse(bar.contains("morphContent(showsExpandedBlock: false"),
                        "no phantom mini measurer copy exists")
+        // RW-152 §1 ADDITION (Nov 10, 2026 — new pins, the
+        // RW-86 assertions above stand verbatim): the overlay
+        // morph's mini endpoint is the surface's REST height,
+        // captured on the CONTAINER and confined to the pure
+        // rest state, and no height is applied to the surface
+        // at rest. Inside the bar, the one pre-existing
+        // measurement (dockHeight) serves only the entrance's
+        // rise distance — it never sizes the bar (RW-86's
+        // actual discipline). The panel endpoint is the
+        // panel's measured content height (RW-152 §2's gate),
+        // which RW-86 never governed.
+        let barStart = try XCTUnwrap(bar.range(of: "struct WearIveRunMiniBarView"))
+        let barEnd = try XCTUnwrap(bar.range(
+            of: "struct WearIveRunExpandedPanelView", range: barStart.upperBound..<bar.endIndex))
+        let barBody = bar[barStart.lowerBound..<barEnd.lowerBound]
+        XCTAssertFalse(barBody.contains("height: dockHeight"),
+                       "RW-86: the bar's one measurement never sizes the bar itself")
+        XCTAssertTrue(bar.contains("if !panelMounted, exitProgress == 0, height > 0"),
+                      "RW-152 §1: the rest capture is confined to the pure rest state")
+        XCTAssertTrue(bar.contains("heightIsDriven ? containerHeight : nil"),
+                      "RW-152 §1: at rest the surface carries no explicit height")
         // RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
         // RW-135 §2.2/§3 re-pin that stood here): the footer
         // section is REMOVED from the layout entirely — the

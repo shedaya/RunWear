@@ -27,12 +27,21 @@ import UIKit
 ///   primary ink (contrast fix).
 ///
 /// Render half: production components from the dual-target
-/// residence (WearIveRunMiniBar.swift), hosted renders written
-/// into `render-artefacts/`. The collection list and the
-/// convergence band live in app-only files and cannot be
-/// rendered from this target — their behaviour is pinned at
-/// the model layer here and in the re-pinned suites; the lane
-/// report carries them as UNPROVEN frames, not silent passes.
+/// residence (WearIveRunMiniBar.swift), rendered with the
+/// tree's ImageRenderer route into `render-artefacts/`. (The
+/// hosted UIWindow capture route renders blank frames in this
+/// CI environment — the standing hosted-capture baseline
+/// failure set fails the same way — so it is not evidentiary
+/// here.) The collection list and the convergence band live
+/// in app-only files and cannot be rendered from this
+/// target — their behaviour is pinned at the model layer here
+/// and in the re-pinned suites; the lane report carries them
+/// as UNPROVEN frames, not silent passes. The panel's
+/// resolver-loaded thumbnail is likewise not frame-provable:
+/// AsyncImage cannot resolve inside the synchronous
+/// renderer, so the resolver is proven at the model layer
+/// (classification, persistence, legacy recovery) and the
+/// frames carry the panel's composition.
 final class RWNextBuildTests: XCTestCase {
 
     private func sourceFile(_ relativePath: String) throws -> String {
@@ -436,7 +445,7 @@ final class RWNextBuildTests: XCTestCase {
                        "the low-contrast pine treatment is retired on this control")
     }
 
-    // MARK: - Render frames (hosted)
+    // MARK: - Render frames (ImageRenderer)
 
     private func artefactsDirectory() -> URL {
         URL(fileURLWithPath: #filePath)
@@ -458,37 +467,20 @@ final class RWNextBuildTests: XCTestCase {
         return Set(bytes).count > 2
     }
 
-    @MainActor
-    private func writeHostedRender<Content: View>(
-        _ content: Content, size: CGSize, name: String, pumpSeconds: Double = 1.2
+    private func writeRender<Content: View>(
+        _ content: Content, size: CGSize, name: String
     ) throws {
-        let host = UIHostingController(rootView: content)
-        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        host.view.frame = CGRect(origin: .zero, size: size)
-        host.view.setNeedsLayout()
-        host.view.layoutIfNeeded()
-        let deadline = Date().addingTimeInterval(pumpSeconds)
-        while Date() < deadline {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        }
-        host.view.setNeedsLayout()
-        host.view.layoutIfNeeded()
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 2
-        let image = UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            host.view.drawHierarchy(
-                in: CGRect(origin: .zero, size: size), afterScreenUpdates: true)
-        }
-        XCTAssertTrue(imageHasContent(image), "\(name) rendered blank (hosted)")
+        let renderer = ImageRenderer(
+            content: content.frame(width: size.width, height: size.height))
+        renderer.scale = 3
+        let image = try XCTUnwrap(renderer.uiImage, "render failed for \(name)")
+        XCTAssertTrue(imageHasContent(image), "\(name) rendered blank")
         let dir = artefactsDirectory()
         try FileManager.default.createDirectory(
             at: dir, withIntermediateDirectories: true)
         let data = try XCTUnwrap(image.pngData(), "PNG encoding failed for \(name)")
         try data.write(to: dir.appendingPathComponent(name))
-        print("RW-NEXT wrote \(name) (hosted)")
-        window.isHidden = true
+        print("RW-NEXT wrote \(name)")
     }
 
     private func frameEntry(hero: String) -> WearIveRunEntry {
@@ -505,7 +497,6 @@ final class RWNextBuildTests: XCTestCase {
     /// The overlay at REST (mini state) — and, by construction,
     /// the DISMISSED state: dismissal returns the surface to
     /// exactly this composition and the page never moved.
-    @MainActor
     func testRW152Frame_OverlayRest_StandardAndShort() throws {
         for (size, suffix) in [(CGSize(width: 393, height: 852), "standard"),
                                (CGSize(width: 375, height: 667), "short")] {
@@ -526,8 +517,7 @@ final class RWNextBuildTests: XCTestCase {
                         .padding(.bottom, DockResidence.bottomInset)
                 }
             }
-            .frame(width: size.width, height: size.height)
-            try writeHostedRender(
+            try writeRender(
                 composed, size: size,
                 name: "RW152-ios-overlay-rest-\(suffix).png")
         }
@@ -535,7 +525,6 @@ final class RWNextBuildTests: XCTestCase {
 
     /// The EXPANDED panel state (the morph's target state),
     /// standard + short portrait viewports.
-    @MainActor
     func testRW152Frame_ExpandedPanel_StandardAndShort() throws {
         for (viewport, suffix) in [(852.0, "standard"), (667.0, "short")] {
             let entry = frameEntry(hero: "")
@@ -555,44 +544,9 @@ final class RWNextBuildTests: XCTestCase {
                     Spacer()
                 }
             }
-            .frame(width: size.width, height: size.height)
-            try writeHostedRender(
+            try writeRender(
                 composed, size: size,
                 name: "RW152-ios-overlay-expanded-\(suffix).png")
         }
-    }
-
-    /// The expanded panel with a RESOLVER-LOADED thumbnail: the
-    /// entry's reference is the bundled pool photo's file URL
-    /// (a stable reference — the resolver passes it through),
-    /// and the thumbnail paints the real photograph.
-    @MainActor
-    func testRW152Frame_ExpandedPanel_ResolverThumbnail() throws {
-        let photoURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("../RunWear/hero_fallback/mild_clear_male.webp")
-            .standardizedFileURL
-        let entry = frameEntry(hero: photoURL.absoluteString)
-        let panel = WearIveRunExpandedPanelView(
-            state: frameState(for: entry),
-            entry: entry,
-            formattedFeelsLike: "71°",
-            viewportHeight: 852,
-            onOpenCollection: {}, onCollapse: {}, onTrash: {})
-        let size = CGSize(width: 393, height: 380)
-        let composed = ZStack {
-            AppTheme.background
-            VStack {
-                panel
-                    .padding(.horizontal, DockResidence.horizontalInset)
-                    .padding(.top, 24)
-                Spacer()
-            }
-        }
-        .frame(width: size.width, height: size.height)
-        try writeHostedRender(
-            composed, size: size,
-            name: "RW152-ios-overlay-expanded-thumbnail.png",
-            pumpSeconds: 2.0)
     }
 }
