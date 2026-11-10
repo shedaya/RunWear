@@ -34,6 +34,16 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+// LEGACY looper mode, per the repo's established Dialog-window
+// pattern (CollectionBackScenarioTest): under PAUSED mode the
+// Dialog window's posted frame callbacks — the ones that
+// recompose after a click inside the collection Dialog — do
+// not reliably run in the full suite (the scenario passed
+// standalone in run 305 and raced in-suite in runs 307-312);
+// LEGACY executes posted work as it is posted, as a device does.
+@org.robolectric.annotation.LooperMode(
+    org.robolectric.annotation.LooperMode.Mode.LEGACY
+)
 @Config(application = Application::class, sdk = [35], qualifiers = "w390dp-h844dp-xhdpi")
 class Rw152CollectionRenderTest {
 
@@ -302,28 +312,15 @@ class Rw152CollectionRenderTest {
             "RW152-DIAG windows after click: " +
                 stage.windowViews().map { it.javaClass.simpleName }
         )
-        // The confirmation lives in its own Dialog window — find
-        // the window root carrying its title. The window can take
-        // several pumps to attach under a loaded runner, so the
-        // search retries across bounded settle rounds (the
-        // dialog's existence is the assertion, not its timing).
-        var dialogView: View? = null
-        repeat(8) {
-            if (dialogView == null) {
-                stage.settle(10)
-                stage.settleWindows()
-                dialogView = stage.windowViews().firstOrNull { v ->
-                    containsComposeRoot(v) &&
-                        stage.texts(stage.mergedRoot(v))
-                            .any { it.contains("Delete this entry?") }
-                }
-            }
-        }
-        dialogView ?: throw AssertionError(
-            "confirmation dialog window not found; windows=" +
-                stage.windowViews().size + " texts=" +
-                stage.composeRoots().flatMap { stage.texts(it) }
-        )
+        // The confirmation lives in its own Dialog window —
+        // ShadowDialog's latest dialog IS the alert (the
+        // collection Dialog was the previous one).
+        stage.settle()
+        val alertDialog = org.robolectric.shadows.ShadowDialog
+            .getLatestDialog()
+            ?: throw AssertionError("confirmation dialog not shown")
+        val dialogView = alertDialog.window?.decorView
+            ?: throw AssertionError("confirmation dialog has no window")
         val dRoot = stage.mergedRoot(dialogView)
         val dTexts = stage.texts(dRoot)
         println("RW152-DIALOG texts: $dTexts")
