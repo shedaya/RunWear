@@ -355,7 +355,6 @@ class Rw152CollectionRenderTest {
             ?: throw AssertionError("confirmation dialog not shown")
         val dRoot = dialogRoot(alert)
         val dTexts = stage.texts(dRoot)
-        println("RW152-DIALOG texts: $dTexts")
         assertTrue("dialog title", dTexts.any { it.contains("Delete this entry?") })
         assertTrue(
             "dialog names place and date",
