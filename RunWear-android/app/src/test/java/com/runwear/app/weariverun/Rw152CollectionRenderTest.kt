@@ -31,6 +31,13 @@ import org.robolectric.shadows.ShadowWindowManagerImpl
  * collection: thumbnails on the shipped cards (chapter covers,
  * TODAY pin), the cover trash bound to the representative entry
  * (J2), and the J1 past-entry confirmation naming place + date.
+ *
+ * The J1 confirmation scenario moved to its own class
+ * (Rw152DeleteConfirmationRenderTest) at gate closure: as this
+ * class's second activity instance in a reused sandbox its
+ * composition frame work intermittently never landed (gate
+ * runs 307/317/318) — one scenario per class is the repo's
+ * harness rule. This class keeps the thumbnails scenario.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -269,143 +276,6 @@ class Rw152CollectionRenderTest {
         )
         stage.controller.pause().stop().destroy()
     }
-
-    @Test
-    fun `tapping a past chapter cover's trash asks first - naming place and date`() {
-        val stage = stage {
-            WearIveRunCollectionScreen(
-                entries = fixtureEntries(),
-                today = today,
-                onDismiss = {},
-                onDeleteEntry = {},
-                onDeletePlace = {}
-            )
-        }
-        stage.settle()
-        // The repo's Dialog-window scenario pattern
-        // (CollectionBackScenarioTest): drive the collection
-        // through its own Dialog handle, and treat semantics
-        // publishing as a bounded frame-timing wait.
-        var collectionDialog: android.app.Dialog? = null
-        repeat(30) {
-            if (collectionDialog == null) {
-                stage.settle(5)
-                collectionDialog = org.robolectric.shadows.ShadowDialog
-                    .getLatestDialog()
-            }
-        }
-        val collection = collectionDialog
-            ?: throw AssertionError("collection dialog not shown")
-        assertTrue(collection.isShowing)
-
-        fun dialogRoot(dialog: android.app.Dialog): SemanticsNode {
-            val decor = dialog.window!!.decorView
-            val candidates = mutableListOf<SemanticsNode>()
-            fun collect(v: android.view.View) {
-                if (v is androidx.compose.ui.platform.ViewRootForTest) {
-                    candidates += v.semanticsOwner.rootSemanticsNode
-                }
-                if (v is android.view.ViewGroup) {
-                    for (i in 0 until v.childCount) collect(v.getChildAt(i))
-                }
-            }
-            collect(decor)
-            return candidates.lastOrNull()
-                ?: throw AssertionError("no compose root in dialog window")
-        }
-
-        fun findTrashNode(): SemanticsNode? =
-            stage.nodes(dialogRoot(collection)).firstOrNull {
-                it.config.contains(SemanticsProperties.ContentDescription) &&
-                    it.config[SemanticsProperties.ContentDescription]
-                        .any { d -> d == "Delete the Miami, FL cover entry" }
-            }
-
-        var trashNode: SemanticsNode? = null
-        repeat(30) {
-            if (trashNode == null) {
-                trashNode = runCatching { findTrashNode() }.getOrNull()
-                if (trashNode == null) stage.settle(5)
-            }
-        }
-        val descNode = trashNode
-            ?: throw AssertionError("cover trash description node not found")
-        // The description sits on the button's icon node in the
-        // unmerged tree; the OnClick lives on the button — climb
-        // to the nearest clickable ancestor.
-        var climber: SemanticsNode? = descNode
-        var clickAction: (() -> Boolean)? = null
-        while (climber != null && clickAction == null) {
-            if (climber.config.contains(SemanticsActions.OnClick)) {
-                clickAction = climber.config[SemanticsActions.OnClick].action
-            }
-            climber = climber.parent
-        }
-        val action = clickAction
-            ?: throw AssertionError("no clickable ancestor for the cover trash")
-        assertTrue("cover trash click must be accepted", action.invoke())
-
-        // Await the confirmation as a NEW latest dialog (bounded
-        // frame-timing wait, same pattern).
-        var alertDialog: android.app.Dialog? = null
-        repeat(30) {
-            if (alertDialog == null) {
-                stage.settle(5)
-                val latest = org.robolectric.shadows.ShadowDialog
-                    .getLatestDialog()
-                if (latest != null && latest !== collection) {
-                    alertDialog = latest
-                }
-            }
-        }
-        val alert = alertDialog
-            ?: throw AssertionError("confirmation dialog not shown")
-        val dRoot = dialogRoot(alert)
-        val dTexts = stage.texts(dRoot)
-        assertTrue("dialog title", dTexts.any { it.contains("Delete this entry?") })
-        assertTrue(
-            "dialog names place and date",
-            dTexts.any {
-                it.contains("Miami, FL") && it.contains("Mon, Nov 2, 2026")
-            }
-        )
-        assertTrue(
-            "dialog states on-device-only + irreversible plainly",
-            dTexts.any {
-                it.contains("stored only on this device") &&
-                    it.contains("cannot be undone")
-            }
-        )
-        assertTrue("Keep action", dTexts.any { it == "Keep" })
-        assertTrue("Delete action", dTexts.any { it == "Delete" })
-
-        val decor = alert.window!!.decorView
-        if (decor.width == 0 || decor.height == 0) {
-            val dm = decor.resources.displayMetrics
-            val wSpec = android.view.View.MeasureSpec.makeMeasureSpec(
-                dm.widthPixels, android.view.View.MeasureSpec.AT_MOST
-            )
-            val hSpec = android.view.View.MeasureSpec.makeMeasureSpec(
-                dm.heightPixels, android.view.View.MeasureSpec.AT_MOST
-            )
-            decor.measure(wSpec, hSpec)
-            decor.layout(0, 0, decor.measuredWidth, decor.measuredHeight)
-        }
-        val bitmap = Bitmap.createBitmap(
-            decor.width.coerceAtLeast(1), decor.height.coerceAtLeast(1),
-            Bitmap.Config.ARGB_8888
-        )
-        decor.draw(android.graphics.Canvas(bitmap))
-        val out = java.io.File(
-            "build/render-out-rw152/rw152-delete-confirmation.png"
-        )
-        out.parentFile?.mkdirs()
-        java.io.FileOutputStream(out).use {
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
-        }
-        stage.controller.pause().stop().destroy()
-    }
-
 
     private fun containsComposeRoot(view: View): Boolean {
         if (view is androidx.compose.ui.platform.ViewRootForTest) return true
