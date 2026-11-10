@@ -8,6 +8,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -1562,7 +1566,8 @@ fun HeroMainScreen(
                             // its foot. Dismissal: chevron, Back
                             // (BackHandler above), or a glide-up
                             // on the panel.
-                            androidx.compose.animation.AnimatedContent(
+                            val wirViewportMaxHeight = maxHeight
+                            AnimatedContent(
                                 targetState = wirExpanded,
                                 transitionSpec = {
                                     (fadeIn(
@@ -1576,9 +1581,10 @@ fun HeroMainScreen(
                                             easing = WearIveRunDockPolicy.MORPH_EASING
                                         )
                                     )) using
-                                        androidx.compose.animation.SizeTransform(
+                                        SizeTransform(
                                             clip = false
-                                        ) { _, _ ->
+                                        ) { _: androidx.compose.ui.unit.IntSize,
+                                            _: androidx.compose.ui.unit.IntSize ->
                                             tween(
                                                 380,
                                                 easing = WearIveRunDockPolicy.MORPH_EASING
@@ -1597,7 +1603,7 @@ fun HeroMainScreen(
                                             .heightIn(
                                                 max = WirOverlayPanelPolicy
                                                     .maxPanelHeightDp(
-                                                        maxHeight.value
+                                                        wirViewportMaxHeight.value
                                                     ).dp
                                             )
                                             .verticalScroll(
@@ -1605,9 +1611,7 @@ fun HeroMainScreen(
                                                     .rememberScrollState()
                                             )
                                             .pointerInput(Unit) {
-                                                androidx.compose.foundation
-                                                    .gestures
-                                                    .detectVerticalDragGestures(
+                                                detectVerticalDragGestures(
                                                         onDragStart = {
                                                             glideUpPx = 0f
                                                         },
