@@ -9,6 +9,12 @@
             "state": "translated",
             "value": "I tend to get cold"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suelo pasar frío"
+          }
         }
       }
     },
@@ -19,6 +25,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slightly Cold"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algo friolero"
           }
         }
       }
@@ -31,6 +43,12 @@
             "state": "translated",
             "value": "Neither"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ni frío ni calor"
+          }
         }
       }
     },
@@ -38,6 +56,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neutral"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Neutral"
@@ -53,6 +77,12 @@
             "state": "translated",
             "value": "I get cold very easily"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paso frío muy fácilmente"
+          }
         }
       }
     },
@@ -63,6 +93,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Run Cold"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muy friolero"
           }
         }
       }
@@ -75,6 +111,12 @@
             "state": "translated",
             "value": "I overheat very easily"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paso calor muy fácilmente"
+          }
         }
       }
     },
@@ -85,6 +127,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Run Hot"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muy caluroso"
           }
         }
       }
@@ -97,6 +145,12 @@
             "state": "translated",
             "value": "I tend to overheat"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suelo pasar calor"
+          }
         }
       }
     },
@@ -107,6 +161,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slightly Hot"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algo caluroso"
           }
         }
       }
@@ -119,6 +179,12 @@
             "state": "translated",
             "value": "Could not decode weather data"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron decodificar los datos del tiempo"
+          }
         }
       }
     },
@@ -129,6 +195,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Decoding error: %1$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error de decodificación: %1$@"
           }
         }
       }
@@ -141,6 +213,12 @@
             "state": "translated",
             "value": "HTTP error: %1$d"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error HTTP: %1$d"
+          }
         }
       }
     },
@@ -151,6 +229,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Invalid response from Supabase"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Respuesta no válida de Supabase"
           }
         }
       }
@@ -163,6 +247,12 @@
             "state": "translated",
             "value": "Invalid Supabase URL"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL de Supabase no válida"
+          }
         }
       }
     },
@@ -173,6 +263,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Invalid URL"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL no válida"
           }
         }
       }
@@ -185,6 +281,12 @@
             "state": "translated",
             "value": "Invalid response from weather service"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Respuesta no válida del servicio meteorológico"
+          }
         }
       }
     },
@@ -195,6 +297,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Location not available"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubicación no disponible"
           }
         }
       }
@@ -207,6 +315,12 @@
             "state": "translated",
             "value": "Men's"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hombre"
+          }
         }
       }
     },
@@ -217,6 +331,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Women's"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mujer"
           }
         }
       }
@@ -229,6 +349,12 @@
             "state": "translated",
             "value": "Female"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Femenino"
+          }
         }
       }
     },
@@ -240,6 +366,12 @@
             "state": "translated",
             "value": "Male"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masculino"
+          }
         }
       }
     },
@@ -247,6 +379,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unisex"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Unisex"
@@ -262,6 +400,12 @@
             "state": "translated",
             "value": "Other"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro"
+          }
         }
       }
     },
@@ -272,6 +416,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unflattering photo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foto poco favorecedora"
           }
         }
       }
@@ -284,6 +434,12 @@
             "state": "translated",
             "value": "Wrong outfit for the weather"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conjunto inadecuado para el tiempo"
+          }
         }
       }
     },
@@ -294,6 +450,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dark"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscuro"
           }
         }
       }
@@ -306,6 +468,12 @@
             "state": "translated",
             "value": "Light"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claro"
+          }
         }
       }
     },
@@ -317,6 +485,12 @@
             "state": "translated",
             "value": "System"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistema"
+          }
         }
       }
     },
@@ -324,6 +498,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Celsius"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Celsius"
@@ -339,6 +519,12 @@
             "state": "translated",
             "value": "Fahrenheit"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fahrenheit"
+          }
         }
       }
     },
@@ -349,6 +535,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Body Temperature"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperatura corporal"
           }
         }
       }
@@ -361,6 +553,12 @@
             "state": "translated",
             "value": "Current Location"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ubicación actual"
+          }
         }
       }
     },
@@ -368,6 +566,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d°"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$d°"
@@ -383,6 +587,12 @@
             "state": "translated",
             "value": "Couldn't get your location."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo obtener tu ubicación."
+          }
         }
       }
     },
@@ -393,6 +603,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Location access denied. Enable in Settings."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acceso a la ubicación denegado. Actívalo en Ajustes."
           }
         }
       }
@@ -405,6 +621,12 @@
             "state": "translated",
             "value": "Location isn't available."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ubicación no está disponible."
+          }
         }
       }
     },
@@ -412,6 +634,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Error"
@@ -427,6 +655,12 @@
             "state": "translated",
             "value": "Couldn't reach the weather service."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo contactar con el servicio meteorológico."
+          }
         }
       }
     },
@@ -437,6 +671,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fit Preference"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferencia de ajuste"
           }
         }
       }
@@ -449,6 +689,12 @@
             "state": "translated",
             "value": "Enable"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar"
+          }
         }
       }
     },
@@ -459,6 +705,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loading..."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando..."
           }
         }
       }
@@ -471,6 +723,12 @@
             "state": "translated",
             "value": "Location Needed"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se necesita la ubicación"
+          }
         }
       }
     },
@@ -478,6 +736,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--°"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "--°"
@@ -493,6 +757,12 @@
             "state": "translated",
             "value": "Outfit"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conjunto"
+          }
         }
       }
     },
@@ -503,6 +773,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "RunWear needs your location for weather-based outfit recommendations."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RunWear necesita tu ubicación para las recomendaciones de conjuntos según el tiempo."
           }
         }
       }
@@ -515,6 +791,12 @@
             "state": "translated",
             "value": "Refresh"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar"
+          }
         }
       }
     },
@@ -525,6 +807,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retry"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar"
           }
         }
       }
@@ -537,6 +825,12 @@
             "state": "translated",
             "value": "Settings"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
+          }
         }
       }
     },
@@ -547,6 +841,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Temperature Unit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unidad de temperatura"
           }
         }
       }
@@ -559,6 +859,12 @@
             "state": "translated",
             "value": "Cold Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con frío"
+          }
         }
       }
     },
@@ -566,6 +872,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30-39°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "30-39°F"
@@ -581,6 +893,12 @@
             "state": "translated",
             "value": "Cool Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con fresco"
+          }
         }
       }
     },
@@ -588,6 +906,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "40-49°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "40-49°F"
@@ -603,6 +927,12 @@
             "state": "translated",
             "value": "Extreme Cold Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con frío extremo"
+          }
         }
       }
     },
@@ -610,6 +940,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<10°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "<10°F"
@@ -625,6 +961,12 @@
             "state": "translated",
             "value": "Frigid Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con frío glacial"
+          }
         }
       }
     },
@@ -632,6 +974,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "10-19°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "10-19°F"
@@ -647,6 +995,12 @@
             "state": "translated",
             "value": "Hot Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con calor"
+          }
         }
       }
     },
@@ -654,6 +1008,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "80°F+"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "80°F+"
@@ -669,6 +1029,12 @@
             "state": "translated",
             "value": "Mild Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con clima templado"
+          }
         }
       }
     },
@@ -676,6 +1042,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "50-64°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "50-64°F"
@@ -691,6 +1063,12 @@
             "state": "translated",
             "value": "<%1$d°C"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<%1$d°C"
+          }
         }
       }
     },
@@ -698,6 +1076,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d°C+"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%1$d°C+"
@@ -713,6 +1097,12 @@
             "state": "translated",
             "value": "%1$d-%2$d°C"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d-%2$d°C"
+          }
         }
       }
     },
@@ -724,6 +1114,12 @@
             "state": "translated",
             "value": "Very Cold Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con mucho frío"
+          }
         }
       }
     },
@@ -731,6 +1127,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "20-29°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "20-29°F"
@@ -746,6 +1148,12 @@
             "state": "translated",
             "value": "Warm Weather Running"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Correr con calor suave"
+          }
         }
       }
     },
@@ -753,6 +1161,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "65-79°F"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "65-79°F"
@@ -768,6 +1182,12 @@
             "state": "translated",
             "value": "Clear"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Despejado"
+          }
         }
       }
     },
@@ -779,6 +1199,12 @@
             "state": "translated",
             "value": "Cloudy"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nublado"
+          }
         }
       }
     },
@@ -786,6 +1212,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "E"
@@ -801,6 +1233,12 @@
             "state": "translated",
             "value": "ENE"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ENE"
+          }
         }
       }
     },
@@ -808,6 +1246,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ESE"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "ESE"
@@ -823,6 +1267,12 @@
             "state": "translated",
             "value": "N"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N"
+          }
         }
       }
     },
@@ -830,6 +1280,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NE"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "NE"
@@ -845,6 +1301,12 @@
             "state": "translated",
             "value": "NNE"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NNE"
+          }
         }
       }
     },
@@ -855,6 +1317,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "NNW"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NNO"
           }
         }
       }
@@ -867,6 +1335,12 @@
             "state": "translated",
             "value": "NW"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NO"
+          }
         }
       }
     },
@@ -874,6 +1348,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "S"
@@ -889,6 +1369,12 @@
             "state": "translated",
             "value": "SE"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SE"
+          }
         }
       }
     },
@@ -896,6 +1382,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSE"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "SSE"
@@ -911,6 +1403,12 @@
             "state": "translated",
             "value": "SSW"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSO"
+          }
         }
       }
     },
@@ -921,6 +1419,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "SW"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SO"
           }
         }
       }
@@ -933,6 +1437,12 @@
             "state": "translated",
             "value": "W"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O"
+          }
         }
       }
     },
@@ -943,6 +1453,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "WNW"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ONO"
           }
         }
       }
@@ -955,6 +1471,12 @@
             "state": "translated",
             "value": "WSW"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OSO"
+          }
         }
       }
     },
@@ -965,6 +1487,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Light Rain"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lluvia ligera"
           }
         }
       }
@@ -977,6 +1505,12 @@
             "state": "translated",
             "value": "Foggy"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con niebla"
+          }
         }
       }
     },
@@ -987,6 +1521,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Partly Cloudy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcialmente nublado"
           }
         }
       }
@@ -999,6 +1539,12 @@
             "state": "translated",
             "value": "Rainy"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lluvioso"
+          }
         }
       }
     },
@@ -1009,6 +1555,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Snowy"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con nieve"
           }
         }
       }
@@ -1021,6 +1573,12 @@
             "state": "translated",
             "value": "Storms"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tormentas"
+          }
         }
       }
     },
@@ -1031,6 +1589,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unknown"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconocido"
           }
         }
       }

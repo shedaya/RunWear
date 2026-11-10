@@ -9,6 +9,12 @@
             "state": "translated",
             "value": "RunWear"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RunWear"
+          }
         }
       }
     },
@@ -19,6 +25,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dark"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscuro"
           }
         }
       }
@@ -31,6 +43,12 @@
             "state": "translated",
             "value": "Light"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claro"
+          }
         }
       }
     },
@@ -41,6 +59,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "System"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistema"
           }
         }
       }
@@ -53,6 +77,12 @@
             "state": "translated",
             "value": "%1$dd ago"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hace %1$d d"
+          }
         }
       }
     },
@@ -63,6 +93,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$dD AGO"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HACE %1$d D"
           }
         }
       }
@@ -75,6 +111,12 @@
             "state": "translated",
             "value": "%1$dh ago"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hace %1$d h"
+          }
         }
       }
     },
@@ -85,6 +127,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$dH AGO"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HACE %1$d H"
           }
         }
       }
@@ -97,6 +145,12 @@
             "state": "translated",
             "value": "just now"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ahora mismo"
+          }
         }
       }
     },
@@ -107,6 +161,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "JUST NOW"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AHORA MISMO"
           }
         }
       }
@@ -119,6 +179,12 @@
             "state": "translated",
             "value": "%1$d min ago"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hace %1$d min"
+          }
         }
       }
     },
@@ -129,6 +195,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$dM AGO"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HACE %1$d MIN"
           }
         }
       }
@@ -141,6 +213,12 @@
             "state": "translated",
             "value": "Couldn't load weather"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar el tiempo"
+          }
         }
       }
     },
@@ -151,6 +229,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Couldn't reach the weather service"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo contactar con el servicio meteorológico"
           }
         }
       }
@@ -163,6 +247,12 @@
             "state": "translated",
             "value": "Your outfit for the weather right now, from your last RunWear recommendation."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu conjunto para el tiempo de ahora, de tu última recomendación de RunWear."
+          }
         }
       }
     },
@@ -173,6 +263,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "FOR NOW · %1$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "POR AHORA · %1$@"
           }
         }
       }
@@ -185,6 +281,12 @@
             "state": "translated",
             "value": "Location isn't available to the widget"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La ubicación no está disponible para el widget"
+          }
         }
       }
     },
@@ -195,6 +297,12 @@
           "stringUnit": {
             "state": "translated",
             "value": " · +%1$d more"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · +%1$d más"
           }
         }
       }
@@ -207,6 +315,12 @@
             "state": "translated",
             "value": "Running Outfit"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conjunto para correr"
+          }
         }
       }
     },
@@ -218,6 +332,12 @@
             "state": "translated",
             "value": "Open RunWear to see your outfit"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre RunWear para ver tu conjunto"
+          }
         }
       }
     },
@@ -225,6 +345,12 @@
       "extractionState": "manual",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " · "
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": " · "
@@ -240,6 +366,12 @@
             "state": "translated",
             "value": "Humidity %1$d%% · UV %2$d"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Humedad %1$d%% · UV %2$d"
+          }
         }
       }
     },
@@ -251,6 +383,12 @@
             "state": "translated",
             "value": "Actual %1$@ · Wind %2$d mph · %3$@"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Real %1$@ · Viento %2$d mph · %3$@"
+          }
         }
       }
     },
@@ -261,6 +399,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Updated %1$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizado: %1$@"
           }
         }
       }
