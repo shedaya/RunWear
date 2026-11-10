@@ -5,7 +5,6 @@ import java.lang.reflect.Modifier
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -25,7 +24,7 @@ class MimResourceParityTest {
             "../engine/src/commonMain/moko-resources/base/strings.xml"
         )
         return candidates.map(::File).firstOrNull { it.exists() }
-            ?: fail("engine strings.xml not found from ${File("").absolutePath}")
+            ?: throw AssertionError("engine strings.xml not found from ${File("").absolutePath}")
     }
 
     private fun unescape(v: String): String {
