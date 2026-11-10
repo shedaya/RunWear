@@ -60,7 +60,7 @@ abstract class Rw152MorphBase : Rw145RenderTestBase() {
         )
         assertFalse(
             "no collection doorway at rest",
-            boxes.any { it.text == "Open the collection" }
+            boxes.any { it.text.contains("Open the collection") }
         )
 
         // EXPANDED: the same surface, grown in place.
@@ -70,7 +70,7 @@ abstract class Rw152MorphBase : Rw145RenderTestBase() {
         val density = host.composeView.resources.displayMetrics.density
         val viewportDp =
             host.composeView.resources.displayMetrics.heightPixels / density
-        val doorway = boxes.firstOrNull { it.text == "Open the collection" }
+        val doorway = boxes.firstOrNull { it.text.contains("Open the collection") }
         assertTrue("doorway composed in the expanded panel", doorway != null)
         assertTrue(
             "doorway inside the viewport (bottom ${doorway!!.bottom / density} of $viewportDp)",
@@ -94,7 +94,7 @@ abstract class Rw152MorphBase : Rw145RenderTestBase() {
         )
         assertFalse(
             "doorway gone after dismissal",
-            boxes.any { it.text == "Open the collection" }
+            boxes.any { it.text.contains("Open the collection") }
         )
         host.controller.pause().stop().destroy()
     }

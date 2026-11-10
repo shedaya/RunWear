@@ -264,7 +264,14 @@ class Gen5FurtherAuditTest {
         val mainVm = source("com/runwear/app/ui/viewmodel/MainViewModel.kt")
         assertTrue(mainVm.contains("onForecastDerived(response, forecast, now)"))
         assertTrue(mainVm.contains("personalHeroRepository.startPersonalFill(cells)"))
-        assertTrue(mainVm.contains("noteFillTarget(cells)"))
+        // RE-PINNED (RW-151 client §5, Nov 10, 2026 — supersedes
+        // the A8-era call shape): the derivation now notes its
+        // target through noteFillDerivation, which records the
+        // target ids AND the fillable set AND the accompanied
+        // wire form in one call (PersonalHeroRepository
+        // .noteFillDerivation sets fillTargetCells from the
+        // target ids — the A8 behaviour this pin protects).
+        assertTrue(mainVm.contains("noteFillDerivation("))
         // The grant path in the Make It Me view model no longer
         // fires a cell-less fill call.
         val mimVm = source("com/runwear/app/makeitme/MakeItMeViewModel.kt")

@@ -51,7 +51,7 @@ class Rw99PosterCoverSourcePinTest {
         )
         assertTrue(
             "the loader requests at display size x2",
-            src.contains("displayPx * 2")
+            src.contains("widthPx * 2")
         )
         assertTrue(
             "the thumbnail resolves through HeroRefResolver",

@@ -1016,6 +1016,12 @@ fun HeroMainScreen(
                 // area fills it and the MINI dock overlays its bottom
                 // (the ruled floating form); the expanded form is the
                 // footer section inside the scroll content itself.
+                // The scaffold's bottom inset, consumed ONCE here
+                // for the dock-clearance system (RW-147 boundary +
+                // RW-152 band-edge fade); the three scroll
+                // containers consume their own (HomeCompositionPin).
+                val wirScaffoldBottomInsetDp =
+                    scaffoldContentPadding.calculateBottomPadding().value
                 Box(modifier = Modifier.fillMaxSize()) {
                 PullToRefreshBox(
                     isRefreshing = uiState.isLoading,
@@ -1039,8 +1045,7 @@ fun HeroMainScreen(
                                 Modifier.padding(
                                     bottom = (
                                         DockClearancePolicy.dockBandDp() +
-                                            scaffoldContentPadding
-                                                .calculateBottomPadding().value
+                                            wirScaffoldBottomInsetDp
                                         ).dp
                                 )
                             } else {
@@ -1439,8 +1444,7 @@ fun HeroMainScreen(
                             .padding(
                                 bottom = (
                                     DockClearancePolicy.dockBandDp() +
-                                        scaffoldContentPadding
-                                            .calculateBottomPadding().value
+                                        wirScaffoldBottomInsetDp
                                     ).dp
                             )
                             .height(24.dp)

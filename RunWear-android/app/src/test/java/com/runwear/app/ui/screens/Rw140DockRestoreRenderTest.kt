@@ -907,31 +907,38 @@ class Rw140SourcePinTest {
         throw IllegalStateException("HeroMainScreen.kt not found")
     }
 
+    // RE-PINNED (RW-152 §1, Nov 10, 2026 — supersedes both
+    // RW-140 pins below in full): the in-flow footer and the
+    // layout-position handoff are RETIRED. The expanded panel is
+    // a state of the dock overlay (one composable, in-place
+    // morph); there is no wirFooterContent for any host, no
+    // grid breakout variant, and no fade derivation in the host
+    // (the pure policy functions remain only for this file's own
+    // RW-140 harness host above).
     @Test
-    fun `rw140 - compact host uses the plain footer content, grids keep the breakout`() {
+    fun `rw152 - no in-flow footer content remains in any host`() {
         val source = heroMainSource()
         assertEquals(
-            "grid breakout variant used by exactly the two grid hosts",
-            2,
-            Regex("wirFooterContent = wirFooterContentGrid").findAll(source).count()
+            "no footer content lambda is passed to any scroll host",
+            0,
+            Regex("wirFooterContent").findAll(source).count()
         )
         assertTrue(
-            "compact list host uses the plain footer content",
-            Regex("wirFooterContent = wirFooterContent\\s*\\)")
-                .containsMatchIn(source)
+            "the expanded state lives in the overlay morph",
+            source.contains("\"wirDockSurfaceMorph\"")
         )
     }
 
     @Test
-    fun `rw140 - dock handoff transform reads the fade state in the draw phase`() {
+    fun `rw152 - the host derives no layout fade for the dock element`() {
         val source = heroMainSource()
-        assertTrue(
-            "graphicsLayer reads wirFooterFadeState",
-            source.contains("val drawFade = wirFooterFadeState.value")
+        assertFalse(
+            "the fadeFromLayoutPx handoff is retired in the host (RW-152 §1)",
+            source.contains("WearIveRunDockPolicy.fadeFromLayoutPx")
         )
         assertTrue(
-            "host derives the fade through the shared policy path",
-            source.contains("WearIveRunDockPolicy.fadeFromLayoutPx")
+            "the dock and panel are one AnimatedContent surface",
+            source.contains("AnimatedContent(")
         )
     }
 }

@@ -97,10 +97,17 @@ class Rw152CollectionRenderTest {
         }
 
         fun capture(name: String): Bitmap {
-            val w = composeView.resources.displayMetrics.widthPixels
-            val h = composeView.resources.displayMetrics.heightPixels
+            // Draw the collection's Dialog window view (the
+            // screen's real surface), falling back to the
+            // activity's view.
+            val target = windowViews()
+                .filter { it !== activity.window.decorView }
+                .maxByOrNull { it.width * it.height }
+                ?: composeView
+            val w = target.width.coerceAtLeast(1)
+            val h = target.height.coerceAtLeast(1)
             val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            composeView.draw(Canvas(bitmap))
+            target.draw(Canvas(bitmap))
             val outDir = File("build/render-out-rw152")
             outDir.mkdirs()
             File(outDir, name).outputStream().use {
@@ -110,6 +117,23 @@ class Rw152CollectionRenderTest {
         }
 
         fun root(): SemanticsNode = mergedRoot(composeView)
+
+        /** All window roots (the collection screen hosts its own
+         * Dialog window; its content does not live in the
+         * activity's ComposeView). */
+        fun windowViews(): List<View> {
+            val wm = shadowOf(activity.windowManager)
+                as ShadowWindowManagerImpl
+            return wm.views.toList()
+        }
+
+        fun composeRoots(): List<SemanticsNode> =
+            windowViews().mapNotNull { v ->
+                if (containsComposeRoot(v)) mergedRoot(v) else null
+            }
+
+        fun allTexts(): List<String> =
+            composeRoots().flatMap { texts(it) }
 
         fun mergedRoot(view: View): SemanticsNode {
             var found: SemanticsNode? = null
@@ -180,13 +204,14 @@ class Rw152CollectionRenderTest {
             )
         }
         stage.capture("rw152-collection-thumbnails.png")
-        val root = stage.root()
-        val all = stage.texts(root)
-        val photoSlots = stage.nodes(root).count {
+        val roots = stage.composeRoots()
+        assertTrue("the collection dialog window composed", roots.isNotEmpty())
+        val all = roots.flatMap { stage.texts(it) }
+        val photoSlots = roots.sumOf { r -> stage.nodes(r).count {
             it.config.contains(SemanticsProperties.ContentDescription) &&
                 it.config[SemanticsProperties.ContentDescription]
                     .any { d -> d == "Entry photo" }
-        }
+        } }
         assertTrue(
             "TODAY pin + chapter covers carry photo thumbnails (found $photoSlots)",
             photoSlots >= 3
@@ -213,16 +238,17 @@ class Rw152CollectionRenderTest {
                 onDeletePlace = {}
             )
         }
-        stage.clickDescription(
-            stage.root(), "Delete the Miami, FL cover entry"
-        )
+        val coverRoot = stage.composeRoots().firstOrNull { r ->
+            stage.texts(r).contains("Delete the Miami, FL cover entry")
+        } ?: throw AssertionError("collection window with the cover trash not found")
+        stage.clickDescription(coverRoot, "Delete the Miami, FL cover entry")
         stage.settle()
-        // The confirmation lives in a Dialog window — find its
-        // view among the window manager's roots.
-        val wm = shadowOf(stage.activity.windowManager) as ShadowWindowManagerImpl
-        val dialogView = wm.views.firstOrNull { v ->
-            v !== stage.activity.window.decorView &&
-                containsComposeRoot(v)
+        // The confirmation lives in its own Dialog window — find
+        // the window root carrying its title.
+        val dialogView = stage.windowViews().firstOrNull { v ->
+            containsComposeRoot(v) &&
+                stage.texts(stage.mergedRoot(v))
+                    .any { it.contains("Delete this entry?") }
         } ?: throw AssertionError("confirmation dialog window not found")
         val dRoot = stage.mergedRoot(dialogView)
         val dTexts = stage.texts(dRoot)

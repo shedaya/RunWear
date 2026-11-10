@@ -154,10 +154,17 @@ class Rw152UnitTest {
 
     @Test
     fun `cover falls back to the newest entry when none has a photo`() {
+        // Distinct dates: the collection's day ordering is by
+        // date (settledAt breaks no ties on this surface), so the
+        // fallback is the newest DAY's entry.
         val chapters = WearIveRunCollectionLogic.chapters(
             listOf(
-                entry("Miami, FL", "a", 1000, null),
-                entry("Miami, FL", "b", 2000, null)
+                entry("Miami, FL", "a", 1000, null).copy(
+                    date = LocalDate.of(2026, 11, 4)
+                ),
+                entry("Miami, FL", "b", 2000, null).copy(
+                    date = LocalDate.of(2026, 11, 5)
+                )
             )
         )
         assertEquals("b", chapters.single().cover?.sessionId)
