@@ -531,6 +531,7 @@ internal fun MakeItMeUploadFlow(
     modifier: Modifier = Modifier,
     entryDoor: MakeItMeEntryDoor = MakeItMeEntryDoor.STANDARD
 ) {
+    val transportErrorText = stringResource(MR.strings.mim_transport_error)
     val context = LocalContext.current
     var step by remember { mutableStateOf(UploadStep.CONSENT) }
     // WS-5 (F-2): system Back is the flow's own — step back, then
@@ -769,7 +770,7 @@ internal fun MakeItMeUploadFlow(
                             if (ok) {
                                 step = UploadStep.PHOTOS
                             } else {
-                                errorText = stringResource(MR.strings.mim_transport_error)
+                                errorText = transportErrorText
                             }
                         }
                     },
@@ -951,7 +952,7 @@ internal fun MakeItMeUploadFlow(
                                 step = UploadStep.SAVED
                             } else {
                                 step = UploadStep.PHOTOS
-                                errorText = stringResource(MR.strings.mim_transport_error)
+                                errorText = transportErrorText
                             }
                         }
                     },
@@ -2058,9 +2059,9 @@ object MakeItMeSettingsPresentation {
         if (!makeItMeEnabled) {
             // Flag OFF: the plain not-started row (frame 36) — the
             // section exists, the feature's doors stay shut.
-            listOf(stringResource(MR.strings.mim_s2_state_a_row))
+            listOf(MakeItMeStrings.S2_STATE_A_ROW)
         } else when (mode) {
-            MakeItMeMode.STOCK -> listOf(stringResource(MR.strings.mim_s2_state_a_row))
+            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S2_STATE_A_ROW)
             // Gen-3 WS-D: status group (not a row title — composed
             // from FreeLooksMeter), then Your photos, then the
             // Premium offer card. GEN-5 (RW-28 item 25): the
@@ -2068,14 +2069,14 @@ object MakeItMeSettingsPresentation {
             // quarantined Danger zone at the end of Settings —
             // see dangerZoneRowTitles.
             MakeItMeMode.FREE -> listOf(
-                stringResource(MR.strings.mim_s6_photos_row),
-                stringResource(MR.strings.mim_s35_number_of_photos),
-                stringResource(MR.strings.mim_u2g_card_title)
+                MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
+                MakeItMeStrings.U2G_CARD_TITLE
             )
             MakeItMeMode.SUBSCRIBED -> listOf(
-                stringResource(MR.strings.mim_s6_photos_row),
-                stringResource(MR.strings.mim_s35_number_of_photos),
-                stringResource(MR.strings.mim_u2g_card_title)
+                MakeItMeStrings.S6_PHOTOS_ROW,
+                MakeItMeStrings.S35_NUMBER_OF_PHOTOS,
+                MakeItMeStrings.U2G_CARD_TITLE
             )
         }
 
@@ -2088,10 +2089,10 @@ object MakeItMeSettingsPresentation {
      */
     fun dangerZoneRowTitles(mode: MakeItMeMode): List<String> =
         when (mode) {
-            MakeItMeMode.STOCK -> listOf(stringResource(MR.strings.mim_s20_delete_data_row))
+            MakeItMeMode.STOCK -> listOf(MakeItMeStrings.S20_DELETE_DATA_ROW)
             MakeItMeMode.FREE, MakeItMeMode.SUBSCRIBED -> listOf(
-                stringResource(MR.strings.mim_s10_delete_row),
-                stringResource(MR.strings.mim_s20_delete_data_row)
+                MakeItMeStrings.S10_DELETE_ROW,
+                MakeItMeStrings.S20_DELETE_DATA_ROW
             )
         }
 }

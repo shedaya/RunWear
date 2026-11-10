@@ -1,7 +1,5 @@
 package com.runwear.app.makeitme
 
-import com.runwear.engine.MR
-import dev.icerock.moko.resources.compose.stringResource
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -94,8 +92,8 @@ object ConvergenceBandPolicy {
         // post-process-death window) likewise renders no band.
         if (cov != null && (cov.total <= 0 || cov.outstanding <= 0)) return null
         return ConvergenceBandContent(
-            heading = stringResource(MR.strings.mim_band_making_heading),
-            line = stringResource(MR.strings.mim_band_making_line),
+            heading = MakeItMeStrings.BAND_MAKING_HEADING,
+            line = MakeItMeStrings.BAND_MAKING_LINE,
             fraction = if (cov != null && cov.total > 0) {
                 cov.ready.toFloat() / cov.total.toFloat()
             } else {

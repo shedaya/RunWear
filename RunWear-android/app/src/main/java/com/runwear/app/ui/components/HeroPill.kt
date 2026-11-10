@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.runwear.app.makeitme.MakeItMeMode
 import com.runwear.app.makeitme.MakeItMeStrings
-import com.runwear.app.makeitme.MakeItMeUpsellRules
 import com.runwear.app.makeitme.PersonalLookStatus
 import com.runwear.app.makeitme.PersonalServeKind
 
@@ -107,11 +106,11 @@ object HeroPillPolicy {
             // generating state stays clean.
             return HeroPillContent(
                 kind = HeroPillKind.MAKING,
-                text = stringResource(MR.strings.mim_hero_pill_making),
+                text = MakeItMeStrings.HERO_PILL_MAKING,
                 showSpinner = true,
                 showScriptMark = true,
                 upsellText = if (mode == MakeItMeMode.FREE) {
-                    stringResource(MR.strings.mim_hero_pill_making_upsell)
+                    MakeItMeStrings.HERO_PILL_MAKING_UPSELL
                 } else {
                     null
                 }
@@ -128,8 +127,8 @@ object HeroPillPolicy {
         ) {
             return HeroPillContent(
                 kind = HeroPillKind.EXHAUSTED,
-                text = stringResource(MR.strings.mim_hero_pill_exhausted_count, MakeItMeUpsellRules.FREE_ALLOWANCE),
-                actionText = stringResource(MR.strings.mim_hero_pill_get_unlimited),
+                text = MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT,
+                actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED,
                 showScriptMark = true,
                 wholePillAction = true
             )
@@ -150,7 +149,7 @@ object HeroPillPolicy {
                 // (d) Subscribed: script mark + Premium status + lock glyph.
                 MakeItMeMode.SUBSCRIBED -> HeroPillContent(
                     kind = HeroPillKind.PREMIUM,
-                    text = stringResource(MR.strings.mim_hero_pill_premium),
+                    text = MakeItMeStrings.HERO_PILL_PREMIUM,
                     showScriptMark = true,
                     showLock = true
                 )
@@ -158,7 +157,7 @@ object HeroPillPolicy {
                 MakeItMeMode.FREE -> HeroPillContent(
                     kind = HeroPillKind.EXACT_FREE,
                     text = MakeItMeStrings.heroPillLookCount(freeGenerationsUsed),
-                    actionText = stringResource(MR.strings.mim_hero_pill_get_unlimited),
+                    actionText = MakeItMeStrings.HERO_PILL_GET_UNLIMITED,
                     showScriptMark = true
                 )
                 MakeItMeMode.STOCK -> null
