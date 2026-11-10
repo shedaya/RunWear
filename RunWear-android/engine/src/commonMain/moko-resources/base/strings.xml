@@ -221,4 +221,34 @@
     <string name="mim_first_look_count_line">That was look %1$d of your %2$d free looks — %3$d remain, whenever you want them.</string>
     <string name="mim_first_look_heading_today">Your first look · Today</string>
     <string name="mim_first_look_heading_place">Your first look · Today, %1$s</string>
+
+    <!-- LOC-1 WP-R2 sweep (2026-11-09): engine-level display copy beyond the
+         WP-3 pilot — comfort short labels, gender labels, TempBracket band
+         words, and the recommendation tips (DESIGN sec 2.3: DISPLAY with
+         unit slots; the frostbite tip renders its threshold through the
+         unit policy, never a baked-in degree value). -->
+    <string name="comfort_runs_very_cold_short">Run Cold</string>
+    <string name="comfort_runs_cold_short">Slightly Cold</string>
+    <string name="comfort_neutral_short">Neutral</string>
+    <string name="comfort_runs_warm_short">Slightly Hot</string>
+    <string name="comfort_runs_very_warm_short">Run Hot</string>
+    <string name="gender_male_label">Male</string>
+    <string name="gender_female_label">Female</string>
+    <string name="bracket_freezing_word">FREEZING</string>
+    <string name="bracket_cold_word">COLD</string>
+    <string name="bracket_cool_word">COOL</string>
+    <string name="bracket_mild_word">MILD</string>
+    <string name="bracket_warm_word">WARM</string>
+    <string name="bracket_hot_word">HOT</string>
+    <string name="tip_feel_cool">🏃 You should feel slightly cool stepping outside. If you\'re comfortable standing still, you\'re overdressed for running.</string>
+    <string name="tip_layered">🧥 Your layered setup lets you regulate heat — unzip your mid-layer or shell if you warm up after the first mile.</string>
+    <string name="tip_wind_shell">💨 A wind shell beats a heavy jacket for running. It blocks wind chill while letting you vent excess heat.</string>
+    <string name="tip_frostbite">🥶 Cover all exposed skin — frostbite risk increases below %1$s with wind. Vaseline on cheeks and nose helps.</string>
+    <string name="tip_heat_risk">🌡️ High heat risk — consider running early morning or evening.</string>
+    <string name="tip_hydrate_full">💧 Hydrate well before, during, and after your run.</string>
+    <string name="tip_hydrate_carry">💧 Stay hydrated — consider carrying water.</string>
+    <string name="tip_rain_cap">🌧️ Wear a cap under your hood to keep rain out of your eyes. Avoid cotton — it retains moisture.</string>
+    <string name="tip_humidity">💦 High humidity — sweat won\'t evaporate easily. Wear looser, lighter fabrics and hydrate more.</string>
+    <string name="tip_uv">☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.</string>
+    <string name="tip_shorts_cold">🩳 Many runners still wear shorts at this temperature. Your legs generate plenty of heat — try it before adding tights.</string>
 </resources>

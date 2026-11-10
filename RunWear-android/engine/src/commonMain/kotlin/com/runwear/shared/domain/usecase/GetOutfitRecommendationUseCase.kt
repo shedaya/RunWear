@@ -1,6 +1,7 @@
 package com.runwear.shared.domain.usecase
 
 import com.runwear.shared.domain.model.*
+import com.runwear.shared.domain.service.RunWearTips
 
 /**
  * THE BRAIN: Running-Specific Clothing Recommendation Engine (v4.2)
@@ -237,49 +238,51 @@ class GetOutfitRecommendationUseCase {
 
         // The key running tip — always show below 50°F
         if (temp < 50) {
-            tips.add("🏃 You should feel slightly cool stepping outside. If you're comfortable standing still, you're overdressed for running.")
+            tips.add(RunWearTips.feelCool())
         }
 
         // Layered-setup ventilation tip (2+ torso layers happen below 32°F)
         if (temp < 32 && temp >= 10) {
-            tips.add("🧥 Your layered setup lets you regulate heat — unzip your mid-layer or shell if you warm up after the first mile.")
+            tips.add(RunWearTips.layered())
         }
 
         // Wind tip
         if (isWindy && temp < 50) {
-            tips.add("💨 A wind shell beats a heavy jacket for running. It blocks wind chill while letting you vent excess heat.")
+            tips.add(RunWearTips.windShell())
         }
 
-        // Extreme cold
+        // Extreme cold. LOC-1 WP-R2: the frostbite tip's threshold is a
+        // UNIT SLOT (DESIGN sec 2.3) — RunWearTips renders the canonical
+        // 10°F threshold through the display unit, never a baked value.
         if (temp < 10) {
-            tips.add("🥶 Cover all exposed skin — frostbite risk increases below 10°F with wind. Vaseline on cheeks and nose helps.")
+            tips.add(RunWearTips.frostbite())
         }
 
         // Heat
         when {
             temp >= 80 -> {
-                tips.add("🌡️ High heat risk — consider running early morning or evening.")
-                tips.add("💧 Hydrate well before, during, and after your run.")
+                tips.add(RunWearTips.heatRisk())
+                tips.add(RunWearTips.hydrateFull())
             }
-            temp >= 70 -> tips.add("💧 Stay hydrated — consider carrying water.")
+            temp >= 70 -> tips.add(RunWearTips.hydrateCarry())
         }
 
         // Rain
         if (isRaining) {
-            tips.add("🌧️ Wear a cap under your hood to keep rain out of your eyes. Avoid cotton — it retains moisture.")
+            tips.add(RunWearTips.rainCap())
         }
 
         // Humidity
         if (isHumid && temp > 60) {
-            tips.add("💦 High humidity — sweat won't evaporate easily. Wear looser, lighter fabrics and hydrate more.")
+            tips.add(RunWearTips.humidity())
         }
 
         // UV
-        if (uvIndex > 6) tips.add("☀️ UV is high — reapply sunscreen every 60-90 minutes if running longer than an hour.")
+        if (uvIndex > 6) tips.add(RunWearTips.uv())
 
         // Shorts in cold encouragement
         if (temp in 40.0..49.0) {
-            tips.add("🩳 Many runners still wear shorts at this temperature. Your legs generate plenty of heat — try it before adding tights.")
+            tips.add(RunWearTips.shortsCold())
         }
 
         return tips.take(3)

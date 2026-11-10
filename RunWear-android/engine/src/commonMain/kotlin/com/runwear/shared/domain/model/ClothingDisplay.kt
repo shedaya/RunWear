@@ -151,3 +151,46 @@ val ComfortPreference.labelDesc: StringDesc
             ComfortPreference.RUNS_VERY_WARM -> MR.strings.comfort_runs_very_warm_label
         }
     )
+
+/** LOC-1 WP-R2: the comfort preference's SHORT display form ("Run Cold"). */
+val ComfortPreference.shortLabelDesc: StringDesc
+    get() = res(
+        when (this) {
+            ComfortPreference.RUNS_VERY_COLD -> MR.strings.comfort_runs_very_cold_short
+            ComfortPreference.RUNS_COLD -> MR.strings.comfort_runs_cold_short
+            ComfortPreference.NEUTRAL -> MR.strings.comfort_neutral_short
+            ComfortPreference.RUNS_WARM -> MR.strings.comfort_runs_warm_short
+            ComfortPreference.RUNS_VERY_WARM -> MR.strings.comfort_runs_very_warm_short
+        }
+    )
+
+/**
+ * LOC-1 WP-R2: the gender preference's display label. UNISEX carries an
+ * intentionally EMPTY label in the enum — that is a state (the deselected
+ * state), not a string, so it maps to null here, never to a resource.
+ */
+val GenderPreference.labelDesc: StringDesc?
+    get() = when (this) {
+        GenderPreference.MALE -> res(MR.strings.gender_male_label)
+        GenderPreference.FEMALE -> res(MR.strings.gender_female_label)
+        GenderPreference.UNISEX -> null
+    }
+
+/**
+ * LOC-1 WP-R2: the RW-144 band word for a temperature bracket
+ * ("FREEZING"…"HOT") — the hero band vocabulary. Pre-R2 the band rendered
+ * the enum's `name` verbatim (HeroBand.word), which is an internal
+ * identifier doing double duty as display copy; the resource is now the
+ * display surface. (The colour mapping stays design, per the glossary.)
+ */
+val TempBracket.wordDesc: StringDesc
+    get() = res(
+        when (this) {
+            TempBracket.FREEZING -> MR.strings.bracket_freezing_word
+            TempBracket.COLD -> MR.strings.bracket_cold_word
+            TempBracket.COOL -> MR.strings.bracket_cool_word
+            TempBracket.MILD -> MR.strings.bracket_mild_word
+            TempBracket.WARM -> MR.strings.bracket_warm_word
+            TempBracket.HOT -> MR.strings.bracket_hot_word
+        }
+    )
