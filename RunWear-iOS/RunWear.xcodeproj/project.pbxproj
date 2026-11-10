@@ -265,6 +265,7 @@
 		1C0000000000000000000041 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000015 /* Localizable.xcstrings */; };
 		1C0000000000000000000042 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000016 /* Localizable.xcstrings */; };
 		1C0000000000000000000043 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000017 /* Localizable.xcstrings */; };
+		1C0000000000000000000044 /* LocalizationCorpusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000018 /* LocalizationCorpusTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -509,6 +510,7 @@
 		1C0000000000000000000015 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		1C0000000000000000000016 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		1C0000000000000000000017 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1C0000000000000000000018 /* LocalizationCorpusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationCorpusTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -799,6 +801,7 @@
 				S60001000000000000000002 /* Gen6WaveBShareTests.swift */,
 				E10001000000000000000003 /* EngineFixtureTests.swift */,
 				E10001000000000000000004 /* engine_fixtures.json */,
+				1C0000000000000000000018 /* LocalizationCorpusTests.swift */,
 			);
 			path = RunWearTests;
 			sourceTree = "<group>";
@@ -1254,6 +1257,7 @@
 				1C000000000000000000002A /* AppEnglish.swift in Sources */,
 				1C000000000000000000002B /* LocaleUnits.swift in Sources */,
 				1C000000000000000000002C /* LocaleFormats.swift in Sources */,
+				1C0000000000000000000044 /* LocalizationCorpusTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
