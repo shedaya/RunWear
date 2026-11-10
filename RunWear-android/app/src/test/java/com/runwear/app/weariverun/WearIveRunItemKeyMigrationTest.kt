@@ -1,3 +1,12 @@
+package com.runwear.app.weariverun
+
+import com.runwear.shared.domain.model.ClothingItem
+import java.time.LocalDate
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
 /**
  * LOC-1 WP-R2 gate (WP-3 DESIGN — "dual-read legacy entries"): Wear
  * I've Run entries persist display names; stable keys ride along
