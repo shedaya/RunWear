@@ -56,9 +56,9 @@ class LocaleFormatsTest {
             LocaleFormats.dateWeekdayMonthDay(monday, Locale.US),
             LocaleFormats.dateWeekdayMonthDay(monday, Locale.GERMANY)
         )
-        // German MEDIUM date renders without throwing and drops the year.
+        // German MEDIUM date is numeric on the JDK ("9.11.2026");
+        // dateMonthDay drops the year and its separator cleanly.
         val de = LocaleFormats.dateMonthDay(monday, Locale.GERMANY)
-        org.junit.Assert.assertTrue(de, de.contains("Nov"))
-        org.junit.Assert.assertFalse(de, de.contains("2026"))
+        assertEquals("09.11.", de)
     }
 }

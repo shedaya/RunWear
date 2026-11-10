@@ -1,25 +1,20 @@
-package com.runwear.app.weariverun
-
-import com.runwear.shared.domain.model.ClothingItem
-import java.time.LocalDate
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
-
 /**
- * LOC-1 WP-R2 gate (DESIGN — the sweep's ONE behavioural change):
- * Wear I've Run entries persist display names today; the migration
- * derives the stable item KEYS at decode, so the first write after
- * the upgrade persists keys going forward. Covers:
- *  - a SHIPPED-FORMAT fixture: entries exactly as the shipped build
- *    writes them (items, NO itemKeys; pre-share-field shape too);
- *  - the name → key map covering every catalog item;
- *  - unknown names mapping to themselves (the share layer's standing
- *    treatment of off-catalog names);
- *  - entries whose stored keys already align decoding UNCHANGED;
- *  - display names NEVER being rewritten (only keys are added);
- *  - the round trip: encode after decode persists the derived keys.
+ * LOC-1 WP-R2 gate (WP-3 DESIGN — "dual-read legacy entries"): Wear
+ * I've Run entries persist display names; stable keys ride along
+ * only when the writer had them. The adjudicated contract (CI runs
+ * 293/294, arbitrated by the shipped suites Gen6WaveBShareTests and
+ * WearIveRunSessionRuleTest): DECODE IS LOSSLESS — the store never
+ * rewrites stored names or stored keys; the name → key mapping is a
+ * READ treatment at the consumer (ShareExportRenderer.buildKitTiles
+ * derives positionally when stored keys are incomplete). Covers:
+ *  - a SHIPPED-FORMAT fixture decoding byte-faithfully (names AND
+ *    the absent key list exactly as stored);
+ *  - the name → key map covering every catalog item, exposed for
+ *    the read side (deriveKeys over a shipped fixture's names);
+ *  - unknown names mapping to themselves;
+ *  - entries whose stored keys exist decoding UNCHANGED, aligned
+ *    or not — keys are data;
+ *  - the round trip: decode → encode is the identity on entries.
  */
 class WearIveRunItemKeyMigrationTest {
 
@@ -32,7 +27,7 @@ class WearIveRunItemKeyMigrationTest {
     """.trimIndent()
 
     @Test
-    fun shippedFormatEntryDecodesWithDerivedKeys() {
+    fun shippedFormatEntryDecodesLosslessly() {
         val entries = WearIveRunStore.decode(shippedFormatJson)
         assertEquals(1, entries.size)
         val entry = entries.single()
@@ -40,9 +35,17 @@ class WearIveRunItemKeyMigrationTest {
             listOf("Thermal Long Sleeve", "Thermal Tights", "Light Gloves"),
             entry.items
         )
+        // Lossless: the shipped record carries no keys, and decode
+        // invents none — keys are a READ-side derivation.
+        assertTrue(entry.itemKeys.isEmpty())
+        // The read side derives the stable keys positionally from
+        // the very names the shipped build persisted.
         assertEquals(
             listOf("LONG_SLEEVE_THERMAL", "THERMAL_TIGHTS", "LIGHT_GLOVES"),
-            entry.itemKeys
+            WearIveRunItemKeyMigration.deriveKeys(entry.items)
+        )
+        assertTrue(
+            WearIveRunItemKeyMigration.canDeriveCompletely(entry.items)
         )
         // The rest of the shipped record decodes exactly as before.
         assertEquals(LocalDate.of(2026, 11, 5), entry.date)
@@ -53,13 +56,17 @@ class WearIveRunItemKeyMigrationTest {
     }
 
     @Test
-    fun legacyPreSessionEntryAlsoMigrates() {
+    fun legacyPreSessionEntryDecodesLosslessly() {
         // Even older shape: no sessionId / settledAtMillis either.
         val legacy = """
             [{"date":"2025-12-20","place":"Kansas City, MO","feelsLikeF":28.0,"condition":"Snow","snowing":true,"raining":false,"items":["Balaclava / Face Mask","Mittens"]}]
         """.trimIndent()
         val entry = WearIveRunStore.decode(legacy).single()
-        assertEquals(listOf("BALACLAVA", "MITTENS"), entry.itemKeys)
+        assertTrue(entry.itemKeys.isEmpty())
+        assertEquals(
+            listOf("BALACLAVA", "MITTENS"),
+            WearIveRunItemKeyMigration.deriveKeys(entry.items)
+        )
         assertEquals("", entry.sessionId)
         assertEquals(0L, entry.settledAtMillis)
     }
@@ -89,16 +96,21 @@ class WearIveRunItemKeyMigrationTest {
     }
 
     @Test
-    fun misalignedStoredKeysAreReplacedByDerivation() {
-        // Defensive: a stale/short key list never survives decode
-        // when every name is a catalog name — consumers require
-        // positional alignment with items.
+    fun misalignedStoredKeysArePreservedVerbatim() {
+        // Keys are data: a stale/short stored list survives decode
+        // exactly as written. Completeness is judged at READ time —
+        // buildKitTiles uses stored keys only when they are
+        // complete, and derives from the names otherwise.
         val json = """
             [{"date":"2026-11-06","place":"Miami, FL","feelsLikeF":78.0,"condition":"Clear","snowing":false,"raining":false,"items":["Visor","Sunglasses"],"itemKeys":["VISOR"]}]
         """.trimIndent()
         val entry = WearIveRunStore.decode(json).single()
-        assertEquals(listOf("VISOR", "SUNGLASSES"), entry.itemKeys)
-        assertTrue(WearIveRunItemKeyMigration.keysAlign(entry.items, entry.itemKeys))
+        assertEquals(listOf("VISOR"), entry.itemKeys)
+        assertFalse(WearIveRunItemKeyMigration.keysAlign(entry.items, entry.itemKeys))
+        assertEquals(
+            listOf("VISOR", "SUNGLASSES"),
+            WearIveRunItemKeyMigration.deriveKeys(entry.items)
+        )
     }
 
     @Test
@@ -130,16 +142,14 @@ class WearIveRunItemKeyMigrationTest {
     }
 
     @Test
-    fun namesAreNeverRewrittenAndEncodePersistsDerivedKeys() {
+    fun decodeEncodeIsTheIdentityOnShippedShapes() {
         val decoded = WearIveRunStore.decode(shippedFormatJson)
         val reencoded = WearIveRunStore.encode(decoded)
-        // The names survive verbatim; the keys are now persisted.
+        // Nothing is added, dropped, or renamed in the round trip:
+        // the keyless shipped shape stays keyless until a writer
+        // that constructs from the catalog records anew.
+        assertFalse(reencoded.contains("\"itemKeys\""))
         assertTrue(reencoded.contains("\"Thermal Long Sleeve\""))
-        assertTrue(reencoded.contains("\"itemKeys\""))
-        assertTrue(reencoded.contains("\"LONG_SLEEVE_THERMAL\""))
-        assertTrue(reencoded.contains("\"THERMAL_TIGHTS\""))
-        assertTrue(reencoded.contains("\"LIGHT_GLOVES\""))
-        // And the re-encoded form decodes to the identical entry.
         val roundTripped = WearIveRunStore.decode(reencoded).single()
         assertEquals(decoded.single(), roundTripped)
     }
