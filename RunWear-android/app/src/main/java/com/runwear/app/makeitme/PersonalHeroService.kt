@@ -440,7 +440,10 @@ open class PersonalHeroService @Inject constructor(
      * the endpoint confirmed the adoption executed.
      */
     open suspend fun requestIdentityAdoption(sourceUserId: String): Boolean {
-        val body = """{"source_user_id":"$sourceUserId"}"""
+        // GEN-5 Item 4a discipline, same as reconcile: name this
+        // client's platform — the endpoint's RevenueCat lookup
+        // defaults to the iOS storefront view when it is absent.
+        val body = """{"source_user_id":"$sourceUserId","platform":"android"}"""
         return callFunction("request-identity-adoption", body) is FunctionResult.Ok
     }
 
