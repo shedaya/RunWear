@@ -326,19 +326,24 @@ object WearIveRunCollectionLogic {
             val range = feelsRangeLabel()
             return if (isMultiStay) {
                 val last = stays.first()
-                "$stayCount stays · $dayCount days · Last stay · ${spanLabel(last.start, last.end)}" +
-                    (range?.let { " · $it" } ?: "")
+                com.runwear.app.i18n.AppEnglish.WIR_SUMMARY_MULTI.format(
+                    com.runwear.app.i18n.AppEnglish.plural(stayCount, com.runwear.app.i18n.AppEnglish.WIR_STAYS_COUNT_ONE, com.runwear.app.i18n.AppEnglish.WIR_STAYS_COUNT_OTHER),
+                    com.runwear.app.i18n.AppEnglish.plural(dayCount, com.runwear.app.i18n.AppEnglish.WIR_DAYS_COUNT_ONE, com.runwear.app.i18n.AppEnglish.WIR_DAYS_COUNT_OTHER),
+                    spanLabel(last.start, last.end)
+                ) + (range?.let { com.runwear.app.i18n.AppEnglish.WIR_SUMMARY_RANGE_SUFFIX.format(it) } ?: "")
             } else {
                 val stay = stays.first()
-                "$dayCount ${if (dayCount == 1) "day" else "days"} · ${spanLabel(stay.start, stay.end)}" +
-                    (range?.let { " · $it" } ?: "")
+                com.runwear.app.i18n.AppEnglish.WIR_SUMMARY_SINGLE.format(
+                    com.runwear.app.i18n.AppEnglish.plural(dayCount, com.runwear.app.i18n.AppEnglish.WIR_DAYS_COUNT_ONE, com.runwear.app.i18n.AppEnglish.WIR_DAYS_COUNT_OTHER),
+                    spanLabel(stay.start, stay.end)
+                ) + (range?.let { com.runwear.app.i18n.AppEnglish.WIR_SUMMARY_RANGE_SUFFIX.format(it) } ?: "")
             }
         }
 
         fun feelsRangeLabel(): String? {
             val min = feelsMinF ?: return null
             val max = feelsMaxF ?: return null
-            return if (min == max) "${min.toInt()}°" else "${min.toInt()}°–${max.toInt()}°"
+            return if (min == max) com.runwear.app.i18n.AppEnglish.WIR_FEELS_SINGLE.format(min.toInt()) else com.runwear.app.i18n.AppEnglish.WIR_FEELS_RANGE.format(min.toInt(), max.toInt())
         }
     }
 
@@ -377,7 +382,7 @@ object WearIveRunCollectionLogic {
         fun rangeLabel(): String? {
             val min = feelsMinF ?: return null
             val max = feelsMaxF ?: return null
-            return if (min == max) "${min.toInt()}°" else "${min.toInt()}°–${max.toInt()}°"
+            return if (min == max) com.runwear.app.i18n.AppEnglish.WIR_FEELS_SINGLE.format(min.toInt()) else com.runwear.app.i18n.AppEnglish.WIR_FEELS_RANGE.format(min.toInt(), max.toInt())
         }
     }
 
@@ -401,8 +406,8 @@ object WearIveRunCollectionLogic {
         return when {
             start == end -> start.format(monthDay)
             start.year == end.year && start.month == end.month ->
-                "${start.format(monthDay)}–${end.dayOfMonth}"
-            else -> "${start.format(monthDay)} – ${end.format(monthDay)}"
+                com.runwear.app.i18n.AppEnglish.WIR_SPAN_SAME_MONTH.format(start.format(monthDay), end.dayOfMonth)
+            else -> com.runwear.app.i18n.AppEnglish.WIR_SPAN_CROSS.format(start.format(monthDay), end.format(monthDay))
         }
     }
 
@@ -416,22 +421,22 @@ object WearIveRunCollectionLogic {
     fun lastSavedLabel(entry: WearIveRunDayEntry, nowMillis: Long): String? {
         if (entry.settledAtMillis <= 0L) return null
         val ageMs = nowMillis - entry.settledAtMillis
-        if (ageMs < 0L) return "Last saved just now"
+        if (ageMs < 0L) return com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_JUST_NOW
         val minutes = ageMs / 60_000L
         return when {
-            minutes < 1L -> "Last saved just now"
-            minutes < 60L -> "Last saved $minutes min ago"
+            minutes < 1L -> com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_JUST_NOW
+            minutes < 60L -> com.runwear.app.i18n.AppEnglish.plural(minutes.toInt(), com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_MINUTES_ONE, com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_MINUTES_OTHER)
             minutes < 60L * 24L -> {
                 val hours = minutes / 60L
-                if (hours == 1L) "Last saved 1 hr ago" else "Last saved $hours hr ago"
+                com.runwear.app.i18n.AppEnglish.plural(hours.toInt(), com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_HOURS_ONE, com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_HOURS_OTHER)
             }
-            else -> "Last saved ${dayForm(entry.date, entry.date)}"
+            else -> com.runwear.app.i18n.AppEnglish.WIR_LAST_SAVED_DAY.format(dayForm(entry.date, entry.date))
         }
     }
 
     /** The collection's day form: "Today" for today, else "MMM d". */
     fun dayForm(date: LocalDate, today: LocalDate): String =
-        if (date == today) "Today"
+        if (date == today) com.runwear.app.i18n.AppEnglish.WIR_DAY_TODAY
         else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
 
     /**
@@ -442,7 +447,7 @@ object WearIveRunCollectionLogic {
      * holder must use this form, not [dayForm].
      */
     fun narrationDayForm(date: LocalDate, today: LocalDate): String =
-        if (date == today) "Now"
+        if (date == today) com.runwear.app.i18n.AppEnglish.WIR_NOW
         else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
 }
 
@@ -477,4 +482,60 @@ object WearIveRunRecordPolicy {
             selectedMoment.year, selectedMoment.monthValue, selectedMoment.dayOfMonth
         ) && weather.hour == selectedMoment.hour
     }
+}
+
+/**
+ * LOC-1 WP-R2 — the displayName → stable-key derivation at the
+ * persistence boundary (the sweep's one behavioural change).
+ *
+ * Shipped builds persisted an entry's kit as DISPLAY NAMES
+ * (`items`), and the stable keys (`itemKeys`) only exist on
+ * entries written since GEN-6 Wave B — and only when the writer
+ * had them. The name→key map below is derived from the catalog
+ * itself (every [com.runwear.shared.domain.model.ClothingItem]'s
+ * displayName → its key), so it covers all 30 catalog items by
+ * construction. Derivation rule, applied on decode:
+ *
+ * - an entry whose stored keys already align with its names
+ *   (same size, and every stored key is the catalog key for the
+ *   name at that position) decodes UNCHANGED;
+ * - any other entry derives its keys positionally from its
+ *   names; a name with no catalog entry maps to ITSELF (the
+ *   share layer's standing treatment of unknown names — visible
+ *   as its own tile, never linked to a catalog item);
+ * - the entry's `items` (names) are NEVER rewritten — the
+ *   migration enriches keys only, so every rendered surface keeps
+ *   reading exactly the names the shipped build wrote.
+ *
+ * Because encode writes itemKeys whenever they are non-empty,
+ * the first write after this lands persists the derived keys for
+ * every legacy entry: the migration is lazy, total, and needs no
+ * schema version bump or one-shot pass.
+ */
+object WearIveRunItemKeyMigration {
+
+    /** displayName → key for every catalog item (30 entries). */
+    val keyByDisplayName: Map<String, String> =
+        com.runwear.shared.domain.model.ClothingItem.entries
+            .associate { it.displayName to it.key }
+
+    /** The derived key for one persisted display name. */
+    fun keyFor(displayName: String): String =
+        keyByDisplayName[displayName] ?: displayName
+
+    /** Derive the full key list for an entry's persisted names. */
+    fun deriveKeys(items: List<String>): List<String> = items.map(::keyFor)
+
+    /** True when [storedKeys] already match the derived keys. */
+    fun keysAlign(items: List<String>, storedKeys: List<String>): Boolean =
+        storedKeys.size == items.size &&
+            items.indices.all { storedKeys[it] == keyFor(items[it]) }
+
+    /** The entry with its keys derived when they do not align. */
+    fun migrate(entry: WearIveRunDayEntry): WearIveRunDayEntry =
+        if (keysAlign(entry.items, entry.itemKeys)) {
+            entry
+        } else {
+            entry.copy(itemKeys = deriveKeys(entry.items))
+        }
 }

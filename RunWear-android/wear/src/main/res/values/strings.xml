@@ -2,10 +2,27 @@
 <resources>
     <string name="app_name">RunWear</string>
 
-    <!-- Tile -->
-    <string name="tile_outfit_label">Running Outfit</string>
-    <string name="tile_outfit_description">Weather and outfit recommendation for your run</string>
-
-    <!-- Complication -->
-    <string name="complication_outfit_label">RunWear Outfit</string>
+    <!-- LOC-1 WP-R2 sweep: wear UI + complication/tile edge copy
+         (values byte-identical to the shipped literals). -->
+    <string name="wear_feels_like_label">Feels like</string>
+    <string name="wear_swipe_for_items">Swipe for %1$d items →</string>
+    <string name="wear_couldnt_load">Couldn't load weather</string>
+    <string name="wear_grant">Grant</string>
+    <string name="wear_loading">Loading...</string>
+    <string name="wear_location_needed">Location needed</string>
+    <string name="wear_permission_required">Location permission required</string>
+    <string name="wear_location_unavailable">Location unavailable — set it in the phone app.</string>
+    <string name="wear_no_data_available">No data available</string>
+    <string name="wear_no_data">No data</string>
+    <string name="wear_no_tips">No specific tips for today. Enjoy your run!</string>
+    <string name="wear_outfit_preview">Outfit preview</string>
+    <string name="wear_outfit_recommendation">Outfit recommendation: %1$s</string>
+    <string name="wear_refresh">Refresh</string>
+    <string name="wear_retry">Retry</string>
+    <string name="wear_runner">Runner</string>
+    <string name="wear_tap_for_details">Tap for details</string>
+    <string name="wear_tap_to_enable">Tap to enable</string>
+    <string name="wear_tap_to_load">Tap to load</string>
+    <string name="wear_tap_to_retry">Tap to retry</string>
+    <string name="wear_complication_feels">Feels like %1$s, actual %2$s</string>
 </resources>

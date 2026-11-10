@@ -37,7 +37,7 @@ sealed interface WearIveRunNarrationPayload {
     /** "Updated to {place}, {day}" — the place form. */
     data class Place(val place: String, val dayForm: String) :
         WearIveRunNarrationPayload {
-        override fun render(): String = "$place, $dayForm"
+        override fun render(): String = com.runwear.app.i18n.AppEnglish.WIR_PLACE_MOMENT.format(place, dayForm)
     }
 
     /**
@@ -51,7 +51,7 @@ sealed interface WearIveRunNarrationPayload {
     data class Moment(val reading: String, val dateForm: String? = null) :
         WearIveRunNarrationPayload {
         override fun render(): String =
-            if (dateForm != null) "$dateForm $reading" else reading
+            if (dateForm != null) com.runwear.app.i18n.AppEnglish.WIR_MOMENT_DATED.format(dateForm, reading) else reading
     }
 }
 
@@ -95,16 +95,13 @@ object WearIveRunSubtitle {
      */
     fun detail(entry: WearIveRunEntry): String? {
         val feels = entry.feelsLikeF ?: return null
-        val items = when (entry.itemCount) {
-            1 -> "1 item"
-            else -> "${entry.itemCount} items"
-        }
+        val items = com.runwear.app.i18n.AppEnglish.plural(entry.itemCount, com.runwear.app.i18n.AppEnglish.WIR_ITEMS_COUNT_ONE, com.runwear.app.i18n.AppEnglish.WIR_ITEMS_COUNT_OTHER)
         val outfit = entry.itemNames.filter { it.isNotBlank() }.take(3)
         return buildString {
-            append("${feels.toInt()}° feels like · $items")
+            append(com.runwear.app.i18n.AppEnglish.WIR_SUBTITLE_DETAIL.format("${feels.toInt()}°", items))
             if (outfit.isNotEmpty()) {
-                append(" · ")
-                append(outfit.joinToString(" · "))
+                append(com.runwear.app.i18n.AppEnglish.WIR_SUBTITLE_JOIN)
+                append(outfit.joinToString(com.runwear.app.i18n.AppEnglish.WIR_SUBTITLE_JOIN))
             }
         }
     }
@@ -319,7 +316,7 @@ object WearIveRunUpdateNarration {
 
     /** The new entry's moment reading: its clock label, or "Now". */
     fun momentReading(entry: WearIveRunDayEntry): String =
-        entry.momentLabel ?: "Now"
+        entry.momentLabel ?: com.runwear.app.i18n.AppEnglish.WIR_NOW
 
     /**
      * RW-98 (Sol's ruling, Nov 6, 2026): the full-date form a
@@ -441,8 +438,8 @@ object WearIveRunDockNarration {
     /** "{Today | Tomorrow | Weekday, Mon D}" for a recorded day. */
     fun dayLabel(date: java.time.LocalDate, today: java.time.LocalDate): String =
         when (date) {
-            today -> "Today"
-            today.plusDays(1) -> "Tomorrow"
+            today -> com.runwear.app.i18n.AppEnglish.WIR_DAY_TODAY
+            today.plusDays(1) -> com.runwear.app.i18n.AppEnglish.WIR_DAY_TOMORROW
             else -> date.format(
                 java.time.format.DateTimeFormatter.ofPattern(
                     "EEEE, MMM d", java.util.Locale.US
@@ -487,10 +484,10 @@ object WearIveRunDockNarration {
         val place = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(entry.place).display
         return if (entry.date > today) {
-            val prefix = "Planned for "
-            var suffix = " · " + dayLabel(entry.date, today)
+            val prefix = com.runwear.app.i18n.AppEnglish.WIR_PLANNED_FOR
+            var suffix = com.runwear.app.i18n.AppEnglish.WIR_PLAN_SUFFIX_DAY.format(dayLabel(entry.date, today))
             if (entry.momentLabel != null) {
-                suffix += " · " + entry.momentLabel
+                suffix += com.runwear.app.i18n.AppEnglish.WIR_PLAN_SUFFIX_MOMENT.format(entry.momentLabel)
             }
             WearIveRunNarration(
                 text = prefix + place + suffix,
@@ -498,16 +495,17 @@ object WearIveRunDockNarration {
                 payloadEnd = prefix.length + place.length
             )
         } else if (entry.date == today) {
-            val prefix = "Updated to "
-            val payload = place + ", " +
-                (entry.momentLabel ?: "Now")
+            val prefix = com.runwear.app.i18n.AppEnglish.WIR_UPDATED_TO
+            val payload = com.runwear.app.i18n.AppEnglish.WIR_UPDATED_TODAY_PAYLOAD.format(
+                place, entry.momentLabel ?: com.runwear.app.i18n.AppEnglish.WIR_NOW
+            )
             WearIveRunNarration(
                 text = prefix + payload,
                 payloadStart = prefix.length,
                 payloadEnd = prefix.length + payload.length
             )
         } else {
-            val prefix = "Updated to "
+            val prefix = com.runwear.app.i18n.AppEnglish.WIR_UPDATED_TO
             WearIveRunNarration(
                 text = prefix + place,
                 payloadStart = prefix.length,
@@ -529,18 +527,17 @@ object WearIveRunDockNarration {
         val place = com.runwear.shared.domain.model.SimplePlace
             .fromRawDisplayString(entry.place).display
         val sb = StringBuilder()
-        sb.append(place).append(" · ").append(dayLabel(entry.date, today))
+        sb.append(com.runwear.app.i18n.AppEnglish.WIR_ENTRY_LINE_HEAD.format(place, dayLabel(entry.date, today)))
         // RW-150: the footer's detail line agrees with its own
         // header (and the dock): a picked moment is named here
         // too, in the same tail position.
         if (entry.momentLabel != null) {
-            sb.append(" · ").append(entry.momentLabel)
+            sb.append(com.runwear.app.i18n.AppEnglish.WIR_ENTRY_LINE_MOMENT.format(entry.momentLabel))
         }
-        sb.append(" — ").append(unit.formatTemperature(entry.feelsLikeF))
-        sb.append(" feels like")
+        sb.append(com.runwear.app.i18n.AppEnglish.WIR_ENTRY_LINE_TAIL.format(unit.formatTemperature(entry.feelsLikeF)))
         val items = entry.items.filter { it.isNotBlank() }
         if (items.isNotEmpty()) {
-            sb.append(" · ").append(items.joinToString(" · "))
+            sb.append(com.runwear.app.i18n.AppEnglish.WIR_SUBTITLE_JOIN).append(items.joinToString(com.runwear.app.i18n.AppEnglish.WIR_SUBTITLE_JOIN))
         }
         return sb.toString()
     }
@@ -549,7 +546,7 @@ object WearIveRunDockNarration {
 /** Pure narration composition for the bar's one line. */
 object WearIveRunNarrationFormatter {
 
-    const val WORDMARK = "Wear I've Run"
+    const val WORDMARK: String = com.runwear.app.i18n.AppEnglish.WIR_WORDMARK
 
     /**
      * "Added {place}, {time}" — e.g. added("New York", "Now") renders
@@ -557,8 +554,8 @@ object WearIveRunNarrationFormatter {
      * payload (rendered in pine).
      */
     fun added(place: String, timeLabel: String): WearIveRunNarration {
-        val prefix = "Added "
-        val payload = "$place, $timeLabel"
+        val prefix = com.runwear.app.i18n.AppEnglish.WIR_ADDED
+        val payload = com.runwear.app.i18n.AppEnglish.WIR_ADDED_PAYLOAD.format(place, timeLabel)
         return WearIveRunNarration(
             text = prefix + payload,
             payloadStart = prefix.length,
@@ -576,7 +573,7 @@ object WearIveRunNarrationFormatter {
      * to," — never "Update to," — on both platforms.
      */
     fun update(payload: WearIveRunNarrationPayload): WearIveRunNarration {
-        val prefix = "Updated to "
+        val prefix = com.runwear.app.i18n.AppEnglish.WIR_UPDATED_TO
         val rendered = payload.render()
         return WearIveRunNarration(
             text = prefix + rendered,

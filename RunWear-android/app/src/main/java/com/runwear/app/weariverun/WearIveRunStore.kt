@@ -138,7 +138,7 @@ class WearIveRunStore(private val context: Context) {
                 runCatching {
                     val o = array.getJSONObject(i)
                     val items = o.optJSONArray("items") ?: JSONArray()
-                    WearIveRunDayEntry(
+                    WearIveRunItemKeyMigration.migrate(WearIveRunDayEntry(
                         date = LocalDate.parse(o.getString("date")),
                         // GEN-3: entries written before the session
                         // rule have no sessionId/settledAtMillis —
@@ -195,7 +195,7 @@ class WearIveRunStore(private val context: Context) {
                                 height = fa.optDouble("h")
                             )
                         }
-                    )
+                    ))
                 }.getOrNull()
             }
         }

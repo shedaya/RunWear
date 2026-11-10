@@ -184,4 +184,147 @@
 
     <!-- LOC-1 WP-R2 sweep: feedback intro body. -->
     <string name="feedback_intro">Tell us what happened. What you write goes to the small team that builds this app, along with a summary of what the app was doing when you wrote it. You can read that summary below before you send it. We never send your health data or your location.</string>
+
+    <!-- LOC-1 WP-R2 sweep: Wear I've Run narration templates (DESIGN 6).
+         Count-bearing lines live in plurals.xml. -->
+    <string name="wir_place_moment">%1$s, %2$s</string>
+    <string name="wir_moment_dated">%1$s %2$s</string>
+    <string name="wir_now">Now</string>
+    <string name="wir_subtitle_detail">%1$s feels like · %2$s</string>
+    <string name="wir_subtitle_join"> · </string>
+    <string name="wir_updated_to">Updated to </string>
+    <string name="wir_added">Added </string>
+    <string name="wir_added_payload">%1$s, %2$s</string>
+    <string name="wir_planned_for">Planned for </string>
+    <string name="wir_plan_suffix_day"> · %1$s</string>
+    <string name="wir_plan_suffix_moment"> · %1$s</string>
+    <string name="wir_updated_today_payload">%1$s, %2$s</string>
+    <string name="wir_entry_line_head">%1$s · %2$s</string>
+    <string name="wir_entry_line_moment"> · %1$s</string>
+    <string name="wir_entry_line_tail"> — %1$s feels like</string>
+    <string name="wir_wordmark">Wear I\'ve Run</string>
+    <string name="wir_day_today">Today</string>
+    <string name="wir_day_tomorrow">Tomorrow</string>
+    <string name="wir_summary_multi">%1$s · %2$s · Last stay · %3$s</string>
+    <string name="wir_summary_single">%1$s · %2$s</string>
+    <string name="wir_summary_range_suffix"> · %1$s</string>
+    <string name="wir_feels_range">%1$d°–%2$d°</string>
+    <string name="wir_feels_single">%1$d°</string>
+    <string name="wir_span_same_month">%1$s–%2$d</string>
+    <string name="wir_span_cross">%1$s – %2$s</string>
+    <string name="wir_last_saved_just_now">Last saved just now</string>
+    <string name="wir_last_saved_day">Last saved %1$s</string>
+
+
+    <!-- LOC-1 WP-R2 sweep: widget copy (Glance resolves via stringResource). -->
+    <string name="widget_loading">Loading…</string>
+    <string name="widget_loading_outfit">Loading your outfit…</string>
+    <string name="widget_loading_strip">RunWear · Loading…</string>
+    <string name="widget_location_needed">Location needed</string>
+    <string name="widget_tap_to_enable">Tap to enable</string>
+    <string name="widget_location_strip">Location needed · Tap to enable</string>
+    <string name="widget_tap_enable_location">Tap to enable location</string>
+    <string name="widget_feels_like_caps">FEELS LIKE</string>
+    <string name="widget_actual">Actual %1$s</string>
+    <string name="widget_feels_like">Feels like %1$s</string>
+    <string name="widget_wind">Wind %1$s</string>
+    <string name="widget_couldnt_load">Couldn\'t load weather</string>
+    <string name="widget_couldnt_reach">Couldn\'t reach the weather service</string>
+    <string name="widget_location_unavailable">Location isn\'t available to the widget</string>
+    <string name="widget_refresh">Refresh</string>
+    <string name="widget_retry">Retry</string>
+    <string name="widget_later_today">Later today</string>
+    <string name="widget_later_today_range">Later today: %1$s</string>
+    <string name="widget_by_line">By %1$s: %2$s</string>
+    <string name="widget_for_now">FOR NOW</string>
+    <string name="widget_for_now_age">FOR NOW · %1$s</string>
+    <string name="widget_just_now">JUST NOW</string>
+    <string name="widget_updated_time">Updated %1$s</string>
+    <string name="widget_updated_age">Updated %1$s</string>
+    <string name="widget_age_min_upper">%1$dM AGO</string>
+    <string name="widget_age_hr_upper">%1$dH AGO</string>
+    <string name="widget_age_day_upper">%1$dD AGO</string>
+    <string name="widget_age_just_now_lower">just now</string>
+    <string name="widget_age_min_lower">%1$d min ago</string>
+    <string name="widget_age_hr_lower">%1$dh ago</string>
+    <string name="widget_age_day_lower">%1$dd ago</string>
+    <string name="widget_brand_loading">RunWear · %1$s</string>
+
+    <!-- LOC-1 WP-R2 sweep: collection surface chrome. -->
+    <string name="collection_today_badge">TODAY</string>
+    <string name="collection_back">Back</string>
+    <string name="collection_close">Close</string>
+    <string name="filter_all">All</string>
+    <string name="filter_cold">Cold</string>
+    <string name="filter_snow">Snow</string>
+    <string name="filter_rain">Rain</string>
+    <string name="filter_heat">Heat</string>
+    <string name="collection_empty_title">Your scrapbook starts with today\'s run</string>
+    <string name="collection_empty_body">Each day\'s outfit is saved here automatically — one card per day, in the places you run. Days before today aren\'t backfilled; the collection grows from here.</string>
+    <string name="collection_share_day">Share %1$s from %2$s</string>
+    <string name="collection_share">Share</string>
+    <string name="collection_remove_all">Remove all %1$s entries</string>
+    <string name="collection_no_match">No days match this filter here.</string>
+    <string name="collection_view_chapter">View %1$s chapter</string>
+    <string name="collection_share_this_day">Share this day</string>
+    <string name="collection_day_title_today">Today · %1$s</string>
+
+    <!-- LOC-1 WP-R2 sweep: share studio copy (captions are user-published
+         text — display copy, extracted; the FTC disclosure moves with them). -->
+    <string name="share_format_feed">Feed 4:5</string>
+    <string name="share_format_stories">Stories 9:16</string>
+    <string name="share_format_square">Square</string>
+    <string name="share_meridiem_am">AM</string>
+    <string name="share_meridiem_pm">PM</string>
+    <string name="share_clock_caption">today, %1$s</string>
+    <string name="share_clock_poster">Today, %1$s</string>
+    <string name="share_clock_time">%1$d:00 %2$s</string>
+    <string name="share_tomorrow_caption">tomorrow %1$s</string>
+    <string name="share_tomorrow_poster">Tomorrow %1$s</string>
+    <string name="share_daypart_caption">%1$s %2$s</string>
+    <string name="share_daypart_poster">%1$s %2$s</string>
+    <string name="share_morning_caption">this morning</string>
+    <string name="share_morning_poster">This morning</string>
+    <string name="share_afternoon_caption">this afternoon</string>
+    <string name="share_afternoon_poster">This afternoon</string>
+    <string name="share_tonight_caption">tonight</string>
+    <string name="share_tonight_poster">Tonight</string>
+    <string name="share_title_feels_story">Feels-Like Story</string>
+    <string name="share_title_swing">Swing</string>
+    <string name="share_title_scrapbook">Scrapbook</string>
+    <string name="share_title_short_call">Short Call</string>
+    <string name="share_kit_bullet">• %1$s</string>
+    <string name="share_why_swing">One outfit for a %1$d-degree swing.</string>
+    <string name="share_why_cold">No guesswork at %1$d°.</string>
+    <string name="share_why_anchor">Dressed for the feels-like, not the thermometer.</string>
+    <string name="share_caption_feels_story">%1$s, %2$s: %3$d° on the thermometer, %4$d° on the run. RunWear\'s call:
+%5$s
+%6$s #RunAnyWear · runwear.ai</string>
+    <string name="share_caption_swing">%1$s today: %2$d° to %3$d°. Dressed for %4$s\'s %5$d°:
+%6$s
+One outfit, no mid-run regret. #RunAnyWear · runwear.ai</string>
+    <string name="share_caption_scrapbook">One for the scrapbook: %1$s, %2$s, %3$d° feels like, %4$s. The kit:
+%5$s
+Every run, remembered — run, weather or not. #RunAnyWear · @runwear.ai</string>
+    <string name="share_caption_short_call">%1$s, %2$s: %3$d° feels like, %4$s. The call:
+%5$s
+#RunAnyWear · @runwear.ai</string>
+    <string name="share_subject">RunWear — %1$s, %2$d° feels like</string>
+    <string name="share_link_title">RunWear — %1$s · %2$d° feels like</string>
+    <string name="share_weather_line">%1$d° feels like · %2$s · %3$s · %4$s.</string>
+    <string name="share_disclosure">As an Amazon Associate, RunWear earns from qualifying purchases.</string>
+    <string name="share_this_day">Share this day</string>
+    <string name="share_choose_card">Choose the card for %1$s — %2$s.</string>
+    <string name="share_morning_poster">Morning Poster</string>
+    <string name="share_kit_card">Kit Card</string>
+    <string name="share_rendering">Rendering previews…</string>
+    <string name="share_couldnt_share">Couldn\'t share this card — try again.</string>
+    <string name="share_render_timeout">Couldn\'t render this card — it took too long.</string>
+    <string name="share_render_photo_fail">Couldn\'t render this card — its photo couldn\'t be loaded.</string>
+    <string name="share_render_retry">Couldn\'t render this card — try again.</string>
+    <string name="share_photo_blocked">This day\'s photo couldn\'t load — the Morning Poster can\'t be shared until it does.</string>
+    <string name="share_caption_label">Caption</string>
+    <string name="share_render_dirty">This card didn\'t render cleanly — try again</string>
+    <string name="share_look_failed">Your %1$s couldn\'t be made.</string>
+    <string name="share_look_making">Making your %1$s…</string>
 </resources>

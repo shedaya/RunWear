@@ -51,9 +51,9 @@ enum class ShareExportFormat {
 
     val label: String
         get() = when (this) {
-            FEED -> "Feed 4:5"
-            STORIES -> "Stories 9:16"
-            SQUARE -> "Square"
+            FEED -> com.runwear.app.i18n.AppEnglish.SHARE_FORMAT_FEED
+            STORIES -> com.runwear.app.i18n.AppEnglish.SHARE_FORMAT_STORIES
+            SQUARE -> com.runwear.app.i18n.AppEnglish.SHARE_FORMAT_SQUARE
         }
 
     /** Exact export pixels — the verify gate requires the
@@ -150,20 +150,20 @@ object ShareMomentResolver {
         }
         return when (reading) {
             is MomentReading.Clock -> {
-                val time = "${reading.hour12}:00 ${if (reading.isPM) "PM" else "AM"}"
-                Forms("today, $time", "Today, $time", false)
+                val time = com.runwear.app.i18n.AppEnglish.SHARE_CLOCK_TIME.format(reading.hour12, if (reading.isPM) com.runwear.app.i18n.AppEnglish.SHARE_MERIDIEM_PM else com.runwear.app.i18n.AppEnglish.SHARE_MERIDIEM_AM)
+                Forms(com.runwear.app.i18n.AppEnglish.SHARE_CLOCK_CAPTION.format(time), com.runwear.app.i18n.AppEnglish.SHARE_CLOCK_POSTER.format(time), false)
             }
             is MomentReading.Daypart -> {
                 if (reading.dayWord == "Tomorrow") {
                     Forms(
-                        "tomorrow ${reading.part.rawValue}",
-                        "Tomorrow ${reading.part.rawValue}",
+                        com.runwear.app.i18n.AppEnglish.SHARE_TOMORROW_CAPTION.format(reading.part.rawValue),
+                        com.runwear.app.i18n.AppEnglish.SHARE_TOMORROW_POSTER.format(reading.part.rawValue),
                         false
                     )
                 } else {
                     Forms(
-                        "${reading.dayWord.lowercase(Locale.US)} ${reading.part.rawValue}",
-                        "${reading.dayWord} ${reading.part.rawValue}",
+                        com.runwear.app.i18n.AppEnglish.SHARE_DAYPART_CAPTION.format(reading.dayWord.lowercase(Locale.US), reading.part.rawValue),
+                        com.runwear.app.i18n.AppEnglish.SHARE_DAYPART_POSTER.format(reading.dayWord, reading.part.rawValue),
                         false
                     )
                 }
@@ -171,11 +171,11 @@ object ShareMomentResolver {
             MomentReading.Now -> {
                 when (MomentReading.DayPart.forHour(lastSavedAt.hour)) {
                     MomentReading.DayPart.MORNING ->
-                        Forms("this morning", "This morning", false)
+                        Forms(com.runwear.app.i18n.AppEnglish.SHARE_MORNING_CAPTION, com.runwear.app.i18n.AppEnglish.SHARE_MORNING_POSTER, false)
                     MomentReading.DayPart.AFTERNOON ->
-                        Forms("this afternoon", "This afternoon", false)
+                        Forms(com.runwear.app.i18n.AppEnglish.SHARE_AFTERNOON_CAPTION, com.runwear.app.i18n.AppEnglish.SHARE_AFTERNOON_POSTER, false)
                     MomentReading.DayPart.EVENING, MomentReading.DayPart.NIGHT ->
-                        Forms("tonight", "Tonight", false)
+                        Forms(com.runwear.app.i18n.AppEnglish.SHARE_TONIGHT_CAPTION, com.runwear.app.i18n.AppEnglish.SHARE_TONIGHT_POSTER, false)
                 }
             }
         }
@@ -300,10 +300,10 @@ enum class ShareCaptionTemplate {
 
     val title: String
         get() = when (this) {
-            FEELS_LIKE_STORY -> "Feels-Like Story"
-            SWING -> "Swing"
-            SCRAPBOOK -> "Scrapbook"
-            SHORT_CALL -> "Short Call"
+            FEELS_LIKE_STORY -> com.runwear.app.i18n.AppEnglish.SHARE_TITLE_FEELS_STORY
+            SWING -> com.runwear.app.i18n.AppEnglish.SHARE_TITLE_SWING
+            SCRAPBOOK -> com.runwear.app.i18n.AppEnglish.SHARE_TITLE_SCRAPBOOK
+            SHORT_CALL -> com.runwear.app.i18n.AppEnglish.SHARE_TITLE_SHORT_CALL
         }
 }
 
@@ -312,32 +312,32 @@ object ShareCaptionComposer {
     /** The kit as bullet lines — one garment per line, up to
      * four headline garments (§5.3: bullets, always). */
     fun kitBlock(kitNames: List<String>): String =
-        kitNames.take(4).joinToString("\n") { "• $it" }
+        kitNames.take(4).joinToString("\n") { com.runwear.app.i18n.AppEnglish.SHARE_KIT_BULLET.format(it) }
 
     /** The why-line library (T1's anchor element). Deterministic
      * selection, identical on both platforms: a big swing wins,
      * then cold, then the anchor line. */
     fun whyLine(input: ShareCaptionInput): String {
         if (input.swingF >= 15) {
-            return "One outfit for a ${input.swingDisplay}-degree swing."
+            return com.runwear.app.i18n.AppEnglish.SHARE_WHY_SWING.format(input.swingDisplay)
         }
         if (input.feelsF <= 40) {
-            return "No guesswork at ${input.feels}°."
+            return com.runwear.app.i18n.AppEnglish.SHARE_WHY_COLD.format(input.feels)
         }
-        return "Dressed for the feels-like, not the thermometer."
+        return com.runwear.app.i18n.AppEnglish.SHARE_WHY_ANCHOR
     }
 
     fun caption(template: ShareCaptionTemplate, input: ShareCaptionInput): String {
         val kit = kitBlock(input.kitNames)
         return when (template) {
             ShareCaptionTemplate.FEELS_LIKE_STORY ->
-                "${input.place}, ${input.captionMoment}: ${input.actual}° on the thermometer, ${input.feels}° on the run. RunWear's call:\n$kit\n${whyLine(input)} #RunAnyWear · runwear.ai"
+                com.runwear.app.i18n.AppEnglish.SHARE_CAPTION_FEELS_STORY.format(input.place, input.captionMoment, input.actual, input.feels, kit, whyLine(input))
             ShareCaptionTemplate.SWING ->
-                "${input.place} today: ${input.low}° to ${input.high}°. Dressed for ${input.captionMoment}'s ${input.feels}°:\n$kit\nOne outfit, no mid-run regret. #RunAnyWear · runwear.ai"
+                com.runwear.app.i18n.AppEnglish.SHARE_CAPTION_SWING.format(input.place, input.low, input.high, input.captionMoment, input.feels, kit)
             ShareCaptionTemplate.SCRAPBOOK ->
-                "One for the scrapbook: ${input.place}, ${input.captionMoment}, ${input.feels}° feels like, ${input.conditionLower}. The kit:\n$kit\nEvery run, remembered — run, weather or not. #RunAnyWear · @runwear.ai"
+                com.runwear.app.i18n.AppEnglish.SHARE_CAPTION_SCRAPBOOK.format(input.place, input.captionMoment, input.feels, input.conditionLower, kit)
             ShareCaptionTemplate.SHORT_CALL ->
-                "${input.place}, ${input.captionMoment}: ${input.feels}° feels like, ${input.conditionLower}. The call:\n$kit\n#RunAnyWear · @runwear.ai"
+                com.runwear.app.i18n.AppEnglish.SHARE_CAPTION_SHORT_CALL.format(input.place, input.captionMoment, input.feels, input.conditionLower, kit)
         }
     }
 
@@ -367,11 +367,11 @@ object ShareCaptionComposer {
 
     /** The activity sheet's subject (Mail) — §8. */
     fun subject(input: ShareCaptionInput): String =
-        "RunWear — ${input.place}, ${input.feels}° feels like"
+        com.runwear.app.i18n.AppEnglish.SHARE_SUBJECT.format(input.place, input.feels)
 
     /** The rich link metadata title — §8. */
     fun linkTitle(input: ShareCaptionInput): String =
-        "RunWear — ${input.place} · ${input.feels}° feels like"
+        com.runwear.app.i18n.AppEnglish.SHARE_LINK_TITLE.format(input.place, input.feels)
 }
 
 // MARK: - Face anchor (§4.3)
@@ -592,10 +592,9 @@ object ShareKitCardModel {
         condition: String,
         place: String,
         posterMoment: String
-    ): String = "$feelsDegrees° feels like · $condition · $place · $posterMoment."
+    ): String = com.runwear.app.i18n.AppEnglish.SHARE_WEATHER_LINE.format(feelsDegrees, condition, place, posterMoment)
 
-    const val DISCLOSURE =
-        "As an Amazon Associate, RunWear earns from qualifying purchases."
+    const val DISCLOSURE: String = com.runwear.app.i18n.AppEnglish.SHARE_DISCLOSURE
 
     // Grid layout — one geometry for view and verifier.
     //

@@ -72,7 +72,7 @@ object LaterTodayLine {
     ): String? {
         val clauses = outfitDeltaClauses(current, later)
         if (clauses.isEmpty()) return null
-        val parts = mutableListOf("By ${targetTime.format(TIME_FORMAT)}: ${clauses.joinToString(" · ")}")
+        val parts = mutableListOf(com.runwear.app.i18n.AppEnglish.WIDGET_BY_LINE.format(targetTime.format(TIME_FORMAT), clauses.joinToString(" · ")))
         if (laterWeather.precipitationProbability >= RAIN_MENTION_THRESHOLD) {
             parts += "rain ${laterWeather.precipitationProbability}%"
         }
@@ -94,7 +94,7 @@ object LaterTodayLine {
         } else {
             "feels like ${displayUnit.displayValue(min)}–${displayUnit.formatTemperature(max)}"
         }
-        val parts = mutableListOf("Later today: $range")
+        val parts = mutableListOf(com.runwear.app.i18n.AppEnglish.WIDGET_LATER_TODAY_RANGE.format(range))
         if (peakRain >= RAIN_MENTION_THRESHOLD) parts += "rain up to $peakRain%"
         return parts.joinToString(" · ")
     }

@@ -218,7 +218,7 @@ internal fun HeroWeatherPage(
         heroImageUrl?.let { url ->
             AsyncImage(
                 model = url,
-                contentDescription = "Runner",
+                contentDescription = androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_runner),
                 contentScale = ContentScale.Crop,
                 alignment = Alignment.TopCenter,
                 modifier = Modifier.fillMaxSize()
@@ -377,7 +377,7 @@ internal fun HeroWeatherPage(
                     // DA-13: the numeral's label — it is the
                     // feels-like, named on the card.
                     Text(
-                        text = "Feels like",
+                        text = androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_feels_like_label),
                         style = MaterialTheme.typography.labelSmall,
                         color = RunWearColors.TextPrimary.copy(alpha = 0.8f),
                         textAlign = TextAlign.Center
@@ -472,7 +472,7 @@ internal fun HeroWeatherPage(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "Swipe for $outfitItemCount items →",
+                    text = androidx.compose.ui.res.pluralStringResource(com.runwear.wear.R.plurals.wear_swipe_items, outfitItemCount, outfitItemCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = RunWearColors.Primary,
                     fontWeight = FontWeight.Medium,
@@ -550,7 +550,7 @@ internal fun OutfitPage(
                     .heightIn(min = 40.dp)
                     .padding(horizontal = 8.dp)
             ) {
-                Text("Refresh", style = MaterialTheme.typography.labelSmall)
+                Text(androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_refresh), style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -759,7 +759,7 @@ private fun WearLoadingScreen() {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Loading...",
+                text = androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_loading),
                 style = MaterialTheme.typography.bodySmall,
                 color = RunWearColors.TextSecondary
             )
@@ -788,7 +788,7 @@ private fun WearErrorScreen(error: String, onRetry: () -> Unit) {
             )
             Spacer(Modifier.height(10.dp))
             Button(onClick = onRetry, modifier = Modifier.height(44.dp)) {
-                Text("Retry")
+                Text(androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_retry))
             }
         }
     }
@@ -804,14 +804,14 @@ private fun WearPermissionScreen(onRequest: () -> Unit) {
                 .padding(horizontal = 28.dp, vertical = 12.dp)
         ) {
             Text(
-                text = "Location needed",
+                text = androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_location_needed),
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
                 color = RunWearColors.TextSecondary
             )
             Spacer(Modifier.height(10.dp))
             Button(onClick = onRequest, modifier = Modifier.height(44.dp)) {
-                Text("Grant")
+                Text(androidx.compose.ui.res.stringResource(com.runwear.wear.R.string.wear_grant))
             }
         }
     }
