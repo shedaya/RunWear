@@ -582,7 +582,7 @@ struct HeroTopChromeView: View {
         ZStack {
             // Wordmark, centered on the hero (not on the row's
             // remaining space — the frames center it on screen).
-            Text("RunWear")
+            Text(AppStrings.heroWordmark)
                 .font(.greatVibes(size: 25))
                 .lineLimit(1)
                 .foregroundColor(HeroChrome.cream)
@@ -616,7 +616,7 @@ struct HeroTopChromeView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Location: \(placeName). Change location")
+                .accessibilityLabel(AppStrings.heroLocationA11y(placeName))
 
                 Spacer(minLength: 0)
 
@@ -634,7 +634,7 @@ struct HeroTopChromeView: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Settings")
+                .accessibilityLabel(AppStrings.a11ySettings)
             }
         }
     }
@@ -692,7 +692,7 @@ struct HeroDateTimeChipView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Choose a date: \(dateText)")
+            .accessibilityLabel(AppStrings.heroChooseDate(dateText))
 
             // Divider with the v7 clear space on each side.
             HStack(spacing: 0) {
@@ -716,14 +716,14 @@ struct HeroDateTimeChipView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isNow ? "Choose a time: now" : "Choose a time: \(timeText)")
+            .accessibilityLabel(isNow ? AppStrings.heroChooseTimeNow : AppStrings.heroChooseTime(timeText))
 
             if !isNow {
                 Button(action: onNowTapped) {
                     HStack(spacing: 3) {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 11, weight: .bold))
-                        Text("Now")
+                        Text(AppStrings.heroNow)
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
                     }
@@ -733,7 +733,7 @@ struct HeroDateTimeChipView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Back to now")
+                .accessibilityLabel(AppStrings.heroBackToNow)
             }
 
             Spacer().frame(width: HeroChipGeometry.rightPadding)
@@ -774,7 +774,7 @@ struct HeroFeelsLikeBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("FEELS LIKE")
+            Text(AppStrings.widgetFeelsLikeCaps)
                 .font(.system(size: 11, weight: .semibold))
                 .tracking(2.2)
                 .foregroundColor(HeroChrome.cream)
@@ -807,7 +807,7 @@ struct HeroFeelsLikeBlockView: View {
             }
 
             HStack(spacing: 0) {
-                Text("Actual ")
+                Text(AppStrings.heroActualPrefix)
                     .font(.system(size: 15))
                 Text(formattedActual)
                     .font(.system(size: 15, weight: .bold))

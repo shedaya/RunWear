@@ -69,14 +69,14 @@ enum TemperatureBracket: String, CaseIterable {
 
     var description: String {
         switch self {
-        case .hot: return "Hot Weather Running"
-        case .warm: return "Warm Weather Running"
-        case .mild: return "Mild Weather Running"
-        case .cool: return "Cool Weather Running"
-        case .cold: return "Cold Weather Running"
-        case .veryCold: return "Very Cold Weather Running"
-        case .frigid: return "Frigid Weather Running"
-        case .extreme: return "Extreme Cold Running"
+        case .hot: return AppStrings.weatherBracketHotDesc
+        case .warm: return AppStrings.weatherBracketWarmDesc
+        case .mild: return AppStrings.weatherBracketMildDesc
+        case .cool: return AppStrings.weatherBracketCoolDesc
+        case .cold: return AppStrings.weatherBracketColdDesc
+        case .veryCold: return AppStrings.weatherBracketVeryColdDesc
+        case .frigid: return AppStrings.weatherBracketFrigidDesc
+        case .extreme: return AppStrings.weatherBracketExtremeDesc
         }
     }
 
@@ -155,20 +155,36 @@ enum TemperatureBracket: String, CaseIterable {
     /// Fahrenheit returns the historical rawValue byte-for-byte;
     /// Celsius converts the same bounds, so the band and the hero
     /// numbers always speak one unit.
+    /// The range label in Fahrenheit, resolved through the catalog
+    /// (WP-R3). The rawValue stays the canonical token (it segments
+    /// combination IDs); display reads go through here / rangeText.
+    var displayRange: String {
+        switch self {
+        case .hot: return AppStrings.weatherBracketHotRange
+        case .warm: return AppStrings.weatherBracketWarmRange
+        case .mild: return AppStrings.weatherBracketMildRange
+        case .cool: return AppStrings.weatherBracketCoolRange
+        case .cold: return AppStrings.weatherBracketColdRange
+        case .veryCold: return AppStrings.weatherBracketVeryColdRange
+        case .frigid: return AppStrings.weatherBracketFrigidRange
+        case .extreme: return AppStrings.weatherBracketExtremeRange
+        }
+    }
+
     func rangeText(for unit: TemperatureUnit) -> String {
-        guard unit == .celsius else { return rawValue }
+        guard unit == .celsius else { return displayRange }
         func celsius(_ fahrenheit: Int) -> Int {
             Int(round(Double(fahrenheit - 32) * 5 / 9))
         }
         switch fahrenheitBounds {
         case let (lower?, nil):
-            return "\(celsius(lower))°C+"
+            return AppStrings.weatherBracketRangeCelsiusHigh(celsius(lower))
         case let (nil, upper?):
-            return "<\(celsius(upper))°C"
+            return AppStrings.weatherBracketRangeCelsiusBelow(celsius(upper))
         case let (lower?, upper?):
-            return "\(celsius(lower))-\(celsius(upper))°C"
+            return AppStrings.weatherBracketRangeCelsiusSpan(celsius(lower), celsius(upper))
         case (nil, nil):
-            return rawValue
+            return displayRange
         }
     }
 }

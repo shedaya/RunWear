@@ -62,7 +62,7 @@ struct WatchOutfitView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 10))
-                        Text("Refresh")
+                        Text(AppStrings.wearRefresh)
                             .font(.caption2)
                     }
                 }
@@ -139,7 +139,7 @@ struct WatchGlancePage: View {
 
                 // Swipe hint
                 HStack(spacing: 4) {
-                    Text("Outfit")
+                    Text(AppStrings.wearOutfitLabel)
                         .font(.system(size: 9))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8))

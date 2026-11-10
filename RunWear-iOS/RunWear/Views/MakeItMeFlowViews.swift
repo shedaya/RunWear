@@ -83,11 +83,11 @@ struct MakeItMeForkView: View {
                 // GEN-6 (RW-52): the Make It Me script is the
                 // fork's TITLE (design-spec §10.1, frame 32) — it
                 // heads the fork, not the inside of a card.
-                Text("Make It Me")
+                Text(AppStrings.mimScriptMark)
                     .font(.greatVibes(size: 34))
                     .foregroundColor(AppTheme.inkPrimary)
 
-                Text("See yourself in every outfit.")
+                Text(AppStrings.flowSeeYourself)
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
@@ -100,7 +100,7 @@ struct MakeItMeForkView: View {
                 // closing line — nothing else. (Frame 32 carries no
                 // free-looks promise sentence, and neither does
                 // this fork — see the Option A note below.)
-                Text("Your recommendations, with you in the photo.")
+                Text(AppStrings.flowRecommendationsYou)
                     .font(.system(size: 16))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
@@ -113,11 +113,11 @@ struct MakeItMeForkView: View {
                 // the door — tapping it opens the opt-in flow
                 // directly (gen-5's wiring).
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Make it me")
+                    Text(AppStrings.flowMakeItMeCta)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                     Button(action: onCustomize) {
-                        Text("Use my photos")
+                        Text(AppStrings.flowUseMyPhotos)
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -134,11 +134,11 @@ struct MakeItMeForkView: View {
                 // RW-78: tapping it completes onboarding with the
                 // standard set directly (gen-5's wiring).
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Standard photos")
+                    Text(AppStrings.flowStandardPhotos)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(AppTheme.inkPrimary)
                     Button(action: onStock) {
-                        Text("Use standard photos")
+                        Text(AppStrings.flowUseStandard)
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
@@ -149,7 +149,7 @@ struct MakeItMeForkView: View {
                 .padding(16)
                 .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardFill))
 
-                Text("Either way, your recommendations don't change — only the photo does.")
+                Text(AppStrings.flowEitherWay)
                     .font(.system(size: 13))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
@@ -311,25 +311,25 @@ struct MakeItMeOptInFlow: View {
             VStack(alignment: .leading, spacing: 20) {
                 // GEN-5 (RW-28 item 20): the consent header
                 // carries the Make It Me script (frame 33).
-                Text("Make It Me")
+                Text(AppStrings.mimScriptMark)
                     .font(.greatVibes(size: 28))
                     .foregroundColor(AppTheme.inkPrimary)
 
-                Text("Before you add photos")
+                Text(AppStrings.flowBeforePhotos)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
 
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("RunWear will upload your photos to our server. They're used for one thing only: making pictures of you wearing your recommended outfits.")
-                    Text("Your photos are never used to train AI models. They're never shown to other users, never added to RunWear's standard photo library, and never shared.")
-                    Text("Pictures made from your photos are kept only for you, so your outfits are ready when you open the app.")
-                    Text("You can delete your photos and every picture made from them at any time: Settings → Make It Me → Delete my photos. Deleting is permanent and takes effect right away.")
+                    Text(AppStrings.flowConsentUpload)
+                    Text(AppStrings.flowConsentNever)
+                    Text(AppStrings.flowConsentKept)
+                    Text(AppStrings.flowConsentDelete)
                     // GEN-6 Wave A (RW-48, design-spec §10.2): the
                     // consent body's closing sentence — the
                     // explicit no-other-use assurance the settled
                     // body ends on — restored as the body's last
                     // line.
-                    Text("Nothing else is done with them.")
+                    Text(AppStrings.flowConsentNothingElse)
                 }
                 .font(.system(size: 16))
                 .foregroundColor(AppTheme.inkPrimary)
@@ -342,7 +342,7 @@ struct MakeItMeOptInFlow: View {
                         Image(systemName: attested ? "checkmark.square.fill" : "square")
                             .font(.system(size: 22))
                             .foregroundColor(attested ? AppTheme.primaryColor : AppTheme.inkSecondary)
-                        Text("These photos are of me, and I am 18 or older.")
+                        Text(AppStrings.flowAttestation)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(AppTheme.inkPrimary)
                             .multilineTextAlignment(.leading)
@@ -352,7 +352,7 @@ struct MakeItMeOptInFlow: View {
                 Button {
                     step = .capture
                 } label: {
-                    Text("Continue")
+                    Text(AppStrings.actionContinue)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(attested ? .white : AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity)
@@ -363,7 +363,7 @@ struct MakeItMeOptInFlow: View {
                 .disabled(!attested)
 
                 Button(action: onCancel) {
-                    Text("Not now")
+                    Text(AppStrings.viewNotNow)
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity)
@@ -449,11 +449,11 @@ struct MakeItMeCaptureView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Add your photo")
+                Text(AppStrings.flowAddPhoto)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundColor(AppTheme.inkPrimary)
 
-                Text("One front-facing photo of your face works best: good light, no sunglasses. The generator reads only your face.")
+                Text(AppStrings.flowPhotoGuidance)
                     .font(.system(size: 15))
                     .foregroundColor(AppTheme.inkSecondary)
 
@@ -464,7 +464,7 @@ struct MakeItMeCaptureView: View {
                 // full-body slot is out). GEN-6 (DA-23): the dead
                 // copy constant itself is now deleted.
                 if isReplace {
-                    Text("Replacing your photos remakes today's look right away. Your other looks update as they're made again.")
+                    Text(AppStrings.flowReplaceNote)
                         .font(.system(size: 14))
                         .foregroundColor(AppTheme.inkSecondary)
 
@@ -476,7 +476,7 @@ struct MakeItMeCaptureView: View {
                             Image(systemName: attested ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 22))
                                 .foregroundColor(attested ? AppTheme.primaryColor : AppTheme.inkSecondary)
-                            Text("These photos are of me, and I am 18 or older.")
+                            Text(AppStrings.flowAttestation)
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .multilineTextAlignment(.leading)
@@ -495,7 +495,7 @@ struct MakeItMeCaptureView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             switch photo.state {
                             case .checking:
-                                Text("Checking this photo…")
+                                Text(AppStrings.flowCheckingPhoto)
                                     .font(.system(size: 14))
                                     .foregroundColor(AppTheme.inkSecondary)
                             case .accepted:
@@ -509,7 +509,7 @@ struct MakeItMeCaptureView: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 13, weight: .bold))
-                                    Text("That's exactly what we need")
+                                    Text(AppStrings.captureExact)
                                 }
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(AppTheme.inkPrimary)
@@ -548,7 +548,7 @@ struct MakeItMeCaptureView: View {
                                 } label: {
                                     HStack(spacing: 6) {
                                         Image(systemName: "camera.fill")
-                                        Text("Take the guided selfie")
+                                        Text(AppStrings.flowGuidedSelfie)
                                     }
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(AppTheme.pinePayload)
@@ -560,7 +560,7 @@ struct MakeItMeCaptureView: View {
                                 } label: {
                                     HStack(spacing: 6) {
                                         Image(systemName: "photo.on.rectangle")
-                                        Text("Choose a different photo")
+                                        Text(AppStrings.flowDifferentPhoto)
                                     }
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundColor(AppTheme.pinePayload)
@@ -587,7 +587,7 @@ struct MakeItMeCaptureView: View {
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle")
-                            Text("Add your photo")
+                            Text(AppStrings.flowAddPhoto)
                         }
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(AppTheme.inkPrimary)
@@ -642,7 +642,7 @@ struct MakeItMeCaptureView: View {
                     } label: {
                         HStack {
                             if committing { ProgressView().tint(.white) }
-                            Text(isReplace ? "Save photos" : "Make my first look")
+                            Text(isReplace ? AppStrings.flowSavePhotos : AppStrings.flowMakeFirstLook)
                         }
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(canConfirm ? .white : AppTheme.inkSecondary)
@@ -654,7 +654,7 @@ struct MakeItMeCaptureView: View {
                     .disabled(!canConfirm)
 
                     Button(action: onCancel) {
-                        Text("Cancel")
+                        Text(AppStrings.actionCancel)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(AppTheme.inkSecondary)
                             .frame(maxWidth: .infinity)
@@ -675,10 +675,10 @@ struct MakeItMeCaptureView: View {
         // RW-16.14: the source choice — camera beside library. The
         // routing decision itself is the pure PhotoIntakeRouting;
         // this dialog only renders its outcome.
-        .confirmationDialog("Add a photo", isPresented: $showSourceChoice, titleVisibility: .visible) {
-            Button("Take Photo") { routeToSource(.camera) }
-            Button("Choose from Library") { routeToSource(.library) }
-            Button("Cancel", role: .cancel) {}
+        .confirmationDialog(AppStrings.flowAddPhotoShort, isPresented: $showSourceChoice, titleVisibility: .visible) {
+            Button(AppStrings.flowTakePhoto) { routeToSource(.camera) }
+            Button(AppStrings.flowChooseLibrary) { routeToSource(.library) }
+            Button(AppStrings.actionCancel, role: .cancel) {}
         }
         .fullScreenCover(isPresented: $showCamera) {
             // RW-26: the camera door IS the guided capture —

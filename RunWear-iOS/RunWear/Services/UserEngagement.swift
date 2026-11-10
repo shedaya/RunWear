@@ -88,6 +88,19 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The human label for the picker and the mail fallback. The raw
+    /// value stays the canonical English name; display resolves
+    /// through the catalog (WP-R3).
+    var displayName: String {
+        switch self {
+        case .somethingWrong: return AppStrings.feedbackSomethingWrong
+        case .recommendationOff: return AppStrings.feedbackRecommendationOff
+        case .confusing: return AppStrings.feedbackConfusing
+        case .idea: return AppStrings.feedbackIdea
+        case .other: return AppStrings.feedbackOther
+        }
+    }
+
     var id: String { wireId }
 }
 
@@ -166,7 +179,7 @@ enum FeedbackComposer {
         components.scheme = "mailto"
         components.path = supportEmail
         components.queryItems = [
-            URLQueryItem(name: "subject", value: "RunWear Feedback — \(category.rawValue)"),
+            URLQueryItem(name: "subject", value: "RunWear Feedback — \(category.displayName)"),
             URLQueryItem(name: "body", value: bodyLines.joined(separator: "\n"))
         ]
         return components.url

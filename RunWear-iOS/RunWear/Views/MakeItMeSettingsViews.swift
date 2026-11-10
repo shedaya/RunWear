@@ -99,7 +99,7 @@ struct MakeItMeSettingsSection: View {
                 if featureEnabled {
                     settingsRow(
                         title: MakeItMeSettingsRow.notStarted.title,
-                        subtitle: "Make your outfit photos from your own photos.",
+                        subtitle: AppStrings.mimsetIntro,
                         action: { presentation.present(.optIn) }
                     )
                 } else {
@@ -107,7 +107,7 @@ struct MakeItMeSettingsSection: View {
                         Text(MakeItMeSettingsRow.notStarted.title)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("Make your outfit photos from your own photos.")
+                        Text(AppStrings.mimsetIntro)
                             .font(.system(size: 13))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -118,7 +118,7 @@ struct MakeItMeSettingsSection: View {
                 // the shared seam — one source of truth, so the
                 // block can never contradict itself.
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("You're in your photos.")
+                    Text(AppStrings.mimsetInPhotos)
                         .font(.system(size: 16, weight: .semibold))
                     // WS-8 (D-25 residue class): the state/meter
                     // lines render in the design's secondary token
@@ -140,11 +140,11 @@ struct MakeItMeSettingsSection: View {
                         // band seat above), so the claim can never
                         // outrun the coverage it asserts.
                         if SubscribedReadiness.mayClaim(coverage: store.bankCoverage) {
-                            Text("Subscribed · Your photo is ready before you open the app.")
+                            Text(AppStrings.mimsetSubscribedReady)
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         } else {
-                            Text("Subscribed.")
+                            Text(AppStrings.mimsetSubscribed)
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -176,7 +176,7 @@ struct MakeItMeSettingsSection: View {
         } header: {
             // RW-26 (notes §7.5): "Make It Me" is a script
             // wordmark wherever it appears as a title.
-            Text("Make It Me")
+            Text(AppStrings.mimScriptMark)
                 .font(.greatVibes(size: 20))
                 .textCase(nil)
                 .foregroundColor(AppTheme.inkPrimary)
@@ -202,7 +202,7 @@ struct MakeItMeSettingsSection: View {
                         Text(MakeItMeSettingsRow.yourPhotos.title)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("View or replace")
+                        Text(AppStrings.mimsetViewReplace)
                             .font(.system(size: 13))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -376,7 +376,7 @@ private struct MakeItMePremiumOfferCard: View {
                 .foregroundColor(AppTheme.inkPrimary)
             // The settled two-benefit copy (§9 line, verbatim):
             // looks made ahead, without limit.
-            Text("Made ahead, without limit — every outfit is ready when you open the app.")
+            Text(AppStrings.mimsetMadeAhead)
                 .font(.system(size: 14))
                 .foregroundColor(AppTheme.inkSecondary)
             // RW-100 (Sol's sharpened spec, Nov 6, 2026): BOTH
@@ -394,15 +394,15 @@ private struct MakeItMePremiumOfferCard: View {
             if let priceLine = MakeItMePriceLabels.settingsOfferPriceLine(annualPriceString: billing.annualPriceString) {
                 planOptionRow(
                     plan: .annual,
-                    label: "Annual — \(priceLine)",
-                    accessibility: "Annual plan, \(priceLine)"
+                    label: AppStrings.mimsetAnnualPrice(priceLine),
+                    accessibility: AppStrings.mimsetAnnualPlanA11y(priceLine)
                 )
             }
             if let monthlyLabel = MakeItMePriceLabels.settingsMonthlyLabel(monthlyPriceString: billing.monthlyPriceString) {
                 planOptionRow(
                     plan: .monthly,
                     label: monthlyLabel,
-                    accessibility: "Monthly plan, \(monthlyLabel)"
+                    accessibility: AppStrings.mimsetMonthlyPlanA11y(monthlyLabel)
                 )
             }
             Button(action: purchase) {
@@ -490,7 +490,7 @@ private struct MakeItMePremiumOfferCard: View {
             case .subscribed, .cancelled:
                 break
             case .unavailable:
-                unavailableLine = "Purchases aren't available right now. Please try again later."
+                unavailableLine = AppStrings.mimsetPurchasesUnavailable
             }
         }
     }
@@ -536,10 +536,10 @@ struct MakeItMePhotosView: View {
         // Frame 38/EX-10's form: "Added Nov 2 · Every look is
         // made from this one." Without a stamp (no set loaded
         // yet) the line keeps its settled second half alone.
-        guard let arrivalDate else { return "Every look is made from this one." }
+        guard let arrivalDate else { return AppStrings.mimsetEveryLookOne }
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
-        return "Added \(formatter.string(from: arrivalDate)) · Every look is made from this one."
+        return AppStrings.mimsetAddedLine(formatter.string(from: arrivalDate))
     }
 
     var body: some View {
@@ -555,10 +555,10 @@ struct MakeItMePhotosView: View {
                     // are distinct (the gen-4 build collapsed them
                     // into one generic "Replace photos" button).
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Make It Me")
+                        Text(AppStrings.mimScriptMark)
                             .font(.greatVibes(size: 26))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("Your photos")
+                        Text(AppStrings.mimsetYourPhotos)
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(AppTheme.inkPrimary)
                     }
@@ -574,7 +574,7 @@ struct MakeItMePhotosView: View {
                             }
                         }
                     case .empty:
-                        Text("No photos on the server.")
+                        Text(AppStrings.mimsetNoPhotos)
                             .font(.system(size: 15))
                             .foregroundColor(AppTheme.inkSecondary)
                     case .failed(let message):
@@ -585,7 +585,7 @@ struct MakeItMePhotosView: View {
                             Button {
                                 Task { await loader.load() }
                             } label: {
-                                Text("Try again")
+                                Text(AppStrings.mimLookRetry)
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(AppTheme.inkPrimary)
                                     .padding(.horizontal, 16)
@@ -594,14 +594,14 @@ struct MakeItMePhotosView: View {
                             }
                         }
                     case .idle, .loading:
-                        Text("Loading…")
+                        Text(AppStrings.mimsetLoading)
                             .font(.system(size: 15))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
 
                     // The one current photo, labelled (frame 38).
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Your current photo")
+                        Text(AppStrings.mimsetCurrentPhoto)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
                         Text(arrivalLine)
@@ -613,10 +613,10 @@ struct MakeItMePhotosView: View {
                     // heading — a retake re-makes what's AHEAD and
                     // never rewrites the collection behind it.
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("A new photo starts a new set")
+                        Text(AppStrings.mimsetNewPhotoHead)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("Retake your selfie and new looks are made from the new photo. Looks already saved in Wear I've Run stay exactly as they are.")
+                        Text(AppStrings.mimsetNewPhotoBody)
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -626,7 +626,7 @@ struct MakeItMePhotosView: View {
                     // the replace flow, whose source choice opens
                     // on exactly these two doors.
                     Button(action: onReplace) {
-                        Text("Retake Selfie")
+                        Text(AppStrings.mimsetRetake)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -634,7 +634,7 @@ struct MakeItMePhotosView: View {
                             .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.primaryColor))
                     }
                     Button(action: onReplace) {
-                        Text("Choose a Different Photo")
+                        Text(AppStrings.mimsetDifferentPhoto)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
                             .frame(maxWidth: .infinity)
@@ -648,7 +648,7 @@ struct MakeItMePhotosView: View {
                     // Settings list behind it. Same confirmation,
                     // same deletion path as the danger zone.
                     Button(role: .destructive, action: onDeletePhotos) {
-                        Text("Delete my photos")
+                        Text(AppStrings.settingsDeletePhotos)
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(.red)
                             .frame(maxWidth: .infinity)
@@ -695,7 +695,7 @@ private struct ReferencePhotoTileView: View {
                         VStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle")
                                 .foregroundColor(AppTheme.inkSecondary)
-                            Text("Tap to retry")
+                            Text(AppStrings.mimsetTapRetry)
                                 .font(.system(size: 10))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -707,7 +707,7 @@ private struct ReferencePhotoTileView: View {
                     VStack(spacing: 4) {
                         ProgressView()
                             .tint(AppTheme.inkSecondary)
-                        Text("Loading…")
+                        Text(AppStrings.mimsetLoading)
                             .font(.system(size: 10))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -769,18 +769,18 @@ struct MakeItMeSubscriptionSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // The feature's script title (§7.5: 30pt instance).
-                    Text("Make It Me")
+                    Text(AppStrings.mimScriptMark)
                         .font(.greatVibes(size: 30))
                         .foregroundColor(AppTheme.inkPrimary)
 
                     // Free bar + the real meter (§1 wording pass).
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text("Free plan")
+                            Text(AppStrings.mimsetFreePlan)
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(AppTheme.inkPrimary)
                             Spacer()
-                            Text("\(PersonalHeroStore.freeAllowance) looks included")
+                            Text(AppStrings.mimsetLooksIncluded(PersonalHeroStore.freeAllowance))
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -794,10 +794,10 @@ struct MakeItMeSubscriptionSheet: View {
                     // How Premium works — the convergence copy,
                     // verbatim (§6 audit table, row 3).
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("How Premium works")
+                        Text(AppStrings.mimsetHowPremium)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("Looks of you for every scenario. This week's weather is made first; the rest are made as you need them, and each one is banked for good once it's made.")
+                        Text(AppStrings.mimsetHowPremiumBody)
                             .font(.system(size: 14))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -811,14 +811,14 @@ struct MakeItMeSubscriptionSheet: View {
                     // not a stroke change alone.
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Premium")
+                            Text(AppStrings.mimsetPremium)
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(AppTheme.inkPrimary)
-                            Text("All of Make It Me.")
+                            Text(AppStrings.mimsetAllOf)
                                 .font(.system(size: 15))
                                 .foregroundColor(AppTheme.inkSecondary)
                             if let price = store.billing.annualPriceString {
-                                Text("\(price)/yr")
+                                Text(AppStrings.payAnnualRow(price))
                                     .font(.system(size: 19, weight: .bold))
                                     .foregroundColor(AppTheme.inkPrimary)
                             }
@@ -850,7 +850,7 @@ struct MakeItMeSubscriptionSheet: View {
                     .contentShape(RoundedRectangle(cornerRadius: 16))
                     .onTapGesture { selectedPlan = .annual }
                     .accessibilityAddTraits(selectedPlan == .annual ? [.isSelected] : [])
-                    .accessibilityLabel("Annual plan")
+                    .accessibilityLabel(AppStrings.mimsetAnnualPlan)
 
                     // GEN-3 (WS-F) as settled by GEN-6 (DA-20 +
                     // RW-58): the fine print under the card carries
@@ -902,7 +902,7 @@ struct MakeItMeSubscriptionSheet: View {
                         .contentShape(RoundedRectangle(cornerRadius: 14))
                         .onTapGesture { selectedPlan = .monthly }
                         .accessibilityAddTraits(selectedPlan == .monthly ? [.isSelected] : [])
-                        .accessibilityLabel("Monthly plan, \(store.billing.monthlyRowLabel)")
+                        .accessibilityLabel(AppStrings.mimsetMonthlyPlanA11y(store.billing.monthlyRowLabel))
                     }
 
                     if store.billing.isSubscribed {
@@ -914,11 +914,11 @@ struct MakeItMeSubscriptionSheet: View {
                         // filling sees the plain subscribed state,
                         // never a hard-coded readiness promise.
                         if SubscribedReadiness.mayClaim(coverage: store.bankCoverage) {
-                            Text("Subscribed · Your photo is ready before you open the app.")
+                            Text(AppStrings.mimsetSubscribedReady)
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         } else {
-                            Text("You're subscribed.")
+                            Text(AppStrings.mimsetSubscribedShort)
                                 .font(.system(size: 14))
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -961,7 +961,7 @@ struct MakeItMeSubscriptionSheet: View {
                             if store.billing.isSubscribed { dismiss() }
                         }
                     } label: {
-                        Text("Restore purchases")
+                        Text(AppStrings.mimsetRestore)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -989,7 +989,7 @@ struct MakeItMeSubscriptionSheet: View {
             case .cancelled:
                 break
             case .unavailable:
-                unavailableLine = "Purchases aren't available right now. Please try again later."
+                unavailableLine = AppStrings.mimsetPurchasesUnavailable
             }
         }
     }
@@ -1007,10 +1007,10 @@ struct MakeItMeUpsellCard: View {
             // GEN-6 (DA-22): the feature's name as a title is the
             // Make It Me SCRIPT, like every other title instance
             // in the app — never a bold sans caps eyebrow.
-            Text("Make It Me")
+            Text(AppStrings.mimScriptMark)
                 .font(.greatVibes(size: 25))
                 .foregroundColor(AppTheme.inkPrimary)
-            Text("This outfit isn't you — yet.")
+            Text(AppStrings.mimsetNotYouYet)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(AppTheme.inkPrimary)
             // RW-148 (Nov 9, 2026): the seen-count is the ONE
@@ -1025,7 +1025,7 @@ struct MakeItMeUpsellCard: View {
             Button {
                 showSubscriptionSheet = true
             } label: {
-                Text("See myself in every outfit")
+                Text(AppStrings.mimsetSeeMyself)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -1035,7 +1035,7 @@ struct MakeItMeUpsellCard: View {
             Button {
                 store.dismissUpsell(currentCell: currentCell)
             } label: {
-                Text("Not now")
+                Text(AppStrings.viewNotNow)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(AppTheme.inkSecondary)
                     .frame(maxWidth: .infinity)
@@ -1097,7 +1097,7 @@ struct ConvergenceBandView: View {
         .background(RoundedRectangle(cornerRadius: 16).fill(AppTheme.cardOnSheet))
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(content.heading). \(content.line)")
+        .accessibilityLabel(AppStrings.mimsetBandJoin(content.heading, content.line))
     }
 }
 
@@ -1132,7 +1132,7 @@ struct YourLooksLibraryView: View {
     var body: some View {
         ScrollView {
             if cells.isEmpty {
-                Text("Your looks will appear here as they're made.")
+                Text(AppStrings.mimsetLooksEmpty)
                     .font(.system(size: 15))
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
@@ -1148,7 +1148,7 @@ struct YourLooksLibraryView: View {
             }
         }
         .background(AppTheme.background.ignoresSafeArea())
-        .navigationTitle("Your looks")
+        .navigationTitle(AppStrings.looksTitle)
         .navigationBarTitleDisplayMode(.inline)
         // Landing on the library re-reads the bank (the
         // reconciliation pass's library leg).
@@ -1158,11 +1158,11 @@ struct YourLooksLibraryView: View {
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }
+                Button(AppStrings.actionDone) { dismiss() }
             }
         }
-        .alert("Why am I seeing a stock photo?", isPresented: $showFailedExplanation) {
-            Button("OK", role: .cancel) {}
+        .alert(AppStrings.looksWhyDoor, isPresented: $showFailedExplanation) {
+            Button(AppStrings.actionOk, role: .cancel) {}
         } message: {
             Text(PersonalServePolicy.failedExplanation)
         }
@@ -1210,7 +1210,7 @@ struct YourLooksLibraryView: View {
                 .font(.system(size: 13))
                 .foregroundColor(AppTheme.inkSecondary)
             if cell.isFailed {
-                Button("Why am I seeing a stock photo?") {
+                Button(AppStrings.looksWhyDoor) {
                     showFailedExplanation = true
                 }
                 .font(.system(size: 13, weight: .semibold))

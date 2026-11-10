@@ -53,7 +53,7 @@ struct WearIveRunCollectionView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // The collection's signature — script, ink on light
                 // / warm-white on dark via the ink token.
-                Text("Wear I've Run")
+                Text(AppStrings.wirWordmark)
                     .font(.greatVibes(size: 34))
                     .foregroundColor(AppTheme.inkPrimary)
 
@@ -62,7 +62,7 @@ struct WearIveRunCollectionView: View {
                 if model.entries.isEmpty {
                     emptyState
                 } else if chapters.isEmpty && pinned == nil {
-                    Text("No days match this filter yet.")
+                    Text(AppStrings.collectionNoMatch)
                         .font(.appSecondary)
                         .foregroundColor(AppTheme.inkSecondary)
                 } else {
@@ -78,7 +78,7 @@ struct WearIveRunCollectionView: View {
                                 // would announce a day the record
                                 // does not hold.
                                 Text(Calendar.current.isDateInToday(today.dayStart)
-                                     ? "Today"
+                                     ? AppStrings.wirDayToday
                                      : WearIveRunDateFormatting.dayLabel(today.dayStart))
                                     .font(.appEyebrow)
                                     .foregroundColor(AppTheme.inkMuted)
@@ -93,7 +93,7 @@ struct WearIveRunCollectionView: View {
                                         .foregroundColor(AppTheme.inkSecondary)
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("Delete this entry")
+                                .accessibilityLabel(AppStrings.collectionDeleteEntry)
                             }
                             NavigationLink {
                                 WearIveRunDayView(
@@ -158,10 +158,10 @@ struct WearIveRunCollectionView: View {
             // state, verbatim — build 25's invented head and
             // session-framed body are replaced with the settled
             // day-language text.
-            Text("Your scrapbook starts with today's run.")
+            Text(AppStrings.wirEmptyLine)
                 .font(.appSectionTitle)
                 .foregroundColor(AppTheme.inkPrimary)
-            Text("Each day's outfit is saved here automatically — one card per day, in the places you've run. Nothing is backfilled. It begins the first time today's outfit is generated.")
+            Text(AppStrings.collectionEmptyBody)
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
         }
@@ -203,7 +203,7 @@ struct WearIveRunCollectionView: View {
                 Text(entry.placeDisplayName)
                     .font(.appItemName)
                     .foregroundColor(AppTheme.inkPrimary)
-                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
+                Text(AppEnglish.collectionEntryHead(formatTemperature(entry.feelsLikeF), entry.condition) + AppEnglish.mimFirstLookWeatherItems(entry.itemNames.count))
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
                 // GEN-5 (RW-28 item 10): the TODAY card's settled
@@ -269,7 +269,7 @@ struct WearIveRunChapterView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Wear I've Run")
+                Text(AppStrings.wirWordmark)
                     .font(.greatVibes(size: 28))
                     .foregroundColor(AppTheme.inkPrimary)
 
@@ -301,13 +301,13 @@ struct WearIveRunChapterView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "trash")
-                            Text("Delete all entries for this place")
+                            Text(AppStrings.collectionDeletePlace)
                         }
                         .font(.appSecondary.weight(.semibold))
                     }
                     .padding(.top, 4)
                 } else {
-                    Text("No days match this filter yet.")
+                    Text(AppStrings.collectionNoMatch)
                         .font(.appSecondary)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -369,9 +369,9 @@ struct WearIveRunChapterView: View {
         let range = group.feelsLikeRangeF
         let rangeText = range.min == range.max
             ? formatTemperature(range.min)
-            : "\(formatTemperature(range.min))–\(formatTemperature(range.max))"
-        let days = group.dayCount == 1 ? "1 day" : "\(group.dayCount) days"
-        return "\(days) · \(rangeText)"
+            : AppEnglish.collectionRangeJoin(formatTemperature(range.min), formatTemperature(range.max))
+        let days = AppEnglish.wirDaysCount(group.dayCount)
+        return AppEnglish.wirSummarySingle(days, rangeText)
     }
 
     private func dayList(_ entries: [WearIveRunEntry]) -> some View {
@@ -390,7 +390,7 @@ struct WearIveRunChapterView: View {
                                 Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
                                     .font(.appItemName)
                                     .foregroundColor(AppTheme.inkPrimary)
-                                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
+                                Text(AppEnglish.collectionEntryHead(formatTemperature(entry.feelsLikeF), entry.condition) + AppEnglish.mimFirstLookWeatherItems(entry.itemNames.count))
                                     .font(.appFootnote)
                                     .foregroundColor(AppTheme.inkSecondary)
                             }
@@ -416,7 +416,7 @@ struct WearIveRunChapterView: View {
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Delete \(WearIveRunDateFormatting.dayLabel(entry.dayStart)) in \(entry.placeDisplayName)")
+                    .accessibilityLabel(AppStrings.collectionDeleteDayPlace(WearIveRunDateFormatting.dayLabel(entry.dayStart), entry.placeDisplayName))
                 }
             }
         }
@@ -534,14 +534,14 @@ struct WearIveRunDayView: View {
                 .fullScreenCover(isPresented: $showPhotoViewer) {
                     HeroPhotoViewer(
                         imageURL: entry.heroImageReference,
-                        caption: entry.itemNames.joined(separator: " · ")
+                        caption: entry.itemNames.joined(separator: AppStrings.wirSubtitleJoin)
                     )
                 }
 
-                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition)")
+                Text(AppEnglish.collectionEntryHead(formatTemperature(entry.feelsLikeF), entry.condition))
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
-                Text("Actual \(formatTemperature(entry.actualF)) · \(entry.placeDisplayName)")
+                Text(AppStrings.collectionEntryActual(formatTemperature(entry.actualF), entry.placeDisplayName))
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkSecondary)
 
@@ -562,10 +562,10 @@ struct WearIveRunDayView: View {
                 } label: {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Share this day")
+                            Text(AppStrings.collectionShareDay)
                                 .font(.appItemName)
                                 .foregroundColor(AppTheme.inkPrimary)
-                            Text("Morning Poster or Kit Card, with the day's caption.")
+                            Text(AppStrings.collectionShareDaySub)
                                 .font(.appFootnote)
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -858,11 +858,11 @@ struct ShareStudioView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 HStack {
-                    Text("Share this day")
+                    Text(AppStrings.collectionShareDay)
                         .font(.appSectionTitle)
                         .foregroundColor(AppTheme.inkPrimary)
                     Spacer()
-                    Button("Close") { dismiss() }
+                    Button(AppStrings.actionClose) { dismiss() }
                         .font(.appButtonLabel)
                         .foregroundColor(AppTheme.pinePayload)
                 }
@@ -877,7 +877,7 @@ struct ShareStudioView: View {
                     Text(ShareCardCopy.verifyFailureLabel)
                         .font(.appSecondary)
                         .foregroundColor(AppTheme.inkPrimary)
-                    Button("Try again") {
+                    Button(AppStrings.actionTryAgain) {
                         verifyFailed = false
                         onRetry(selectedKind)
                     }
@@ -888,7 +888,7 @@ struct ShareStudioView: View {
                 Button {
                     shareTapped()
                 } label: {
-                    Text("Share")
+                    Text(AppStrings.actionShare)
                         .font(.appButtonLabel)
                         .foregroundColor(AppTheme.warmWhite)
                         .frame(maxWidth: .infinity)
@@ -926,8 +926,8 @@ struct ShareStudioView: View {
 
     private var formatChoice: some View {
         HStack(alignment: .top, spacing: 12) {
-            formatCard(kind: .poster, name: "Morning Poster", slot: posterSlot)
-            formatCard(kind: .kit, name: "Kit Card", slot: kitSlot)
+            formatCard(kind: .poster, name: AppStrings.collectionPoster, slot: posterSlot)
+            formatCard(kind: .kit, name: AppStrings.collectionKitCard, slot: kitSlot)
         }
     }
 
@@ -953,7 +953,7 @@ struct ShareStudioView: View {
                                 .font(.appFootnote)
                                 .foregroundColor(AppTheme.inkPrimary)
                                 .multilineTextAlignment(.center)
-                            Text("Try again")
+                            Text(AppStrings.actionTryAgain)
                                 .font(.appFootnote.weight(.semibold))
                                 .foregroundColor(AppTheme.pinePayload)
                         }
@@ -995,7 +995,7 @@ struct ShareStudioView: View {
     }
 
     private var sizeControl: some View {
-        Picker("Size", selection: $format) {
+        Picker(AppStrings.collectionSize, selection: $format) {
             ForEach(ShareExportFormat.allCases) { option in
                 Text(option.label).tag(option)
             }
@@ -1029,16 +1029,16 @@ struct ShareStudioView: View {
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(exportContext.missingKitGarments) { garment in
                     HStack {
-                        Text("\(garment.name) couldn't load.")
+                        Text(AppStrings.collectionLoadFailed(garment.name))
                             .font(.appFootnote)
                             .foregroundColor(AppTheme.inkPrimary)
                         Spacer()
-                        Button("Remove from card") { onRemoveGarment(garment.key) }
+                        Button(AppStrings.actionRemoveFromCard) { onRemoveGarment(garment.key) }
                             .font(.appFootnote.weight(.semibold))
                             .foregroundColor(AppTheme.pinePayload)
                     }
                 }
-                Button("Try again") { onRetry(.kit) }
+                Button(AppStrings.actionTryAgain) { onRetry(.kit) }
                     .font(.appButtonLabel)
                     .foregroundColor(AppTheme.pinePayload)
             }
@@ -1052,7 +1052,7 @@ struct ShareStudioView: View {
                             .font(.appFootnote)
                             .foregroundColor(AppTheme.inkPrimary)
                         Spacer()
-                        Button("Shop ›") { openURL(url) }
+                        Button(AppStrings.actionShopArrow) { openURL(url) }
                             .font(.appFootnote.weight(.semibold))
                             .foregroundColor(AppTheme.pinePayload)
                     }
@@ -1077,11 +1077,11 @@ struct ShareStudioView: View {
     private var captionChoice: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Caption")
+                Text(AppStrings.collectionCaption)
                     .font(.appItemName)
                     .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
-                Button("Edit") {
+                Button(AppStrings.actionEdit) {
                     editorDraft = activeCaption
                     editorPresented = true
                 }
@@ -1120,7 +1120,7 @@ struct ShareStudioView: View {
 
     private var captionEditor: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Edit caption")
+            Text(AppStrings.collectionEditCaption)
                 .font(.appSectionTitle)
                 .foregroundColor(AppTheme.inkPrimary)
             TextEditor(text: $editorDraft)
@@ -1129,11 +1129,11 @@ struct ShareStudioView: View {
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 12).fill(AppTheme.sheet))
             HStack {
-                Button("Cancel") { editorPresented = false }
+                Button(AppStrings.actionCancel) { editorPresented = false }
                     .font(.appButtonLabel)
                     .foregroundColor(AppTheme.pinePayload)
                 Spacer()
-                Button("Use this caption") {
+                Button(AppStrings.collectionUseCaption) {
                     editedCaption = editorDraft
                     editorPresented = false
                 }
@@ -1287,7 +1287,7 @@ struct MorningPosterView: View {
         }
         // Legacy record without a wind figure: the micro-line
         // carries what the record holds — never a fabrication.
-        return "\(entry.condition) · Actual \(actual)°"
+        return AppStrings.collectionCardActual(entry.condition, actual)
     }
 
     var body: some View {
@@ -1316,11 +1316,11 @@ struct MorningPosterView: View {
             VStack(spacing: 0) {
                 // Lockup: script brand + hashtag directly under it.
                 VStack(spacing: 2) {
-                    Text("RunWear")
+                    Text(AppStrings.heroWordmark)
                         .font(.greatVibes(size: 37))
                         .foregroundColor(AppTheme.warmWhite)
                         .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
-                    Text("#RunAnyWear")
+                    Text(AppStrings.collectionHashtag)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(AppTheme.warmWhite)
                 }
@@ -1334,7 +1334,7 @@ struct MorningPosterView: View {
                         Text(feelsText)
                             .font(.system(size: 64, weight: .heavy))
                             .foregroundColor(.white)
-                        Text("feels like")
+                        Text(AppStrings.collectionFeelsWord)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white.opacity(0.9))
                     }
@@ -1387,13 +1387,13 @@ struct MorningPosterView: View {
     /// elements in opposite corners.
     private var footerRow: some View {
         HStack(spacing: 9) {
-            Text("Wear I've Run")
+            Text(AppStrings.wirWordmark)
                 .font(.greatVibes(size: 21))
                 .foregroundColor(.white)
             Text("·")
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.55))
-            Text("runwear.ai")
+            Text(AppStrings.collectionSite)
                 .font(.system(size: 11.5, weight: .semibold))
                 .foregroundColor(.white)
         }
@@ -1438,7 +1438,7 @@ struct KitCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Wear I've Run")
+                Text(AppStrings.wirWordmark)
                     .font(.greatVibes(size: 24))
                     .foregroundColor(AppTheme.textPrimary)
                 Text(entry.placeDisplayName)
@@ -1481,7 +1481,7 @@ struct KitCardView: View {
                                 .padding(.top, 1)
                         }
                         if hasShopLink(forKey: item.key) {
-                            Text("Shop ›")
+                            Text(AppStrings.actionShopArrow)
                                 .font(.system(size: 12.5, weight: .semibold))
                                 .foregroundColor(AppTheme.primaryColor)
                                 .padding(.top, 4)
@@ -1493,10 +1493,10 @@ struct KitCardView: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 8) {
-                Text("#RunAnyWear")
+                Text(AppStrings.collectionHashtag)
                     .font(.system(size: 13.5, weight: .semibold))
                     .foregroundColor(AppTheme.primaryColor)
-                Text("runwear.ai")
+                Text(AppStrings.collectionSite)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(AppTheme.textSecondary)
             }

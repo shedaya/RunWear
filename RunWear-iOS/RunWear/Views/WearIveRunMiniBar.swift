@@ -107,7 +107,7 @@ enum WearIveRunState: Equatable {
 }
 
 enum WearIveRunMiniBarModel {
-    static let wordmark = "Wear I've Run"
+    static let wordmark = AppStrings.wirWordmark
 
     /// The bar's state from the session's entry: absent without
     /// one; a future-day entry is the planned form; anything
@@ -210,9 +210,9 @@ enum WearIveRunNarration {
         case .preAdd:
             return nil
         case .updated(let payload):
-            return "Updated to \(payload.rendered)"
+            return AppEnglish.wirUpdatedLine(payload.rendered)
         case .planned(let place, let dayLabel, let moment):
-            return "Planned for \(place)\(plannedSuffix(dayLabel: dayLabel, moment: moment))"
+            return AppEnglish.wirPlannedLine(place, plannedSuffix(dayLabel: dayLabel, moment: moment))
         }
     }
 
@@ -230,11 +230,11 @@ enum WearIveRunNarration {
     static func plannedSuffix(dayLabel: String, moment: MomentReading) -> String {
         switch moment {
         case .clock:
-            return " · \(dayLabel) · \(moment.rendered)"
+            return AppEnglish.wirPlanSuffixDayMoment(dayLabel, moment.rendered)
         case .daypart:
-            return " · \(moment.rendered)"
+            return AppEnglish.wirPlanSuffixMoment(moment.rendered)
         case .now:
-            return " · \(dayLabel)"
+            return AppEnglish.wirPlanSuffixDay(dayLabel)
         }
     }
 
@@ -254,7 +254,7 @@ enum WearIveRunNarration {
         let tomorrow = calendar.date(
             byAdding: .day, value: 1,
             to: calendar.startOfDay(for: now)) ?? now
-        if calendar.isDate(entry.dayStart, inSameDayAs: tomorrow) { return "Tomorrow" }
+        if calendar.isDate(entry.dayStart, inSameDayAs: tomorrow) { return AppEnglish.wirDayTomorrow }
         let weekday = DateFormatter()
         weekday.calendar = calendar
         weekday.locale = Locale(identifier: "en_US_POSIX")
@@ -275,11 +275,11 @@ enum WearIveRunNarration {
         // Day comparisons against the INJECTED now (see
         // plannedDayLabel — the isDateIn* family would anchor
         // to the system clock instead).
-        if calendar.isDate(entry.dayStart, inSameDayAs: now) { return "Today" }
+        if calendar.isDate(entry.dayStart, inSameDayAs: now) { return AppEnglish.wirDayToday }
         let tomorrow = calendar.date(
             byAdding: .day, value: 1,
             to: calendar.startOfDay(for: now)) ?? now
-        if calendar.isDate(entry.dayStart, inSameDayAs: tomorrow) { return "Tomorrow" }
+        if calendar.isDate(entry.dayStart, inSameDayAs: tomorrow) { return AppEnglish.wirDayTomorrow }
         let weekday = DateFormatter()
         weekday.calendar = calendar
         weekday.locale = Locale(identifier: "en_US_POSIX")
@@ -312,10 +312,10 @@ enum WearIveRunNarration {
         // the recorded dayStart — never a hardcoded "Today".
         let day = expandedDayLabel(for: entry, calendar: calendar, now: now)
         if entry.itemNames.isEmpty {
-            let items = entry.itemNames.count == 1 ? "1 item" : "\(entry.itemNames.count) items"
-            return "\(entry.placeDisplayName) · \(day) — \(formattedFeelsLike) feels like · \(items)"
+            let items = AppEnglish.wirItemsCount(entry.itemNames.count)
+            return AppEnglish.wirEntryLineCount(entry.placeDisplayName, day, formattedFeelsLike, items)
         }
-        return "\(entry.placeDisplayName) · \(day) — \(formattedFeelsLike) feels like · \(entry.itemNames.joined(separator: " · "))"
+        return AppEnglish.wirEntryLineCount(entry.placeDisplayName, day, formattedFeelsLike, entry.itemNames.joined(separator: " · "))
     }
 }
 
@@ -377,7 +377,7 @@ enum WearIveRunViewedNarration {
         }
         guard placeChanged || momentChanged else { return nil }
         if placeChanged, let viewedPlace {
-            return "\(viewedPlace.displayName), \(momentText)"
+            return AppEnglish.wirPlaceMoment(viewedPlace.displayName, momentText)
         }
         return momentText
     }
@@ -393,7 +393,7 @@ enum WearIveRunViewedNarration {
         calendar: Calendar = .current,
         now: Date = Date()
     ) -> String {
-        if isViewingNow { return "Now" }
+        if isViewingNow { return AppEnglish.wirNow }
         let display = viewedHour % 12 == 0 ? 12 : viewedHour % 12
         let suffix = viewedHour >= 12 ? "p.m." : "a.m."
         if calendar.isDate(viewedDate, inSameDayAs: now) {
@@ -1013,7 +1013,7 @@ struct WearIveRunEmptyDockView: View {
 
     /// The designed empty state's head line, verbatim (frame 10;
     /// the same string the collection's emptyState carries).
-    static let emptyLine = "Your scrapbook starts with today's run."
+    static let emptyLine = AppEnglish.wirEmptyLine
 
     var body: some View {
         Button(action: onOpenCollection) {
@@ -1048,7 +1048,7 @@ struct WearIveRunEmptyDockView: View {
                 ))
             }
         }
-        .accessibilityLabel("\(WearIveRunMiniBarModel.wordmark). \(Self.emptyLine)")
+        .accessibilityLabel(AppEnglish.wirWordmarkLine(WearIveRunMiniBarModel.wordmark, Self.emptyLine))
     }
 }
 
@@ -1369,7 +1369,7 @@ struct WearIveRunMiniBarView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Expand")
+            .accessibilityLabel(AppStrings.wirExpand)
             Button {
                 // §4.7: light trash haptic at tap (existing);
                 // the host orchestrates the exit and fires the
@@ -1385,7 +1385,7 @@ struct WearIveRunMiniBarView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove today's entry")
+            .accessibilityLabel(AppEnglish.wirRemoveToday)
         }
     }
 
@@ -1435,7 +1435,7 @@ struct WearIveRunMiniBarView: View {
     /// {place}" — the verb in secondary ink, the place in pine
     /// semibold (the same spans the one-line form renders).
     private func plannedNarrationHead(place: String) -> Text {
-        Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+        Text(AppEnglish.wirPlannedFor).foregroundColor(AppTheme.inkSecondary)
             + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
     }
 
@@ -1452,18 +1452,18 @@ struct WearIveRunMiniBarView: View {
             // bold; its moment segment rides in secondary ink
             // (the moment is context, the place is the payload).
             if case .placeAtMoment(let place, let moment) = payload {
-                return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                return Text(AppEnglish.wirUpdatedTo).foregroundColor(AppTheme.inkSecondary)
                     + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
                     + Text(", \(moment.rendered)").foregroundColor(AppTheme.inkSecondary)
             }
-            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+            return Text(AppEnglish.wirUpdatedTo).foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
         case .planned(let place, let dayLabel, let moment):
             // §7.2: "Planned for {place} · {day}" — the place in
             // pine bold, the day word in secondary ink. RW-150:
             // the suffix (day + any picked time) comes from the
             // one shared composition the plain line uses.
-            return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+            return Text(AppEnglish.wirPlannedFor).foregroundColor(AppTheme.inkSecondary)
                 + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
                 + Text(WearIveRunNarration.plannedSuffix(dayLabel: dayLabel, moment: moment)).foregroundColor(AppTheme.inkSecondary)
         case .preAdd:
@@ -1687,13 +1687,13 @@ struct WearIveRunFooterSectionView: View {
             // §4.6 / §2.2: the doorway, visible in the expanded
             // form (Sol's Nov 4 requirement, W-1).
             Button(action: onOpenCollection) {
-                Text("Open the collection ›")
+                Text(AppEnglish.wirOpenCollection)
                     .font(.system(size: 15.5, weight: .semibold))
                     .foregroundColor(AppTheme.pinePayload)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open the full Wear I've Run collection")
+            .accessibilityLabel(AppEnglish.wirOpenCollectionFull)
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
@@ -1736,7 +1736,7 @@ struct WearIveRunFooterSectionView: View {
                 for: shownEntry, formattedFeelsLike: formattedFeelsLike))
         .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
         .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
-        .accessibilityLabel("\(WearIveRunMiniBarModel.wordmark), expanded")
+        .accessibilityLabel(AppStrings.wirWordmarkExpanded(WearIveRunMiniBarModel.wordmark))
         .onAppear {
             if displayedState == nil {
                 displayedState = state
@@ -1804,7 +1804,7 @@ struct WearIveRunFooterSectionView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Collapse")
+            .accessibilityLabel(AppStrings.wirCollapse)
             Button {
                 // §4.7: light trash haptic at tap; the host
                 // orchestrates the exit over a frozen snapshot.
@@ -1818,7 +1818,7 @@ struct WearIveRunFooterSectionView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove today's entry")
+            .accessibilityLabel(AppEnglish.wirRemoveToday)
         }
         .scaleEffect(headerScale)
         .overlay {
@@ -1870,7 +1870,7 @@ struct WearIveRunFooterSectionView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Open the full Wear I've Run collection")
+        .accessibilityLabel(AppEnglish.wirOpenCollectionFull)
     }
 
     /// §4.3/§4.5: a released line flips the footer's fields —
@@ -1978,14 +1978,14 @@ struct WearIveRunFooterSectionView: View {
             // composed from the same recorded state (§7.0), so
             // dock and footer agree in every change class.
             if case .placeAtMoment(let place, let moment) = payload {
-                return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                return Text(AppEnglish.wirUpdatedTo).foregroundColor(AppTheme.inkSecondary)
                     + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
                     + Text(", \(moment.rendered)").foregroundColor(AppTheme.inkSecondary)
             }
-            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+            return Text(AppEnglish.wirUpdatedTo).foregroundColor(AppTheme.inkSecondary)
                 + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
         case .planned(let place, let dayLabel, let moment):
-            return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+            return Text(AppEnglish.wirPlannedFor).foregroundColor(AppTheme.inkSecondary)
                 + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
                 + Text(WearIveRunNarration.plannedSuffix(dayLabel: dayLabel, moment: moment)).foregroundColor(AppTheme.inkSecondary)
         case .preAdd:

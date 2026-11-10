@@ -25,25 +25,25 @@ struct WatchSettingsView: View {
         ScrollView {
             VStack(spacing: 16) {
                 // Title
-                Text("Settings")
+                Text(AppStrings.wearSettingsTitle)
                     .font(.headline)
                     .foregroundColor(AppTheme.inkPrimary)
 
                 // Temperature Unit
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Temperature Unit")
+                    Text(AppStrings.wearTemperatureUnit)
                         .font(.caption2)
                         .foregroundColor(AppTheme.inkSecondary)
 
                     VStack(spacing: 8) {
                         WatchSettingsButton(
-                            label: "Fahrenheit",
+                            label: AppStrings.unitFahrenheitLabel,
                             isSelected: viewModel.temperatureUnit == .fahrenheit,
                             action: { viewModel.temperatureUnit = .fahrenheit }
                         )
 
                         WatchSettingsButton(
-                            label: "Celsius",
+                            label: AppStrings.unitCelsiusLabel,
                             isSelected: viewModel.temperatureUnit == .celsius,
                             action: { viewModel.temperatureUnit = .celsius }
                         )
@@ -55,13 +55,13 @@ struct WatchSettingsView: View {
                 // button; tapping the selected one again clears
                 // back to neutral, nothing highlighted).
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Fit Preference")
+                    Text(AppStrings.wearFitPreference)
                         .font(.caption2)
                         .foregroundColor(AppTheme.inkSecondary)
 
                     VStack(spacing: 8) {
                         WatchSettingsButton(
-                            label: "Men's",
+                            label: AppStrings.fitOptionMens,
                             isSelected: viewModel.genderPreference == .male,
                             action: {
                                 viewModel.genderPreference = viewModel.genderPreference
@@ -70,7 +70,7 @@ struct WatchSettingsView: View {
                         )
 
                         WatchSettingsButton(
-                            label: "Women's",
+                            label: AppStrings.fitOptionWomens,
                             isSelected: viewModel.genderPreference == .female,
                             action: {
                                 viewModel.genderPreference = viewModel.genderPreference
@@ -82,7 +82,7 @@ struct WatchSettingsView: View {
 
                 // Body Temperature
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Body Temperature")
+                    Text(AppStrings.wearBodyTemperature)
                         .font(.caption2)
                         .foregroundColor(AppTheme.inkSecondary)
 

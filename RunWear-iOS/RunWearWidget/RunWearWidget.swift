@@ -106,8 +106,8 @@ struct RunWearWidget: Widget {
         StaticConfiguration(kind: Self.kind, provider: RunWearWidgetProvider()) { entry in
             RunWearWidgetEntryView(entry: entry)
         }
-        .configurationDisplayName("Running Outfit")
-        .description("Your outfit for the weather right now, from your last RunWear recommendation.")
+        .configurationDisplayName(AppStrings.widgetName)
+        .description(AppStrings.widgetDescription)
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

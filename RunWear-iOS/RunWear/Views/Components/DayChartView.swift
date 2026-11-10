@@ -137,7 +137,7 @@ struct DayChartView: View {
                 path.addLine(to: CGPoint(x: x, y: height))
             }
             .stroke(AppTheme.primaryColor, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
-            Text("NOW")
+            Text(AppStrings.chartNowCaps)
                 .font(.system(size: 8.5, weight: .bold))
                 .tracking(0.5)
                 .foregroundColor(AppTheme.primaryColor)
@@ -218,17 +218,14 @@ struct DayChartView: View {
     // MARK: - Accessibility
 
     private var accessibilitySummary: String {
-        "Day chart. Feels like from \(Int(model.low.feelsLikeF.rounded())) degrees "
-            + "at \(DayChartFormat.hourLabel(model.low.hour)) to "
-            + "\(Int(model.high.feelsLikeF.rounded())) degrees at "
-            + "\(DayChartFormat.hourLabel(model.high.hour))."
+        AppStrings.chartA11ySummary(Int(model.low.feelsLikeF.rounded()), DayChartFormat.hourLabel(model.low.hour), Int(model.high.feelsLikeF.rounded()), DayChartFormat.hourLabel(model.high.hour))
     }
 
     private var accessibilityValue: String {
         guard let entry = model.entry(forHour: placedSelectedHour) else { return "" }
         return DayChartFormat.readout(
             hour: entry.hour,
-            formattedFeelsLike: "\(Int(entry.feelsLikeF.rounded()))°"
+            formattedFeelsLike: AppStrings.chartDegreeValue(Int(entry.feelsLikeF.rounded()))
         )
     }
 }
@@ -308,20 +305,20 @@ struct DayChartBandView: View {
             // beside them. The selected hour itself is named on
             // the chart's own axis above, not in this row.
             HStack(alignment: .center) {
-                Text("\(unit.formatFromFahrenheit(model.low.feelsLikeF)) low")
+                Text(AppStrings.chartLowLabel(unit.formatFromFahrenheit(model.low.feelsLikeF)))
                 Spacer()
                 Button(action: onChange) {
                     HStack(spacing: 3) {
-                        Text("Change")
+                        Text(AppStrings.chartChange)
                         Text("›").fontWeight(.bold)
                     }
                     .font(.system(size: 15.5, weight: .bold))
                     .foregroundColor(AppTheme.pinePayload)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Change the hour")
+                .accessibilityLabel(AppStrings.chartChangeHour)
                 Spacer()
-                Text("\(unit.formatFromFahrenheit(model.high.feelsLikeF)) high")
+                Text(AppStrings.chartHighLabel(unit.formatFromFahrenheit(model.high.feelsLikeF)))
             }
             .font(.system(size: 12.5))
             .foregroundColor(AppTheme.inkSecondary)

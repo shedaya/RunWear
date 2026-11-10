@@ -345,9 +345,9 @@ struct HeroImageView: View {
         }
         .buttonStyle(.plain)
         .disabled(alreadyFlagged)
-        .accessibilityLabel("Flag this photo")
+        .accessibilityLabel(AppStrings.a11yFlagPhoto)
         .confirmationDialog(
-            "Flag this photo",
+            AppStrings.a11yFlagPhoto,
             isPresented: $showFlagSheet,
             titleVisibility: .visible
         ) {
@@ -359,7 +359,7 @@ struct HeroImageView: View {
                     onFlagHero(reason)
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(AppStrings.actionCancel, role: .cancel) {}
         }
     }
 
@@ -381,9 +381,9 @@ struct HeroImageView: View {
         }
         .buttonStyle(.plain)
         .disabled(alreadyFlagged)
-        .accessibilityLabel("Flag this photo")
+        .accessibilityLabel(AppStrings.a11yFlagPhoto)
         .confirmationDialog(
-            "Flag this photo",
+            AppStrings.a11yFlagPhoto,
             isPresented: $showFlagSheet,
             titleVisibility: .visible
         ) {
@@ -395,7 +395,7 @@ struct HeroImageView: View {
                     onFlagPersonalHero(reason)
                 }
             }
-            Button("Cancel", role: .cancel) {}
+            Button(AppStrings.actionCancel, role: .cancel) {}
         } message: {
             // The consequence, stated before the user commits
             // (frame 45 carries it under the lead reason; the
@@ -473,9 +473,9 @@ struct HeroImageView: View {
     private var formattedDate: String {
         let calendar = Calendar.current
         if calendar.isDateInToday(date) {
-            return "Today"
+            return AppStrings.wirDayToday
         } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow"
+            return AppStrings.wirDayTomorrow
         } else {
             let formatter = DateFormatter()
             formatter.dateFormat = "EEE, MMM d"
@@ -624,7 +624,7 @@ struct HeroPillView: View {
                         .lineLimit(1)
                 }
             )
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel)")
+            .accessibilityLabel(AppStrings.heroPillTwo(HeroPill.scriptMarkText, HeroPill.makingLabel))
         case .makingWithUpsell:
             // GEN-5 (C-4 AMENDED) + GEN-6 VQ FIX (RW-71): the
             // FREE generating pill — the clean generating row
@@ -654,7 +654,7 @@ struct HeroPillView: View {
                     .buttonStyle(.plain)
                 }
             )
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.makingLabel). \(HeroPill.getInstantlyLabel)")
+            .accessibilityLabel(AppStrings.heroPillThree(HeroPill.scriptMarkText, HeroPill.makingLabel, HeroPill.getInstantlyLabel))
         case .exhausted(let used, let allowance):
             // GEN-5 (OUT OF FREE LOOKS) + GEN-6 VQ FIX (RW-72):
             // script + the whole honest count on the first line,
@@ -679,7 +679,7 @@ struct HeroPillView: View {
                 )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.exhaustedCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
+            .accessibilityLabel(AppStrings.heroPillThree(HeroPill.scriptMarkText, HeroPill.exhaustedCountLabel(used: used, allowance: allowance), HeroPill.getUnlimitedLabel))
         case .freeLook(let used, let allowance):
             Button(action: onPillGetUnlimited) {
                 seated(
@@ -702,7 +702,7 @@ struct HeroPillView: View {
                 )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.freeLookCountLabel(used: used, allowance: allowance)). \(HeroPill.getUnlimitedLabel)")
+            .accessibilityLabel(AppStrings.heroPillThree(HeroPill.scriptMarkText, HeroPill.freeLookCountLabel(used: used, allowance: allowance), HeroPill.getUnlimitedLabel))
         case .premium:
             seated(
                 HStack(spacing: 6) {
@@ -717,7 +717,7 @@ struct HeroPillView: View {
                         .foregroundColor(ink)
                 }
             )
-            .accessibilityLabel("\(HeroPill.scriptMarkText). \(HeroPill.premiumLabel)")
+            .accessibilityLabel(AppStrings.heroPillTwo(HeroPill.scriptMarkText, HeroPill.premiumLabel))
         }
     }
 }

@@ -51,13 +51,13 @@ struct BoxlessWeatherLineView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            stat(icon: "wind", value: "\(Int(windMph.rounded())) mph", label: "WIND")
+            stat(icon: "wind", value: AppStrings.windValue(Int(windMph.rounded())), label: AppStrings.statWindLabel)
             Spacer(minLength: 0)
-            stat(icon: "cloud.rain", value: "\(rainPercent)%", label: "RAIN")
+            stat(icon: "cloud.rain", value: AppStrings.detailPercent(rainPercent), label: AppStrings.statRainLabel)
             Spacer(minLength: 0)
-            stat(icon: "drop", value: "\(humidityPercent)%", label: "HUMIDITY")
+            stat(icon: "drop", value: AppStrings.detailPercent(humidityPercent), label: AppStrings.statHumidityLabel)
             Spacer(minLength: 0)
-            stat(icon: "sun.max", value: "\(Int(uvIndex.rounded())) of 11", label: "UV")
+            stat(icon: "sun.max", value: AppStrings.sheetUvValue(Int(uvIndex.rounded())), label: AppStrings.sheetUvLabel)
         }
     }
 
@@ -200,7 +200,7 @@ struct DetailedWeatherBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Weather details")
+            Text(AppStrings.sheetWeatherDetails)
                 .font(.appItemName)
                 .foregroundColor(AppTheme.inkPrimary)
                 .padding(.horizontal, 16)

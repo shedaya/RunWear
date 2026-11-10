@@ -57,7 +57,7 @@ enum OnboardingCopy {
     /// character in the welcome headline slot: the tagline,
     /// promoted to the headline. Do not "correct" the casing —
     /// the decision records this exact string.
-    static let welcomeHeadline = "Run, weather or not."
+    static let welcomeHeadline = AppStrings.onbHeadline
 
     /// The free-looks promise. By A1 it lives ONLY on frame 28's
     /// own screen — never on the setup form, never on the fork.
@@ -70,7 +70,7 @@ enum OnboardingCopy {
     /// the welcome screen.
     /// RW-128 (fix wave 2026-11-07): the promise follows the
     /// aligned allowance — 10, from the store's one constant.
-    static let freeLooksPromise = "Your first 10 looks are free."
+    static let freeLooksPromise = AppStrings.onbFreeLooksPromise
 
     /// GEN-3 ROUND 2 (Sol, Nov 4 — the name-led welcome, CHOSEN by
     /// Sol; supersedes the I-SETTINGS/WS-E title+detail composition
@@ -93,19 +93,19 @@ enum OnboardingCopy {
 
     static let welcomePoints: [WelcomePoint] = [
         WelcomePoint(
-            name: "RunWear",
-            phrase: "The right outfit for the weather",
-            body: "One recommendation for the run you're about to take — feels-like, wind, and rain included."
+            name: AppStrings.heroWordmark,
+            phrase: AppStrings.onbPromise1Headline,
+            body: AppStrings.onbPromise1Phrase
         ),
         WelcomePoint(
-            name: "Make It Me",
-            phrase: "See yourself in every outfit",
-            body: "Picture yourself at the start line with the perfect outfit ready to go."
+            name: AppStrings.mimScriptMark,
+            phrase: AppStrings.onbPromise2Headline,
+            body: AppStrings.onbPromise2Phrase
         ),
         WelcomePoint(
-            name: "Wear I've Run",
-            phrase: "Remember every run",
-            body: "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+            name: AppStrings.wirWordmark,
+            phrase: AppStrings.onbPromise3Headline,
+            body: AppStrings.onbPromise3Phrase
         ),
     ]
 
@@ -119,21 +119,21 @@ enum OnboardingCopy {
     /// footer (design-spec §1). The W-21 "Free forever" line was
     /// flagged as a deviation by the gen-4 census (A-1) on the
     /// shipped build; the fix wave restores the settled form.
-    static let welcomeFooter = "Free to start · Set up in under a minute"
+    static let welcomeFooter = AppStrings.onbPromiseFooter
 
     /// GEN-3 (Sol, Nov 4 — RULED): the combined preferences
     /// screen's headline and lede, verbatim.
-    static let preferencesHeadline = "Make it yours"
-    static let preferencesLede = "Three quick calls. You can change any of them later in Settings."
+    static let preferencesHeadline = AppStrings.onbSetupTitle
+    static let preferencesLede = AppStrings.onbSetupSub
 
     /// The three preference questions, in order, in their SHIPPED
     /// wording — each heads its control on the combined screen
     /// (they were the one-per-screen steps' question lines before
     /// the GEN-3 combination; the wording is unchanged).
     static let preferencesQuestions = [
-        "How do you measure the weather?",
-        "Whose fit should the outfits follow?",
-        "Do you get cold easily, or overheat quickly?",
+        AppStrings.onbTempSub,
+        AppStrings.onbFitSub,
+        AppStrings.onbBodySub,
     ]
 }
 
@@ -152,7 +152,7 @@ enum OnboardingCopy {
 enum ForkContextLine {
     static func make(placeDisplayName: String, isPlaceKnown: Bool, feelsLike: String) -> String? {
         guard isPlaceKnown else { return nil }
-        return "\(placeDisplayName) · \(feelsLike)"
+        return AppStrings.onbForkContextLine(placeDisplayName, feelsLike)
     }
 }
 
@@ -305,8 +305,8 @@ struct FirstLookPresentation: Equatable {
         let counted = min(used, allowance)
         let remaining = allowance - counted
         if remaining > 0 {
-            return "That was look \(counted) of your \(allowance) free looks — \(remaining) remain, whenever you want them."
+            return AppStrings.mimMeterLine(counted, allowance, remaining)
         }
-        return "That was look \(counted) of your \(allowance) free looks."
+        return AppStrings.mimMeterLineDone(counted, allowance)
     }
 }

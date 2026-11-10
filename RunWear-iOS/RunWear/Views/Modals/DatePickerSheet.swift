@@ -114,7 +114,7 @@ struct DatePickerSheet: View {
         VStack(spacing: 20) {
             // Title — frame 42's own name for the sheet, the
             // sibling of the time picker's "Choose a Time".
-            Text("Choose a Day")
+            Text(AppStrings.sheetChooseDay)
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
@@ -132,11 +132,11 @@ struct DatePickerSheet: View {
             // targets), exactly as the time picker's row does.
             ViewThatFits(in: .horizontal) {
                 HStack {
-                    Button("Cancel") { dismiss() }
+                    Button(AppStrings.actionCancel) { dismiss() }
                         .font(.appSecondary.weight(.semibold))
                         .foregroundColor(AppTheme.inkSecondary)
                     Spacer()
-                    Button("Confirm") {
+                    Button(AppStrings.actionConfirm) {
                         selectedDate = draft.commit()
                         onConfirm?()
                         dismiss()
@@ -145,7 +145,7 @@ struct DatePickerSheet: View {
                     .foregroundColor(AppTheme.pinePayload)
                 }
                 VStack(spacing: 10) {
-                    Button("Confirm") {
+                    Button(AppStrings.actionConfirm) {
                         selectedDate = draft.commit()
                         onConfirm?()
                         dismiss()
@@ -153,7 +153,7 @@ struct DatePickerSheet: View {
                     .font(.appSecondary.weight(.bold))
                     .foregroundColor(AppTheme.pinePayload)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    Button("Cancel") { dismiss() }
+                    Button(AppStrings.actionCancel) { dismiss() }
                         .font(.appSecondary.weight(.semibold))
                         .foregroundColor(AppTheme.inkSecondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -225,7 +225,7 @@ private struct DateButton: View {
 
                 // Frame 42: beyond-forecast days are named as such.
                 if isBeyondForecast {
-                    Text("Beyond forecast")
+                    Text(AppStrings.chartBeyondForecast)
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(isSelected ? .white.opacity(0.8) : AppTheme.inkMuted)
                         .lineLimit(1)
@@ -255,9 +255,9 @@ private struct DateButton: View {
 
     private var dayLabel: String {
         if calendar.isDateInToday(date) {
-            return "Today"
+            return AppStrings.wirDayToday
         } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow"
+            return AppStrings.wirDayTomorrow
         } else {
             let formatter = DateFormatter()
             formatter.dateFormat = "EEE"

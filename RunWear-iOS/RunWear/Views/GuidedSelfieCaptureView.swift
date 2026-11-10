@@ -103,7 +103,7 @@ struct GuidedSelfieCaptureView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 15, weight: .bold))
-                            Text("That's exactly what we need")
+                            Text(AppStrings.captureExact)
                         }
                     }
                 }
@@ -138,7 +138,7 @@ struct GuidedSelfieCaptureView: View {
                 // GEN-5 (RW-29 FA-53): the library door, inside
                 // the guided surface.
                 if let onUsePhotoInstead {
-                    Button("Use a photo instead") { onUsePhotoInstead() }
+                    Button(AppStrings.captureUsePhoto) { onUsePhotoInstead() }
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.6), radius: 4)
@@ -179,7 +179,7 @@ struct GuidedSelfieCaptureView: View {
             Image(systemName: "camera.slash")
                 .font(.system(size: 40))
                 .foregroundColor(AppTheme.inkSecondary)
-            Text("Camera access is off. You can turn it on in Settings — or pick a photo from your library instead.")
+            Text(AppStrings.captureCameraOff)
                 .font(.system(size: 15))
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
@@ -187,11 +187,11 @@ struct GuidedSelfieCaptureView: View {
             // GEN-5 (RW-29 FA-53): the library door the copy
             // promises, wired — the denied state is not a dead end.
             if let onUsePhotoInstead {
-                Button("Use a photo instead") { onUsePhotoInstead() }
+                Button(AppStrings.captureUsePhoto) { onUsePhotoInstead() }
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(AppTheme.pinePayload)
             }
-            Button("Not now") { onCancel() }
+            Button(AppStrings.viewNotNow) { onCancel() }
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(AppTheme.inkPrimary)
         }

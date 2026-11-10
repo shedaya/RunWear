@@ -57,7 +57,7 @@ struct WidgetLastGood: Codable, Equatable {
     /// temperature, wind, and condition alongside the feels-like
     /// hero. Wind is mph, as everywhere in the app.
     var supportingLine: String {
-        "Actual \(formatTemperature(fahrenheit: temperatureF)) · Wind \(Int(round(windMph))) mph · \(conditionText)"
+        AppEnglish.widgetSupportingLine(formatTemperature(fahrenheit: temperatureF), Int(round(windMph)), conditionText)
     }
 
     /// Every garment name in wearing order (for the larger
@@ -91,10 +91,10 @@ enum WidgetFreshness {
     static func ageShortUpper(_ age: TimeInterval) -> String {
         let minutes = Int(age) / 60
         switch minutes {
-        case ..<1: return "JUST NOW"
-        case ..<60: return "\(minutes)M AGO"
-        case ..<(60 * 24): return "\(minutes / 60)H AGO"
-        default: return "\(minutes / (60 * 24))D AGO"
+        case ..<1: return AppEnglish.widgetAgeJustNowUpper
+        case ..<60: return AppEnglish.widgetAgeMinUpper(minutes)
+        case ..<(60 * 24): return AppEnglish.widgetAgeHrUpper(minutes / 60)
+        default: return AppEnglish.widgetAgeDayUpper(minutes / (60 * 24))
         }
     }
 
@@ -103,18 +103,15 @@ enum WidgetFreshness {
     static func ageWords(_ age: TimeInterval) -> String {
         let minutes = Int(age) / 60
         switch minutes {
-        case ..<1: return "just now"
-        case ..<60: return "\(minutes) min ago"
-        case ..<(60 * 24): return "\(minutes / 60)h ago"
-        default: return "\(minutes / (60 * 24))d ago"
+        case ..<1: return AppEnglish.widgetAgeJustNowLower
+        case ..<60: return AppEnglish.widgetAgeMinLower(minutes)
+        case ..<(60 * 24): return AppEnglish.widgetAgeHrLower(minutes / 60)
+        default: return AppEnglish.widgetAgeDayLower(minutes / (60 * 24))
         }
     }
 
     private static func clockTime(of date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: date)
+        LocaleFormats.timeHourMinute(date)
     }
 
     /// Small/Medium eyebrow: the data's save moment is ALWAYS
@@ -123,9 +120,9 @@ enum WidgetFreshness {
     /// live (Android 1.1.8 rule).
     static func eyebrow(_ record: WidgetLastGood, now: Date) -> String {
         if isStale(record, now: now) {
-            return "FOR NOW · \(ageShortUpper(age(of: record, now: now)))"
+            return AppEnglish.widgetForNowAge(ageShortUpper(age(of: record, now: now)))
         }
-        return "FOR NOW · \(clockTime(of: record.savedAt))"
+        return AppEnglish.widgetForNowAge(clockTime(of: record.savedAt))
     }
 
     /// Large brand-strip freshness: "Updated h:mm a" while
@@ -133,9 +130,9 @@ enum WidgetFreshness {
     static func updatedLabel(_ record: WidgetLastGood, now: Date) -> String {
         let age = age(of: record, now: now)
         if age < largeAgeFormThreshold {
-            return "Updated \(clockTime(of: record.savedAt))"
+            return AppEnglish.widgetUpdatedAge(clockTime(of: record.savedAt))
         }
-        return "Updated \(ageWords(age))"
+        return AppEnglish.widgetUpdatedAge(ageWords(age))
     }
 }
 
@@ -149,19 +146,19 @@ enum WidgetErrorCategory: String, Codable {
     case location
     case weather
 
-    var headline: String { "Couldn't load weather" }
+    var headline: String { AppEnglish.widgetCouldntLoad }
 
     var reason: String {
         switch self {
-        case .location: return "Location isn't available to the widget"
-        case .weather: return "Couldn't reach the weather service"
+        case .location: return AppEnglish.widgetLocationUnavailable
+        case .weather: return AppEnglish.widgetCouldntReach
         }
     }
 
     /// The fresh-install form (the app has never run, so no
     /// category was ever recorded): same headline family, the
     /// honest reason.
-    static let neverRunReason = "Open RunWear to see your outfit"
+    static let neverRunReason = AppEnglish.widgetOpenRunwear
 }
 
 /// The App Group store. Reads are total: a missing or corrupt

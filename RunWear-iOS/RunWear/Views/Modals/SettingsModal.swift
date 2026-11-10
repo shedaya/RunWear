@@ -56,7 +56,7 @@ struct SettingsModal: View {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "—"
         let build = info?["CFBundleVersion"] as? String ?? "—"
-        return "\(short) (\(build))"
+        return AppStrings.settingsVersionFormat(short, build)
     }
 
     /// WS-5 (D-14): the Form composes the SettingsInventory
@@ -105,11 +105,11 @@ struct SettingsModal: View {
             .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
             .background(AppTheme.background.ignoresSafeArea())
-            .navigationTitle("Settings")
+            .navigationTitle(AppStrings.settingsTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { isPresented = false }
+                    Button(AppStrings.actionDone) { isPresented = false }
                 }
             }
             // WS-5 (§1.3): every sheet on this surface rests at a
@@ -158,7 +158,7 @@ struct SettingsModal: View {
             // RW-25: native segmented appearance picker
             // (System / Light / Dark) — Form idioms only.
             Section {
-                Picker("Appearance", selection: $appearancePreference) {
+                Picker(AppStrings.settingsAppearance, selection: $appearancePreference) {
                     ForEach(AppearancePreference.allCases) { preference in
                         Text(preference.displayName).tag(preference)
                     }
@@ -166,14 +166,14 @@ struct SettingsModal: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             } header: {
-                settingsSectionHeader("Appearance")
+                settingsSectionHeader(AppStrings.settingsAppearance)
             }
 
         case .temperatureUnit:
             Section {
                 TemperatureUnitPicker(unit: $temperatureUnit)
             } header: {
-                settingsSectionHeader("Temperature Unit")
+                settingsSectionHeader(AppStrings.settingsTempUnitLabel)
             } footer: {
                 // RW-83: the settled DS §6/§13 consequence line
                 // under the Temperature Unit row — what the unit
@@ -181,7 +181,7 @@ struct SettingsModal: View {
                 // (Absent from the product on both platforms until
                 // this fix; Sol's build-28 Settings frames
                 // corroborated the iOS half.)
-                Text("Used for today's outfit, the hourly chart, and your watch.")
+                Text(AppStrings.settingsTempUnitNote)
             }
 
         case .fitPreference:
@@ -197,14 +197,14 @@ struct SettingsModal: View {
             Section {
                 FitPreferenceInlinePicker(preference: $genderPreference)
             } header: {
-                settingsSectionHeader("Fit Preference")
+                settingsSectionHeader(AppStrings.settingsFit)
             }
 
         case .bodyTemperature:
             Section {
                 ComfortLevelControl(comfortLevel: $comfortLevel)
             } header: {
-                settingsSectionHeader("Body Temperature")
+                settingsSectionHeader(AppStrings.settingsBodyTemp)
             }
 
         case .helpImprove:
@@ -223,22 +223,22 @@ struct SettingsModal: View {
                     // toggle's on-state is pine, not system green.
                     Toggle(isOn: $analyticsOptIn) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Help improve the app")
+                            Text(AppStrings.settingsHelpLabel)
                                 .font(.appSecondary.weight(.medium))
-                            Text("Count how the app is used")
+                            Text(AppStrings.settingsHelpSub)
                                 .font(.appFootnote)
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
                     }
                     .tint(AppTheme.primaryColor)
-                    Text("We count how the app is used — which features get used and where recommendations miss — and nothing else. No account, no advertising ID, and your location never leaves the phone more precisely than the city name. Turn this off and nothing is counted or sent.")
+                    Text(AppStrings.settingsHelpBody)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                     if !analyticsOptIn {
-                        Text("Off. Nothing is being counted.")
+                        Text(AppStrings.settingsHelpOff)
                             .font(.appFootnote.weight(.medium))
                     }
-                    Text("If the app crashes, it can send us the technical details so we can fix it. This happens only after a crash, and only with your permission here.")
+                    Text(AppStrings.settingsCrashBody)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -264,21 +264,21 @@ struct SettingsModal: View {
                 Button {
                     showFeedback = true
                 } label: {
-                    Label("Send feedback", systemImage: "envelope")
+                    Label(AppStrings.settingsSendFeedback, systemImage: "envelope")
                 }
 
                 Link(destination: Self.reviewURL) {
-                    Label("Rate RunWear", systemImage: "star")
+                    Label(AppStrings.settingsRate, systemImage: "star")
                 }
             } header: {
-                settingsSectionHeader("Support")
+                settingsSectionHeader(AppStrings.settingsSupport)
             }
 
         case .about:
             Section {
-                LabeledContent("Version", value: appVersion)
+                LabeledContent(AppStrings.settingsVersion, value: appVersion)
             } header: {
-                settingsSectionHeader("About")
+                settingsSectionHeader(AppStrings.settingsAbout)
             }
         case .dangerZone:
             // GEN-6 (RW-56): ONE quarantined "Danger zone"
@@ -298,7 +298,7 @@ struct SettingsModal: View {
                     Button(role: .destructive) {
                         makeItMePresentation.alert = .confirmDelete
                     } label: {
-                        Text("Delete my photos")
+                        Text(AppStrings.settingsDeletePhotos)
                             .font(.system(size: 16, weight: .medium))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -306,12 +306,12 @@ struct SettingsModal: View {
                 Button(role: .destructive) {
                     makeItMePresentation.alert = .confirmDeleteData
                 } label: {
-                    Text("Delete my data")
+                    Text(AppStrings.settingsDeleteData)
                         .font(.system(size: 16, weight: .medium))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } header: {
-                settingsSectionHeader("Danger zone")
+                settingsSectionHeader(AppStrings.settingsDangerZone)
             }
 
         }
@@ -382,12 +382,12 @@ struct SettingsModal: View {
         // GEN-5 (RW-29 FA-20): frame 39's settled heading is
         // "Delete my photos?" (the buttons already carry the
         // matching "Delete my photos" / "Keep my photos").
-        case .confirmDelete: return "Delete my photos?"
-        case .deletedConfirmation: return "Your photos and pictures are deleted."
-        case .deleteFailed: return "Your photos could not be deleted. Please try again."
-        case .confirmDeleteData: return "Delete all your data?"
-        case .dataDeletedConfirmation: return "Your data and account are deleted."
-        case .deleteDataFailed: return "Your data could not be deleted. Please try again."
+        case .confirmDelete: return AppStrings.settingsDeletePhotosTitle
+        case .deletedConfirmation: return AppStrings.settingsDeletePhotosDone
+        case .deleteFailed: return AppStrings.settingsDeletePhotosFailed
+        case .confirmDeleteData: return AppStrings.settingsDeleteDataTitle
+        case .dataDeletedConfirmation: return AppStrings.settingsDeleteDataDone
+        case .deleteDataFailed: return AppStrings.settingsDeleteDataFailed
         case .commitFailed(let failure): return LocalizedStringKey(failure.line)
         case nil: return ""
         }
@@ -396,18 +396,18 @@ struct SettingsModal: View {
     private func makeItMeAlertMessage(_ alert: MakeItMeAlert) -> String {
         switch alert {
         case .confirmDelete:
-            return "Your photos and every picture made from them will be deleted from our server and this phone. Your outfit pictures go back to the standard photos, and Make It Me turns off. This can't be undone."
+            return AppStrings.settingsDeletePhotosBody
         case .confirmDeleteData:
             // RW-16.30 decision 5a: S12's scope discipline, extended
             // to the account itself, plus the one money fact the
             // photos copy doesn't carry — deleting data does not
             // cancel a store subscription.
-            return "Everything RunWear holds for you will be deleted from our server and this phone: your photos, every picture made from them, and your account itself. This can't be undone. Deleting your data does not cancel a subscription — you can manage that from your store account."
+            return AppStrings.settingsDeleteDataBody
         case .commitFailed(let failure):
             // The orphaned-commit failure (RW-16.9): the line is
             // the alert's title; the server's detail, when it
             // sent one, is the message.
-            return failure.detail ?? "Please try again."
+            return failure.detail ?? AppStrings.settingsTryAgainLater
         case .deletedConfirmation, .deleteFailed, .dataDeletedConfirmation, .deleteDataFailed:
             return ""
         }
@@ -417,17 +417,17 @@ struct SettingsModal: View {
     private func makeItMeAlertButtons(_ alert: MakeItMeAlert) -> some View {
         switch alert {
         case .confirmDelete:
-            Button("Delete my photos", role: .destructive) {
+            Button(AppStrings.settingsDeletePhotos, role: .destructive) {
                 Task { await performDeleteMyPhotos() }
             }
-            Button("Keep my photos", role: .cancel) {}
+            Button(AppStrings.settingsKeepPhotos, role: .cancel) {}
         case .confirmDeleteData:
-            Button("Delete my data", role: .destructive) {
+            Button(AppStrings.settingsDeleteData, role: .destructive) {
                 Task { await performDeleteMyData() }
             }
-            Button("Keep my data", role: .cancel) {}
+            Button(AppStrings.settingsKeepData, role: .cancel) {}
         case .deletedConfirmation, .deleteFailed, .dataDeletedConfirmation, .deleteDataFailed, .commitFailed:
-            Button("OK", role: .cancel) {}
+            Button(AppStrings.actionOk, role: .cancel) {}
         }
     }
 
@@ -485,7 +485,7 @@ struct FeedbackSheet: View {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "\(short) (\(build))"
+        return AppStrings.settingsVersionFormat(short, build)
     }
 
     /// The derived bundle that rides with the report — exactly
@@ -496,14 +496,14 @@ struct FeedbackSheet: View {
     /// what submit() sends: these three entries, nothing else.
     private var bundle: [String: String] {
         let defaults = UserDefaults.standard
-        let fit = defaults.string(forKey: "genderPreference") ?? "not set"
-        let unit = defaults.string(forKey: "temperatureUnit") ?? "not set"
+        let fit = defaults.string(forKey: "genderPreference") ?? AppStrings.settingsNotSet
+        let unit = defaults.string(forKey: "temperatureUnit") ?? AppStrings.settingsNotSet
         let comfort = (defaults.object(forKey: "comfortLevel") as? Int)
-            .flatMap(ComfortLevel.init(rawValue:))?.label ?? "not set"
+            .flatMap(ComfortLevel.init(rawValue:))?.label ?? AppStrings.settingsNotSet
         return [
-            "App version": appVersion,
-            "Device": "\(UIDevice.current.model), \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
-            "Settings": "Fit: \(fit) · Units: \(unit) · Body temperature: \(comfort)",
+            AppStrings.settingsDiagAppVersion: appVersion,
+            AppStrings.settingsDiagDevice: AppStrings.settingsDiagDeviceFormat(UIDevice.current.model, UIDevice.current.systemName, UIDevice.current.systemVersion),
+            AppStrings.settingsDiagSettings: AppStrings.settingsDiagSettingsFormat(fit, unit, comfort),
         ]
     }
 
@@ -524,34 +524,34 @@ struct FeedbackSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Category", selection: $category) {
+                    Picker(AppStrings.settingsFeedbackCategory, selection: $category) {
                         ForEach(FeedbackCategory.allCases) { category in
-                            Text(category.rawValue).tag(category)
+                            Text(category.displayName).tag(category)
                         }
                     }
                     .labelsHidden()
                 } header: {
-                    settingsSectionHeader("Category")
+                    settingsSectionHeader(AppStrings.settingsFeedbackCategory)
                 }
 
                 Section {
                     TextEditor(text: $message)
                         .frame(minHeight: 120)
-                        .accessibilityLabel("Your feedback")
+                        .accessibilityLabel(AppStrings.settingsFeedbackYours)
                 } header: {
-                    settingsSectionHeader("Your Feedback")
+                    settingsSectionHeader(AppStrings.settingsFeedbackYoursTitle)
                 }
 
                 Section {
-                    TextField("Email (optional)", text: $replyEmail)
+                    TextField(AppStrings.settingsFeedbackEmail, text: $replyEmail)
                         .textContentType(.emailAddress)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    settingsSectionHeader("Reply To")
+                    settingsSectionHeader(AppStrings.settingsFeedbackReplyTo)
                 } footer: {
-                    Text("Only used to reply to your feedback.")
+                    Text(AppStrings.settingsFeedbackEmailNote)
                 }
 
                 // Frame 48: the what's-sent disclosure, before Send.
@@ -565,27 +565,27 @@ struct FeedbackSheet: View {
                             .font(.appFootnote)
                             .foregroundColor(AppTheme.inkSecondary)
                     }
-                    Text("Plus your message, exactly as written, under the category you picked. Nothing else — no health data, no location, no photos.")
+                    Text(AppStrings.settingsFeedbackDisclosure)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                 } header: {
-                    settingsSectionHeader("What We're Sending With This")
+                    settingsSectionHeader(AppStrings.settingsFeedbackSendingWith)
                 }
 
                 if sent {
                     Section {
-                        Label("Thanks — your feedback is in.", systemImage: "checkmark.circle")
+                        Label(AppStrings.settingsFeedbackSent, systemImage: "checkmark.circle")
                             .foregroundColor(AppTheme.pinePayload)
                     }
                 }
 
                 if sendFailed {
                     Section {
-                        Text("That didn't send. Check your connection and try again — or email it instead.")
+                        Text(AppStrings.settingsFeedbackSendFailed)
                             .font(.appFootnote)
                             .foregroundColor(AppTheme.inkSecondary)
                         if let fallbackURL {
-                            Button("Email it instead") {
+                            Button(AppStrings.settingsFeedbackEmailInstead) {
                                 openURL(fallbackURL)
                                 dismiss()
                             }
@@ -599,14 +599,14 @@ struct FeedbackSheet: View {
             .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
             .background(AppTheme.background.ignoresSafeArea())
-            .navigationTitle("Send feedback")
+            .navigationTitle(AppStrings.viewSendFeedback)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button(AppStrings.actionCancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(sending ? "Sending…" : "Send") {
+                    Button(sending ? AppStrings.settingsSending : AppStrings.settingsSend) {
                         Task { await submit() }
                     }
                     .disabled(!canSend)

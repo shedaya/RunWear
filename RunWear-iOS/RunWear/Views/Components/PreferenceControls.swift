@@ -48,16 +48,16 @@ struct ComfortLevelControl: View {
                 .foregroundStyle(AppTheme.inkSecondary)
 
             Slider(value: indexBinding, in: 0...4, step: 1) {
-                Text("Body Temperature")
+                Text(AppStrings.settingsBodyTemp)
             }
             .tint(tint)
-            .accessibilityLabel("Body Temperature")
+            .accessibilityLabel(AppStrings.settingsBodyTemp)
             .accessibilityValue(comfortLevel.shortLabel)
 
             HStack {
-                Text("Runs Cold")
+                Text(AppStrings.onbBodySliderMin)
                 Spacer()
-                Text("Runs Warm")
+                Text(AppStrings.onbBodySliderMax)
             }
             .font(.appFootnote)
             .foregroundStyle(AppTheme.inkSecondary)
@@ -73,7 +73,7 @@ struct TemperatureUnitPicker: View {
     @Binding var unit: TemperatureUnit
 
     var body: some View {
-        Picker("Temperature Unit", selection: $unit) {
+        Picker(AppStrings.settingsTempUnitLabel, selection: $unit) {
             ForEach(TemperatureUnit.allCases, id: \.self) { unit in
                 Text(unit.label).tag(unit)
             }

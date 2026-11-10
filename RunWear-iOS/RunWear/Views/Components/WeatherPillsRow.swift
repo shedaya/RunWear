@@ -92,7 +92,7 @@ extension WeatherPillsRow {
         WeatherPillsRow(
             condition: .partlyCloudy,
             windSpeed: 8,
-            windDirection: "NW",
+            windDirection: AppStrings.weatherCompassNw,
             humidity: 55,
             precipitationProbability: 20,
             uvIndex: 6.5
@@ -102,7 +102,7 @@ extension WeatherPillsRow {
         WeatherPillsRow(
             condition: .cloudy,
             windSpeed: 15,
-            windDirection: "S",
+            windDirection: AppStrings.weatherCompassS,
             humidity: 80,
             precipitationProbability: 0,
             uvIndex: 0

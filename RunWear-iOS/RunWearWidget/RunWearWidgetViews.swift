@@ -135,7 +135,7 @@ struct RunWearWidgetEntryView: View {
     private func smallOutfitLineOne(_ record: WidgetLastGood) -> Text {
         var line = Text(record.topBaseName).fontWeight(.semibold)
         if !record.layerNames.isEmpty {
-            line = line + Text(" · " + record.layerNames.joined(separator: " · "))
+            line = line + Text(AppStrings.widgetSeparator + record.layerNames.joined(separator: AppStrings.widgetSeparator))
         }
         return line
     }
@@ -146,7 +146,7 @@ struct RunWearWidgetEntryView: View {
     private func smallOutfitLineTwo(_ record: WidgetLastGood) -> Text {
         var line = Text(record.bottomName)
         if !record.secondaryNames.isEmpty {
-            line = line + Text(" · +\(record.secondaryNames.count) more")
+            line = line + Text(AppStrings.widgetMoreSuffix(record.secondaryNames.count))
                 .font(.caption)
                 .foregroundColor(AppTheme.inkSecondary)
         }
@@ -243,7 +243,7 @@ struct RunWearWidgetEntryView: View {
     private func largeContent(_ record: WidgetLastGood) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline) {
-                Text("RunWear")
+                Text(AppStrings.heroWordmark)
                     .font(.greatVibes(size: 26))
                     .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
@@ -304,7 +304,7 @@ struct RunWearWidgetEntryView: View {
 
             Spacer(minLength: 2)
 
-            Text("Humidity \(record.humidityPercent)% · UV \(Int(round(record.uvIndex)))")
+            Text(AppStrings.widgetStatsLine(record.humidityPercent, Int(round(record.uvIndex))))
                 .font(.caption2)
                 .foregroundColor(AppTheme.inkSecondary)
                 .lineLimit(1)
@@ -328,7 +328,7 @@ struct RunWearWidgetEntryView: View {
     // model): shown ONLY when no last-good record exists.
     private var errorContent: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("RunWear")
+            Text(AppStrings.heroWordmark)
                 .font(.greatVibes(size: 26))
                 .foregroundColor(AppTheme.inkPrimary)
             Text(entry.errorCategory?.headline ?? WidgetErrorCategory.weather.headline)

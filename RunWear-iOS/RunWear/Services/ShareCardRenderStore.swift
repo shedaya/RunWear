@@ -70,22 +70,22 @@ enum ShareCardCopy {
     /// never a bare spinner on a blank sheet.
     static func progressLabel(for kind: ShareCardKind) -> String {
         switch kind {
-        case .poster: return "Making your Morning Poster…"
-        case .kit: return "Making your Kit Card…"
+        case .poster: return AppStrings.sharePosterProgress
+        case .kit: return AppStrings.shareKitProgress
         }
     }
 
     static func failureLabel(for kind: ShareCardKind) -> String {
         switch kind {
-        case .poster: return "Your Morning Poster couldn't be made."
-        case .kit: return "Your Kit Card couldn't be made."
+        case .poster: return AppStrings.sharePosterFailed
+        case .kit: return AppStrings.shareKitFailed
         }
     }
 
     /// GEN-6 (RW-31 §7): the verify gate's failure line — the
     /// rendered raster failed inspection, so the system sheet
     /// never opens and the Studio offers the retry instead.
-    static let verifyFailureLabel = "This card didn't render cleanly — try again"
+    static let verifyFailureLabel = AppStrings.shareVerifyFailed
 }
 
 enum ShareCardState: Equatable {

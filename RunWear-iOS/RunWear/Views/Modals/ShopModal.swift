@@ -61,10 +61,10 @@ struct ShopModal: View {
                     // the links open Amazon; RunWear may earn a
                     // commission; it never changes the outfit
                     // recommended.
-                    Text("Affiliate Disclosure: ")
+                    Text(AppStrings.shopDisclosureLead)
                         .font(.caption.weight(.bold))
                         .foregroundColor(AppTheme.inkSecondary)
-                    + Text("These links open Amazon. As an Amazon Associate, RunWear may earn a commission from qualifying purchases, at no extra cost to you. It never changes the outfit we recommend.")
+                    + Text(AppStrings.shopDisclosure)
                         .font(.caption)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -77,7 +77,7 @@ struct ShopModal: View {
                 .padding(.horizontal, 24)
 
                 Button(action: dismiss) {
-                    Text("Close")
+                    Text(AppStrings.shopClose)
                         .font(.appSecondary.weight(.semibold))
                         .foregroundColor(AppTheme.inkPrimary)
                         .frame(maxWidth: .infinity)
@@ -149,7 +149,7 @@ struct ShopModal: View {
                 Button(action: { openAmazon(for: item) }) {
                     HStack(spacing: 6) {
                         Image(systemName: "cart.fill")
-                        Text("Shop")
+                        Text(AppStrings.shopTitle)
                     }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(.white)
@@ -184,11 +184,11 @@ struct ShopModal: View {
     private var headerSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Shop Gear")
+                Text(AppStrings.shopGear)
                     .font(.appSheetTitle)
                     .foregroundColor(AppTheme.inkPrimary)
 
-                Text("\(items.count) items recommended")
+                Text(AppStrings.shopItemsRecommended(items.count))
                     .font(.appSecondary)
                     .monospacedDigit()
                     .foregroundColor(AppTheme.inkSecondary)
@@ -199,7 +199,7 @@ struct ShopModal: View {
             // Shop All button
             Button(action: openShopAll) {
                 HStack(spacing: 4) {
-                    Text("Shop All")
+                    Text(AppStrings.shopAll)
                         .font(.appSecondary.weight(.semibold))
                     Image(systemName: "arrow.right")
                         .font(.appFootnote.weight(.semibold))
@@ -324,7 +324,7 @@ private struct ShopItemRow: View {
                 // "Shop ›" as labelled text, replacing the bare
                 // cart glyph (the row itself still opens Amazon,
                 // or selects for the inspector at regular width).
-                Text("Shop ›")
+                Text(AppStrings.actionShopArrow)
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.primaryColor)
             }
@@ -354,9 +354,9 @@ private struct ShopItemRow: View {
 #Preview {
     ShopModal(
         items: [
-            ClothingItem(key: "SHORTS", name: "Running Shorts (5-7\")", description: "Standard running shorts", icon: "figure.run", amazonSearchTerm: "running shorts 5 inch"),
-            ClothingItem(key: "SHORT_SLEEVE", name: "Short Sleeve Shirt", description: "Moisture-wicking technical fabric", icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit"),
-            ClothingItem(key: "BASEBALL_CAP", name: "Running Cap", description: "Sun and light rain protection", icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
+            ClothingItem(key: "SHORTS", name: AppStrings.shopItemShortsName, description: AppStrings.shopItemShortsDesc, icon: "figure.run", amazonSearchTerm: "running shorts 5 inch"),
+            ClothingItem(key: "SHORT_SLEEVE", name: AppStrings.shopItemShirtName, description: AppStrings.shopItemShirtDesc, icon: "tshirt.fill", amazonSearchTerm: "running short sleeve shirt dri-fit"),
+            ClothingItem(key: "BASEBALL_CAP", name: AppStrings.shopItemCapName, description: AppStrings.shopItemCapDesc, icon: "baseball.cap.fill", amazonSearchTerm: "running cap lightweight")
         ],
         genderPreference: .male,
         weatherCode: 0,

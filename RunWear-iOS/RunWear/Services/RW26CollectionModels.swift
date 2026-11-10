@@ -492,11 +492,11 @@ enum WearIveRunWeatherFilter: String, CaseIterable, Equatable {
 
     var label: String {
         switch self {
-        case .all: return "All"
-        case .cold: return "Cold"
-        case .snow: return "Snow"
-        case .rain: return "Rain"
-        case .heat: return "Heat"
+        case .all: return AppStrings.filterAll
+        case .cold: return AppStrings.filterCold
+        case .snow: return AppStrings.filterSnow
+        case .rain: return AppStrings.filterRain
+        case .heat: return AppStrings.filterHeat
         }
     }
 }
@@ -575,18 +575,18 @@ struct WearIveRunChapter: Equatable {
         let range = feelsLikeRangeF
         let rangeText = range.min == range.max
             ? formatTemperature(range.min)
-            : "\(formatTemperature(range.min))–\(formatTemperature(range.max))"
+            : AppEnglish.collectionRangeJoin(formatTemperature(range.min), formatTemperature(range.max))
         if stays.count > 1, let lastStay = stays.first {
             let span = WearIveRunDateFormatting.span(
                 from: lastStay.firstDay, to: lastStay.lastDay, calendar: calendar
             )
-            return "\(stays.count) stays · \(dayCount) days · Last stay · \(span) · \(rangeText)"
+            return AppEnglish.wirSummaryMulti(AppEnglish.wirStaysCount(stays.count), AppEnglish.wirDaysCount(dayCount), span, rangeText)
         }
         let span = WearIveRunDateFormatting.span(
             from: entries.last!.dayStart, to: entries.first!.dayStart, calendar: calendar
         )
-        let days = dayCount == 1 ? "1 day" : "\(dayCount) days"
-        return "\(days) · \(span) · \(rangeText)"
+        let days = AppEnglish.wirDaysCount(dayCount)
+        return AppEnglish.wirSummarySingle(days, span) + AppEnglish.wirSummaryRangeSuffix(rangeText)
     }
 }
 
@@ -791,14 +791,13 @@ enum WearIveRunDateFormatting {
         let sameMonth = calendar.component(.month, from: start) == calendar.component(.month, from: end)
             && calendar.component(.year, from: start) == calendar.component(.year, from: end)
         if sameMonth {
-            let month = formatter("MMM", calendar: calendar).string(from: start)
-            let first = calendar.component(.day, from: start)
+            let fromText = formatter("MMM d", calendar: calendar).string(from: start)
             let last = calendar.component(.day, from: end)
-            return "\(month) \(first)–\(last)"
+            return AppEnglish.wirSpanSameMonth(fromText, last)
         }
         let fromText = formatter("MMM d", calendar: calendar).string(from: start)
         let toText = formatter("MMM d", calendar: calendar).string(from: end)
-        return "\(fromText) – \(toText)"
+        return AppEnglish.wirSpanCross(fromText, toText)
     }
 
     /// GEN-5 (RW-28 item 10): the TODAY card's "Last saved …"
@@ -806,12 +805,12 @@ enum WearIveRunDateFormatting {
     /// today, a day label before that. Never a stamped date-time.
     static func lastSavedLine(savedAt: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         if now.timeIntervalSince(savedAt) < 60 {
-            return "Last saved just now"
+            return AppEnglish.wirLastSavedJustNow
         }
         if calendar.isDate(savedAt, inSameDayAs: now) {
-            return "Last saved \(formatter("h:mm a", calendar: calendar).string(from: savedAt))"
+            return AppEnglish.wirLastSavedClock(formatter("h:mm a", calendar: calendar).string(from: savedAt))
         }
-        return "Last saved \(dayLabel(savedAt, calendar: calendar))"
+        return AppEnglish.wirLastSavedDay(dayLabel(savedAt, calendar: calendar))
     }
 
     /// "Mar 11" style single-day label.
@@ -1082,14 +1081,14 @@ final class RecentLocationsStore {
 /// temperature ONLY. The hero numeral and the weather strip are
 /// rendered from the view model directly.
 enum HomeHeaderCopy {
-    static let feelsLikeLabel = "Feels like"
+    static let feelsLikeLabel = AppStrings.heroFeelsLikeLabel
 
     /// The location line's place is the SimplePlace (WS-4): the
     /// string overload routes through the model, so a raw geocode
     /// string handed to this formatter still cannot reach the
     /// rendered line.
     static func locationLine(place: String, moment: String) -> String {
-        "\(placeSegment(place: place)) · \(moment)"
+        AppStrings.homeLocationLine(placeSegment(place: place), moment)
     }
 
     /// The location line's place segment alone, resolved through
@@ -1103,18 +1102,18 @@ enum HomeHeaderCopy {
     static func placeSegment(place: String) -> String {
         let resolved = SimplePlace(rawDisplayName: place)?.displayName ?? place
         return resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Current Location"
+            ? AppStrings.homeCurrentLocation
             : resolved
     }
 
     static func locationLine(place: SimplePlace, moment: String) -> String {
-        "\(place.displayName) · \(moment)"
+        AppStrings.homeLocationLine(place.displayName, moment)
     }
 
     /// "Actual 38°" — the formatted temperature (unit included) and
     /// nothing else.
     static func actualLine(formattedTemperature: String) -> String {
-        "Actual \(formattedTemperature)"
+        AppStrings.homeActualLine(formattedTemperature)
     }
 }
 
@@ -1335,10 +1334,10 @@ enum PersonalServePresentation: Equatable {
 
 enum PersonalServePolicy {
     /// The scaffold badge: factual, no promise of a time.
-    static let scaffoldBadge = "This look was made for similar weather — your exact one is being made."
+    static let scaffoldBadge = AppStrings.mimScaffoldBadge
 
     /// The failed cell's library explanation (frame 21).
-    static let failedExplanation = "This look couldn't be made, so the standard photo is shown here. Your other looks are unaffected."
+    static let failedExplanation = AppStrings.mimFailedExplanation
 
     static func presentation(
         hasPersonalPhoto: Bool,
@@ -1403,7 +1402,7 @@ enum LooksLibrary {
     }
 
     /// The settled failure suffix (frame 21 / design-spec §17).
-    static let failedSuffix = "stock photo for now"
+    static let failedSuffix = AppStrings.mimFailedSuffix
 
     static func cells(from lookStates: [String: PersonalLookState]) -> [Cell] {
         lookStates
@@ -1419,8 +1418,8 @@ enum LooksLibrary {
                 let timeName = time.rawValue.capitalized
                 return Cell(
                     combinationId: combinationId,
-                    titleLine: "\(weather.rawValue.capitalized) · \(bracket.rawValue.capitalized)",
-                    statusLine: state.isFailed ? "\(timeName) · \(failedSuffix)" : timeName,
+                    titleLine: AppStrings.mimLookTitle(weather.rawValue.capitalized, bracket.rawValue.capitalized),
+                    statusLine: state.isFailed ? AppStrings.mimLookStatusFailed(timeName, failedSuffix) : timeName,
                     state: state
                 )
             }
@@ -1490,11 +1489,11 @@ enum FeedbackRouting {
 
     /// Human categories — Android's five ids, verbatim.
     static let humanCategories: [(id: String, label: String)] = [
-        ("something_wrong", "Something's wrong"),
-        ("recommendation_off", "The recommendation seems off"),
-        ("confusing", "Confusing"),
-        ("idea", "Idea"),
-        ("other", "Other")
+        ("something_wrong", AppStrings.feedbackSomethingWrong),
+        ("recommendation_off", AppStrings.feedbackRecommendationOff),
+        ("confusing", AppStrings.feedbackConfusing),
+        ("idea", AppStrings.feedbackIdea),
+        ("other", AppStrings.feedbackOther)
     ]
 
     /// Machine-traffic category names (RW-18 separation).
@@ -1571,10 +1570,10 @@ enum SelfieCheck: String, CaseIterable, Equatable {
 
     var passedLabel: String {
         switch self {
-        case .faceFound: return "In frame"
-        case .faceLargeEnough: return "Face size"
-        case .faceFrontal: return "Straight on"
-        case .wellLit: return "Light"
+        case .faceFound: return AppStrings.mimCheckInFrame
+        case .faceLargeEnough: return AppStrings.mimCheckFaceSize
+        case .faceFrontal: return AppStrings.mimCheckStraightOn
+        case .wellLit: return AppStrings.mimCheckLight
         }
     }
 
@@ -1591,10 +1590,10 @@ enum SelfieCheck: String, CaseIterable, Equatable {
     /// The one coaching line for this check's failure.
     var coachingLine: String {
         switch self {
-        case .faceFound: return "Center your face in the oval."
-        case .faceLargeEnough: return "Move a little closer — your face should fill the oval."
-        case .faceFrontal: return "Look straight at the camera."
-        case .wellLit: return "Face a window or a brighter light."
+        case .faceFound: return AppStrings.mimCoachCenter
+        case .faceLargeEnough: return AppStrings.mimCoachCloser
+        case .faceFrontal: return AppStrings.mimCoachStraight
+        case .wellLit: return AppStrings.mimCoachLight
         }
     }
 }
@@ -1643,7 +1642,7 @@ enum SelfieGuidance {
     /// C3E — the uploaded photo's face is too small. GEN-6
     /// (RW-51): the settled §10.4 wording, identical to
     /// PhotoRejection.faceTooSmall.specString.
-    static let retakeFaceTooSmall = "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…"
+    static let retakeFaceTooSmall = AppStrings.mimRetakeFaceTooSmall
     /// C3F — the uploaded photo is not frontal.
-    static let retakeNotFrontal = "This photo isn't facing the camera. Take a selfie with the camera instead — face it straight on."
+    static let retakeNotFrontal = AppStrings.mimRetakeNotFrontal
 }

@@ -155,7 +155,7 @@ struct WeatherOutfitView: View {
                 if showFlagThanks {
                     VStack {
                         Spacer()
-                        Text("Thanks — we'll review this photo")
+                        Text(AppStrings.viewThanksFlagReview)
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
                             .padding(.horizontal, 16)
@@ -570,27 +570,27 @@ struct WeatherOutfitView: View {
         .fullScreenCover(isPresented: $showHeroViewer) {
             HeroPhotoViewer(
                 imageURL: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl,
-                caption: recommendation.allItems.map(\.name).joined(separator: " · ")
+                caption: recommendation.allItems.map(\.name).joined(separator: AppStrings.wirSubtitleJoin)
             )
         }
         // Neutral THREE-door rating moment (frame 49): feedback
         // first, then the rating door, then not-now. Any door
         // closes it for the season; the rating door hands off to
         // the system review sheet.
-        .alert("Enjoying RunWear?", isPresented: $showRatingPrompt) {
-            Button("Send feedback") {
+        .alert(AppStrings.viewEnjoying, isPresented: $showRatingPrompt) {
+            Button(AppStrings.viewSendFeedback) {
                 ratingTracker.recordPromptShown()
                 showFeedbackSheet = true
             }
-            Button("Rate RunWear") {
+            Button(AppStrings.viewRate) {
                 ratingTracker.recordPromptShown()
                 requestReview()
             }
-            Button("Not now", role: .cancel) {
+            Button(AppStrings.viewNotNow, role: .cancel) {
                 ratingTracker.recordPromptShown()
             }
         } message: {
-            Text("A quick rating helps other runners find their outfit.")
+            Text(AppStrings.viewRatingHelp)
         }
     }
 
@@ -1062,15 +1062,15 @@ struct WeatherOutfitView: View {
     /// day word + the hour beyond it; never the gen-4 build's
     /// "Today, 9:00 PM" stamped form.
     private var sheetMoment: String {
-        if isViewingNow { return "Now" }
+        if isViewingNow { return AppStrings.heroNow }
         let calendar = Calendar.current
         if calendar.isDateInToday(viewModel.selectedDate) {
             return heroHourString
         }
         if calendar.isDateInTomorrow(viewModel.selectedDate) {
-            return "Tomorrow \(heroHourString)"
+            return AppStrings.viewTomorrowHour(heroHourString)
         }
-        return "\(navDateString) \(heroHourString)"
+        return AppStrings.viewDateHour(navDateString, heroHourString)
     }
 
     /// GEN-5 (RW-28, C-7): the entry's moment as a simple human
@@ -1507,7 +1507,7 @@ struct WeatherOutfitView: View {
             selectedWeatherDetail = .condition(viewModel.currentCondition)
         } label: {
             HStack {
-                Text("Full Weather Detail")
+                Text(AppStrings.viewFullWeatherDetail)
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
@@ -1532,7 +1532,7 @@ struct WeatherOutfitView: View {
             // the v8 frame and the Android RW-144 build. Item
             // taps still open the item shop flow, unchanged.
             HStack {
-                Text("\(recommendation.allItems.count) items for your run")
+                Text(AppStrings.outfitHeaderItems(recommendation.allItems.count))
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
                 Spacer()
@@ -1568,7 +1568,7 @@ struct WeatherOutfitView: View {
             .condition(viewModel.currentCondition),
             .wind(
                 speed: snapshot?.windSpeed ?? weather.currentWeather.windspeed,
-                direction: snapshot?.windDirectionCompass ?? "N",
+                direction: snapshot?.windDirectionCompass ?? AppStrings.weatherCompassN,
                 gusts: snapshot?.windGusts ?? weather.currentWeather.windspeed
             ),
             .humidity(percentage: snapshot?.humidity ?? 50),
@@ -1597,7 +1597,7 @@ struct WeatherOutfitView: View {
             // every place-bearing surface now does.
             viewModel.displayedPlaceName,
             navDateString,
-            "\(viewModel.temperatureUnit.format(viewModel.currentTemperature)) · Feels like \(viewModel.temperatureUnit.format(viewModel.currentFeelsLike))",
+            AppStrings.viewFeelsLine(viewModel.temperatureUnit.format(viewModel.currentTemperature), viewModel.temperatureUnit.format(viewModel.currentFeelsLike)),
             // RW-109: this line stands beside the same displayed
             // feels-like (the line above), so it names the
             // DISPLAY bracket, not the engine bracket.
@@ -1612,7 +1612,7 @@ struct WeatherOutfitView: View {
     /// says so, with the selected date/time as context, instead of
     /// the pre-RW-23 silent substitution.
     private var outsideForecastNotice: some View {
-        Text("Forecast isn't available for that time yet — showing current conditions. (\(navDateString), \(selectedHourString))")
+        Text(AppStrings.viewForecastUnavailable(navDateString, selectedHourString))
             .font(.appFootnote)
             .foregroundColor(AppTheme.inkSecondary)
             .padding(.horizontal, 16)
@@ -1623,7 +1623,7 @@ struct WeatherOutfitView: View {
         var components = Calendar.current.dateComponents([.year, .month, .day], from: viewModel.selectedDate)
         components.hour = viewModel.selectedHour
         guard let date = Calendar.current.date(from: components) else {
-            return "\(viewModel.selectedHour):00"
+            return AppStrings.viewHourPlain(viewModel.selectedHour)
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "h a"
@@ -1634,9 +1634,9 @@ struct WeatherOutfitView: View {
         let calendar = Calendar.current
         let date = viewModel.selectedDate
         if calendar.isDateInToday(date) {
-            return "Today"
+            return AppStrings.wirDayToday
         } else if calendar.isDateInTomorrow(date) {
-            return "Tomorrow"
+            return AppStrings.wirDayTomorrow
         }
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE, MMM d"
@@ -1688,7 +1688,7 @@ struct WeatherOutfitView: View {
             // the place the conditions beside it belong to.
             placeName: HomeHeaderCopy.placeSegment(place: viewModel.displayedPlaceName),
             dateText: chipDateString,
-            timeText: isViewingNow ? "Now" : heroHourString,
+            timeText: isViewingNow ? AppStrings.heroNow : heroHourString,
             isNow: isViewingNow,
             // RW-144 (parent ruling, Nov 8, 2026): the hero
             // numeral + Actual line are the bare degree ("58°" /
@@ -1922,7 +1922,7 @@ struct WeatherOutfitView: View {
                 // library door stays here — one tap from where
                 // the failed cell is encountered (frame 20's door
                 // wording, RW-61).
-                Button("See all your looks") {
+                Button(AppStrings.viewSeeAllLooks) {
                     showLooksLibrary = true
                 }
                 .font(.appSecondary.weight(.semibold))
@@ -1963,7 +1963,7 @@ struct WeatherOutfitView: View {
             // and, since the Nov 9, 2026 ruling, no "Shop"
             // button beside it (see outfitGridSection).
             HStack {
-                Text("\(recommendation.allItems.count) items for your run")
+                Text(AppStrings.outfitHeaderItems(recommendation.allItems.count))
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
 
@@ -1994,7 +1994,7 @@ struct WeatherOutfitView: View {
     @ViewBuilder private var proTipSection: some View {
         if !recommendation.tips.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Pro Tip")
+                Text(AppStrings.viewProTip)
                     .font(.appItemName)
                     .foregroundColor(AppTheme.inkSecondary)
                     .padding(.horizontal, 16)
@@ -2033,7 +2033,7 @@ private struct RefreshErrorBanner: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button("Retry", action: onRetry)
+            Button(AppStrings.actionRetry, action: onRetry)
                 .font(.system(size: 13, weight: .semibold))
                 // WS-8 (D-25 class): the banner's fill is near-black
                 // in both modes, so its pine text is the DARK pine
@@ -2046,7 +2046,7 @@ private struct RefreshErrorBanner: View {
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
             }
-            .accessibilityLabel("Dismiss")
+            .accessibilityLabel(AppStrings.viewDismiss)
         }
         .padding(12)
         .background(

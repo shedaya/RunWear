@@ -93,13 +93,13 @@ enum SupabaseError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidURL:
-            return "Invalid Supabase URL"
+            return AppStrings.errorInvalidSupabaseUrl
         case .invalidResponse:
-            return "Invalid response from Supabase"
+            return AppStrings.errorInvalidSupabaseResponse
         case .httpError(let code):
-            return "HTTP error: \(code)"
+            return AppStrings.errorHttp(code)
         case .decodingError(let error):
-            return "Decoding error: \(error.localizedDescription)"
+            return AppStrings.errorDecoding(error.localizedDescription)
         }
     }
 }

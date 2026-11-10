@@ -100,7 +100,7 @@ class WeatherViewModel: ObservableObject {
     @Published var recommendation: OutfitRecommendation?
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var locationName: String = "Loading..."
+    @Published var locationName: String = AppStrings.wearLoading
 
     /// The current place as the app's ONE place value (WS-4 /
     /// RC-4): derived once at geocode time (or at manual
@@ -137,7 +137,7 @@ class WeatherViewModel: ObservableObject {
         // passed straight through. It now falls back to the
         // app's existing non-place label.
         return resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Current Location"
+            ? AppStrings.homeCurrentLocation
             : resolved
     }
 
@@ -259,7 +259,7 @@ class WeatherViewModel: ObservableObject {
     /// never what a tap has merely requested. Before the first
     /// commit they carry the launch state (the restored manual
     /// place, or the GPS non-place label).
-    @Published private(set) var displayedPlaceName: String = "Current Location"
+    @Published private(set) var displayedPlaceName: String = AppStrings.homeCurrentLocation
     @Published private(set) var displayedSourceIsGPS: Bool = true
 
     // Settings with persistence
@@ -459,7 +459,7 @@ class WeatherViewModel: ObservableObject {
             // authored words (design-spec §17 / frame 47: name
             // the failure and what is safe) — never the raw
             // system error text the build-25 code surfaced.
-            errorMessage = "The weather service couldn't be reached. Your places, settings, and photos stay on this phone — nothing is lost."
+            errorMessage = AppStrings.vmWeatherUnreachable
             // The widget's never-succeeded card reads its
             // failure category from the same fact (Addendum 7).
             WidgetLastGoodStore.saveErrorCategory(.weather)
@@ -472,7 +472,7 @@ class WeatherViewModel: ObservableObject {
         guard let location = location else {
             // GEN-5 (RW-29 FA-15): authored form (frame 47's
             // pattern — the failure named, and what is safe).
-            errorMessage = "Location isn't available. Your places, settings, and photos stay on this phone — nothing is lost."
+            errorMessage = AppStrings.vmLocationUnavailable
             WidgetLastGoodStore.saveErrorCategory(.location)
             return
         }
@@ -528,7 +528,7 @@ class WeatherViewModel: ObservableObject {
     func refreshCurrent() async {
         guard let currentLocation else {
             // GEN-5 (RW-29 FA-15): authored form, as above.
-            errorMessage = "Location isn't available. Your places, settings, and photos stay on this phone — nothing is lost."
+            errorMessage = AppStrings.vmLocationUnavailable
             WidgetLastGoodStore.saveErrorCategory(.location)
             return
         }
@@ -787,7 +787,7 @@ class WeatherViewModel: ObservableObject {
             )
             let clauses = widgetOutfitDeltaClauses(current: current, later: laterRecommendation)
             if !clauses.isEmpty {
-                var line = "By \(widgetHourLabel(hour: targetHour, on: today)): \(clauses.joined(separator: " · "))"
+                var line = AppEnglish.widgetByLine(widgetHourLabel(hour: targetHour, on: today), clauses.joined(separator: " · "))
                 if later.precipitationProbability >= 30 {
                     line += " · rain \(later.precipitationProbability)%"
                 }
@@ -807,7 +807,7 @@ class WeatherViewModel: ObservableObject {
         let range = Int(round(temperatureUnit.convert(fromFahrenheit: minF))) == Int(round(temperatureUnit.convert(fromFahrenheit: maxF)))
             ? "feels like \(Int(round(temperatureUnit.convert(fromFahrenheit: minF))))\(symbol)"
             : "feels like \(Int(round(temperatureUnit.convert(fromFahrenheit: minF))))–\(Int(round(temperatureUnit.convert(fromFahrenheit: maxF))))\(symbol)"
-        var line = "Later today: \(range)"
+        var line = AppEnglish.widgetLaterTodayRange(range)
         if peakRain >= 30 { line += " · rain up to \(peakRain)%" }
         return line
     }
@@ -848,11 +848,7 @@ class WeatherViewModel: ObservableObject {
         components.hour = hour
         components.minute = 0
         guard let target = locationCalendar.date(from: components) else { return "\(hour)" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "h a"
-        formatter.timeZone = locationCalendar.timeZone
-        return formatter.string(from: target)
+        return LocaleFormats.timeHour(target, timeZone: locationCalendar.timeZone)
     }
 
     /// Reset to current date and time — re-enters the NOW state.
@@ -1904,7 +1900,7 @@ class WeatherViewModel: ObservableObject {
             locationName = place.displayName
         } else {
             simplePlace = nil
-            locationName = "Current Location"
+            locationName = AppStrings.homeCurrentLocation
         }
         displayedPlaceName = placeDisplayName
         displayedSourceIsGPS = sourceIsGPS

@@ -121,12 +121,12 @@ enum MakeItMeSettingsRow: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .notStarted: return "See yourself in every outfit"
-        case .yourPhotos: return "Your photos"
-        case .numberOfPhotos: return "Number of photos"
-        case .premium: return "Premium"
-        case .manageSubscription: return "Manage subscription"
-        case .deletePhotos: return "Delete my photos"
+        case .notStarted: return AppStrings.mimsetRowSeeYourself
+        case .yourPhotos: return AppStrings.mimsetYourPhotos
+        case .numberOfPhotos: return AppStrings.mimsetRowNumberOfPhotos
+        case .premium: return AppStrings.mimsetPremium
+        case .manageSubscription: return AppStrings.mimsetRowManageSubscription
+        case .deletePhotos: return AppStrings.settingsDeletePhotos
         }
     }
 }

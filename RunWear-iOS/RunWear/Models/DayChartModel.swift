@@ -237,7 +237,7 @@ enum DayChartNowMarker {
 /// (forecast covering hours 0…23) has no beyond-forecast region
 /// and names nothing.
 enum DayChartBeyondForecast {
-    static let label = "Beyond forecast"
+    static let label = AppStrings.chartBeyondForecast
 
     /// The caption for a chart, or nil when the day is fully
     /// covered by the forecast.
@@ -329,7 +329,7 @@ enum DayChartFormat {
     /// The sheet readout: hour + feels-like ONLY ("6 PM · 47°").
     /// The temperature arrives pre-formatted in the display unit.
     static func readout(hour: Int, formattedFeelsLike: String) -> String {
-        "\(hourLabel(hour)) · \(formattedFeelsLike)"
+        AppStrings.chartReadout(hourLabel(hour), formattedFeelsLike)
     }
 }
 

@@ -105,7 +105,7 @@ struct OnboardingView: View {
             Spacer()
 
             VStack(spacing: 10) {
-                Text("RunWear")
+                Text(AppStrings.heroWordmark)
                     .font(.greatVibes(size: 64))
                     .foregroundStyle(AppTheme.inkPrimary)
 
@@ -132,7 +132,7 @@ struct OnboardingView: View {
             Button {
                 path.append(.preferences)
             } label: {
-                Text("Get Started")
+                Text(AppStrings.onbPromiseCta)
                     .font(.appButtonLabel)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -171,7 +171,7 @@ struct OnboardingView: View {
                 (Text(point.name)
                     .fontWeight(.bold)
                     .foregroundColor(AppTheme.pinePayload)
-                 + Text(" — ")
+                 + Text(AppStrings.onbNameSeparator)
                     .foregroundColor(AppTheme.inkPrimary)
                  + Text(point.phrase))
                     .font(.system(size: 17))
@@ -249,7 +249,7 @@ struct OnboardingView: View {
             Button {
                 advanceToNextStep()
             } label: {
-                Text("Continue")
+                Text(AppStrings.actionContinue)
                     .font(.appButtonLabel)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -296,18 +296,18 @@ struct OnboardingView: View {
     private var locationScreen: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("One more thing — where are you running?")
+                Text(AppStrings.onbLocationTitle)
                     .font(.title.weight(.bold))
                     .foregroundStyle(AppTheme.inkPrimary)
 
-                Text("RunWear saves your most recent location on your phone so your outfit is ready when you open the app. For a forecast, it sends coordinates rounded to a rough area — never your exact spot — and your location is never sold or used for advertising.")
+                Text(AppStrings.onbLocationBody)
                     .font(.appSecondary)
                     .foregroundStyle(AppTheme.inkSecondary)
 
                 Button {
                     useMyLocationTapped()
                 } label: {
-                    Text("Use My Location")
+                    Text(AppStrings.onbLocationCtaPrimary)
                         .font(.appButtonLabel)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -320,7 +320,7 @@ struct OnboardingView: View {
                     locationChoice = .manual
                     beginFirstLook()
                 } label: {
-                    Text("Set a City Instead")
+                    Text(AppStrings.onbLocationCtaSecondary)
                         .font(.appButtonLabel)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -338,7 +338,7 @@ struct OnboardingView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .tint(AppTheme.inkPrimary)
-                        Text("Finding your location…")
+                        Text(AppStrings.onbLocationFinding)
                             .font(.appSecondary)
                             .foregroundStyle(AppTheme.inkSecondary)
                     }
@@ -346,7 +346,7 @@ struct OnboardingView: View {
                 }
 
                 if locationPermissionDenied {
-                    Text("Location is off — set a city instead, or turn location on for RunWear in Settings.")
+                    Text(AppStrings.onbLocationDenied)
                         .font(.appSecondary)
                         .foregroundStyle(AppTheme.inkSecondary)
                 }
@@ -683,7 +683,7 @@ private struct FirstLookView: View {
                 }
 
                 Button(action: onComplete) {
-                    Text("Continue")
+                    Text(AppStrings.actionContinue)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -736,7 +736,7 @@ private struct FirstLookView: View {
                 // it belongs: the fork preview and the flag-off
                 // ready view.
                 VStack(spacing: 6) {
-                    Text("Make It Me")
+                    Text(AppStrings.mimScriptMark)
                         .font(.greatVibes(size: 34))
                         .foregroundColor(AppTheme.inkPrimary)
                     Text(MakeItMeCopy.firstLookHeading(city: previewVM.simplePlace?.city))
@@ -830,10 +830,10 @@ private struct FirstLookView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(1.2)
                         .foregroundColor(AppTheme.pinePayload)
-                    Text("Ready the moment you open the app — made ahead, never while you wait.")
+                    Text(AppStrings.mimBandReadyLine)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text("Every outfit, every day — no number to run out of.")
+                    Text(AppStrings.mimBandUnlimitedLine)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppTheme.inkPrimary)
                 }
@@ -857,7 +857,7 @@ private struct FirstLookView: View {
                 // lands and swaps in. Waiting is the user's
                 // choice, never a requirement.
                 Button(action: onComplete) {
-                    Text("See My Outfit")
+                    Text(AppStrings.mimFirstLookSeeOutfit)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -877,7 +877,7 @@ private struct FirstLookView: View {
                     Button {
                         showPremiumSheet = true
                     } label: {
-                        Text("Upgrade to Premium")
+                        Text(AppStrings.mimFirstLookUpgrade)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(AppTheme.inkSecondary)
                             .frame(maxWidth: .infinity)
@@ -1000,7 +1000,7 @@ private struct FirstLookView: View {
     }
 
     private var contextLine: String {
-        "\(previewVM.placeDisplayName) · \(previewVM.temperatureUnit.format(previewVM.currentFeelsLike))"
+        AppStrings.onbForkContextLine(previewVM.placeDisplayName, previewVM.temperatureUnit.format(previewVM.currentFeelsLike))
     }
 
     /// W-23: the fork's caption — the context line ONLY once the
@@ -1019,7 +1019,7 @@ private struct FirstLookView: View {
     }
 
     private var outfitLine: String {
-        previewVM.recommendation?.allItems.map(\.name).joined(separator: " · ") ?? ""
+        previewVM.recommendation?.allItems.map(\.name).joined(separator: AppStrings.wirSubtitleJoin) ?? ""
     }
 
     /// Routes the first load by the choice made on the preferences
@@ -1053,7 +1053,7 @@ private struct FirstLookView: View {
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
-                Button("Try Again") {
+                Button(AppStrings.supportTryAgain) {
                     started = false
                     start()
                 }
@@ -1071,14 +1071,14 @@ private struct FirstLookView: View {
                 // renders the same designed treatment (styled
                 // doors, spinner + copy while a request is in
                 // flight) rather than the stripped layout.
-                Text("One more thing — where are you running?")
+                Text(AppStrings.onbLocationTitle)
                     .font(.appSectionTitle)
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
                 Button {
                     locationService.requestPermission()
                 } label: {
-                    Text("Use My Location")
+                    Text(AppStrings.onbLocationCtaPrimary)
                         .font(.appButtonLabel)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -1088,7 +1088,7 @@ private struct FirstLookView: View {
                 Button {
                     showLocationPicker = true
                 } label: {
-                    Text("Set a City Instead")
+                    Text(AppStrings.onbLocationCtaSecondary)
                         .font(.appButtonLabel)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
@@ -1098,17 +1098,17 @@ private struct FirstLookView: View {
                 HStack(spacing: 10) {
                     ProgressView()
                         .tint(AppTheme.inkPrimary)
-                    Text("Finding your location…")
+                    Text(AppStrings.onbLocationFinding)
                         .font(.appSecondary)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
             } else if locationService.authorizationStatus == .denied ||
                       locationService.authorizationStatus == .restricted {
-                Text("Location is off — set a city to see your first recommendation.")
+                Text(AppStrings.onbLocationOffLine)
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkPrimary)
                     .multilineTextAlignment(.center)
-                Button("Set a City Instead") {
+                Button(AppStrings.onbLocationCtaSecondary) {
                     showLocationPicker = true
                 }
                 .font(.appButtonLabel)
@@ -1118,7 +1118,7 @@ private struct FirstLookView: View {
                     .tint(AppTheme.inkPrimary)
                 // DEVIATION-COPY (no deck entry): the wait line for
                 // the first recommendation load.
-                Text("Getting your first recommendation…")
+                Text(AppStrings.loadingFirstRecommendation)
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkSecondary)
             }

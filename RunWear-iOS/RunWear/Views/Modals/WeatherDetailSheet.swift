@@ -16,13 +16,13 @@ enum WeatherDetailType {
 
     var title: String {
         switch self {
-        case .feelsLike: return "Feels Like"
-        case .actual: return "Actual"
-        case .condition: return "Weather Condition"
-        case .wind: return "Wind"
-        case .humidity: return "Humidity"
-        case .precipitation: return "Precipitation"
-        case .uvIndex: return "UV Index"
+        case .feelsLike: return AppStrings.detailMetricFeelsLike
+        case .actual: return AppStrings.detailMetricActual
+        case .condition: return AppStrings.detailMetricCondition
+        case .wind: return AppStrings.detailMetricWind
+        case .humidity: return AppStrings.detailMetricHumidity
+        case .precipitation: return AppStrings.weatherLabelPrecip
+        case .uvIndex: return AppStrings.detailMetricUv
         }
     }
 
@@ -47,13 +47,13 @@ enum WeatherMetricKind: String, CaseIterable, Hashable {
 
     var shortTitle: String {
         switch self {
-        case .feelsLike: return "Feels like"
-        case .actual: return "Actual"
-        case .condition: return "Condition"
-        case .wind: return "Wind"
-        case .humidity: return "Humidity"
-        case .precipitation: return "Rain"
-        case .uvIndex: return "UV"
+        case .feelsLike: return AppStrings.weatherLabelFeelsLike
+        case .actual: return AppStrings.weatherLabelActual
+        case .condition: return AppStrings.weatherLabelCondition
+        case .wind: return AppStrings.weatherLabelWind
+        case .humidity: return AppStrings.weatherLabelHumidity
+        case .precipitation: return AppStrings.detailShortRain
+        case .uvIndex: return AppStrings.weatherLabelUv
         }
     }
 }
@@ -77,10 +77,10 @@ extension WeatherDetailType {
         case .feelsLike(let value): return value
         case .actual(let value): return value
         case .condition(let condition): return condition.rawValue
-        case .wind(let speed, _, _): return "\(Int(round(speed))) mph"
-        case .humidity(let percentage): return "\(percentage)%"
-        case .precipitation(let percentage): return "\(percentage)%"
-        case .uvIndex(let value): return String(format: "%.1f", value)
+        case .wind(let speed, _, _): return AppStrings.windValue(Int(round(speed)))
+        case .humidity(let percentage): return AppStrings.detailPercent(percentage)
+        case .precipitation(let percentage): return AppStrings.detailPercent(percentage)
+        case .uvIndex(let value): return String(format: AppStrings.detailUvValue, value)
         }
     }
 }
@@ -224,7 +224,7 @@ struct WeatherDetailSheet: View {
                             .foregroundColor(AppTheme.inkSecondary)
                     }
                 } header: {
-                    Text("Context")
+                    Text(AppStrings.detailContext)
                 }
                 Section {
                     ForEach(allDetails, id: \.kind) { detail in
@@ -243,7 +243,7 @@ struct WeatherDetailSheet: View {
                         .tag(detail.kind)
                     }
                 } header: {
-                    Text("Metrics")
+                    Text(AppStrings.detailMetrics)
                 }
             }
             .listStyle(.sidebar)
@@ -252,7 +252,7 @@ struct WeatherDetailSheet: View {
             // sidebar list's system material.
             .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
-            .navigationTitle("Weather Detail")
+            .navigationTitle(AppStrings.detailTitle)
         } detail: {
             NavigationStack {
                 ScrollView {
@@ -269,7 +269,7 @@ struct WeatherDetailSheet: View {
                         Button {
                             showMetricInspector.toggle()
                         } label: {
-                            Label("Metric", systemImage: "sidebar.right")
+                            Label(AppStrings.detailMetricLabel, systemImage: "sidebar.right")
                         }
                     }
                 }
@@ -324,9 +324,9 @@ struct WeatherDetailSheet: View {
     private var detailContent: some View {
         switch detailType {
         case .feelsLike(let value):
-            temperatureContent(value: value, caption: "Feels like")
+            temperatureContent(value: value, caption: AppStrings.weatherLabelFeelsLike)
         case .actual(let value):
-            temperatureContent(value: value, caption: "Actual temperature")
+            temperatureContent(value: value, caption: AppStrings.detailActualTemperature)
         case .condition(let condition):
             conditionContent(condition)
         case .wind(let speed, let direction, let gusts):
@@ -374,7 +374,7 @@ struct WeatherDetailSheet: View {
                         .font(.largeTitle.weight(.semibold))
                         .monospacedDigit()
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text("mph")
+                    Text(AppStrings.detailWindUnit)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -383,7 +383,7 @@ struct WeatherDetailSheet: View {
                     Text(direction)
                         .font(.largeTitle.weight(.semibold))
                         .foregroundColor(AppTheme.inkPrimary)
-                    Text("direction")
+                    Text(AppStrings.detailWindDirectionWord)
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                 }
@@ -394,7 +394,7 @@ struct WeatherDetailSheet: View {
                             .font(.largeTitle.weight(.semibold))
                             .monospacedDigit()
                             .foregroundColor(AppTheme.inkPrimary)
-                        Text("gusts")
+                        Text(AppStrings.detailWindGustsWord)
                             .font(.appFootnote)
                             .foregroundColor(AppTheme.inkSecondary)
                     }
@@ -410,7 +410,7 @@ struct WeatherDetailSheet: View {
 
     private func humidityContent(_ percentage: Int) -> some View {
         VStack(spacing: 8) {
-            Text("\(percentage)%")
+            Text(AppStrings.detailPercent(percentage))
                 .font(.system(size: bigValueSize, weight: .semibold))
                 .monospacedDigit()
                 .foregroundColor(AppTheme.inkPrimary)
@@ -424,12 +424,12 @@ struct WeatherDetailSheet: View {
 
     private func precipitationContent(_ percentage: Int) -> some View {
         VStack(spacing: 8) {
-            Text("\(percentage)%")
+            Text(AppStrings.detailPercent(percentage))
                 .font(.system(size: bigValueSize, weight: .semibold))
                 .monospacedDigit()
                 .foregroundColor(AppTheme.inkPrimary)
 
-            Text("Chance of precipitation")
+            Text(AppStrings.detailPrecipChance)
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
         }
@@ -437,7 +437,7 @@ struct WeatherDetailSheet: View {
 
     private func uvIndexContent(_ value: Double) -> some View {
         VStack(spacing: 8) {
-            Text(String(format: "%.1f", value))
+            Text(String(format: AppStrings.detailUvValue, value))
                 .font(.system(size: bigValueSize, weight: .semibold))
                 .monospacedDigit()
                 .foregroundColor(AppTheme.inkPrimary)
@@ -452,7 +452,7 @@ struct WeatherDetailSheet: View {
 
     private var tipsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Running Tip")
+            Text(AppStrings.weatherRunningTip)
                 .font(.appEyebrow)
                 .foregroundColor(AppTheme.inkSecondary)
 
@@ -516,44 +516,44 @@ struct WeatherDetailSheet: View {
 
     private func uvDescription(_ value: Double) -> String {
         switch value {
-        case ..<3: return "Low"
-        case 3..<6: return "Moderate"
-        case 6..<8: return "High"
-        case 8..<11: return "Very High"
-        default: return "Extreme"
+        case ..<3: return AppStrings.uvLow
+        case 3..<6: return AppStrings.uvModerate
+        case 6..<8: return AppStrings.uvHigh
+        case 8..<11: return AppStrings.uvVeryHigh
+        default: return AppStrings.uvExtreme
         }
     }
 
     private func conditionDescription(_ condition: WeatherCondition) -> String {
         switch condition {
-        case .clear: return "Perfect conditions for running"
-        case .partlyCloudy: return "Some cloud cover, comfortable running"
-        case .cloudy: return "Overcast skies, cooler temperatures"
-        case .foggy: return "Limited visibility, stay alert"
-        case .drizzle: return "Light rain, consider a waterproof layer"
-        case .rain: return "Wet conditions, waterproof gear recommended"
-        case .snow: return "Snowy conditions, watch your footing"
-        case .thunderstorm: return "Dangerous conditions, consider staying indoors"
-        case .unknown: return "Check local conditions"
+        case .clear: return AppStrings.detailConditionClearAdvice
+        case .partlyCloudy: return AppStrings.detailConditionPartlyAdvice
+        case .cloudy: return AppStrings.detailConditionCloudyAdvice
+        case .foggy: return AppStrings.detailConditionFoggyAdvice
+        case .drizzle: return AppStrings.detailConditionDrizzleAdvice
+        case .rain: return AppStrings.detailConditionRainAdvice
+        case .snow: return AppStrings.detailConditionSnowAdvice
+        case .thunderstorm: return AppStrings.detailConditionStormAdvice
+        case .unknown: return AppStrings.detailConditionUnknownAdvice
         }
     }
 
     private func windDescription(speed: Double) -> String {
         switch speed {
-        case ..<5: return "Calm conditions"
-        case 5..<15: return "Light breeze"
-        case 15..<25: return "Moderate wind, may affect pace"
-        case 25..<40: return "Strong wind, challenging running"
-        default: return "Very strong wind, use caution"
+        case ..<5: return AppStrings.detailWindCalm
+        case 5..<15: return AppStrings.detailWindLight
+        case 15..<25: return AppStrings.detailWindModerate
+        case 25..<40: return AppStrings.detailWindStrong
+        default: return AppStrings.detailWindVeryStrong
         }
     }
 
     private func humidityDescription(_ percentage: Int) -> String {
         switch percentage {
-        case ..<30: return "Low humidity, stay hydrated"
-        case 30..<60: return "Comfortable humidity level"
-        case 60..<80: return "Moderate humidity, pace yourself"
-        default: return "High humidity, take it easy"
+        case ..<30: return AppStrings.detailHumidityLow
+        case 30..<60: return AppStrings.detailHumidityComfortable
+        case 60..<80: return AppStrings.detailHumidityModerate
+        default: return AppStrings.detailHumidityHigh
         }
     }
 
@@ -566,36 +566,36 @@ struct WeatherDetailSheet: View {
             if case .condition(let condition)? = allDetails.first(where: { $0.kind == .condition }) {
                 return Self.conditionTip(condition)
             }
-            return "Check conditions before heading out."
+            return AppStrings.tipCheckConditions
         case .condition(let condition):
             return Self.conditionTip(condition)
         case .wind(let speed, _, _):
             if speed > 20 {
-                return "Start your run heading into the wind so you have it at your back when tired."
+                return AppStrings.tipWindStart
             } else {
-                return "Light wind can help cool you down during your run."
+                return AppStrings.tipWindLight
             }
         case .humidity(let percentage):
             if percentage > 70 {
-                return "High humidity makes it harder to cool down. Slow your pace and hydrate frequently."
+                return AppStrings.tipHumidityHigh
             } else if percentage < 30 {
-                return "Low humidity can be deceptively dehydrating. Drink before you feel thirsty."
+                return AppStrings.tipHumidityLow
             } else {
-                return "Comfortable humidity for running. Stay hydrated as usual."
+                return AppStrings.tipHumidityComfortable
             }
         case .precipitation(let percentage):
             if percentage > 50 {
-                return "Consider waterproof gear and protect electronics in a ziplock bag."
+                return AppStrings.tipRainGear
             } else {
-                return "Low chance of rain, but a light layer won't hurt."
+                return AppStrings.tipRainLow
             }
         case .uvIndex(let value):
             if value >= 6 {
-                return "High UV - wear sunscreen SPF 30+, sunglasses, and a hat."
+                return AppStrings.tipUvHigh
             } else if value >= 3 {
-                return "Moderate UV - sunscreen recommended for longer runs."
+                return AppStrings.tipUvModerate
             } else {
-                return "Low UV exposure - enjoy your run!"
+                return AppStrings.tipUvLow
             }
         }
     }
@@ -606,15 +606,15 @@ extension WeatherDetailSheet {
     /// metric and (GEN-6 / RW-63) the two temperature metrics.
     static func conditionTip(_ condition: WeatherCondition) -> String {
         switch condition {
-        case .clear: return "Great day for a run! Don't forget sunscreen if it's sunny."
-        case .partlyCloudy: return "Enjoy the cloud cover - it can help keep you cool."
-        case .cloudy: return "Overcast days can be great for longer runs."
-        case .foggy: return "Wear bright, reflective clothing for visibility."
-        case .drizzle: return "Light rain can be refreshing. A cap helps keep rain off your face."
-        case .rain: return "Wear moisture-wicking fabrics and protect your phone."
-        case .snow: return "Choose shoes with good traction and shorten your stride."
-        case .thunderstorm: return "Safety first - consider an indoor workout."
-        case .unknown: return "Check conditions before heading out."
+        case .clear: return AppStrings.tipConditionClear
+        case .partlyCloudy: return AppStrings.tipConditionPartly
+        case .cloudy: return AppStrings.tipConditionCloudy
+        case .foggy: return AppStrings.tipConditionFoggy
+        case .drizzle: return AppStrings.tipConditionDrizzle
+        case .rain: return AppStrings.tipConditionRain
+        case .snow: return AppStrings.tipConditionSnow
+        case .thunderstorm: return AppStrings.tipConditionStorm
+        case .unknown: return AppStrings.tipCheckConditions
         }
     }
 }
@@ -626,7 +626,7 @@ extension WeatherDetailSheet {
         WeatherDetailSheet(
             detailType: .uvIndex(value: 7.5),
             allDetails: [.uvIndex(value: 7.5)],
-            contextLines: ["Preview"],
+            contextLines: [AppStrings.detailPreview],
             isPresented: .constant(true)
         )
     }

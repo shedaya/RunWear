@@ -28,28 +28,28 @@ enum WeatherPillType {
         case .condition(let condition):
             return condition.shortDescription
         case .wind(let speed, _):
-            return "\(Int(round(speed))) mph"
+            return AppStrings.windValue(Int(round(speed)))
         case .humidity(let percentage):
-            return "\(percentage)%"
+            return AppStrings.detailPercent(percentage)
         case .precipitation(let percentage):
-            return "\(percentage)%"
+            return AppStrings.detailPercent(percentage)
         case .uvIndex(let value):
-            return String(format: "%.1f", value)
+            return String(format: AppStrings.detailUvValue, value)
         }
     }
 
     var accessibilityLabel: String {
         switch self {
         case .condition(let condition):
-            return "Weather: \(condition.rawValue)"
+            return AppStrings.a11yWeather(condition.rawValue)
         case .wind(let speed, let direction):
-            return "Wind: \(Int(round(speed))) miles per hour from \(direction)"
+            return AppStrings.a11yWind(Int(round(speed)), direction)
         case .humidity(let percentage):
-            return "Humidity: \(percentage) percent"
+            return AppStrings.a11yHumidity(percentage)
         case .precipitation(let percentage):
-            return "Precipitation chance: \(percentage) percent"
+            return AppStrings.a11yPrecipitation(percentage)
         case .uvIndex(let value):
-            return "UV Index: \(value)"
+            return AppStrings.a11yUvIndex("\(value)")
         }
     }
 }
@@ -134,7 +134,7 @@ struct WeatherPill: View {
 #Preview {
     VStack(spacing: 16) {
         WeatherPill(type: .condition(.clear))
-        WeatherPill(type: .wind(speed: 12, direction: "NW"))
+        WeatherPill(type: .wind(speed: 12, direction: AppStrings.weatherCompassNw))
         WeatherPill(type: .humidity(percentage: 65))
         WeatherPill(type: .precipitation(percentage: 20))
         WeatherPill(type: .uvIndex(value: 7.5))

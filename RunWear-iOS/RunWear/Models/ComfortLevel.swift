@@ -19,22 +19,22 @@ enum ComfortLevel: Int, Codable, CaseIterable {
     /// Short display label (Android ComfortPreference.shortLabel)
     var label: String {
         switch self {
-        case .veryCold: return "Run Cold"
-        case .cold: return "Slightly Cold"
-        case .neutral: return "Neutral"
-        case .warm: return "Slightly Hot"
-        case .veryWarm: return "Run Hot"
+        case .veryCold: return AppStrings.comfortVeryColdLabel
+        case .cold: return AppStrings.comfortColdLabel
+        case .neutral: return AppStrings.comfortNeutralLabel
+        case .warm: return AppStrings.comfortWarmLabel
+        case .veryWarm: return AppStrings.comfortVeryWarmLabel
         }
     }
 
     /// Full description for UI (Android ComfortPreference.label)
     var shortLabel: String {
         switch self {
-        case .veryCold: return "I get cold very easily"
-        case .cold: return "I tend to get cold"
-        case .neutral: return "Neither"
-        case .warm: return "I tend to overheat"
-        case .veryWarm: return "I overheat very easily"
+        case .veryCold: return AppStrings.comfortVeryColdDesc
+        case .cold: return AppStrings.comfortColdDesc
+        case .neutral: return AppStrings.comfortNeutralDesc
+        case .warm: return AppStrings.comfortWarmDesc
+        case .veryWarm: return AppStrings.comfortVeryWarmDesc
         }
     }
 

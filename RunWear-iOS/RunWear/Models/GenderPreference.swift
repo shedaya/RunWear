@@ -36,9 +36,9 @@ enum GenderPreference: String, Codable, CaseIterable {
     /// Text display label (not icons)
     var displayLabel: String {
         switch self {
-        case .male: return "Male"
-        case .female: return "Female"
-        case .unisex: return "Unisex"
+        case .male: return AppStrings.genderMaleLabel
+        case .female: return AppStrings.genderFemaleLabel
+        case .unisex: return AppStrings.genderUnisexLabel
         }
     }
 
@@ -71,8 +71,8 @@ enum GenderPreference: String, Codable, CaseIterable {
     /// reached only by tapping the selected choice again (see
     /// fitSelection(afterTapping:)).
     static let fitOptions: [FitPreferenceOption] = [
-        FitPreferenceOption(value: .male, label: "Men's"),
-        FitPreferenceOption(value: .female, label: "Women's")
+        FitPreferenceOption(value: .male, label: AppStrings.fitOptionMens),
+        FitPreferenceOption(value: .female, label: AppStrings.fitOptionWomens)
     ]
 
     /// RW-81: the fit value that results from TAPPING a choice

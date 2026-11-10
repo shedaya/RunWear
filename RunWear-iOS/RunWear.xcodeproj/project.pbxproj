@@ -246,6 +246,25 @@
 		AA1000000000000000003007 /* RunWearWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001005 /* RunWearWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		AA1000000000000000003008 /* Gen5WidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000001007 /* Gen5WidgetTests.swift */; };
 		AA1000000000000000003009 /* HeroPhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10001000000000000000090 /* HeroPhoto.swift */; };
+		1C0000000000000000000021 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C0000000000000000000022 /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C0000000000000000000023 /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C0000000000000000000024 /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C0000000000000000000025 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C0000000000000000000026 /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C0000000000000000000027 /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C0000000000000000000028 /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C0000000000000000000029 /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C000000000000000000002A /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C000000000000000000002B /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C000000000000000000002C /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C000000000000000000002D /* AppStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000011 /* AppStrings.swift */; };
+		1C000000000000000000002E /* AppEnglish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000012 /* AppEnglish.swift */; };
+		1C000000000000000000002F /* LocaleUnits.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000013 /* LocaleUnits.swift */; };
+		1C0000000000000000000030 /* LocaleFormats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000014 /* LocaleFormats.swift */; };
+		1C0000000000000000000041 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000015 /* Localizable.xcstrings */; };
+		1C0000000000000000000042 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000016 /* Localizable.xcstrings */; };
+		1C0000000000000000000043 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1C0000000000000000000017 /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -483,6 +502,13 @@
 		AA1000000000000000001004 /* RunWear.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunWear.entitlements; sourceTree = "<group>"; };
 		AA1000000000000000001006 /* WidgetLastGood.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLastGood.swift; sourceTree = "<group>"; };
 		AA1000000000000000001007 /* Gen5WidgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gen5WidgetTests.swift; sourceTree = "<group>"; };
+		1C0000000000000000000011 /* AppStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStrings.swift; sourceTree = "<group>"; };
+		1C0000000000000000000012 /* AppEnglish.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnglish.swift; sourceTree = "<group>"; };
+		1C0000000000000000000013 /* LocaleUnits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocaleUnits.swift; sourceTree = "<group>"; };
+		1C0000000000000000000014 /* LocaleFormats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocaleFormats.swift; sourceTree = "<group>"; };
+		1C0000000000000000000015 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1C0000000000000000000016 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		1C0000000000000000000017 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -536,6 +562,8 @@
 				W14401000000000000000003 /* garment_tiles_light */,
 				F10001000000000000000010 /* GreatVibes-Regular.ttf */,
 				A10000062334567800000010 /* PrivacyInfo.xcprivacy */,
+				1C0000000000000000000001 /* Localization */,
+				1C0000000000000000000015 /* Localizable.xcstrings */,
 			);
 			path = RunWear;
 			sourceTree = "<group>";
@@ -675,6 +703,7 @@
 				B100000A2334567800000010 /* PrivacyInfo.xcprivacy */,
 				B10001000000000000000001 /* WatchConnectivityManager.swift */,
 				B10001000000000000000002 /* WatchSettingsView.swift */,
+				1C0000000000000000000016 /* Localizable.xcstrings */,
 			);
 			path = RunWearWatch;
 			sourceTree = "<group>";
@@ -781,8 +810,20 @@
 				AA1000000000000000001010 /* RunWearWidgetViews.swift */,
 				AA1000000000000000001002 /* Info.plist */,
 				AA1000000000000000001003 /* RunWearWidget.entitlements */,
+				1C0000000000000000000017 /* Localizable.xcstrings */,
 			);
 			path = RunWearWidget;
+			sourceTree = "<group>";
+		};
+		1C0000000000000000000001 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				1C0000000000000000000011 /* AppStrings.swift */,
+				1C0000000000000000000012 /* AppEnglish.swift */,
+				1C0000000000000000000013 /* LocaleUnits.swift */,
+				1C0000000000000000000014 /* LocaleFormats.swift */,
+			);
+			path = Localization;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -943,6 +984,7 @@
 				W14402000000000000000010 /* garment_tiles_light in Resources */,
 				F10002000000000000000010 /* GreatVibes-Regular.ttf in Resources */,
 				A10000052334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
+				1C0000000000000000000041 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -953,6 +995,7 @@
 				B1000009233456780000005 /* Assets.xcassets in Resources */,
 				F10002000000000000000002 /* hero_fallback in Resources */,
 				B10000092334567800000010 /* PrivacyInfo.xcprivacy in Resources */,
+				1C0000000000000000000042 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -970,6 +1013,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA1000000000000000003006 /* GreatVibes-Regular.ttf in Resources */,
+				1C0000000000000000000043 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1052,6 +1096,10 @@
 				F10002000000000000000107 /* MakeItMeFlowViews.swift in Sources */,
 				F10002000000000000000108 /* MakeItMeSettingsViews.swift in Sources */,
 				F10002000000000000000134 /* CameraCaptureView.swift in Sources */,
+				1C0000000000000000000021 /* AppStrings.swift in Sources */,
+				1C0000000000000000000022 /* AppEnglish.swift in Sources */,
+				1C0000000000000000000023 /* LocaleUnits.swift in Sources */,
+				1C0000000000000000000024 /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1081,6 +1129,10 @@
 				B10002000000000000000106 /* FallbackImageProvider.swift in Sources */,
 				B10002000000000000000107 /* SupabaseClient.swift in Sources */,
 				B10002000000000000000108 /* HeroFlag.swift in Sources */,
+				1C0000000000000000000025 /* AppStrings.swift in Sources */,
+				1C0000000000000000000026 /* AppEnglish.swift in Sources */,
+				1C0000000000000000000027 /* LocaleUnits.swift in Sources */,
+				1C0000000000000000000028 /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1198,6 +1250,10 @@
 				Z30002000000000000000001 /* Gen3ISmallTests.swift in Sources */,
 				Z40002000000000000000001 /* Gen3ShareRenderTests.swift in Sources */,
 				S60002000000000000000003 /* Gen6WaveBShareTests.swift in Sources */,
+				1C0000000000000000000029 /* AppStrings.swift in Sources */,
+				1C000000000000000000002A /* AppEnglish.swift in Sources */,
+				1C000000000000000000002B /* LocaleUnits.swift in Sources */,
+				1C000000000000000000002C /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1209,6 +1265,10 @@
 				AA1000000000000000003010 /* RunWearWidgetViews.swift in Sources */,
 				AA1000000000000000003002 /* AppTheme.swift in Sources */,
 				AA1000000000000000003003 /* WidgetLastGood.swift in Sources */,
+				1C000000000000000000002D /* AppStrings.swift in Sources */,
+				1C000000000000000000002E /* AppEnglish.swift in Sources */,
+				1C000000000000000000002F /* LocaleUnits.swift in Sources */,
+				1C0000000000000000000030 /* LocaleFormats.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

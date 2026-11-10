@@ -12,7 +12,7 @@ enum WatchViewState {
 @MainActor
 class WatchViewModel: NSObject, ObservableObject {
     @Published var state: WatchViewState = .loading
-    @Published var locationName: String = "Loading..."
+    @Published var locationName: String = AppStrings.wearLoading
 
     // Hero image state
     @Published var heroImageUrl: String?
@@ -27,7 +27,7 @@ class WatchViewModel: NSObject, ObservableObject {
         }
     }
 
-    @Published var temperatureUnit: TemperatureUnit = .fahrenheit {
+    @Published var temperatureUnit: TemperatureUnit = LocaleUnits.defaultTemperatureUnit {
         didSet {
             UserDefaults.standard.set(temperatureUnit.rawValue, forKey: "temperatureUnit")
         }
@@ -111,13 +111,13 @@ class WatchViewModel: NSObject, ObservableObject {
         case .notDetermined:
             state = .permissionNeeded
         case .restricted, .denied:
-            state = .error("Location access denied. Enable in Settings.")
+            state = .error(AppStrings.wearErrorLocationDenied)
         case .authorizedWhenInUse, .authorizedAlways:
             state = .loading
             locationManager.requestLocation()
         @unknown default:
             // GEN-5 (RW-29 FA-15 / EX-20): authored words.
-            state = .error("Location isn't available.")
+            state = .error(AppStrings.wearErrorLocationUnavailable)
         }
     }
 
@@ -168,7 +168,7 @@ class WatchViewModel: NSObject, ObservableObject {
         } catch {
             // GEN-5 (RW-29 FA-15 / EX-20): authored words, never
             // raw system error text (design-spec §17).
-            state = .error("Couldn't reach the weather service.")
+            state = .error(AppStrings.wearErrorWeather)
         }
     }
 
@@ -239,11 +239,11 @@ class WatchViewModel: NSObject, ObservableObject {
                 let state = placemark.administrativeArea ?? ""
                 locationName = [city, state].filter { !$0.isEmpty }.joined(separator: ", ")
                 if locationName.isEmpty {
-                    locationName = "Current Location"
+                    locationName = AppStrings.wearCurrentLocation
                 }
             }
         } catch {
-            locationName = "Current Location"
+            locationName = AppStrings.wearCurrentLocation
         }
     }
 
@@ -267,11 +267,11 @@ class WatchViewModel: NSObject, ObservableObject {
         let temp = unit == .fahrenheit
             ? adjustedF
             : (adjustedF - 32) * 5 / 9
-        return "\(Int(round(temp)))°"
+        return AppStrings.wearDegrees(Int(round(temp)))
     }
 
     var displayTemperature: String {
-        guard let weather = currentWeather else { return "--°" }
+        guard let weather = currentWeather else { return AppStrings.wearNoData }
         // GEN-6 (DA-14): the glance renders the comfort-adjusted
         // feels-like (see glanceTemperatureString). Falls back to
         // the actual temperature as the raw surrogate only when
@@ -299,7 +299,7 @@ extension WatchViewModel: CLLocationManagerDelegate {
         Task { @MainActor in
             // GEN-5 (RW-29 FA-15 / EX-20): authored words, never
             // raw system error text (design-spec §17).
-            state = .error("Couldn't get your location.")
+            state = .error(AppStrings.wearErrorLocation)
         }
     }
 

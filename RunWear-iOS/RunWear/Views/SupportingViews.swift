@@ -13,7 +13,7 @@ struct LoadingView: View {
             // text, not as another placeholder bar.
             VStack {
                 Spacer()
-                Text("Getting your first recommendation…")
+                Text(AppStrings.loadingFirstRecommendation)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(AppTheme.inkSecondary)
                     .padding(.bottom, 40)
@@ -48,7 +48,7 @@ struct LoadingView: View {
         }
         .background(AppTheme.background)
         .redacted(reason: .placeholder)
-        .accessibilityLabel("Loading your weather")
+        .accessibilityLabel(AppStrings.supportLoadingWeather)
     }
 
     private func skeletonLine(width: CGFloat, height: CGFloat) -> some View {
@@ -80,19 +80,19 @@ struct LocationPermissionView: View {
             // Headings on the dark gate background use textOnDark:
             // textPrimary (#212121) on darkBackground (#0A0A0A) is
             // ~1.3:1 — effectively invisible.
-            Text("Location Access Needed")
+            Text(AppStrings.supportLocationNeeded)
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.inkPrimary)
 
-            Text("RunWear needs your location to provide accurate weather-based outfit recommendations for your area.")
+            Text(AppStrings.supportLocationNeededBody)
                 .font(.body)
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
             Button(action: onRequestPermission) {
-                Text("Enable Location")
+                Text(AppStrings.supportEnableLocation)
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -109,7 +109,7 @@ struct LocationPermissionView: View {
                 // inkPrimary clears 4.5:1 in both modes (pinned in
                 // RW26Phase2Tests); cardStroke is the app's standard
                 // card outline in both modes.
-                Text("Set Location Manually")
+                Text(AppStrings.supportSetManual)
                     .font(.headline)
                     .foregroundColor(AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
@@ -135,19 +135,19 @@ struct LocationDeniedView: View {
                 .font(.system(size: 80))
                 .foregroundColor(AppTheme.inkMuted)
 
-            Text("Location Access Denied")
+            Text(AppStrings.supportLocationDenied)
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.inkPrimary)
 
-            Text("RunWear needs location access to show weather-based outfit recommendations. Please enable location access in Settings, or set your location manually.")
+            Text(AppStrings.supportLocationDeniedBody)
                 .font(.body)
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
 
             Button(action: openSettings) {
-                Text("Open Settings")
+                Text(AppStrings.supportOpenSettings)
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -161,7 +161,7 @@ struct LocationDeniedView: View {
                 // Same token pair as LocationPermissionView's
                 // button (see the note there): white on the light
                 // cream ground is 1.13:1 with no fill behind it.
-                Text("Set Location Manually")
+                Text(AppStrings.supportSetManual)
                     .font(.headline)
                     .foregroundColor(AppTheme.inkPrimary)
                     .frame(maxWidth: .infinity)
@@ -202,7 +202,7 @@ struct ErrorView: View {
             // RW-26 (frame 47; §8 Q3): the honest headline — the
             // "Oops!"-era tone retires. The message below names
             // what is safe / what happened.
-            Text("Couldn't load your weather")
+            Text(AppStrings.supportCouldntLoad)
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(AppTheme.inkPrimary)
@@ -216,7 +216,7 @@ struct ErrorView: View {
             Button(action: onRetry) {
                 HStack {
                     Image(systemName: "arrow.clockwise")
-                    Text("Try Again")
+                    Text(AppStrings.supportTryAgain)
                 }
                 .font(.headline)
                 .foregroundColor(.white)
@@ -231,18 +231,18 @@ struct ErrorView: View {
     }
 }
 
-#Preview("Loading") {
+#Preview(AppStrings.supportLoading) {
     LoadingView()
 }
 
-#Preview("Permission") {
+#Preview(AppStrings.supportPermission) {
     LocationPermissionView {}
 }
 
-#Preview("Denied") {
+#Preview(AppStrings.supportDenied) {
     LocationDeniedView()
 }
 
-#Preview("Error") {
-    ErrorView(message: "Could not fetch weather data") {}
+#Preview(AppStrings.supportError) {
+    ErrorView(message: AppStrings.supportFetchFailed) {}
 }

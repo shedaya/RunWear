@@ -67,7 +67,7 @@ struct HomeHeroNumeralRow: View {
                     Circle()
                         .fill(AppTheme.temperatureColor(for: bracket))
                         .frame(width: 8, height: 8)
-                    Text(bracket.rawValue)
+                    Text(bracket.displayRange)
                         .font(.appEyebrow)
                         .foregroundColor(AppTheme.inkPrimary)
                 }
@@ -99,20 +99,20 @@ struct HomeHeroNumeralRow: View {
     private var heroWeatherFigures: some View {
         Grid(horizontalSpacing: 12, verticalSpacing: 3) {
             GridRow {
-                figureLabel("WIND")
-                figureValue("\(Int(windMph.rounded())) mph")
+                figureLabel(AppStrings.statWindLabel)
+                figureValue(AppStrings.windValue(Int(windMph.rounded())))
             }
             GridRow {
-                figureLabel("RAIN")
-                figureValue("\(rainPercent)%")
+                figureLabel(AppStrings.statRainLabel)
+                figureValue(AppStrings.detailPercent(rainPercent))
             }
             GridRow {
-                figureLabel("HUMIDITY")
-                figureValue("\(humidityPercent)%")
+                figureLabel(AppStrings.statHumidityLabel)
+                figureValue(AppStrings.detailPercent(humidityPercent))
             }
             GridRow {
-                figureLabel("UV")
-                figureValue("\(Int(uvIndex.rounded())) of 11")
+                figureLabel(AppStrings.sheetUvLabel)
+                figureValue(AppStrings.sheetUvValue(Int(uvIndex.rounded())))
             }
         }
     }

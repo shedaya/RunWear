@@ -26,9 +26,9 @@ enum HeroFlagReason: String, CaseIterable {
     /// then the quality reason, then the residual.
     var label: String {
         switch self {
-        case .outfitMismatch: return "Wrong outfit for the weather"
-        case .looksBroken: return "Unflattering photo"
-        case .inappropriate: return "Other"
+        case .outfitMismatch: return AppStrings.mimFlagWrongOutfit
+        case .looksBroken: return AppStrings.mimFlagUnflattering
+        case .inappropriate: return AppStrings.mimFlagOther
         }
     }
 

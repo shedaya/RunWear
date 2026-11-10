@@ -6,7 +6,7 @@ class WatchConnectivityManager: NSObject, ObservableObject {
     static let shared = WatchConnectivityManager()
 
     @Published var genderPreference: GenderPreference = .unisex
-    @Published var temperatureUnit: TemperatureUnit = .fahrenheit
+    @Published var temperatureUnit: TemperatureUnit = LocaleUnits.defaultTemperatureUnit
     @Published var comfortLevel: ComfortLevel = .neutral
 
     private override init() {

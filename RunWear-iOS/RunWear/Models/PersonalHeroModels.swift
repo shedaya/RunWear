@@ -598,10 +598,10 @@ enum PersonalHeroFlagReason: String, CaseIterable {
     /// the server contract and do not change.
     var label: String {
         switch self {
-        case .doesntLookLikeMe: return "This doesn't look like me"
-        case .outfitMismatch: return "Wrong outfit for the weather"
-        case .looksBroken: return "Something else"
-        case .inappropriate: return "Other"
+        case .doesntLookLikeMe: return AppStrings.mimFlagDoesntLookLikeMe
+        case .outfitMismatch: return AppStrings.mimFlagWrongOutfit
+        case .looksBroken: return AppStrings.mimFlagSomethingElse
+        case .inappropriate: return AppStrings.mimFlagOther
         }
     }
 
@@ -614,7 +614,7 @@ enum PersonalHeroFlagReason: String, CaseIterable {
 
     /// What flagging a personal photo does, stated before the
     /// user commits (frame 45, under the lead reason).
-    static let consequenceLine = "We'll stop showing this photo and make it again."
+    static let consequenceLine = AppStrings.mimFlagConsequence
 }
 
 /// The personalized photo on screen, as a personal flag must
@@ -717,10 +717,10 @@ struct CommitFailurePresentation: Equatable {
     /// DEVIATION-COPY: honest, specific, and claims nothing was
     /// sent — because nothing was (anonymous sign-in unavailable
     /// server-side, so no session can be minted).
-    static let serverUnavailableLine = "We can't reach RunWear's server right now, so your photos can't be uploaded yet. Nothing was sent. You can try again later — your recommendations are unchanged."
+    static let serverUnavailableLine = AppStrings.mimServerUnavailable
 
     /// DEVIATION-COPY: the generic upload-failure line.
-    static let uploadFailureLine = "Something went wrong uploading your photos. No look was used. Please try again."
+    static let uploadFailureLine = AppStrings.mimUploadFailed
 
     static func forError(_ error: Error) -> CommitFailurePresentation {
         if let apiError = error as? PersonalHeroAPIError {
@@ -1052,8 +1052,8 @@ enum FreeLooksMeter {
     /// (FreeLooksAllowance.value) these are exactly the strings
     /// Settings carries.
     static func settingsLine(used: Int, allowance: Int) -> String {
-        if used >= allowance { return "All \(allowance) free looks used" }
-        return "\(used) of \(allowance) free looks used"
+        if used >= allowance { return AppStrings.mimSettingsAllUsed(allowance) }
+        return AppStrings.mimSettingsUsedOf(used, allowance)
     }
 
     /// RW-148: the "This outfit isn't you — yet" card's body
@@ -1066,15 +1066,15 @@ enum FreeLooksMeter {
     /// card is a pure render of it and the unification pin can
     /// assert it end to end.
     static func upsellBodyLine(used: Int) -> String {
-        let noun = used == 1 ? "outfit" : "outfits"
-        return "You've seen yourself in \(used) \(noun). This is a new one, so it wears a standard photo. Subscribe, and RunWear makes your photo for every outfit in your weather ahead of time — you, on screen the moment you open the app."
+        let noun = AppStrings.outfitOutfits(used)
+        return AppStrings.mimUpsellBody(used, noun)
     }
 
     /// The paywall's free bar line, composed from the same counter
     /// (it previously interpolated the store value inline — same
     /// number, second spelling site).
     static func subscriptionLine(used: Int, allowance: Int) -> String {
-        "\(used) of \(allowance) used · Free looks never expire — and your first ones take about a minute to make."
+        AppStrings.mimSubscriptionLine(used, allowance)
     }
 
     // MARK: In-flight truthfulness (GEN-3 · X-9)
@@ -1136,8 +1136,8 @@ enum FreeLooksMeter {
     static func settingsPendingLine(inFlight: Int) -> String? {
         switch inFlight {
         case ...0: return nil
-        case 1: return "Making your look…"
-        default: return "Making \(inFlight) looks…"
+        case 1: return AppStrings.mimMakingOne
+        default: return AppStrings.mimMakingMany(inFlight)
         }
     }
 }
@@ -1214,33 +1214,33 @@ enum HeroPillState: Equatable {
 }
 
 enum HeroPill {
-    static let makingLabel = "Making this you…"
+    static let makingLabel = AppStrings.mimPillMaking
     // GEN-6 Wave A (RW-34): there is NO scaffold label. The
     // GEN-3 scaffold label constant is removed outright —
     // the owner ruled Nov 5, 2026 that it is not an approved
     // pill; a scaffold serve is silent (see the state table
     // above and `resolve`'s scaffold gate).
-    static let premiumLabel = "Premium"
-    static let getUnlimitedLabel = "Get unlimited"
+    static let premiumLabel = AppStrings.mimPillPremium
+    static let getUnlimitedLabel = AppStrings.mimPillGetUnlimited
     /// GEN-5 (C-4 AMENDED): the free generating pill's green
     /// upsell line — verbatim, unembellished.
-    static let getInstantlyLabel = "Get it instantly next time"
+    static let getInstantlyLabel = AppStrings.mimPillGetInstantly
 
     /// The exhausted pill's honest count, in the free pill's
     /// count family: "10 of 10 looks used".
     static func exhaustedCountLabel(used: Int, allowance: Int) -> String {
-        "\(min(used, allowance)) of \(allowance) looks used"
+        AppStrings.mimPillExhaustedCount(min(used, allowance), allowance)
     }
     /// The Make It Me script mark the pill carries in states
     /// (b)(c)(d) — rendered in Great Vibes wherever the pill is
     /// drawn (GEN-3 DESIGN DELTA 2).
-    static let scriptMarkText = "Make It Me"
+    static let scriptMarkText = AppStrings.mimScriptMark
 
     /// The count half of the free-look pill, in the approved
     /// mock's "1 of 10 looks" form, clamped to the allowance like
     /// the W-18 meter.
     static func freeLookCountLabel(used: Int, allowance: Int) -> String {
-        "\(min(used, allowance)) of \(allowance) looks"
+        AppStrings.mimPillCount(min(used, allowance), allowance)
     }
 
     static func resolve(
@@ -1548,8 +1548,8 @@ struct ConvergenceBandContent: Equatable {
 /// and ready < total. When the bank is complete (or the state
 /// is unknown) there is no band.
 enum ConvergenceBand {
-    static let heading = "Making your looks"
-    static let line = "We're generating your outfits across all running conditions, so it will be ready when you need it."
+    static let heading = AppStrings.mimBandHeading
+    static let line = AppStrings.mimBandLine
 
     /// GEN-5 (Addendum 8, bank non-convergence): the STALLED
     /// line. Sol's device sat at ~90% for three hours after
@@ -1563,7 +1563,7 @@ enum ConvergenceBand {
     /// the design record), written to the honesty rules: it
     /// names the delay, and it claims only what is true — the
     /// looks already banked ARE the ones being served.
-    static let stalledLine = "This is taking longer than usual. Your ready looks are already in your outfits — the rest are still being made."
+    static let stalledLine = AppStrings.mimBandStalled
 
     /// How long coverage may fail to advance before the bank
     /// reads as stalled (the store's tracker applies it).
@@ -1677,27 +1677,27 @@ enum PhotoRejection: Equatable {
     var specString: String {
         switch self {
         case .faceUnclear:
-            return "We can't see your face clearly in this one. Try a photo without sunglasses or a hat shadow."
+            return AppStrings.mimRejectFaceUnclear
         case .multiplePeople:
-            return "This photo has more than one person in it. Pick one that's just you."
+            return AppStrings.mimRejectMultiplePeople
         case .tooDark:
             // GEN-6 (RW-51): the settled dim/turned wording
             // (design-spec §10.4, frame 18), verbatim in substance.
-            return "Try facing a window or light, looking at the camera."
+            return AppStrings.mimRejectTooDark
         case .tooClose:
             // GEN-6 (RW-51): the settled too-close wording
             // (design-spec §10.4, frame 18), verbatim.
-            return "Hold the phone at arm's length, so your whole face fits with space around it."
+            return AppStrings.mimRejectTooClose
         case .faceTooSmall:
             // GEN-6 (RW-51): the settled face-too-small wording
             // (design-spec §10.4, frame 18), verbatim — failure-
             // specific, and the camera is offered first (the
             // guided capture frames the face for you).
-            return "Your face is small in that photo — A closer selfie works best — a mirror selfie is great too. Or let the camera guide you…"
+            return AppStrings.mimRejectFaceTooSmall
         case .rotated:
             // C3G: verbatim with Android's MakeItMeStrings
             // C3G_REJECT_ROTATED (both platforms, one string).
-            return "This photo came out sideways. Retake it holding your phone upright, or pick a photo that's already upright."
+            return AppStrings.mimRejectRotated
         }
     }
 }
@@ -1879,15 +1879,15 @@ enum MakeItMeCopy {
     /// string (MakeItMeStrings.FIRST_LOOK_BAND_HEADER). The band
     /// header names what the §9 pair below it belongs to; without
     /// it the two benefit lines float unattributed.
-    static let firstLookBandHeader = "With Premium"
+    static let firstLookBandHeader = AppStrings.mimFirstLookBandHeader
 
     /// Frame 34's heading (design frame 34 + Android's
     /// firstLookHeading, verbatim pattern): "Your first look ·
     /// Today, {city}" — the CITY only, never the region; with no
     /// known place the line ends at "Today".
     static func firstLookHeading(city: String?) -> String {
-        guard let city, !city.isEmpty else { return "Your first look · Today" }
-        return "Your first look · Today, \(city)"
+        guard let city, !city.isEmpty else { return AppStrings.mimFirstLookToday }
+        return AppStrings.mimFirstLookTodayCity(city)
     }
 
     /// Frame 34's weather line (design frame 34 + Android's
@@ -1897,8 +1897,8 @@ enum MakeItMeCopy {
     /// context composition — the RW-14 single computed line
     /// ("{place} · {feels-like}") is not frame 34's treatment.
     static func firstLookWeatherLine(feelsLike: String, condition: String, itemCount: Int) -> String {
-        var line = "\(feelsLike) feels like · \(condition)"
-        if itemCount > 0 { line += " · \(itemCount) items" }
+        var line = AppStrings.mimFirstLookWeather(feelsLike, condition)
+        if itemCount > 0 { line += AppStrings.mimFirstLookWeatherItems(itemCount) }
         return line
     }
 
@@ -1906,10 +1906,10 @@ enum MakeItMeCopy {
     /// confirmation the flow shows after a successful commit,
     /// before it dismisses — the explicit "it saved" the field
     /// report found missing on both platforms.
-    static let saveConfirmed = "Your photos are saved."
+    static let saveConfirmed = AppStrings.mimSaveConfirmed
     /// Spec §7 G1, verbatim: the progress line's title while the
     /// server reports the current cell's look as making.
-    static let progressTitle = "Making this outfit yours…"
+    static let progressTitle = AppStrings.mimProgressTitle
     /// Spec §7 G2, verbatim as AMENDED Nov 1, 2026 (RW-16.16): the
     /// original "About 10 seconds" figure was false against a
     /// measured 72-second job and a 2–4 minute backend norm; the
@@ -1922,7 +1922,7 @@ enum MakeItMeCopy {
     // §11's line — whose standard-photo clause the first-look
     // screen now honours (the standard photo sits plainly up
     // while the look is made, FA-5) — governs again.
-    static let progressSubline = "This usually takes a few minutes — the standard photo stays up until yours is done."
+    static let progressSubline = AppStrings.mimProgressSubline
     /// Spec §7 G5 (added Nov 1, 2026 — RW-16.16): the durable
     /// failed-look line at the hero, shown with the G6 action
     /// whenever the server reports the current cell's look as
@@ -1930,24 +1930,24 @@ enum MakeItMeCopy {
     /// failure class in this build. DECIDED Nov 1, 2026
     /// (RW-16.16): Sol picked the final wording from the options
     /// put to him — a one-string swap.
-    static let lookFailed = "Your look couldn't be made from these photos — tap to try again."
+    static let lookFailed = AppStrings.mimLookFailed
     /// Spec §7 G6 (added Nov 1, 2026 — RW-16.16): the failed
     /// line's retry action. User-initiated only; automatic
     /// re-request stays off.
-    static let lookRetry = "Try again"
+    static let lookRetry = AppStrings.mimLookRetry
     /// GEN-2 I2 (W-16): frame 34's failed-look line. DEVIATION-COPY
     /// (no deck entry): the G5 line's "tap to try again" names an
     /// action frame 34 does not carry (the retry lives on the
     /// outfit screen's hero, G6), so this line states the failure,
     /// the accounting truth (a failed look is never charged —
     /// server doctrine, §1), and where the retry lives.
-    static let firstLookFailed = "Your look couldn't be made from these photos. No free look was used — your outfit is ready either way, and you can try again from there."
+    static let firstLookFailed = AppStrings.mimFirstLookFailed
     /// GEN-2 I2 (W-16): frame 34's claim line, shown ONLY once the
     /// generated photo is the photo on screen. Before this fix the
     /// line was a hardcoded literal rendered over the fork's stock
     /// photo; it is now the ready phase's caption, composed by
     /// FirstLookPresentation.
-    static let firstLookReadyCaption = "You're in the photo now."
+    static let firstLookReadyCaption = AppStrings.mimFirstLookReadyCaption
 }
 
 // MARK: - Photo intake source routing (RW-16.14)
@@ -1983,8 +1983,8 @@ enum PhotoIntakeRoute: Equatable {
 }
 
 enum PhotoIntakeRouting {
-    static let cameraUnavailableNote = "No camera is available here — choose from your library instead."
-    static let cameraDeniedNote = "Camera access is off for RunWear. You can turn it on in Settings, or choose from your library."
+    static let cameraUnavailableNote = AppStrings.mimCameraUnavailableNote
+    static let cameraDeniedNote = AppStrings.mimCameraDeniedNote
 
     static func route(requested: PhotoIntakeSource, cameraAccess: CameraAccess) -> PhotoIntakeRoute {
         switch requested {

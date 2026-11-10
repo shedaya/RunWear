@@ -70,7 +70,7 @@ struct LocationPickerSheet: View {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(AppTheme.inkMuted)
-                        TextField("Search a place", text: $searchText)
+                        TextField(AppStrings.searchPlacePlaceholder, text: $searchText)
                             .autocorrectionDisabled()
                             .onChange(of: searchText) { _, newValue in
                                 if newValue.count >= 2 {
@@ -118,12 +118,12 @@ struct LocationPickerSheet: View {
                         HStack(spacing: 12) {
                             Image(systemName: "location.fill")
                                 .foregroundColor(AppTheme.pinePayload)
-                            Text("Current location")
+                            Text(AppStrings.locCurrentLocation)
                                 .font(.appSecondary.weight(.semibold))
                                 .foregroundColor(AppTheme.inkPrimary)
                             Spacer()
                             if isUsingGPS {
-                                Text("CURRENT")
+                                Text(AppStrings.locCurrentBadge)
                                     .font(.appEyebrow)
                                     .foregroundColor(AppTheme.pinePayload)
                                     .padding(.horizontal, 8)
@@ -147,17 +147,17 @@ struct LocationPickerSheet: View {
                         // First run (frame 25): no ghost rows —
                         // a quiet hint card where the list will live.
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Places you pick will be kept here")
+                            Text(AppStrings.locRecentEmptyHead)
                                 .font(.appSecondary.weight(.semibold))
                                 .foregroundColor(AppTheme.inkPrimary)
-                            Text("Your recent places will wait here — pick a place once and it joins a short list — home, the office, trip cities — so jumping back takes one tap. Nothing is saved until you choose a place.")
+                            Text(AppStrings.locRecentEmptyBody)
                                 .font(.appFootnote)
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
                         .padding(.vertical, 4)
                     }
                 } else {
-                    Section("Recent Locations") {
+                    Section(AppStrings.locRecentsTitle) {
                         ForEach(recentsModel.recents) { recent in
                             Button {
                                 onSelectLocation(
@@ -184,7 +184,7 @@ struct LocationPickerSheet: View {
                                         recentName: recent.name,
                                         displayedSourceIsGPS: isUsingGPS,
                                         displayedPlaceName: currentPlaceName) {
-                                        Text("CURRENT")
+                                        Text(AppStrings.locCurrentBadge)
                                             .font(.appEyebrow)
                                             .foregroundColor(AppTheme.pinePayload)
                                             .padding(.horizontal, 8)
@@ -199,7 +199,7 @@ struct LocationPickerSheet: View {
                             }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing) {
-                                Button("Remove", role: .destructive) {
+                                Button(AppStrings.locRemoveRecent, role: .destructive) {
                                     recentsModel.remove(id: recent.id)
                                 }
                             }
@@ -219,11 +219,11 @@ struct LocationPickerSheet: View {
             .listRowBackground(AppTheme.sheet)
             .scrollContentBackground(.hidden)
             .background(AppTheme.background.ignoresSafeArea())
-            .navigationTitle("Set Location")
+            .navigationTitle(AppStrings.sheetSetLocation)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { close() }
+                    Button(AppStrings.actionDone) { close() }
                 }
             }
         }
@@ -238,7 +238,7 @@ struct LocationPickerSheet: View {
     @ViewBuilder
     private var resultsSection: some View {
         if !searchResults.isEmpty {
-            Section("Results") {
+            Section(AppStrings.locResults) {
                 ForEach(searchResults) { result in
                     Button {
                         onSelectLocation(result.coordinate, result.displayName)
@@ -266,14 +266,14 @@ struct LocationPickerSheet: View {
                 }
             }
         } else if isSearching {
-            Section("Results") {
-                Text("Searching…")
+            Section(AppStrings.locResults) {
+                Text(AppStrings.locSearchingText)
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkSecondary)
             }
         } else if completedQuery == searchText {
-            Section("Results") {
-                Text("No places found")
+            Section(AppStrings.locResults) {
+                Text(AppStrings.locNoResults)
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkSecondary)
             }
@@ -319,7 +319,7 @@ struct LocationPickerSheet: View {
             let candidates = placemarks.compactMap { placemark -> LocationSearchCandidate? in
                 guard let location = placemark.location else { return nil }
 
-                let name = placemark.locality ?? placemark.name ?? "Unknown"
+                let name = placemark.locality ?? placemark.name ?? AppStrings.locUnknown
                 let subtitle = [placemark.administrativeArea, placemark.country]
                     .compactMap { $0 }
                     .joined(separator: ", ")

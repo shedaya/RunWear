@@ -16,8 +16,8 @@ enum TemperatureUnit: String, Codable, CaseIterable {
     /// Short display label
     var label: String {
         switch self {
-        case .fahrenheit: return "Fahrenheit"
-        case .celsius: return "Celsius"
+        case .fahrenheit: return AppStrings.unitFahrenheitLabel
+        case .celsius: return AppStrings.unitCelsiusLabel
         }
     }
 

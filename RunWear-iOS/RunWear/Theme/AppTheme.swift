@@ -353,9 +353,9 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .system: return "System"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .system: return AppStrings.settingsAppearanceSystem
+        case .light: return AppStrings.settingsAppearanceLight
+        case .dark: return AppStrings.settingsAppearanceDark
         }
     }
 

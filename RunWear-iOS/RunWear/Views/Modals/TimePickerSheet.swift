@@ -132,8 +132,8 @@ struct TimePickerSheet: View {
     private var activeDateLabel: String {
         guard draft.dayChanged else { return dateLabel }
         let calendar = Calendar.current
-        if calendar.isDateInToday(draft.workingDate) { return "Today" }
-        if calendar.isDateInTomorrow(draft.workingDate) { return "Tomorrow" }
+        if calendar.isDateInToday(draft.workingDate) { return AppStrings.wirDayToday }
+        if calendar.isDateInTomorrow(draft.workingDate) { return AppStrings.wirDayTomorrow }
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE, MMM d"
         return formatter.string(from: draft.workingDate)
@@ -227,7 +227,7 @@ struct TimePickerSheet: View {
     // itself. The scroll motion is a device item.
     func sheetContent(size: DynamicTypeSize) -> some View {
         VStack(spacing: size.isAccessibilitySize ? 12 : 16) {
-            Text("Choose a Time")
+            Text(AppStrings.sheetChooseTime)
                 .font(.appSheetTitle)
                 .foregroundColor(AppTheme.inkPrimary)
                 .multilineTextAlignment(.center)
@@ -269,7 +269,7 @@ struct TimePickerSheet: View {
                 // build 25's paraphrase omitted both facts it
                 // carries (every hour available; the handle
                 // snaps hour to hour).
-                Text("Every hour can be chosen — the handle snaps hour to hour.")
+                Text(AppStrings.sheetTimeNote)
                     .font(.appFootnote)
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
@@ -280,12 +280,12 @@ struct TimePickerSheet: View {
                 // Horizon honesty: a day the forecast does not
                 // reach has no hours to offer — named, never
                 // dressed over with invented hours.
-                Text("Forecast isn't available for this day yet.")
+                Text(AppStrings.sheetForecastUnavailableDay)
                     .font(.appSecondary)
                     .foregroundColor(AppTheme.inkSecondary)
                     .multilineTextAlignment(.center)
 
-                Button("Cancel") { dismiss() }
+                Button(AppStrings.actionCancel) { dismiss() }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.inkSecondary)
             }
@@ -328,7 +328,7 @@ struct TimePickerSheet: View {
                 contextLineStacked
             }
         } else {
-            Text("\(dateLabel) · \(placeName) · Feels-like by hour")
+            Text(AppStrings.sheetTimeHeader(dateLabel, placeName))
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -341,7 +341,7 @@ struct TimePickerSheet: View {
     private var contextLineRow: some View {
         HStack(spacing: 0) {
             dateDoor
-            Text(" · \(placeName) · Feels-like by hour")
+            Text(AppStrings.sheetTimeHeaderPlace(placeName))
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
         }
@@ -354,7 +354,7 @@ struct TimePickerSheet: View {
     private var contextLineStacked: some View {
         VStack(spacing: 2) {
             dateDoor
-            Text("· \(placeName) · Feels-like by hour")
+            Text(AppStrings.sheetTimeHeaderPlaceTight(placeName))
                 .font(.appSecondary)
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -376,7 +376,7 @@ struct TimePickerSheet: View {
             .foregroundColor(AppTheme.pinePayload)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Choose a day: \(activeDateLabel)")
+        .accessibilityLabel(AppStrings.a11yChooseDay(activeDateLabel))
     }
 
     /// The Cancel / Confirm row. GEN-6 VQ FIX (RW-73): kept in
@@ -388,24 +388,24 @@ struct TimePickerSheet: View {
     private var actionRow: some View {
         ViewThatFits(in: .horizontal) {
             HStack {
-                Button("Cancel") { dismiss() }
+                Button(AppStrings.actionCancel) { dismiss() }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                 Spacer()
-                Button("Confirm") {
+                Button(AppStrings.actionConfirm) {
                     confirmSession()
                 }
                 .font(.appSecondary.weight(.bold))
                 .foregroundColor(AppTheme.pinePayload)
             }
             VStack(spacing: 10) {
-                Button("Confirm") {
+                Button(AppStrings.actionConfirm) {
                     confirmSession()
                 }
                 .font(.appSecondary.weight(.bold))
                 .foregroundColor(AppTheme.pinePayload)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                Button("Cancel") { dismiss() }
+                Button(AppStrings.actionCancel) { dismiss() }
                     .font(.appSecondary.weight(.semibold))
                     .foregroundColor(AppTheme.inkSecondary)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -437,7 +437,7 @@ struct TimePickerSheet: View {
             HStack(spacing: 10) {
                 // GEN-5 (RW-29 FA-39): steppers disable at the
                 // selectable range's ends.
-                stepper(systemImage: "minus", label: "Previous hour", isEnabled: draft.canStep(by: -1)) {
+                stepper(systemImage: "minus", label: AppStrings.a11yPrevHour, isEnabled: draft.canStep(by: -1)) {
                     draft.step(by: -1)
                 }
 
@@ -452,7 +452,7 @@ struct TimePickerSheet: View {
                 .monospacedDigit()
                 .frame(maxWidth: .infinity)
 
-                stepper(systemImage: "plus", label: "Next hour", isEnabled: draft.canStep(by: 1)) {
+                stepper(systemImage: "plus", label: AppStrings.a11yNextHour, isEnabled: draft.canStep(by: 1)) {
                     draft.step(by: 1)
                 }
             }
@@ -474,7 +474,7 @@ struct TimePickerSheet: View {
                         .font(.appFootnote)
                         .opacity(0)
                         .accessibilityHidden(true)
-                    Text(entry.outfitItemNames.joined(separator: " · "))
+                    Text(entry.outfitItemNames.joined(separator: AppStrings.wirSubtitleJoin))
                         .font(.appFootnote)
                         .foregroundColor(AppTheme.inkSecondary)
                         .multilineTextAlignment(.center)
@@ -517,7 +517,7 @@ struct TimePickerSheet: View {
                 outfitItemNames: ["Short-Sleeve Running Shirt", "5-Inch Running Shorts", "Cap"]
             )
         }),
-        dateLabel: "Today",
+        dateLabel: AppStrings.wirDayToday,
         placeName: "Kansas City",
         unit: .fahrenheit,
         initialHour: 16,

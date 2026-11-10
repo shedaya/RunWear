@@ -41,12 +41,12 @@ enum MakeItMePriceLabels {
     /// "Monthly — $0.99/month" (the gen-4 build's "$0.99 / month"
     /// with no label deviated on both platforms).
     static func monthlyRowLabel(priceString: String?) -> String {
-        priceString.map { "Monthly — \($0)/month" } ?? "Monthly"
+        priceString.map { AppStrings.payMonthlyRow($0) } ?? AppStrings.payMonthly
     }
 
     static func annualRowLabel(annualPriceString: String?, annual: Decimal?, monthly: Decimal?) -> String {
-        guard let annualPriceString else { return "Annual" }
-        return "\(annualPriceString)/yr"
+        guard let annualPriceString else { return AppStrings.payAnnual }
+        return AppStrings.payAnnualRow(annualPriceString)
     }
 
     /// The Settings Premium offer card's price line (GEN-3, WS-D):
@@ -56,14 +56,14 @@ enum MakeItMePriceLabels {
     /// GEN-5 (RW-28 item 26): the settled compact form "$9.99/yr"
     /// (the gen-4 "$9.99 / year" deviated).
     static func settingsOfferPriceLine(annualPriceString: String?) -> String? {
-        annualPriceString.map { "\($0)/yr" }
+        annualPriceString.map { AppStrings.payAnnualRow($0) }
     }
 
     /// GEN-5 (RW-28 items 26/29 + C-5): the Settings card's modest
     /// monthly element label — the same settled row form as the
     /// paywall's, so the price reads identically in both places.
     static func settingsMonthlyLabel(monthlyPriceString: String?) -> String? {
-        monthlyPriceString.map { "Monthly — \($0)/month" }
+        monthlyPriceString.map { AppStrings.payMonthlyRow($0) }
     }
 
     /// RW-100 (Sol, Nov 6, 2026): the confirm button's label on
@@ -83,11 +83,11 @@ enum MakeItMePriceLabels {
     ) -> String {
         switch plan {
         case .annual:
-            return annualPriceString.map { "Get Premium — Annual, \($0)/yr" }
-                ?? "Get Premium — Annual"
+            return annualPriceString.map { AppStrings.payConfirmAnnual($0) }
+                ?? AppStrings.payConfirmAnnualPlain
         case .monthly:
-            return monthlyPriceString.map { "Get Premium — Monthly, \($0)/month" }
-                ?? "Get Premium — Monthly"
+            return monthlyPriceString.map { AppStrings.payConfirmMonthly($0) }
+                ?? AppStrings.payConfirmMonthlyPlain
         }
     }
 
@@ -97,7 +97,7 @@ enum MakeItMePriceLabels {
     /// at the stated basis (never hardcoded, never a second price).
     static func perRunLine(annual: Decimal?) -> String? {
         guard let cents = perRunCents(annual: annual) else { return nil }
-        return "only about \(cents)¢ per run"
+        return AppStrings.payPerRun(cents)
     }
 
     /// Runs per year at the stated basis: four to five runs a week,
@@ -123,6 +123,6 @@ enum MakeItMePriceLabels {
     /// unresolved, so no price framing renders without a price.
     static func perRunFinePrint(annualPriceString: String?, annual: Decimal?) -> String? {
         guard let annualPriceString, annual != nil else { return nil }
-        return "\(annualPriceString) a year, at 4–5 runs a week."
+        return AppStrings.payFinePrint(annualPriceString)
     }
 }

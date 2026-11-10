@@ -33,9 +33,9 @@ enum ShareExportFormat: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .feed: return "Feed 4:5"
-        case .stories: return "Stories 9:16"
-        case .square: return "Square"
+        case .feed: return AppEnglish.shareFormatFeed
+        case .stories: return AppEnglish.shareFormatStories
+        case .square: return AppEnglish.shareFormatSquare
         }
     }
 
@@ -122,31 +122,31 @@ enum ShareMomentResolver {
             // "today" for every clock reading, which a tomorrow
             // entry would have made false.
             if calendar.isDate(dayStart, inSameDayAs: now) {
-                return ("today, \(time)", "Today, \(time)", false)
+                return (AppEnglish.shareMomentToday(time), AppEnglish.shareMomentTodayCaps(time), false)
             }
             let tomorrow = calendar.date(
                 byAdding: .day, value: 1,
                 to: calendar.startOfDay(for: now)) ?? now
             if calendar.isDate(dayStart, inSameDayAs: tomorrow) {
-                return ("tomorrow, \(time)", "Tomorrow, \(time)", false)
+                return (AppEnglish.shareMomentTomorrow(time), AppEnglish.shareMomentTomorrowCaps(time), false)
             }
             let weekday = DateFormatter()
             weekday.calendar = calendar
             weekday.locale = Locale(identifier: "en_US_POSIX")
             weekday.dateFormat = "EEEE"
             let dayWord = weekday.string(from: dayStart)
-            return ("\(dayWord.lowercased()), \(time)", "\(dayWord), \(time)", false)
+            return (AppEnglish.shareMomentWeekdayLower(dayWord.lowercased(), time), AppEnglish.shareMomentWeekday(dayWord, time), false)
         case .daypart(let dayWord, let part):
             if dayWord == "Tomorrow" {
-                return ("tomorrow \(part.rawValue)", "Tomorrow \(part.rawValue)", false)
+                return (AppEnglish.shareMomentTomorrowPart(part.rawValue), AppEnglish.shareMomentTomorrowPartCaps(part.rawValue), false)
             }
-            return ("\(dayWord.lowercased()) \(part.rawValue)", "\(dayWord) \(part.rawValue)", false)
+            return (AppEnglish.shareMomentDaypartLower(dayWord.lowercased(), part.rawValue), AppEnglish.shareMomentDaypart(dayWord, part.rawValue), false)
         case .now:
             let hour = calendar.component(.hour, from: lastSavedAt)
             switch MomentReading.DayPart.forHour(hour) {
-            case .morning: return ("this morning", "This morning", false)
-            case .afternoon: return ("this afternoon", "This afternoon", false)
-            case .evening, .night: return ("tonight", "Tonight", false)
+            case .morning: return (AppEnglish.shareMomentThisMorning, AppEnglish.shareMomentThisMorningCaps, false)
+            case .afternoon: return (AppEnglish.shareMomentThisAfternoon, AppEnglish.shareMomentThisAfternoonCaps, false)
+            case .evening, .night: return (AppEnglish.shareMomentTonight, AppEnglish.shareMomentTonightCaps, false)
             }
         }
     }
@@ -198,10 +198,10 @@ enum ShareCaptionTemplate: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .feelsLikeStory: return "Feels-Like Story"
-        case .swing: return "Swing"
-        case .scrapbook: return "Scrapbook"
-        case .shortCall: return "Short Call"
+        case .feelsLikeStory: return AppEnglish.shareTitleFeelsStory
+        case .swing: return AppEnglish.shareTitleSwing
+        case .scrapbook: return AppEnglish.shareTitleScrapbook
+        case .shortCall: return AppEnglish.shareTitleShortCall
         }
     }
 }
@@ -210,7 +210,7 @@ enum ShareCaptionComposer {
     /// The kit as bullet lines — one garment per line, up to
     /// four headline garments (§5.3: bullets, always).
     static func kitBlock(_ kitNames: [String]) -> String {
-        kitNames.prefix(4).map { "• \($0)" }.joined(separator: "\n")
+        kitNames.prefix(4).map { AppEnglish.shareBullet($0) }.joined(separator: "\n")
     }
 
     /// The why-line library (T1's anchor element). Deterministic
@@ -218,25 +218,25 @@ enum ShareCaptionComposer {
     /// then cold, then the anchor line.
     static func whyLine(for input: ShareCaptionInput) -> String {
         if input.swingF >= 15 {
-            return "One outfit for a \(input.swingDisplay)-degree swing."
+            return AppEnglish.shareWhySwing(input.swingDisplay)
         }
         if input.feelsF <= 40 {
-            return "No guesswork at \(input.feels)°."
+            return AppEnglish.shareWhyCold(input.feels)
         }
-        return "Dressed for the feels-like, not the thermometer."
+        return AppEnglish.shareWhyAnchor
     }
 
     static func caption(for template: ShareCaptionTemplate, input: ShareCaptionInput) -> String {
         let kit = kitBlock(input.kitNames)
         switch template {
         case .feelsLikeStory:
-            return "\(input.place), \(input.captionMoment): \(input.actual)° on the thermometer, \(input.feels)° on the run. RunWear's call:\n\(kit)\n\(whyLine(for: input)) #RunAnyWear · runwear.ai"
+            return AppEnglish.shareCaptionFeelsLike(input.place, input.captionMoment, input.actual, input.feels, kit, whyLine(for: input))
         case .swing:
-            return "\(input.place) today: \(input.low)° to \(input.high)°. Dressed for \(input.captionMoment)'s \(input.feels)°:\n\(kit)\nOne outfit, no mid-run regret. #RunAnyWear · runwear.ai"
+            return AppEnglish.shareCaptionSwing(input.place, input.low, input.high, input.captionMoment, input.feels, kit)
         case .scrapbook:
-            return "One for the scrapbook: \(input.place), \(input.captionMoment), \(input.feels)° feels like, \(input.conditionLower). The kit:\n\(kit)\nEvery run, remembered — run, weather or not. #RunAnyWear · @runwear.ai"
+            return AppEnglish.shareCaptionScrapbook(input.place, input.captionMoment, input.feels, input.conditionLower, kit)
         case .shortCall:
-            return "\(input.place), \(input.captionMoment): \(input.feels)° feels like, \(input.conditionLower). The call:\n\(kit)\n#RunAnyWear · @runwear.ai"
+            return AppEnglish.shareCaptionShort(input.place, input.captionMoment, input.feels, input.conditionLower, kit)
         }
     }
 
@@ -264,12 +264,12 @@ enum ShareCaptionComposer {
 
     /// The activity sheet's subject (Mail) — §8.
     static func subject(for input: ShareCaptionInput) -> String {
-        "RunWear — \(input.place), \(input.feels)° feels like"
+        AppEnglish.shareSubject(input.place, input.feels)
     }
 
     /// The rich link metadata title — §8.
     static func linkTitle(for input: ShareCaptionInput) -> String {
-        "RunWear — \(input.place) · \(input.feels)° feels like"
+        AppEnglish.shareLinkTitle(input.place, input.feels)
     }
 }
 
@@ -370,19 +370,19 @@ enum ShareAnchorCrop {
 enum SharePosterModel {
     /// Tier 2 — "{place} · {Moment}." (sentence moment form).
     static func tier2Line(place: String, posterMoment: String) -> String {
-        "\(place) · \(posterMoment)."
+        AppEnglish.sharePosterTier2(place, posterMoment)
     }
 
     /// Tier 3 — the outfit in words: headline garments (up to
     /// four) joined by middots. Promoted: the clear second read
     /// after the numeral.
     static func tier3Line(kitNames: [String]) -> String {
-        kitNames.prefix(4).joined(separator: " · ")
+        kitNames.prefix(4).joined(separator: AppEnglish.wirSubtitleJoin)
     }
 
     /// Tier 4 — the conditions micro-line.
     static func tier4Line(condition: String, actualDegrees: Int, windMph: Int) -> String {
-        "\(condition) · Actual \(actualDegrees)° · Wind \(windMph) mph"
+        AppEnglish.sharePosterTier4(condition, actualDegrees, windMph)
     }
 
     /// The yield rule: under pressure the micro-line yields —
@@ -435,10 +435,10 @@ enum ShareKitCardModel {
     /// The header weather line: "{feels}° feels like ·
     /// {condition} · {place} · {Moment}."
     static func weatherLine(feelsDegrees: Int, condition: String, place: String, posterMoment: String) -> String {
-        "\(feelsDegrees)° feels like · \(condition) · \(place) · \(posterMoment)."
+        AppEnglish.shareKitWeatherLine(feelsDegrees, condition, place, posterMoment)
     }
 
-    static let disclosure = "As an Amazon Associate, RunWear earns from qualifying purchases."
+    static let disclosure = AppEnglish.shareDisclosure
 
     // MARK: Grid layout — one geometry for view and verifier
     //
