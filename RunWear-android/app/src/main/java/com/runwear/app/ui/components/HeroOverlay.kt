@@ -127,7 +127,7 @@ fun HeroDateTimeChip(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Schedule,
-                        contentDescription = "Select date",
+                        contentDescription = com.runwear.app.i18n.AppStrings.selectDate(),
                         tint = PhotoInk,
                         modifier = Modifier.size(15.dp)
                     )
@@ -201,7 +201,7 @@ fun HeroDateTimeChip(
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Refresh,
-                            contentDescription = "Return to now",
+                            contentDescription = com.runwear.app.i18n.AppStrings.returnToNow(),
                             tint = PhotoInk,
                             modifier = Modifier.size(13.dp)
                         )

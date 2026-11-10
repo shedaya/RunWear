@@ -150,7 +150,7 @@ fun DateTimePill(
                 ) {
                     Icon(
                         Icons.Outlined.CalendarToday,
-                        contentDescription = "Select date",
+                        contentDescription = com.runwear.app.i18n.AppStrings.selectDate(),
                         tint = primaryInk,
                         modifier = Modifier.size(14.dp)
                     )
@@ -190,7 +190,7 @@ fun DateTimePill(
                 ) {
                     Icon(
                         Icons.Outlined.Schedule,
-                        contentDescription = "Select time",
+                        contentDescription = com.runwear.app.i18n.AppStrings.selectTime(),
                         tint = if (isNowSelected) nowAccentText else secondaryInk,
                         modifier = Modifier.size(14.dp)
                     )
@@ -224,7 +224,7 @@ fun DateTimePill(
                     ) {
                         Icon(
                             Icons.Outlined.Refresh,
-                            contentDescription = "Jump to now",
+                            contentDescription = com.runwear.app.i18n.AppStrings.jumpToNow(),
                             tint = nowAccentText,
                             modifier = Modifier.size(12.dp)
                         )
@@ -274,7 +274,7 @@ fun DateButton(
         ) {
             Icon(
                 Icons.Outlined.CalendarToday,
-                contentDescription = "Select date",
+                contentDescription = com.runwear.app.i18n.AppStrings.selectDate(),
                 tint = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.size(18.dp)
             )
@@ -313,7 +313,7 @@ fun TimeButton(
         ) {
             Icon(
                 Icons.Outlined.Schedule,
-                contentDescription = "Select time",
+                contentDescription = com.runwear.app.i18n.AppStrings.selectTime(),
                 tint = com.runwear.app.ui.theme.PhotoInk,
                 modifier = Modifier.size(18.dp)
             )

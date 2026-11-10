@@ -178,7 +178,7 @@ fun HeroShimmerPlaceholder(
  * captions and the settled line existed nowhere in the module.
  */
 object HomeLoadingCopy {
-    const val FIRST_RECOMMENDATION: String = "Getting your first recommendation…"
+    const val FIRST_RECOMMENDATION: String = com.runwear.app.i18n.AppEnglish.LOADING_FIRST_RECOMMENDATION
 }
 
 /**
@@ -187,9 +187,9 @@ object HomeLoadingCopy {
  * "Getting location..." until a fix is adopted and named.
  */
 fun loadingStatusText(hasLocationPermission: Boolean, locationName: String): String = when {
-    !hasLocationPermission -> "Getting your location…"
-    locationName == "Getting location..." -> "Finding your location…"
-    else -> "Loading your forecast…"
+    !hasLocationPermission -> com.runwear.app.i18n.AppEnglish.LOADING_GETTING_YOUR_LOCATION
+    locationName == com.runwear.app.i18n.AppEnglish.LOADING_GETTING_LOCATION_STATE -> com.runwear.app.i18n.AppEnglish.LOADING_FINDING_LOCATION
+    else -> com.runwear.app.i18n.AppEnglish.LOADING_FORECAST
 }
 
 /**

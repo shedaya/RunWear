@@ -60,7 +60,7 @@ import java.util.Locale
 object HeroSheetFormat {
 
     /** RW-26 settled header stack, step (i): the small label. */
-    const val FEELS_LIKE_LABEL = "Feels like"
+    const val FEELS_LIKE_LABEL: String = com.runwear.app.i18n.AppEnglish.HERO_FEELS_LIKE_LABEL
 
     /**
      * RW-26 settled header stack, step (ii): the location line

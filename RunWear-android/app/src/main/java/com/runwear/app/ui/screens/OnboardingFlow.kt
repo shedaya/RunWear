@@ -34,7 +34,7 @@ import androidx.compose.animation.core.CubicBezierEasing
  */
 object OnboardingCopy {
     // ── Frame 28 · Promise (welcome) ─────────────────────────────
-    const val HEADLINE = "Run, weather or not."
+    const val HEADLINE: String = com.runwear.app.i18n.AppEnglish.ONB_HEADLINE
     // GEN-3 ROUND 2 (Sol, Nov 4 — the name-led welcome, CHOSEN by
     // Sol; supersedes the A-SETTINGS/WS-E title+body composition
     // and the earlier "no name-led variant" instruction): each
@@ -47,23 +47,21 @@ object OnboardingCopy {
     // GEN-5 (RW-28 item 27, design §1): each point's HEADLINE is
     // "Name — headline phrase" in pine bold; the body line beneath
     // is separate. The headline phrases are the settled ones.
-    const val PROMISE_1_HEADLINE = "The right outfit for the weather"
-    const val PROMISE_1_PHRASE =
-        "One recommendation for the run you're about to take — feels-like, wind, and rain included."
+    const val PROMISE_1_HEADLINE: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_1_HEADLINE
+    const val PROMISE_1_PHRASE: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_1_PHRASE
     const val PROMISE_2_NAME = "Make It Me"
-    const val PROMISE_2_HEADLINE = "See yourself in every outfit"
+    const val PROMISE_2_HEADLINE: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_2_HEADLINE
     // GEN-3 WELCOME UPDATE (Sol, Nov 4): point 2's final phrase,
     // word for word (supersedes "Put yourself in the photos.").
-    const val PROMISE_2_PHRASE = "Picture yourself at the start line with the perfect outfit ready to go."
+    const val PROMISE_2_PHRASE: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_2_PHRASE
     const val PROMISE_3_NAME = "Wear I've Run"
-    const val PROMISE_3_HEADLINE = "Remember every run"
-    const val PROMISE_3_PHRASE =
-        "Turn each day's outfit into a card you can share — a scrapbook of what you wore and where you ran."
+    const val PROMISE_3_HEADLINE: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_3_HEADLINE
+    const val PROMISE_3_PHRASE: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_3_PHRASE
 
     /** One name-led welcome point: the [headlineLine] in pine bold,
      * the [phrase] as the separate body line beneath it. */
     data class WelcomePoint(val name: String, val headline: String, val phrase: String) {
-        val headlineLine: String get() = "$name — $headline"
+        val headlineLine: String get() = com.runwear.app.i18n.AppEnglish.ONB_HEADLINE_LINE_TEMPLATE.format(name, headline)
     }
 
     /** The three welcome points, in display order. */
@@ -72,45 +70,45 @@ object OnboardingCopy {
         WelcomePoint(PROMISE_2_NAME, PROMISE_2_HEADLINE, PROMISE_2_PHRASE),
         WelcomePoint(PROMISE_3_NAME, PROMISE_3_HEADLINE, PROMISE_3_PHRASE)
     )
-    const val PROMISE_CTA = "Get Started"
+    const val PROMISE_CTA: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_CTA
     // GEN-5 (RW-28 item 27, design §1): the settled footer line.
-    const val PROMISE_FOOTER = "Free to start · Set up in under a minute"
+    const val PROMISE_FOOTER: String = com.runwear.app.i18n.AppEnglish.ONB_PROMISE_FOOTER
 
     /** The A1 promise sentence — sanctioned on frame 28 ONLY. */
     // RW-128: derives from the one allowance constant (10).
     val FREE_LOOKS_PROMISE: String =
-        "Your first ${com.runwear.app.makeitme.MakeItMeUpsellRules.FREE_ALLOWANCE} looks are free."
+        com.runwear.app.i18n.AppEnglish.ONB_FREE_LOOKS_PROMISE_TEMPLATE.format(com.runwear.app.makeitme.MakeItMeUpsellRules.FREE_ALLOWANCE)
 
     // ── Frame 29 · Setup (preferences, Android expression) ──────
-    const val SETUP_STEP_LABEL = "Step 1 of 2"
-    const val SETUP_TITLE = "Make it yours"
-    const val SETUP_SUB = "Three quick calls. You can change any of them later in Settings."
-    const val TEMP_TITLE = "Temperature"
-    const val TEMP_SUB = "How do you measure the weather?"
-    const val FIT_TITLE = "Fit preference"
-    const val FIT_SUB = "Whose fit should the outfits follow?"
-    const val BODY_TITLE = "Body temperature"
-    const val BODY_SUB = "Do you get cold easily, or overheat quickly?"
+    const val SETUP_STEP_LABEL: String = com.runwear.app.i18n.AppEnglish.ONB_SETUP_STEP_LABEL
+    const val SETUP_TITLE: String = com.runwear.app.i18n.AppEnglish.ONB_SETUP_TITLE
+    const val SETUP_SUB: String = com.runwear.app.i18n.AppEnglish.ONB_SETUP_SUB
+    const val TEMP_TITLE: String = com.runwear.app.i18n.AppEnglish.ONB_TEMP_TITLE
+    const val TEMP_SUB: String = com.runwear.app.i18n.AppEnglish.ONB_TEMP_SUB
+    const val FIT_TITLE: String = com.runwear.app.i18n.AppEnglish.ONB_FIT_TITLE
+    const val FIT_SUB: String = com.runwear.app.i18n.AppEnglish.ONB_FIT_SUB
+    const val BODY_TITLE: String = com.runwear.app.i18n.AppEnglish.ONB_BODY_TITLE
+    const val BODY_SUB: String = com.runwear.app.i18n.AppEnglish.ONB_BODY_SUB
     // Combined-screen option fidelity: temperature in FULL WORDS,
     // and the body-temperature slider's end labels. Fit carries
     // exactly TWO options (RW-81, Sol's ruling, Nov 6, 2026,
     // superseding Nov 4): neutral is not a labelled option — it is
     // the state where neither button is selected (tap the selected
     // button again to return to it), so there is no third string.
-    const val TEMP_OPTION_FAHRENHEIT = "Fahrenheit"
-    const val TEMP_OPTION_CELSIUS = "Celsius"
-    const val FIT_OPTION_MENS = "Men's"
-    const val FIT_OPTION_WOMENS = "Women's"
-    const val BODY_SLIDER_MIN_LABEL = "Runs Cold"
-    const val BODY_SLIDER_MAX_LABEL = "Runs Warm"
-    const val SETUP_CTA = "Continue"
+    const val TEMP_OPTION_FAHRENHEIT: String = com.runwear.app.i18n.AppEnglish.ONB_TEMP_OPTION_FAHRENHEIT
+    const val TEMP_OPTION_CELSIUS: String = com.runwear.app.i18n.AppEnglish.ONB_TEMP_OPTION_CELSIUS
+    const val FIT_OPTION_MENS: String = com.runwear.app.i18n.AppEnglish.ONB_FIT_OPTION_MENS
+    const val FIT_OPTION_WOMENS: String = com.runwear.app.i18n.AppEnglish.ONB_FIT_OPTION_WOMENS
+    const val BODY_SLIDER_MIN_LABEL: String = com.runwear.app.i18n.AppEnglish.ONB_BODY_SLIDER_MIN_LABEL
+    const val BODY_SLIDER_MAX_LABEL: String = com.runwear.app.i18n.AppEnglish.ONB_BODY_SLIDER_MAX_LABEL
+    const val SETUP_CTA: String = com.runwear.app.i18n.AppEnglish.ONB_SETUP_CTA
 
     // ── Frame 30 · Location step ────────────────────────────────
-    const val LOCATION_STEP_LABEL = "Step 2 of 2"
-    const val LOCATION_TITLE = "One more thing — where are you running?"
-    const val LOCATION_BODY = "We need your location to get accurate weather for your run"
-    const val LOCATION_CTA_PRIMARY = "Use My Location"
-    const val LOCATION_CTA_SECONDARY = "Set a City Instead"
+    const val LOCATION_STEP_LABEL: String = com.runwear.app.i18n.AppEnglish.ONB_LOCATION_STEP_LABEL
+    const val LOCATION_TITLE: String = com.runwear.app.i18n.AppEnglish.ONB_LOCATION_TITLE
+    const val LOCATION_BODY: String = com.runwear.app.i18n.AppEnglish.ONB_LOCATION_BODY
+    const val LOCATION_CTA_PRIMARY: String = com.runwear.app.i18n.AppEnglish.ONB_LOCATION_CTA_PRIMARY
+    const val LOCATION_CTA_SECONDARY: String = com.runwear.app.i18n.AppEnglish.ONB_LOCATION_CTA_SECONDARY
 }
 
 /**

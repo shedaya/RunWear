@@ -448,7 +448,7 @@ internal fun ChapterCover(
             IconButton(onClick = onClick) {
                 Icon(
                     Icons.Outlined.Visibility,
-                    contentDescription = "View ${chapter.place} chapter",
+                    contentDescription = com.runwear.app.i18n.AppStrings.viewChapter(chapter.place),
                     tint = RunWearColors.TextSecondary
                 )
             }

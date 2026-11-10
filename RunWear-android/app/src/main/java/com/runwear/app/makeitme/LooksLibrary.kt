@@ -149,13 +149,10 @@ object LooksLibraryPolicy {
 
 /** RW-61 settled copy (frame 21 / design-spec §17, verbatim). */
 object LooksLibraryStrings {
-    const val TITLE: String = "Your looks"
-    const val WHY_DOOR: String = "Why am I seeing a stock photo?"
-    const val EXPLANATION: String =
-        "One scenario didn't pass the quality gate after every attempt, " +
-            "so it shows the stock photo rather than a version of you " +
-            "that isn't right. It retries on its own when generation improves."
-    const val EMPTY_LINE: String = "No looks yet — your first look is on its way."
+    const val TITLE: String = com.runwear.app.i18n.AppEnglish.LOOKS_TITLE
+    const val WHY_DOOR: String = com.runwear.app.i18n.AppEnglish.LOOKS_WHY_DOOR
+    const val EXPLANATION: String = com.runwear.app.i18n.AppEnglish.LOOKS_EXPLANATION
+    const val EMPTY_LINE: String = com.runwear.app.i18n.AppEnglish.LOOKS_EMPTY_LINE
 }
 
 /**

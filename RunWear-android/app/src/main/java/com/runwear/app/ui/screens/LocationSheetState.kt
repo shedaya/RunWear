@@ -77,8 +77,8 @@ object LocationSheetState {
     /** The row's subtitle line for a resolved [status]. */
     fun currentLocationRowSubtitle(status: CurrentLocationRowStatus): String = when (status) {
         CurrentLocationRowStatus.USING_GPS,
-        CurrentLocationRowStatus.PERMISSION_GRANTED -> "GPS location enabled"
-        CurrentLocationRowStatus.PERMISSION_REQUIRED -> "Requires location permission"
+        CurrentLocationRowStatus.PERMISSION_GRANTED -> com.runwear.app.i18n.AppStringsPure.locGpsEnabled()
+        CurrentLocationRowStatus.PERMISSION_REQUIRED -> com.runwear.app.i18n.AppStringsPure.locRequiresPermission()
     }
 
     /**
@@ -89,11 +89,11 @@ object LocationSheetState {
      */
     fun currentLocationFailureMessage(reason: LocationErrorReason): String = when (reason) {
         LocationErrorReason.PERMISSION_DENIED ->
-            "Location permission is off. Turn it on to use your current location."
+            com.runwear.app.i18n.AppStringsPure.locFailPermission()
         LocationErrorReason.TIMEOUT ->
-            "We couldn't get a fix on your location. Try again in a moment."
+            com.runwear.app.i18n.AppStringsPure.locFailTimeout()
         LocationErrorReason.UNAVAILABLE ->
-            "Your current location isn't available right now. Try again in a moment."
+            com.runwear.app.i18n.AppStringsPure.locFailUnavailable()
     }
 
     /**
@@ -104,7 +104,7 @@ object LocationSheetState {
      */
     fun currentLocationRequestSubtitle(request: CurrentLocationRequestState): String? =
         when (request) {
-            CurrentLocationRequestState.Locating -> "Finding your location…"
+            CurrentLocationRequestState.Locating -> com.runwear.app.i18n.AppStringsPure.locFinding()
             is CurrentLocationRequestState.Failed -> request.message
             CurrentLocationRequestState.Idle,
             CurrentLocationRequestState.Succeeded -> null

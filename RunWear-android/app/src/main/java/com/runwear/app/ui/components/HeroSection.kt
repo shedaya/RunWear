@@ -966,7 +966,7 @@ fun HeroGearButton(
     ) {
         Icon(
             imageVector = Icons.Outlined.Settings,
-            contentDescription = "Settings",
+            contentDescription = com.runwear.app.i18n.AppStrings.settings(),
             tint = com.runwear.app.ui.theme.PhotoInk,
             modifier = Modifier
                 .padding(9.dp)
@@ -996,7 +996,7 @@ private fun HeroFlagChip(
     ) {
         Icon(
             imageVector = Icons.Outlined.Flag,
-            contentDescription = "Flag this photo",
+            contentDescription = com.runwear.app.i18n.AppStrings.flagPhoto(),
             tint = com.runwear.app.ui.theme.PhotoInk.copy(alpha = if (enabled) 0.9f else 0.45f),
             modifier = Modifier
                 .padding(8.dp)
@@ -1025,7 +1025,7 @@ private fun HeroRefreshChip(
     ) {
         Icon(
             imageVector = Icons.Outlined.Refresh,
-            contentDescription = "Show another photo",
+            contentDescription = com.runwear.app.i18n.AppStrings.anotherPhoto(),
             tint = com.runwear.app.ui.theme.PhotoInk.copy(alpha = 0.9f),
             modifier = Modifier
                 .padding(8.dp)
@@ -1290,16 +1290,16 @@ private fun generateHeroAltText(
     weather: WeatherConditions?,
     outfit: OutfitRecommendation?
 ): String {
-    if (weather == null) return "Runner in running gear"
+    if (weather == null) return com.runwear.app.i18n.AppEnglish.HERO_ALT_DEFAULT
 
     val tempDesc = when {
-        weather.feelsLikeInFahrenheit < 35 -> "cold"
-        weather.feelsLikeInFahrenheit < 65 -> "mild"
-        else -> "warm"
+        weather.feelsLikeInFahrenheit < 35 -> com.runwear.app.i18n.AppEnglish.HERO_ALT_TEMP_COLD
+        weather.feelsLikeInFahrenheit < 65 -> com.runwear.app.i18n.AppEnglish.HERO_ALT_TEMP_MILD
+        else -> com.runwear.app.i18n.AppEnglish.HERO_ALT_TEMP_WARM
     }
 
     val weatherDesc = weather.weatherCode.description.lowercase()
     val itemCount = outfit?.allItems?.size ?: 0
 
-    return "Runner dressed for $tempDesc $weatherDesc conditions with $itemCount items of gear"
+    return com.runwear.app.i18n.AppEnglish.HERO_ALT_TEMPLATE.format(tempDesc, weatherDesc, itemCount)
 }

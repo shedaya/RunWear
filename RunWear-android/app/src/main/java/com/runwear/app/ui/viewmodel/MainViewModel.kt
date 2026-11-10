@@ -77,7 +77,7 @@ data class MainUiState(
      * daily block (the chart falls back to its fixed ranges).
      */
     val sunTimes: List<com.runwear.shared.domain.model.DaySunTimes> = emptyList(),
-    val locationName: String = "Getting location...",
+    val locationName: String = com.runwear.app.i18n.AppEnglish.LOADING_GETTING_LOCATION_STATE,
     /**
      * WS-4 (RC-4): the current place as a simple-place value, derived
      * ONCE at geocode/selection time. [locationName] is always this
@@ -993,9 +993,9 @@ class MainViewModel @Inject constructor(
                             },
                             onFailure = {
                                 val fallback =
-                                    com.runwear.shared.domain.model.SimplePlace("Your Location")
+                                    com.runwear.shared.domain.model.SimplePlace(com.runwear.app.i18n.AppEnglish.VM_YOUR_LOCATION)
                                 if (commitGpsPlace(fallback, newLat, newLon)) {
-                                    preferencesRepository.saveGPSLocation(newLat, newLon, "Your Location")
+                                    preferencesRepository.saveGPSLocation(newLat, newLon, com.runwear.app.i18n.AppEnglish.VM_YOUR_LOCATION)
                                 }
                             }
                         )
@@ -1264,9 +1264,9 @@ class MainViewModel @Inject constructor(
                 },
                 onFailure = {
                     val fallback =
-                        com.runwear.shared.domain.model.SimplePlace("Your Location")
+                        com.runwear.shared.domain.model.SimplePlace(com.runwear.app.i18n.AppEnglish.VM_YOUR_LOCATION)
                     if (commitGpsPlace(fallback, lat, lon)) {
-                        preferencesRepository.saveGPSLocation(lat, lon, "Your Location")
+                        preferencesRepository.saveGPSLocation(lat, lon, com.runwear.app.i18n.AppEnglish.VM_YOUR_LOCATION)
                     }
                 }
             )
@@ -1334,7 +1334,7 @@ class MainViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                error = e.message ?: "Weather error",
+                                error = e.message ?: com.runwear.app.i18n.AppEnglish.VM_WEATHER_ERROR,
                                 // RW-92 (Nov 6, 2026): the parser
                                 // refused the selected moment (it
                                 // has no forecast entry — e.g. past
@@ -1466,7 +1466,7 @@ class MainViewModel @Inject constructor(
                 },
                 onFailure = { e ->
                     if (e is CancellationException) return@fold
-                    _uiState.update { it.copy(isLoading = false, error = e.message ?: "Weather error") }
+                    _uiState.update { it.copy(isLoading = false, error = e.message ?: com.runwear.app.i18n.AppEnglish.VM_WEATHER_ERROR) }
                     // A failed day suppresses the rating moment (addendum rules).
                     viewModelScope.launch { feedbackStore.markBadDay() }
                 }
@@ -2820,12 +2820,12 @@ class MainViewModel @Inject constructor(
     )
 
     private fun slotLabel(slot: String): String = when (slot) {
-        "base" -> "Base layer"
-        "mid" -> "Mid layer"
-        "outer" -> "Outer layer"
-        "bottom" -> "Bottom"
-        "head" -> "Head"
-        "hands" -> "Hands"
+        "base" -> com.runwear.app.i18n.AppEnglish.LAYER_BASE
+        "mid" -> com.runwear.app.i18n.AppEnglish.LAYER_MID
+        "outer" -> com.runwear.app.i18n.AppEnglish.LAYER_OUTER
+        "bottom" -> com.runwear.app.i18n.AppEnglish.LAYER_BOTTOM
+        "head" -> com.runwear.app.i18n.AppEnglish.LAYER_HEAD
+        "hands" -> com.runwear.app.i18n.AppEnglish.LAYER_HANDS
         else -> slot
     }
 

@@ -231,7 +231,7 @@ internal fun DatePickerSheetContent(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "SELECT DATE",
+                text = com.runwear.app.i18n.AppStrings.sheetSelectDate(),
                 style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary
             )
@@ -251,8 +251,8 @@ internal fun DatePickerSheetContent(
                     // draft policy's refusal remains behind the tap.
                     val isSelected = date == draftDate
                     val label = when {
-                        date == today -> "Today"
-                        date == today.plusDays(1) -> "Tomorrow"
+                        date == today -> com.runwear.app.i18n.AppStringsPure.dayToday()
+                        date == today.plusDays(1) -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
                         else -> date.format(DateTimeFormatter.ofPattern("EEE"))
                     }
                     val sublabel = date.format(DateTimeFormatter.ofPattern("MMM d"))
@@ -292,7 +292,7 @@ internal fun DatePickerSheetContent(
             Spacer(Modifier.height(16.dp))
 
             Text(
-                text = "Days past the 7-day forecast are beyond the forecast — no weather is invented for them.",
+                text = com.runwear.app.i18n.AppStrings.sheetSelectDateNote(),
                 fontSize = 12.sp,
                 color = RunWearColors.TextSecondary,
                 textAlign = TextAlign.Center
@@ -312,7 +312,7 @@ internal fun DatePickerSheetContent(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Cancel", fontWeight = FontWeight.SemiBold)
+                    Text(com.runwear.app.i18n.AppStrings.cancel(), fontWeight = FontWeight.SemiBold)
                 }
                 Button(
                     onClick = { onSelectDate(DatePickerDraftPolicy.confirm(draftDate)) },
@@ -323,7 +323,7 @@ internal fun DatePickerSheetContent(
                         contentColor = com.runwear.app.ui.theme.PhotoInk
                     )
                 ) {
-                    Text("Confirm", fontWeight = FontWeight.SemiBold)
+                    Text(com.runwear.app.i18n.AppStrings.confirm(), fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -482,7 +482,7 @@ fun SettingsSheetContent(
     ) {
         item(key = "settings-title") {
             Text(
-                text = "SETTINGS",
+                text = com.runwear.app.i18n.AppStrings.settingsTitle(),
                 style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 24.dp)
@@ -495,13 +495,13 @@ fun SettingsSheetContent(
                     // device; Light / Dark pin the app theme.
                     Column {
                         Text(
-                            text = "Appearance",
+                            text = com.runwear.app.i18n.AppStrings.settingsAppearance(),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = RunWearColors.TextPrimary
                         )
                         Text(
-                            text = "Match your device, or always light or dark.",
+                            text = com.runwear.app.i18n.AppStrings.settingsAppearanceSub(),
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
@@ -515,8 +515,8 @@ fun SettingsSheetContent(
                 }
                 SettingsSectionId.TEMPERATURE_UNIT -> item(key = section.name) {
                     SettingRow(
-                        label = "Temperature Unit",
-                        sublabel = "Display temperature in"
+                        label = com.runwear.app.i18n.AppStrings.settingsTempUnitLabel(),
+                        sublabel = com.runwear.app.i18n.AppStrings.settingsTempUnitSub()
                     ) {
                         UnitToggle(
                             isCelsius = temperatureUnit == TemperatureUnit.CELSIUS,
@@ -528,7 +528,7 @@ fun SettingsSheetContent(
                     // choice actually governs — stated under the
                     // row, verbatim.
                     Text(
-                        text = "Used for today's outfit, the hourly chart, and your watch.",
+                        text = com.runwear.app.i18n.AppStrings.settingsTempUnitNote(),
                         fontSize = 12.sp,
                         color = RunWearColors.TextSecondary,
                         modifier = Modifier.padding(top = 6.dp, bottom = 2.dp)
@@ -538,13 +538,13 @@ fun SettingsSheetContent(
                 SettingsSectionId.BODY_TEMPERATURE -> item(key = section.name) {
                     Column {
                         Text(
-                            text = "Body Temperature",
+                            text = com.runwear.app.i18n.AppStrings.settingsBodyTemp(),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = RunWearColors.TextPrimary
                         )
                         Text(
-                            text = "How do you typically feel when running?",
+                            text = com.runwear.app.i18n.AppStrings.settingsBodyTempSub(),
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
@@ -565,7 +565,7 @@ fun SettingsSheetContent(
                 SettingsSectionId.FIT_PREFERENCE -> item(key = section.name) {
                     Column {
                         Text(
-                            text = "Fit Preference",
+                            text = com.runwear.app.i18n.AppStrings.settingsFit(),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = RunWearColors.TextPrimary
@@ -574,7 +574,7 @@ fun SettingsSheetContent(
                             // RW-81 (Nov 6, 2026): exactly two fit
                             // options; neutral is the unselected
                             // state, not a third labelled choice.
-                            text = "Whose fit should your recommendations shop for?",
+                            text = com.runwear.app.i18n.AppStrings.settingsFitSub(),
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
@@ -640,7 +640,7 @@ fun SettingsSheetContent(
                                 color = RunWearColors.TextPrimary
                             )
                             Text(
-                                text = "Tell us what happened, in your own words.",
+                                text = com.runwear.app.i18n.AppStrings.settingsFeedbackSub(),
                                 fontSize = 12.sp,
                                 color = RunWearColors.TextSecondary,
                                 modifier = Modifier.padding(top = 2.dp)
@@ -675,7 +675,7 @@ fun SettingsSheetContent(
                                 color = RunWearColors.TextPrimary
                             )
                             Text(
-                                text = "Rate RunWear in the Play Store.",
+                                text = com.runwear.app.i18n.AppStrings.settingsRateSub(),
                                 fontSize = 12.sp,
                                 color = RunWearColors.TextSecondary,
                                 modifier = Modifier.padding(top = 2.dp)
@@ -697,8 +697,8 @@ fun SettingsSheetContent(
                     // included.
                     Column {
                         SettingRow(
-                            label = "Help improve the app",
-                            sublabel = "Count how the app is used"
+                            label = com.runwear.app.i18n.AppStrings.settingsHelpLabel(),
+                            sublabel = com.runwear.app.i18n.AppStrings.settingsHelpSub()
                         ) {
                             Switch(
                                 checked = analyticsOptIn,
@@ -712,17 +712,14 @@ fun SettingsSheetContent(
                             )
                         }
                         Text(
-                            text = "We count how the app is used — which features get used and where " +
-                                "recommendations miss — and nothing else. No account, no advertising ID, " +
-                                "and your location never leaves the phone more precisely than the city " +
-                                "name. Turn this off and nothing is counted or sent.",
+                            text = com.runwear.app.i18n.AppStrings.settingsHelpBody(),
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 10.dp)
                         )
                         if (!analyticsOptIn) {
                             Text(
-                                text = "Off. Nothing is being counted.",
+                                text = com.runwear.app.i18n.AppStrings.settingsHelpOff(),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = RunWearColors.TextPrimary,
@@ -730,8 +727,7 @@ fun SettingsSheetContent(
                             )
                         }
                         Text(
-                            text = "If the app crashes, it can send us the technical details so we can " +
-                                "fix it. This happens only after a crash, and only with your permission here.",
+                            text = com.runwear.app.i18n.AppStrings.settingsCrashBody(),
                             fontSize = 12.sp,
                             color = RunWearColors.TextSecondary,
                             modifier = Modifier.padding(top = 10.dp)
@@ -745,7 +741,7 @@ fun SettingsSheetContent(
                     // "name (code)" form) and Android lacked.
                     Column {
                         Text(
-                            text = "About",
+                            text = com.runwear.app.i18n.AppStrings.settingsAbout(),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = RunWearColors.TextPrimary
@@ -758,7 +754,7 @@ fun SettingsSheetContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Version",
+                                text = com.runwear.app.i18n.AppStrings.settingsVersion(),
                                 fontSize = 14.sp,
                                 color = RunWearColors.TextSecondary
                             )
@@ -853,7 +849,7 @@ private fun UnitToggle(
         ) {
             Text(
                 // GEN-5 (RW-28 item 24): full words, not symbols.
-                text = "Fahrenheit",
+                text = com.runwear.app.i18n.AppStringsPure.onbTempOptionFahrenheit(),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (!isCelsius) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
@@ -875,7 +871,7 @@ private fun UnitToggle(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Celsius",
+                text = com.runwear.app.i18n.AppStringsPure.onbTempOptionCelsius(),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isCelsius) com.runwear.app.ui.theme.PhotoInk else RunWearColors.TextSecondary
@@ -990,12 +986,12 @@ internal fun ComfortSliderControl(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Runs Cold",
+                text = com.runwear.app.i18n.AppStringsPure.onbBodySliderMin(),
                 fontSize = 12.sp,
                 color = RunWearColors.TextSecondary
             )
             Text(
-                text = "Runs Warm",
+                text = com.runwear.app.i18n.AppStringsPure.onbBodySliderMax(),
                 fontSize = 12.sp,
                 color = RunWearColors.TextSecondary
             )
@@ -1277,14 +1273,14 @@ fun LocationPickerSheet(
                     }) {
                         Icon(
                             Icons.Outlined.Delete,
-                            contentDescription = "Remove ${contextRecent!!.name}",
+                            contentDescription = com.runwear.app.i18n.AppStrings.locRemoveRecent(contextRecent!!.name),
                             tint = RunWearColors.TextPrimary
                         )
                     }
                     IconButton(onClick = { contextRecent = null }) {
                         Icon(
                             Icons.Outlined.Close,
-                            contentDescription = "Cancel",
+                            contentDescription = com.runwear.app.i18n.AppStrings.cancel(),
                             tint = RunWearColors.TextSecondary
                         )
                     }
@@ -1293,7 +1289,7 @@ fun LocationPickerSheet(
             }
 
             Text(
-                text = "SET LOCATION",
+                text = com.runwear.app.i18n.AppStrings.sheetSetLocation(),
                 style = MaterialTheme.typography.titleLarge,
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -1311,7 +1307,7 @@ fun LocationPickerSheet(
                 // unfocused border that actually reads on the cream
                 // sheet (the gen-4 BgCardLight border was nearly
                 // invisible, so the field looked borderless).
-                placeholder = { Text("Search a place") },
+                placeholder = { Text(com.runwear.app.i18n.AppStrings.searchPlace()) },
                 leadingIcon = {
                     Icon(Icons.Outlined.Search, contentDescription = null)
                 },
@@ -1342,7 +1338,7 @@ fun LocationPickerSheet(
             if (query.isEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Start typing a city or ZIP — results appear as you type.",
+                    text = com.runwear.app.i18n.AppStrings.locHintTyping(),
                     fontSize = 13.sp,
                     color = RunWearColors.TextSecondary
                 )
@@ -1362,7 +1358,7 @@ fun LocationPickerSheet(
             ) {
                 HorizontalDivider(modifier = Modifier.weight(1f), color = RunWearColors.Hairline)
                 Text(
-                    text = "or",
+                    text = com.runwear.app.i18n.AppStrings.locOr(),
                     fontSize = 13.sp,
                     color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -1425,7 +1421,7 @@ fun LocationPickerSheet(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Current location",
+                                text = com.runwear.app.i18n.AppStrings.locCurrentLocation(),
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 15.sp,
                                 color = RunWearColors.TextPrimary
@@ -1433,7 +1429,7 @@ fun LocationPickerSheet(
                             if (isCurrentGpsPlace) {
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "CURRENT",
+                                    text = com.runwear.app.i18n.AppStrings.locCurrentBadge(),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = RunWearColors.PineAccent
@@ -1503,7 +1499,7 @@ fun LocationPickerSheet(
                         // RW-55: the settled first-run hint
                         // (frame 25), including the no-save
                         // assurance.
-                        text = "Your recent places will wait here — Pick a place once and it joins a short list — home, the office, trip cities — so jumping back takes one tap. Nothing is saved until you choose a place.",
+                        text = com.runwear.app.i18n.AppStrings.locRecentsHint(),
                         fontSize = 13.sp,
                         color = RunWearColors.TextSecondary,
                         modifier = Modifier.padding(12.dp)
@@ -1511,7 +1507,7 @@ fun LocationPickerSheet(
                 }
             } else {
                 Text(
-                    text = "RECENT LOCATIONS",
+                    text = com.runwear.app.i18n.AppStrings.locRecentsTitle(),
                     style = MaterialTheme.typography.labelMedium,
                     color = RunWearColors.TextSecondary,
                     modifier = Modifier.padding(bottom = 4.dp)
@@ -1560,7 +1556,7 @@ fun LocationPickerSheet(
                             )
                         ) {
                             Text(
-                                text = "CURRENT",
+                                text = com.runwear.app.i18n.AppStrings.locCurrentBadge(),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = RunWearColors.PineAccent
@@ -1580,7 +1576,7 @@ fun LocationPickerSheet(
                 Spacer(Modifier.height(16.dp))
                 when {
                     isSearching -> Text(
-                        text = "Searching for \u201C$query\u201D\u2026",
+                        text = com.runwear.app.i18n.AppStrings.locSearching(query),
                         fontSize = 14.sp,
                         color = RunWearColors.TextSecondary
                     )
@@ -1593,7 +1589,7 @@ fun LocationPickerSheet(
                         }
                     )
                     else -> Text(
-                        text = "No locations found",
+                        text = com.runwear.app.i18n.AppStrings.locNoResults(),
                         fontSize = 14.sp,
                         color = RunWearColors.TextSecondary
                     )
@@ -1633,7 +1629,7 @@ fun LocationPickerSheet(
                                     fontSize = 12.sp,
                                     color = RunWearColors.TextSecondary
                                 )
-                            ) { append("Currently using: ") }
+                            ) { append(com.runwear.app.i18n.AppStrings.locCurrentlyUsing()) }
                             withStyle(
                                 SpanStyle(
                                     fontSize = 14.sp,
@@ -1720,7 +1716,7 @@ fun ShopAllSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "SHOP YOUR OUTFIT",
+                    text = com.runwear.app.i18n.AppStrings.shopSheetTitle(),
                     style = MaterialTheme.typography.titleLarge,
                     color = RunWearColors.TextPrimary
                 )
@@ -1735,7 +1731,7 @@ fun ShopAllSheet(
                     color = RunWearColors.Primary
                 ) {
                     Text(
-                        text = "Shop All →",
+                        text = com.runwear.app.i18n.AppStrings.shopAllArrow(),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = com.runwear.app.ui.theme.PhotoInk,
@@ -1888,7 +1884,7 @@ private fun ShopItemRow(
                 // is "Shop ›" (frame 44) — the whole row is the
                 // door; "Shop on Amazon" + chevron is retired.
                 Text(
-                    text = "Shop ›",
+                    text = com.runwear.app.i18n.AppStrings.shopRowDoor(),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = RunWearColors.PineAccent
@@ -1912,13 +1908,13 @@ private fun getCategoryColor(category: ClothingCategory): Color {
 
 private fun getCategoryDisplayName(category: ClothingCategory): String {
     return when (category) {
-        ClothingCategory.TOP_BASE -> "Base Layer"
-        ClothingCategory.TOP_MID -> "Mid Layer"
-        ClothingCategory.TOP_OUTER -> "Outer Layer"
-        ClothingCategory.BOTTOM -> "Bottom"
-        ClothingCategory.HEAD -> "Headwear"
-        ClothingCategory.HANDS -> "Gloves"
-        ClothingCategory.ACCESSORIES -> "Accessories"
+        ClothingCategory.TOP_BASE -> com.runwear.app.i18n.AppStringsPure.catBaseLayer()
+        ClothingCategory.TOP_MID -> com.runwear.app.i18n.AppStringsPure.catMidLayer()
+        ClothingCategory.TOP_OUTER -> com.runwear.app.i18n.AppStringsPure.catOuterLayer()
+        ClothingCategory.BOTTOM -> com.runwear.app.i18n.AppStringsPure.catBottom()
+        ClothingCategory.HEAD -> com.runwear.app.i18n.AppStringsPure.catHeadwear()
+        ClothingCategory.HANDS -> com.runwear.app.i18n.AppStringsPure.catGloves()
+        ClothingCategory.ACCESSORIES -> com.runwear.app.i18n.AppStringsPure.catAccessories()
     }
 }
 
@@ -1987,15 +1983,15 @@ object WeatherSheetCopy {
     /** The Running tip when the outfit carries none of its own. */
     fun fallbackTip(weather: WeatherConditions): String = when {
         weather.weatherCode.code in 2..3 && weather.feelsLike < 55 ->
-            "Overcast and cool — a light layer you can shed beats one you can't."
+            com.runwear.app.i18n.AppEnglish.WEATHER_TIP_OVERCAST
         weather.precipitationProbability > 40 ->
-            "Rain is likely — a light shell you can shed beats one you can't."
+            com.runwear.app.i18n.AppEnglish.WEATHER_TIP_RAIN
         weather.feelsLike >= 75 ->
-            "Warm out — start lighter than feels right; you'll heat up fast."
+            com.runwear.app.i18n.AppEnglish.WEATHER_TIP_WARM
         weather.feelsLike < 35 ->
-            "Cold out — cover ears and hands first; they chill fastest."
+            com.runwear.app.i18n.AppEnglish.WEATHER_TIP_COLD
         else ->
-            "A light layer you can shed beats one you can't."
+            com.runwear.app.i18n.AppEnglish.WEATHER_TIP_DEFAULT
     }
 }
 
@@ -2033,16 +2029,16 @@ fun UnifiedWeatherDetail(
         }
         Spacer(Modifier.height(16.dp))
         val adjustedFeelsLike = weather.feelsLike + comfortPreference.tempAdjustment
-        DetailRow("Feels like", unit.formatTemperature(adjustedFeelsLike))
-        DetailRow("Actual", unit.formatTemperature(weather.temperature))
-        DetailRow("Condition", weather.weatherCode.description)
-        DetailRow("Wind", unit.formatWind(weather.windSpeed))
-        DetailRow("Humidity", "${weather.humidity}%")
-        DetailRow("UV Index", "${weather.uvIndex.toInt()}")
-        DetailRow("Precipitation", "${weather.precipitationProbability}% chance")
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelFeelsLike(), unit.formatTemperature(adjustedFeelsLike))
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelActual(), unit.formatTemperature(weather.temperature))
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelCondition(), weather.weatherCode.description)
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelWind(), unit.formatWind(weather.windSpeed))
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelHumidity(), "${weather.humidity}%")
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelUv(), "${weather.uvIndex.toInt()}")
+        DetailRow(com.runwear.app.i18n.AppStrings.weatherLabelPrecip(), com.runwear.app.i18n.AppStrings.weatherPrecipValue(weather.precipitationProbability))
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Running tip",
+            text = com.runwear.app.i18n.AppStrings.weatherRunningTip(),
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = RunWearColors.PineAccent

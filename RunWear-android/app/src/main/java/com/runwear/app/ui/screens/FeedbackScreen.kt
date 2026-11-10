@@ -127,7 +127,7 @@ fun FeedbackScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = RunWearColors.Primary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Done", fontWeight = FontWeight.SemiBold)
+                    Text(com.runwear.app.i18n.AppStrings.done(), fontWeight = FontWeight.SemiBold)
                 }
             }
             return
@@ -140,10 +140,7 @@ fun FeedbackScreen(
                 .padding(horizontal = 24.dp)
         ) {
             Text(
-                text = "Tell us what happened. What you write goes to the small team that builds " +
-                    "this app, along with a summary of what the app was doing when you wrote it. " +
-                    "You can read that summary below before you send it. We never send your " +
-                    "health data or your location.",
+                text = com.runwear.app.i18n.AppStrings.feedbackIntro(),
                 fontSize = 14.sp,
                 color = RunWearColors.TextSecondary
             )
@@ -178,7 +175,7 @@ fun FeedbackScreen(
             OutlinedTextField(
                 value = message,
                 onValueChange = { message = it },
-                placeholder = { Text("Say what happened in your own words.") },
+                placeholder = { Text(com.runwear.app.i18n.AppStrings.feedbackBodyPlaceholder()) },
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth(),
                 colors = feedbackFieldColors()
@@ -189,8 +186,8 @@ fun FeedbackScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = { Text("Email (optional)") },
-                placeholder = { Text("you@example.com") },
+                label = { Text(com.runwear.app.i18n.AppStrings.feedbackEmailLabel()) },
+                placeholder = { Text(com.runwear.app.i18n.AppStrings.feedbackEmailPlaceholder()) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = feedbackFieldColors()
@@ -281,7 +278,7 @@ fun FeedbackScreen(
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
-                    Text("Send feedback", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    Text(com.runwear.app.i18n.AppStrings.sendFeedback(), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
                 }
             }
             if (category == null || message.trim().length < MIN_MESSAGE_CHARS) {
@@ -347,7 +344,7 @@ fun RatingMomentDialog(
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Text("Send feedback", fontWeight = FontWeight.SemiBold)
+                    Text(com.runwear.app.i18n.AppStrings.sendFeedback(), fontWeight = FontWeight.SemiBold)
                 }
                 Button(
                     onClick = onRate,
@@ -356,7 +353,7 @@ fun RatingMomentDialog(
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Text("Rate RunWear", fontWeight = FontWeight.SemiBold)
+                    Text(com.runwear.app.i18n.AppStrings.rateRunWear(), fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
                     onClick = onDismiss,
@@ -364,7 +361,7 @@ fun RatingMomentDialog(
                         .fillMaxWidth()
                         .height(50.dp)
                 ) {
-                    Text("Not now", color = RunWearColors.TextPrimary)
+                    Text(com.runwear.app.i18n.AppStrings.notNow(), color = RunWearColors.TextPrimary)
                 }
             }
         },

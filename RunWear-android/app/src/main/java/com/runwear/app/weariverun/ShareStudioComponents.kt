@@ -208,7 +208,7 @@ internal fun ShareRenderErrorNotice(
                 color = RunWearColors.TextPrimary,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) { Text(com.runwear.app.i18n.AppStrings.close()) }
         }
     }
 }
@@ -1059,11 +1059,11 @@ fun ShareStudioSheet(
                             )
                             TextButton(
                                 onClick = { excludedKeys = excludedKeys + garment.key }
-                            ) { Text("Remove from card") }
+                            ) { Text(com.runwear.app.i18n.AppStrings.removeFromCard()) }
                         }
                     }
                     TextButton(onClick = { garmentRetryNonce++ }) {
-                        Text("Try again")
+                        Text(com.runwear.app.i18n.AppStrings.tryAgain())
                     }
                 }
                 val shoppable = kitSkeleton.filter {
@@ -1093,7 +1093,7 @@ fun ShareStudioSheet(
                                             Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                         )
                                     }
-                                ) { Text("Shop ›") }
+                                ) { Text(com.runwear.app.i18n.AppStrings.shopArrow()) }
                             }
                         }
                     }
@@ -1115,7 +1115,7 @@ fun ShareStudioSheet(
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = { editingCaption = !editingCaption }) {
-                    Text("Edit")
+                    Text(com.runwear.app.i18n.AppStrings.edit())
                 }
             }
             captions.forEach { (template, text) ->
@@ -1170,7 +1170,7 @@ fun ShareStudioSheet(
                 )
                 TextButton(
                     onClick = { renderNonce++ }
-                ) { Text("Try again") }
+                ) { Text(com.runwear.app.i18n.AppStrings.tryAgain()) }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -1178,7 +1178,7 @@ fun ShareStudioSheet(
             // Third movement — the door: ONE pine Share button,
             // enabled only on a settled, VERIFIED render.
             Row(modifier = Modifier.fillMaxWidth()) {
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(com.runwear.app.i18n.AppStrings.close()) }
                 Spacer(Modifier.weight(1f))
                 Button(
                     enabled = !shareHeld,
@@ -1199,7 +1199,7 @@ fun ShareStudioSheet(
                         }
                     }
                 ) {
-                    Text("Share")
+                    Text(com.runwear.app.i18n.AppStrings.share())
                 }
             }
         }

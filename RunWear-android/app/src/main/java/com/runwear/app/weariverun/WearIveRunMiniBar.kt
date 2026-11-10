@@ -358,9 +358,9 @@ private fun MorphBarContent(
                         Icon(
                             imageVector = Icons.Outlined.ExpandLess,
                             contentDescription = if (kind == WearIveRunElementKind.MINI) {
-                                "Expand Wear I've Run"
+                                com.runwear.app.i18n.AppStrings.expandWir()
                             } else {
-                                "Collapse Wear I've Run"
+                                com.runwear.app.i18n.AppStrings.collapseWir()
                             },
                             tint = RunWearColors.TextSecondary,
                             modifier = Modifier
@@ -378,7 +378,7 @@ private fun MorphBarContent(
                     }) {
                         Icon(
                             imageVector = Icons.Outlined.Delete,
-                            contentDescription = "Remove from Wear I've Run",
+                            contentDescription = com.runwear.app.i18n.AppStrings.removeWir(),
                             tint = RunWearColors.TextSecondary,
                             modifier = Modifier.size(14.dp)
                         )
@@ -468,14 +468,14 @@ private fun MorphBarContent(
                                 )
                         ) {
                             Text(
-                                text = "View collection",
+                                text = com.runwear.app.i18n.AppStrings.viewCollection(),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(Modifier.width(6.dp))
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
-                                contentDescription = "View the full Wear I've Run collection",
+                                contentDescription = com.runwear.app.i18n.AppStrings.viewCollectionFull(),
                                 modifier = Modifier.size(16.dp)
                             )
                         }
