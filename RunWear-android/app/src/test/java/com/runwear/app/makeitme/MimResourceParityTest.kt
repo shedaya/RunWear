@@ -69,6 +69,11 @@ class MimResourceParityTest {
             val key = "mim_" + field.name.lowercase()
             val expected = field.get(null) as String
             assertTrue("resource missing for ${field.name} ($key)", res.containsKey(key))
+            if ('%' in res.getValue(key)) {
+                // Placeholder-bearing field (its runtime value is computed
+                // from the free allowance): asserted via formatting below.
+                continue
+            }
             assertEquals("value drift on ${field.name}", expected, res[key])
             checked++
         }
@@ -97,6 +102,18 @@ class MimResourceParityTest {
         for (pref in com.runwear.shared.domain.model.ComfortPreference.entries) {
             assertEquals(pref.label, res["comfort_" + pref.name.lowercase() + "_label"])
         }
+    }
+
+    @Test
+    fun exhaustedCountResourceFormatsToTheFacadeValue() {
+        val resource = resources().getValue("mim_hero_pill_exhausted_count")
+        assertEquals("%1$d of %1$d used", resource)
+        assertEquals(
+            MakeItMeStrings.HERO_PILL_EXHAUSTED_COUNT,
+            String.format(
+                java.util.Locale.US, resource, MakeItMeUpsellRules.FREE_ALLOWANCE
+            )
+        )
     }
 
     @Test
