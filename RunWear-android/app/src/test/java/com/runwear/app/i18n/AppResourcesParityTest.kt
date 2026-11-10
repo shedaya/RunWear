@@ -264,12 +264,23 @@ class AppResourcesParityTest {
             "widget_for_now" to AppEnglish.WIDGET_FOR_NOW,
             "widget_for_now_age" to AppEnglish.WIDGET_FOR_NOW_AGE,
             "widget_just_now" to AppEnglish.WIDGET_JUST_NOW,
-            "widget_updated" to AppEnglish.WIDGET_UPDATED,
+            "widget_updated_time" to AppEnglish.WIDGET_UPDATED,
+            "widget_updated_age" to AppEnglish.WIDGET_UPDATED,
+            "widget_age_just_now_lower" to AppEnglish.WIDGET_AGE_JUST_NOW_LOWER,
+            "widget_age_min_lower" to AppEnglish.WIDGET_AGE_MIN_LOWER,
+            "widget_age_hr_lower" to AppEnglish.WIDGET_AGE_HR_LOWER,
+            "widget_age_day_lower" to AppEnglish.WIDGET_AGE_DAY_LOWER,
+            "widget_brand_loading" to AppEnglish.WIDGET_BRAND_LOADING,
+            "hero_alt_default" to AppEnglish.HERO_ALT_DEFAULT,
+            "hero_alt_template" to AppEnglish.HERO_ALT_TEMPLATE,
+            "hero_alt_temp_cold" to AppEnglish.HERO_ALT_TEMP_COLD,
+            "hero_alt_temp_mild" to AppEnglish.HERO_ALT_TEMP_MILD,
+            "hero_alt_temp_warm" to AppEnglish.HERO_ALT_TEMP_WARM,
             "widget_age_min_upper" to AppEnglish.WIDGET_AGE_MIN_UPPER,
             "widget_age_hr_upper" to AppEnglish.WIDGET_AGE_HR_UPPER,
             "widget_age_day_upper" to AppEnglish.WIDGET_AGE_DAY_UPPER
         )
-        assertEquals("parity table must cover the whole mirror", 168, byResKey.size)
+        assertEquals("parity table must cover the whole mirror", 179, byResKey.size)
         for ((key, mirror) in byResKey) {
             assertEquals("resource $key", res[key], mirror)
         }
