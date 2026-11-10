@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <resources>
     <!-- Make It Me copy deck (LOC-1 WP-3 pilot): values byte-identical to the
-         pre-extraction MakeItMeStrings constants; see extract_mim.py --verify. -->
+         pre-extraction MakeItMeStrings constants (extract_mim.py verify mode). -->
     <string name="mim_f1_headline">See yourself in every outfit.</string>
     <string name="mim_f2_lead">Your recommendations, with you in the photo.</string>
     <string name="mim_f3_option_a_title">Make It Me</string>
