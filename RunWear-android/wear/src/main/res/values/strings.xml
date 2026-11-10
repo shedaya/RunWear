@@ -4,7 +4,6 @@
     <string name="tile_outfit_label">Running Outfit</string>
     <string name="tile_outfit_description">Weather and outfit recommendation for your run</string>
     <string name="complication_outfit_label">RunWear Outfit</string>
-    <string name="app_name">RunWear</string>
 
     <!-- LOC-1 WP-R2 sweep: wear UI + complication/tile edge copy
          (values byte-identical to the shipped literals). -->
