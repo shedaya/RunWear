@@ -773,7 +773,7 @@ private fun StepperButton(
 }
 
 private fun dayLabel(date: LocalDate, today: LocalDate): String = when {
-    date == today -> "Today"
-    date == today.plusDays(1) -> "Tomorrow"
-    else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d"))
+    date == today -> com.runwear.app.i18n.AppStringsPure.dayToday()
+    date == today.plusDays(1) -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
+    else -> com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(date)
 }

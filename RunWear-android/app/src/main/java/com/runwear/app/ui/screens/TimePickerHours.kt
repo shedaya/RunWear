@@ -1,7 +1,6 @@
 package com.runwear.app.ui.screens
 
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -24,9 +23,8 @@ object TimePickerHours {
 
     fun isNightHour(hour: Int): Boolean = hour in NIGHT_HOURS
 
-    private val LABEL_FORMAT: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("h a", Locale.US)
-
+    // LOC-1 WP-R2: locale formatter (device locale; en-US identical).
     /** Grid cell label, e.g. "6 AM", "12 PM", "12 AM". */
-    fun label(hour: Int): String = LocalTime.of(hour, 0).format(LABEL_FORMAT)
+    fun label(hour: Int): String =
+        com.runwear.app.i18n.LocaleFormats.timeHour(java.time.LocalDateTime.of(java.time.LocalDate.now(), LocalTime.of(hour, 0)))
 }

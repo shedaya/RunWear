@@ -184,7 +184,7 @@ object ShareMomentResolver {
     /** "Thursday, November 5" — the stamped form for past
      * chapters (full weekday, full month, day number). */
     fun stampedForm(dayStart: LocalDate): String =
-        dayStart.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.US))
+        com.runwear.app.i18n.LocaleFormats.dateStamped(dayStart)
 
     /**
      * The bridge FROM the Android day entry: the entry's recorded

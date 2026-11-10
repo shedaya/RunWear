@@ -1,7 +1,6 @@
 package com.runwear.app.weariverun
 
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -377,7 +376,7 @@ object WearIveRunCollectionLogic {
         val feelsMinF: Double? get() = days.minOfOrNull { it.feelsLikeF }
         val feelsMaxF: Double? get() = days.maxOfOrNull { it.feelsLikeF }
         fun label(): String =
-            LocalDate.of(year, month, 1).format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.US))
+            com.runwear.app.i18n.LocaleFormats.dateMonthYear(LocalDate.of(year, month, 1))
 
         fun rangeLabel(): String? {
             val min = feelsMinF ?: return null
@@ -402,12 +401,12 @@ object WearIveRunCollectionLogic {
 
     /** "Mar 11–13" / "Mar 11" / "Mar 30 – Apr 2" span label. */
     fun spanLabel(start: LocalDate, end: LocalDate): String {
-        val monthDay = DateTimeFormatter.ofPattern("MMM d", Locale.US)
+        // LOC-1 WP-R2: month-day renders via LocaleFormats (device locale).
         return when {
-            start == end -> start.format(monthDay)
+            start == end -> com.runwear.app.i18n.LocaleFormats.dateMonthDay(start)
             start.year == end.year && start.month == end.month ->
-                com.runwear.app.i18n.AppEnglish.WIR_SPAN_SAME_MONTH.format(start.format(monthDay), end.dayOfMonth)
-            else -> com.runwear.app.i18n.AppEnglish.WIR_SPAN_CROSS.format(start.format(monthDay), end.format(monthDay))
+                com.runwear.app.i18n.AppEnglish.WIR_SPAN_SAME_MONTH.format(com.runwear.app.i18n.LocaleFormats.dateMonthDay(start), end.dayOfMonth)
+            else -> com.runwear.app.i18n.AppEnglish.WIR_SPAN_CROSS.format(com.runwear.app.i18n.LocaleFormats.dateMonthDay(start), com.runwear.app.i18n.LocaleFormats.dateMonthDay(end))
         }
     }
 
@@ -437,7 +436,7 @@ object WearIveRunCollectionLogic {
     /** The collection's day form: "Today" for today, else "MMM d". */
     fun dayForm(date: LocalDate, today: LocalDate): String =
         if (date == today) com.runwear.app.i18n.AppEnglish.WIR_DAY_TODAY
-        else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
+        else com.runwear.app.i18n.LocaleFormats.dateMonthDay(date)
 
     /**
      * WS-4 (D-08): the NARRATION's day form — "Now" for today, else
@@ -448,7 +447,7 @@ object WearIveRunCollectionLogic {
      */
     fun narrationDayForm(date: LocalDate, today: LocalDate): String =
         if (date == today) com.runwear.app.i18n.AppEnglish.WIR_NOW
-        else date.format(DateTimeFormatter.ofPattern("MMM d", Locale.US))
+        else com.runwear.app.i18n.LocaleFormats.dateMonthDay(date)
 }
 
 /**

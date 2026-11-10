@@ -752,7 +752,7 @@ internal fun DayCard(
 }
 
 internal fun dayTitle(entry: WearIveRunDayEntry, today: LocalDate): String {
-    val dow = entry.date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))
+    val dow = com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(entry.date)
     return if (entry.date == today) com.runwear.app.i18n.AppEnglish.COLLECTION_DAY_TITLE_TODAY.format(dow) else dow
 }
 

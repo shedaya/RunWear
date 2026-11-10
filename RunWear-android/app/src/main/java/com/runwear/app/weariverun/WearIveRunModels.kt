@@ -332,11 +332,7 @@ object WearIveRunUpdateNarration {
         if (entry.date == today) {
             null
         } else {
-            entry.date.format(
-                java.time.format.DateTimeFormatter.ofPattern(
-                    "MMMM d", java.util.Locale.US
-                )
-            )
+            com.runwear.app.i18n.LocaleFormats.dateFullMonthDay(entry.date)
         }
 
     /**
@@ -440,11 +436,7 @@ object WearIveRunDockNarration {
         when (date) {
             today -> com.runwear.app.i18n.AppEnglish.WIR_DAY_TODAY
             today.plusDays(1) -> com.runwear.app.i18n.AppEnglish.WIR_DAY_TOMORROW
-            else -> date.format(
-                java.time.format.DateTimeFormatter.ofPattern(
-                    "EEEE, MMM d", java.util.Locale.US
-                )
-            )
+            else -> com.runwear.app.i18n.LocaleFormats.dateFullWeekdayMonthDay(date)
         }
 
     /**

@@ -1,8 +1,6 @@
 package com.runwear.app.widget
 
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * Pure freshness/age reckoning for the widget (spec §B.3: data freshness is
@@ -51,13 +49,13 @@ object WidgetFreshness {
         }
     }
 
-    private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+    // LOC-1 WP-R2: the freshness clock renders via LocaleFormats.timeShort (device locale).
 
     /** Large brand-strip freshness: a clock time while recent, an age once it's old. */
     fun updatedLabel(savedAtLocal: LocalDateTime, savedAtEpochMs: Long, nowEpochMs: Long): String {
         val age = ageMs(savedAtEpochMs, nowEpochMs)
         return if (age < LARGE_AGE_FORM_MS) {
-            com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(savedAtLocal.format(TIME_FORMAT))
+            com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(com.runwear.app.i18n.LocaleFormats.timeShort(savedAtLocal))
         } else {
             com.runwear.app.i18n.AppEnglish.WIDGET_UPDATED.format(ageWords(age))
         }
@@ -81,7 +79,7 @@ object WidgetFreshness {
         return if (isStale(savedAtEpochMs, nowEpochMs)) {
             com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(ageShortUpper(ageMs(savedAtEpochMs, nowEpochMs)))
         } else {
-            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(savedAtLocal.format(TIME_FORMAT))
+            com.runwear.app.i18n.AppEnglish.WIDGET_FOR_NOW_AGE.format(com.runwear.app.i18n.LocaleFormats.timeShort(savedAtLocal))
         }
     }
 

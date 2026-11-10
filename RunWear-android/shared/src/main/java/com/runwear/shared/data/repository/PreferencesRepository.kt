@@ -13,7 +13,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.runwear.shared.domain.model.AppearancePreference
 import com.runwear.shared.domain.model.ComfortPreference
 import com.runwear.shared.domain.model.GenderPreference
+import com.runwear.shared.domain.model.LocaleUnitsPolicy
 import com.runwear.shared.domain.model.TemperatureUnit
+import com.runwear.shared.domain.model.WindUnit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -28,6 +30,15 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 
 data class UserPreferences(
     val temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
+    /**
+     * LOC-1 WP-R2 (DESIGN §7): the wind frame, decoupled from the
+     * temperature unit. Its default pairs with the legacy
+     * temperature pairing (FAHRENHEIT ⇒ MPH) so an en-US user who
+     * never touches units sees exactly the shipped behaviour; the
+     * repository resolves the real default from the device locale
+     * until the user stores a wind choice.
+     */
+    val windUnit: WindUnit = WindUnit.MPH,
     val comfortPreference: ComfortPreference = ComfortPreference.NEUTRAL,
     val genderPreference: GenderPreference = GenderPreference.UNISEX,
     val hasCompletedOnboarding: Boolean = false,
@@ -48,6 +59,10 @@ class PreferencesRepository @Inject constructor(
 ) {
     private object Keys {
         val USE_CELSIUS = booleanPreferencesKey("use_celsius")
+        // LOC-1 WP-R2: the wind frame's own stored choice (0 = mph,
+        // 1 = km/h). ABSENCE of the key = no choice made — the
+        // locale default applies; presence always wins.
+        val WIND_UNIT = intPreferencesKey("wind_unit")
         val COMFORT_PREFERENCE = intPreferencesKey("comfort_preference")
         val GENDER_PREFERENCE = intPreferencesKey("gender_preference")
         val APPEARANCE_PREFERENCE = intPreferencesKey("appearance_preference")
@@ -60,8 +75,28 @@ class PreferencesRepository @Inject constructor(
     }
 
     val preferencesFlow: Flow<UserPreferences> = context.dataStore.data.map { prefs ->
+        // LOC-1 WP-R2 (DESIGN §7): unit defaults derive from the
+        // device locale ONLY until the user stores a choice — the
+        // stored key's PRESENCE is the choice, and it always wins.
+        // en-US resolves to FAHRENHEIT + MPH, the shipped defaults,
+        // so en-US behaviour is unchanged (pinned by
+        // LocaleDefaultUnitsTest under an en-US locale).
+        val deviceLocale = java.util.Locale.getDefault()
+        val storedCelsius = prefs[Keys.USE_CELSIUS]
+        val temperatureUnit = when {
+            storedCelsius != null ->
+                if (storedCelsius) TemperatureUnit.CELSIUS else TemperatureUnit.FAHRENHEIT
+            else -> LocaleUnitsPolicy.defaultTemperatureUnit(deviceLocale)
+        }
+        val storedWind = prefs[Keys.WIND_UNIT]
+        val windUnit = when {
+            storedWind != null -> WindUnit.entries.getOrNull(storedWind) ?: WindUnit.MPH
+            storedCelsius != null -> WindUnit.impliedBy(temperatureUnit)
+            else -> LocaleUnitsPolicy.defaultWindUnit(deviceLocale)
+        }
         UserPreferences(
-            temperatureUnit = if (prefs[Keys.USE_CELSIUS] == true) TemperatureUnit.CELSIUS else TemperatureUnit.FAHRENHEIT,
+            temperatureUnit = temperatureUnit,
+            windUnit = windUnit,
             comfortPreference = ComfortPreference.entries.getOrNull(prefs[Keys.COMFORT_PREFERENCE] ?: 2)
                 ?: ComfortPreference.NEUTRAL,
             genderPreference = GenderPreference.entries.getOrNull(prefs[Keys.GENDER_PREFERENCE] ?: 2)
@@ -75,6 +110,14 @@ class PreferencesRepository @Inject constructor(
     suspend fun setTemperatureUnit(unit: TemperatureUnit) {
         context.dataStore.edit { prefs ->
             prefs[Keys.USE_CELSIUS] = unit == TemperatureUnit.CELSIUS
+        }
+    }
+
+    /** LOC-1 WP-R2: store the wind frame choice (its presence in
+     * the store is what makes it win over the locale default). */
+    suspend fun setWindUnit(unit: WindUnit) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.WIND_UNIT] = unit.ordinal
         }
     }
     

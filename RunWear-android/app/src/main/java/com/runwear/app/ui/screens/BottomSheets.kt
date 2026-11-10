@@ -253,9 +253,9 @@ internal fun DatePickerSheetContent(
                     val label = when {
                         date == today -> com.runwear.app.i18n.AppStringsPure.dayToday()
                         date == today.plusDays(1) -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
-                        else -> date.format(DateTimeFormatter.ofPattern("EEE"))
+                        else -> com.runwear.app.i18n.LocaleFormats.dateWeekday(date)
                     }
-                    val sublabel = date.format(DateTimeFormatter.ofPattern("MMM d"))
+                    val sublabel = com.runwear.app.i18n.LocaleFormats.dateMonthDay(date)
 
                     Surface(
                         onClick = {

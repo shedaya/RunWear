@@ -82,13 +82,13 @@ fun DateTimePill(
     val isTomorrow = dateTime.toLocalDate() == referenceNow.toLocalDate().plusDays(1)
 
     val dateText = when {
-        isToday -> "Today"
-        isTomorrow -> "Tomorrow"
-        else -> dateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+        isToday -> com.runwear.app.i18n.AppStringsPure.dayToday()
+        isTomorrow -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
+        else -> com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(dateTime)
     }
 
-    val timeText = if (isNowSelected) "Now"
-        else dateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+    val timeText = if (isNowSelected) com.runwear.app.i18n.AppEnglish.WIR_NOW
+        else com.runwear.app.i18n.LocaleFormats.timeShort(dateTime)
 
     // PWA glass morphism: rgba(255, 255, 255, 0.12) = 12% white
     val glassBackground = Color.White.copy(alpha = 0.12f)
@@ -256,9 +256,9 @@ fun DateButton(
     val isTomorrow = dateTime.toLocalDate() == LocalDate.now().plusDays(1)
 
     val dateText = when {
-        isToday -> "Today"
-        isTomorrow -> "Tomorrow"
-        else -> dateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
+        isToday -> com.runwear.app.i18n.AppStringsPure.dayToday()
+        isTomorrow -> com.runwear.app.i18n.AppStringsPure.dayTomorrow()
+        else -> com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(dateTime)
     }
 
     Surface(
@@ -298,7 +298,7 @@ fun TimeButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val timeText = dateTime.format(DateTimeFormatter.ofPattern("h:mm a"))
+    val timeText = com.runwear.app.i18n.LocaleFormats.timeShort(dateTime)
 
     Surface(
         onClick = onClick,

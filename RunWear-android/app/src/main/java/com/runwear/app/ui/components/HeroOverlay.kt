@@ -40,7 +40,6 @@ import com.runwear.app.ui.theme.temperatureBracketColor
 import com.runwear.shared.domain.model.TemperatureUnit
 import com.runwear.shared.domain.model.WeatherConditions
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
@@ -51,17 +50,13 @@ import java.util.Locale
  */
 object HeroChipFormat {
 
-    private val DATE_FORMAT: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US)
-    private val TIME_FORMAT: DateTimeFormatter =
-        DateTimeFormatter.ofPattern("h:mm a", Locale.US)
-
+    // LOC-1 WP-R2: locale formatters (device locale; en-US identical).
     fun dateText(selectedDateTime: LocalDateTime): String =
-        selectedDateTime.format(DATE_FORMAT)
+        com.runwear.app.i18n.LocaleFormats.dateWeekdayMonthDay(selectedDateTime)
 
     /** "Now" in the Now state; the picked clock time otherwise. */
     fun timeText(selectedDateTime: LocalDateTime, isNowSelected: Boolean): String =
-        if (isNowSelected) "Now" else selectedDateTime.format(TIME_FORMAT)
+        if (isNowSelected) com.runwear.app.i18n.AppEnglish.WIR_NOW else com.runwear.app.i18n.LocaleFormats.timeShort(selectedDateTime)
 
     /** The return segment exists ONLY while the selection differs from Now. */
     fun showNowReturn(isNowSelected: Boolean): Boolean = !isNowSelected

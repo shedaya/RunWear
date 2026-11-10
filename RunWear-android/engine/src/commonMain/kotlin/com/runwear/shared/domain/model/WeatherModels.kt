@@ -131,20 +131,30 @@ enum class TemperatureUnit(val symbol: String) {
     /** Legacy alias for [formatTemperature]; the argument is canonical °F. */
     fun format(tempFahrenheit: Double): String = formatTemperature(tempFahrenheit)
 
-    /** The wind-speed label that pairs with this unit. */
+    /**
+     * LOC-1 WP-R2: the wind frame is DECOUPLED from this unit
+     * (WindUnit, in :shared) — a preference now carries its own
+     * wind default from the locale, and a stored wind choice wins
+     * independently. These three members remain as the LEGACY
+     * pairing (the frame this temperature unit implies) for call
+     * sites not yet migrated to the preferences wind frame; their
+     * values are unchanged.
+     */
+
+    /** The wind-speed label that pairs with this unit (legacy pairing). */
     val windLabel: String
         get() = when (this) {
             FAHRENHEIT -> "mph"
             CELSIUS -> "km/h"
         }
 
-    /** Project a canonical mph wind speed into this unit's speed frame. */
+    /** Project a canonical mph wind speed into this unit's speed frame (legacy pairing). */
     fun convertWind(speedMph: Double): Double = when (this) {
         FAHRENHEIT -> speedMph
         CELSIUS -> speedMph * 1.609344
     }
 
-    /** A canonical mph wind speed rendered in this unit, e.g. "4 mph" / "7 km/h". */
+    /** A canonical mph wind speed rendered in this unit, e.g. "4 mph" / "7 km/h" (legacy pairing). */
     fun formatWind(speedMph: Double): String = "${convertWind(speedMph).toInt()} $windLabel"
 }
 
