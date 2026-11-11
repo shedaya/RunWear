@@ -460,13 +460,52 @@ final class RW169StructuralTests: XCTestCase {
             onToggle: {}, onOpenCollection: {}, onOpenShareEntry: nil, onTrash: {})
     }
 
+    private func measuredTextHeight(_ text: String, font: UIFont, width: CGFloat) -> CGFloat {
+        let rect = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font], context: nil)
+        return ceil(rect.height)
+    }
+
+    /// The two REST heights for the approval fixture at a
+    /// given surface width, computed with the PRODUCTION
+    /// formulas (WearIveRunUnifiedSurfaceView.miniRestHeight /
+    /// expandedRestHeight) over text heights measured at the
+    /// fixture — the values the surface itself reports at
+    /// rest on device, where its geometry actions measure the
+    /// same strings in the same columns. (ImageRenderer takes
+    /// one static pass, so the capture frames the surface at
+    /// its rest heights rather than its 56 pt seed.)
+    private func fixtureRestHeights(surfaceWidth: CGFloat) throws -> (mini: CGFloat, expanded: CGFloat) {
+        try registerGreatVibes()
+        let wordmarkW = textWidth(
+            WearIveRunMiniBarModel.wordmark,
+            font: try XCTUnwrap(UIFont(name: "GreatVibes-Regular", size: 17)))
+        let line = try XCTUnwrap(WearIveRunNarration.line(for: plannedState))
+        // Mini: narration column = width − 32 padding −
+        // (wordmark + 8) − 96 controls reserve.
+        let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 96
+        let miniNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 12), width: miniColumn)
+        let mini = 16 + max(44, miniNarrH)
+        // Expanded: narration spans width − 32 at 15 pt; the
+        // entry line sits beside the 56 pt thumbnail + 10.
+        let expNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 15), width: surfaceWidth - 32)
+        let entryLine = WearIveRunNarration.expandedLine(
+            for: fixtureEntry(place: "Los Angeles, CA"), formattedFeelsLike: "58°")
+        let entryH = measuredTextHeight(entryLine, font: .systemFont(ofSize: 14.5), width: surfaceWidth - 32 - 56 - 10)
+        let expanded = 20 + 44 + 12 + expNarrH + 12 + entryH + 12 + 24 + 20
+        return (mini, expanded)
+    }
+
     @MainActor
     func testRW169_Captures_SixStates_PhonePortrait() throws {
+        try registerGreatVibes()
         let planned = plannedState
         let entry = fixtureEntry(place: "Los Angeles, CA")
-        let opEntry = fixtureEntry(place: "Overland Park, KS")
-        let miniH: CGFloat = 60
-        let expandedH: CGFloat = 264
+        let rests = try fixtureRestHeights(surfaceWidth: 369)
+        let miniH = rests.mini
+        let expandedH = rests.expanded
 
         // 1 · mini at rest — the dock over the page's foot zone.
         try writeRender(
@@ -497,7 +536,9 @@ final class RW169StructuralTests: XCTestCase {
             },
             size: CGSize(width: 393, height: 852),
             name: "RW169-ios-mini-midscroll-phone.png")
-        // 3 · morph mid-transition stills (p ≈ .25 / .5 / .75).
+        // 3 · morph mid-transition stills (p ≈ .25 / .5 / .75)
+        // on the shared canvas, heights interpolated between
+        // the two fixture rest heights.
         for (p, label) in [(0.25, "p25"), (0.5, "p50"), (0.75, "p75")] {
             let h = miniH + (expandedH - miniH) * CGFloat(p)
             try writeRender(
@@ -520,13 +561,14 @@ final class RW169StructuralTests: XCTestCase {
             },
             size: CGSize(width: 393, height: 852),
             name: "RW169-ios-expanded-rest-phone.png")
-        // 5 · expanded at the height cap (viewport 480 → cap 364).
+        // 5 · expanded at the height cap (viewport 480 → the
+        // container takes min(rest, cap)).
         let cap = WearIveRunOverlayPolicy.expandedCap(viewportHeight: 480)
         try writeRender(
             ZStack {
                 AppTheme.background
                 VStack { Spacer(); unifiedSurface(progress: 1, state: planned, entry: entry)
-                    .frame(width: 369, height: cap).clipped() }
+                    .frame(width: 369, height: min(expandedH, cap)).clipped() }
                     .padding(.horizontal, 12).padding(.bottom, 14)
             },
             size: CGSize(width: 393, height: 480),
@@ -548,18 +590,19 @@ final class RW169StructuralTests: XCTestCase {
             },
             size: CGSize(width: 393, height: 200),
             name: "RW169-ios-topchrome-phone.png")
-        _ = opEntry
     }
 
     @MainActor
     func testRW169_Captures_MorphEndpointsAndWideClass() throws {
+        try registerGreatVibes()
         let planned = plannedState
         let entry = fixtureEntry(place: "Los Angeles, CA")
+        let rests = try fixtureRestHeights(surfaceWidth: 369)
         // Morph endpoint stills on the shared 393×400 canvas
         // (the video's first/last beats; p samples are in the
         // phone capture test).
         for (p, label) in [(0.0, "p0"), (1.0, "p100")] {
-            let h: CGFloat = p == 0 ? 60 : 264
+            let h: CGFloat = p == 0 ? rests.mini : rests.expanded
             try writeRender(
                 ZStack {
                     AppTheme.background
@@ -572,11 +615,12 @@ final class RW169StructuralTests: XCTestCase {
         }
         // Wide class (852 pt): the surface in its centred
         // column, mini and expanded, plus the top chrome.
+        let wideRests = try fixtureRestHeights(surfaceWidth: 640)
         try writeRender(
             ZStack {
                 AppTheme.background
                 VStack { Spacer(); unifiedSurface(progress: 0, state: planned, entry: entry)
-                    .frame(width: 640, height: 60) }
+                    .frame(width: 640, height: wideRests.mini) }
                     .padding(.bottom, 14)
             },
             size: CGSize(width: 852, height: 393),
@@ -585,7 +629,7 @@ final class RW169StructuralTests: XCTestCase {
             ZStack {
                 AppTheme.background
                 VStack { Spacer(); unifiedSurface(progress: 1, state: planned, entry: entry)
-                    .frame(width: 640, height: 264) }
+                    .frame(width: 640, height: wideRests.expanded) }
                     .padding(.bottom, 14)
             },
             size: CGSize(width: 852, height: 393),
