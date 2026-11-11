@@ -127,15 +127,26 @@ class Rw156ExpandedPanelRenderTest : Rw156Base() {
         val bitmap = capture(host, "rw156-expanded.png")
         val density = host.composeView.resources.displayMetrics.density
 
-        // The panel's vertical span: FooterGround rows on the
-        // centre column.
+        // The panel's vertical span: the LONGEST contiguous
+        // FooterGround run on the centre column (the hero
+        // photograph contains ground-coloured pixels too —
+        // sidewalk beige — so first-match detection is not the
+        // panel; the panel is the one long unbroken run).
         val cx = bitmap.width / 2
         var panelTop = -1
         var panelBottom = -1
-        for (y in 0 until bitmap.height) {
-            if (isFooterGround(bitmap.getPixel(cx, y))) {
-                if (panelTop < 0) panelTop = y
-                panelBottom = y
+        var runStart = -1
+        var bestLen = 0
+        for (y in 0..bitmap.height) {
+            val ground = y < bitmap.height && isFooterGround(bitmap.getPixel(cx, y))
+            if (ground && runStart < 0) runStart = y
+            if (!ground && runStart >= 0) {
+                if (y - runStart > bestLen) {
+                    bestLen = y - runStart
+                    panelTop = runStart
+                    panelBottom = y - 1
+                }
+                runStart = -1
             }
         }
         assertTrue("expanded panel composed (FooterGround found)", panelTop >= 0)

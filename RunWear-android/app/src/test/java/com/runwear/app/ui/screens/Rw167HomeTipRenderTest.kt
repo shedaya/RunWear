@@ -4,6 +4,9 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.ScrollAxisRange
+import com.runwear.shared.domain.model.ComfortPreference
+import com.runwear.shared.domain.model.TemperatureUnit
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.robolectric.annotation.Config
@@ -98,5 +101,60 @@ class Rw167HomeTipRenderTest : Rw145RenderTestBase() {
             !runningTipHeaderSeen
         )
         host.controller.pause().stop().destroy()
+    }
+}
+
+/**
+ * RW-167 — the UnifiedWeatherDetail flag itself: the sheet's
+ * rendering (default) keeps the Running tip row; the inlined
+ * home rendering (showRunningTip = false) drops the row
+ * entirely — including when the outfit tip is present (no
+ * fallback substitution: the row is gone, not swapped).
+ */
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
+class Rw167WeatherDetailTipFlagTest : Rw145RenderTestBase() {
+
+    private fun detailTexts(showRunningTip: Boolean, tip: String?): List<String> {
+        val host = compose(dark = false) {
+            UnifiedWeatherDetail(
+                weather = nyWeather(),
+                unit = TemperatureUnit.FAHRENHEIT,
+                locationName = "Kansas City, MO",
+                momentLabel = "Now",
+                runningTip = tip,
+                comfortPreference = ComfortPreference.NEUTRAL,
+                showRunningTip = showRunningTip
+            )
+        }
+        val all = texts(host).map { it.text }
+        host.controller.pause().stop().destroy()
+        return all
+    }
+
+    @Test
+    fun `sheet rendering keeps the running tip`() {
+        val all = detailTexts(showRunningTip = true, tip = "SHEET TIP TEXT")
+        assertTrue(all.any { it.trim() == "Running tip" })
+        assertTrue(all.any { it.contains("SHEET TIP TEXT") })
+    }
+
+    @Test
+    fun `inlined rendering drops the tip row - no fallback swap`() {
+        val all = detailTexts(showRunningTip = false, tip = "SHEET TIP TEXT")
+        assertFalse(all.any { it.trim() == "Running tip" })
+        assertFalse(all.any { it.contains("SHEET TIP TEXT") })
+        assertFalse(
+            "no generic fallback tip in place of the suppressed row",
+            all.any { it.contains("a light layer you can shed") }
+        )
+        // The detail itself still renders.
+        assertTrue(all.any { it.contains("Feels like") })
+    }
+
+    @Test
+    fun `sheet rendering with no outfit tip uses the fallback tip`() {
+        val all = detailTexts(showRunningTip = true, tip = null)
+        assertTrue(all.any { it.trim() == "Running tip" })
+        assertTrue(all.any { it.contains("a light layer you can shed") })
     }
 }

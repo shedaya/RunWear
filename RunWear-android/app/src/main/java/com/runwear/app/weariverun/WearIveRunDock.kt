@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -498,6 +499,16 @@ fun WearIveRunDock(
                     darkTheme = darkTheme
                 )
             ),
+            // RW-156 REOPENED (Nov 11, 2026): a hairline boundary
+            // of the dock's own — over the now-uniform sheet
+            // ground the translucent fill alone (85% of a colour
+            // ~identical to the ground) cannot carry the pill's
+            // edge; the 1dp ink hairline + the soft shadow below
+            // are its boundary/depth, in both themes.
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                RunWearColors.TextPrimary.copy(alpha = 0.09f)
+            ),
             shadowElevation = 6.dp
         ) {
             Row(
@@ -744,16 +755,39 @@ fun WearIveRunFooterSection(
         1f
     }
 
+    // RW-156 REOPENED (Nov 11, 2026): in the RW-152 overlay
+    // residence the host seats this panel at the dock's own
+    // inset (sheetGapDp == 0). There the panel is a floating
+    // card, not an in-flow sheet: ALL corners rounded, a real
+    // elevation shadow following the rounded shape, and a
+    // hairline boundary — the in-flow shadow device (an
+    // un-clipped rectangular gradient strip above the panel)
+    // is exactly the square-cornered block Sol circled at the
+    // panel's top corners on 1.2.32, so in this seat it is not
+    // painted at all. The in-flow seat (sheetGapDp > 0, the
+    // spec section 2.2 rendering) is unchanged.
+    val overlaySeat = sheetGapDp == 0
+    val panelShape = if (overlaySeat) {
+        RoundedCornerShape(WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp)
+    } else {
+        RoundedCornerShape(
+            topStart = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp,
+            topEnd = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp
+        )
+    }
+
     Column(modifier = modifier.heightFraction(heightFraction.value)) {
         // The sheet gap (spec section 2.2): card sheet between
         // the preceding section and the footer's top edge; the
         // shadow strip occupies its last ~18dp.
-        Spacer(
-            Modifier.height(
-                (sheetGapDp - WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP)
-                    .coerceAtLeast(0).dp
+        if (!overlaySeat) {
+            Spacer(
+                Modifier.height(
+                    (sheetGapDp - WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP)
+                        .coerceAtLeast(0).dp
+                )
             )
-        )
+        }
         Column(
             modifier = Modifier.graphicsLayer {
                 alpha = contentAlpha.value * growAlpha
@@ -762,30 +796,51 @@ fun WearIveRunFooterSection(
             // The top shadow (spec section 2.2: 0/-10pt, 28pt
             // blur, black 7%) expressed as a soft gradient strip
             // above the section: black 7% at the footer's edge
-            // fading to transparent over ~18dp.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.07f)
+            // fading to transparent over ~18dp. In-flow seat
+            // only — see the RW-156 note above.
+            if (!overlaySeat) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(WearIveRunDockPolicy.FOOTER_SHADOW_STRIP_DP.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.07f)
+                                )
                             )
                         )
-                    )
-            )
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp,
-                            topEnd = WearIveRunDockPolicy.FOOTER_TOP_CORNER_DP.dp
-                        )
+                    .then(
+                        if (overlaySeat) {
+                            Modifier.shadow(
+                                elevation = 16.dp,
+                                shape = panelShape
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
+                    .clip(panelShape)
                     .background(RunWearColors.FooterGround)
+                    .then(
+                        if (overlaySeat) {
+                            Modifier.border(
+                                width = 1.dp,
+                                color = RunWearColors.TextPrimary.copy(
+                                    alpha = 0.09f
+                                ),
+                                shape = panelShape
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Top hairline: 1dp at ink 4% (spec section 2.2).

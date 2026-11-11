@@ -371,7 +371,16 @@ fun HeroMainScreen(
                             uiState.isNowSelected
                         ),
                     runningTip = uiState.outfit?.tips?.firstOrNull(),
-                    comfortPreference = uiState.comfortPreference
+                    comfortPreference = uiState.comfortPreference,
+                    // RW-167: this call is INLINED in the home
+                    // scroll, where homeTrailingListItems renders
+                    // the Pro Tip card from the same tips list —
+                    // the inlined block drops its tip row (the
+                    // weather sheet's call keeps it). The tip is
+                    // still passed: suppression is the flag, not
+                    // a null (null would render the generic
+                    // fallback tip instead).
+                    showRunningTip = false
                 )
             }
         }
@@ -1056,6 +1065,47 @@ fun HeroMainScreen(
                 val wirScaffoldBottomInsetDp =
                     scaffoldContentPadding.calculateBottomPadding().value
                 Box(modifier = Modifier.fillMaxSize()) {
+                // RW-156 REOPENED (Nov 11, 2026): the dock
+                // residence's ground. RW-147's layout boundary
+                // truncates the Surface-painted scroll area at
+                // the dock band's top edge; below it the root
+                // BoxWithConstraints' Background (#F5F1E8) showed
+                // through as a full-width, straight-edged cream
+                // strip behind the translucent dock — the
+                // rectangular block Sol reported on 1.2.30 and
+                // again on 1.2.32 (the 1.2.31 by-construction
+                // removal had only removed the in-flow footer;
+                // this strip is a different surface). The
+                // residence now paints the SHEET's ground
+                // (Surface) for exactly the band the boundary
+                // reserves, so the sheet reads continuous to the
+                // screen's bottom edge and the dock floats over
+                // one uniform ground; the boundary itself (no
+                // readable content ever rests under the dock) is
+                // unchanged. In the EXPANDED layout the residence
+                // belongs to the scrolling pane only, mirroring
+                // the dock overlay's own inset.
+                if (wirSurfacesPresent) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .then(
+                                if (layout == AdaptiveLayout.EXPANDED) {
+                                    Modifier.padding(
+                                        start = spec.heroPaneWidth ?: 400.dp
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .height(
+                                (DockClearancePolicy.dockBandDp() +
+                                    wirScaffoldBottomInsetDp).dp
+                            )
+                            .background(RunWearColors.Surface)
+                    )
+                }
                 PullToRefreshBox(
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
@@ -1636,6 +1686,28 @@ fun HeroMainScreen(
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            // RW-156 REOPENED (Nov 11,
+                                            // 2026): the panel takes
+                                            // the dock's own residence
+                                            // extent (RW-152 design
+                                            // section 1: bottom-
+                                            // anchored at the dock's
+                                            // inset, the dock's
+                                            // horizontal extent) —
+                                            // 12dp side insets and the
+                                            // dock's 14dp bottom lift
+                                            // — instead of the
+                                            // full-bleed edge-to-edge
+                                            // rectangle it shipped as.
+                                            .padding(
+                                                horizontal =
+                                                    WearIveRunDockPolicy.DOCK_INSET_DP.dp
+                                            )
+                                            .navigationBarsPadding()
+                                            .padding(
+                                                bottom =
+                                                    WearIveRunDockPolicy.DOCK_BOTTOM_DP.dp
+                                            )
                                             .heightIn(
                                                 max = WirOverlayPanelPolicy
                                                     .maxPanelHeightDp(
@@ -1670,7 +1742,16 @@ fun HeroMainScreen(
                                             }
                                     ) {
                                         wirFooterRender(
-                                            WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP
+                                            // RW-156 REOPENED: gap 0
+                                            // is the overlay seat —
+                                            // the panel carries its
+                                            // own shadow/boundary
+                                            // (WearIveRunFooterSection)
+                                            // and the seat above
+                                            // provides the lift; the
+                                            // in-flow sheet gap does
+                                            // not apply here.
+                                            0
                                         )
                                     }
                                 } else {
