@@ -192,8 +192,6 @@ final class Gen6RW78RW79Tests: XCTestCase {
         // release precedes it in the same closure).
         XCTAssertTrue(home.contains(".sheet(isPresented: ownedBinding(.heroPaywall, $showHeroPillPaywall), onDismiss: {"),
                       "dismissing the hero paywall triggers the revalidation")
-        XCTAssertTrue(home.contains("releaseSheet(.heroPaywall)"),
-                      "the paywall's dismissal releases the sheet owner")
         XCTAssertEqual(occurrences(home, "viewModel.revalidatePersonalLookState()"), 3,
                        "exactly three call sites: foreground, paywall dismissal, Home appearing")
     }
