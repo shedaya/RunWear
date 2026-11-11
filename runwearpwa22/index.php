@@ -10,6 +10,21 @@
     <meta name="apple-mobile-web-app-title" content="RunWear">
     <meta name="application-name" content="RunWear">
     <meta name="description" content="Get personalized running outfit recommendations based on real-time weather conditions">
+    <!-- Open Graph / Twitter Card — link previews (Strava, Messages, X, Slack) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="RunWear">
+    <meta property="og:url" content="https://runwear.ai/">
+    <meta property="og:title" content="RunWear — What to Wear for Your Run">
+    <meta property="og:description" content="What to wear for your run — the outfit for the weather you'll feel, any hour.">
+    <meta property="og:image" content="https://runwear.ai/og-card.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="RunWear — what to wear for your run">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="RunWear — What to Wear for Your Run">
+    <meta name="twitter:description" content="What to wear for your run — the outfit for the weather you'll feel, any hour.">
+    <meta name="twitter:image" content="https://runwear.ai/og-card.jpg">
+    <meta name="twitter:image:alt" content="RunWear — what to wear for your run">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="impact-site-verification" value="86649e82-8861-41f8-9773-c3a758e9a761">
     <title>RunWear - Running Outfit Guide</title>
