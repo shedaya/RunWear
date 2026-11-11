@@ -32,6 +32,7 @@ on:
           - review
           - listing-dump
           - listing-apply
+          - listing-fix-appinfo
         default: verify
         required: true
       version:
@@ -124,3 +125,7 @@ jobs:
         if: inputs.task == 'listing-apply'
         working-directory: scripts/asc
         run: python3 asc_listing.py apply
+      - name: Set name/subtitle on the editable App Info (rides version 1.3)
+        if: inputs.task == 'listing-fix-appinfo'
+        working-directory: scripts/asc
+        run: python3 asc_listing.py fix-appinfo

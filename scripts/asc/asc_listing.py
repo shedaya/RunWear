@@ -132,6 +132,9 @@ def find_version(state, version_string):
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "dump"
+    if mode == "fix-appinfo":
+        fix_appinfo()
+        return
     state = dump_state()
     if mode == "dump":
         return
@@ -275,3 +278,43 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def fix_appinfo():
+    """PATCH name/subtitle onto the EDITABLE (non-READY_FOR_SALE) app
+    info's en-US localization — the record Apple created alongside the
+    new version. The live app info is never touched."""
+    s, d = get("APP INFOS", f"/v1/apps/{APP_ID}/appInfos" + q(limit=10))
+    targets = []
+    for ai in d.get("data", []):
+        st = ai.get("attributes", {}).get("appStoreState")
+        print("  appInfo:", ai["id"], "| state:", st)
+        if st != "READY_FOR_SALE":
+            targets.append(ai["id"])
+    if len(targets) != 1:
+        print("ABORT: expected exactly 1 editable appInfo, found", len(targets))
+        sys.exit(1)
+    ai_id = targets[0]
+    s, d = get("editable appInfo localizations",
+               f"/v1/appInfos/{ai_id}/appInfoLocalizations" + q(limit=50))
+    loc = next((l for l in d.get("data", [])
+                if l.get("attributes", {}).get("locale") == "en-US"), None)
+    if loc is None:
+        print("ABORT: no en-US localization on the editable appInfo")
+        sys.exit(1)
+    body = {"data": {"type": "appInfoLocalizations", "id": loc["id"],
+                     "attributes": {"name": NAME, "subtitle": SUBTITLE}}}
+    s, d = write("PATCH editable appInfo en-US (name/subtitle)", "PATCH",
+                 f"/v1/appInfoLocalizations/{loc['id']}", body)
+    ok = s in (200, 201)
+    s, d = get("READBACK editable appInfo localization",
+               f"/v1/appInfoLocalizations/{loc['id']}")
+    la = (d.get("data") or {}).get("attributes", {})
+    print("  now name:", repr(la.get("name")), "| subtitle:", repr(la.get("subtitle")))
+    print("APPINFO_FIX_SUMMARY_BEGIN")
+    print(json.dumps({"appinfo_id": ai_id, "applied": ok,
+                      "name": la.get("name"), "subtitle": la.get("subtitle"),
+                      "name_match": la.get("name") == NAME,
+                      "subtitle_match": la.get("subtitle") == SUBTITLE},
+                     indent=1, ensure_ascii=False))
+    print("APPINFO_FIX_SUMMARY_END")
