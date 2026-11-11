@@ -116,6 +116,7 @@ import com.runwear.app.weariverun.WearIveRunElementEvent
 import com.runwear.app.weariverun.WearIveRunElementMachine
 import com.runwear.app.weariverun.WearIveRunCollectionLogic
 import com.runwear.app.weariverun.WearIveRunCollectionScreen
+import com.runwear.app.weariverun.ShareStudioSheet
 import com.runwear.app.weariverun.WearIveRunDayEntry
 import com.runwear.app.weariverun.WearIveRunEntry
 import com.runwear.app.weariverun.WearIveRunDock
@@ -409,6 +410,12 @@ fun HeroMainScreen(
     // collection entry's stored photograph.
     var showHeroViewer by remember { mutableStateOf(false) }
     var heroViewerEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+    // RW-158 (user ruling, Nov 10, 2026): the footer's entry row,
+    // when the footer's entry is a PAST entry, opens the share
+    // studio for that entry directly.
+    var wirFooterShareEntry by remember {
         mutableStateOf<WearIveRunDayEntry?>(null)
     }
 
@@ -967,6 +974,16 @@ fun HeroMainScreen(
                 onCollapse = wirGlideFromFooter,
                 onDelete = wirTrash,
                 onOpenCollection = { showWearIveRunCollection = true },
+                // RW-158 (user ruling, Nov 10, 2026): a PAST
+                // entry's footer row opens its share studio;
+                // today's entry keeps the collection doorway.
+                onEntryTap = if (
+                    dayEntry.date < uiState.locationNow.toLocalDate()
+                ) {
+                    { wirFooterShareEntry = dayEntry }
+                } else {
+                    null
+                },
                 sheetGapDp = gap,
                 growInKey = if (exit == null) wirFooterGrowKey else 0,
                 cueKey = wirCreationKey,
@@ -1738,6 +1755,22 @@ fun HeroMainScreen(
                 heroResign = { path ->
                     makeItMeViewModel?.signedHeroUrlForPath(path)
                 }
+            )
+        }
+
+        // RW-158: the share studio opened straight from the
+        // footer's past-entry row — the same sheet the collection
+        // opens, with the same resolver seam and photo door.
+        wirFooterShareEntry?.let { entry ->
+            ShareStudioSheet(
+                entry = entry,
+                gender = uiState.genderPreference,
+                temperatureUnit = uiState.temperatureUnit,
+                onDismiss = { wirFooterShareEntry = null },
+                heroResign = { path ->
+                    makeItMeViewModel?.signedHeroUrlForPath(path)
+                },
+                onViewPhoto = { heroViewerEntry = it }
             )
         }
     }

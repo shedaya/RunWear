@@ -304,7 +304,11 @@ fun WearIveRunCollectionScreen(
             gender = gender,
             temperatureUnit = temperatureUnit,
             onDismiss = { shareEntry = null },
-            heroResign = heroResign
+            heroResign = heroResign,
+            // RW-158: the sheet's poster preview is the eye's new
+            // home — tapping it opens the entry's full photo
+            // (RW-133) through the same host door as before.
+            onViewPhoto = onViewPhoto
         )
     }
 
@@ -646,6 +650,16 @@ internal fun ChapterDetail(
                                     onShare = { onShare(day) },
                                     onDelete = onDeleteEntry?.let {
                                         { it(day) }
+                                    },
+                                    // RW-158 (user ruling,
+                                    // Nov 10, 2026): a PAST day's
+                                    // row tap opens its share
+                                    // studio; today's row is
+                                    // unchanged.
+                                    onRowTap = if (day.date != today) {
+                                        { onShare(day) }
+                                    } else {
+                                        null
                                     }
                                 )
                             }
@@ -683,6 +697,15 @@ internal fun ChapterDetail(
                         onShare = { onShare(day) },
                         onDelete = onDeleteEntry?.let { { it(day) } },
                         onPhotoClick = onViewPhoto?.let { { it(day) } },
+                        // RW-158 (user ruling, Nov 10, 2026): a
+                        // PAST day's card tap opens the share
+                        // studio for that day; today's card keeps
+                        // the RW-133 full-photo tap.
+                        onCardTap = if (day.date != today) {
+                            { onShare(day) }
+                        } else {
+                            null
+                        },
                         temperatureUnit = temperatureUnit,
                         heroResign = heroResign
                     )
@@ -702,10 +725,23 @@ private fun DayRow(
     // RW-122: per-entry delete (the collection previously offered
     // no delete at all). One tap, no confirmation — the same
     // behaviour as the home section's trash.
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    // RW-158 (user ruling, Nov 10, 2026): a PAST day's row tap
+    // opens the share studio for that day. Wired only by the
+    // chapter detail's hometown rows; the DayCard's own DayRow
+    // leaves it null (the card carries the tap there).
+    onRowTap: (() -> Unit)? = null
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth()
+            .then(
+                if (onRowTap != null) {
+                    Modifier.clickable { onRowTap() }
+                } else {
+                    Modifier
+                }
+            )
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -767,6 +803,11 @@ internal fun DayCard(
     /** RW-133: open the entry's stored photograph full-screen.
      * Wired only when the entry carries a photo reference. */
     onPhotoClick: (() -> Unit)? = null,
+    /** RW-158 (user ruling, Nov 10, 2026): pressing a PAST entry
+     * opens the share studio for that entry directly — the card
+     * tap routes here when set, ahead of the photo. Today's card
+     * is never given this (its tap keeps the RW-133 photo). */
+    onCardTap: (() -> Unit)? = null,
     temperatureUnit: TemperatureUnit = TemperatureUnit.FAHRENHEIT,
     /** RW-152 §3: the pinned TODAY variant is a FLAG on the one
      * DayCard, not a different call — place == null no longer
@@ -778,10 +819,13 @@ internal fun DayCard(
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = RunWearColors.BgCard,
-        modifier = if (onPhotoClick != null && entry.heroRef != null) {
-            Modifier.clickable { onPhotoClick() }
-        } else {
-            Modifier
+        modifier = when {
+            // RW-158: a past entry's card tap opens its share
+            // studio (the caller wires this only for past days).
+            onCardTap != null -> Modifier.clickable { onCardTap() }
+            onPhotoClick != null && entry.heroRef != null ->
+                Modifier.clickable { onPhotoClick() }
+            else -> Modifier
         }
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

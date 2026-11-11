@@ -608,6 +608,12 @@ fun WearIveRunFooterSection(
     onCollapse: () -> Unit,
     onDelete: () -> Unit,
     onOpenCollection: () -> Unit,
+    /** RW-158 (user ruling, Nov 10, 2026): when the footer's
+     * entry is a PAST entry, its row tap opens the share studio
+     * for that entry instead of the collection. Null (today's
+     * entry) keeps the collection doorway on the row; the
+     * "Open the collection ›" line below always keeps it. */
+    onEntryTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     sheetGapDp: Int = WearIveRunDockPolicy.FOOTER_SHEET_GAP_DP,
     growInKey: Int = 0,
@@ -859,7 +865,17 @@ fun WearIveRunFooterSection(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onOpenCollection() }
+                                .clickable {
+                                    // RW-158: a past entry's row
+                                    // opens its share studio; the
+                                    // collection stays one line
+                                    // below either way.
+                                    if (onEntryTap != null) {
+                                        onEntryTap()
+                                    } else {
+                                        onOpenCollection()
+                                    }
+                                }
                         ) {
                             // Thumbnail (spec section 4.5): cross-
                             // fades when the record's hero image

@@ -656,7 +656,13 @@ fun ShareStudioSheet(
     /** RW-152 §3 (Nov 10, 2026): the HeroRefResolver re-sign seam —
      * the poster composition loads the RESOLVED hero, never a
      * stored (possibly expired) display URL. */
-    heroResign: (suspend (String) -> String?)? = null
+    heroResign: (suspend (String) -> String?)? = null,
+    /** RW-158 (user ruling, Nov 10, 2026): tapping the Morning
+     * Poster preview opens the entry's full photo (the RW-133
+     * hero rule, reached from inside the sheet now that a past
+     * entry's tap opens the sheet instead of the photo). Null =
+     * the preview is not tappable (render proofs). */
+    onViewPhoto: ((WearIveRunDayEntry) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -982,11 +988,35 @@ fun ShareStudioSheet(
                 when {
                     currentRender != null -> Image(
                         bitmap = currentRender.bitmap.asImageBitmap(),
-                        contentDescription = null,
+                        // RW-158: the poster preview is the eye —
+                        // it names itself and opens the full
+                        // photo when the host wires onViewPhoto
+                        // (the Kit Card preview is the kit, not
+                        // the photo, and stays untappable).
+                        contentDescription = if (
+                            kind == ShareArtifactKind.MORNING_POSTER &&
+                            onViewPhoto != null
+                        ) {
+                            "View full photo"
+                        } else {
+                            null
+                        },
                         contentScale = ContentScale.FillBounds,
                         modifier = Modifier.fillMaxWidth()
                             .aspectRatio(format.aspect.toFloat())
                             .clip(RoundedCornerShape(16.dp))
+                            .then(
+                                if (
+                                    kind == ShareArtifactKind.MORNING_POSTER &&
+                                    onViewPhoto != null
+                                ) {
+                                    Modifier.clickable {
+                                        onViewPhoto(entry)
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            )
                     )
                     currentRendering -> Box(
                         modifier = Modifier.fillMaxWidth()
