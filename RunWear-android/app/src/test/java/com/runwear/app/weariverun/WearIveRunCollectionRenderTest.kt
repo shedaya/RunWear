@@ -150,11 +150,11 @@ class WearIveRunCollectionRenderTest : WearElementHarness() {
             "app/src/main/java/com/runwear/app/weariverun/ShareStudioComponents.kt"
         )
         assertTrue(studio.contains("Share this day"))
-        assertTrue(studio.contains("Morning Poster"))
+        assertTrue(studio.contains("Postcard"))
         assertTrue(studio.contains("Kit Card"))
         assertTrue(
             "poster choice is a rendered thumbnail, not a bare text row",
-            studio.contains("\"Morning Poster\"") &&
+            studio.contains("\"Postcard\"") &&
                 studio.contains("thumbnail")
         )
         assertTrue(

@@ -40,7 +40,11 @@ import java.io.FileOutputStream
 
 /** Which designed artifact a collection card shares. */
 enum class ShareArtifactKind(val chooserTitle: String, val fileStem: String) {
-    MORNING_POSTER("Share Morning Poster", "morning-poster"),
+    // Rename ruling (Nov 10, 2026): the format's user-facing
+    // name is Postcard — the chooser title and the shared file's
+    // stem (the file name surfaces in the OS share UI). The enum
+    // identifier stays MORNING_POSTER (code-only).
+    MORNING_POSTER("Share Postcard", "postcard"),
     KIT_CARD("Share Kit Card", "kit-card")
 }
 

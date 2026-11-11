@@ -939,7 +939,7 @@ fun ShareStudioSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     StudioThumbnailChoice(
-                        label = "Morning Poster",
+                        label = "Postcard",
                         render = posterRender,
                         rendering = posterRendering,
                         failed = posterRenderFailed,
@@ -1055,7 +1055,7 @@ fun ShareStudioSheet(
                     ShareRenderProgressPill(
                         label = "Rendering ${
                             if (kind == ShareArtifactKind.MORNING_POSTER) {
-                                "Morning Poster"
+                                "Postcard"
                             } else {
                                 "Kit Card"
                             }
@@ -1071,7 +1071,7 @@ fun ShareStudioSheet(
             if (heroFailed) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "This day's photo couldn't load — the Morning Poster can't be shared until it does.",
+                    text = "This day's photo couldn't load — the Postcard can't be shared until it does.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = RunWearColors.TextPrimary
                 )
