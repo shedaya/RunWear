@@ -1649,6 +1649,13 @@ struct WearIveRunExpandedPanelView: View {
     /// app-only). Stable references render without it.
     var heroURLResolver: ((WearIveRunEntry) async -> String?)?
     let onOpenCollection: () -> Void
+    /// RW-158 (user ruling, Nov 10, 2026): the entry row's tap
+    /// for a PAST entry opens the Share Studio sheet — the
+    /// host (app target) presents it, since the Studio lives
+    /// in an app-only file and this file is dual-target. Nil
+    /// in seats with no share presentation (tests, watch):
+    /// the row then keeps its collection route for every entry.
+    var onOpenShareEntry: ((WearIveRunEntry) -> Void)?
     /// RW-152 §1: the chevron (or a vertical glide on the
     /// header) collapses the surface back to the mini dock —
     /// dismissal restores the page exactly, because the page
@@ -1913,11 +1920,28 @@ struct WearIveRunExpandedPanelView: View {
 
     /// The entry row (§2.2/§7.3 doorway): the recorded
     /// thumbnail (56 pt, radius 14) + the full entry line at
-    /// 14.5 pt. Tapping it opens the collection sheet. The
-    /// thumbnail loads through the RW-152 §3 resolver and
-    /// cross-fades when the record's hero image changes (§4.5).
+    /// 14.5 pt. Tapping it opens the collection sheet — EXCEPT
+    /// a PAST entry, whose tap opens the Share Studio sheet
+    /// directly (RW-158, user ruling Nov 10, 2026; the pure
+    /// decision is WearIveRunTapPolicy's). The thumbnail loads
+    /// through the RW-152 §3 resolver and cross-fades when the
+    /// record's hero image changes (§4.5).
+    /// RW-158: the entry row's tap route — the policy's pure
+    /// decision for the SHOWN entry: past → the share sheet
+    /// (via the host's presenter); today/future → the
+    /// collection, unchanged. With no presenter injected the
+    /// row keeps the collection route.
+    private func entryRowTapped() {
+        if let onOpenShareEntry,
+           WearIveRunTapPolicy.expandedPanelEntryDestination(for: shownEntry) == .shareSheet {
+            onOpenShareEntry(shownEntry)
+        } else {
+            onOpenCollection()
+        }
+    }
+
     private var entryRow: some View {
-        Button(action: onOpenCollection) {
+        Button(action: entryRowTapped) {
             HStack(spacing: 12) {
                 // The thumbnail renders ONLY once its image
                 // has decoded — no placeholder graphic and no
@@ -2045,6 +2069,9 @@ struct WearIveRunOverlayView: View {
     /// HeroRefRuntime directly).
     var heroURLResolver: ((WearIveRunEntry) async -> String?)?
     let onOpenCollection: () -> Void
+    /// RW-158: forwarded to the expanded panel's entry row
+    /// (a past entry's tap opens the Share Studio sheet).
+    var onOpenShareEntry: ((WearIveRunEntry) -> Void)?
     let onTrash: () -> Void
 
     @State private var expansionProgress: Double = 0
@@ -2118,6 +2145,7 @@ struct WearIveRunOverlayView: View {
                     exitContentOpacity: 1 - exitProgress,
                     heroURLResolver: heroURLResolver,
                     onOpenCollection: onOpenCollection,
+                    onOpenShareEntry: onOpenShareEntry,
                     onCollapse: { collapse() },
                     onTrash: onTrash
                 )

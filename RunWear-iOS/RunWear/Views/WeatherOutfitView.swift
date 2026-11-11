@@ -12,6 +12,10 @@ struct WeatherOutfitView: View {
     /// rule); the store behind it is the collection itself.
     @StateObject private var collectionModel = WearIveRunCollectionModel()
     @State private var showCollection = false
+    /// RW-158 (user ruling, Nov 10, 2026): the past entry whose
+    /// tap on the expanded panel's entry row opened the Share
+    /// Studio sheet directly.
+    @State private var wearShareEntry: WearIveRunEntry?
     /// RW-26 feedback door from the rating moment (frame 49).
     @State private var showFeedbackSheet = false
     /// RW-25 scroll-handoff progress (0 = hero full-frame at rest,
@@ -507,6 +511,19 @@ struct WeatherOutfitView: View {
                     genderPreference: viewModel.genderPreference
                 )
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        // RW-158: the Share Studio sheet for a past entry,
+        // opened directly from the expanded panel's entry row.
+        // Opening is viewing — the Studio's Share button is
+        // the only path to the system share sheet.
+        .sheet(item: $wearShareEntry) { entry in
+            WearIveRunShareStudioHost(
+                entry: entry,
+                formatTemperature: { viewModel.temperatureUnit.formatFromFahrenheit($0) },
+                genderPreference: viewModel.genderPreference
+            )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
@@ -1028,7 +1045,7 @@ struct WeatherOutfitView: View {
     private var anyHomeSheetPresented: Bool {
         showSettings || showDatePicker || showTimePicker
             || showLocationPicker || selectedWeatherDetail != nil
-            || showCollection || showFeedbackSheet
+            || showCollection || showFeedbackSheet || wearShareEntry != nil
             // GEN-6 (RW-61): the looks library is a home sheet too.
             || showLooksLibrary
     }
@@ -1087,6 +1104,11 @@ struct WeatherOutfitView: View {
                 // the one resolver (re-signing half).
                 heroURLResolver: { await HeroRefRuntime.loadableURLString(for: $0) },
                 onOpenCollection: { showCollection = true },
+                // RW-158: a PAST entry's tap on the expanded
+                // panel's entry row opens the Share Studio
+                // sheet for that entry (the panel routes via
+                // WearIveRunTapPolicy; today stays collection).
+                onOpenShareEntry: { wearShareEntry = $0 },
                 onTrash: {
                     // §4.7: the host orchestrates the exit over
                     // a frozen snapshot; the store removal fires

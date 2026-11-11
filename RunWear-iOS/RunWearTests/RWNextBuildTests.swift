@@ -575,6 +575,110 @@ final class RWNextBuildTests: XCTestCase {
         }
     }
 
+    // MARK: - RW-158: past-entry tap → share sheet (user ruling, Nov 10, 2026)
+
+    func testRW158_TapRouting_PastShareTodayUnchanged() {
+        // The ruling (user, Nov 10, 2026): "pressing on the
+        // past run should simply open the share interface that
+        // we've designed." The routing is a pure decision:
+        // past entry → .shareSheet on BOTH entry surfaces;
+        // today/future → the surface's unchanged route;
+        // chapter card → .drillDown; sheet preview → .fullPhoto.
+        let now = day(2026, 11, 10, hour: 12)
+        let past = entry(place: "New York, NY", dayStart: day(2026, 11, 9, hour: 23),
+                         hero: "", session: "s-158-1")
+        let today = entry(place: "New York, NY", dayStart: day(2026, 11, 10, hour: 0),
+                          hero: "", session: "s-158-2")
+        let future = entry(place: "New York, NY", dayStart: day(2026, 11, 11),
+                           hero: "", session: "s-158-3")
+        XCTAssertTrue(WearIveRunTapPolicy.isPast(past, now: now, calendar: nyCalendar))
+        XCTAssertFalse(WearIveRunTapPolicy.isPast(today, now: now, calendar: nyCalendar),
+                       "an entry from the first minute of today is not past")
+        XCTAssertFalse(WearIveRunTapPolicy.isPast(future, now: now, calendar: nyCalendar))
+        // Chapter day/entry rows.
+        XCTAssertEqual(WearIveRunTapPolicy.chapterEntryDestination(
+            for: past, now: now, calendar: nyCalendar), .shareSheet)
+        XCTAssertEqual(WearIveRunTapPolicy.chapterEntryDestination(
+            for: today, now: now, calendar: nyCalendar), .dayView,
+            "today's entry in the collection is unchanged (ruling boundary)")
+        XCTAssertEqual(WearIveRunTapPolicy.chapterEntryDestination(
+            for: future, now: now, calendar: nyCalendar), .dayView)
+        // The expanded panel's entry row (footer affordance).
+        XCTAssertEqual(WearIveRunTapPolicy.expandedPanelEntryDestination(
+            for: past, now: now, calendar: nyCalendar), .shareSheet)
+        XCTAssertEqual(WearIveRunTapPolicy.expandedPanelEntryDestination(
+            for: today, now: now, calendar: nyCalendar), .openCollection,
+            "the panel row's unchanged route is the collection")
+        // The chapter card itself keeps its drill-down; the
+        // sheet's poster preview keeps the full photo.
+        XCTAssertEqual(WearIveRunTapPolicy.chapterCardDestination, .drillDown)
+        XCTAssertEqual(WearIveRunTapPolicy.sharePreviewDestination, .fullPhoto)
+    }
+
+    func testRW158_OldEntryWithExpiredSignedURL_SheetRendersViaResolver() throws {
+        // The RW-152 §3 durable-ref path, exercised for RW-158:
+        // an OLD entry (Nov 9, viewed Nov 10) whose stored
+        // display reference is an EXPIRED signed URL. Its tap
+        // routes to the share sheet, and the sheet's poster
+        // base can only load through the resolver — the stable
+        // (synchronous) reference is nil, the durable storage
+        // path is what re-signs.
+        let now = day(2026, 11, 10, hour: 12)
+        let expired = "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/sign/personal-heroes/u1/heroes/ny-nov9.jpg?token=expired"
+        let old = entry(place: "New York, NY", dayStart: day(2026, 11, 9),
+                        hero: expired, session: "s-158-old")
+        XCTAssertEqual(WearIveRunTapPolicy.chapterEntryDestination(
+            for: old, now: now, calendar: nyCalendar), .shareSheet)
+        XCTAssertEqual(old.heroDurableReference, "u1/heroes/ny-nov9.jpg",
+                       "the durable identity is the storage path, not the dead URL")
+        XCTAssertEqual(HeroRefResolver.storagePath(for: old), "u1/heroes/ny-nov9.jpg")
+        XCTAssertNil(HeroRefResolver.stableDisplayReference(for: old),
+                     "an expired signed URL never renders synchronously — it re-signs")
+        XCTAssertTrue(HeroRefResolver.hasLoadableReference(old),
+                      "the entry is loadable through the resolver path")
+        // The share host's poster pipeline loads through the
+        // one resolver — pinned in the host's own section, so
+        // the direct-entry sheet (not only the day view) is
+        // covered.
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        let hostStart = try XCTUnwrap(collection.range(of: "struct WearIveRunShareStudioHost"))
+        let hostEnd = try XCTUnwrap(collection.range(of: "struct ShareExportContext"))
+        let host = collection[hostStart.lowerBound..<hostEnd.lowerBound]
+        XCTAssertTrue(host.contains("HeroRefRuntime.loadableURLString(for: entry)"),
+                      "the sheet's poster base resolves via HeroRefRuntime (RW-152 §3)")
+        XCTAssertTrue(host.contains("ShareStudioView("),
+                      "the host presents the designed Share Studio sheet")
+    }
+
+    func testRW158_RoutingWiring_SourcePins() throws {
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        // Chapter rows route through the policy and present
+        // the host sheet by item; the day view stays for the
+        // unchanged route, and the chapter card's NavigationLink
+        // into the chapter (drill-down) stands.
+        XCTAssertTrue(collection.contains("WearIveRunTapPolicy.chapterEntryDestination(for: entry) == .shareSheet"))
+        XCTAssertTrue(collection.contains(".sheet(item: $shareEntry)"))
+        XCTAssertTrue(collection.contains("WearIveRunDayView("),
+                      "today/future rows keep the day view")
+        XCTAssertTrue(collection.contains("WearIveRunChapterView("),
+                      "the chapter card keeps its drill-down (RW-158 boundary)")
+        // The Studio's poster preview opens the full photo.
+        let studioStart = try XCTUnwrap(collection.range(of: "struct ShareStudioView"))
+        let studio = collection[studioStart.lowerBound...]
+        XCTAssertTrue(studio.contains("WearIveRunTapPolicy.sharePreviewDestination == .fullPhoto"))
+        XCTAssertTrue(studio.contains("HeroPhotoViewer("),
+                      "the full-screen photo stays reachable from the sheet's preview")
+        // The expanded panel routes through the policy and the
+        // host presents the sheet from WeatherOutfitView.
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        XCTAssertTrue(bar.contains("WearIveRunTapPolicy.expandedPanelEntryDestination(for: shownEntry) == .shareSheet"))
+        XCTAssertTrue(bar.contains("var onOpenShareEntry: ((WearIveRunEntry) -> Void)?"))
+        let host = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(host.contains("onOpenShareEntry: { wearShareEntry = $0 }"))
+        XCTAssertTrue(host.contains(".sheet(item: $wearShareEntry)"))
+        XCTAssertTrue(host.contains("WearIveRunShareStudioHost("))
+    }
+
     /// The EXPANDED panel state (the morph's target state),
     /// standard + short portrait viewports.
     @MainActor

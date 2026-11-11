@@ -991,6 +991,80 @@ enum WearIveRunDeletePolicy {
     }
 }
 
+// MARK: - RW-158: entry tap routing (user ruling, Nov 10, 2026)
+//
+// "Pressing on the past run should simply open the share
+// interface that we've designed." Tapping a PAST Wear I've Run
+// entry opens the Share Studio sheet ("Share this day") for
+// that entry DIRECTLY — opening is viewing: the sheet does not
+// invoke the system share sheet or share anything; the user
+// still chooses the format and taps Share inside. The routing
+// is a pure decision, pinned at this layer:
+//
+// - a past entry (its day is strictly before today) →
+//   `.shareSheet`, from every entry surface (the chapter's
+//   day/entry rows and the expanded panel's entry row alike);
+// - today's (or a future planned) entry → UNCHANGED: the
+//   chapter row keeps its day view (`.dayView`), the expanded
+//   panel's row keeps opening the collection
+//   (`.openCollection`), the collection's pinned entry and the
+//   home hero are untouched by this item;
+// - the place-group / chapter card itself → `.drillDown`
+//   (into the chapter's days — unchanged);
+// - the poster preview inside the share sheet → `.fullPhoto`
+//   (the RW-133 full-screen photo stays reachable from inside
+//   the sheet; the eye/full-screen affordance does not
+//   disappear with the routing change).
+enum WearIveRunTapDestination: Equatable {
+    case shareSheet
+    case dayView
+    case drillDown
+    case fullPhoto
+    case openCollection
+}
+
+enum WearIveRunTapPolicy {
+
+    /// A PAST entry: its recorded day is strictly before
+    /// today (the same day boundary the RW-152 §4 delete
+    /// policy uses).
+    static func isPast(_ entry: WearIveRunEntry,
+                       now: Date = Date(),
+                       calendar: Calendar = .current) -> Bool {
+        calendar.startOfDay(for: entry.dayStart) < calendar.startOfDay(for: now)
+    }
+
+    /// A day/entry row inside a place chapter (RW-158): a past
+    /// entry opens the share sheet; today/future keeps the
+    /// day view it has always opened.
+    static func chapterEntryDestination(
+        for entry: WearIveRunEntry,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> WearIveRunTapDestination {
+        isPast(entry, now: now, calendar: calendar) ? .shareSheet : .dayView
+    }
+
+    /// The expanded panel's entry row (RW-158): a past entry
+    /// opens the share sheet; today/future keeps opening the
+    /// collection, as it does today.
+    static func expandedPanelEntryDestination(
+        for entry: WearIveRunEntry,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> WearIveRunTapDestination {
+        isPast(entry, now: now, calendar: calendar) ? .shareSheet : .openCollection
+    }
+
+    /// The place-group / chapter card: drill-down into the
+    /// chapter's days — unchanged by RW-158.
+    static let chapterCardDestination: WearIveRunTapDestination = .drillDown
+
+    /// The poster preview inside the share sheet: the
+    /// full-screen photo (RW-133) — unchanged reachability.
+    static let sharePreviewDestination: WearIveRunTapDestination = .fullPhoto
+}
+
 // MARK: - Tolerant array decoding (GEN-5, RW-29 FA-14)
 
 /// Record-by-record decoding for the UserDefaults-backed

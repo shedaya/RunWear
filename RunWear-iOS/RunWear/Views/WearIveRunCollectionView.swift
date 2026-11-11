@@ -360,6 +360,10 @@ struct WearIveRunChapterView: View {
     /// RW-152 §4 (J1): the past entry awaiting its delete
     /// confirmation on this surface.
     @State private var pendingDelete: WearIveRunEntry?
+    /// RW-158 (user ruling, Nov 10, 2026): the PAST entry whose
+    /// tap opened the Share Studio sheet directly
+    /// (WearIveRunTapPolicy.chapterEntryDestination).
+    @State private var shareEntry: WearIveRunEntry?
 
     /// RW-152 §4 (J1): route a per-entry delete — a PAST entry
     /// asks first (the confirmation names place and date);
@@ -440,6 +444,18 @@ struct WearIveRunChapterView: View {
         .modifier(WearIveRunDeleteConfirmation(
             pending: $pendingDelete,
             onConfirm: { model.removeEntry(id: $0.id) }))
+        // RW-158: a past entry's tap presents the Share Studio
+        // sheet for that entry directly. Opening is viewing —
+        // nothing is shared until the Studio's Share button.
+        .sheet(item: $shareEntry) { entry in
+            WearIveRunShareStudioHost(
+                entry: entry,
+                formatTemperature: formatTemperature,
+                genderPreference: genderPreference
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var filterRow: some View {
@@ -497,36 +513,58 @@ struct WearIveRunChapterView: View {
         return "\(days) · \(rangeText)"
     }
 
+    /// One day row's label — shared by the row's two tap
+    /// routes (RW-158): the share-sheet button for a past
+    /// entry and the day-view navigation link for
+    /// today/future render the identical row.
+    private func dayRowLabel(_ entry: WearIveRunEntry) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
+                    .font(.appItemName)
+                    .foregroundColor(AppTheme.inkPrimary)
+                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
+                    .font(.appFootnote)
+                    .foregroundColor(AppTheme.inkSecondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.appFootnote.weight(.semibold))
+                .foregroundColor(AppTheme.inkMuted)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+    }
+
     private func dayList(_ entries: [WearIveRunEntry]) -> some View {
         VStack(spacing: 10) {
             ForEach(entries) { entry in
                 HStack(spacing: 8) {
-                    NavigationLink {
-                        WearIveRunDayView(
-                            entry: entry,
-                            formatTemperature: formatTemperature,
-                            genderPreference: genderPreference,
-                            onDelete: { model.removeEntry(id: entry.id) }
-                        )
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(WearIveRunDateFormatting.dayLabel(entry.dayStart))
-                                    .font(.appItemName)
-                                    .foregroundColor(AppTheme.inkPrimary)
-                                Text("\(formatTemperature(entry.feelsLikeF)) feels like · \(entry.condition) · \(entry.itemNames.count) items")
-                                    .font(.appFootnote)
-                                    .foregroundColor(AppTheme.inkSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.appFootnote.weight(.semibold))
-                                .foregroundColor(AppTheme.inkMuted)
+                    // RW-158 (user ruling, Nov 10, 2026): the
+                    // tap route is the pure policy's decision —
+                    // a PAST entry opens the Share Studio sheet
+                    // directly; today's (or a future planned)
+                    // entry keeps its day view, unchanged.
+                    if WearIveRunTapPolicy.chapterEntryDestination(for: entry) == .shareSheet {
+                        Button {
+                            shareEntry = entry
+                        } label: {
+                            dayRowLabel(entry)
                         }
-                        .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(AppTheme.sheet))
+                        .buttonStyle(.plain)
+                    } else {
+                        NavigationLink {
+                            WearIveRunDayView(
+                                entry: entry,
+                                formatTemperature: formatTemperature,
+                                genderPreference: genderPreference,
+                                onDelete: { model.removeEntry(id: entry.id) }
+                            )
+                        } label: {
+                            dayRowLabel(entry)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     // Fix wave 2026-11-07 (RW-122, iOS half):
                     // per-entry delete in the collection — the
                     // row's own trash, beside (never inside) the
@@ -579,75 +617,6 @@ struct WearIveRunDayView: View {
     /// Fix wave 2026-11-07 (RW-133): the entry's photograph,
     /// tapped, opens fitted full-screen.
     @State private var showPhotoViewer = false
-    /// The Studio's chosen export format. The render slots'
-    /// keys carry it, so each (card, format) pair renders at
-    /// most once and is cached process-wide.
-    @State private var shareFormat: ShareExportFormat = .feed
-    /// Garments the user removed from the Kit Card in the
-    /// Studio (the input-gating escape for a garment whose
-    /// render cannot load).
-    @State private var excludedKitKeys: Set<String> = []
-    /// GEN-3 share-render fix (kept): each card renders through
-    /// its own slot — independent pipelines, render-once per
-    /// content key, process-wide image cache.
-    @StateObject private var posterSlot = ShareCardSlot()
-    @StateObject private var kitSlot = ShareCardSlot()
-    /// Verify-gate context the render pipelines publish for the
-    /// Studio: the poster's face-anchor canvas point and the
-    /// Kit Card's missing garment renders.
-    @StateObject private var exportContext = ShareExportContext()
-
-    /// Content keys: a re-recorded entry (new hero, new kit) is
-    /// a new card; the same entry is the same card forever. The
-    /// keys carry a CONTENT FINGERPRINT (GEN-5 FA-24) and, from
-    /// GEN-6, the export format (RW-31 §9: the render store's
-    /// slots gain the format as part of their key).
-    private var shareContentFingerprint: String {
-        [entry.placeKey,
-         String(entry.dayStart.timeIntervalSince1970),
-         String(entry.feelsLikeF),
-         entry.condition,
-         entry.itemNames.joined(separator: ","),
-         entry.heroImageReference].joined(separator: "|")
-    }
-    private func posterKey(format: ShareExportFormat) -> String {
-        "\(entry.id)|poster|\(format.rawValue)|\(shareContentFingerprint)"
-    }
-    private func kitKey(format: ShareExportFormat) -> String {
-        "\(entry.id)|kit|\(format.rawValue)|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)|\(excludedKitKeys.sorted().joined(separator: ","))|\(shareContentFingerprint)"
-    }
-
-    /// The day's moment in its caption and poster forms (§5.1).
-    private var moments: (caption: String, poster: String, isPastChapter: Bool) {
-        ShareMomentResolver.forms(
-            momentReading: entry.momentReading,
-            dayStart: entry.dayStart,
-            lastSavedAt: entry.lastSavedAt,
-            now: Date()
-        )
-    }
-
-    /// The caption system's input, filled from the day record.
-    /// Legacy entries without a recorded day range fall back to
-    /// the actual/feels-like pair as the range — never a
-    /// fabricated figure.
-    private var captionInput: ShareCaptionInput {
-        let lowF = entry.dayLowF ?? min(entry.actualF, entry.feelsLikeF)
-        let highF = entry.dayHighF ?? max(entry.actualF, entry.feelsLikeF)
-        return ShareCaptionInput(
-            place: entry.placeDisplayName,
-            captionMoment: moments.caption,
-            isPastChapter: moments.isPastChapter,
-            feels: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.feelsLikeF)),
-            actual: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.actualF)),
-            low: ShareDisplayDegrees.number(fromFormatted: formatTemperature(lowF)),
-            high: ShareDisplayDegrees.number(fromFormatted: formatTemperature(highF)),
-            swingF: highF - lowF,
-            feelsF: entry.feelsLikeF,
-            conditionLower: entry.condition.lowercased(),
-            kitNames: entry.itemNames
-        )
-    }
 
     var body: some View {
         ScrollView {
@@ -753,37 +722,17 @@ struct WearIveRunDayView: View {
         .navigationTitle(WearIveRunDateFormatting.dayLabel(entry.dayStart))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showStudio) {
-            ShareStudioView(
+            // RW-158: the day view's Share row presents the
+            // same Share Studio host the chapter rows and the
+            // expanded panel present directly for past entries.
+            WearIveRunShareStudioHost(
                 entry: entry,
-                captionInput: captionInput,
-                posterMoment: moments.poster,
                 formatTemperature: formatTemperature,
-                genderPreference: genderPreference,
-                posterSlot: posterSlot,
-                kitSlot: kitSlot,
-                exportContext: exportContext,
-                format: $shareFormat,
-                excludedKitKeys: excludedKitKeys,
-                onFormatChanged: {
-                    requestPoster()
-                    requestKit()
-                },
-                onRetry: { kind in
-                    if kind == .poster { requestPoster(force: true) } else { requestKit(force: true) }
-                },
-                onRemoveGarment: { key in
-                    excludedKitKeys.insert(key)
-                    requestKit(force: true)
-                }
+                genderPreference: genderPreference
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        // Pre-warm BOTH cards on appearance, as two independent
-        // pipelines — neither waits for the other, and each slot
-        // renders at most once per (entry, format) key.
-        .task { await MainActor.run { requestPoster() } }
-        .task { await MainActor.run { requestKit() } }
         // RW-152 §3: resolve the hero through the one resolver
         // (a personal hero's storage path re-signs here).
         .task { resolvedHeroURL = await HeroRefRuntime.loadableURLString(for: entry) }
@@ -795,6 +744,131 @@ struct WearIveRunDayView: View {
                 onDelete?()
                 dismiss()
             }))
+    }
+
+}
+
+// MARK: - Share Studio host (GEN-6 machinery; RW-158 direct entry)
+//
+// The Share Studio's owning view: the two render slots, the
+// export-format state, the caption input, and the two render
+// pipelines (moved verbatim from WearIveRunDayView, where this
+// machinery previously lived). RW-158 (user ruling, Nov 10,
+// 2026): a PAST entry's tap opens this sheet DIRECTLY from the
+// chapter's day rows and from the expanded panel's entry row —
+// the day view's "Share this day" row presents this same host,
+// so every door leads to the one designed share interface.
+// Opening the sheet shares nothing: the Studio's own Share
+// button is the only path to the system share sheet. The
+// poster pipeline loads its base through the ONE resolver
+// (HeroRefRuntime.loadableURLString — RW-152 §3), so an OLD
+// entry whose stored display reference is an EXPIRED signed
+// URL still renders its poster via its durable reference.
+
+struct WearIveRunShareStudioHost: View {
+    let entry: WearIveRunEntry
+    let formatTemperature: (Double) -> String
+    let genderPreference: GenderPreference
+
+    /// The Studio's chosen export format. The render slots'
+    /// keys carry it, so each (card, format) pair renders at
+    /// most once and is cached process-wide.
+    @State private var shareFormat: ShareExportFormat = .feed
+    /// Garments the user removed from the Kit Card in the
+    /// Studio (the input-gating escape for a garment whose
+    /// render cannot load).
+    @State private var excludedKitKeys: Set<String> = []
+    /// GEN-3 share-render fix (kept): each card renders through
+    /// its own slot — independent pipelines, render-once per
+    /// content key, process-wide image cache.
+    @StateObject private var posterSlot = ShareCardSlot()
+    @StateObject private var kitSlot = ShareCardSlot()
+    /// Verify-gate context the render pipelines publish for the
+    /// Studio: the poster's face-anchor canvas point and the
+    /// Kit Card's missing garment renders.
+    @StateObject private var exportContext = ShareExportContext()
+
+    /// Content keys: a re-recorded entry (new hero, new kit) is
+    /// a new card; the same entry is the same card forever. The
+    /// keys carry a CONTENT FINGERPRINT (GEN-5 FA-24) and, from
+    /// GEN-6, the export format (RW-31 §9: the render store's
+    /// slots gain the format as part of their key).
+    private var shareContentFingerprint: String {
+        [entry.placeKey,
+         String(entry.dayStart.timeIntervalSince1970),
+         String(entry.feelsLikeF),
+         entry.condition,
+         entry.itemNames.joined(separator: ","),
+         entry.heroImageReference].joined(separator: "|")
+    }
+    private func posterKey(format: ShareExportFormat) -> String {
+        "\(entry.id)|poster|\(format.rawValue)|\(shareContentFingerprint)"
+    }
+    private func kitKey(format: ShareExportFormat) -> String {
+        "\(entry.id)|kit|\(format.rawValue)|\(entry.itemKeys.joined(separator: ","))|\(genderPreference.rawValue)|\(excludedKitKeys.sorted().joined(separator: ","))|\(shareContentFingerprint)"
+    }
+
+    /// The day's moment in its caption and poster forms (§5.1).
+    private var moments: (caption: String, poster: String, isPastChapter: Bool) {
+        ShareMomentResolver.forms(
+            momentReading: entry.momentReading,
+            dayStart: entry.dayStart,
+            lastSavedAt: entry.lastSavedAt,
+            now: Date()
+        )
+    }
+
+    /// The caption system's input, filled from the day record.
+    /// Legacy entries without a recorded day range fall back to
+    /// the actual/feels-like pair as the range — never a
+    /// fabricated figure.
+    private var captionInput: ShareCaptionInput {
+        let lowF = entry.dayLowF ?? min(entry.actualF, entry.feelsLikeF)
+        let highF = entry.dayHighF ?? max(entry.actualF, entry.feelsLikeF)
+        return ShareCaptionInput(
+            place: entry.placeDisplayName,
+            captionMoment: moments.caption,
+            isPastChapter: moments.isPastChapter,
+            feels: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.feelsLikeF)),
+            actual: ShareDisplayDegrees.number(fromFormatted: formatTemperature(entry.actualF)),
+            low: ShareDisplayDegrees.number(fromFormatted: formatTemperature(lowF)),
+            high: ShareDisplayDegrees.number(fromFormatted: formatTemperature(highF)),
+            swingF: highF - lowF,
+            feelsF: entry.feelsLikeF,
+            conditionLower: entry.condition.lowercased(),
+            kitNames: entry.itemNames
+        )
+    }
+
+    var body: some View {
+        ShareStudioView(
+            entry: entry,
+            captionInput: captionInput,
+            posterMoment: moments.poster,
+            formatTemperature: formatTemperature,
+            genderPreference: genderPreference,
+            posterSlot: posterSlot,
+            kitSlot: kitSlot,
+            exportContext: exportContext,
+            format: $shareFormat,
+            excludedKitKeys: excludedKitKeys,
+            onFormatChanged: {
+                requestPoster()
+                requestKit()
+            },
+            onRetry: { kind in
+                if kind == .poster { requestPoster(force: true) } else { requestKit(force: true) }
+            },
+            onRemoveGarment: { key in
+                excludedKitKeys.insert(key)
+                requestKit(force: true)
+            }
+        )
+        // Pre-warm BOTH cards on appearance, as two independent
+        // pipelines — neither waits for the other, and each slot
+        // renders at most once per (entry, format) key.
+        .task { await MainActor.run { requestPoster() } }
+        .task { await MainActor.run { requestKit() } }
     }
 
     // MARK: Render requests (slot-deduped, keyed by format)
@@ -1009,6 +1083,17 @@ struct ShareStudioView: View {
     @State private var editorDraft = ""
     @State private var verifyFailed = false
     @State private var activityPresented = false
+    /// RW-158: the poster preview, tapped, opens the entry's
+    /// full-screen photograph (RW-133) — the full-photo
+    /// affordance stays reachable from inside the sheet
+    /// (WearIveRunTapPolicy.sharePreviewDestination). The URL
+    /// resolves through the ONE resolver (RW-152 §3), so an
+    /// old entry's expired signed reference re-signs here too.
+    @State private var showPreviewPhoto = false
+    @State private var previewHeroURL: String?
+    private var previewHeroURLString: String? {
+        previewHeroURL ?? HeroRefResolver.stableDisplayReference(for: entry)
+    }
 
     private var orderedCaptions: [(template: ShareCaptionTemplate, text: String)] {
         ShareCaptionComposer.orderedCaptions(for: captionInput)
@@ -1101,6 +1186,18 @@ struct ShareStudioView: View {
                 .ignoresSafeArea()
             }
         }
+        // RW-158: the poster preview's full-screen photo
+        // (RW-133) — the stored frame fitted whole, one quiet
+        // caption line, exactly as the day view presents it.
+        .fullScreenCover(isPresented: $showPreviewPhoto) {
+            HeroPhotoViewer(
+                imageURL: previewHeroURLString,
+                caption: entry.itemNames.joined(separator: " · ")
+            )
+        }
+        // RW-158 / RW-152 §3: resolve the preview photo's URL
+        // through the one resolver (a storage path re-signs).
+        .task { previewHeroURL = await HeroRefRuntime.loadableURLString(for: entry) }
     }
 
     // MARK: First movement — the card
@@ -1194,6 +1291,18 @@ struct ShareStudioView: View {
                 .frame(maxWidth: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+                // RW-158: the POSTER preview is tappable — it
+                // opens the entry's photograph full-screen
+                // (RW-133's hero rule), so routing past entries
+                // straight to this sheet did not retire the
+                // full-photo affordance. (The Kit Card preview
+                // carries no photograph to open.)
+                .onTapGesture {
+                    if selectedKind == .poster,
+                       WearIveRunTapPolicy.sharePreviewDestination == .fullPhoto {
+                        showPreviewPhoto = true
+                    }
+                }
         }
     }
 
