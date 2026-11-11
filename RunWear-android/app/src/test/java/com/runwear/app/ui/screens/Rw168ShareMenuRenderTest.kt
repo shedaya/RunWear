@@ -120,7 +120,7 @@ class Rw168MenuDarkRenderTest : Rw168Base() {
 
 @Config(qualifiers = "w390dp-h844dp-xhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class Rw168MenuDoorsRenderTest : Rw168Base() {
+class Rw168CollectionDoorRenderTest : Rw168Base() {
 
     @Test
     fun `rw168 collection door navigates into the collection`() {
@@ -137,6 +137,11 @@ class Rw168MenuDoorsRenderTest : Rw168Base() {
         )
         host.controller.pause().stop().destroy()
     }
+}
+
+@Config(qualifiers = "w390dp-h844dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class Rw168OutfitDoorRenderTest : Rw168Base() {
 
     @Test
     fun `rw168 outfit door presents the share sheet dialog`() {
