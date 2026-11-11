@@ -190,9 +190,9 @@ final class Gen6RW78RW79Tests: XCTestCase {
         // paywall's sheet binding is the owner-gated form; its
         // onDismiss still runs the RW-79 revalidation (the
         // release precedes it in the same closure).
-        XCTAssertTrue(home.contains(".sheet(isPresented: ownedBinding(.heroPaywall, $showHeroPillPaywall)"),
+        XCTAssertTrue(home.contains(".sheet(isPresented: ownedBinding(.heroPaywall, $showHeroPillPaywall), onDismiss: {"),
                       "dismissing the hero paywall triggers the revalidation")
-        XCTAssertTrue(home.contains("onDismiss: { releaseSheet(.heroPaywall)"),
+        XCTAssertTrue(home.contains("releaseSheet(.heroPaywall)"),
                       "the paywall's dismissal releases the sheet owner")
         XCTAssertEqual(occurrences(home, "viewModel.revalidatePersonalLookState()"), 3,
                        "exactly three call sites: foreground, paywall dismissal, Home appearing")
