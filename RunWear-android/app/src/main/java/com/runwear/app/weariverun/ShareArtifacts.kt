@@ -122,6 +122,11 @@ object ShareArtifacts {
      * maxSdkVersion=28 WRITE_EXTERNAL_STORAGE. Returns false on
      * any failure, with the pending row removed — the caller
      * surfaces the failure honestly rather than claiming a save.
+     *
+     * RW-169 §7F scope note: the owner confirmed the save DID work
+     * on his device — this is a robustness fix for a latent gap
+     * (the publish result was unchecked and nothing read the row
+     * back), not a repair of a proven on-device failure.
      */
     fun saveToPhotos(context: Context, bitmap: Bitmap, kind: ShareArtifactKind): Boolean {
         val resolver = context.contentResolver
@@ -160,11 +165,73 @@ object ShareArtifacts {
                 values.put(
                     android.provider.MediaStore.Images.Media.IS_PENDING, 0
                 )
-                resolver.update(uri, values, null, null)
+                // RW-169 §7F (Nov 11, 2026 — diagnosis §6): the
+                // publish update's result is CHECKED. The pre-fix
+                // code discarded it and returned true
+                // unconditionally: an update matching zero rows
+                // left the row IS_PENDING = 1 — invisible to every
+                // gallery app by design — while the caller still
+                // announced "Saved to photos". Anything but
+                // exactly one updated row is a failure.
+                val updated = resolver.update(uri, values, null, null)
+                check(updated == 1) {
+                    "MediaStore publish updated $updated rows (want 1)"
+                }
+            }
+            // RW-169 §7F: READ THE ROW BACK before claiming the
+            // save — the row must exist, be published
+            // (IS_PENDING cleared on API 29+) and carry bytes.
+            // The caller's "Saved to photos" may only follow this
+            // read-back; this function returning true IS that
+            // read-back passing.
+            check(verifyPublishedRow(resolver, uri)) {
+                "saved row did not read back as a published photo"
             }
             true
         } catch (e: Exception) {
             runCatching { resolver.delete(uri, null, null) }
+            false
+        }
+    }
+
+    /**
+     * RW-169 §7F: the post-write read-back. Queries [uri] and
+     * returns true only when the row exists with size > 0 and —
+     * on API 29+, where the pending flag exists — IS_PENDING
+     * cleared (a pending row is gallery-invisible). Any query
+     * failure or missing column is a failed verification, never
+     * an assumed success.
+     */
+    fun verifyPublishedRow(
+        resolver: android.content.ContentResolver,
+        uri: Uri
+    ): Boolean {
+        val columns = if (android.os.Build.VERSION.SDK_INT >= 29) {
+            arrayOf(
+                android.provider.MediaStore.Images.Media.SIZE,
+                android.provider.MediaStore.Images.Media.IS_PENDING
+            )
+        } else {
+            arrayOf(android.provider.MediaStore.Images.Media.SIZE)
+        }
+        return try {
+            resolver.query(uri, columns, null, null, null)?.use { cursor ->
+                if (!cursor.moveToFirst()) return false
+                val sizeIdx = cursor.getColumnIndex(
+                    android.provider.MediaStore.Images.Media.SIZE
+                )
+                if (sizeIdx < 0 || cursor.getLong(sizeIdx) <= 0L) return false
+                if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    val pendingIdx = cursor.getColumnIndex(
+                        android.provider.MediaStore.Images.Media.IS_PENDING
+                    )
+                    if (pendingIdx < 0 || cursor.getInt(pendingIdx) != 0) {
+                        return false
+                    }
+                }
+                true
+            } ?: false
+        } catch (e: Exception) {
             false
         }
     }

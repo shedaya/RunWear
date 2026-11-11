@@ -515,12 +515,18 @@ fun WearIveRunDock(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(start = 16.dp, end = 4.dp)
             ) {
+                // RW-169 §7B width law: the wordmark is a
+                // FIXED-CLAIM element — it never yields, wraps or
+                // shrinks (softWrap off, no weight). The narration
+                // beside it is the flexing element: it wraps and
+                // the bar grows (spec §4.3).
                 Text(
                     text = WearIveRunNarrationFormatter.WORDMARK,
                     fontFamily = GreatVibesFontFamily,
                     fontSize = 17.sp,
                     color = RunWearColors.TextPrimary,
-                    maxLines = 1
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Spacer(Modifier.width(10.dp))
                 Crossfade(
@@ -877,14 +883,21 @@ fun WearIveRunFooterSection(
                                 }
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // RW-169 §7B width law: the
+                                    // wordmark is fixed-claim (no
+                                    // weight, no wrap) — the SPACER
+                                    // flexes to keep the controls
+                                    // right-aligned, never the
+                                    // wordmark.
                                     Text(
                                         text = WearIveRunNarrationFormatter.WORDMARK,
                                         fontFamily = GreatVibesFontFamily,
                                         fontSize = 31.sp,
                                         color = RunWearColors.TextPrimary,
                                         maxLines = 1,
-                                        modifier = Modifier.weight(1f)
+                                        softWrap = false
                                     )
+                                    Spacer(Modifier.weight(1f))
                                     IconButton(onClick = onCollapse) {
                                         Icon(
                                             imageVector = Icons.Outlined.ExpandMore,
@@ -955,11 +968,17 @@ fun WearIveRunFooterSection(
                             // one hour after issue; an entry with no
                             // reference at all recovers through the
                             // bank re-link like every other surface.
+                            // RW-169 §7E.4: the thumbnail resolves
+                            // through the HELD resolver and renders
+                            // in the never-unload slot — while a
+                            // successor reference resolves, the
+                            // current decoded image stays; the slot
+                            // never returns to empty for this entry.
                             val footerThumbnailUrl =
                                 if (heroResign != null &&
                                     entry.sourceEntry != null
                                 ) {
-                                    rememberResolvedHeroUrl(
+                                    rememberHeldResolvedHeroUrl(
                                         entry.sourceEntry!!,
                                         heroResign, heroRecovery
                                     ) { path ->
@@ -970,42 +989,20 @@ fun WearIveRunFooterSection(
                                 } else {
                                     entry.thumbnailUrl
                                 }
-                            Crossfade(
-                                targetState = footerThumbnailUrl,
-                                animationSpec = tween(
-                                    WearIveRunDockPolicy.NARRATION_CROSSFADE_MS
-                                ),
-                                label = "wirFooterThumbnail"
-                            ) { url ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(RunWearColors.Background),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    url?.let {
-                                        var decoded by remember(it) {
-                                            mutableStateOf(false)
-                                        }
-                                        AsyncImage(
-                                            model = it,
-                                            contentDescription = null,
-                                            contentScale = ContentScale.Crop,
-                                            alignment = Alignment.TopCenter,
-                                            onState = { painterState ->
-                                                if (painterState is
-                                                    AsyncImagePainter.State.Success
-                                                ) {
-                                                    decoded = true
-                                                }
-                                            },
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .alpha(if (decoded) 1f else 0f)
-                                        )
-                                    }
-                                }
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(RunWearColors.Background),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                HeldHeroThumbnail(
+                                    url = footerThumbnailUrl,
+                                    identityKey = entry.sourceEntry?.let {
+                                        WearIveRunCollectionLogic.identityOf(it)
+                                    } ?: entry.place,
+                                    modifier = Modifier.fillMaxSize()
+                                )
                             }
                             Spacer(Modifier.width(12.dp))
                             // Entry line (spec section 4.5):

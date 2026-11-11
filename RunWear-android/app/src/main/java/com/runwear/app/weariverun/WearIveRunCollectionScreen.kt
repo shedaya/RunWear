@@ -445,7 +445,10 @@ internal fun CollectionThumbnail(
     modifier: Modifier = Modifier
 ) {
     var recovered by remember(entry) { mutableStateOf(false) }
-    val url = rememberResolvedHeroUrl(
+    // RW-169 §7E.4: held resolution — a re-settle rewriting this
+    // entry's reference never returns the slot to empty while the
+    // successor resolves.
+    val url = rememberHeldResolvedHeroUrl(
         entry, heroResign, heroRecovery
     ) { path ->
         recovered = true

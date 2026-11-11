@@ -1,11 +1,19 @@
 package com.runwear.app.weariverun
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.Alignment
+import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 
 /**
  * RW-152 §3 (Nov 10, 2026): durable hero references and their
@@ -220,3 +228,83 @@ fun rememberResolvedHeroUrl(
     recovery: HeroRecoverySeam? = null,
     onHeroRecovered: ((String) -> Unit)? = null
 ): String? = rememberHeroResolution(entry, resign, recovery, onHeroRecovered).url
+
+/**
+ * RW-169 §7E.4 (Nov 11, 2026): the HELD form of the resolver —
+ * thumbnail binds at promotion. The pre-fix resolver state was
+ * keyed on the stored reference, so when a re-settle rewrote the
+ * reference the resolved state reset to null and the decode-gated
+ * image returned to alpha 0 until the network re-signed the new
+ * reference — the footer's thumbnail washing out and vanishing at
+ * ~14.3 s of the owner's recording.
+ *
+ * This holder keeps the last URL THIS surface resolved for THIS
+ * entry's identity: while a successor reference resolves, the
+ * current decoded image stays ([ThumbnailHold]); the display
+ * only moves forward to a new non-null URL. A DIFFERENT entry
+ * (identity change) starts honestly empty — the hold never leaks
+ * one entry's photo onto another.
+ */
+@Composable
+fun rememberHeldResolvedHeroUrl(
+    entry: WearIveRunDayEntry,
+    resign: (suspend (String) -> String?)? = null,
+    recovery: HeroRecoverySeam? = null,
+    onHeroRecovered: ((String) -> Unit)? = null
+): String? {
+    val resolved = rememberResolvedHeroUrl(entry, resign, recovery, onHeroRecovered)
+    val identity = remember(entry) {
+        WearIveRunCollectionLogic.identityOf(entry)
+    }
+    // Keyed on the entry's identity: a different entry starts
+    // honestly empty; the same entry keeps its last shown URL.
+    var held by remember(identity) { mutableStateOf<String?>(null) }
+    LaunchedEffect(resolved) {
+        if (resolved != null) held = resolved
+    }
+    return ThumbnailHold.displayed(resolved, held)
+}
+
+/**
+ * RW-169 §7E.4: a thumbnail slot that never unloads. Renders the
+ * last URL that DECODED successfully for [identityKey] as the
+ * base layer; a successor [url] loads invisibly above it and
+ * replaces the base only once its own decode succeeds. Until
+ * anything has decoded, the slot stays empty (the caller's
+ * tinted ground shows) — honest for a photo-less entry.
+ */
+@Composable
+fun HeldHeroThumbnail(
+    url: String?,
+    identityKey: String,
+    modifier: Modifier = Modifier
+) {
+    var shownUrl by remember(identityKey) { mutableStateOf<String?>(null) }
+    Box(modifier = modifier) {
+        shownUrl?.let { shown ->
+            AsyncImage(
+                model = shown,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        if (url != null && url != shownUrl) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.TopCenter,
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Success) {
+                        shownUrl = url
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .alpha(0f)
+            )
+        }
+    }
+}
