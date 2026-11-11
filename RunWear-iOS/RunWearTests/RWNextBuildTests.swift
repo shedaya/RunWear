@@ -925,9 +925,18 @@ final class RWNextBuildTests: XCTestCase {
         let pressAnim = try XCTUnwrap(tap.range(of: "withAnimation"))
         XCTAssertLessThan(expandCall.lowerBound, pressAnim.lowerBound,
                           "RW-162 G1: onExpand fires in the tap's own transaction, BEFORE any press animation — never in its completion")
-        // The overlay's measurement pass + travel-only clip.
-        XCTAssertTrue(bar.contains("private func startMorph()"),
-                      "the morph starts only once the panel's content height is measured (RW-162 G1)")
+        // RE-PINNED for RW-169 §7A (Nov 11, 2026; supersedes
+        // the RW-162 G1 measurement-pass pin that stood here):
+        // the during-morph measurement pass (startMorph) is
+        // RETIRED — it was D3's mechanism (the expanded height
+        // existed only while the morph ran). The morph's
+        // endpoints are the two REST heights, so the tap runs
+        // the spring immediately, with no measurement to wait
+        // for. The travel-only clip pins below stand.
+        XCTAssertFalse(bar.contains("private func startMorph()"),
+                      "RW-169 §7A: no during-morph measurement pass remains")
+        XCTAssertTrue(bar.contains("WearIveRunMorphProbe.containerHeight"),
+                      "RW-169 §7A: the container height is the rest-height interpolation (see WearIveRunOverlayView)")
         XCTAssertTrue(bar.contains("travelClipActive"),
                       "the container clip binds only while the morph travels (RW-162 G5)")
         XCTAssertTrue(bar.contains("clipShape(RoundedRectangle(cornerRadius: radius))"),

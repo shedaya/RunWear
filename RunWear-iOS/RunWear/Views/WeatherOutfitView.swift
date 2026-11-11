@@ -102,6 +102,16 @@ struct WeatherOutfitView: View {
     /// (day rollover — the entry leaves the store without a
     /// trash tap) can still run the §4.8 exit over a snapshot.
     @State private var lastWearEntry: WearIveRunEntry?
+    /// RW-169 §7E (PresentedEntry): the ONE presented snapshot
+    /// every Wear I've Run surface renders — committed by the
+    /// stability gate below, swapped whole, never mutated.
+    /// A restored session entry (already settled in a prior
+    /// session) promotes to the snapshot immediately; a NEW
+    /// viewed frame reaches it only through the gate.
+    @State private var presentedSnapshot: WearIveRunPresentedSnapshot?
+    /// RW-169 §7E.1: the stability gate — a viewed frame must
+    /// stand unchanged for ≈2 s before it may commit.
+    @State private var settleGate = WearIveRunSettleGate()
     /// RW-135 §7.5: true while any home scroll gesture (or its
     /// deceleration) is live — fed by the layouts'
     /// onScrollPhaseChange; the dock defers a mid-gesture
@@ -232,6 +242,14 @@ struct WeatherOutfitView: View {
             .onChange(of: collectionModel.sessionEntry()?.id) { _, newID in
                 if let entry = collectionModel.sessionEntry() {
                     lastWearEntry = entry
+                    // RW-169 §7E: a RESTORED entry (settled in
+                    // a prior session, already the record)
+                    // promotes to the presented snapshot at
+                    // once — it is not a new viewed change and
+                    // does not pass the stability gate.
+                    if presentedSnapshot == nil {
+                        presentedSnapshot = makePresentedSnapshot(for: entry)
+                    }
                 } else if newID == nil, !wearExitInProgress,
                           let snapshot = lastWearEntry {
                     beginWearExit(snapshot: snapshot, removesData: false)
@@ -478,6 +496,17 @@ struct WeatherOutfitView: View {
                 try? await Task.sleep(nanoseconds: 30_000_000_000)
                 if Task.isCancelled { break }
                 viewModel.maintainNowIfNeeded()
+            }
+        }
+        // RW-169 §7E.1: the settle gate's clock — a parked
+        // candidate commits only once its frame has stood
+        // unchanged for the stability window, and only at
+        // scroll rest (§7E.4: flips defer past a live gesture).
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if Task.isCancelled { break }
+                commitStableSettleIfReady()
             }
         }
         // RW-79: the foreground re-read. A generation running
@@ -999,8 +1028,18 @@ struct WeatherOutfitView: View {
                 seat: .straddle,
                 onPillGetUnlimited: { requestSheet(.heroPaywall) }
             )
-            .offset(y: HeroVerticalLayout.pillOffsetFromSheetTop(
-                pillHeight: currentPillHeight))
+            // RW-169 §7D (D8): the seat is MEASURED, not
+            // planned — the pill's own measured height feeds
+            // its top alignment guide in the same layout pass,
+            // so its bottom lands on the hero-foot + dip anchor
+            // at every pill height on the first frame. (The
+            // pre-fix seat was an offset computed from
+            // HeroPillMetrics planning heights, 44/62 pt
+            // estimates: wrong first seat, then the snap.)
+            .alignmentGuide(.top) { dimensions in
+                StraddleSeatGuide.topGuideValue(
+                    measuredPillHeight: dimensions.height)
+            }
         }
     }
 
@@ -1154,7 +1193,13 @@ struct WeatherOutfitView: View {
         // another place, and it can never announce a place the
         // session has moved past, because the session's one
         // entry always holds the last settled place.
-        let liveEntry = collectionModel.sessionEntry()
+        // RW-169 §7E.2: the surface renders ONLY the presented
+        // snapshot — the store's live entry is consulted solely
+        // as the restored-snapshot source before the first
+        // promotion lands (onChange above) and for the exit
+        // path. A parked, not-yet-stable candidate is never
+        // rendered here.
+        let liveEntry = presentedSnapshot?.entry ?? collectionModel.sessionEntry()
         let todays = wearExitInProgress ? wearExitEntry : liveEntry
         // WS-4 + Y-5: the state derives EVERYTHING from the one
         // entry value above — the narration payload AND the
@@ -1163,18 +1208,28 @@ struct WeatherOutfitView: View {
         // write as the content).
         // GEN-5 (RW-29 FA-3): the moment below is the ENTRY's
         // recorded momentReading — never the live sheetMoment.
-        let state = wearExitInProgress
-            ? (wearExitState ?? .preAdd)
-            : WearIveRunMiniBarModel.state(
+        // RW-169 §7E.2: when the presented snapshot stands, its
+        // OWN committed state is the surface's state (the
+        // snapshot and its narration are one object).
+        let state: WearIveRunState
+        if wearExitInProgress {
+            state = wearExitState ?? .preAdd
+        } else if let presentedSnapshot, presentedSnapshot.entry.id == todays?.id {
+            state = presentedSnapshot.state
+        } else {
+            state = WearIveRunMiniBarModel.state(
                 todaysEntry: todays,
                 moment: todays?.momentReading ?? .now,
                 wasUpdatedThisSession: todays?.wasUpdatedInSession ?? false
             )
+        }
         if state != .preAdd, let todays {
             WearIveRunOverlayView(
                 state: state,
                 entry: todays,
-                formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
+                formattedFeelsLike: (presentedSnapshot?.entry.id == todays.id
+                    ? presentedSnapshot?.formattedFeelsLike : nil)
+                    ?? viewModel.temperatureUnit.formatFromFahrenheit(todays.feelsLikeF),
                 cueCount: collectionModel.cueCount,
                 narrationVersion: collectionModel.narrationVersion,
                 exitProgress: wearDockExitProgress,
@@ -1259,6 +1314,10 @@ struct WeatherOutfitView: View {
     private func finishWearExit() {
         if wearExitRemovesData {
             collectionModel.removeSessionEntry()
+            // RW-169 §7E: the presented snapshot leaves with
+            // the record it presented.
+            presentedSnapshot = nil
+            settleGate.clearPending()
         }
         wearExitInProgress = false
         wearExitRemovesData = false
@@ -1375,7 +1434,16 @@ struct WeatherOutfitView: View {
             // current frame, not a foreign stock photo. Y-10's
             // "honestly empty before first resolution" sub-rule is
             // the one element that yields in this merge.
-            heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference() ?? "",
+            // RW-169 §7E.3: a fallback serve is never recorded
+            // as the entry's hero reference — the bundled
+            // always-available fallback the pre-fix line fell
+            // back to is a stock stand-in, not the entry's
+            // photo. Only a REMOTE serve actually on screen
+            // (pool or personal, viewModel.heroImageUrl) is
+            // recorded; before one lands the reference is
+            // honestly empty and the RW-152 §3 recovery path
+            // heals it when the serve arrives.
+            heroImageReference: viewModel.heroImageUrl ?? "",
             sessionID: collectionModel.sessionID,
             momentReading: entryMomentReading,
             lastSavedAt: Date(),
@@ -1388,7 +1456,45 @@ struct WeatherOutfitView: View {
             dayLowF: selectedDayActualRangeF?.low,
             dayHighF: selectedDayActualRangeF?.high
         )
-        collectionModel.recordSettled(entry)
+        // RW-169 §7E.1: the eight call sites of this function
+        // no longer write the record — they OFFER the viewed
+        // frame to the stability gate. The record (and with it
+        // the presented snapshot every surface renders) flips
+        // only when the frame has stood unchanged for the
+        // ≈2 s window, atomically, at scroll rest — see
+        // commitStableSettleIfReady.
+        settleGate.offer(entry, at: Date())
+    }
+
+    /// RW-169 §7E: build the immutable presented snapshot for a
+    /// settled entry — narration state and formatted feels-like
+    /// derived from the entry alone, committed with it.
+    private func makePresentedSnapshot(for entry: WearIveRunEntry) -> WearIveRunPresentedSnapshot {
+        WearIveRunPresentedSnapshot(
+            entry: entry,
+            state: WearIveRunMiniBarModel.state(
+                todaysEntry: entry,
+                moment: entry.momentReading,
+                wasUpdatedThisSession: entry.wasUpdatedInSession),
+            formattedFeelsLike: viewModel.temperatureUnit.formatFromFahrenheit(entry.feelsLikeF))
+    }
+
+    /// RW-169 §7E.1/.4: the gate's commit. Runs on the gate
+    /// clock (250 ms) — a candidate whose frame has been stable
+    /// for the whole window commits ATOMICALLY: the store write
+    /// and the presented-snapshot swap happen together, and
+    /// every surface (mini, expanded, collection TODAY card —
+    /// the last reads the store the same write feeds) flips to
+    /// the same snapshot in the same transaction. While a
+    /// scroll gesture is live the commit defers to scroll rest.
+    private func commitStableSettleIfReady() {
+        guard !isScrollGestureActive else { return }
+        guard let candidate = settleGate.stableCandidate(at: Date()) else { return }
+        settleGate.clearPending()
+        collectionModel.recordSettled(candidate)
+        if let settled = collectionModel.sessionEntry() {
+            presentedSnapshot = makePresentedSnapshot(for: settled)
+        }
     }
 
     /// The outfit column's pinned foot entry (f5): opens the full
@@ -1974,7 +2080,35 @@ struct WeatherOutfitView: View {
     /// the first-look screen, and not in the scroll content under
     /// the photo (X-8). No current cell (not opted in / stock
     /// mode) hides the pill.
+    /// RW-169 §7D (D9): the ONE agreed presentation value for
+    /// the current cell — the straddle pill, the hero, and the
+    /// failure wording all read this and nothing else, so the
+    /// cell can never be FAILED across the hero and MAKING on
+    /// the pill at once. Resolved once from the cell's look
+    /// state and its pill resolution together.
+    private var cellPresentation: PersonalCellPresentation {
+        guard let cell = viewModel.currentPersonalCombination else { return .serving }
+        let lookState = personalStore.lookStates[cell.combinationId] ?? .none
+        return PersonalCellPresentation.resolve(
+            lookState: lookState,
+            pillState: HeroPill.resolve(
+                optedIn: personalStore.isOptedIn,
+                lookState: lookState,
+                personalPhotoDisplayed: viewModel.currentPersonalHeroId != nil,
+                isSubscribed: personalStore.mode == .subscribed,
+                freeGenerationsUsed: personalStore.freeGenerationsUsed,
+                freeAllowance: PersonalHeroStore.freeAllowance,
+                isScaffoldServe: viewModel.currentPersonalServeIsScaffold,
+                isExhaustedCell: personalStore.exhaustedCell == cell.combinationId
+            ))
+    }
+
     private var heroPillState: HeroPillState {
+        // RW-169 §7D: under the agreed FAILED presentation the
+        // straddle pill carries no making/serving claim — the
+        // pill component's failed form at the hero (below) is
+        // the one carrier of the state.
+        guard cellPresentation != .failed else { return .hidden }
         guard let cell = viewModel.currentPersonalCombination else { return .hidden }
         return HeroPill.resolve(
             optedIn: personalStore.isOptedIn,
@@ -1996,9 +2130,11 @@ struct WeatherOutfitView: View {
     /// RW-111: whether the current cell's look stands failed —
     /// the hero's failure-line input (the line itself renders in
     /// HeroImageView, in the pill's eye line over the stock hero).
+    /// RW-169 §7D: this reads the ONE agreed presentation value
+    /// (cellPresentation) — the same value the pill reads — not
+    /// a second derivation from the look state.
     private var currentCellLookIsFailed: Bool {
-        guard let cell = viewModel.currentPersonalCombination else { return false }
-        return (personalStore.lookStates[cell.combinationId] ?? .none).isFailed
+        cellPresentation == .failed
     }
 
     // MARK: - RW-14 Personal Section

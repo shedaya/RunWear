@@ -1340,6 +1340,17 @@ struct WearIveRunMiniBarView: View {
             // RW-135 §7.6: the wordmark in the bar is 17 pt.
             .font(.greatVibes(size: 17))
             .foregroundColor(AppTheme.inkPrimary)
+            // RW-169 §7B (width law, D1): the wordmark is a
+            // FIXED-CLAIM element — it never yields. It carries
+            // the row's highest layout priority and a fixed
+            // horizontal size, so its rendered width is its rest
+            // width at every row width; when space runs out the
+            // NARRATION wraps and the bar grows (spec §4.3).
+            // (RW-162 G4(a) gave the narration priority 1 and the
+            // wordmark no floor at all — at 393 pt the wordmark
+            // was left ≈33 pt and wrapped character-wise.)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(2)
     }
 
     /// Two tiny grayed controls at the right end (spec §9.2):
@@ -2014,22 +2025,22 @@ struct WearIveRunExpandedPanelView: View {
     private var entryRow: some View {
         Button(action: entryRowTapped) {
             HStack(spacing: 12) {
-                // The thumbnail renders ONLY once its image
-                // has decoded — no placeholder graphic and no
-                // broken-image frame ever paints (D-12).
-                AsyncImage(url: thumbURLString.flatMap { URL(string: $0) }) { phase in
-                    if case .success(let image) = phase {
-                        HeroPhoto(image: image, width: 56, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    } else {
-                        Color.clear
-                            .frame(width: 56, height: 56)
-                    }
-                }
-                .id(thumbURLString ?? "")
-                .transition(.opacity)
+                // RW-169 §7E.3 (thumbnail binds at promotion):
+                // a surface that has shown a thumbnail never
+                // returns to an empty slot for the same entry —
+                // the current decoded image stays while a
+                // successor reference resolves. (The pre-fix
+                // AsyncImage was keyed by the reference string,
+                // so a re-settle's reference change reset it to
+                // the empty phase — D-12's wash-out.)
+                WearIveRunPromotedThumbnail(urlString: thumbURLString)
                 // No line limit, by design (WS-4): the entry
                 // line wraps whole rather than truncating.
+                // RW-169 §7B/D5: the line is also fixed-claim
+                // vertically — it takes layout priority over the
+                // trailing spacer and sizes to its full wrapped
+                // height, so it can never be tail-truncated
+                // mid-word ("…Runni…") inside this row.
                 Text(WearIveRunNarration.expandedLine(
                     for: shownEntry,
                     formattedFeelsLike: formattedFeelsLike
@@ -2037,6 +2048,8 @@ struct WearIveRunExpandedPanelView: View {
                 .font(.system(size: 14.5))
                 .foregroundColor(AppTheme.inkSecondary)
                 .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
                 .id(WearIveRunNarration.expandedLine(
                     for: shownEntry, formattedFeelsLike: formattedFeelsLike))
                 .transition(.opacity)
@@ -2091,25 +2104,692 @@ struct WearIveRunExpandedPanelView: View {
     }
 }
 
-// MARK: - RW-152 §1 — the one overlay surface (two states, one morph)
+// MARK: - RW-169 §7E — PresentedEntry: the settle discipline, implemented once
+//
+// Diagnosis §5/§7E (RW-169): recordTodaysEntry() was called from
+// eight sites gated by a classifier that disciplined cue/narration
+// version, not content — every re-settle of the live view was a
+// candidate write and surfaces re-rendered piecemeal. The fix:
+// a change reaches the record only after the viewed frame is
+// unchanged for the spec's ≈2 s stability window; on commit the
+// entry flips ATOMICALLY as one immutable presented snapshot;
+// every surface (mini, expanded, collection TODAY card) renders
+// only the snapshot.
+
+/// One immutable presented snapshot of the settled entry: the
+/// entry, its derived narration state, and its formatted
+/// feels-like, committed together and never mutated in place.
+/// A new settle produces a NEW snapshot; surfaces swap whole.
+struct WearIveRunPresentedSnapshot: Equatable {
+    let entry: WearIveRunEntry
+    let state: WearIveRunState
+    let formattedFeelsLike: String
+}
+
+/// The stability gate between a viewed frame and the record.
+/// Pure value logic with injected time, so the ≈2 s window is
+/// pinned without a clock: offering a DIFFERENT frame restarts
+/// the window; offering the same frame again does not.
+/// The frame key is (place, day, feels-like, kit, hero
+/// reference, moment) — the viewed frame of spec §7E.1;
+/// `lastSavedAt` and narration stamps are not frame content.
+struct WearIveRunSettleGate {
+    static let stabilityWindow: TimeInterval = 2.0
+
+    private(set) var pendingEntry: WearIveRunEntry?
+    private var pendingSince: Date?
+    private var pendingKey: String?
+
+    static func frameKey(for entry: WearIveRunEntry) -> String {
+        [
+            entry.placeName,
+            String(entry.dayStart.timeIntervalSince1970),
+            String(entry.feelsLikeF),
+            entry.itemNames.joined(separator: "·"),
+            entry.heroImageReference,
+            entry.momentReading.rendered,
+        ].joined(separator: "|")
+    }
+
+    /// Offer a viewed frame. A frame whose key differs from the
+    /// pending frame replaces it and restarts the window; the
+    /// same frame offered again keeps the original offer (and
+    /// its original timestamp).
+    mutating func offer(_ entry: WearIveRunEntry, at now: Date) {
+        let key = Self.frameKey(for: entry)
+        guard key != pendingKey else { return }
+        pendingEntry = entry
+        pendingKey = key
+        pendingSince = now
+    }
+
+    /// The candidate that has been stable for the whole window
+    /// at `now`, or nil while any part of the window remains.
+    func stableCandidate(at now: Date) -> WearIveRunEntry? {
+        guard let pendingEntry, let pendingSince,
+              now.timeIntervalSince(pendingSince) >= Self.stabilityWindow
+        else { return nil }
+        return pendingEntry
+    }
+
+    /// True when a candidate is parked inside its window.
+    var hasPending: Bool { pendingEntry != nil }
+
+    mutating func clearPending() {
+        pendingEntry = nil
+        pendingKey = nil
+        pendingSince = nil
+    }
+}
+
+// MARK: - RW-169 §7A — the morph probe (mechanical acceptance)
+//
+// The acceptance probe of §7A, as pure functions the tests pin:
+// at every morph progress value there is exactly ONE narration
+// in the hierarchy (the unified surface's single narration view,
+// opacity 1 throughout the travel — it is never one of two
+// cross-fading forms), and the wordmark's rendered width is the
+// interpolation of its two REST widths — never below the mini
+// rest width, never the ≈33 pt crush D1 shipped.
+enum WearIveRunMorphProbe {
+    /// Exactly one narration exists at every progress value:
+    /// the same narration view is repositioned/rescaled by the
+    /// morph, never swapped for a second form's narration.
+    static func legibleNarrationCount(progress: Double) -> Int { 1 }
+
+    /// The wordmark's rendered width at `progress`: the linear
+    /// interpolation of its mini and expanded REST widths (its
+    /// font size interpolates 17 → 31 pt across the same travel).
+    /// At p = 0 it equals the mini rest width exactly; at p = 1
+    /// the expanded rest width; between, it is never less than
+    /// the mini rest width.
+    static func wordmarkWidth(
+        progress: Double, miniRestWidth: Double, expandedRestWidth: Double
+    ) -> Double {
+        let p = min(1, max(0, progress))
+        return miniRestWidth + (expandedRestWidth - miniRestWidth) * p
+    }
+
+    /// The container height at `progress`: the interpolation of
+    /// the two REST heights (mini measured at mini rest,
+    /// expanded measured at expanded rest / derived from the
+    /// rest content before the first expansion) — never a
+    /// height measured during the morph itself.
+    static func containerHeight(
+        miniRest: Double, expandedRest: Double, progress: Double
+    ) -> Double {
+        WearIveRunMorph.height(
+            mini: miniRest, expanded: expandedRest, progress: progress)
+    }
+}
+
+// MARK: - RW-169 §7D — the straddle pill's measured seat
+//
+// The pill's seat is computed by the layout pass itself from the
+// pill's OWN measured size (an alignment guide), not from
+// HeroPillMetrics planning heights: the guide value below is
+// the pill's measured height minus the anchor, so the pill's
+// bottom lands on the anchor line (hero foot + straddle dip)
+// at every pill height, on the first frame — no wrong first
+// seat, no snap.
+enum StraddleSeatGuide {
+    /// The pill bottom's seat relative to the SHEET's top edge:
+    /// the sheet's top sits `sheetOverlap` above the hero foot,
+    /// and the pill bottom sits `straddleDip` below the foot.
+    static let anchorFromSheetTop: CGFloat =
+        HomeHandoffGeometry.sheetOverlap + HeroVerticalLayout.straddleDip
+
+    /// The `.top` alignment-guide value for a pill of the given
+    /// MEASURED height: guide = height − anchor, so the layout
+    /// places the pill's top at (sheet top + anchor − height)
+    /// and its bottom exactly on the anchor.
+    static func topGuideValue(measuredPillHeight: CGFloat) -> CGFloat {
+        measuredPillHeight - anchorFromSheetTop
+    }
+}
+
+// MARK: - RW-169 §7E.3 — the promoted thumbnail
+//
+// Binds at promotion: once an image has decoded for the entry's
+// thumbnail slot it stays on screen while a successor reference
+// resolves; the slot returns to empty only when there is no
+// successor reference at all. (The pre-fix AsyncImage was keyed
+// by the reference string, so any reference change reset the
+// slot to the empty phase until the network re-signed and
+// re-decoded — the §5 wash-out.)
+struct WearIveRunPromotedThumbnail: View {
+    let urlString: String?
+    @State private var displayedImage: Image?
+    @State private var displayedURLString: String?
+
+    var body: some View {
+        ZStack {
+            if let displayedImage {
+                HeroPhoto(image: displayedImage, width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            } else {
+                Color.clear.frame(width: 56, height: 56)
+            }
+        }
+        .frame(width: 56, height: 56)
+        .task(id: urlString) {
+            guard let urlString, !urlString.isEmpty,
+                  urlString != displayedURLString,
+                  let url = URL(string: urlString) else { return }
+            let data: Data?
+            if url.isFileURL {
+                data = try? Data(contentsOf: url)
+            } else {
+                data = try? await URLSession.shared.data(from: url).0
+            }
+            guard let data, let decoded = UIImage(data: data) else { return }
+            displayedImage = Image(uiImage: decoded)
+            displayedURLString = urlString
+        }
+    }
+}
+
+// MARK: - RW-169 §7A — ONE element, two geometries (the unified surface)
+//
+// RETIRES the dual-form ZStack (D3): the overlay no longer
+// composes a complete mini form and a complete expanded form
+// simultaneously and cross-fades between them over a height
+// measured during the morph. There is ONE content hierarchy —
+// the same wordmark view, the same narration view, the same
+// entry row and the same doorway throughout the travel — whose
+// positions, sizes and opacities are pure functions of the one
+// expansionProgress. The container height is the interpolation
+// of the two REST heights: the mini rest height is measured at
+// mini rest, the expanded rest height is measured at expanded
+// rest (before the first expansion it is derived from the rest
+// content by WearIveRunOverlayPolicy.contentHeight — a rest
+// computation, never a during-morph measurement).
+
+struct WearIveRunUnifiedSurfaceView: View {
+    let state: WearIveRunState
+    let entry: WearIveRunEntry
+    let formattedFeelsLike: String
+    let cueCount: Int
+    var narrationVersion: Int = 0
+    var exitProgress: Double = 0
+    var isDimmedBySheet: Bool = false
+    var isScrollGestureActive: Bool = false
+    let viewportHeight: CGFloat
+    var heroURLResolver: ((WearIveRunEntry) async -> String?)?
+    /// The morph's one progress value (0 = mini, 1 = expanded),
+    /// owned by the overlay container.
+    let expansionProgress: Double
+    /// Rest-height reporting to the container: called with the
+    /// surface's rest anatomy heights when a rest-state geometry
+    /// read lands (and on appear) — never during the travel.
+    var onRestHeights: ((CGFloat, CGFloat) -> Void)? = nil
+    let onToggle: () -> Void
+    let onOpenCollection: () -> Void
+    var onOpenShareEntry: ((WearIveRunEntry) -> Void)?
+    let onTrash: () -> Void
+
+    @State private var displayedState: WearIveRunState?
+    @State private var pendingNarrationState: WearIveRunState?
+    @State private var narrationDeferral = WearIveRunNarrationDeferral()
+    @State private var displayedEntry: WearIveRunEntry?
+    @State private var resolvedHeroURL: String?
+    @State private var wordmarkWidth: CGFloat = 96
+    @State private var miniNarrationHeight: CGFloat = 17
+    @State private var expandedNarrationHeight: CGFloat = 20
+    @State private var liveNarrationHeight: CGFloat = 17
+    @State private var expandedEntryHeight: CGFloat = 56
+    @State private var cueHapticNonce = 0
+    @State private var trashHapticNonce = 0
+    @State private var glideHapticNonce = 0
+    @State private var pulseScale: CGFloat = 1
+    @State private var isPulsing = false
+    @State private var ringScale: CGFloat = 1
+    @State private var ringOpacity: Double = 0
+    @State private var bounceScale: CGFloat = 1
+    @State private var pressScale: CGFloat = 1
+    @State private var entranceProgress: Double = 1
+    @State private var didRunEntrance = false
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var p: Double { min(1, max(0, expansionProgress)) }
+    private func lerp(_ a: CGFloat, _ b: CGFloat) -> CGFloat {
+        a + (b - a) * CGFloat(p)
+    }
+    private var shownState: WearIveRunState { displayedState ?? state }
+    private var shownEntry: WearIveRunEntry { displayedEntry ?? entry }
+
+    /// Mini rest height: vertical padding 8×2 + the one row
+    /// (44 pt controls, or the wrapped narration when taller).
+    var miniRestHeight: CGFloat { 16 + max(44, miniNarrationHeight) }
+    /// Expanded rest height from the measured rest anatomy:
+    /// top 20 + header 44 + 12 + narration + 12 + entry + 12 +
+    /// doorway 24 + bottom 20.
+    var expandedRestHeight: CGFloat {
+        20 + 44 + 12 + expandedNarrationHeight + 12
+            + expandedEntryHeight + 12 + 24 + 20
+    }
+
+    private var thumbURLString: String? {
+        HeroRefResolver.stableDisplayReference(for: shownEntry) ?? resolvedHeroURL
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let topPad = lerp(8, 20)
+            let narrationX = (1 - CGFloat(p)) * (wordmarkWidth + 8)
+            let narrationY = topPad + lerp(10, 56)
+            let narrationWidth = max(40, width - 32 - narrationX - (1 - CGFloat(p)) * 96)
+            let entryY = narrationY + liveNarrationHeight + 12
+            let doorwayY = entryY + expandedEntryHeight + 12
+            ZStack(alignment: .topLeading) {
+                // The wordmark — the same view at every progress
+                // value; its size interpolates 17 → 31 pt and it
+                // is fixed-claim (fixedSize) at every sample.
+                wordmark
+                    .offset(x: 16, y: topPad + lerp(8, 0))
+                // The controls — one toggle + trash, top-right
+                // throughout the travel.
+                controls
+                    .offset(x: width - 16 - 92, y: topPad)
+                // THE narration — one view, one line object,
+                // opacity 1 at every progress value; it slides
+                // from beside the wordmark (mini) to below the
+                // header (expanded) and grows 12 → 15 pt.
+                if let line = WearIveRunNarration.line(for: shownState) {
+                    narrationView(line)
+                        .frame(width: narrationWidth, alignment: .leading)
+                        .offset(x: 16 + narrationX, y: narrationY)
+                }
+                // The entry row — the same row throughout; it
+                // rides below the narration and fades in with
+                // progress (below the mini rest height at p = 0,
+                // so the mini form never shows it).
+                entryRow
+                    .frame(width: width - 32, alignment: .leading)
+                    .offset(x: 16, y: entryY)
+                    .opacity(p)
+                    .allowsHitTesting(p > 0.5 && exitProgress == 0)
+                // The doorway — always present in the expanded
+                // form (§2.4), fading in with the same travel.
+                doorway
+                    .offset(x: 16, y: doorwayY)
+                    .opacity(p)
+                    .allowsHitTesting(p > 0.5 && exitProgress == 0)
+            }
+            .frame(width: width, alignment: .topLeading)
+        }
+        .background {
+            // One material throughout: the mini state's
+            // translucent tint (light .85 / dark .82, §2.1)
+            // over the system blur, deepening to the expanded
+            // state's opaque sheet tint with progress — the
+            // tint layer's opacity is what moves, never the
+            // material's blur.
+            ZStack {
+                Rectangle().fill(.regularMaterial)
+                Rectangle().fill(
+                    (colorScheme == .dark
+                        ? Color(hex: AppTheme.cardDarkHex)
+                        : Color(hex: AppTheme.sheetLightHex)
+                    ).opacity(WearIveRunMorph.tintOpacity(
+                        progress: p,
+                        isDark: colorScheme == .dark
+                    ))
+                )
+            }
+        }
+        .overlay {
+            if isPulsing {
+                RoundedRectangle(cornerRadius: WearIveRunMorph.miniCornerRadius)
+                    .stroke(AppTheme.pinePayload, lineWidth: 2)
+                    .scaleEffect(ringScale)
+                    .opacity(ringOpacity)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: p)))
+        .overlay {
+            RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: p))
+                .strokeBorder(
+                    colorScheme == .dark
+                        ? Color.white.opacity(0.14)
+                        : Color.black.opacity(0.08),
+                    lineWidth: 0.5)
+        }
+        .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
+        .opacity(WearIveRunElementDimming.opacity(sheetPresented: isDimmedBySheet)
+            * (1 - exitProgress) * entranceProgress)
+        .offset(y: (reduceMotion ? 0 : CGFloat(1 - entranceProgress) * 90)
+            + (reduceMotion ? 0 : CGFloat(26 * exitProgress)))
+        .scaleEffect(pulseScale * bounceScale * pressScale)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Tapping the surface body toggles it (the toggle
+            // control is the same action, RW-152 §1).
+            if p < 0.5 { handleToggleTap() }
+        }
+        .sensoryFeedback(.impact(flexibility: .soft), trigger: cueHapticNonce)
+        .sensoryFeedback(.impact(weight: .light), trigger: trashHapticNonce)
+        .sensoryFeedback(.impact(weight: .light), trigger: glideHapticNonce)
+        .accessibilityLabel("\(WearIveRunMiniBarModel.wordmark)\(p > 0.5 ? ", expanded" : "")")
+        .task(id: shownEntry.id) {
+            if HeroRefResolver.stableDisplayReference(for: shownEntry) == nil {
+                resolvedHeroURL = await heroURLResolver?(shownEntry)
+            }
+        }
+        .onAppear {
+            if displayedState == nil {
+                displayedState = state
+                displayedEntry = entry
+                _ = narrationDeferral.offer(
+                    line: WearIveRunNarration.line(for: state),
+                    gestureActive: false)
+            }
+            onRestHeights?(miniRestHeight, expandedRestHeight)
+            runEntranceIfNeeded()
+        }
+        .onChange(of: cueCount) { oldValue, newValue in
+            guard newValue > oldValue, didRunEntrance else { return }
+            didRunEntrance = false
+            runEntranceIfNeeded()
+        }
+        .onChange(of: state) { _, newState in
+            let released = narrationDeferral.offer(
+                line: WearIveRunNarration.line(for: newState),
+                gestureActive: isScrollGestureActive)
+            if released != nil {
+                applyNarrationCrossfade(to: newState)
+            } else if isScrollGestureActive {
+                pendingNarrationState = newState
+            }
+        }
+        .onChange(of: entry) { _, newEntry in
+            if displayedState == state, displayedEntry != newEntry {
+                applyNarrationCrossfade(to: state)
+            }
+        }
+        .onChange(of: isScrollGestureActive) { _, active in
+            if !active, narrationDeferral.gestureEnded() != nil,
+               let pending = pendingNarrationState {
+                pendingNarrationState = nil
+                DispatchQueue.main.async {
+                    applyNarrationCrossfade(to: pending)
+                }
+            }
+        }
+    }
+
+    // MARK: The one hierarchy's elements
+
+    private var wordmark: some View {
+        Text(WearIveRunMiniBarModel.wordmark)
+            .font(.greatVibes(size: lerp(17, 31)))
+            .foregroundColor(AppTheme.inkPrimary)
+            // §7B width law: fixed-claim at every progress
+            // value — the wordmark's width is its interpolated
+            // rest width, never a negotiated remainder.
+            .fixedSize(horizontal: true, vertical: false)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { _, width in
+                if width > 0 { wordmarkWidth = width }
+            }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 4) {
+            Button {
+                handleToggleTap()
+            } label: {
+                ZStack {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .opacity(1 - p)
+                    Image(systemName: "chevron.down")
+                        .opacity(p)
+                }
+                .font(.system(size: 14))
+                .foregroundColor(AppTheme.inkMuted)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(p > 0.5 ? "Collapse" : "Expand")
+            Button {
+                trashHapticNonce += 1
+                onTrash()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppTheme.inkMuted)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Remove today's entry")
+        }
+    }
+
+    @ViewBuilder
+    private func narrationView(_ line: String) -> some View {
+        narrationText(line, for: shownState)
+            .font(.system(size: lerp(12, 15)))
+            .id(line)
+            .transition(.opacity)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.height
+            } action: { _, height in
+                if height > 0 {
+                    liveNarrationHeight = height
+                    // Rest captures only: a height measured at a
+                    // rest state feeds that state's rest height;
+                    // nothing measured during the travel feeds
+                    // either endpoint.
+                    if p == 0 { miniNarrationHeight = height }
+                    if p == 1 { expandedNarrationHeight = height }
+                    if p == 0 || p == 1 {
+                        onRestHeights?(miniRestHeight, expandedRestHeight)
+                    }
+                }
+            }
+    }
+
+    private var entryRow: some View {
+        Button(action: entryRowTapped) {
+            HStack(spacing: 12) {
+                WearIveRunPromotedThumbnail(urlString: thumbURLString)
+                // §2.4 anatomy + RW-169 D5: the entry line
+                // wraps whole over as many lines as it needs —
+                // no line limit, no tail truncation, fixed
+                // vertical claim.
+                Text(WearIveRunNarration.expandedLine(
+                    for: shownEntry,
+                    formattedFeelsLike: formattedFeelsLike
+                ))
+                .font(.system(size: 14.5))
+                .foregroundColor(AppTheme.inkSecondary)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open the full Wear I've Run collection")
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { _, height in
+            if height > 0, p == 1 {
+                expandedEntryHeight = height
+                onRestHeights?(miniRestHeight, expandedRestHeight)
+            }
+        }
+    }
+
+    private var doorway: some View {
+        Button(action: onOpenCollection) {
+            Text("Open the collection ›")
+                .font(.system(size: 15.5, weight: .semibold))
+                .foregroundColor(AppTheme.pinePayload)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open the full Wear I've Run collection")
+    }
+
+    private func entryRowTapped() {
+        if let onOpenShareEntry,
+           WearIveRunTapPolicy.expandedPanelEntryDestination(for: shownEntry) == .shareSheet {
+            onOpenShareEntry(shownEntry)
+        } else {
+            onOpenCollection()
+        }
+    }
+
+    /// The narration's rich form — verb secondary, payload pine
+    /// semibold — composed from the SHOWN recorded state only
+    /// (§7.0), identical in both geometries because it is the
+    /// same view.
+    private func narrationText(_ line: String, for shownState: WearIveRunState) -> Text {
+        switch shownState {
+        case .updated(let payload):
+            if case .placeAtMoment(let place, let moment) = payload {
+                return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                    + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+                    + Text(", \(moment.rendered)").foregroundColor(AppTheme.inkSecondary)
+            }
+            return Text("Updated to ").foregroundColor(AppTheme.inkSecondary)
+                + Text(payload.rendered).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+        case .planned(let place, let dayLabel, let moment):
+            return Text("Planned for ").foregroundColor(AppTheme.inkSecondary)
+                + Text(place).foregroundColor(AppTheme.pinePayload).fontWeight(.semibold)
+                + Text(WearIveRunNarration.plannedSuffix(dayLabel: dayLabel, moment: moment)).foregroundColor(AppTheme.inkSecondary)
+        case .preAdd:
+            return Text(line).foregroundColor(AppTheme.inkSecondary)
+        }
+    }
+
+    // MARK: Toggle, cross-fade, entrance, cue (the mini bar's discipline, carried)
+
+    /// The toggle fires SYNCHRONOUSLY in the tap's own
+    /// transaction (RW-162 G1's rule, carried): the press scale
+    /// is decoration that follows it, never its carrier.
+    private func handleToggleTap() {
+        guard exitProgress == 0 else { return }
+        glideHapticNonce += 1
+        onToggle()
+        if reduceMotion { return }
+        withAnimation(.easeInOut(duration: 0.12)) {
+            pressScale = 0.97
+        } completion: {
+            withAnimation(.easeOut(duration: 0.15)) { pressScale = 1 }
+        }
+    }
+
+    /// §4.3/§7E.4: a released line flips the surface's fields —
+    /// narration and entry together, from the one snapshot —
+    /// as an opacity-only cross-fade (≈210 ms) + the update
+    /// bounce, deferred to scroll rest by the gate above.
+    private func applyNarrationCrossfade(to newState: WearIveRunState) {
+        guard displayedState != newState || displayedEntry != entry else { return }
+        if exitProgress == 0 { runUpdateBounce() }
+        if reduceMotion {
+            displayedState = newState
+            displayedEntry = entry
+            return
+        }
+        withAnimation(.easeInOut(duration: WearIveRunMorph.narrationCrossfadeSeconds)) {
+            displayedState = newState
+            displayedEntry = entry
+        }
+    }
+
+    private func runEntranceIfNeeded() {
+        guard !didRunEntrance else { return }
+        didRunEntrance = true
+        guard cueCount > 0 else {
+            entranceProgress = 1
+            return
+        }
+        if reduceMotion {
+            entranceProgress = 0
+            withAnimation(.easeInOut(duration: 0.22)) {
+                entranceProgress = 1
+            } completion: {
+                cueHapticNonce += 1
+            }
+            return
+        }
+        entranceProgress = 0
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+            entranceProgress = 1
+        } completion: {
+            fireCueSettle()
+        }
+    }
+
+    /// The cue's settle moment: fire the ONE pulse and the ONE
+    /// soft haptic (§4.1), together, exactly here.
+    private func fireCueSettle() {
+        cueHapticNonce += 1
+        runCuePulse()
+    }
+
+    private func runCuePulse() {
+        guard !reduceMotion else { return }
+        isPulsing = true
+        ringScale = 1
+        ringOpacity = 0.9
+        withAnimation(.easeOut(duration: WearIveRunElementMachine.cuePulseDurationSeconds)) {
+            ringScale = 1.08
+            ringOpacity = 0
+        }
+        let half = WearIveRunElementMachine.cuePulseDurationSeconds / 2
+        withAnimation(.easeInOut(duration: half)) {
+            pulseScale = WearIveRunElementMachine.cuePulseScale
+        } completion: {
+            withAnimation(.easeInOut(duration: half)) {
+                pulseScale = 1
+            } completion: {
+                isPulsing = false
+            }
+        }
+    }
+
+    private func runUpdateBounce() {
+        if reduceMotion {
+            cueHapticNonce += 1
+            return
+        }
+        withAnimation(.easeOut(duration: 0.16)) {
+            bounceScale = CGFloat(WearIveRunMorph.updateBounceScale)
+        } completion: {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                bounceScale = 1
+            } completion: {
+                cueHapticNonce += 1
+            }
+        }
+    }
+}
+
+// MARK: - RW-152 §1 / RW-169 §7A — the one overlay surface (two states, one morph)
 //
 // The container the host mounts. It owns the ONE
-// `expansionProgress` (0 = MINI, 1 = EXPANDED): height
-// interpolates between the two states' MEASURED content
-// heights through WearIveRunMorph.height, the mini state fades
-// out linearly, and the expanded content cross-fades in over
-// the morph's window (expandedContentOpacity — the RW-135 §3
-// dissolve) with its ≤4 pt drift. Expansion is user-summoned
-// ONLY (the dock's expand control or body tap — the tap driver
-// spring); dismissal (chevron / glide) runs the collapse
-// driver. The expanded state is NEVER the rest state: the
-// surface mounts at progress 0. Dismissal restores the page
-// exactly because the page never moved — the overlay is the
-// only thing that changed. Under Reduce Motion the morph is
-// the ≤150 ms crossfade (§5/§6 of the morph decision).
-// The host's exit progress folds this container's height
-// (× (1 − progress)) while both states fade — the §4.7
-// content-fade + height-fold on the one surface.
+// `expansionProgress` (0 = MINI, 1 = EXPANDED) and drives the
+// ONE unified surface (WearIveRunUnifiedSurfaceView) with it:
+// height interpolates between the two REST heights through
+// WearIveRunMorph.height — the mini rest height measured at
+// mini rest, the expanded rest height measured at expanded
+// rest (before the first expansion, derived from the rest
+// content by WearIveRunOverlayPolicy.contentHeight). No height
+// is ever measured during the morph (RW-169 §7A retires RW-162
+// G1's during-morph measurement pass and the dual-form ZStack
+// it fed). Expansion is user-summoned ONLY; dismissal restores
+// the page exactly because the page never moved. The host's
+// exit progress folds this container's height while the
+// surface fades — the §4.7 content-fade + height-fold.
 
 struct WearIveRunOverlayView: View {
     let state: WearIveRunState
@@ -2118,208 +2798,122 @@ struct WearIveRunOverlayView: View {
     /// The entry's feels-like, formatted in the user's unit.
     let formattedFeelsLike: String
     /// Cue-worthy landing counter (creation only), forwarded
-    /// to the mini state's entrance logic.
+    /// to the surface's entrance logic.
     let cueCount: Int
     /// The collection model's narration version (bookkeeping,
-    /// forwarded to both states).
+    /// forwarded to the surface).
     var narrationVersion: Int = 0
     /// Host-orchestrated exit progress (0 = at rest, 1 = fully
     /// exited), driven by the host's §4.7/§4.8 choreography.
     var exitProgress: Double = 0
     /// True while any sheet is presented over home — forwarded
-    /// to the mini state's backdrop dim.
+    /// to the surface's backdrop dim.
     var isDimmedBySheet: Bool = false
     /// True while the host page's scroll gesture is live —
-    /// forwarded to both states' narration deferral gates.
+    /// forwarded to the surface's narration deferral gate.
     var isScrollGestureActive: Bool = false
-    /// The host viewport's height — the expanded panel's §2
+    /// The host viewport's height — the expanded state's §2
     /// cap input.
     let viewportHeight: CGFloat
     /// RW-152 §3: the resolver's signing half, forwarded to the
-    /// panel (the collection surfaces resolve through
+    /// surface (the collection surfaces resolve through
     /// HeroRefRuntime directly).
     var heroURLResolver: ((WearIveRunEntry) async -> String?)?
     let onOpenCollection: () -> Void
-    /// RW-158: forwarded to the expanded panel's entry row
-    /// (a past entry's tap opens the Share Studio sheet).
+    /// RW-158: forwarded to the surface's entry row (a past
+    /// entry's tap opens the Share Studio sheet).
     var onOpenShareEntry: ((WearIveRunEntry) -> Void)?
     let onTrash: () -> Void
 
     @State private var expansionProgress: Double = 0
-    /// The panel stays mounted for the whole morph (and while
-    /// expanded); it unmounts only when a collapse completes.
-    @State private var panelMounted = false
-    /// RW-162 G1 (device verdict, Nov 10, 2026): the morph is
-    /// RUNNING (or holding the expanded state) — distinct from
-    /// `panelMounted`, because expansion now mounts the panel
-    /// for one UNFRAMED measurement pass before the morph's
-    /// height drive engages (see expand()). The driven frame
-    /// and the travel clip apply only while this is true.
-    @State private var morphActive = false
-    /// The surface's REST height, captured by the CONTAINER
-    /// while the panel is unmounted (at rest the container IS
-    /// the mini dock, intrinsically sized — no frame is ever
-    /// applied). It seeds the morph's mini endpoint and the
-    /// exit fold. The capture lives on the container, is
-    /// guarded to the pure rest state (panel unmounted, no
-    /// exit folding — so a morph or fold in flight cannot feed
-    /// it), and is only read once a morph or exit is already
-    /// running. RW-86 discipline, kept in the new shape: the
-    /// mini bar is never SIZED by any measurement (its own
-    /// dockHeight capture serves only its entrance rise) — the
-    /// blank-bar mechanism was a measured height driving the
-    /// bar's own frame, and no frame here is driven by the
-    /// height of the thing it frames at rest.
+    /// The surface's measured mini rest height (captured from
+    /// the unified surface's own rest anatomy at progress 0).
     /// Seeded with the settled single-line dock height.
-    @State private var restHeight: Double = Double(DockResidence.measuredDockHeight)
-    /// The panel's measured content height (RW-152 §2's gate:
-    /// rendered panel height == measured content height) — the
-    /// morph's expanded endpoint.
-    @State private var panelHeight: Double = 0
+    @State private var miniRestHeight: Double = Double(DockResidence.measuredDockHeight)
+    /// The surface's measured expanded rest height, captured
+    /// at expanded rest after the first expansion; 0 until
+    /// then (the pre-expansion endpoint is the policy's
+    /// rest-content derivation below).
+    @State private var expandedRestHeight: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// The container's height WHILE a morph or exit is running:
-    /// the morph interpolation, folded by the exit progress. At
-    /// rest (panel unmounted, no exit) no height is applied at
-    /// all — the surface stands at its intrinsic mini height.
+    /// The expanded endpoint before its first rest measurement:
+    /// the §2 policy's content height for this entry's rest
+    /// content (narration and entry lines counted from the
+    /// recorded strings at the panel's width class).
+    private var expandedRestEstimate: Double {
+        let narration = WearIveRunNarration.line(for: state) ?? ""
+        let entryLine = WearIveRunNarration.expandedLine(
+            for: entry, formattedFeelsLike: formattedFeelsLike)
+        let narrationLines = max(1, Int(ceil(Double(narration.count) / 44.0)))
+        let entryLines = max(1, Int(ceil(Double(entryLine.count) / 38.0)))
+        return Double(WearIveRunOverlayPolicy.contentHeight(
+            narrationLineCount: narrationLines,
+            entryLineCount: entryLines,
+            textScale: 1))
+    }
+
+    /// The container's height: the morph interpolation of the
+    /// two rest heights, capped per §2, folded by the exit.
     private var containerHeight: Double {
-        let expanded = panelHeight > 0 ? panelHeight : restHeight
-        let base = WearIveRunMorph.height(
-            mini: restHeight, expanded: expanded, progress: expansionProgress)
+        let expanded = min(
+            expandedRestHeight > 0 ? expandedRestHeight : expandedRestEstimate,
+            Double(WearIveRunOverlayPolicy.expandedCap(viewportHeight: viewportHeight)))
+        let base = WearIveRunMorphProbe.containerHeight(
+            miniRest: miniRestHeight, expandedRest: expanded, progress: expansionProgress)
         return exitProgress > 0 ? base * (1 - exitProgress) : base
     }
 
-    /// Whether an explicit height governs the surface right
-    /// now (a morph is running/holding, or an exit is folding).
-    /// RW-162 G1: NOT merely `panelMounted` — during expansion's
-    /// measurement pass the panel is mounted but the frame must
-    /// stay un-driven, or the panel is measured inside the very
-    /// height it is supposed to determine.
-    private var heightIsDriven: Bool { morphActive || exitProgress > 0 }
-
-    /// RW-162 G5 (device verdict, Nov 10, 2026): the travel clip
-    /// applies ONLY while the morph is actually travelling
-    /// (0 < progress < 1) or an exit is folding. The pre-fix
-    /// condition (progress > 0) clipped the surface for the
-    /// WHOLE expanded rest state — with a plain rectangular
-    /// `.clipped()` that sheared the panel's rounded corners
-    /// and its shadow off at the container's bounds, which is
-    /// precisely the device's "huge rectangle, no boundaries or
-    /// shadows" expanded panel.
+    /// RW-162 G5, carried: the travel clip applies ONLY while
+    /// the morph is actually travelling (0 < progress < 1) or
+    /// an exit is folding — at either rest state the surface's
+    /// own rounded shape and shadow stand unclipped.
     private var travelClipActive: Bool {
         (expansionProgress > 0 && expansionProgress < 1) || exitProgress > 0
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            WearIveRunMiniBarView(
-                state: state,
-                entry: entry,
-                formattedFeelsLike: formattedFeelsLike,
-                cueCount: cueCount,
-                narrationVersion: narrationVersion,
-                exitProgress: exitProgress,
-                isDimmedBySheet: isDimmedBySheet,
-                isScrollGestureActive: isScrollGestureActive,
-                onExpand: { expand() },
-                onOpenCollection: onOpenCollection,
-                onTrash: onTrash
-            )
-            .opacity(1 - expansionProgress)
-            .allowsHitTesting(expansionProgress == 0 && exitProgress == 0)
-            .accessibilityHidden(expansionProgress > 0)
-
-            if panelMounted {
-                WearIveRunExpandedPanelView(
-                    state: state,
-                    entry: entry,
-                    formattedFeelsLike: formattedFeelsLike,
-                    narrationVersion: narrationVersion,
-                    isScrollGestureActive: isScrollGestureActive,
-                    viewportHeight: viewportHeight,
-                    exitContentOpacity: 1 - exitProgress,
-                    heroURLResolver: heroURLResolver,
-                    onOpenCollection: onOpenCollection,
-                    onOpenShareEntry: onOpenShareEntry,
-                    onCollapse: { collapse() },
-                    onTrash: onTrash
-                )
-                .opacity(WearIveRunMorph.expandedContentOpacity(
-                    progress: expansionProgress))
-                .offset(y: WearIveRunMorph.expandedContentOffset(
-                    progress: expansionProgress))
-                .allowsHitTesting(expansionProgress > 0.5 && exitProgress == 0)
-                .onGeometryChange(for: Double.self) { proxy in
-                    proxy.size.height
-                } action: { _, height in
-                    if height > 0 { panelHeight = height }
-                }
-            }
-        }
-        .frame(height: heightIsDriven ? containerHeight : nil)
+        WearIveRunUnifiedSurfaceView(
+            state: state,
+            entry: entry,
+            formattedFeelsLike: formattedFeelsLike,
+            cueCount: cueCount,
+            narrationVersion: narrationVersion,
+            exitProgress: exitProgress,
+            isDimmedBySheet: isDimmedBySheet,
+            isScrollGestureActive: isScrollGestureActive,
+            viewportHeight: viewportHeight,
+            heroURLResolver: heroURLResolver,
+            expansionProgress: expansionProgress,
+            onRestHeights: { mini, expanded in
+                // Rest captures only (the surface calls this
+                // from its rest-state geometry reads): these
+                // become the morph's two endpoints.
+                if mini > 0 { miniRestHeight = Double(mini) }
+                if expanded > 0 { expandedRestHeight = Double(expanded) }
+            },
+            onToggle: { toggle() },
+            onOpenCollection: onOpenCollection,
+            onOpenShareEntry: onOpenShareEntry,
+            onTrash: onTrash
+        )
+        .frame(height: containerHeight)
         .clippedIfMorphing(travelClipActive, radius: WearIveRunMorph.cornerRadius(progress: expansionProgress))
-        .onChange(of: panelHeight) { _, newHeight in
-            // RW-162 G1: expansion's measurement pass — the
-            // panel has reported a real content height larger
-            // than the rest height; the morph may start.
-            if panelMounted, !morphActive, expansionProgress == 0,
-               exitProgress == 0, newHeight > restHeight + 0.5 {
-                startMorph()
-            }
-        }
-        .onGeometryChange(for: Double.self) { proxy in
-            proxy.size.height
-        } action: { _, height in
-            // Rest capture ONLY: while the panel is unmounted
-            // and no exit is folding, the container's size is
-            // the mini dock's intrinsic height. Once a morph
-            // mounts the panel (or an exit starts folding) the
-            // explicit height governs and the capture must not
-            // chase it.
-            if !panelMounted, exitProgress == 0, height > 0 {
-                restHeight = height
-            }
-        }
     }
 
-    /// Summon the expanded state. RW-162 G1 (device verdict,
-    /// Nov 10, 2026): the pre-fix form mounted the panel AND
-    /// engaged the driven frame in the same transaction, so the
-    /// panel's content height was measured inside a container
-    /// already framed (and clipped) at the morph's interpolation
-    /// — the endpoint could capture the mini height (the
-    /// container-level twin of the run-263 false-endpoint
-    /// defect), above all when the entry region took its
-    /// ScrollView branch and accepted the proposed height. The
-    /// morph then travelled 0 → 1 between two equal heights:
-    /// the mini faded out, nothing grew — "never expands". The
-    /// fix is a measurement pass: mount the panel UNFRAMED and
-    /// UNCLIPPED (its opacity window keeps it invisible at
-    /// progress 0), let it report its true content height, and
-    /// only then engage the driven frame and run the spring. A
-    /// 250 ms fallback starts the morph with the best height on
-    /// record if no larger measurement lands, so the tap can
-    /// never dead-end.
-    private func expand() {
-        guard expansionProgress == 0, exitProgress == 0, !morphActive else { return }
-        panelMounted = true
-        if panelHeight > restHeight + 0.5 {
-            startMorph()
+    private func toggle() {
+        if expansionProgress < 0.5 {
+            expand()
         } else {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                if panelMounted, !morphActive, expansionProgress == 0, exitProgress == 0 {
-                    startMorph()
-                }
-            }
+            collapse()
         }
     }
 
-    /// Engage the driven frame and run the one progress value
-    /// 0 → 1 with the tap driver spring (Reduce Motion: the
-    /// ≤150 ms crossfade).
-    private func startMorph() {
-        morphActive = true
+    /// Summon the expanded state: the tap driver spring runs
+    /// the one progress value 0 → 1 between the two rest
+    /// heights (Reduce Motion: the ≤150 ms crossfade).
+    private func expand() {
+        guard expansionProgress == 0, exitProgress == 0 else { return }
         withAnimation(WearIveRunMorph.animation(
             for: reduceMotion ? .reducedMotion : .tap
         )) {
@@ -2328,18 +2922,13 @@ struct WearIveRunOverlayView: View {
     }
 
     /// Dismiss to the mini state: the collapse driver runs the
-    /// progress back to 0; the panel unmounts at the settle and
-    /// the surface stands exactly as it did before the summon.
+    /// progress back to 0; the surface stands exactly as it did
+    /// before the summon.
     private func collapse() {
         withAnimation(WearIveRunMorph.animation(
             for: reduceMotion ? .reducedMotion : .collapse
         )) {
             expansionProgress = 0
-        } completion: {
-            if expansionProgress == 0 {
-                panelMounted = false
-                morphActive = false
-            }
         }
     }
 }

@@ -584,17 +584,20 @@ struct HeroTopChromeView: View {
     var onShareTapped: (() -> Void)? = nil
 
     var body: some View {
-        ZStack {
-            // Wordmark, centered on the hero (not on the row's
-            // remaining space — the frames center it on screen).
-            Text("RunWear")
-                .font(.greatVibes(size: 25))
-                .lineLimit(1)
-                .foregroundColor(HeroChrome.cream)
-                .shadow(color: Color.black.opacity(0.35), radius: 6, y: 2)
-                .accessibilityHidden(true)
-
-            HStack(alignment: .top, spacing: 8) {
+        // RW-169 §7C (D10): ONE negotiating layout pass — place
+        // pill, wordmark, share and gear are siblings in a
+        // single HStack, so they divide the row's width
+        // together. (The pre-fix form centred the wordmark in
+        // an overlaying ZStack layer that never negotiated with
+        // the pill: the pill truncated at a 110 pt cap copied
+        // from a mock whose place was "Phoenix, AZ", and what
+        // remained still slid under the wordmark.)
+        // §7B width law: the wordmark and the place name are
+        // FIXED-CLAIM — both are fixedSize and carry layout
+        // priority; the flexible space (the two spacers) is
+        // what yields. The wordmark's centred zone is reserved
+        // by the equal spacers around it.
+        HStack(alignment: .top, spacing: 8) {
                 Button(action: onPlaceTapped) {
                     HStack(spacing: 6) {
                         Image(systemName: "mappin")
@@ -602,13 +605,15 @@ struct HeroTopChromeView: View {
                         Text(placeName)
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
-                            .truncationMode(.tail)
-                            // The pill must never reach the
-                            // centered wordmark: long place names
-                            // truncate inside the pill (the mock's
-                            // pill is ~118 pt wide).
-                            .frame(maxWidth: 110, alignment: .leading)
+                            // RW-169 §7B: the pill SIZES TO ITS
+                            // TEXT — no width cap, no tail
+                            // truncation. The 110 pt cap that
+                            // stood here was a constant copied
+                            // from a mock whose place happened
+                            // to be "Phoenix, AZ" (D10).
+                            .fixedSize(horizontal: true, vertical: false)
                     }
+                    .layoutPriority(1)
                     .foregroundColor(HeroChrome.cream)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
@@ -625,10 +630,28 @@ struct HeroTopChromeView: View {
 
                 Spacer(minLength: 0)
 
+                // The RunWear wordmark, centred in its reserved
+                // zone between the two flexible spacers — a
+                // sibling in this same pass, fixed-claim
+                // (fixedSize + highest priority), so neither the
+                // pill nor the button pair can slide under it
+                // or compress it.
+                Text("RunWear")
+                    .font(.greatVibes(size: 25))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
+                    .foregroundColor(HeroChrome.cream)
+                    .shadow(color: Color.black.opacity(0.35), radius: 6, y: 2)
+                    .accessibilityHidden(true)
+
+                Spacer(minLength: 0)
+
                 // RW-168: share sits beside the gear, in the
                 // gear's own circle chrome (fill, hairline,
-                // cream glyph) — the hero's geometry is
-                // otherwise untouched.
+                // cream glyph) — the pair stays structurally
+                // bound as end-of-row siblings
+                // ([Spacer][share][gear], RW-169 §7C).
                 if let onShareTapped {
                     Button(action: onShareTapped) {
                         Image(systemName: "square.and.arrow.up")
@@ -662,7 +685,6 @@ struct HeroTopChromeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Settings")
-            }
         }
     }
 }

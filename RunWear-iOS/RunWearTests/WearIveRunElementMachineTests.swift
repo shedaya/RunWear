@@ -804,8 +804,18 @@ final class WearIveRunW15FixTests: XCTestCase {
         // wiring at the same strength.
         XCTAssertTrue(view.contains("WearIveRunMorph.height("),
                       "RW-152 §1: the container's height is the morph's interpolation of the two measured states")
-        XCTAssertTrue(view.contains("WearIveRunMorph.expandedContentOpacity"),
-                      "RW-152 §1: the expanded content cross-fades through the morph's dissolve window")
+        // RE-PINNED for RW-169 §7A (Nov 11, 2026; supersedes the
+        // RW-152 §1 expandedContentOpacity wiring pin that stood
+        // here): the dual-form ZStack — a complete mini form and
+        // a complete expanded form composed simultaneously, the
+        // expanded content cross-fading in over the morph's
+        // window — is RETIRED (diagnosis D3). The overlay now
+        // drives ONE unified surface whose single hierarchy is
+        // repositioned by the same progress value.
+        XCTAssertTrue(view.contains("WearIveRunUnifiedSurfaceView"),
+                      "RW-169 §7A: the overlay drives one unified surface — one hierarchy, two geometries")
+        XCTAssertFalse(view.contains("WearIveRunMorph.expandedContentOpacity"),
+                      "RW-169 §7A: the dual-form dissolve window is retired with the dual-form ZStack")
         XCTAssertFalse(view.contains("handoffFade"),
                        "RW-152 §1: the scroll-position handoff is removed")
         XCTAssertTrue(view.contains("WearIveRunMorph.tintOpacity"),
@@ -1352,8 +1362,13 @@ final class WearIveRunSessionRuleTests: XCTestCase {
         // to the merged expression — served hero first, the
         // always-available gated resolution only when nothing has
         // been served yet (see WeatherOutfitView's merge note).
-        XCTAssertTrue(home.contains("heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference() ?? \"\""),
-                      "the entry must stamp the served hero identity at settle time")
+        // RE-PINNED for RW-169 §7E.3 (Nov 11, 2026; narrows
+        // the GEN-3 merge pin that stood here): the entry
+        // stamps the REMOTE serve on screen at settle time —
+        // a bundled fallback serve is never recorded as the
+        // entry's hero reference.
+        XCTAssertTrue(home.contains("heroImageReference: viewModel.heroImageUrl ?? \"\""),
+                      "RW-169 §7E.3: the entry stamps the remote serve on screen at settle time, never a fallback serve")
         // And the collection renders the recorded reference
         // verbatim — it re-resolves nothing at open time.
         // (RW-152 §3 note, Nov 9, 2026: the collection still

@@ -387,8 +387,18 @@ final class Gen3HeroServingTests: XCTestCase {
 
     func testAllPhotoSurfacesShareTheAlwaysAvailableResolution_sourcePin() throws {
         let view = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(view.contains("viewModel.alwaysAvailableHeroReference()"),
-                      "Wear I've Run entry recording must be fed by the same always-available resolution as the hero (X-10)")
+        // RE-PINNED for RW-169 §7E.3 (Nov 11, 2026; narrows the
+        // X-10 pin that stood here): a FALLBACK serve is never
+        // recorded as the entry's hero reference — the bundled
+        // always-available resolution no longer feeds the
+        // recording. Only a remote serve actually on screen
+        // (viewModel.heroImageUrl) is recorded; the
+        // always-available resolution still feeds the HERO's
+        // own paint (the VM pin below stands).
+        XCTAssertTrue(view.contains("heroImageReference: viewModel.heroImageUrl ?? \"\""),
+                      "RW-169 §7E.3: the entry records the remote serve on screen, never a fallback serve")
+        XCTAssertFalse(view.contains("heroImageReference: viewModel.currentHeroFlagTarget?.imageUrl ?? viewModel.alwaysAvailableHeroReference()"),
+                      "RW-169 §7E.3: the fallback-inclusive recording expression is retired")
         let vm = try sourceFile("../RunWear/ViewModels/WeatherViewModel.swift")
         XCTAssertTrue(vm.contains("func alwaysAvailableHeroReference()"))
         XCTAssertTrue(vm.contains("heroOwnerPlaceKey = placeDisplayName"),

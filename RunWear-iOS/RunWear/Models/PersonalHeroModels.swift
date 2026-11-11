@@ -1279,6 +1279,41 @@ enum HeroPillState: Equatable {
     case premium
 }
 
+// MARK: - RW-169 §7D — ONE agreed per-cell presentation value
+//
+// Diagnosis D9: the same cell could present FAILED across the
+// hero (a failure line rendered from one derivation) and MAKING
+// on the straddle pill (rendered from another) simultaneously,
+// over a stock hero. There is now ONE presentation value per
+// cell, resolved once from the cell's facts, and every surface
+// — the straddle pill, the hero, and the failure wording —
+// reads THIS value and no other derivation: a cell is serving,
+// making, or failed, and it cannot be two of those at once
+// because the value is a single enum case.
+enum PersonalCellPresentation: Equatable {
+    /// A look (personal or stock) is being served for the cell.
+    case serving
+    /// The cell's exact look is being generated.
+    case making
+    /// The cell's look generation failed terminally.
+    case failed
+
+    /// Resolve the one presentation value from the cell's
+    /// facts. FAILED outranks MAKING in the resolution order
+    /// as a belt-and-braces rule — in practice the two cannot
+    /// co-occur in one look state (it is a single enum), which
+    /// is precisely the agreement the value guarantees.
+    static func resolve(
+        lookState: PersonalLookState,
+        pillState: HeroPillState
+    ) -> PersonalCellPresentation {
+        if lookState.isFailed { return .failed }
+        if pillState == .making || pillState == .makingWithUpsell { return .making }
+        if lookState == .making { return .making }
+        return .serving
+    }
+}
+
 enum HeroPill {
     static let makingLabel = "Making this you…"
     // GEN-6 Wave A (RW-34): there is NO scaffold label. The

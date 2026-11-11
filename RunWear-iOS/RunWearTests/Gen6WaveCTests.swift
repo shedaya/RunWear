@@ -1134,10 +1134,24 @@ final class Gen6FixWaveTests: XCTestCase {
         let barBody = bar[barStart.lowerBound..<barEnd.lowerBound]
         XCTAssertFalse(barBody.contains("height: dockHeight"),
                        "RW-86: the bar's one measurement never sizes the bar itself")
-        XCTAssertTrue(bar.contains("if !panelMounted, exitProgress == 0, height > 0"),
-                      "RW-152 §1: the rest capture is confined to the pure rest state")
-        XCTAssertTrue(bar.contains("heightIsDriven ? containerHeight : nil"),
-                      "RW-152 §1: at rest the surface carries no explicit height")
+        // RE-PINNED for RW-169 §7A (Nov 11, 2026; supersedes
+        // the RW-152 §1 rest-capture pins that stood here):
+        // the dual-form overlay — whose rest capture was
+        // confined to the panel-unmounted state and which
+        // carried no explicit height at rest — is RETIRED
+        // (diagnosis D3). The unified surface's container
+        // height is ALWAYS the interpolation of the two REST
+        // heights, both captured at their own rest states
+        // (the surface reports them via onRestHeights from
+        // rest-state geometry reads only, p == 0 / p == 1).
+        XCTAssertTrue(bar.contains("onRestHeights"),
+                      "RW-169 §7A: rest heights are reported from rest-state reads only")
+        XCTAssertTrue(bar.contains("if p == 0 { miniNarrationHeight = height }"),
+                      "RW-169 §7A: the mini rest capture is confined to the mini rest state")
+        XCTAssertTrue(bar.contains("if p == 1 { expandedNarrationHeight = height }"),
+                      "RW-169 §7A: the expanded rest capture is confined to the expanded rest state")
+        XCTAssertTrue(bar.contains(".frame(height: containerHeight)"),
+                      "RW-169 §7A: the container height is the rest-height interpolation at every progress value")
         // RE-PINNED for RW-152 §1 (Nov 9, 2026; supersedes the
         // RW-135 §2.2/§3 re-pin that stood here): the footer
         // section is REMOVED from the layout entirely — the
