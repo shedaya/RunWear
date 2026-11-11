@@ -217,10 +217,65 @@ final class RW168ShareMenuTests: XCTestCase {
 
     @MainActor
     func testRW168_ShareMenuRender_LightAndDark() throws {
-        try writeRender(menuScene(dark: false), size: CGSize(width: 393, height: 430),
-                        name: "RW168-ios-share-menu-light.png")
-        try writeRender(menuScene(dark: true), size: CGSize(width: 393, height: 430),
-                        name: "RW168-ios-share-menu-dark.png")
+        let light = try renderImage(menuScene(dark: false), size: CGSize(width: 393, height: 430),
+                                    name: "RW168-ios-share-menu-light.png")
+        let dark = try renderImage(menuScene(dark: true), size: CGSize(width: 393, height: 430),
+                                   name: "RW168-ios-share-menu-dark.png")
+        // The two frames must genuinely differ at the menu
+        // card: the light card is the sheet cream (#FDFBF6,
+        // luminance ≈ 250) and the dark card is Warm Charcoal
+        // (#211D17, ≈ 28). Identical frames would mean the
+        // appearance never applied — a failed render, not a
+        // dark frame (the first RW-168 run produced exactly
+        // that; this pin is its correction).
+        let lightCard = cardLuminance(light)
+        let darkCard = cardLuminance(dark)
+        XCTAssertGreaterThan(lightCard, 200, "light menu card renders on the sheet cream")
+        XCTAssertLessThan(darkCard, 80, "dark menu card renders on Warm Charcoal")
+    }
+
+    /// Mean luminance sampled inside the menu card's fill
+    /// (see the sample-seat note in the body).
+    private func cardLuminance(_ image: UIImage) -> Double {
+        guard let cg = image.cgImage else { return -1 }
+        let w = 48, h = 48
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data: &bytes, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return -1 }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        // Bitmap rows run bottom-up relative to the image; the
+        // sample sits in the card's trailing field (right of
+        // every row's text, inside the card) at image
+        // (0.92, 0.24) — grid (0.92, 0.76) in drawn rows — so
+        // it reads the card's FILL, never its ink. Sample a
+        // 5x5 patch there.
+        let cx = Int(0.92 * Double(w)), cy = Int(0.76 * Double(h))
+        var sum = 0.0, count = 0.0
+        for y in max(0, cy - 2)...min(h - 1, cy + 2) {
+            for x in max(0, cx - 2)...min(w - 1, cx + 2) {
+                let i = (y * w + x) * 4
+                sum += 0.299 * Double(bytes[i]) + 0.587 * Double(bytes[i + 1]) + 0.114 * Double(bytes[i + 2])
+                count += 1
+            }
+        }
+        return count > 0 ? sum / count : -1
+    }
+
+    @MainActor
+    private func renderImage<Content: View>(_ content: Content, size: CGSize, name: String) throws -> UIImage {
+        let renderer = ImageRenderer(content: content.frame(width: size.width, height: size.height))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.uiImage, "render failed for \(name)")
+        XCTAssertTrue(imageHasContent(image), "\(name) rendered blank")
+        let dir = artefactsDirectory()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try XCTUnwrap(image.pngData(), "PNG encoding failed for \(name)")
+        try data.write(to: dir.appendingPathComponent(name))
+        print("RW168 wrote \(name)")
+        return image
     }
 
     /// The production top chrome row (place pill, wordmark,
@@ -247,6 +302,14 @@ final class RW168ShareMenuTests: XCTestCase {
                 Spacer(minLength: 0)
             }
         }
+        // Both appearance channels: preferredColorScheme for
+        // the SwiftUI environment, and the colorScheme
+        // environment itself — the channel ImageRenderer's
+        // trait resolution follows for the dynamic UIColor
+        // tokens AppTheme is built from (the first RW-168 run
+        // carried preferredColorScheme alone and produced a
+        // light frame for the dark leg).
         .preferredColorScheme(dark ? .dark : .light)
+        .environment(\.colorScheme, dark ? .dark : .light)
     }
 }
