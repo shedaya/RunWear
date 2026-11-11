@@ -145,7 +145,7 @@ class Rw167WeatherDetailTipFlagTest : Rw145RenderTestBase() {
         assertFalse(all.any { it.contains("SHEET TIP TEXT") })
         assertFalse(
             "no generic fallback tip in place of the suppressed row",
-            all.any { it.contains("a light layer you can shed") }
+            all.any { it.contains("light layer you can shed") }
         )
         // The detail itself still renders.
         assertTrue(all.any { it.contains("Feels like") })
@@ -155,6 +155,6 @@ class Rw167WeatherDetailTipFlagTest : Rw145RenderTestBase() {
     fun `sheet rendering with no outfit tip uses the fallback tip`() {
         val all = detailTexts(showRunningTip = true, tip = null)
         assertTrue(all.any { it.trim() == "Running tip" })
-        assertTrue(all.any { it.contains("a light layer you can shed") })
+        assertTrue(all.any { it.contains("light layer you can shed") })
     }
 }
