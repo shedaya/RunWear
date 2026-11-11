@@ -230,8 +230,8 @@ final class RW168ShareMenuTests: XCTestCase {
         // that; this pin is its correction).
         let lightCard = cardLuminance(light)
         let darkCard = cardLuminance(dark)
-        XCTAssertGreaterThan(lightCard, 200, "light menu card renders on the sheet cream")
-        XCTAssertLessThan(darkCard, 80, "dark menu card renders on Warm Charcoal")
+        XCTAssertGreaterThan(lightCard, 200, "light menu card renders on the sheet cream (sampled \(lightCard))")
+        XCTAssertLessThan(darkCard, 80, "dark menu card renders on Warm Charcoal (sampled \(darkCard))")
     }
 
     /// Mean luminance sampled inside the menu card's fill
@@ -246,13 +246,15 @@ final class RW168ShareMenuTests: XCTestCase {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return -1 }
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        // Bitmap rows run bottom-up relative to the image; the
-        // sample sits in the card's trailing field (right of
-        // every row's text, inside the card) at image
-        // (0.92, 0.24) — grid (0.92, 0.76) in drawn rows — so
-        // it reads the card's FILL, never its ink. Sample a
-        // 5x5 patch there.
-        let cx = Int(0.92 * Double(w)), cy = Int(0.76 * Double(h))
+        // The sample sits in the card's trailing field (right
+        // of every row's text, inside the card) at image
+        // (0.92, 0.24), so it reads the card's FILL, never its
+        // ink. Sample a 5x5 patch there. (Run 43044517642's
+        // artifact PNGs, sampled externally at this seat, read
+        // #FDFBF6 light / #211D17 dark — the frames are right;
+        // this sampler's first form read the backdrop at the
+        // mirrored row and failed the light assertion.)
+        let cx = Int(0.92 * Double(w)), cy = Int(0.24 * Double(h))
         var sum = 0.0, count = 0.0
         for y in max(0, cy - 2)...min(h - 1, cy + 2) {
             for x in max(0, cx - 2)...min(w - 1, cx + 2) {
