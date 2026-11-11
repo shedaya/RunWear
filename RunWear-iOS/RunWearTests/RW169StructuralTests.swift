@@ -487,7 +487,7 @@ final class RW169StructuralTests: XCTestCase {
         // (wordmark + 8) − 96 controls reserve.
         let miniColumn = surfaceWidth - 32 - (wordmarkW + 8) - 96
         let miniNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 12), width: miniColumn)
-        let mini = 16 + max(44, miniNarrH)
+        let mini = max(16 + max(44, miniNarrH), 26 + miniNarrH)
         // Expanded: narration spans width − 32 at 15 pt; the
         // entry line sits beside the 56 pt thumbnail + 10.
         let expNarrH = measuredTextHeight(line, font: .systemFont(ofSize: 15), width: surfaceWidth - 32)

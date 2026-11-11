@@ -2361,7 +2361,14 @@ struct WearIveRunUnifiedSurfaceView: View {
 
     /// Mini rest height: vertical padding 8×2 + the one row
     /// (44 pt controls, or the wrapped narration when taller).
-    var miniRestHeight: CGFloat { 16 + max(44, miniNarrationHeight) }
+    /// RW-169 §7B containment: the narration sits at
+    /// topPad + 10, so a wrapped narration's full extent is
+    /// 8 + 10 + its height + 8 bottom padding — the bar grows
+    /// to CONTAIN it (26 + height), never letting the text
+    /// paint past the material's bottom edge.
+    var miniRestHeight: CGFloat {
+        max(16 + max(44, miniNarrationHeight), 26 + miniNarrationHeight)
+    }
     /// Expanded rest height from the measured rest anatomy:
     /// top 20 + header 44 + 12 + narration + 12 + entry + 12 +
     /// doorway 24 + bottom 20.
