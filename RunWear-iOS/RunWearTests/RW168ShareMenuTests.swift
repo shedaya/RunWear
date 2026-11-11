@@ -234,36 +234,34 @@ final class RW168ShareMenuTests: XCTestCase {
         XCTAssertLessThan(darkCard, 80, "dark menu card renders on Warm Charcoal (sampled \(darkCard))")
     }
 
-    /// Mean luminance sampled inside the menu card's fill
-    /// (see the sample-seat note in the body).
+    /// Mean luminance of the menu card's FILL, sampled from a
+    /// native-resolution crop at image seat (0.88, 0.36) — the
+    /// card's lower-right interior: inside the card, right of
+    /// every row's text, clear of every edge and the shadow.
+    /// (Two earlier sampler forms failed on geometry, not on
+    /// the frames: a 48x48 squash made the patch straddle the
+    /// card's right edge — sampled 191 against the true 251.
+    /// The artifact PNGs sampled externally at this seat read
+    /// a uniform 251.0 light / 29.5 dark.)
     private func cardLuminance(_ image: UIImage) -> Double {
         guard let cg = image.cgImage else { return -1 }
-        let w = 48, h = 48
+        let seatX = Int(0.88 * Double(cg.width)), seatY = Int(0.36 * Double(cg.height))
+        let half = 10
+        let rect = CGRect(x: seatX - half, y: seatY - half, width: half * 2, height: half * 2)
+        guard let crop = cg.cropping(to: rect) else { return -1 }
+        let w = crop.width, h = crop.height
         var bytes = [UInt8](repeating: 0, count: w * h * 4)
         guard let ctx = CGContext(
             data: &bytes, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return -1 }
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
-        // The sample sits in the card's trailing field (right
-        // of every row's text, inside the card) at image
-        // (0.92, 0.24), so it reads the card's FILL, never its
-        // ink. Sample a 5x5 patch there. (Run 43044517642's
-        // artifact PNGs, sampled externally at this seat, read
-        // #FDFBF6 light / #211D17 dark — the frames are right;
-        // this sampler's first form read the backdrop at the
-        // mirrored row and failed the light assertion.)
-        let cx = Int(0.92 * Double(w)), cy = Int(0.24 * Double(h))
-        var sum = 0.0, count = 0.0
-        for y in max(0, cy - 2)...min(h - 1, cy + 2) {
-            for x in max(0, cx - 2)...min(w - 1, cx + 2) {
-                let i = (y * w + x) * 4
-                sum += 0.299 * Double(bytes[i]) + 0.587 * Double(bytes[i + 1]) + 0.114 * Double(bytes[i + 2])
-                count += 1
-            }
+        ctx.draw(crop, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var sum = 0.0
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            sum += 0.299 * Double(bytes[i]) + 0.587 * Double(bytes[i + 1]) + 0.114 * Double(bytes[i + 2])
         }
-        return count > 0 ? sum / count : -1
+        return sum / Double(w * h)
     }
 
     @MainActor
