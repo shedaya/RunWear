@@ -54,12 +54,14 @@ class Rw166UnitTest {
         conditionLabel: String = "Clear sky",
         momentLabel: String? = "9 a.m.",
         itemKeys: List<String> = kitKeys,
-        settledAtMillis: Long = 1_762_700_400_000L // 2025-11-09T14:00Z
+        settledAtMillis: Long = 1_762_696_800_000L // 2025-11-09T14:00Z
     ) = WearIveRunDayEntry(
         date = date,
         place = place,
         feelsLikeF = feelsLikeF,
         conditionLabel = conditionLabel,
+        isSnowing = false,
+        isRaining = false,
         items = itemKeys,
         itemKeys = itemKeys,
         heroRef = null,
@@ -223,12 +225,11 @@ class Rw166UnitTest {
             momentLabel = "7 a.m.",
             settledAtMillis = 1_762_527_600_000L
         )
-        val today = LocalDate.of(2026, 11, 10)
         // Pre-heal: neither entry has a loadable reference, so
         // the cover is the NEWEST entry (the honest placeholder
         // shape Sol saw).
         val before = WearIveRunCollectionLogic.chapters(
-            listOf(newest, older), today
+            listOf(newest, older)
         ).single()
         assertEquals(newest.date, before.cover?.date)
         assertFalse(HeroRefResolver.hasLoadableReference(before.cover!!))
@@ -240,7 +241,7 @@ class Rw166UnitTest {
             heroRef = olderPath, heroDurableRef = olderPath
         )
         val after = WearIveRunCollectionLogic.chapters(
-            listOf(newest, healedOlder), today
+            listOf(newest, healedOlder)
         ).single()
         assertEquals(older.date, after.cover?.date)
         assertTrue(HeroRefResolver.hasLoadableReference(after.cover!!))
