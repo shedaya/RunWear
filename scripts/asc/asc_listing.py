@@ -276,9 +276,6 @@ def main():
     print("APPLY_SUMMARY_END")
 
 
-if __name__ == "__main__":
-    main()
-
 
 def fix_appinfo():
     """PATCH name/subtitle onto the EDITABLE (non-READY_FOR_SALE) app
@@ -318,3 +315,6 @@ def fix_appinfo():
                       "subtitle_match": la.get("subtitle") == SUBTITLE},
                      indent=1, ensure_ascii=False))
     print("APPINFO_FIX_SUMMARY_END")
+
+if __name__ == "__main__":
+    main()
