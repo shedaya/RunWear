@@ -390,6 +390,14 @@ fun WearIveRunMorphSurface(
                     }
                 },
                 expandedRegion = {
+                    // Composed only once the morph is under way
+                    // (p > 0): at mini rest the expanded content
+                    // does not exist in the tree at all — the
+                    // doorway's first appearance is the expansion
+                    // itself (RW-152's rest-state pin), and no
+                    // unplaced semantics leak from a region the
+                    // layout has not seated.
+                    if (p > 0f) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -453,6 +461,7 @@ fun WearIveRunMorphSurface(
                                 .clickable { onOpenCollection() }
                                 .padding(vertical = 4.dp)
                         )
+                    }
                     }
                 }
             )

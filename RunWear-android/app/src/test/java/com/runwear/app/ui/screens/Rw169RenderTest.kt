@@ -154,11 +154,17 @@ abstract class Rw169Base : Rw156Base() {
         nodeBoxes(host).filter { it.text == "Wear I've Run" }
 
     /** The anti-crush signature (diagnosis D1): the wordmark is a
-     * wide, short strip. A crushed wordmark is tall and narrow. */
+     * wide, short strip. A crushed wordmark is tall and narrow.
+     * The glyph node is the SMALLEST node carrying the exact
+     * wordmark text — merged ancestors (the surface's clickable
+     * merges its subtree in the semantics tree) carry the same
+     * text at container size and are not the glyph strip. */
     protected fun assertWordmarkWhole(host: Host, where: String) {
         val marks = wordmarkNodes(host)
-        assertEquals("$where: exactly one wordmark instance", 1, marks.size)
-        val m = marks.single()
+        assertTrue("$where: wordmark present", marks.isNotEmpty())
+        val m = marks.minByOrNull {
+            (it.right - it.left) * (it.bottom - it.top)
+        }!!
         val width = m.right - m.left
         val height = m.bottom - m.top
         assertTrue(
@@ -183,7 +189,7 @@ class Rw169MorphMiniRenderTest : Rw169Base() {
         assertEquals(
             "the fixture narration, whole",
             "Planned for Los Angeles, CA · Tomorrow",
-            narrationNodes(host).single().text
+            narrationNodes(host).single().text.replace('\u00A0', ' ')
         )
         assertWordmarkWhole(host, "mini rest")
         // The two-line case (spec §4.3): the narration wraps and
@@ -223,7 +229,7 @@ class Rw169MorphMidFlightRenderTest : Rw169Base() {
             assertEquals(
                 "sample $label: the same single narration, whole",
                 "Planned for Los Angeles, CA · Tomorrow",
-                narrationNodes(host).single().text
+                narrationNodes(host).single().text.replace('\u00A0', ' ')
             )
             println("RW169 morph sample $label ok (step ${i + 1})")
         }

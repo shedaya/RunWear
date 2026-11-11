@@ -119,26 +119,53 @@ class Rw169DeleteAnchorProbeTest : Rw169HomeBase() {
         seedExactEntry(state)
         val host = compose(dark = false) { Home(state, exhaustedMim()) }
         flickToEnd(host)
-        val before = nodeBoxes(host).firstOrNull {
-            it.text.contains("Pro Tip")
-        } ?: throw AssertionError("Pro Tip card not composed at end of scroll")
-        val topBefore = before.top
+        // The end-of-scroll reading position: the scroll offset
+        // plus the tops of the text nodes composed in the final
+        // window (RW-167's stepped drive proves the Pro Tip card
+        // renders during this scroll; the §8.6 invariant is that
+        // NONE of what is on screen moves when the record is
+        // deleted from the surface floating over it).
+        fun scrollValue(): Float {
+            val node = scrollNodes(host)
+                .maxByOrNull { it.boundsInRoot.height }!!
+            return node.config[SemanticsProperties.VerticalScrollAxisRange]
+                .value()
+        }
+        val valueBefore = scrollValue()
+        val topsBefore = nodeBoxes(host)
+            .filter { it.text.isNotBlank() }
+            .associate { it.text to it.top }
+        assertTrue(
+            "reading window composed at end of scroll",
+            topsBefore.size >= 4
+        )
         // Delete from the visible surface at the end of scroll.
         clickDescription(host, "Remove from Wear I've Run")
         settleReveal(host)
-        val after = nodeBoxes(host).firstOrNull {
-            it.text.contains("Pro Tip")
-        } ?: throw AssertionError("Pro Tip card missing after delete")
-        println(
-            "RW169 delete-anchor: proTipTop before=$topBefore after=${after.top}"
-        )
+        val valueAfter = scrollValue()
         assertTrue(
-            "the Pro Tip does not move (before=$topBefore after=${after.top})",
-            kotlin.math.abs(after.top - topBefore) <= 2f
+            "scroll offset unmoved by the delete " +
+                "($valueBefore -> $valueAfter)",
+            kotlin.math.abs(valueAfter - valueBefore) <= 2f
         )
+        var stillChecked = 0
+        for ((text, top) in topsBefore) {
+            val now = nodeBoxes(host).firstOrNull { it.text == text }
+                ?: continue
+            assertTrue(
+                "node '$text' unmoved by the delete " +
+                    "($top -> ${now.top})",
+                kotlin.math.abs(now.top - top) <= 2f
+            )
+            stillChecked++
+        }
         assertTrue(
-            "the element is gone after delete",
-            wordmarkNodes(host).isEmpty()
+            "at least 3 reading nodes re-checked after the delete",
+            stillChecked >= 3
+        )
+        assertEquals(
+            "the record's narration is gone after the delete",
+            0, narrationNodes(host).size
         )
         host.controller.pause().stop().destroy()
     }

@@ -27,9 +27,9 @@ import org.robolectric.annotation.Config
  * into an animated GIF by the lane for comparison against
  * prototype.mp4's beats.
  *
- * Classes are grouped by @Config qualifier (one Robolectric
- * sandbox per qualifier) to keep the CI job inside its budget;
- * every state is still its own test with its own composition.
+ * Harness rule (RW-144/152 lanes): ONE full-screen composition
+ * per class — the first full-screen composition in a sandbox is
+ * the one that reveals, so every Home state gets its own class.
  */
 abstract class Rw169CaptureBase : Rw169HomeBase() {
 
@@ -83,8 +83,10 @@ abstract class Rw169CaptureBase : Rw169HomeBase() {
     }
 }
 
+// ---------------- Folded portrait (w390dp-h740dp) ----------------
+
 @Config(qualifiers = "w390dp-h740dp-xhdpi")
-class Rw169CapFolded : Rw169CaptureBase() {
+class Rw169CapFoldedMiniRest : Rw169CaptureBase() {
     @Test
     fun `capture folded mini at rest plus chrome crop`() {
         val host = homeHost()
@@ -93,7 +95,10 @@ class Rw169CapFolded : Rw169CaptureBase() {
         captureCrop(host, "rw169-folded-chrome.png", 0, (h * 0.30f).toInt())
         host.controller.pause().stop().destroy()
     }
+}
 
+@Config(qualifiers = "w390dp-h740dp-xhdpi")
+class Rw169CapFoldedMiniScroll : Rw169CaptureBase() {
     @Test
     fun `capture folded mini mid-scroll`() {
         val host = homeHost()
@@ -101,10 +106,16 @@ class Rw169CapFolded : Rw169CaptureBase() {
         capture(host, "rw169-folded-mini-midscroll.png")
         host.controller.pause().stop().destroy()
     }
+}
 
+@Config(qualifiers = "w390dp-h740dp-xhdpi")
+class Rw169CapFoldedMorph : Rw169CaptureBase() {
     @Test
     fun `capture folded morph sequence`() = morphSequence("rw169-folded")
+}
 
+@Config(qualifiers = "w390dp-h740dp-xhdpi")
+class Rw169CapFoldedExpanded : Rw169CaptureBase() {
     @Test
     fun `capture folded expanded at rest`() {
         val host = homeHost()
@@ -115,7 +126,7 @@ class Rw169CapFolded : Rw169CaptureBase() {
 }
 
 @Config(qualifiers = "w390dp-h400dp-xhdpi")
-class Rw169CapFoldedCap : Rw169CaptureBase() {
+class Rw169CapFoldedExpandedCap : Rw169CaptureBase() {
     @Test
     fun `capture folded expanded at the height cap`() {
         val host = homeHost()
@@ -125,8 +136,10 @@ class Rw169CapFoldedCap : Rw169CaptureBase() {
     }
 }
 
+// ---------------- Wide / unfolded (w1000dp-h800dp) ----------------
+
 @Config(qualifiers = "w1000dp-h800dp-xhdpi")
-class Rw169CapWide : Rw169CaptureBase() {
+class Rw169CapWideMiniRest : Rw169CaptureBase() {
     @Test
     fun `capture wide mini at rest plus chrome crop`() {
         val host = homeHost()
@@ -135,7 +148,10 @@ class Rw169CapWide : Rw169CaptureBase() {
         captureCrop(host, "rw169-wide-chrome.png", 0, (h * 0.30f).toInt())
         host.controller.pause().stop().destroy()
     }
+}
 
+@Config(qualifiers = "w1000dp-h800dp-xhdpi")
+class Rw169CapWideMiniScroll : Rw169CaptureBase() {
     @Test
     fun `capture wide mini mid-scroll`() {
         val host = homeHost()
@@ -143,10 +159,16 @@ class Rw169CapWide : Rw169CaptureBase() {
         capture(host, "rw169-wide-mini-midscroll.png")
         host.controller.pause().stop().destroy()
     }
+}
 
+@Config(qualifiers = "w1000dp-h800dp-xhdpi")
+class Rw169CapWideMorph : Rw169CaptureBase() {
     @Test
     fun `capture wide morph sequence`() = morphSequence("rw169-wide")
+}
 
+@Config(qualifiers = "w1000dp-h800dp-xhdpi")
+class Rw169CapWideExpanded : Rw169CaptureBase() {
     @Test
     fun `capture wide expanded at rest`() {
         val host = homeHost()
@@ -157,7 +179,7 @@ class Rw169CapWide : Rw169CaptureBase() {
 }
 
 @Config(qualifiers = "w1000dp-h400dp-xhdpi")
-class Rw169CapWideCap : Rw169CaptureBase() {
+class Rw169CapWideExpandedCap : Rw169CaptureBase() {
     @Test
     fun `capture wide expanded at the height cap`() {
         val host = homeHost()

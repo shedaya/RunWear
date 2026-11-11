@@ -916,6 +916,15 @@ class Rw140SourcePinTest {
     // grid breakout variant, and no fade derivation in the host
     // (the pure policy functions remain only for this file's own
     // RW-140 harness host above).
+    //
+    // RE-PINNED AGAIN (RW-169 §7A, Nov 11, 2026 — supersedes the
+    // RW-152 mechanism pins, keeps its retirements): the RW-152
+    // two-layout AnimatedContent crossfade + SizeTransform is
+    // itself REPLACED by the shared-layout geometry morph
+    // (WearIveRunMorphSurface) — one layout whose geometry
+    // interpolates between the mini and expanded rest
+    // geometries, no two complete forms arbitrated. The overlay
+    // host and seat are unchanged.
     @Test
     fun `rw152 - no in-flow footer content remains in any host`() {
         val source = heroMainSource()
@@ -925,7 +934,11 @@ class Rw140SourcePinTest {
             Regex("wirFooterContent").findAll(source).count()
         )
         assertTrue(
-            "the expanded state lives in the overlay morph",
+            "the expanded state lives in the overlay morph surface (RW-169 §7A)",
+            source.contains("WearIveRunMorphSurface(")
+        )
+        assertFalse(
+            "the RW-152 two-form surface tag is retired (RW-169 §7A)",
             source.contains("\"wirDockSurfaceMorph\"")
         )
     }
@@ -937,9 +950,13 @@ class Rw140SourcePinTest {
             "the fadeFromLayoutPx handoff is retired in the host (RW-152 §1)",
             source.contains("WearIveRunDockPolicy.fadeFromLayoutPx")
         )
+        assertFalse(
+            "no SizeTransform arbitration remains in the host (RW-169 §7A)",
+            source.contains("SizeTransform")
+        )
         assertTrue(
-            "the dock and panel are one AnimatedContent surface",
-            source.contains("AnimatedContent(")
+            "the dock and panel are one morph surface (RW-169 §7A)",
+            source.contains("WearIveRunMorphSurface(")
         )
     }
 }
