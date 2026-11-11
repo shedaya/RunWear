@@ -30,6 +30,8 @@ on:
           - testers-add
           - testers-revoke
           - review
+          - listing-dump
+          - listing-apply
         default: verify
         required: true
       version:
@@ -114,3 +116,11 @@ jobs:
         if: inputs.task == 'review'
         working-directory: scripts/asc
         run: python3 asc_review.py "${{ inputs.version }}"
+      - name: Dump full listing state (read-only)
+        if: inputs.task == 'listing-dump'
+        working-directory: scripts/asc
+        run: python3 asc_listing.py dump
+      - name: Apply REVIEW-v2 listing copy (name/subtitle/description/keywords/promo)
+        if: inputs.task == 'listing-apply'
+        working-directory: scripts/asc
+        run: python3 asc_listing.py apply
