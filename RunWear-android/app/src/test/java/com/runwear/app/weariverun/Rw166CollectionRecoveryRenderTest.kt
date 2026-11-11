@@ -51,11 +51,15 @@ class Rw166CollectionRecoveryRenderTest : Rw158Harness() {
         "SUNGLASSES"
     )
 
-    private fun emptyRefEntry(date: LocalDate, moment: String) =
+    private fun emptyRefEntry(
+        date: LocalDate,
+        moment: String,
+        feelsLikeF: Double = 58.0
+    ) =
         WearIveRunDayEntry(
             date = date,
             place = "New York, NY",
-            feelsLikeF = 58.0,
+            feelsLikeF = feelsLikeF,
             conditionLabel = "Clear sky",
             isSnowing = false,
             isRaining = false,
@@ -84,7 +88,16 @@ class Rw166CollectionRecoveryRenderTest : Rw158Harness() {
 
     @Test
     fun `chapter day card recovers its banked hero and reports the heal`() {
-        val newest = emptyRefEntry(LocalDate.of(2026, 11, 9), "9 a.m.")
+        // The newest entry sits in a different temp bracket
+        // (72°F → WARM): recovery never crosses brackets, so its
+        // cell is genuinely unbanked even though the outfit,
+        // weather, and time band match the older entry's. (With
+        // identical carried identity the two entries would map
+        // to the SAME bank cell and both would — correctly —
+        // recover it; run 328's count of 2 proved exactly that.)
+        val newest = emptyRefEntry(
+            LocalDate.of(2026, 11, 9), "9 a.m.", feelsLikeF = 72.0
+        )
         val older = emptyRefEntry(LocalDate.of(2026, 11, 7), "7 a.m.")
         // The bank holds the OLDER entry's exact cell only.
         val bankId = HeroRecovery.candidateCombinationIds(

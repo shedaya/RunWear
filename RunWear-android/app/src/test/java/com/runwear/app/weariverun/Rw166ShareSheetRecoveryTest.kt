@@ -62,7 +62,12 @@ class Rw166ShareSheetRecoveryTest : Rw158Harness() {
             heroDurableRef = null,
             momentLabel = "9 a.m.",
             settledAtMillis = 1_762_696_800_000L,
-            sessionId = "rw166-share"
+            sessionId = "rw166-share",
+            // The harness's own entries carry the stored anchor;
+            // without one the poster render detours through ML
+            // Kit face detection, which never completes under
+            // Robolectric (Rw158ExpiredRefSheetTest's shape).
+            faceAnchor = ShareFaceAnchor.DEFAULT_UPPER_MIDDLE
         )
         val bankId = HeroRecovery.candidateCombinationIds(
             ny, "MALE", ZoneId.systemDefault()

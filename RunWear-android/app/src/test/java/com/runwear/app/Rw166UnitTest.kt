@@ -31,7 +31,7 @@ import java.time.ZoneId
  * cell IS banked, and a Philadelphia entry settled WITH one.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class)
+@Config(application = Application::class, sdk = [35])
 class Rw166UnitTest {
 
     private val nyZone: ZoneId = ZoneId.of("America/New_York")
