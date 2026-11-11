@@ -492,7 +492,13 @@ final class Gen6WaveATests: XCTestCase {
         let outfit = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
         XCTAssertTrue(outfit.contains("isScaffoldServe: viewModel.currentPersonalServeIsScaffold"),
                       "home feeds the pill policy the serve's scaffold fact")
-        XCTAssertTrue(outfit.contains("onPillGetUnlimited: { showHeroPillPaywall = true }"),
+        // RW-161 RE-PIN (device verdict, Nov 10, 2026): the
+        // pill's Premium door now claims the ONE sheet owner
+        // (requestSheet(.heroPaywall)) instead of writing the
+        // paywall's backing directly — the door and its
+        // destination are unchanged; only the presentation
+        // plumbing is owner-gated.
+        XCTAssertTrue(outfit.contains("onPillGetUnlimited: { requestSheet(.heroPaywall) }"),
                       "the pill's Premium door opens the paywall from home")
     }
 

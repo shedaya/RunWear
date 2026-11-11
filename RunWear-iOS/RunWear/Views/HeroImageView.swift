@@ -579,6 +579,23 @@ struct HeroPillView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Capsule().fill(AppTheme.firstScreenPillFill))
+                // RW-162 G4(b) (device verdict, Nov 10, 2026):
+                // the boundary hairline. The straddle fill IS
+                // the sheet's own colour family, so the pill's
+                // lower half — the half over the sheet — had no
+                // visible edge at all and the pill read as
+                // pasted onto the boundary, half-on/half-off.
+                // The hairline (the same edge language as the
+                // Wear I've Run dock/panel, RW-162 G4(a)/G5)
+                // carries the boundary around the WHOLE capsule,
+                // over photo and sheet alike; the warm-black
+                // shadow below stays.
+                .overlay(
+                    Capsule().strokeBorder(
+                        isDark ? Color.white.opacity(0.14)
+                               : Color.black.opacity(0.08),
+                        lineWidth: 0.5)
+                )
                 .shadow(color: Color(hex: "140E08").opacity(64.0 / 255.0), radius: 12, y: 5)
         }
     }

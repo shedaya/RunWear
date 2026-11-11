@@ -353,6 +353,28 @@ struct WearIveRunEntry: Codable, Equatable, Hashable, Identifiable {
         )
     }
 
+    /// RW-159/RW-160: a copy carrying a RECOVERED durable
+    /// reference — the bank re-link (HeroRecovery) found this
+    /// entry's personal hero in the server bank after the entry
+    /// settled with an empty display reference. Only the
+    /// durable identity changes; the display reference stays
+    /// what settle wrote, and every other field is the entry's
+    /// own. The resolver re-signs the durable path at render.
+    func withHeroDurableReference(_ durable: String) -> WearIveRunEntry {
+        WearIveRunEntry(
+            dayStart: dayStart, placeName: placeName,
+            feelsLikeF: feelsLikeF, actualF: actualF, condition: condition,
+            itemNames: itemNames, itemKeys: itemKeys,
+            heroImageReference: heroImageReference,
+            heroDurableReference: durable,
+            sessionID: sessionID, wasUpdatedInSession: wasUpdatedInSession,
+            momentReading: momentReading, updatePayload: updatePayload,
+            lastSavedAt: lastSavedAt,
+            windMph: windMph, dayLowF: dayLowF, dayHighF: dayHighF,
+            faceAnchor: faceAnchor
+        )
+    }
+
     private enum CodingKeys: String, CodingKey {
         case dayStart, placeName, feelsLikeF, actualF, condition
         case itemNames, itemKeys, heroImageReference, heroDurableReference, sessionID
@@ -960,6 +982,254 @@ enum HeroRefResolver {
             }
         }
         return nil
+    }
+}
+
+// MARK: - RW-159/RW-160 (device verdict, Nov 10, 2026): bank re-link recovery
+//
+// THE GAP the RW-152 §3 recovery could not cross: it derives an
+// entry's durable reference FROM its display reference — a
+// signed URL reduces to its path. An entry that settled with NO
+// hero on screen persists an EMPTY display reference
+// (`recordTodaysEntry`: flag target nil + the always-available
+// fallback nil → ""), and an empty string derives an empty
+// durable reference. There is no path to re-sign, the cover
+// rule's loadable test fails for every such entry, and the
+// chapter falls to the placeholder — while the user's personal
+// hero for that very outfit sits in his server bank
+// (personal_heroes rows carry combination_id + storage_path).
+//
+// THE RECOVERY: an entry persists enough identity to find its
+// bank hero — itemKeys (the outfit signature the combination
+// id's hash segment signs), feelsLikeF (the settle frame's
+// comfort-adjusted feels-like — the same value the cell was
+// keyed from, so its temp bracket is EXACT), the condition
+// label (the weather, lossily: the label collapses neighbouring
+// WMO codes, so weather is a CANDIDATE SET, never a guess), and
+// the moment reading / last-settled time (the time of day,
+// likewise a candidate set). Candidates are tried in a fixed
+// priority — exact reconstruction first — against the bank the
+// client already reads (fetchBankHeroes' table). A hit is the
+// entry's OWN banked hero for its OWN outfit at its OWN
+// bracket; nothing is ever substituted across outfits or
+// brackets. No hit → the entry stays honestly empty (a look
+// settled against a stock/scaffold serve has no personal hero
+// to recover).
+enum HeroRecovery {
+
+    /// The temp-bracket token for a feels-like value — the
+    /// shared engine's table (HeroFrameMapping / TempBracket:
+    /// FREEZING <20, COLD 20–34, COOL 35–49, MILD 50–64,
+    /// WARM 65–79, HOT ≥80, on the Int-truncated value),
+    /// restated here so this Foundation-only file stays
+    /// self-contained for the test target.
+    static func tempBracketToken(feelsLikeF: Double) -> String {
+        switch Int(feelsLikeF) {
+        case ..<20: return "FREEZING"
+        case 20...34: return "COLD"
+        case 35...49: return "COOL"
+        case 50...64: return "MILD"
+        case 65...79: return "WARM"
+        default: return "HOT"
+        }
+    }
+
+    /// Weather tokens for the entry's persisted condition
+    /// label, most likely first. The label is the WeatherCondition
+    /// short description ("Clear", "Partly Cloudy", "Cloudy",
+    /// "Foggy", "Light Rain", "Rainy", "Snowy", "Storms"); the
+    /// engine maps WMO codes 0–1 → CLEAR and 2–3 + fog →
+    /// CLOUDY, so a label standing at that boundary carries
+    /// both candidates. Unrecognised labels carry all four.
+    static func weatherTokens(conditionLabel: String) -> [String] {
+        let label = conditionLabel.lowercased()
+        let primary: String?
+        if label.contains("snow") { primary = "SNOW" }
+        else if label.contains("rain") || label.contains("drizzle") || label.contains("storm") { primary = "RAIN" }
+        else if label.contains("cloud") || label.contains("fog") || label.contains("overcast") { primary = "CLOUDY" }
+        else if label.contains("clear") || label.contains("sunny") || label.contains("sky") { primary = "CLEAR" }
+        else { primary = nil }
+        var tokens: [String] = []
+        if let primary { tokens.append(primary) }
+        // Boundary neighbour: code 1 (Mainly clear → CLEAR) and
+        // code 2 (Partly cloudy → CLOUDY) wear adjacent labels.
+        if primary == "CLEAR" { tokens.append("CLOUDY") }
+        if primary == "CLOUDY" { tokens.append("CLEAR") }
+        for token in ["CLEAR", "CLOUDY", "RAIN", "SNOW"] where !tokens.contains(token) {
+            tokens.append(token)
+        }
+        return tokens
+    }
+
+    /// The time-of-day token for a 24-hour clock hour — the
+    /// engine's table (DAWN 5–9, MIDDAY 10–16, DUSK 17–19,
+    /// NIGHT 20–4).
+    static func timeToken(hour: Int) -> String {
+        switch ((hour % 24) + 24) % 24 {
+        case 5...9: return "DAWN"
+        case 10...16: return "MIDDAY"
+        case 17...19: return "DUSK"
+        default: return "NIGHT"
+        }
+    }
+
+    /// Time-of-day tokens for the entry, most likely first:
+    /// the recorded moment reading when it carries one (a
+    /// clock reading is the settle's own hour; a daypart maps
+    /// to its band), else the hour the entry last settled.
+    static func timeTokens(for entry: WearIveRunEntry, calendar: Calendar = .current) -> [String] {
+        let primary: String
+        switch entry.momentReading {
+        case .clock(let hour12, let isPM):
+            primary = timeToken(hour: (hour12 % 12) + (isPM ? 12 : 0))
+        case .daypart(_, let part):
+            switch part {
+            case .morning: primary = "DAWN"
+            case .afternoon: primary = "MIDDAY"
+            case .evening: primary = "DUSK"
+            case .night: primary = "NIGHT"
+            }
+        case .now:
+            primary = timeToken(hour: calendar.component(.hour, from: entry.lastSavedAt))
+        }
+        var tokens = [primary]
+        for token in ["DAWN", "MIDDAY", "DUSK", "NIGHT"] where token != primary {
+            tokens.append(token)
+        }
+        return tokens
+    }
+
+    /// Candidate combination ids for the entry, in priority
+    /// order — the exact reconstruction first, then the same
+    /// weather at other times of day, then the boundary/other
+    /// weathers. The bracket and the outfit hash never vary:
+    /// both derive exactly from persisted values, and a hero
+    /// banked under a different bracket or outfit is a
+    /// DIFFERENT look, never this entry's photo.
+    static func candidateCombinationIds(
+        for entry: WearIveRunEntry,
+        genderSegment: String,
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard !entry.itemKeys.isEmpty else { return [] }
+        let hash = OutfitSignatureHash.hash(itemKeys: entry.itemKeys)
+        let bracket = tempBracketToken(feelsLikeF: entry.feelsLikeF)
+        var ids: [String] = []
+        for weather in weatherTokens(conditionLabel: entry.condition) {
+            for time in timeTokens(for: entry, calendar: calendar) {
+                ids.append("\(genderSegment)_\(weather)_\(bracket)_\(time)_\(hash)")
+            }
+        }
+        return ids
+    }
+
+    /// The entry's recovered durable reference (a bank storage
+    /// path), when recovery applies: the entry carries NO
+    /// loadable reference (an entry with one is never
+    /// re-linked — its own identity wins) and one of its
+    /// candidate cells is banked. `bankPaths` is the bank as
+    /// the client reads it: combination_id → storage_path.
+    static func recoveredDurableReference(
+        for entry: WearIveRunEntry,
+        genderSegment: String,
+        bankPaths: [String: String],
+        calendar: Calendar = .current
+    ) -> String? {
+        guard !HeroRefResolver.hasLoadableReference(entry) else { return nil }
+        for id in candidateCombinationIds(for: entry, genderSegment: genderSegment, calendar: calendar) {
+            if let path = bankPaths[id], !path.isEmpty { return path }
+        }
+        return nil
+    }
+}
+
+// MARK: - RW-161 (device verdict, Nov 10, 2026): one sheet owner on Home
+//
+// Build 27's "Share this day" sheet stood open while horizontal
+// swipes cycled the Settings / Set Location / Share sheets
+// behind and over each other: Home carried TEN independent
+// sheet states (nine booleans + two item bindings, split across
+// TWO hosts — the NavigationStack's content and WeatherOutfitView
+// itself), and SwiftUI presents whichever are non-nil, in
+// whichever order their hosts evaluate. There was no single
+// fact of "which sheet is up", so nothing could refuse a second
+// presentation while one stood.
+//
+// THE DISCIPLINE: one owner token. A route may present only
+// while it OWNS the token; a request made while another route
+// owns it is QUEUED (FIFO) and presented when the owner
+// releases. This enum is the pure arbitration the host's
+// bindings all funnel through, pinned here.
+enum HomeSheetRoute: String, Equatable, CaseIterable {
+    case settings, datePicker, timePicker, weatherDetail, locationPicker
+    case collection, wearShare, feedback, heroPaywall, looksLibrary, heroViewer
+}
+
+enum HomeSheetArbiter {
+
+    /// Claim the token for `requested`. Granted when the token
+    /// is free (or already the requester's); otherwise the
+    /// request queues behind the owner, once.
+    static func claim(
+        owner: HomeSheetRoute?,
+        queue: [HomeSheetRoute],
+        requested: HomeSheetRoute
+    ) -> (owner: HomeSheetRoute?, queue: [HomeSheetRoute]) {
+        if owner == nil { return (requested, queue) }
+        if owner == requested || queue.contains(requested) { return (owner, queue) }
+        return (owner, queue + [requested])
+    }
+
+    /// Release `released`. Releasing the owner hands the token
+    /// to the oldest queued route; releasing a queued route
+    /// just dequeues it; releasing anything else is a no-op.
+    static func release(
+        owner: HomeSheetRoute?,
+        queue: [HomeSheetRoute],
+        released: HomeSheetRoute
+    ) -> (owner: HomeSheetRoute?, queue: [HomeSheetRoute]) {
+        if owner == released {
+            var rest = queue
+            let next = rest.isEmpty ? nil : rest.removeFirst()
+            return (next, rest)
+        }
+        return (owner, queue.filter { $0 != released })
+    }
+
+    /// Whether `route` may be presented right now: it owns the
+    /// token. Every Home sheet binding's getter is this test.
+    static func mayPresent(owner: HomeSheetRoute?, route: HomeSheetRoute) -> Bool {
+        owner == route
+    }
+}
+
+// MARK: - RW-162 G2 (device verdict, Nov 10, 2026): the fresh-fix rule
+//
+// "When I click on current location, it doesn't really work or
+// at least not consistently." An explicit Current Location
+// tap's one-shot request could be satisfied by the location
+// manager's CACHED fix — with kilometre accuracy desired, a
+// fix from the previous city qualifies — so the tap could
+// "work" (a fix delivered, weather fetched) while changing
+// nothing the user could see, or work properly when a fresh
+// fix happened to arrive. The rule the tap is judged by: a
+// fix counts as the tap's answer only when its own timestamp
+// is at or after the request (2 s of clock slack); the wait
+// is bounded, and the best fix seen answers when the window
+// closes, so the tap never dead-ends. LocationService
+// executes this; the rule is pure so it is pinned here.
+enum FreshFixPolicy {
+    /// How long an explicit request waits for a fresh fix.
+    static let windowSeconds: TimeInterval = 10
+    /// Clock slack applied to a fix's timestamp.
+    static let slackSeconds: TimeInterval = 2
+
+    static func isFresh(fixDate: Date, requestedAt: Date) -> Bool {
+        fixDate >= requestedAt.addingTimeInterval(-slackSeconds)
+    }
+
+    static func windowClosed(requestedAt: Date, now: Date) -> Bool {
+        now.timeIntervalSince(requestedAt) >= windowSeconds
     }
 }
 

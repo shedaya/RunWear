@@ -644,8 +644,15 @@ final class RWNextBuildTests: XCTestCase {
         let hostStart = try XCTUnwrap(collection.range(of: "struct WearIveRunShareStudioHost"))
         let hostEnd = try XCTUnwrap(collection.range(of: "// MARK: - Share export context"))
         let host = collection[hostStart.lowerBound..<hostEnd.lowerBound]
-        XCTAssertTrue(host.contains("HeroRefRuntime.loadableURLString(for: entry)"),
+        // RW-160 RE-PIN (device verdict, Nov 10, 2026): the
+        // host's load is the RECOVERING form of the same
+        // resolver call (it carries the gender segment) — the
+        // RW-152 §3 property (poster base via HeroRefRuntime)
+        // stands, extended by the bank re-link.
+        XCTAssertTrue(host.contains("HeroRefRuntime.loadableURLString("),
                       "the sheet's poster base resolves via HeroRefRuntime (RW-152 §3)")
+        XCTAssertTrue(host.contains("for: entry, gender: genderPreference"),
+                      "the sheet's poster base uses the recovering resolution (RW-160)")
         XCTAssertTrue(host.contains("ShareStudioView("),
                       "the host presents the designed Share Studio sheet")
     }
@@ -674,8 +681,15 @@ final class RWNextBuildTests: XCTestCase {
         XCTAssertTrue(bar.contains("WearIveRunTapPolicy.expandedPanelEntryDestination(for: shownEntry) == .shareSheet"))
         XCTAssertTrue(bar.contains("var onOpenShareEntry: ((WearIveRunEntry) -> Void)?"))
         let host = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
-        XCTAssertTrue(host.contains("onOpenShareEntry: { wearShareEntry = $0 }"))
-        XCTAssertTrue(host.contains(".sheet(item: $wearShareEntry)"))
+        // RW-161 RE-PIN (device verdict, Nov 10, 2026): the
+        // panel's share route now funnels through the ONE sheet
+        // owner — the tap stashes the entry and claims the
+        // token (requestWearShare), and the sheet presents
+        // through the owner-gated item binding. The RW-158
+        // routing behaviour (past entry → this sheet) is
+        // unchanged; only the presentation plumbing moved.
+        XCTAssertTrue(host.contains("onOpenShareEntry: { requestWearShare($0) }"))
+        XCTAssertTrue(host.contains(".sheet(item: wearShareSheetItem)"))
         XCTAssertTrue(host.contains("WearIveRunShareStudioHost("))
     }
 
@@ -728,5 +742,269 @@ final class RWNextBuildTests: XCTestCase {
                 composed, size: size,
                 name: "RW152-ios-overlay-expanded-\(suffix).png")
         }
+    }
+
+    // MARK: - Build 28 fix lane (device verdict, Nov 10, 2026)
+
+    /// RW-159 (F1): the REAL failing shape — not the RW-158
+    /// fixture's expired signed URL, but the EMPTY reference
+    /// build 27's New York entries actually carry. The chapter
+    /// (every NY entry empty) falls to the placeholder; the
+    /// bank re-link then recovers the newest entry's OWN hero
+    /// from the bank, and once persisted the cover rule picks
+    /// it — the chapter renders its photo.
+    func testRW159_EmptyRefEntryRecoversFromBank_RealShape() {
+        // New York, Nov 9: settled at 9 a.m. (DAWN), feels 58
+        // (MILD), Clear — with NO hero reference at all.
+        let nyNov9 = entry(place: "New York, NY", dayStart: day(2026, 11, 9),
+                           hero: "", session: "s-ny-nov9", feels: 58)
+        XCTAssertEqual(nyNov9.heroImageReference, "")
+        XCTAssertEqual(nyNov9.heroDurableReference, "",
+                       "an empty display reference derives an empty durable one — the RW-152 recovery had nothing to derive from")
+        XCTAssertFalse(HeroRefResolver.hasLoadableReference(nyNov9))
+        // The pre-recovery chapter: no loadable entry, so the
+        // cover IS this entry and its placeholder (the device
+        // screenshot's empty New York banner).
+        let chapterBefore = WearIveRunCollection.chapters(
+            from: [nyNov9], filter: .all, calendar: nyCalendar)[0]
+        XCTAssertEqual(chapterBefore.cover.id, nyNov9.id)
+        XCTAssertFalse(HeroRefResolver.hasLoadableReference(chapterBefore.cover))
+        // His bank (read live in the lane, Nov 10, 2026): heroes
+        // keyed by combination_id with storage paths of the form
+        // {uid}/heroes/{combination_id}/v{n}.png. The entry's
+        // candidate set leads with its exact reconstruction.
+        let hash = OutfitSignatureHash.hash(itemKeys: nyNov9.itemKeys)
+        let exactCell = "MALE_CLEAR_MILD_DAWN_\(hash)"
+        let candidates = HeroRecovery.candidateCombinationIds(
+            for: nyNov9, genderSegment: "MALE", calendar: nyCalendar)
+        XCTAssertEqual(candidates.first, exactCell,
+                       "the exact reconstruction (gender/weather/bracket/time/hash, all from persisted fields) leads the candidate set")
+        let bankPath = "63e82e02-7ef5-4b3a-9bf1-16fa6f3e9f58/heroes/\(exactCell)/v1.png"
+        let bank: [String: String] = [exactCell: bankPath]
+        let recovered = HeroRecovery.recoveredDurableReference(
+            for: nyNov9, genderSegment: "MALE", bankPaths: bank, calendar: nyCalendar)
+        XCTAssertEqual(recovered, bankPath,
+                       "the empty-ref entry re-links to its OWN banked hero")
+        // Persisted (the model's heal write, exercised here at
+        // the value layer): the entry becomes loadable through
+        // its durable path, and the cover rule picks it.
+        let healed = nyNov9.withHeroDurableReference(bankPath)
+        XCTAssertTrue(HeroRefResolver.hasLoadableReference(healed))
+        XCTAssertEqual(HeroRefResolver.storagePath(for: healed), bankPath)
+        XCTAssertNil(HeroRefResolver.stableDisplayReference(for: healed),
+                     "the recovered path re-signs at render, never renders raw")
+        let chapterAfter = WearIveRunCollection.chapters(
+            from: [healed], filter: .all, calendar: nyCalendar)[0]
+        XCTAssertTrue(HeroRefResolver.hasLoadableReference(chapterAfter.cover))
+        // The Philadelphia contrast, in the same terms: an entry
+        // that settled WITH a signed URL was never broken — its
+        // durable path derived at decode and the plain resolver
+        // serves it; recovery never touches it.
+        let signed = "https://ebicqznlcjbqcukjfzcf.supabase.co/storage/v1/object/sign/personal-heroes/u1/heroes/phl.jpg?token=abc"
+        let phl = entry(place: "Philadelphia, PA", dayStart: day(2026, 11, 9),
+                        hero: signed, session: "s-phl", feels: 58)
+        XCTAssertEqual(phl.heroDurableReference, "u1/heroes/phl.jpg")
+        XCTAssertNil(HeroRecovery.recoveredDurableReference(
+            for: phl, genderSegment: "MALE", bankPaths: bank, calendar: nyCalendar),
+            "an entry carrying its own reference is never re-linked")
+    }
+
+    /// RW-159: recovery is not a New-York special case and never
+    /// fabricates: a bank missing the entry's own bracket/outfit
+    /// yields nothing (the honest placeholder stands), a
+    /// same-outfit hero at a DIFFERENT bracket is a different
+    /// look and is not served, and an entry with no outfit keys
+    /// has no signature to look up.
+    func testRW159_RecoveryNeverFabricates() {
+        let nyNov9 = entry(place: "New York, NY", dayStart: day(2026, 11, 9),
+                           hero: "", session: "s-ny-nov9b", feels: 58)
+        let hash = OutfitSignatureHash.hash(itemKeys: nyNov9.itemKeys)
+        // Same outfit, WARM bracket (the entry is MILD): not its photo.
+        let wrongBracket: [String: String] = [
+            "MALE_CLEAR_WARM_DAWN_\(hash)": "u/heroes/warm.png"]
+        XCTAssertNil(HeroRecovery.recoveredDurableReference(
+            for: nyNov9, genderSegment: "MALE", bankPaths: wrongBracket, calendar: nyCalendar),
+            "a different bracket's look is never substituted")
+        // Empty bank: nothing recovers.
+        XCTAssertNil(HeroRecovery.recoveredDurableReference(
+            for: nyNov9, genderSegment: "MALE", bankPaths: [:], calendar: nyCalendar))
+        // A weather-boundary hit still recovers: the label
+        // "Clear" stands next to CLOUDY in the candidate order.
+        let cloudyBank: [String: String] = [
+            "MALE_CLOUDY_MILD_DAWN_\(hash)": "u/heroes/cloudy.png"]
+        XCTAssertEqual(HeroRecovery.recoveredDurableReference(
+            for: nyNov9, genderSegment: "MALE", bankPaths: cloudyBank, calendar: nyCalendar),
+            "u/heroes/cloudy.png")
+        // No outfit keys → no candidates → no recovery.
+        let keyless = WearIveRunEntry(
+            dayStart: day(2026, 11, 9), placeName: "New York, NY",
+            feelsLikeF: 58, actualF: 60, condition: "Clear",
+            itemNames: [], itemKeys: [], heroImageReference: "", sessionID: "s-keyless")
+        XCTAssertTrue(HeroRecovery.candidateCombinationIds(
+            for: keyless, genderSegment: "MALE", calendar: nyCalendar).isEmpty)
+        XCTAssertNil(HeroRecovery.recoveredDurableReference(
+            for: keyless, genderSegment: "MALE", bankPaths: cloudyBank, calendar: nyCalendar))
+    }
+
+    /// RW-160 (F2): the Postcard pipeline consumes the SAME
+    /// recovering resolution as the cover — build 27's pipeline
+    /// took the plain resolver, whose nil for an empty-ref
+    /// entry failed the poster slot while the Kit Card (which
+    /// never touches the hero) rendered fully.
+    func testRW160_PosterPipelineRecoversEmptyRefEntry_SourcePins() throws {
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        let hostStart = try XCTUnwrap(collection.range(of: "struct WearIveRunShareStudioHost"))
+        let hostEnd = try XCTUnwrap(collection.range(of: "// MARK: - Share export context"))
+        let host = collection[hostStart.lowerBound..<hostEnd.lowerBound]
+        XCTAssertTrue(host.contains("for: entry, gender: genderPreference"),
+                      "the poster base loads through the RECOVERING resolver (RW-160)")
+        XCTAssertTrue(host.contains("onHeroRecovered"),
+                      "a recovery in the poster pipeline is persisted on the entry")
+        // The runtime's recovering overload falls back to the
+        // bank re-link only for entries with no loadable ref.
+        let api = try sourceFile("../RunWear/Services/PersonalHeroAPI.swift")
+        XCTAssertTrue(api.contains("HeroRecovery.recoveredDurableReference"))
+        XCTAssertTrue(api.contains("fetchBankHeroPaths"))
+    }
+
+    /// RW-161 (F3): one presentation owner — a second sheet
+    /// request queues while one stands, activates on release,
+    /// and only the owner may present.
+    func testRW161_SheetArbiter_SingleOwnerQueue() {
+        var arbiter = HomeSheetArbiter.claim(owner: nil, queue: [], requested: .wearShare)
+        XCTAssertEqual(arbiter.owner, .wearShare)
+        XCTAssertTrue(HomeSheetArbiter.mayPresent(owner: arbiter.owner, route: .wearShare))
+        // While the share sheet stands, Settings and Location
+        // requests queue — neither may present (the build-27
+        // swipe-cycling stack).
+        arbiter = HomeSheetArbiter.claim(owner: arbiter.owner, queue: arbiter.queue, requested: .settings)
+        arbiter = HomeSheetArbiter.claim(owner: arbiter.owner, queue: arbiter.queue, requested: .locationPicker)
+        XCTAssertEqual(arbiter.owner, .wearShare)
+        XCTAssertEqual(arbiter.queue, [.settings, .locationPicker])
+        XCTAssertFalse(HomeSheetArbiter.mayPresent(owner: arbiter.owner, route: .settings))
+        XCTAssertFalse(HomeSheetArbiter.mayPresent(owner: arbiter.owner, route: .locationPicker))
+        // A duplicate request does not double-queue.
+        arbiter = HomeSheetArbiter.claim(owner: arbiter.owner, queue: arbiter.queue, requested: .settings)
+        XCTAssertEqual(arbiter.queue, [.settings, .locationPicker])
+        // Release hands the token to the oldest queued route.
+        arbiter = HomeSheetArbiter.release(owner: arbiter.owner, queue: arbiter.queue, released: .wearShare)
+        XCTAssertEqual(arbiter.owner, .settings)
+        XCTAssertEqual(arbiter.queue, [.locationPicker])
+        // Releasing a queued (non-owner) route just dequeues it.
+        arbiter = HomeSheetArbiter.release(owner: arbiter.owner, queue: arbiter.queue, released: .locationPicker)
+        XCTAssertEqual(arbiter.owner, .settings)
+        XCTAssertTrue(arbiter.queue.isEmpty)
+        arbiter = HomeSheetArbiter.release(owner: arbiter.owner, queue: arbiter.queue, released: .settings)
+        XCTAssertNil(arbiter.owner)
+    }
+
+    /// RW-161 (F3): the host's wiring — every Home sheet is
+    /// owner-gated and the transient layer defers under a sheet.
+    func testRW161_HostWiring_SourcePins() throws {
+        let host = try sourceFile("../RunWear/Views/WeatherOutfitView.swift")
+        XCTAssertTrue(host.contains("ownedBinding(.settings, $showSettings)"))
+        XCTAssertTrue(host.contains("ownedBinding(.locationPicker, $showLocationPicker)"))
+        XCTAssertTrue(host.contains("ownedBinding(.collection, $showCollection)"))
+        XCTAssertTrue(host.contains(".sheet(item: wearShareSheetItem)"),
+                      "the RW-158 share sheet presents through the owner-gated item binding")
+        XCTAssertTrue(host.contains("showFlagThanks && !anyHomeSheetPresented"),
+                      "the flag toast defers while a sheet owns the screen (RW-161)")
+        XCTAssertTrue(host.contains("currentCellLookIsFailed && !anyHomeSheetPresented"),
+                      "the failed-look line defers while a sheet owns the screen (RW-161)")
+    }
+
+    /// RW-162 G1: the expand tap fires the expansion
+    /// synchronously (never from an animation completion), and
+    /// the overlay measures the panel before driving its frame.
+    func testRW162G1_ExpandIsSynchronousAndMeasured_SourcePins() throws {
+        let bar = try sourceFile("../RunWear/Views/WearIveRunMiniBar.swift")
+        let tapStart = try XCTUnwrap(bar.range(of: "private func handleExpandTap()"))
+        let tapEnd = try XCTUnwrap(bar.range(of: "// MARK: §4.1"))
+        let tap = bar[tapStart.lowerBound..<tapEnd.lowerBound]
+        let expandCall = try XCTUnwrap(tap.range(of: "onExpand()"))
+        let pressAnim = try XCTUnwrap(tap.range(of: "withAnimation"))
+        XCTAssertLessThan(expandCall.lowerBound, pressAnim.lowerBound,
+                          "RW-162 G1: onExpand fires in the tap's own transaction, BEFORE any press animation — never in its completion")
+        // The overlay's measurement pass + travel-only clip.
+        XCTAssertTrue(bar.contains("private func startMorph()"),
+                      "the morph starts only once the panel's content height is measured (RW-162 G1)")
+        XCTAssertTrue(bar.contains("travelClipActive"),
+                      "the container clip binds only while the morph travels (RW-162 G5)")
+        XCTAssertTrue(bar.contains("clipShape(RoundedRectangle(cornerRadius: radius))"),
+                      "the travel clip follows the morph's rounded shape, never a plain rectangle (RW-162 G5)")
+    }
+
+    /// RW-162 G2: the fresh-fix rule and its wiring — an
+    /// explicit Current Location tap never answers with a
+    /// cached fix from before the tap.
+    func testRW162G2_FreshFixPolicy() throws {
+        let requestedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        XCTAssertTrue(FreshFixPolicy.isFresh(
+            fixDate: requestedAt.addingTimeInterval(3), requestedAt: requestedAt),
+            "a fix timestamped after the tap is fresh")
+        XCTAssertTrue(FreshFixPolicy.isFresh(
+            fixDate: requestedAt.addingTimeInterval(-1), requestedAt: requestedAt),
+            "a fix inside the 2 s clock slack is fresh")
+        XCTAssertFalse(FreshFixPolicy.isFresh(
+            fixDate: requestedAt.addingTimeInterval(-3600), requestedAt: requestedAt),
+            "the previous city's hour-old cached fix is NOT the tap's answer")
+        XCTAssertFalse(FreshFixPolicy.windowClosed(
+            requestedAt: requestedAt, now: requestedAt.addingTimeInterval(5)))
+        XCTAssertTrue(FreshFixPolicy.windowClosed(
+            requestedAt: requestedAt, now: requestedAt.addingTimeInterval(11)),
+            "the bounded window closes and the best fix seen answers instead of a dead end")
+        let service = try sourceFile("../RunWear/Services/LocationService.swift")
+        XCTAssertTrue(service.contains("locations.last"),
+                      "a delivery batch's LAST fix is the newest (the pre-fix code took the stalest, .first)")
+        XCTAssertTrue(service.contains("func requestFreshLocation()"))
+        let content = try sourceFile("../RunWear/Views/ContentView.swift")
+        XCTAssertEqual(content.components(separatedBy: "locationService.requestFreshLocation()").count - 1, 2,
+                       "both explicit Current Location taps (gate sheet + Home sheet) request a fresh fix")
+    }
+
+    /// RW-162 G5: the expanded panel OVER NON-UNIFORM content —
+    /// the acceptance frame for the boundary/shadow fix. The
+    /// harness's uniform grounds are exactly why this class
+    /// kept passing the gate: a flat rectangle over a flat
+    /// ground reads as composed. Over list rows the panel's
+    /// hairline edge and shadow are the separation.
+    @MainActor
+    func testRW162Frame_PanelOverContent() throws {
+        let entry = frameEntry(hero: "")
+        let panel = WearIveRunExpandedPanelView(
+            state: frameState(for: entry),
+            entry: entry,
+            formattedFeelsLike: "71°",
+            viewportHeight: 852,
+            onOpenCollection: {}, onCollapse: {}, onTrash: {})
+        let backdrop = VStack(spacing: 0) {
+            ForEach(0..<14, id: \.self) { row in
+                HStack(spacing: 10) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(row.isMultiple(of: 2) ? AppTheme.pinePayload.opacity(0.55) : AppTheme.cardOnSheet)
+                        .frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Running Shorts (5-7\")")
+                            .font(.appItemName)
+                            .foregroundColor(AppTheme.inkPrimary)
+                        Text("Row \(row + 1) of the outfit list under the panel")
+                            .font(.appFootnote)
+                            .foregroundColor(AppTheme.inkSecondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(row.isMultiple(of: 2) ? AppTheme.sheet : AppTheme.background)
+            }
+        }
+        let composed = ZStack(alignment: .bottom) {
+            backdrop
+            panel
+                .padding(.horizontal, DockResidence.horizontalInset)
+                .padding(.bottom, 14)
+        }
+        try writeRender(composed, size: CGSize(width: 393, height: 852),
+                        name: "RW162-ios-panel-over-content.png")
     }
 }

@@ -764,6 +764,25 @@ final class WearIveRunCollectionModel: ObservableObject {
         entries = store.entries
         if sessionEntry() == nil { narratedEntryID = nil }
     }
+
+    /// RW-159/RW-160 (device verdict, Nov 10, 2026): persist a
+    /// bank-recovered durable reference onto the entry that
+    /// settled without one (HeroRecovery / HeroRefRuntime's
+    /// recovering resolution report it here), so the recovery
+    /// happens ONCE — later renders resolve through the entry's
+    /// own durable identity like any signed-ref entry. A plain
+    /// store write of the one entry: no narration, no cue, no
+    /// settle semantics — the entry's content does not change,
+    /// only its hero identity is restored. Refused for an entry
+    /// that already carries a loadable reference (its own
+    /// identity always wins).
+    func healHeroReference(entryID: String, durableReference: String) {
+        guard let entry = entries.first(where: { $0.id == entryID }),
+              !HeroRefResolver.hasLoadableReference(entry),
+              !durableReference.isEmpty else { return }
+        store.record(entry.withHeroDurableReference(durableReference))
+        entries = store.entries
+    }
 }
 
 // MARK: - Morph mathematics (motion decision, 2026-11-04)
@@ -1228,6 +1247,22 @@ struct WearIveRunMiniBarView: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: 0)))
+            // RW-162 G4(a) (device verdict, Nov 10, 2026): the
+            // boundary hairline — the dock's material is 85%/82%
+            // translucent, so over list content its edge washed
+            // out and the pill read as a straight-edged block
+            // slicing the row beneath. A half-point hairline in
+            // the scheme's ink gives the floating surface a real
+            // edge against ANY content under it, in the same
+            // language as the expanded panel's (G5).
+            .overlay {
+                RoundedRectangle(cornerRadius: WearIveRunMorph.cornerRadius(progress: 0))
+                    .strokeBorder(
+                        colorScheme == .dark
+                            ? Color.white.opacity(0.14)
+                            : Color.black.opacity(0.08),
+                        lineWidth: 0.5)
+            }
             // §7.6: the soft shadow (0 offset-x, 6 offset-y, black
             // 14%; SwiftUI's radius is half the CSS blur, so the
             // design's 24 pt blur is radius 12 here).
@@ -1255,6 +1290,12 @@ struct WearIveRunMiniBarView: View {
                 // that stood here cut the plan form's day —
                 // "Tomorr…" — and long place names mid-word.)
                 dockNarration(line, for: shown)
+                    // RW-162 G4(a): the narration takes layout
+                    // priority over the wordmark and the fixed
+                    // 44 pt controls, so the wrap the RW-138
+                    // ruling allows composes inside the pill
+                    // instead of cramming against its controls.
+                    .layoutPriority(1)
                     .id(line)
                     .transition(.opacity)
             }
@@ -1424,22 +1465,33 @@ struct WearIveRunMiniBarView: View {
 
     // MARK: RW-152 §1 — the expand tap
 
-    /// Press (scale 0.97 over 120 ms) + one light haptic on
-    /// release, then the overlay container morphs the surface
-    /// to its expanded state in place — the page never moves.
+    /// Press (scale 0.97 over 120 ms) + one light haptic, and
+    /// the overlay container morphs the surface to its
+    /// expanded state in place — the page never moves.
+    ///
+    /// RW-162 G1 (device verdict, Nov 10, 2026 — "the Wear I've
+    /// Run never expands into the expanded view"): the pre-fix
+    /// form fired `onExpand()` from the press animation's
+    /// COMPLETION closure. The dock's scale is a composition
+    /// (cue pulse × update bounce × press) re-animated by
+    /// settles and narration crossfades landing constantly —
+    /// any transaction superseding the press animation could
+    /// swallow the completion, and with it the expansion: the
+    /// tap visibly pressed and nothing happened, in exactly the
+    /// busy scroll/settle states the user exercised. A control's
+    /// action never rides an animation completion: the
+    /// expansion fires SYNCHRONOUSLY in the tap's own
+    /// transaction, and the press scale is decoration that
+    /// follows it.
     private func handleExpandTap() {
         guard exitProgress == 0 else { return }
-        if reduceMotion {
-            glideHapticNonce += 1
-            onExpand()
-            return
-        }
+        glideHapticNonce += 1
+        onExpand()
+        if reduceMotion { return }
         withAnimation(.easeInOut(duration: 0.12)) {
             pressScale = 0.97
         } completion: {
-            glideHapticNonce += 1
             withAnimation(.easeOut(duration: 0.15)) { pressScale = 1 }
-            onExpand()
         }
     }
 
@@ -1816,6 +1868,25 @@ struct WearIveRunExpandedPanelView: View {
         }
         .clipShape(RoundedRectangle(
             cornerRadius: WearIveRunMorph.cornerRadius(progress: 1)))
+        // RW-162 G5 (device verdict, Nov 10, 2026): the boundary
+        // hairline, in the mini dock's own language (G4(a)) —
+        // the expanded state's edge definition against the
+        // content beneath it. On device the panel read as a
+        // flat full-width rectangle with no boundary at all:
+        // its shadow was being clipped away by the overlay
+        // container for the whole expanded rest state (fixed in
+        // WearIveRunOverlayView's travel clip), and a shadow
+        // alone over busy content is not an edge — the hairline
+        // is what separates the surface from what it covers.
+        .overlay {
+            RoundedRectangle(
+                cornerRadius: WearIveRunMorph.cornerRadius(progress: 1))
+                .strokeBorder(
+                    colorScheme == .dark
+                        ? Color.white.opacity(0.14)
+                        : Color.black.opacity(0.08),
+                    lineWidth: 0.5)
+        }
         // The dock's soft shadow (§7.6): 0 offset-x, 6 offset-y,
         // black 14%, radius 12.
         .shadow(color: Color.black.opacity(0.14), radius: 12, x: 0, y: 6)
@@ -2078,6 +2149,13 @@ struct WearIveRunOverlayView: View {
     /// The panel stays mounted for the whole morph (and while
     /// expanded); it unmounts only when a collapse completes.
     @State private var panelMounted = false
+    /// RW-162 G1 (device verdict, Nov 10, 2026): the morph is
+    /// RUNNING (or holding the expanded state) — distinct from
+    /// `panelMounted`, because expansion now mounts the panel
+    /// for one UNFRAMED measurement pass before the morph's
+    /// height drive engages (see expand()). The driven frame
+    /// and the travel clip apply only while this is true.
+    @State private var morphActive = false
     /// The surface's REST height, captured by the CONTAINER
     /// while the panel is unmounted (at rest the container IS
     /// the mini dock, intrinsically sized — no frame is ever
@@ -2112,8 +2190,25 @@ struct WearIveRunOverlayView: View {
     }
 
     /// Whether an explicit height governs the surface right
-    /// now (a morph is mounted, or an exit is folding).
-    private var heightIsDriven: Bool { panelMounted || exitProgress > 0 }
+    /// now (a morph is running/holding, or an exit is folding).
+    /// RW-162 G1: NOT merely `panelMounted` — during expansion's
+    /// measurement pass the panel is mounted but the frame must
+    /// stay un-driven, or the panel is measured inside the very
+    /// height it is supposed to determine.
+    private var heightIsDriven: Bool { morphActive || exitProgress > 0 }
+
+    /// RW-162 G5 (device verdict, Nov 10, 2026): the travel clip
+    /// applies ONLY while the morph is actually travelling
+    /// (0 < progress < 1) or an exit is folding. The pre-fix
+    /// condition (progress > 0) clipped the surface for the
+    /// WHOLE expanded rest state — with a plain rectangular
+    /// `.clipped()` that sheared the panel's rounded corners
+    /// and its shadow off at the container's bounds, which is
+    /// precisely the device's "huge rectangle, no boundaries or
+    /// shadows" expanded panel.
+    private var travelClipActive: Bool {
+        (expansionProgress > 0 && expansionProgress < 1) || exitProgress > 0
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -2162,7 +2257,16 @@ struct WearIveRunOverlayView: View {
             }
         }
         .frame(height: heightIsDriven ? containerHeight : nil)
-        .clippedIfMorphing(expansionProgress > 0 || exitProgress > 0)
+        .clippedIfMorphing(travelClipActive, radius: WearIveRunMorph.cornerRadius(progress: expansionProgress))
+        .onChange(of: panelHeight) { _, newHeight in
+            // RW-162 G1: expansion's measurement pass — the
+            // panel has reported a real content height larger
+            // than the rest height; the morph may start.
+            if panelMounted, !morphActive, expansionProgress == 0,
+               exitProgress == 0, newHeight > restHeight + 0.5 {
+                startMorph()
+            }
+        }
         .onGeometryChange(for: Double.self) { proxy in
             proxy.size.height
         } action: { _, height in
@@ -2178,12 +2282,44 @@ struct WearIveRunOverlayView: View {
         }
     }
 
-    /// Summon the expanded state: the tap driver spring runs
-    /// the one progress value 0 → 1 (Reduce Motion: the
-    /// ≤150 ms crossfade).
+    /// Summon the expanded state. RW-162 G1 (device verdict,
+    /// Nov 10, 2026): the pre-fix form mounted the panel AND
+    /// engaged the driven frame in the same transaction, so the
+    /// panel's content height was measured inside a container
+    /// already framed (and clipped) at the morph's interpolation
+    /// — the endpoint could capture the mini height (the
+    /// container-level twin of the run-263 false-endpoint
+    /// defect), above all when the entry region took its
+    /// ScrollView branch and accepted the proposed height. The
+    /// morph then travelled 0 → 1 between two equal heights:
+    /// the mini faded out, nothing grew — "never expands". The
+    /// fix is a measurement pass: mount the panel UNFRAMED and
+    /// UNCLIPPED (its opacity window keeps it invisible at
+    /// progress 0), let it report its true content height, and
+    /// only then engage the driven frame and run the spring. A
+    /// 250 ms fallback starts the morph with the best height on
+    /// record if no larger measurement lands, so the tap can
+    /// never dead-end.
     private func expand() {
-        guard expansionProgress == 0, exitProgress == 0 else { return }
+        guard expansionProgress == 0, exitProgress == 0, !morphActive else { return }
         panelMounted = true
+        if panelHeight > restHeight + 0.5 {
+            startMorph()
+        } else {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if panelMounted, !morphActive, expansionProgress == 0, exitProgress == 0 {
+                    startMorph()
+                }
+            }
+        }
+    }
+
+    /// Engage the driven frame and run the one progress value
+    /// 0 → 1 with the tap driver spring (Reduce Motion: the
+    /// ≤150 ms crossfade).
+    private func startMorph() {
+        morphActive = true
         withAnimation(WearIveRunMorph.animation(
             for: reduceMotion ? .reducedMotion : .tap
         )) {
@@ -2200,17 +2336,25 @@ struct WearIveRunOverlayView: View {
         )) {
             expansionProgress = 0
         } completion: {
-            if expansionProgress == 0 { panelMounted = false }
+            if expansionProgress == 0 {
+                panelMounted = false
+                morphActive = false
+            }
         }
     }
 }
 
 private extension View {
-    /// Clip only while a morph or exit is travelling — at rest
-    /// the container must not clip the dock's soft shadow.
-    @ViewBuilder func clippedIfMorphing(_ condition: Bool) -> some View {
+    /// Clip only while a morph or exit is TRAVELLING — at
+    /// either rest state the container must not clip: the
+    /// dock's and the panel's soft shadows live outside their
+    /// bounds, and the expanded state's boundary IS its
+    /// rounded shape. RW-162 G5: the clip follows the morph's
+    /// own rounded shape (never a plain rectangle), so even
+    /// mid-travel the surface keeps its corners.
+    @ViewBuilder func clippedIfMorphing(_ condition: Bool, radius: Double) -> some View {
         if condition {
-            self.clipped()
+            self.clipShape(RoundedRectangle(cornerRadius: radius))
         } else {
             self
         }

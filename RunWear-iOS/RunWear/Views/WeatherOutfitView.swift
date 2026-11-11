@@ -16,6 +16,20 @@ struct WeatherOutfitView: View {
     /// tap on the expanded panel's entry row opened the Share
     /// Studio sheet directly.
     @State private var wearShareEntry: WearIveRunEntry?
+    /// RW-161 (device verdict, Nov 10, 2026): ONE presentation
+    /// owner for every Home sheet. The states above and below
+    /// remain the sheets' backings, but no backing presents
+    /// unless its route owns this token — every presentation
+    /// funnels through claimSheet/releaseSheet (HomeSheetArbiter),
+    /// a second request queues FIFO, and the toast/failure-line
+    /// layer defers while a sheet owns the screen. Build 27's
+    /// failure was ten independent states on two hosts cycling
+    /// behind/over each other on a swipe.
+    @State private var homeSheetOwner: HomeSheetRoute?
+    @State private var homeSheetQueue: [HomeSheetRoute] = []
+    /// Item-sheet payloads stashed while their route is queued.
+    @State private var pendingWeatherDetail: WeatherDetailType?
+    @State private var pendingWearShareEntry: WearIveRunEntry?
     /// RW-26 feedback door from the rating moment (frame 49).
     @State private var showFeedbackSheet = false
     /// RW-25 scroll-handoff progress (0 = hero full-frame at rest,
@@ -134,7 +148,11 @@ struct WeatherOutfitView: View {
 
                 // Hero-flag confirmation toast, bottom-center of
                 // the run screen (Android's snackbar placement).
-                if showFlagThanks {
+                // RW-161: the toast layer DEFERS while a sheet
+                // owns the screen — build 27 rendered a toast
+                // sandwiched between stacked sheets; a transient
+                // line never renders over or between sheets.
+                if showFlagThanks && !anyHomeSheetPresented {
                     VStack {
                         Spacer()
                         Text("Thanks — we'll review this photo")
@@ -227,9 +245,9 @@ struct WeatherOutfitView: View {
             // hero's own top scrim carries its chrome. The Shop
             // entry the toolbar carried moves to the outfit
             // header (see outfitSection) — no surface is dropped.
-            .sheet(isPresented: $showSettings) {
+            .sheet(isPresented: ownedBinding(.settings, $showSettings)) {
                 SettingsModal(
-                    isPresented: $showSettings,
+                    isPresented: ownedBinding(.settings, $showSettings),
                     temperatureUnit: $viewModel.temperatureUnit,
                     genderPreference: $viewModel.genderPreference,
                     comfortLevel: $viewModel.comfortLevel,
@@ -241,10 +259,10 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showDatePicker) {
+            .sheet(isPresented: ownedBinding(.datePicker, $showDatePicker)) {
                 DatePickerSheet(
                     selectedDate: $viewModel.selectedDate,
-                    isPresented: $showDatePicker
+                    isPresented: ownedBinding(.datePicker, $showDatePicker)
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -252,7 +270,7 @@ struct WeatherOutfitView: View {
                     viewModel.updateSelectedTime(date: newDate, hour: viewModel.selectedHour)
                 }
             }
-            .sheet(isPresented: $showTimePicker) {
+            .sheet(isPresented: ownedBinding(.timePicker, $showTimePicker)) {
                 // GEN-4: the chart sheet works on a DRAFT — the
                 // view model's selection is written only by
                 // Confirm, through applyTimePickerCommit. (The
@@ -267,7 +285,7 @@ struct WeatherOutfitView: View {
                     initialHour: timePickerInitialHour,
                     openedInNowState: viewModel.isNowSelection,
                     nowHour: viewModel.dayChartNowHour,
-                    isPresented: $showTimePicker,
+                    isPresented: ownedBinding(.timePicker, $showTimePicker),
                     onConfirm: { viewModel.applyTimePickerCommit($0) },
                     // GEN-6 (RW-66): the day picker's door inside
                     // the sheet (its context line's date segment).
@@ -290,7 +308,7 @@ struct WeatherOutfitView: View {
                     // selected hour.
                     dateSelection: $viewModel.selectedDate,
                     onDateConfirmed: {
-                        showTimePicker = false
+                        dismissSheet(.timePicker)
                         viewModel.updateSelectedTime(
                             date: viewModel.selectedDate,
                             hour: viewModel.selectedHour
@@ -323,7 +341,7 @@ struct WeatherOutfitView: View {
             // (white) sheet -- the blank UV overlay of 2026-10-29.
             // With .sheet(item:) the content exists exactly when
             // a detail does.
-            .sheet(item: $selectedWeatherDetail) { detail in
+            .sheet(item: weatherDetailSheetItem) { detail in
                 WeatherDetailSheet(
                     detailType: detail,
                     allDetails: allWeatherDetails,
@@ -337,9 +355,9 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showLocationPicker) {
+            .sheet(isPresented: ownedBinding(.locationPicker, $showLocationPicker)) {
                 LocationPickerSheet(
-                    isPresented: $showLocationPicker,
+                    isPresented: ownedBinding(.locationPicker, $showLocationPicker),
                     // RW-146: the DISPLAYED truth (see the view
                     // model's displayedPlaceName/displayedSourceIsGPS).
                     isUsingGPS: viewModel.displayedSourceIsGPS,
@@ -503,7 +521,7 @@ struct WeatherOutfitView: View {
         .onChange(of: personalStore.landedHeroVersion) { _, _ in
             recordTodaysEntry()
         }
-        .sheet(isPresented: $showCollection) {
+        .sheet(isPresented: ownedBinding(.collection, $showCollection)) {
             NavigationStack {
                 WearIveRunCollectionView(
                     model: collectionModel,
@@ -518,23 +536,24 @@ struct WeatherOutfitView: View {
         // opened directly from the expanded panel's entry row.
         // Opening is viewing — the Studio's Share button is
         // the only path to the system share sheet.
-        .sheet(item: $wearShareEntry) { entry in
+        .sheet(item: wearShareSheetItem) { entry in
             WearIveRunShareStudioHost(
                 entry: entry,
                 formatTemperature: { viewModel.temperatureUnit.formatFromFahrenheit($0) },
-                genderPreference: viewModel.genderPreference
+                genderPreference: viewModel.genderPreference,
+                onHeroRecovered: { collectionModel.healHeroReference(entryID: $0.id, durableReference: $1) }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showFeedbackSheet) {
+        .sheet(isPresented: ownedBinding(.feedback, $showFeedbackSheet)) {
             // WS-5 (§1.3): named detent — the feedback Form
             // scrolls, so .large only.
             FeedbackSheet()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showHeroPillPaywall, onDismiss: {
+        .sheet(isPresented: ownedBinding(.heroPaywall, $showHeroPillPaywall), onDismiss: {
             // RW-79: the paywall stood over Home while a
             // generation ran — dismissing it re-reads the cell's
             // look state, so the hero the user comes back to
@@ -550,7 +569,7 @@ struct WeatherOutfitView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showLooksLibrary) {
+        .sheet(isPresented: ownedBinding(.looksLibrary, $showLooksLibrary)) {
             // GEN-6 (RW-61): the looks library, one tap from the
             // failed cell's home line.
             NavigationStack {
@@ -564,7 +583,7 @@ struct WeatherOutfitView: View {
         // cropped further), one quiet caption line naming the
         // outfit's pieces, tap-again or swipe-down dismisses,
         // pinch zooms.
-        .fullScreenCover(isPresented: $showHeroViewer) {
+        .fullScreenCover(isPresented: ownedBinding(.heroViewer, $showHeroViewer)) {
             HeroPhotoViewer(
                 imageURL: viewModel.heroImageUrl ?? viewModel.fallbackImageUrl,
                 caption: recommendation.allItems.map(\.name).joined(separator: " · ")
@@ -577,7 +596,7 @@ struct WeatherOutfitView: View {
         .alert("Enjoying RunWear?", isPresented: $showRatingPrompt) {
             Button("Send feedback") {
                 ratingTracker.recordPromptShown()
-                showFeedbackSheet = true
+                requestSheet(.feedback)
             }
             Button("Rate RunWear") {
                 ratingTracker.recordPromptShown()
@@ -635,7 +654,7 @@ struct WeatherOutfitView: View {
                                         HeroPillView(
                                             pillState: heroPillState,
                                             seat: .straddle,
-                                            onPillGetUnlimited: { showHeroPillPaywall = true }
+                                            onPillGetUnlimited: { requestSheet(.heroPaywall) }
                                         )
                                         .padding(.bottom, HeroVerticalLayout.duoPillBottomInset)
                                     }
@@ -912,7 +931,7 @@ struct WeatherOutfitView: View {
             HeroPillView(
                 pillState: heroPillState,
                 seat: .straddle,
-                onPillGetUnlimited: { showHeroPillPaywall = true }
+                onPillGetUnlimited: { requestSheet(.heroPaywall) }
             )
             .offset(y: HeroVerticalLayout.pillOffsetFromSheetTop(
                 pillHeight: currentPillHeight))
@@ -926,7 +945,7 @@ struct WeatherOutfitView: View {
     private var detailedWeatherBlock: some View {
         DetailedWeatherBlockView(
             details: allWeatherDetails,
-            onSelect: { selectedWeatherDetail = $0 }
+            onSelect: { requestWeatherDetail($0) }
         )
     }
 
@@ -970,7 +989,7 @@ struct WeatherOutfitView: View {
                 selectedHour: viewModel.selectedHour,
                 nowHour: viewModel.dayChartNowHour,
                 unit: viewModel.temperatureUnit,
-                onChange: { showTimePicker = true }
+                onChange: { requestSheet(.timePicker) }
             )
             .padding(.horizontal, 16)
         }
@@ -1102,13 +1121,24 @@ struct WeatherOutfitView: View {
                 viewportHeight: viewportHeight,
                 // RW-152 §3: the panel thumbnail resolves through
                 // the one resolver (re-signing half).
-                heroURLResolver: { await HeroRefRuntime.loadableURLString(for: $0) },
-                onOpenCollection: { showCollection = true },
+                // RW-159: the RECOVERING resolution — the
+                // session entry itself may be an empty-ref
+                // settle; its panel thumbnail re-links from the
+                // bank and the recovery persists on the entry.
+                heroURLResolver: { entry in
+                    await HeroRefRuntime.loadableURLString(
+                        for: entry, gender: viewModel.genderPreference,
+                        onRecovered: { recovered in
+                            collectionModel.healHeroReference(
+                                entryID: entry.id, durableReference: recovered)
+                        })
+                },
+                onOpenCollection: { requestSheet(.collection) },
                 // RW-158: a PAST entry's tap on the expanded
                 // panel's entry row opens the Share Studio
                 // sheet for that entry (the panel routes via
                 // WearIveRunTapPolicy; today stays collection).
-                onOpenShareEntry: { wearShareEntry = $0 },
+                onOpenShareEntry: { requestWearShare($0) },
                 onTrash: {
                     // §4.7: the host orchestrates the exit over
                     // a frozen snapshot; the store removal fires
@@ -1299,7 +1329,7 @@ struct WeatherOutfitView: View {
     /// weather detail for the current conditions.
     private var fullWeatherEntry: some View {
         Button {
-            selectedWeatherDetail = .condition(viewModel.currentCondition)
+            requestWeatherDetail(.condition(viewModel.currentCondition))
         } label: {
             HStack {
                 Text("Full Weather Detail")
@@ -1375,11 +1405,155 @@ struct WeatherOutfitView: View {
     /// The detail sheet's isPresented face. Presentation itself is
     /// driven by the selection (sheet(item:)); the sheet's own
     /// dismiss writes false here, which clears the selection.
+    /// RW-161: the face is owner-gated like every Home sheet.
     private var weatherDetailPresented: Binding<Bool> {
         Binding(
-            get: { selectedWeatherDetail != nil },
+            get: { selectedWeatherDetail != nil
+                && HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: .weatherDetail) },
             set: { presented in
-                if !presented { selectedWeatherDetail = nil }
+                if !presented {
+                    selectedWeatherDetail = nil
+                    releaseSheet(.weatherDetail)
+                }
+            }
+        )
+    }
+
+    // MARK: - RW-161: the one sheet owner (arbiter plumbing)
+
+    /// Claim the presentation token for a route (HomeSheetArbiter):
+    /// granted at once when free, queued FIFO while another
+    /// sheet stands. Activation writes the route's backing.
+    private func claimSheet(_ route: HomeSheetRoute) {
+        let result = HomeSheetArbiter.claim(
+            owner: homeSheetOwner, queue: homeSheetQueue, requested: route)
+        homeSheetOwner = result.owner
+        homeSheetQueue = result.queue
+        if result.owner == route { activateSheet(route) }
+    }
+
+    /// Release a route's claim: the owner's release hands the
+    /// token to the oldest queued route, which then activates.
+    private func releaseSheet(_ route: HomeSheetRoute) {
+        let previousOwner = homeSheetOwner
+        let result = HomeSheetArbiter.release(
+            owner: homeSheetOwner, queue: homeSheetQueue, released: route)
+        homeSheetOwner = result.owner
+        homeSheetQueue = result.queue
+        if previousOwner == route, let next = result.owner, next != route {
+            activateSheet(next)
+        }
+    }
+
+    /// Write a route's backing state (the activation half of a
+    /// granted claim). Item routes consume their stashed payload.
+    private func activateSheet(_ route: HomeSheetRoute) {
+        switch route {
+        case .settings: showSettings = true
+        case .datePicker: showDatePicker = true
+        case .timePicker: showTimePicker = true
+        case .locationPicker: showLocationPicker = true
+        case .collection: showCollection = true
+        case .feedback: showFeedbackSheet = true
+        case .heroPaywall: showHeroPillPaywall = true
+        case .looksLibrary: showLooksLibrary = true
+        case .heroViewer: showHeroViewer = true
+        case .weatherDetail:
+            if let detail = pendingWeatherDetail {
+                selectedWeatherDetail = detail
+                pendingWeatherDetail = nil
+            }
+        case .wearShare:
+            if let entry = pendingWearShareEntry {
+                wearShareEntry = entry
+                pendingWearShareEntry = nil
+            }
+        }
+    }
+
+    /// Dismiss a route: clear its backing and release its claim.
+    private func dismissSheet(_ route: HomeSheetRoute) {
+        switch route {
+        case .settings: showSettings = false
+        case .datePicker: showDatePicker = false
+        case .timePicker: showTimePicker = false
+        case .locationPicker: showLocationPicker = false
+        case .collection: showCollection = false
+        case .feedback: showFeedbackSheet = false
+        case .heroPaywall: showHeroPillPaywall = false
+        case .looksLibrary: showLooksLibrary = false
+        case .heroViewer: showHeroViewer = false
+        case .weatherDetail: selectedWeatherDetail = nil
+        case .wearShare: wearShareEntry = nil
+        }
+        releaseSheet(route)
+    }
+
+    /// Request a boolean-backed sheet (the ONLY way user actions
+    /// present one — a direct backing write would bypass the
+    /// owner and either double-present or never present).
+    private func requestSheet(_ route: HomeSheetRoute) {
+        claimSheet(route)
+    }
+
+    /// Request the weather-detail sheet for a payload.
+    private func requestWeatherDetail(_ detail: WeatherDetailType) {
+        pendingWeatherDetail = detail
+        claimSheet(.weatherDetail)
+    }
+
+    /// Request the RW-158 share sheet for an entry.
+    private func requestWearShare(_ entry: WearIveRunEntry) {
+        pendingWearShareEntry = entry
+        claimSheet(.wearShare)
+    }
+
+    /// A boolean sheet's owner-gated binding: the sheet presents
+    /// only while its route owns the token; writes funnel
+    /// through the arbiter (true = claim, false = dismiss).
+    private func ownedBinding(_ route: HomeSheetRoute, _ backing: Binding<Bool>) -> Binding<Bool> {
+        Binding(
+            get: { backing.wrappedValue
+                && HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: route) },
+            set: { newValue in
+                if newValue {
+                    claimSheet(route)
+                } else {
+                    backing.wrappedValue = false
+                    releaseSheet(route)
+                }
+            }
+        )
+    }
+
+    /// The weather-detail sheet's owner-gated item binding.
+    private var weatherDetailSheetItem: Binding<WeatherDetailType?> {
+        Binding(
+            get: { HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: .weatherDetail)
+                ? selectedWeatherDetail : nil },
+            set: { newValue in
+                if let detail = newValue {
+                    requestWeatherDetail(detail)
+                } else {
+                    selectedWeatherDetail = nil
+                    releaseSheet(.weatherDetail)
+                }
+            }
+        )
+    }
+
+    /// The RW-158 share sheet's owner-gated item binding.
+    private var wearShareSheetItem: Binding<WearIveRunEntry?> {
+        Binding(
+            get: { HomeSheetArbiter.mayPresent(owner: homeSheetOwner, route: .wearShare)
+                ? wearShareEntry : nil },
+            set: { newValue in
+                if let entry = newValue {
+                    requestWearShare(entry)
+                } else {
+                    wearShareEntry = nil
+                    releaseSheet(.wearShare)
+                }
             }
         )
     }
@@ -1495,10 +1669,10 @@ struct WeatherOutfitView: View {
             topLuminance: heroLuminance.topLuminance,
             chipLuminance: heroLuminance.chipLuminance,
             footLuminance: heroLuminance.footLuminance,
-            onPlaceTapped: { showLocationPicker = true },
-            onSettingsTapped: { showSettings = true },
-            onDateTapped: { showDatePicker = true },
-            onTimeTapped: { showTimePicker = true },
+            onPlaceTapped: { requestSheet(.locationPicker) },
+            onSettingsTapped: { requestSheet(.settings) },
+            onDateTapped: { requestSheet(.datePicker) },
+            onTimeTapped: { requestSheet(.timePicker) },
             onNowTapped: { viewModel.resetToNow() },
             windMph: viewModel.selectedWeatherSnapshot?.windSpeed ?? weather.currentWeather.windspeed,
             rainPercent: viewModel.selectedWeatherSnapshot?.precipitationProbability ?? 0,
@@ -1545,7 +1719,7 @@ struct WeatherOutfitView: View {
                 // Fix wave 2026-11-07 (RW-133): tapping the
                 // hero opens the stored photograph fitted
                 // full-screen (see HeroPhotoViewer).
-                .onTapGesture { showHeroViewer = true }
+                .onTapGesture { requestSheet(.heroViewer) }
         }
     }
 
@@ -1592,14 +1766,14 @@ struct WeatherOutfitView: View {
             // paint a shorts photo over a COOL outfit.
             fallbackImageUrl: viewModel.fallbackImageUrl ?? "",
             aiImageUrl: viewModel.heroImageUrl,
-            onSettingsTapped: { showSettings = true },
+            onSettingsTapped: { requestSheet(.settings) },
             // No onShareTapped: the hero's top controls are off
             // (showsTopControls below) — and since WS-6 (T-4)
             // there is no home share at all; sharing lives in
             // the collection (Poster / Kit Card).
-            onLocationTapped: { showLocationPicker = true },
-            onDateTapped: { showDatePicker = true },
-            onTimeTapped: { showTimePicker = true },
+            onLocationTapped: { requestSheet(.locationPicker) },
+            onDateTapped: { requestSheet(.datePicker) },
+            onTimeTapped: { requestSheet(.timePicker) },
             onNowTapped: { viewModel.resetToNow() },
             flagTarget: viewModel.currentHeroFlagTarget,
             onFlagHero: { reason in
@@ -1617,11 +1791,15 @@ struct WeatherOutfitView: View {
             // fed by the same heroPillState). HeroImageView's
             // own pill seat is passed .hidden here.
             pillState: .hidden,
-            onPillGetUnlimited: { showHeroPillPaywall = true },
+            onPillGetUnlimited: { requestSheet(.heroPaywall) },
             // RW-111: the failed look's line at the hero, with
             // its retry — the same retry the personal section's
             // button used to fire from the bottom of the page.
-            lookFailed: currentCellLookIsFailed,
+            // RW-161: the failed-look line ("…photos — tap to
+            // try again") is a transient surface on Home's own
+            // layer — it defers while any sheet owns the screen
+            // rather than rendering between stacked sheets.
+            lookFailed: currentCellLookIsFailed && !anyHomeSheetPresented,
             onRetryFailedLook: {
                 if let cell = viewModel.currentPersonalCombination {
                     personalStore.retryLook(for: cell)
@@ -1718,7 +1896,7 @@ struct WeatherOutfitView: View {
                 // the failed cell is encountered (frame 20's door
                 // wording, RW-61).
                 Button("See all your looks") {
-                    showLooksLibrary = true
+                    requestSheet(.looksLibrary)
                 }
                 .font(.appSecondary.weight(.semibold))
                 .foregroundColor(AppTheme.inkPrimary)

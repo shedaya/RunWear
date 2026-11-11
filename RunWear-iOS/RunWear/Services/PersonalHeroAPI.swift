@@ -194,6 +194,34 @@ actor PersonalHeroAPI {
         return Set(rows.filter { failed.contains($0.status) }.map { $0.combinationId })
     }
 
+    /// RW-159/RW-160 (device verdict, Nov 10, 2026): the bank as
+    /// combination_id → storage_path, WITHOUT signing — the
+    /// re-link recovery's lookup table (HeroRecovery). The same
+    /// owner-read table fetchBankHeroes reads; the first row per
+    /// cell wins, as there. Nil on any failure — recovery then
+    /// simply does not happen and the entry stays honestly empty.
+    func fetchBankHeroPaths() async -> [String: String]? {
+        guard let session = try? await requireSession() else { return nil }
+        let path = "/rest/v1/personal_heroes?select=combination_id,storage_path&user_id=eq.\(session.userId)&order=combination_id.asc"
+        guard let data = try? await authedGet(path: path, session: session) else { return nil }
+        struct Row: Decodable {
+            let combinationId: String
+            let storagePath: String?
+            enum CodingKeys: String, CodingKey {
+                case combinationId = "combination_id"
+                case storagePath = "storage_path"
+            }
+        }
+        guard let rows = try? JSONDecoder().decode([Row].self, from: data) else { return nil }
+        var paths: [String: String] = [:]
+        for row in rows {
+            if paths[row.combinationId] == nil, let storagePath = row.storagePath, !storagePath.isEmpty {
+                paths[row.combinationId] = storagePath
+            }
+        }
+        return paths
+    }
+
     /// RW-16.12 Lane B backstop: ask the server to reconcile this
     /// user's entitlement against RevenueCat. The client asserts
     /// NOTHING — it sends an empty body under the user's own JWT;
@@ -422,6 +450,10 @@ enum HeroRefRuntime {
             return stable
         }
         guard let path = HeroRefResolver.storagePath(for: entry) else { return nil }
+        return await signedURLString(forPath: path)
+    }
+
+    private static func signedURLString(forPath path: String) async -> String? {
         if let hit = signedCache[path], hit.expiresAt > Date() {
             return hit.url
         }
@@ -429,5 +461,48 @@ enum HeroRefRuntime {
         else { return nil }
         signedCache[path] = (signed.absoluteString, Date().addingTimeInterval(50 * 60))
         return signed.absoluteString
+    }
+
+    // MARK: RW-159/RW-160: bank re-link recovery
+
+    private static var bankPathsCache: (paths: [String: String], fetchedAt: Date)?
+
+    /// The recovering resolution: the entry's own reference
+    /// first (exactly the resolution above); when the entry
+    /// carries NO loadable reference — the empty-settle shape
+    /// the Nov 10, 2026 device verdict caught (New York's cover
+    /// and its Nov 9 Postcard) — the bank re-link
+    /// (HeroRecovery) looks the entry's own outfit cell up in
+    /// the user's bank, and a hit is reported through
+    /// `onRecovered` (the caller persists it on the entry, so
+    /// the recovery happens once) and re-signed here. No hit →
+    /// nil: the entry is honestly photo-less and every surface
+    /// keeps its placeholder.
+    static func loadableURLString(
+        for entry: WearIveRunEntry,
+        gender: GenderPreference,
+        onRecovered: ((String) -> Void)? = nil
+    ) async -> String? {
+        if let own = await loadableURLString(for: entry) {
+            return own
+        }
+        guard !HeroRefResolver.hasLoadableReference(entry) else { return nil }
+        let bankPaths: [String: String]
+        if let cache = bankPathsCache,
+           Date().timeIntervalSince(cache.fetchedAt) < 5 * 60 {
+            bankPaths = cache.paths
+        } else if let fetched = await PersonalHeroAPI.shared.fetchBankHeroPaths() {
+            bankPaths = fetched
+            bankPathsCache = (fetched, Date())
+        } else {
+            return nil
+        }
+        guard let recovered = HeroRecovery.recoveredDurableReference(
+            for: entry,
+            genderSegment: PersonalCombination.genderSegment(for: gender),
+            bankPaths: bankPaths
+        ) else { return nil }
+        onRecovered?(recovered)
+        return await signedURLString(forPath: recovered)
     }
 }

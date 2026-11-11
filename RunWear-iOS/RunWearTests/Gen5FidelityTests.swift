@@ -203,7 +203,14 @@ final class Gen5FidelityTests: XCTestCase {
         // pipeline no longer dereferences the stored display URL
         // directly (its signed hour may be long past) — it guards
         // the ONE resolver's loadable URL for the entry.
-        XCTAssertTrue(collection.contains("HeroRefRuntime.loadableURLString(for: entry)"))
+        // RE-PINNED for RW-160 (device verdict, Nov 10, 2026):
+        // the resolver call is now the RECOVERING form — it
+        // carries the gender segment the bank re-link keys on —
+        // because build 27's empty-ref entries gave the plain
+        // form nothing to load. The guard property is unchanged:
+        // every photo load still funnels through HeroRefRuntime.
+        XCTAssertTrue(collection.contains("HeroRefRuntime.loadableURLString("))
+        XCTAssertTrue(collection.contains("for: entry, gender: genderPreference"))
         // No force-unwrapped photo access anywhere in the file.
         XCTAssertFalse(collection.contains("heroImageReference!"))
         XCTAssertFalse(collection.contains("URL(string: entry.heroImageReference)!"))

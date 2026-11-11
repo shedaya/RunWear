@@ -122,7 +122,8 @@ struct WearIveRunCollectionView: View {
                                     entry: today,
                                     formatTemperature: formatTemperature,
                                     genderPreference: genderPreference,
-                                    onDelete: { model.removeEntry(id: today.id) }
+                                    onDelete: { model.removeEntry(id: today.id) },
+                                    onHeroRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) }
                                 )
                             } label: {
                                 entryCard(today)
@@ -272,7 +273,14 @@ struct WearIveRunCollectionView: View {
         // RW-152 §3: every collection surface loads through the
         // ONE resolver (ResolvedHeroImage) — the chapter banner
         // and the entry cards alike.
-        ResolvedHeroImage(entry: entry)
+        // RW-159 (device verdict, Nov 10, 2026): the resolver is
+        // the RECOVERING one — an entry that settled with an
+        // empty reference re-links from the bank, and the
+        // recovery is persisted on the entry through the model.
+        ResolvedHeroImage(
+            entry: entry,
+            genderPreference: genderPreference,
+            onRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) })
     }
 }
 
@@ -290,6 +298,12 @@ struct WearIveRunCollectionView: View {
 /// center fill did.
 struct ResolvedHeroImage: View {
     let entry: WearIveRunEntry
+    /// RW-159: the recovering resolution's inputs — the user's
+    /// gender segment keys the bank lookup, and a recovery is
+    /// reported for persistence on the entry. Defaulted so
+    /// seats without a model keep the plain resolver.
+    var genderPreference: GenderPreference = .unisex
+    var onRecovered: ((WearIveRunEntry, String) -> Void)?
     @State private var resolvedURLString: String?
 
     private var urlString: String? {
@@ -313,7 +327,11 @@ struct ResolvedHeroImage: View {
         }
         .task(id: entry.id) {
             if HeroRefResolver.stableDisplayReference(for: entry) == nil {
-                resolvedURLString = await HeroRefRuntime.loadableURLString(for: entry)
+                resolvedURLString = await HeroRefRuntime.loadableURLString(
+                    for: entry, gender: genderPreference,
+                    onRecovered: { recovered in
+                        onRecovered?(entry, recovered)
+                    })
             }
         }
     }
@@ -451,7 +469,8 @@ struct WearIveRunChapterView: View {
             WearIveRunShareStudioHost(
                 entry: entry,
                 formatTemperature: formatTemperature,
-                genderPreference: genderPreference
+                genderPreference: genderPreference,
+                onHeroRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) }
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -558,7 +577,8 @@ struct WearIveRunChapterView: View {
                                 entry: entry,
                                 formatTemperature: formatTemperature,
                                 genderPreference: genderPreference,
-                                onDelete: { model.removeEntry(id: entry.id) }
+                                onDelete: { model.removeEntry(id: entry.id) },
+                                onHeroRecovered: { model.healHeroReference(entryID: $0.id, durableReference: $1) }
                             )
                         } label: {
                             dayRowLabel(entry)
@@ -598,6 +618,9 @@ struct WearIveRunDayView: View {
     /// `WearIveRunCollection.removing(id:)` for this entry.
     /// Nil in seats that only present the day (no delete).
     var onDelete: (() -> Void)? = nil
+    /// RW-159/RW-160: a bank re-link recovery for this entry is
+    /// persisted through here (the host's collection model).
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     /// RW-152 §4 (J1): this (past) entry awaiting its delete
@@ -728,14 +751,24 @@ struct WearIveRunDayView: View {
             WearIveRunShareStudioHost(
                 entry: entry,
                 formatTemperature: formatTemperature,
-                genderPreference: genderPreference
+                genderPreference: genderPreference,
+                onHeroRecovered: onHeroRecovered
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
         // RW-152 §3: resolve the hero through the one resolver
         // (a personal hero's storage path re-signs here).
-        .task { resolvedHeroURL = await HeroRefRuntime.loadableURLString(for: entry) }
+        // RW-159: the RECOVERING resolution — an empty-ref entry
+        // re-links from the bank so the day view's hero (and its
+        // full-photo tap) heal with the cover.
+        .task {
+            resolvedHeroURL = await HeroRefRuntime.loadableURLString(
+                for: entry, gender: genderPreference,
+                onRecovered: { recovered in
+                    onHeroRecovered?(entry, recovered)
+                })
+        }
         // RW-152 §4 (J1): the past-entry delete confirmation —
         // confirming deletes and leaves the day view.
         .modifier(WearIveRunDeleteConfirmation(
@@ -769,6 +802,11 @@ struct WearIveRunShareStudioHost: View {
     let entry: WearIveRunEntry
     let formatTemperature: (Double) -> String
     let genderPreference: GenderPreference
+    /// RW-160 (device verdict, Nov 10, 2026): a bank re-link
+    /// recovery for this entry, reported by the poster pipeline
+    /// for persistence on the entry (the host's model heals it,
+    /// so the recovery happens once).
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
 
     /// The Studio's chosen export format. The render slots'
     /// keys carry it, so each (card, format) pair renders at
@@ -862,7 +900,8 @@ struct WearIveRunShareStudioHost: View {
             onRemoveGarment: { key in
                 excludedKitKeys.insert(key)
                 requestKit(force: true)
-            }
+            },
+            onHeroRecovered: onHeroRecovered
         )
         // Pre-warm BOTH cards on appearance, as two independent
         // pipelines — neither waits for the other, and each slot
@@ -995,7 +1034,18 @@ struct WearIveRunShareStudioHost: View {
         // RW-152 §3: the poster pipeline loads through the one
         // resolver too — the stored display URL's signed hour
         // may be long past; the durable reference re-signs.
-        guard let urlString = await HeroRefRuntime.loadableURLString(for: entry),
+        // RW-160 (device verdict, Nov 10, 2026): the RECOVERING
+        // resolution — build 27's New York Nov 9 Postcard failed
+        // ("Your Postcard couldn't be made") while its Kit Card
+        // rendered, because the entry settled with an EMPTY
+        // reference: the plain resolver had nothing to re-sign,
+        // this load returned nil, and the poster slot failed.
+        // The entry's bank hero exists; the re-link finds it.
+        guard let urlString = await HeroRefRuntime.loadableURLString(
+                for: entry, gender: genderPreference,
+                onRecovered: { recovered in
+                    onHeroRecovered?(entry, recovered)
+                }),
               let url = URL(string: urlString),
               let (data, _) = try? await Self.heroFetchSession.data(from: url),
               let image = UIImage(data: data) else { return nil }
@@ -1073,6 +1123,9 @@ struct ShareStudioView: View {
     var onFormatChanged: () -> Void
     var onRetry: (ShareCardKind) -> Void
     var onRemoveGarment: (String) -> Void
+    /// RW-160: forwarded from the host — the preview's photo
+    /// resolution recovers (and persists) like the poster's.
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -1197,7 +1250,14 @@ struct ShareStudioView: View {
         }
         // RW-158 / RW-152 §3: resolve the preview photo's URL
         // through the one resolver (a storage path re-signs).
-        .task { previewHeroURL = await HeroRefRuntime.loadableURLString(for: entry) }
+        // RW-160: the recovering form, like the poster pipeline.
+        .task {
+            previewHeroURL = await HeroRefRuntime.loadableURLString(
+                for: entry, gender: genderPreference,
+                onRecovered: { recovered in
+                    onHeroRecovered?(entry, recovered)
+                })
+        }
     }
 
     // MARK: First movement — the card

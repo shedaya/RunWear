@@ -98,6 +98,10 @@ struct ContentView: View {
                 onUseCurrentLocation: {
                     viewModel.switchToGPS()
                     locationService.requestPermission()
+                    // RW-162 G2: an explicit Current Location
+                    // tap asks for a FRESH fix, never the
+                    // manager's cached one.
+                    locationService.requestFreshLocation()
                 },
                 onSelectLocation: { coordinate, name in
                     viewModel.setManualLocation(coordinate: coordinate, name: name)
@@ -189,7 +193,10 @@ struct ContentView: View {
                 },
                 onUseCurrentLocation: {
                     viewModel.switchToGPS()
-                    locationService.requestLocation()
+                    // RW-162 G2: an explicit Current Location
+                    // tap asks for a FRESH fix, never the
+                    // manager's cached one.
+                    locationService.requestFreshLocation()
                 }
             )
         }
