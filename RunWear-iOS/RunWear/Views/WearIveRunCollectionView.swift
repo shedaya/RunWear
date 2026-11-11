@@ -912,27 +912,85 @@ struct WearIveRunShareStudioHost: View {
 
     // MARK: Render requests (slot-deduped, keyed by format)
 
+    /// RW-168 (Nov 11, 2026): the ONE card-render pipeline,
+    /// shared with the home menu's direct save — this host's
+    /// slots render through it, and "Save to photos" renders
+    /// through it, so both doors produce the identical card.
+    private var cardRenderer: ShareCardRenderer {
+        ShareCardRenderer(
+            entry: entry,
+            formatTemperature: formatTemperature,
+            genderPreference: genderPreference,
+            onHeroRecovered: onHeroRecovered,
+            exportContext: exportContext,
+            excludedKitKeys: excludedKitKeys
+        )
+    }
+
     @MainActor
     private func requestPoster(force: Bool = false) {
         let format = shareFormat
+        let renderer = cardRenderer
         if force {
-            posterSlot.forceRequest(key: posterKey(format: format)) { await renderPosterImage(format: format) }
+            posterSlot.forceRequest(key: posterKey(format: format)) { await renderer.renderPosterImage(format: format) }
         } else {
-            posterSlot.request(key: posterKey(format: format)) { await renderPosterImage(format: format) }
+            posterSlot.request(key: posterKey(format: format)) { await renderer.renderPosterImage(format: format) }
         }
     }
 
     @MainActor
     private func requestKit(force: Bool = false) {
         let format = shareFormat
+        let renderer = cardRenderer
         if force {
-            kitSlot.forceRequest(key: kitKey(format: format)) { await renderKitImage(format: format) }
+            kitSlot.forceRequest(key: kitKey(format: format)) { await renderer.renderKitImage(format: format) }
         } else {
-            kitSlot.request(key: kitKey(format: format)) { await renderKitImage(format: format) }
+            kitSlot.request(key: kitKey(format: format)) { await renderer.renderKitImage(format: format) }
         }
     }
 
-    // MARK: Render pipelines
+}
+
+
+// MARK: - Share card renderer (RW-168 extraction, Nov 11, 2026)
+//
+// The Studio host's two render pipelines, extracted VERBATIM
+// (RW-158/RW-160 behaviour unchanged) into a standalone value
+// so the home menu's "Save to photos" renders today's card
+// through the SAME pipeline the Studio uses — one composition,
+// one export render, identical artifacts from both doors. The
+// host above drives it through its slots; the home save drives
+// it directly and writes the result to the photo library.
+
+struct ShareCardRenderer {
+    let entry: WearIveRunEntry
+    let formatTemperature: (Double) -> String
+    let genderPreference: GenderPreference
+    var onHeroRecovered: ((WearIveRunEntry, String) -> Void)? = nil
+    let exportContext: ShareExportContext
+    var excludedKitKeys: Set<String> = []
+
+    /// The day's moment in its poster form (the host computes
+    /// the same forms for its captions via ShareMomentResolver).
+    private var moments: (caption: String, poster: String, isPastChapter: Bool) {
+        ShareMomentResolver.forms(
+            momentReading: entry.momentReading,
+            dayStart: entry.dayStart,
+            lastSavedAt: entry.lastSavedAt,
+            now: Date()
+        )
+    }
+
+    /// Render one card of `kind` at `format` — the direct-save
+    /// door (the host uses the per-kind pipelines through its
+    /// slots instead).
+    func renderImage(kind: ShareCardKind, format: ShareExportFormat) async -> UIImage? {
+        switch kind {
+        case .poster: return await renderPosterImage(format: format)
+        case .kit: return await renderKitImage(format: format)
+        }
+    }
+
 
     /// Poster pipeline: hero download → poster-size downscale
     /// (off the main actor) → face-anchor resolution (stored →
@@ -941,7 +999,7 @@ struct WearIveRunShareStudioHost: View {
     /// load FAILS the slot (GEN-5 FA-25) — never a photo-less
     /// dark rectangle — and a composition that would clip the
     /// face cannot be produced (§4.3.3).
-    private func renderPosterImage(format: ShareExportFormat) async -> UIImage? {
+    func renderPosterImage(format: ShareExportFormat) async -> UIImage? {
         guard let base = await loadHeroBase() else { return nil }
         let anchor = base.anchor
         let hero = base.image
@@ -976,7 +1034,7 @@ struct WearIveRunShareStudioHost: View {
     /// load is recorded on the export context and FAILS the
     /// slot — the Studio holds the share in its labeled error
     /// state until retry or removal (RW-31 §7.2).
-    private func renderKitImage(format: ShareExportFormat) async -> UIImage? {
+    func renderKitImage(format: ShareExportFormat) async -> UIImage? {
         let thumbnails = await loadKitThumbnails()
         let included = Array(ShareKitCardModel.orderedItems(names: entry.itemNames, keys: entry.itemKeys)
             .filter { !excludedKitKeys.contains($0.key) }
@@ -1030,7 +1088,7 @@ struct WearIveRunShareStudioHost: View {
     /// anchor: the day record's stored anchor when one exists,
     /// else on-device Vision face detection, else the default
     /// upper-middle composition point (never the centre).
-    private func loadHeroBase() async -> (image: UIImage, anchor: ShareFaceAnchor)? {
+    func loadHeroBase() async -> (image: UIImage, anchor: ShareFaceAnchor)? {
         // RW-152 §3: the poster pipeline loads through the one
         // resolver too — the stored display URL's signed hour
         // may be long past; the durable reference re-signs.
@@ -1075,8 +1133,7 @@ struct WearIveRunShareStudioHost: View {
         else { return nil }
         let box = face.boundingBox // Vision space: y-up
         return CGRect(x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
-    }
-}
+    }}
 
 // MARK: - Share export context (GEN-6, RW-31 §7)
 //

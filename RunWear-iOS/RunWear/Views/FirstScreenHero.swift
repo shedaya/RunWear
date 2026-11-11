@@ -577,6 +577,11 @@ struct HeroTopChromeView: View {
     let luminance: Double
     let onPlaceTapped: () -> Void
     let onSettingsTapped: () -> Void
+    /// RW-168 (Nov 11, 2026): the share control beside the
+    /// gear — same circle chrome, same cream glyph. Optional
+    /// so non-home compositions of this row (render fixtures)
+    /// carry exactly the controls they pass.
+    var onShareTapped: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -619,6 +624,28 @@ struct HeroTopChromeView: View {
                 .accessibilityLabel("Location: \(placeName). Change location")
 
                 Spacer(minLength: 0)
+
+                // RW-168: share sits beside the gear, in the
+                // gear's own circle chrome (fill, hairline,
+                // cream glyph) — the hero's geometry is
+                // otherwise untouched.
+                if let onShareTapped {
+                    Button(action: onShareTapped) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(HeroChrome.cream)
+                            .frame(width: 32, height: 32)
+                            .background(
+                                Circle().fill(HeroChrome.fillInk.opacity(
+                                    HeroScrimMath.chromeAlpha(base: HeroChrome.placeFillAlpha, luminance: luminance)))
+                            )
+                            .overlay(
+                                Circle().stroke(HeroChrome.cream.opacity(HeroChrome.placeOutlineAlpha), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Share")
+                }
 
                 Button(action: onSettingsTapped) {
                     Image(systemName: "gearshape.fill")
@@ -840,6 +867,8 @@ struct HeroChromeOverlayView: View {
     let footLuminance: Double
     let onPlaceTapped: () -> Void
     let onSettingsTapped: () -> Void
+    /// RW-168: the top row's share control (see HeroTopChromeView).
+    var onShareTapped: (() -> Void)? = nil
     let onDateTapped: () -> Void
     let onTimeTapped: () -> Void
     let onNowTapped: () -> Void
@@ -935,7 +964,8 @@ struct HeroChromeOverlayView: View {
                     placeName: placeName,
                     luminance: topLuminance,
                     onPlaceTapped: onPlaceTapped,
-                    onSettingsTapped: onSettingsTapped
+                    onSettingsTapped: onSettingsTapped,
+                    onShareTapped: onShareTapped
                 )
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -984,5 +1014,66 @@ struct HeroChromeOverlayView: View {
             }
             .frame(width: size.width, height: size.height)
         }
+    }
+}
+
+// MARK: - RW-168 home share menu (Nov 11, 2026)
+//
+// The floating card the hero's share control opens: the three
+// EXISTING doors of HomeShareMenuEntry, nothing else. Its
+// boundary/depth follows the studio's RW-152 standard — the
+// mini bar's own construction: sheet fill, a hairline stroke
+// in the same rounded shape, and the soft shadow applied
+// outside it (radius 12, y 6, black 14%). Colours are the
+// dynamic cream / Warm Charcoal tokens, so the card is correct
+// in both themes by construction.
+
+struct HomeShareMenuView: View {
+    let onSelect: (HomeShareMenuEntry) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(HomeShareMenuEntry.allCases.enumerated()), id: \.element.id) { index, entry in
+                Button {
+                    onSelect(entry)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: entry.systemImage)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppTheme.pinePayload)
+                            .frame(width: 20, alignment: .center)
+                        Text(entry.title)
+                            .font(.appSecondary.weight(.medium))
+                            .foregroundColor(AppTheme.inkPrimary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(entry.title)
+
+                if index < HomeShareMenuEntry.allCases.count - 1 {
+                    Rectangle()
+                        .fill(AppTheme.sheetHairline)
+                        .frame(height: 0.5)
+                        .padding(.leading, 44)
+                        .padding(.trailing, 14)
+                }
+            }
+        }
+        .frame(width: 252)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(AppTheme.sheet)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(AppTheme.sheetHairline, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 12, x: 0, y: 6)
     }
 }

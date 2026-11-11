@@ -47,6 +47,10 @@ struct WeatherOutfitView: View {
     let recommendation: OutfitRecommendation
     let onRefresh: () -> Void
     var onUseCurrentLocation: () -> Void = {}
+    /// RW-168: the direct save's photo-library seam — the
+    /// production Photos writer by default; tests inject a
+    /// recording mock (ShareCardPhotoSaving).
+    var photoSaver: ShareCardPhotoSaving = PhotoLibraryShareCardSaver()
 
     // Modal state
     @State private var showSettings = false
@@ -61,6 +65,13 @@ struct WeatherOutfitView: View {
     // Hero-flag confirmation toast (the snackbar equivalent):
     // shown briefly after the user flags the hero photo.
     @State private var showFlagThanks = false
+    /// RW-168: the hero share menu's presentation, and the
+    /// direct save's confirmation toasts — the save toasts
+    /// reuse the flag toast's surface, timing, and deferral
+    /// rule exactly (see the toast blocks in body).
+    @State private var showShareMenu = false
+    @State private var showSavedToPhotosThanks = false
+    @State private var showSaveToPhotosFailed = false
     /// GEN-3 (WS-A(2)): the hero pill's free-look state opens the
     /// Premium paywall from the hero.
     @State private var showHeroPillPaywall = false
@@ -152,6 +163,27 @@ struct WeatherOutfitView: View {
                 // owns the screen — build 27 rendered a toast
                 // sandwiched between stacked sheets; a transient
                 // line never renders over or between sheets.
+                // RW-168: the direct save's confirmation —
+                // the flag toast's surface with the save's own
+                // words (HomeShareMenuPolicy), shown only while
+                // no sheet owns the screen, like the flag toast.
+                if (showSavedToPhotosThanks || showSaveToPhotosFailed) && !anyHomeSheetPresented {
+                    VStack {
+                        Spacer()
+                        Text(showSavedToPhotosThanks
+                             ? HomeShareMenuPolicy.savedConfirmationText
+                             : HomeShareMenuPolicy.saveFailureText)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(AppTheme.darkBackground.opacity(0.92)))
+                            .padding(.bottom, 32)
+                    }
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                }
+
                 if showFlagThanks && !anyHomeSheetPresented {
                     VStack {
                         Spacer()
@@ -205,6 +237,16 @@ struct WeatherOutfitView: View {
                     beginWearExit(snapshot: snapshot, removesData: false)
                 }
             }
+            // RW-168: the share menu overlay — a floating
+            // card under the hero's top-right controls, over a
+            // tap-to-dismiss layer. Sheets present above it
+            // (they are separate presentations), and selecting
+            // an entry closes it before routing.
+            .overlay {
+                if showShareMenu {
+                    shareMenuOverlay
+                }
+            }
             .onChange(of: showFlagThanks) { _, visible in
                 if visible {
                     Task {
@@ -218,7 +260,26 @@ struct WeatherOutfitView: View {
             // tree is the first with both the flag surface and the
             // vocabulary, so the hook lands here on the confirmation
             // state itself.
+            .onChange(of: showSavedToPhotosThanks) { _, visible in
+                if visible {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showSavedToPhotosThanks = false }
+                    }
+                }
+            }
+            .onChange(of: showSaveToPhotosFailed) { _, visible in
+                if visible {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showSaveToPhotosFailed = false }
+                    }
+                }
+            }
             .sensoryFeedback(.impact(weight: .light), trigger: showFlagThanks)
+            // RW-168: the save's success carries the flag
+            // confirmation's light impact, on its own state.
+            .sensoryFeedback(.impact(weight: .light), trigger: showSavedToPhotosThanks)
             // RW-144: the navigation bar is hidden on Home — the
             // v8 hero carries the chrome itself (place pill,
             // wordmark, gear circle over the photograph's top
@@ -610,16 +671,21 @@ struct WeatherOutfitView: View {
         }
     }
 
-    // MARK: - Share (WS-6 / T-4 ruling)
+    // MARK: - Share (WS-6 / T-4 ruling; RW-168, Nov 11, 2026)
 
-    // There is NO home-level share. The RW-6.5 toolbar ShareLink
-    // that sent the raw hero photo + text from here was removed by
-    // the T-4 ruling (Sol, Nov 3, 2026 — register D-15's iOS half):
-    // the design has no home share on either platform, and sharing
-    // lives in the collection, whose Poster / Kit Card share is
-    // the designed artifact path (WearIveRunCollectionView).
-    // GEN-6 (DA-23): the view model's consumerless shareText
-    // computation is deleted with this comment's predecessor.
+    // T-4 removed the RW-6.5 toolbar share control that sent
+    // the raw hero photo + text from here (Sol, Nov 3, 2026 —
+    // register D-15's iOS half), and that removal stands: there
+    // is still no raw-photo share from Home, and the view
+    // model's consumerless share text stays deleted (GEN-6
+    // DA-23). RW-168 (user ruling, Nov 11, 2026) adds the home
+    // share MENU at the hero's top right — a menu of the
+    // EXISTING doors only: the RW-158 Share Studio sheet for
+    // the current outfit, the Wear I've Run collection (where
+    // per-entry sharing lives), and a direct save of today's
+    // card to Photos through the Studio's own renderer. Its
+    // wiring: heroChrome's share toggle, shareMenuOverlay,
+    // handleShareMenuSelection, saveCurrentCardToPhotos.
 
     // MARK: - Layouts (design record §5.2, frame f5)
 
@@ -1508,6 +1574,88 @@ struct WeatherOutfitView: View {
         claimSheet(.wearShare)
     }
 
+    // MARK: - RW-168 home share menu
+
+    /// The floating menu card under the hero's top-right
+    /// controls, over a tap-to-dismiss layer.
+    private var shareMenuOverlay: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { withAnimation { showShareMenu = false } }
+            HomeShareMenuView { entry in
+                handleShareMenuSelection(entry)
+            }
+            .padding(.top, 54)
+            .padding(.trailing, 16)
+        }
+    }
+
+    /// The entry the menu's entry-dependent doors act on —
+    /// the CURRENT day/outfit's record: the session's settled
+    /// entry (the same entry the dock presents; the recording
+    /// settles it from the viewed selection), falling back to
+    /// today's entry by date.
+    private var currentShareEntry: WearIveRunEntry? {
+        collectionModel.sessionEntry() ?? collectionModel.todaysEntry(today: Date())
+    }
+
+    /// A menu selection lands through the SAME doors Home
+    /// already owns — the RW-158 sheet via the one sheet owner
+    /// (requestWearShare), the collection via requestSheet —
+    /// and the direct save below. The menu closes first.
+    private func handleShareMenuSelection(_ entry: HomeShareMenuEntry) {
+        withAnimation { showShareMenu = false }
+        switch HomeShareMenuPolicy.destination(for: entry, hasCurrentEntry: currentShareEntry != nil) {
+        case .shareSheet:
+            if let current = currentShareEntry { requestWearShare(current) }
+        case .collection:
+            requestSheet(.collection)
+        case .saveToPhotos:
+            saveCurrentCardToPhotos()
+        case .none:
+            break
+        }
+    }
+
+    /// "Save to photos": render today's card through the
+    /// Studio's own pipeline (ShareCardRenderer — the
+    /// extraction of the Studio host's pipelines), verify the
+    /// raster at the Studio's own gate (ShareRasterVerifier,
+    /// sampled at the poster's face anchor, as the Studio's
+    /// share door verifies), then write it to the photo
+    /// library directly — one tap, no sheet round-trip. The
+    /// confirmation is the flag toast's surface and timing.
+    private func saveCurrentCardToPhotos() {
+        guard let entry = currentShareEntry else { return }
+        let renderer = ShareCardRenderer(
+            entry: entry,
+            formatTemperature: { viewModel.temperatureUnit.formatFromFahrenheit($0) },
+            genderPreference: viewModel.genderPreference,
+            onHeroRecovered: { collectionModel.healHeroReference(entryID: $0.id, durableReference: $1) },
+            exportContext: ShareExportContext()
+        )
+        let format = HomeShareMenuPolicy.directSaveFormat
+        Task { @MainActor in
+            let image = await renderer.renderImage(kind: HomeShareMenuPolicy.directSaveKind, format: format)
+            var saved = false
+            if let image {
+                let points = [renderer.exportContext.posterAnchorCanvasPoint].compactMap { $0 }
+                let verdict = ShareRasterVerifier.verify(image: image, format: format, samplePoints: points)
+                if verdict.passed {
+                    saved = await ShareCardDirectSave.save(image: image, saver: photoSaver)
+                }
+            }
+            withAnimation {
+                if saved {
+                    showSavedToPhotosThanks = true
+                } else {
+                    showSaveToPhotosFailed = true
+                }
+            }
+        }
+    }
+
     /// A boolean sheet's owner-gated binding: the sheet presents
     /// only while its route owns the token; writes funnel
     /// through the arbiter (true = claim, false = dismiss).
@@ -1671,6 +1819,7 @@ struct WeatherOutfitView: View {
             footLuminance: heroLuminance.footLuminance,
             onPlaceTapped: { requestSheet(.locationPicker) },
             onSettingsTapped: { requestSheet(.settings) },
+            onShareTapped: { withAnimation { showShareMenu.toggle() } },
             onDateTapped: { requestSheet(.datePicker) },
             onTimeTapped: { requestSheet(.timePicker) },
             onNowTapped: { viewModel.resetToNow() },

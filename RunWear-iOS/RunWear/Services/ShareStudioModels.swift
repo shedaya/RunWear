@@ -528,3 +528,87 @@ enum ShareKitCardModel {
         }
     }
 }
+
+// MARK: - RW-168 home share menu (Nov 11, 2026)
+//
+// The home hero's top-right share control (beside the gear)
+// opens ONE small menu of EXISTING doors only — no new sharing
+// surface is created here:
+//   * "Share this outfit" → the RW-158 Share Studio sheet
+//     ("Share this day": Postcard / Kit Card, chosen there) for
+//     the CURRENT day/outfit — the session's settled entry, the
+//     same entry the dock presents.
+//   * "Share from collection" → the Wear I've Run collection,
+//     where per-entry sharing already lives.
+//   * "Save to photos" → today's card saved DIRECTLY to the
+//     photo library, no sheet round-trip, rendered by the same
+//     pipeline the Studio uses (ShareCardRenderer) and written
+//     through the same kind of verified-raster door.
+// This enum + policy are the pure decision layer the home view
+// wires; the test target pins them here.
+
+enum HomeShareMenuEntry: String, CaseIterable, Identifiable {
+    case shareOutfit
+    case shareFromCollection
+    case saveToPhotos
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .shareOutfit: return "Share this outfit"
+        case .shareFromCollection: return "Share from collection"
+        case .saveToPhotos: return "Save to photos"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .shareOutfit: return "square.and.arrow.up"
+        case .shareFromCollection: return "rectangle.stack"
+        case .saveToPhotos: return "square.and.arrow.down"
+        }
+    }
+}
+
+/// Where a menu selection lands. `.none` is the honest answer
+/// when the entry-dependent doors have no entry yet (home is
+/// still settling its first record): the menu closes and
+/// nothing presents, rather than fabricating a card.
+enum HomeShareMenuDestination: Equatable {
+    case shareSheet
+    case collection
+    case saveToPhotos
+    case none
+}
+
+enum HomeShareMenuPolicy {
+    static func destination(
+        for entry: HomeShareMenuEntry,
+        hasCurrentEntry: Bool
+    ) -> HomeShareMenuDestination {
+        switch entry {
+        case .shareOutfit:
+            return hasCurrentEntry ? .shareSheet : .none
+        case .shareFromCollection:
+            return .collection
+        case .saveToPhotos:
+            return hasCurrentEntry ? .saveToPhotos : .none
+        }
+    }
+
+    /// The direct save's card: the Share Studio's OWN defaults —
+    /// the card kind and export format the Studio opens with
+    /// (ShareStudioView's pre-selected Postcard;
+    /// WearIveRunShareStudioHost's initial .feed format). The
+    /// home menu carries no format selector of its own, so
+    /// "today's card" is the card the Studio would present
+    /// first, at its default size.
+    static let directSaveKind: ShareCardKind = .poster
+    static let directSaveFormat: ShareExportFormat = .feed
+
+    /// The save confirmation's words — the flag toast's register
+    /// (a brief past-tense confirmation line, nothing more).
+    static let savedConfirmationText = "Saved to Photos"
+    static let saveFailureText = "Couldn't save that card"
+}

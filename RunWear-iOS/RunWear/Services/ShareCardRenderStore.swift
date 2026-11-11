@@ -1,4 +1,5 @@
 import Combine
+import Photos
 import SwiftUI
 import UIKit
 
@@ -489,5 +490,45 @@ enum ShareRasterVerifier {
             }
         }
         return Verdict(passed: true, failure: nil, meanLuminance: mean, standardDeviation: deviation)
+    }
+}
+
+// MARK: - Direct save to Photos (RW-168, Nov 11, 2026)
+//
+// The Share Studio's only save door is the system activity
+// sheet (its "Save Image" action). RW-168's home menu needs
+// the DIRECT path: the rendered card written to the photo
+// library in one tap, no sheet. The write itself is this seam
+// — a protocol so the home view's save flow is testable with a
+// recording mock, and the production implementation is the
+// Photos framework's add-only authorization + creation request
+// (the same library the activity sheet's Save Image writes to).
+
+protocol ShareCardPhotoSaving {
+    func saveToPhotoLibrary(_ image: UIImage) async -> Bool
+}
+
+struct PhotoLibraryShareCardSaver: ShareCardPhotoSaving {
+    func saveToPhotoLibrary(_ image: UIImage) async -> Bool {
+        let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard status == .authorized || status == .limited else { return false }
+        return await withCheckedContinuation { continuation in
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            } completionHandler: { success, _ in
+                continuation.resume(returning: success)
+            }
+        }
+    }
+}
+
+/// The direct-save orchestration the home menu runs: a missing
+/// render is a failure WITHOUT touching the library (no empty
+/// write, no authorization prompt for a card that does not
+/// exist); a rendered card goes through the saver exactly once.
+enum ShareCardDirectSave {
+    static func save(image: UIImage?, saver: ShareCardPhotoSaving) async -> Bool {
+        guard let image else { return false }
+        return await saver.saveToPhotoLibrary(image)
     }
 }
