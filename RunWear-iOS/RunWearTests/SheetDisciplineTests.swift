@@ -61,11 +61,16 @@ final class SheetDisciplineTests: XCTestCase {
         // outfit header's Shop sheet left the home view with
         // its button (Nov 9, 2026 ruling), so the counts drop
         // by one each: 6 .large-only, 9 drag indicators.
-        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 6,
-                       "Settings, WeatherDetail, Collection, Feedback, the pill paywall and the looks library rest at .large only")
+        // RW-158 RE-PIN (user ruling Nov 10, 2026): Home gains
+        // ONE more .large-only sheet — the Share Studio sheet a
+        // past entry's tap on the expanded panel's entry row
+        // opens directly — so the counts rise by one each:
+        // 7 .large-only, 10 drag indicators.
+        XCTAssertEqual(occurrences(view, ".presentationDetents([.large])"), 7,
+                       "Settings, WeatherDetail, Collection, Feedback, the pill paywall, the looks library and the RW-158 share sheet rest at .large only")
         XCTAssertEqual(occurrences(view, ".presentationDetents([.medium, .large])"), 3,
                        "only Date, Time and Location keep a medium detent")
-        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 9,
+        XCTAssertEqual(occurrences(view, ".presentationDragIndicator(.visible)"), 10,
                        "every home sheet names its detents and shows the drag indicator")
     }
 
@@ -108,8 +113,12 @@ final class SheetDisciplineTests: XCTestCase {
                        "the upsell card's subscription sheet is .large only")
 
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
-        XCTAssertEqual(occurrences(collection, ".presentationDetents([.large])"), 1,
-                       "the collection's share-choice sheet names its detent")
+        // RW-158 RE-PIN (user ruling Nov 10, 2026): the
+        // collection file now names TWO .large-only sheets —
+        // the day view's Share Studio sheet and the chapter's
+        // direct share sheet for a past entry's tap.
+        XCTAssertEqual(occurrences(collection, ".presentationDetents([.large])"), 2,
+                       "the collection's share sheets (day view + RW-158 chapter direct) name their detent")
     }
 
     // MARK: - One scroll consumer per sheet

@@ -642,7 +642,7 @@ final class RWNextBuildTests: XCTestCase {
         // covered.
         let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
         let hostStart = try XCTUnwrap(collection.range(of: "struct WearIveRunShareStudioHost"))
-        let hostEnd = try XCTUnwrap(collection.range(of: "struct ShareExportContext"))
+        let hostEnd = try XCTUnwrap(collection.range(of: "// MARK: - Share export context"))
         let host = collection[hostStart.lowerBound..<hostEnd.lowerBound]
         XCTAssertTrue(host.contains("HeroRefRuntime.loadableURLString(for: entry)"),
                       "the sheet's poster base resolves via HeroRefRuntime (RW-152 §3)")
