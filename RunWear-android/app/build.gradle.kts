@@ -197,4 +197,10 @@ dependencies {
     testImplementation("androidx.test:core-ktx:1.6.1")
     testImplementation("androidx.test.ext:junit-ktx:1.2.1")
     testImplementation("androidx.work:work-testing:2.9.1")
+    // RW-169 §7F: the instrumented save-to-photos test (real
+    // MediaStore, app/src/androidTest) — runs on a device or
+    // emulator via connectedDebugAndroidTest; CI has no
+    // instrumented path (see the lane report).
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

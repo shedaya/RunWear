@@ -756,7 +756,7 @@ fun HeroMainScreen(
     var wirPresented by remember {
         mutableStateOf<com.runwear.app.weariverun.PresentedSnapshot?>(null)
     }
-    val wirShownLine: WearIveRunNarration? get() = wirPresented?.narration
+    val wirShownLine: WearIveRunNarration? = wirPresented?.narration
     // RW-152 §1 (Nov 10, 2026): the expanded footer is a STATE of
     // the dock's overlay surface, not an in-flow list section.
     // wirExpanded is the one surface's expanded state: summoned by
