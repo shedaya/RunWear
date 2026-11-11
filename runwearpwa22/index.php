@@ -68,9 +68,11 @@
                 var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
                 var returning = false;
                 try { returning = window.localStorage.getItem('rw_entry') === 'webapp'; } catch (e) {}
-                var explicitEntry = false;
-                try { explicitEntry = new URLSearchParams(window.location.search).get('entry') === 'webapp'; } catch (e) {}
-                if (standalone || returning || explicitEntry) {
+                var entryParam = '';
+                try { entryParam = new URLSearchParams(window.location.search).get('entry') || ''; } catch (e) {}
+                var explicitEntry = entryParam === 'webapp';
+                var forceLanding = entryParam === 'landing';
+                if (standalone || ((returning || explicitEntry) && !forceLanding)) {
                     document.documentElement.classList.add('rw-skip-landing');
                 }
             } catch (e) {}
@@ -88,6 +90,32 @@
             display: flex; align-items: flex-start; justify-content: center;
         }
         .rw-skip-landing #rwLanding { display: none; }
+        /* ===== Slim app-download bar (browser web-app sessions) =====
+           Shown above the web app whenever the landing is not in play and
+           the app is not running installed/standalone, so entrants who
+           skipped the landing still have a path to the native app.
+           Dismissible; the dismissal is remembered (rw_appbar_dismissed). */
+        #rwAppBar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 900;
+            display: flex; align-items: center; gap: 10px;
+            height: 40px; padding: 0 12px;
+            background: #FDFBF6; color: #26221C;
+            border-bottom: 1px solid rgba(38, 34, 28, 0.12);
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+        }
+        #rwAppBar[hidden] { display: none; }
+        html.rw-has-appbar body { padding-top: 40px; }
+        .rw-appbar-word { font-family: 'Great Vibes', cursive; font-size: 20px; line-height: 1; color: #175E4C; white-space: nowrap; }
+        .rw-appbar-text { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.85; }
+        .rw-appbar-link {
+            color: #175E4C; font-weight: 700; text-decoration: none;
+            border: 1px solid #175E4C; border-radius: 999px; padding: 4px 12px; white-space: nowrap;
+        }
+        .rw-appbar-close {
+            background: none; border: none; color: #26221C; opacity: 0.6;
+            font-size: 18px; line-height: 1; padding: 4px 6px; cursor: pointer;
+        }
         .rw-landing-inner {
             width: 100%; max-width: 580px; margin: auto; text-align: center;
             padding: clamp(32px, 6vh, 64px) clamp(20px, 5vw, 40px) 40px;
@@ -2858,6 +2886,38 @@
                 document.body.style.overflow = '';
                 window.scrollTo(0, 0);
             });
+        })();
+    </script>
+    <!-- Slim app-download bar: browser web-app sessions only (never in the
+         installed/standalone app); dismissible, dismissal remembered. -->
+    <div id="rwAppBar" hidden>
+        <span class="rw-appbar-word">RunWear</span>
+        <span class="rw-appbar-text">Run, weather or not &mdash; in the app.</span>
+        <a class="rw-appbar-link" id="rwAppBarLink" href="https://runwear.ai/?entry=landing">Get the app</a>
+        <button type="button" class="rw-appbar-close" id="rwAppBarClose" aria-label="Dismiss">&times;</button>
+    </div>
+    <script>
+        (function () {
+            try {
+                var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+                if (standalone) return;
+                var dismissed = false;
+                try { dismissed = window.localStorage.getItem('rw_appbar_dismissed') === '1'; } catch (e) {}
+                if (dismissed) return;
+                var bar = document.getElementById('rwAppBar');
+                if (!bar) return;
+                var ua = navigator.userAgent || '';
+                var link = document.getElementById('rwAppBarLink');
+                if (/iPhone|iPad|iPod/i.test(ua)) link.href = 'https://apps.apple.com/app/id6827973343';
+                else if (/Android/i.test(ua)) link.href = 'https://play.google.com/store/apps/details?id=com.runwear.wear';
+                bar.hidden = false;
+                document.documentElement.classList.add('rw-has-appbar');
+                document.getElementById('rwAppBarClose').addEventListener('click', function () {
+                    bar.hidden = true;
+                    document.documentElement.classList.remove('rw-has-appbar');
+                    try { window.localStorage.setItem('rw_appbar_dismissed', '1'); } catch (e) {}
+                });
+            } catch (e) {}
         })();
     </script>
     <div class="container" id="app">
