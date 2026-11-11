@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.SemanticsProperties
 import com.runwear.app.weariverun.WearIveRunDayEntry
 import com.runwear.app.weariverun.WearIveRunDockNarration
 import com.runwear.app.weariverun.WearIveRunEntry
@@ -145,13 +146,53 @@ abstract class Rw169Base : Rw156Base() {
         return out
     }
 
+    /** Text boxes from the UNMERGED semantics tree. The merged
+     * tree folds a clickable surface's whole subtree into the
+     * surface's node (the mini bar is one tap target), so a
+     * merged-tree "wordmark" box measures the surface, not the
+     * glyph strip. Glyph-level assertions (one narration, the
+     * wordmark's wide-not-tall strip) belong to the unmerged
+     * tree, where every Text keeps its own layout bounds. */
+    protected fun unmergedNodeBoxes(host: Host): List<NodeBox> {
+        var root: SemanticsNode? = null
+        fun collect(v: android.view.View) {
+            if (root == null &&
+                v is androidx.compose.ui.platform.ViewRootForTest
+            ) {
+                root = v.semanticsOwner.unmergedRootSemanticsNode
+            }
+            if (v is android.view.ViewGroup) {
+                for (i in 0 until v.childCount) {
+                    if (root == null) collect(v.getChildAt(i))
+                }
+            }
+        }
+        collect(host.composeView.rootView)
+        val r = root ?: throw IllegalStateException("no ViewRootForTest")
+        val out = mutableListOf<NodeBox>()
+        fun walk(node: SemanticsNode) {
+            if (node.config.contains(SemanticsProperties.Text)) {
+                for (t in node.config[SemanticsProperties.Text]) {
+                    out += NodeBox(
+                        t.text,
+                        node.boundsInRoot.top, node.boundsInRoot.bottom,
+                        node.boundsInRoot.left, node.boundsInRoot.right
+                    )
+                }
+            }
+            node.children.forEach { walk(it) }
+        }
+        walk(r)
+        return out
+    }
+
     protected fun narrationNodes(host: Host): List<NodeBox> =
-        nodeBoxes(host).filter {
+        unmergedNodeBoxes(host).filter {
             it.text.contains("Planned for") || it.text.startsWith("Updated to")
         }
 
     protected fun wordmarkNodes(host: Host): List<NodeBox> =
-        nodeBoxes(host).filter { it.text == "Wear I've Run" }
+        unmergedNodeBoxes(host).filter { it.text == "Wear I've Run" }
 
     /** The anti-crush signature (diagnosis D1): the wordmark is a
      * wide, short strip. A crushed wordmark is tall and narrow.

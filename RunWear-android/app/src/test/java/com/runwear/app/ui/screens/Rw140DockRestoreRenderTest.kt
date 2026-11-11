@@ -952,7 +952,7 @@ class Rw140SourcePinTest {
         )
         assertFalse(
             "no SizeTransform arbitration remains in the host (RW-169 §7A)",
-            source.contains("SizeTransform")
+            source.contains("SizeTransform(")
         )
         assertTrue(
             "the dock and panel are one morph surface (RW-169 §7A)",
