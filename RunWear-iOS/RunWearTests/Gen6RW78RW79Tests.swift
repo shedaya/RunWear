@@ -186,8 +186,14 @@ final class Gen6RW78RW79Tests: XCTestCase {
                       "Home observes the app's lifecycle phase")
         XCTAssertTrue(home.contains("if phase == .active"),
                       "returning to the foreground triggers the revalidation")
-        XCTAssertTrue(home.contains(".sheet(isPresented: $showHeroPillPaywall, onDismiss:"),
+        // RW-161 RE-PIN (device verdict, Nov 10, 2026): the
+        // paywall's sheet binding is the owner-gated form; its
+        // onDismiss still runs the RW-79 revalidation (the
+        // release precedes it in the same closure).
+        XCTAssertTrue(home.contains(".sheet(isPresented: ownedBinding(.heroPaywall, $showHeroPillPaywall)"),
                       "dismissing the hero paywall triggers the revalidation")
+        XCTAssertTrue(home.contains("onDismiss: { releaseSheet(.heroPaywall)"),
+                      "the paywall's dismissal releases the sheet owner")
         XCTAssertEqual(occurrences(home, "viewModel.revalidatePersonalLookState()"), 3,
                        "exactly three call sites: foreground, paywall dismissal, Home appearing")
     }

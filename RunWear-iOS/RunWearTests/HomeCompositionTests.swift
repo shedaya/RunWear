@@ -229,7 +229,11 @@ final class HomeCompositionTests: XCTestCase {
                       "RW-144: home carries no nav bar; the hero chrome replaces it")
         XCTAssertFalse(view.contains(".toolbarTitleMenu"),
                        "Y-16: the title menu's extra tap is removed")
-        XCTAssertTrue(view.contains("onPlaceTapped: { showLocationPicker = true }"),
+        // RW-161 RE-PIN (device verdict, Nov 10, 2026): the
+        // pill's tap claims the ONE sheet owner
+        // (requestSheet(.locationPicker)); Y-16's one-tap rule
+        // is unchanged, only the plumbing is owner-gated.
+        XCTAssertTrue(view.contains("onPlaceTapped: { requestSheet(.locationPicker) }"),
                       "Y-16 preserved: the hero place pill is bound straight to the picker")
         let heroChrome = try sourceFile("../RunWear/Views/FirstScreenHero.swift")
         XCTAssertTrue(heroChrome.contains("Button(action: onPlaceTapped)"),
