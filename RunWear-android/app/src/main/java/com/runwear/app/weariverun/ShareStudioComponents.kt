@@ -671,7 +671,16 @@ fun ShareStudioSheet(
     heroRecovery: HeroRecoverySeam? = null,
     /** RW-166: a recovery hit is persisted on the entry through
      * here (the host's store heal), so it happens once. */
-    onHeroRecovered: (String) -> Unit = {}
+    onHeroRecovered: (String) -> Unit = {},
+    /** RW-168 (Nov 11, 2026): the host may seed + track the card
+     * selection, so the home share menu's direct "Save to photos"
+     * saves the CURRENTLY SELECTED card (kind + size format).
+     * Defaults preserve the sheet's standing behaviour exactly:
+     * Postcard, Feed. */
+    initialKind: ShareArtifactKind = ShareArtifactKind.MORNING_POSTER,
+    initialFormat: ShareExportFormat = ShareExportFormat.FEED,
+    onKindSelected: (ShareArtifactKind) -> Unit = {},
+    onFormatSelected: (ShareExportFormat) -> Unit = {}
 ) {
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -695,8 +704,8 @@ fun ShareStudioSheet(
     }
     val posterMoment = forms.poster
 
-    var kind by remember { mutableStateOf(ShareArtifactKind.MORNING_POSTER) }
-    var format by remember { mutableStateOf(ShareExportFormat.FEED) }
+    var kind by remember(entry, initialKind) { mutableStateOf(initialKind) }
+    var format by remember(entry, initialFormat) { mutableStateOf(initialFormat) }
     var excludedKeys by remember(entry) { mutableStateOf<Set<String>>(emptySet()) }
     var renderNonce by remember { mutableStateOf(0) }
     var shareFailed by remember { mutableStateOf(false) }
@@ -970,7 +979,10 @@ fun ShareStudioSheet(
                         failed = posterRenderFailed,
                         selected = kind == ShareArtifactKind.MORNING_POSTER,
                         modifier = Modifier.weight(1f),
-                        onClick = { kind = ShareArtifactKind.MORNING_POSTER }
+                        onClick = {
+                            kind = ShareArtifactKind.MORNING_POSTER
+                            onKindSelected(ShareArtifactKind.MORNING_POSTER)
+                        }
                     )
                     StudioThumbnailChoice(
                         label = "Kit Card",
@@ -979,7 +991,10 @@ fun ShareStudioSheet(
                         failed = kitRenderFailed,
                         selected = kind == ShareArtifactKind.KIT_CARD,
                         modifier = Modifier.weight(1f),
-                        onClick = { kind = ShareArtifactKind.KIT_CARD }
+                        onClick = {
+                            kind = ShareArtifactKind.KIT_CARD
+                            onKindSelected(ShareArtifactKind.KIT_CARD)
+                        }
                     )
                 }
                 if (posterRendering || kitRendering) {
@@ -999,7 +1014,10 @@ fun ShareStudioSheet(
                 ShareExportFormat.entries.forEach { option ->
                     FilterChip(
                         selected = format == option,
-                        onClick = { format = option },
+                        onClick = {
+                            format = option
+                            onFormatSelected(option)
+                        },
                         label = { Text(option.label) }
                     )
                 }

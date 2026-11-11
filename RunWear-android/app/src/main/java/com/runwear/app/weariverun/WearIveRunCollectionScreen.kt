@@ -121,7 +121,13 @@ fun WearIveRunCollectionScreen(
     heroRecovery: HeroRecoverySeam? = null,
     /** RW-166: a recovery hit is persisted on the entry through
      * here (the host's store heal), so it happens once. */
-    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> }
+    onHeroRecovered: (WearIveRunDayEntry, String) -> Unit = { _, _ -> },
+    /** RW-168: the host's tracked share-card selection, seeded
+     * into this screen's sheet (see ShareStudioSheet). */
+    shareInitialKind: ShareArtifactKind = ShareArtifactKind.MORNING_POSTER,
+    shareInitialFormat: ShareExportFormat = ShareExportFormat.FEED,
+    onShareKindSelected: (ShareArtifactKind) -> Unit = {},
+    onShareFormatSelected: (ShareExportFormat) -> Unit = {}
 ) {
 
     var filter by remember { mutableStateOf(WearWeatherFilter.ALL) }
@@ -330,7 +336,11 @@ fun WearIveRunCollectionScreen(
             // RW-158: the sheet's poster preview is the eye's new
             // home — tapping it opens the entry's full photo
             // (RW-133) through the same host door as before.
-            onViewPhoto = onViewPhoto
+            onViewPhoto = onViewPhoto,
+            initialKind = shareInitialKind,
+            initialFormat = shareInitialFormat,
+            onKindSelected = onShareKindSelected,
+            onFormatSelected = onShareFormatSelected
         )
     }
 

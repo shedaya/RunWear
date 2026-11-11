@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- RW-168: legacy (API 26-28) MediaStore writes for "Save to
+         photos"; scoped to the versions that need it — API 29+
+         inserts are permission-free. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- GEN-5 (RW-28 item 16): the guided selfie is captured
          in-app (CameraX), so the app now declares the camera
          permission it previously avoided by handing off to the

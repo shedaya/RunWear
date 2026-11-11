@@ -111,4 +111,58 @@ object ShareArtifacts {
         val intent = buildIntent(stream, kind, caption)
         context.startActivity(Intent.createChooser(intent, kind.chooserTitle))
     }
+
+    /**
+     * RW-168 (Nov 11, 2026): persist [bitmap] as a PNG in the
+     * device photo roll (Pictures/RunWear) through MediaStore —
+     * the direct save behind the home share menu's "Save to
+     * photos". API 29+ needs no permission (app-owned insert,
+     * pending-then-publish); API 26–28 writes through the legacy
+     * EXTERNAL_CONTENT_URI insert under the manifest's
+     * maxSdkVersion=28 WRITE_EXTERNAL_STORAGE. Returns false on
+     * any failure, with the pending row removed — the caller
+     * surfaces the failure honestly rather than claiming a save.
+     */
+    fun saveToPhotos(context: Context, bitmap: Bitmap, kind: ShareArtifactKind): Boolean {
+        val resolver = context.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(
+                android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                "${kind.fileStem}-${System.currentTimeMillis()}.png"
+            )
+            put(android.provider.MediaStore.Images.Media.MIME_TYPE, MIME_TYPE)
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                put(
+                    android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                    "Pictures/RunWear"
+                )
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+        val uri = try {
+            resolver.insert(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                values
+            )
+        } catch (e: Exception) {
+            null
+        } ?: return false
+        return try {
+            val encoded = resolver.openOutputStream(uri)?.use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            } ?: false
+            check(encoded) { "card bitmap did not encode as PNG" }
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                values.clear()
+                values.put(
+                    android.provider.MediaStore.Images.Media.IS_PENDING, 0
+                )
+                resolver.update(uri, values, null, null)
+            }
+            true
+        } catch (e: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            false
+        }
+    }
 }

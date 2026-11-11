@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
@@ -311,6 +313,10 @@ fun HeroSection(
     scrollOffset: Float = 0f,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-168 (Nov 11, 2026): the share button beside the gear +
+     * its menu of existing entries. Null = no share chrome (render
+     * proofs that do not wire it). */
+    shareActions: HeroShareActions? = null,
     /** RW-133: tapping the photo opens the full-screen viewer. */
     onHeroPhotoClick: () -> Unit = {},
     /** Hero-flag affordance: shown only when a hero photo is displayed. */
@@ -726,6 +732,17 @@ fun HeroSection(
 
             Spacer(Modifier.width(8.dp))
 
+            // RW-168: the share button joins the gear at the top
+            // right — same chrome circle, its menu of existing
+            // entries anchored beneath it.
+            if (shareActions != null) {
+                HeroShareButton(
+                    actions = shareActions,
+                    enabled = chromeInteractive
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+
             // RW-144: settings gear in a circle of the same chrome.
             HeroGearButton(
                 onClick = onSettingsClick,
@@ -971,6 +988,149 @@ fun HeroGearButton(
             modifier = Modifier
                 .padding(9.dp)
                 .size(20.dp)
+        )
+    }
+}
+
+/**
+ * RW-168 (Sol, Nov 11, 2026): the home share menu's doors — all
+ * three are EXISTING surfaces/actions, no new feature: the RW-158
+ * "Share this day" sheet for the current day, the Wear I've Run
+ * collection, and a direct save of today's card to the photo roll.
+ * [outfitEnabled] is false when no current-day entry exists yet —
+ * the two entry-bound doors rest disabled; the collection door is
+ * always live.
+ */
+data class HeroShareActions(
+    val onShareOutfit: () -> Unit,
+    val onShareFromCollection: () -> Unit,
+    val onSaveToPhotos: () -> Unit,
+    val outfitEnabled: Boolean = true
+)
+
+/**
+ * RW-168: the share button in the hero's top-right chrome — the
+ * gear's own chrome circle (38dp, warm-black fill, cream outline,
+ * cream glyph) carrying a share glyph — and its menu: a floating
+ * card on the app ground system (Surface, 16dp radius, 1dp ink
+ * hairline, 16dp soft shadow — the RW-152 boundary/depth standard,
+ * never a rectangular block), anchored under the button.
+ */
+@Composable
+fun HeroShareButton(
+    actions: HeroShareActions,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    Box(modifier = modifier) {
+        Surface(
+            onClick = { menuOpen = true },
+            enabled = enabled,
+            modifier = Modifier.size(38.dp),
+            shape = CircleShape,
+            color = com.runwear.app.ui.theme.HeroChromeInk.copy(alpha = 84f / 255f),
+            border = BorderStroke(
+                1.dp, com.runwear.app.ui.theme.PhotoInk.copy(alpha = 30f / 255f)
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Share,
+                contentDescription = "Share",
+                tint = com.runwear.app.ui.theme.PhotoInk,
+                modifier = Modifier
+                    .padding(9.dp)
+                    .size(20.dp)
+            )
+        }
+        if (menuOpen) {
+            androidx.compose.ui.window.Popup(
+                alignment = Alignment.TopEnd,
+                offset = androidx.compose.ui.unit.IntOffset(
+                    0, with(density) { 46.dp.roundToPx() }
+                ),
+                onDismissRequest = { menuOpen = false },
+                properties = androidx.compose.ui.window.PopupProperties(
+                    focusable = true
+                )
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = com.runwear.app.ui.theme.RunWearColors.Surface,
+                    border = BorderStroke(
+                        1.dp,
+                        com.runwear.app.ui.theme.RunWearColors.TextPrimary
+                            .copy(alpha = 0.09f)
+                    ),
+                    shadowElevation = 16.dp,
+                    modifier = Modifier.width(236.dp)
+                ) {
+                    Column(Modifier.padding(vertical = 8.dp)) {
+                        HeroShareMenuRow(
+                            icon = Icons.Outlined.Share,
+                            label = "Share this outfit",
+                            enabled = actions.outfitEnabled,
+                            onClick = {
+                                menuOpen = false
+                                actions.onShareOutfit()
+                            }
+                        )
+                        HeroShareMenuRow(
+                            icon = Icons.Outlined.PhotoLibrary,
+                            label = "Share from collection",
+                            enabled = true,
+                            onClick = {
+                                menuOpen = false
+                                actions.onShareFromCollection()
+                            }
+                        )
+                        HeroShareMenuRow(
+                            icon = Icons.Outlined.SaveAlt,
+                            label = "Save to photos",
+                            enabled = actions.outfitEnabled,
+                            onClick = {
+                                menuOpen = false
+                                actions.onSaveToPhotos()
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroShareMenuRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val ink = if (enabled) {
+        com.runwear.app.ui.theme.RunWearColors.TextPrimary
+    } else {
+        com.runwear.app.ui.theme.RunWearColors.TextSecondary
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled) { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = ink,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = label,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+            color = ink
         )
     }
 }

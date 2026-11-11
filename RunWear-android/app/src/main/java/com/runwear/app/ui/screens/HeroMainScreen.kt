@@ -428,6 +428,23 @@ fun HeroMainScreen(
         mutableStateOf<WearIveRunDayEntry?>(null)
     }
 
+    // RW-168 (Nov 11, 2026): the share-card selection the user
+    // last made in any Share Studio sheet this session (kind +
+    // size format), seeded back into every sheet host — the home
+    // share menu's direct "Save to photos" saves today's card in
+    // exactly this selection. Standing defaults: Postcard, Feed.
+    var shareKind by remember {
+        mutableStateOf(
+            com.runwear.app.weariverun.ShareArtifactKind.MORNING_POSTER
+        )
+    }
+    var shareFormat by remember {
+        mutableStateOf(
+            com.runwear.app.weariverun.ShareExportFormat.FEED
+        )
+    }
+    var saveToPhotosBusy by remember { mutableStateOf(false) }
+
     // GEN-5 (RW-28, B-1): the FIRST emission in this process is
     // the stored collection restoring — it primes the holder at
     // rest (no cue, no announcement for entries an earlier process
@@ -740,6 +757,115 @@ fun HeroMainScreen(
     // takes the holder Absent before the exit plays — spec
     // section 4.8).
     val wirSurfacesPresent = wirPresent || wirExit != null
+
+    // RW-168: the direct save's execution — renders + verifies
+    // today's card in the tracked selection through the Share
+    // Studio's pipeline and writes it to the photo roll,
+    // confirmed through the screen's existing snackbar host.
+    fun launchSaveToPhotos(
+        entry: WearIveRunDayEntry,
+        kindSnapshot: com.runwear.app.weariverun.ShareArtifactKind,
+        formatSnapshot: com.runwear.app.weariverun.ShareExportFormat
+    ) {
+        if (saveToPhotosBusy) return
+        saveToPhotosBusy = true
+        screenScope.launch {
+            val saved = runCatching {
+                com.runwear.app.weariverun.saveTodaysCardToPhotos(
+                    context = context,
+                    entry = entry,
+                    kind = kindSnapshot,
+                    format = formatSnapshot,
+                    gender = uiState.genderPreference,
+                    temperatureUnit = uiState.temperatureUnit,
+                    heroResign = { path ->
+                        makeItMeViewModel?.signedHeroUrlForPath(path)
+                    },
+                    heroRecovery =
+                        com.runwear.app.weariverun.HeroRecoverySeam(
+                            genderSegment =
+                                uiState.genderPreference.name,
+                            bankPaths = {
+                                makeItMeViewModel?.bankHeroPaths()
+                            }
+                        ),
+                    onHeroRecovered = { path ->
+                        screenScope.launch {
+                            wearIveRunStore.healHeroReference(
+                                entry, path
+                            )
+                        }
+                    }
+                )
+            }.getOrDefault(false)
+            saveToPhotosBusy = false
+            snackbarHostState.showSnackbar(
+                if (saved) {
+                    "Saved to photos"
+                } else {
+                    "Couldn't save the card — try again"
+                }
+            )
+        }
+    }
+    // RW-168: API 26–28 needs the storage grant for the
+    // MediaStore write (29+ is permission-free); the pending
+    // save resumes when the grant lands.
+    var pendingSaveEntry by remember {
+        mutableStateOf<WearIveRunDayEntry?>(null)
+    }
+    val savePhotosPermissionLauncher =
+        androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts
+                .RequestPermission()
+        ) { granted ->
+            val pending = pendingSaveEntry
+            pendingSaveEntry = null
+            if (granted && pending != null) {
+                launchSaveToPhotos(pending, shareKind, shareFormat)
+            } else if (!granted) {
+                screenScope.launch {
+                    snackbarHostState.showSnackbar(
+                        "Couldn't save the card — photo access is off"
+                    )
+                }
+            }
+        }
+
+    // RW-168: the hero share button's doors (existing entries
+    // only): the RW-158 sheet for the CURRENT day entry through
+    // the same host state the footer's past-entry rows use; the
+    // collection through its standing state; and the direct
+    // save of today's card in the tracked selection.
+    val heroShareActions = com.runwear.app.ui.components.HeroShareActions(
+        onShareOutfit = {
+            wirDayEntry?.let { wirFooterShareEntry = it }
+        },
+        onShareFromCollection = { showWearIveRunCollection = true },
+        onSaveToPhotos = {
+            val entry = wirDayEntry
+            if (entry != null && !saveToPhotosBusy) {
+                val needsGrant =
+                    android.os.Build.VERSION.SDK_INT < 29 &&
+                        androidx.core.content.ContextCompat
+                            .checkSelfPermission(
+                                context,
+                                android.Manifest.permission
+                                    .WRITE_EXTERNAL_STORAGE
+                            ) != android.content.pm.PackageManager
+                                .PERMISSION_GRANTED
+                if (needsGrant) {
+                    pendingSaveEntry = entry
+                    savePhotosPermissionLauncher.launch(
+                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                } else {
+                    launchSaveToPhotos(entry, shareKind, shareFormat)
+                }
+            }
+        },
+        outfitEnabled = wirDayEntry != null
+    )
 
     // The handoff (spec section 3): a PURE function of the
     // footer's position in the ACTIVE host. a = how far (dp) the
@@ -1179,6 +1305,7 @@ fun HeroMainScreen(
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
+                                            shareActions = heroShareActions,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
@@ -1305,6 +1432,7 @@ fun HeroMainScreen(
                                             onNowClick = onResetToNow,
                                             onLocationClick = { showLocationPicker = true },
                                             onSettingsClick = { showSettings = true },
+                                            shareActions = heroShareActions,
                                             onWeatherPillClick = { type -> weatherDetailType = type },
                                             onFlagClick = onAnyFlagClick,
                                             heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
@@ -1393,6 +1521,7 @@ fun HeroMainScreen(
                                         scrollOffset = 0f,
                                         onLocationClick = { showLocationPicker = true },
                                         onSettingsClick = { showSettings = true },
+                                            shareActions = heroShareActions,
                                         onFlagClick = onAnyFlagClick,
                                         heroFlagEnabled = flaggedHeroUrl != uiState.heroImageUrl,
                                         onCycleHero = onCycleHero,
@@ -1863,7 +1992,11 @@ fun HeroMainScreen(
                     screenScope.launch {
                         wearIveRunStore.healHeroReference(entry, path)
                     }
-                }
+                },
+                shareInitialKind = shareKind,
+                shareInitialFormat = shareFormat,
+                onShareKindSelected = { shareKind = it },
+                onShareFormatSelected = { shareFormat = it }
             )
         }
 
@@ -1888,7 +2021,11 @@ fun HeroMainScreen(
                         wearIveRunStore.healHeroReference(entry, path)
                     }
                 },
-                onViewPhoto = { heroViewerEntry = it }
+                onViewPhoto = { heroViewerEntry = it },
+                initialKind = shareKind,
+                initialFormat = shareFormat,
+                onKindSelected = { shareKind = it },
+                onFormatSelected = { shareFormat = it }
             )
         }
     }
@@ -2427,6 +2564,8 @@ private fun HeroSectionContent(
     scrollOffset: Float,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-168: the hero share button + menu doors. */
+    shareActions: com.runwear.app.ui.components.HeroShareActions? = null,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
     onCycleHero: () -> Unit = {},
@@ -2505,6 +2644,7 @@ private fun HeroSectionContent(
                 scrollOffset = scrollOffset,
                 onLocationClick = onLocationClick,
                 onSettingsClick = onSettingsClick,
+                shareActions = shareActions,
                 // RW-144: chip + feels-like frames.
                 selectedDateTime = uiState.selectedDateTime,
                 isNowSelected = uiState.isNowSelected,
@@ -2581,6 +2721,8 @@ private fun HeroStackedUnit(
     onNowClick: () -> Unit,
     onLocationClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    /** RW-168: the hero share button + menu doors. */
+    shareActions: com.runwear.app.ui.components.HeroShareActions? = null,
     onWeatherPillClick: (String) -> Unit,
     onFlagClick: () -> Unit,
     heroFlagEnabled: Boolean,
@@ -2612,6 +2754,7 @@ private fun HeroStackedUnit(
                 scrollOffset = scrollOffset,
                 onLocationClick = onLocationClick,
                 onSettingsClick = onSettingsClick,
+                shareActions = shareActions,
                 onFlagClick = onFlagClick,
                 heroFlagEnabled = heroFlagEnabled,
                 onCycleHero = onCycleHero,
