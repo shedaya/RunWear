@@ -232,9 +232,12 @@ final class Gen3ShareRenderTests: XCTestCase {
     // MARK: - Sheet copy (labeled states, never a bare spinner)
 
     func testShareSheetCopyIsLabeledPerCardAndState() {
-        XCTAssertEqual(ShareCardCopy.progressLabel(for: .poster), "Making your Morning Poster…")
+        // Rename ruling (user, Nov 10, 2026): the format pair
+        // of record is Postcard + Kit Card — "Morning Poster"
+        // is renamed to "Postcard" everywhere user-facing.
+        XCTAssertEqual(ShareCardCopy.progressLabel(for: .poster), "Making your Postcard…")
         XCTAssertEqual(ShareCardCopy.progressLabel(for: .kit), "Making your Kit Card…")
-        XCTAssertEqual(ShareCardCopy.failureLabel(for: .poster), "Your Morning Poster couldn't be made.")
+        XCTAssertEqual(ShareCardCopy.failureLabel(for: .poster), "Your Postcard couldn't be made.")
         XCTAssertEqual(ShareCardCopy.failureLabel(for: .kit), "Your Kit Card couldn't be made.")
     }
 

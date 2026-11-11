@@ -679,6 +679,29 @@ final class RWNextBuildTests: XCTestCase {
         XCTAssertTrue(host.contains("WearIveRunShareStudioHost("))
     }
 
+    // MARK: - Rename ruling (user, Nov 10, 2026): "Morning Poster" → "Postcard"
+
+    func testPostcardRename_NoMorningPosterUserFacingStrings() throws {
+        // The format pair of record is Postcard + Kit Card.
+        // Every user-facing "Morning Poster" string is renamed;
+        // code identifiers (MorningPosterView,
+        // MorningPosterMetrics, ShareCardKind.poster) are NOT
+        // strings and are intentionally left — this pin guards
+        // the STRING sites only.
+        XCTAssertEqual(ShareCardCopy.progressLabel(for: .poster), "Making your Postcard…")
+        XCTAssertEqual(ShareCardCopy.failureLabel(for: .poster), "Your Postcard couldn't be made.")
+        let collection = try sourceFile("../RunWear/Views/WearIveRunCollectionView.swift")
+        XCTAssertTrue(collection.contains("name: \"Postcard\""),
+                      "the Studio's format card is labeled Postcard")
+        XCTAssertTrue(collection.contains("Text(\"Postcard or Kit Card, with the day's caption.\")"),
+                      "the day view's share explainer names the pair of record")
+        XCTAssertFalse(collection.contains("name: \"Morning Poster\""))
+        XCTAssertFalse(collection.contains("Text(\"Morning Poster"))
+        let store = try sourceFile("../RunWear/Services/ShareCardRenderStore.swift")
+        XCTAssertFalse(store.contains("Morning Poster…"))
+        XCTAssertFalse(store.contains("Morning Poster couldn't"))
+    }
+
     /// The EXPANDED panel state (the morph's target state),
     /// standard + short portrait viewports.
     @MainActor

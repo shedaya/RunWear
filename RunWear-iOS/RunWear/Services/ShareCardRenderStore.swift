@@ -70,14 +70,14 @@ enum ShareCardCopy {
     /// never a bare spinner on a blank sheet.
     static func progressLabel(for kind: ShareCardKind) -> String {
         switch kind {
-        case .poster: return "Making your Morning Poster…"
+        case .poster: return "Making your Postcard…"
         case .kit: return "Making your Kit Card…"
         }
     }
 
     static func failureLabel(for kind: ShareCardKind) -> String {
         switch kind {
-        case .poster: return "Your Morning Poster couldn't be made."
+        case .poster: return "Your Postcard couldn't be made."
         case .kit: return "Your Kit Card couldn't be made."
         }
     }

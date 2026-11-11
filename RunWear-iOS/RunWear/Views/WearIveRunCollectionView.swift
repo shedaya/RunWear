@@ -676,7 +676,7 @@ struct WearIveRunDayView: View {
                             Text("Share this day")
                                 .font(.appItemName)
                                 .foregroundColor(AppTheme.inkPrimary)
-                            Text("Morning Poster or Kit Card, with the day's caption.")
+                            Text("Postcard or Kit Card, with the day's caption.")
                                 .font(.appFootnote)
                                 .foregroundColor(AppTheme.inkSecondary)
                         }
@@ -1204,7 +1204,7 @@ struct ShareStudioView: View {
 
     private var formatChoice: some View {
         HStack(alignment: .top, spacing: 12) {
-            formatCard(kind: .poster, name: "Morning Poster", slot: posterSlot)
+            formatCard(kind: .poster, name: "Postcard", slot: posterSlot)
             formatCard(kind: .kit, name: "Kit Card", slot: kitSlot)
         }
     }
