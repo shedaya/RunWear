@@ -53,10 +53,10 @@ class Rw166CollectionRecoveryRenderTest {
     val composeRule = createComposeRule()
 
     private val kitKeys = listOf(
-        "Light Long Sleeve",
-        "Running Shorts (5-7\")",
-        "Thin Crew Socks",
-        "Pegasus 41"
+        "LONG_SLEEVE_LIGHT",
+        "SHORTS",
+        "LIGHT_BEANIE",
+        "SUNGLASSES"
     )
 
     private fun entry(date: LocalDate, moment: String) = WearIveRunDayEntry(

@@ -28,10 +28,12 @@ import java.time.ZoneId
  *
  * THE RECOVERY (iOS HeroRecovery semantics, Android code shape):
  * an entry persists enough identity to find its bank hero —
- * [WearIveRunDayEntry.itemKeys] (the engine items' keys; on this
- * platform `ClothingItem.key == name`, so the outfit signature
- * hash is the same one OutfitCombination.fromConditions keyed
- * the cell from), [WearIveRunDayEntry.feelsLikeF] (the settle
+ * [WearIveRunDayEntry.itemKeys] (the engine items' keys — the
+ * enum case names, `ClothingItem.key == name` where `name` is
+ * the case name, NOT the display name; the settle persists
+ * `outfit.allItems.map { it.key }`, the same values
+ * OutfitCombination.fromConditions hashed the cell from, via
+ * `it.name`), [WearIveRunDayEntry.feelsLikeF] (the settle
  * frame's comfort-adjusted feels-like — the same value the cell
  * was keyed from, so its temp bracket is EXACT), the condition
  * label (the weather, lossily: WeatherCode.description collapses
@@ -142,10 +144,11 @@ object HeroRecovery {
 
     /**
      * The outfit signature hash — the engine's own rule
-     * (OutfitCombination.fromConditions: the sorted item names
-     * joined with "-", String.hashCode rendered as unsigned hex,
-     * last 8 chars, zero-padded). Item keys ARE item names on
-     * this platform (ClothingItem.key == name).
+     * (OutfitCombination.fromConditions: the sorted item CASE
+     * names — `outfit.allItems.map { it.name }` — joined with
+     * "-", String.hashCode rendered as unsigned hex, last 8
+     * chars, zero-padded). The entry's persisted itemKeys are
+     * exactly those case names (`it.key`, and key == name).
      */
     fun outfitHash(itemKeys: List<String>): String =
         itemKeys.sorted().joinToString("-").hashCode()

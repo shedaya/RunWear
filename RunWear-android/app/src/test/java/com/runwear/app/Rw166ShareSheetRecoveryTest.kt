@@ -49,10 +49,10 @@ class Rw166ShareSheetRecoveryTest : Rw158Harness() {
         photo.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
 
         val kitKeys = listOf(
-            "Light Long Sleeve",
-            "Running Shorts (5-7\")",
-            "Thin Crew Socks",
-            "Pegasus 41"
+            "LONG_SLEEVE_LIGHT",
+            "SHORTS",
+            "LIGHT_BEANIE",
+            "SUNGLASSES"
         )
         val ny = WearIveRunDayEntry(
             date = LocalDate.of(2026, 11, 9),

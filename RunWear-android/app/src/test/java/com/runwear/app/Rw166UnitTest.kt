@@ -36,13 +36,15 @@ class Rw166UnitTest {
 
     private val nyZone: ZoneId = ZoneId.of("America/New_York")
 
-    /** Real engine item names (ClothingItem.key == name) — the
-     * fixture's keys must be the names the settle persisted. */
+    /** Real engine item KEYS — the enum case names the settle
+     * persists (`outfit.allItems.map { it.key }`, key == name).
+     * Display names would hash a different signature than the
+     * one the bank cell was keyed from. */
     private val kitKeys = listOf(
-        "Light Long Sleeve",
-        "Running Shorts (5-7\")",
-        "Thin Crew Socks",
-        "Pegasus 41"
+        "LONG_SLEEVE_LIGHT",
+        "SHORTS",
+        "LIGHT_BEANIE",
+        "SUNGLASSES"
     )
 
     private fun emptyRefEntry(
@@ -75,9 +77,17 @@ class Rw166UnitTest {
     }
 
     @Test
-    fun fixtureKeysAreRealEngineItemNames() {
-        val names = ClothingItem.entries.map { it.key }.toSet()
-        kitKeys.forEach { assertTrue("$it is not an engine item key", it in names) }
+    fun fixtureKeysAreRealEngineItemKeys() {
+        val keys = ClothingItem.entries.map { it.key }.toSet()
+        kitKeys.forEach { assertTrue("$it is not an engine item key", it in keys) }
+        // And the hash over the keys equals the engine's own
+        // cell hash over the same items (fromConditions hashes
+        // `allItems.map { it.name }` — the same strings).
+        val engineHash = kitKeys.map { key ->
+            ClothingItem.entries.first { it.key == key }
+        }.map { it.name }.sorted().joinToString("-").hashCode()
+            .toUInt().toString(16).takeLast(8).padStart(8, '0')
+        assertEquals(engineHash, HeroRecovery.outfitHash(kitKeys))
     }
 
     @Test
